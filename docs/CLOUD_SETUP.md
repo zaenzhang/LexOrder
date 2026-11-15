@@ -54,11 +54,32 @@ node tools/cloud-dev/run.mjs serve
 
 若发现 `postmaster.pid`，运行器拒绝另起数据库；先在原有会话正常停止。不要自动删除 PID 文件，不要让两个隔离会话同时使用同一个数据目录。
 
-## 3. 当前云环境的访问边界
+## 3. 当前云环境的网页预览
 
-本次观察到不同执行会话拥有隔离的 localhost 和 PID 空间。因此数据库、迁移、应用及自动化浏览器检查必须由同一个运行器派生。另开终端执行 `curl localhost` 的失败不能直接说明应用已停止。
+本次观察到不同执行会话拥有隔离的 localhost 和 PID 空间。因此数据库、迁移和应用必须在同一运行环境启动。另开终端执行 `curl localhost` 的失败不能直接说明应用已停止。
 
-本次环境没有提供可调用的公网预览或端口转发工具。`http://127.0.0.1:3000` 是运行会话内部地址，不是用户电脑可直接打开的公网地址。云内启动和验收不等于长期公网托管；正式上线需固定服务器、域名、HTTPS、数据库和文件持久卷，以及经过恢复演练的备份。
+2026-11-15 已通过环境内置的 `sites-preview` 管理通道启动完整应用，并在共享云浏览器完成登录，实际打开客户页和工作台首页。此通道让预览管理器同时持有 Next.js 和 PostgreSQL，解决普通执行会话的 localhost 无法被云浏览器访问的问题。
+
+仅在 `SITES_MANAGED_LINUX_CONTAINER=1` 且 `sites-preview` 可用时，完成前文配置与生产构建后，从仓库根目录准备一个忽略提交的启动目录：
+
+```bash
+mkdir -p .runtime/preview
+node --input-type=module <<'NODE'
+import { writeFileSync } from 'node:fs';
+writeFileSync('.runtime/preview/package.json', JSON.stringify({
+  name: 'lexorder-cloud-preview',
+  private: true,
+  scripts: { dev: 'node ../../tools/cloud-dev/preview-server.mjs' }
+}, null, 2) + '\n');
+NODE
+sites-preview start "$(pwd)/.runtime/preview"
+```
+
+`preview-server.mjs` 接收管理器实际传入的 `--host` / `--port`，映射到运行器的 `LEXORDER_HOST` / `PORT`，并同步 `NEXTAUTH_URL`。预览默认使用独立的 `.runtime/managed-preview` 数据目录；运行器的 `LEXORDER_RUNTIME_DIR` 只接受仓库 `.runtime` 下的子目录。数据库仍仅监听 loopback；主 `npm run dev` 行为保持不变。
+
+在共享云浏览器中打开 CLI 返回的**原样地址**。本次返回 `http://127.0.0.1:4173/`，但后续以实际输出为准，不能把这个地址当作用户电脑可以访问的公网网址。通过 `sites-preview status` 查看状态；不再需要预览时用 `sites-preview stop` 停止。保留任何已有数据库锁，不自动删除；需要独立新预览时，明确选择新的运行目录，避免覆盖旧数据。
+
+预览是当前云会话的临时运行环境。长期上线仍需固定服务器、域名、HTTPS、数据库和文件持久卷，以及经过恢复演练的备份。
 
 ## 4. 验证
 
@@ -78,7 +99,7 @@ node tools/cloud-dev/run.mjs test
 
 运行器迁移独立 `_acceptance_test` 数据库，再执行全部测试。验收文件使用 `.runtime/cloud/acceptance-storage`，专用加密密钥持久保存在 `.runtime/cloud/acceptance-storage.key`（0600）；不会与开发文件和密钥混用。测试包括真实事务回滚、重复提交、并发完成、撤权、客户归属、跨客户 ID、取消和合并。测试账号使用合成标识，结束时停用；合成客户软删除，审计记录保留，不关闭审计保护。
 
-UI 验收可使用同一执行会话下的 Playwright；本次环境中 Chromium 因 Unix socket `EPERM` 无法启动，故真实浏览器和手机视觉验收尚未完成。以下是具备浏览器运行条件后的入口，可通过 `WORKBENCH_QA_SCRIPT` 提供本地验收脚本：
+普通执行会话内直接启动 Chromium 曾因 Unix socket `EPERM` 失败；现已通过上述管理预览与共享云浏览器验证登录、客户页和工作台首页。完整客户维护点击流程及手机视觉验收仍未完成。在具备独立浏览器验收条件的环境，可通过 `WORKBENCH_QA_SCRIPT` 提供本地验收脚本：
 
 ```bash
 WORKBENCH_QA_SCRIPT=/absolute/path/to/check.cjs node tools/cloud-dev/run.mjs verify

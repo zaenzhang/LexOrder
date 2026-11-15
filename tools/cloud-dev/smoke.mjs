@@ -8,7 +8,7 @@ import { readFile } from '../../src/lib/storage/local.ts';
 import { decryptBuffer, sha256 } from '../../src/lib/storage/crypto.ts';
 
 const db = new PrismaClient();
-const base = 'http://127.0.0.1:3000';
+const base = `http://127.0.0.1:${process.env.PORT || 3000}`;
 const checks = [];
 let clientId, otherId;
 assert(new URL(process.env.DATABASE_URL).pathname.endsWith('_test'), 'HTTP smoke requires an isolated _test database');

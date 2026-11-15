@@ -15,6 +15,11 @@ if (!['serve', 'test', 'verify'].includes(mode)) throw new Error('Usage: node to
 const envFile = resolve(root, '.env');
 if (!existsSync(envFile)) throw new Error('Create a private .env from .env.example before starting. See docs/CLOUD_SETUP.md.');
 const env = { ...parseEnv(readFileSync(envFile, 'utf8')), ...process.env, DISABLE_CRON: '1', BACKUP_CRON_ENABLED: 'false', NEXT_TELEMETRY_DISABLED: '1' };
+const appPort = Number(env.PORT || 3000);
+if (!Number.isInteger(appPort) || appPort < 1 || appPort > 65535) throw new Error('PORT must be an integer from 1 to 65535.');
+const appHost = env.LEXORDER_HOST || '127.0.0.1';
+if (!['127.0.0.1', 'localhost', '0.0.0.0'].includes(appHost)) throw new Error('LEXORDER_HOST must be a loopback address or 0.0.0.0.');
+const healthBase = `http://127.0.0.1:${appPort}`;
 const url = new URL(env.DATABASE_URL || 'invalid:');
 if (url.protocol !== 'postgresql:' || !['127.0.0.1', 'localhost'].includes(url.hostname) || !url.port || !url.username || decodeURIComponent(url.password).length < 16) {
   throw new Error('This development runner requires an explicit loopback PostgreSQL URL and a random password of at least 16 characters.');
@@ -22,7 +27,9 @@ if (url.protocol !== 'postgresql:' || !['127.0.0.1', 'localhost'].includes(url.h
 const database = url.pathname.slice(1);
 if (!/^[a-z][a-z0-9_]{1,40}$/.test(database) || database.endsWith('_test')) throw new Error('Use a named development database of up to 41 characters, without the _test suffix.');
 const testDatabase = `${database}_acceptance_test`;
-const runtime = resolve(root, '.runtime/cloud');
+const runtimeRoot = resolve(root, '.runtime');
+const runtime = resolve(root, env.LEXORDER_RUNTIME_DIR || '.runtime/cloud');
+if (!runtime.startsWith(`${runtimeRoot}/`)) throw new Error('LEXORDER_RUNTIME_DIR must be a directory beneath .runtime.');
 mkdirSync(runtime, { recursive: true, mode: 0o700 });
 chmodSync(runtime, 0o700);
 const testKeyFile = resolve(runtime, 'acceptance-storage.key');
@@ -55,12 +62,13 @@ function command(executable, args, childEnv = env) {
   });
   return { child, done };
 }
-let stopping = false;
-async function stop() {
-  if (stopping) return;
-  stopping = true;
-  for (const child of children) child.kill('SIGTERM');
-  await cluster.stop();
+let stopPromise;
+function stop() {
+  if (!stopPromise) stopPromise = (async () => {
+    for (const child of children) child.kill('SIGTERM');
+    await cluster.stop();
+  })();
+  return stopPromise;
 }
 process.on('SIGINT', () => { void stop(); });
 process.on('SIGTERM', () => { void stop(); });
@@ -91,15 +99,15 @@ try {
     await command('npx', ['prisma', 'migrate', 'deploy'], appEnv).done;
     // 官方 tsx Node loader；无需 CLI 的本地 IPC 监听，适用于限制 Unix socket 的环境。
     await command(process.execPath, ['--import', 'tsx', 'prisma/seed.ts'], appEnv).done;
-    const app = command(process.execPath, ['node_modules/next/dist/bin/next', 'start', '--hostname', '127.0.0.1', '--port', '3000'], { ...appEnv, NEXT_DIST_DIR: '.next-build' });
+    const app = command(process.execPath, ['node_modules/next/dist/bin/next', 'start', '--hostname', appHost, '--port', String(appPort)], { ...appEnv, NEXT_DIST_DIR: '.next-build' });
     void app.done.catch(() => {}); // 就绪检查期间也登记退出处理；最终仍 await 同一结果。
     let ready = false;
     for (let attempt = 0; attempt < 60; attempt++) {
-      if (await fetch('http://127.0.0.1:3000/api/health').then(r => r.ok).catch(() => false)) { ready = true; break; }
+      if (await fetch(`${healthBase}/api/health`).then(r => r.ok).catch(() => false)) { ready = true; break; }
       await new Promise(resolveDelay => setTimeout(resolveDelay, 500));
     }
     if (!ready) throw new Error('Application did not become ready.');
-    console.log(`LexOrder ready at http://127.0.0.1:3000 in this execution session (${mode === 'verify' ? 'isolated test' : 'development'} database).`);
+    console.log(`LexOrder ready at ${healthBase} in this execution session (${mode === 'verify' ? 'isolated test' : 'development'} database).`);
     if (mode === 'verify') await command(process.execPath, ['--import', 'tsx', 'tools/cloud-dev/smoke.mjs'], appEnv).done;
     if (mode === 'verify' && env.WORKBENCH_QA_SCRIPT) await command(process.execPath, [resolve(env.WORKBENCH_QA_SCRIPT)], appEnv).done;
     if (mode === 'serve') await app.done;
