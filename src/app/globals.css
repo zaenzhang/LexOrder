@@ -1,0 +1,618 @@
+@import "./moan.css";
+@import "./moan-pages.css";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* 原生 select 统一为墨案输入框外观（审查 2026-09-14：管理后台稠密表单保留原生控件，但外观与 Select 一致） */
+  select {
+    appearance: none;
+    -webkit-appearance: none;
+    min-height: 34px;
+    padding: 0 30px 0 11px;
+    border: 1px solid var(--bd-default);
+    border-radius: 8px;
+    background-color: var(--bg-card);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2368747F' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    font-size: 13px;
+    color: var(--t-primary);
+    box-shadow: var(--sh-well);
+  }
+  select:focus-visible { outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px rgba(0, 123, 127, 0.12); }
+  select:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  :root {
+    /* v4 墨案：shadcn 语义变量全部映射为 docs/mockup/v4/design-system.css 色值 */
+    --background: 150 8% 95%;          /* bg-canvas #F2F4F3 */
+    --foreground: 211 53% 10%;         /* t-primary #0C1927 */
+
+    --card: 0 0% 100%;
+    --card-foreground: 211 53% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 211 53% 10%;
+
+    --primary: 182 100% 25%;           /* teal #007B7F */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 150 10% 92%;          /* bg-sunken #E9EDEB */
+    --secondary-foreground: 211 53% 10%;
+
+    --muted: 150 10% 92%;              /* bg-sunken #E9EDEB */
+    --muted-foreground: 209 10% 45%;   /* t-muted #68747F */
+    --muted-subtle: 209 11% 64%;       /* t-faint #98A3AD */
+
+    --accent: 140 12% 95%;             /* bg-hover #F1F4F2 */
+    --accent-foreground: 211 53% 10%;
+
+    --destructive: 4 76% 40%;          /* red #B42318 */
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 150 10% 88%;             /* bd-subtle #DDE3E0 */
+    --border-strong: 147 8% 73%;       /* bd-strong #B4BFB9 */
+    --hairline: 150 10% 92%;           /* bd-hair #E8ECEA */
+    --input: 150 9% 83%;               /* bd-default #CFD7D3 */
+    --ring: 182 100% 25%;
+
+    --radius: 0.5rem;                  /* 8px */
+    --radius-sm: 0.375rem;             /* 6px */
+    --radius-md: 0.5rem;               /* 8px */
+    --radius-lg: 0.75rem;              /* 12px */
+    --radius-xl: 1rem;                 /* 16px */
+
+    --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Inter", "Helvetica Neue", system-ui, sans-serif;
+    --font-serif: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", serif;
+    --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+
+    --shadow-low: 0 1px 2px rgba(12,25,39,0.05);
+    --shadow-medium: 0 6px 16px -4px rgba(12,25,39,0.10), 0 2px 4px rgba(12,25,39,0.04);
+    --shadow-high: 0 12px 32px -8px rgba(12,25,39,0.16), 0 4px 8px -2px rgba(12,25,39,0.06);
+    --shadow-float: 0 24px 64px -12px rgba(12,25,39,0.24), 0 8px 20px -8px rgba(12,25,39,0.12);
+    --shadow-inset: inset 0 1px 0 rgba(255,255,255,0.9);
+    --shadow-inset-deep: inset 0 1px 2px rgba(12,25,39,0.05);
+    --shadow-glow: 0 1px 2px rgba(0,80,84,0.25), inset 0 1px 0 rgba(255,255,255,0.12);
+
+    --sidebar-bg: 0 0% 100%;
+    --glass-bg: rgba(248,250,249,0.86);
+    --scrim-bg: rgba(12,25,39,0.44);
+    --primary-hover: 182 100% 20%;     /* teal-h #006367 */
+    --primary-soft: 175 32% 92%;       /* teal-soft #E4F1F0 */
+
+    /* v3.4: Apple 式直接反馈，避免页面级慢入场 */
+    --motion-press: 100ms;
+    --motion-fast: 160ms;
+    --motion-base: 220ms;
+    --motion-sheet: 280ms;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+    /* 抽屉/侧滑面板专用（Ionic 的 iOS 曲线）：位移主导的动效用它更贴手 */
+    --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+    /* 状态色（墨案语义色） */
+    --status-green: 146 66% 30%;       /* #1A7F45 */
+    --status-green-bg: 135 33% 93%;    /* #E7F3EA */
+    --status-orange: 39 86% 32%;       /* amber #96650B */
+    --status-orange-bg: 41 76% 92%;    /* #FAF0DB */
+    --status-red: 4 76% 40%;           /* #B42318 */
+    --status-red-bg: 10 69% 95%;       /* #FBECE9 */
+    --status-purple: 260 54% 51%;      /* violet #6C3FC5 */
+    --status-purple-bg: 261 58% 95%;   /* #F1ECFA */
+    --status-blue: 220 74% 45%;        /* #1E56C8 */
+    --status-blue-bg: 222 63% 95%;     /* #E9EEFA */
+    --status-amber: 39 86% 32%;        /* #96650B */
+    --status-amber-bg: 41 76% 92%;     /* #FAF0DB */
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    line-height: 1.5;
+    letter-spacing: 0;
+    font-optical-sizing: auto;
+    font-feature-settings: "cv02","cv03","cv04","cv11","ss01";
+  }
+
+  .tracking-tight,
+  .tracking-tighter,
+  .tracking-wide,
+  .tracking-wider,
+  .tracking-widest {
+    letter-spacing: 0;
+  }
+
+  .tabular { font-variant-numeric: tabular-nums; }
+}
+
+@layer components {
+  /* 卡片 */
+  .ll-surface {
+    /* = 墨案 .card */
+    background: var(--bg-card);
+    border: 1px solid var(--bd-hair);
+    border-radius: var(--r-lg);
+    box-shadow: var(--sh-card), var(--sh-inset);
+  }
+  .ll-surface-quiet {
+    background: hsl(var(--muted));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius-md);
+  }
+
+  /* hairline */
+  .ll-hairline-b { border-bottom: 1px solid hsl(var(--hairline)); }
+  .ll-hairline-t { border-top: 1px solid hsl(var(--hairline)); }
+  .ll-hairline-y {
+    border-top: 1px solid hsl(var(--hairline));
+    border-bottom: 1px solid hsl(var(--hairline));
+  }
+
+  /* 分割线 */
+  .ll-rule {
+    height: 1px;
+    background: hsl(var(--border));
+  }
+
+  /* stat 数字 */
+  .ll-stat {
+    font-family: var(--font-mono), 'JetBrains Mono', ui-monospace, monospace;
+    font-variant-numeric: tabular-nums lining-nums;
+    letter-spacing: -0.02em;
+    font-weight: 500;
+  }
+
+  /* pill / chip */
+  .ll-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    background: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+  }
+  .ll-chip-primary {
+    background: hsl(var(--primary-soft));
+    color: hsl(var(--primary));
+  }
+
+  /* 状态严重度 */
+  .ll-sev-low      { color: var(--green); background: var(--green-bg); }
+  .ll-sev-medium   { color: var(--amber); background: var(--amber-bg); }
+  .ll-sev-high     { color: var(--red); background: var(--red-bg); }
+  .ll-sev-blocking { color: var(--red); background: var(--red-bg); font-weight: 600; }
+
+  /* 列表行 hover */
+  .ll-row {
+    position: relative;
+    transition: background-color var(--motion-fast) var(--ease-out);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .ll-row:hover {
+      background: hsl(var(--muted) / 0.5);
+    }
+  }
+
+  /* chip status colors */
+  .ll-chip-green  { color: hsl(var(--status-green));  background: hsl(var(--status-green-bg)); }
+  .ll-chip-orange { color: hsl(var(--status-orange)); background: hsl(var(--status-orange-bg)); }
+  .ll-chip-red    { color: hsl(var(--status-red));    background: hsl(var(--status-red-bg)); }
+  .ll-chip-purple { color: hsl(var(--status-purple)); background: hsl(var(--status-purple-bg)); }
+  .ll-chip-blue   { color: hsl(var(--status-blue));   background: hsl(var(--status-blue-bg)); }
+  .ll-chip-teal   { color: hsl(var(--primary));       background: hsl(var(--primary) / 0.10); }
+
+  .ll-hero-surface {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--primary-soft)) 100%);
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-low), var(--shadow-inset);
+  }
+
+  .ll-hero-surface::after {
+    content: "";
+    position: absolute;
+    top: -4rem;
+    right: -4rem;
+    width: 14rem;
+    height: 14rem;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(0,123,127,0.18), transparent 65%);
+    pointer-events: none;
+  }
+
+  .ll-panel-head {
+    /* = 墨案 .panel-head */
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--bd-hair);
+  }
+
+  .ll-panel-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .ll-form-control {
+    background-color: hsl(var(--card)) !important;
+    border-color: hsl(var(--input)) !important;
+    box-shadow: var(--shadow-inset-deep), 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease,
+      background-color 0.15s ease;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .ll-form-control:hover {
+      background-color: hsl(var(--card)) !important;
+      border-color: hsl(var(--border-strong)) !important;
+      box-shadow: var(--shadow-inset-deep), 0 1px 3px rgba(15, 23, 42, 0.06) !important;
+    }
+  }
+
+  .ll-form-control:focus,
+  .ll-form-control:focus-visible,
+  .ll-form-control[data-state="open"] {
+    outline: none;
+    background-color: hsl(var(--card)) !important;
+    border-color: hsl(var(--primary)) !important;
+    box-shadow:
+      0 0 0 3px hsl(var(--primary) / 0.14),
+      var(--shadow-inset-deep),
+      0 1px 2px rgba(15, 23, 42, 0.04) !important;
+  }
+
+  .ll-form-control:disabled,
+  .ll-form-control[aria-disabled="true"] {
+    background-color: hsl(var(--muted)) !important;
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+  }
+
+  .ll-form-control.border-destructive,
+  .ll-form-control[aria-invalid="true"] {
+    border-color: hsl(var(--destructive)) !important;
+  }
+
+  .ll-form-control.border-destructive:focus,
+  .ll-form-control.border-destructive:focus-visible,
+  .ll-form-control[aria-invalid="true"]:focus,
+  .ll-form-control[aria-invalid="true"]:focus-visible {
+    border-color: hsl(var(--destructive)) !important;
+    box-shadow:
+      0 0 0 3px hsl(var(--destructive) / 0.14),
+      var(--shadow-inset-deep),
+      0 1px 2px rgba(15, 23, 42, 0.04) !important;
+  }
+
+  .ll-form-control.border-0 {
+    border-color: transparent !important;
+  }
+
+  .ll-form-control.bg-transparent {
+    background-color: transparent !important;
+  }
+
+  .ll-form-control.shadow-none,
+  .ll-form-control.shadow-none:hover,
+  .ll-form-control.shadow-none:focus,
+  .ll-form-control.shadow-none:focus-visible {
+    box-shadow: none !important;
+  }
+
+  .ll-modal-surface :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    textarea,
+    button[role="combobox"]
+  ) {
+    background-color: hsl(var(--card)) !important;
+    box-shadow: var(--shadow-inset-deep), 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease,
+      background-color 0.15s ease;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .ll-modal-surface :is(
+      input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+      textarea,
+      button[role="combobox"]
+    ):hover {
+      background-color: hsl(var(--card)) !important;
+      box-shadow: var(--shadow-inset-deep), 0 1px 3px rgba(15, 23, 42, 0.06) !important;
+    }
+  }
+
+  .ll-modal-surface :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    textarea,
+    button[role="combobox"]
+  ):focus,
+  .ll-modal-surface :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    textarea,
+    button[role="combobox"]
+  ):focus-visible,
+  .ll-modal-surface button[role="combobox"][data-state="open"] {
+    outline: none;
+    background-color: hsl(var(--card)) !important;
+    border-color: hsl(var(--primary)) !important;
+    box-shadow:
+      0 0 0 3px hsl(var(--primary) / 0.14),
+      var(--shadow-inset-deep),
+      0 1px 2px rgba(15, 23, 42, 0.04) !important;
+  }
+
+  .ll-modal-surface :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    textarea,
+    button[role="combobox"]
+  ).border-destructive,
+  .ll-modal-surface :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    textarea,
+    button[role="combobox"]
+  )[aria-invalid="true"] {
+    border-color: hsl(var(--destructive)) !important;
+  }
+
+  .ll-modal-surface :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    textarea,
+    button[role="combobox"]
+  ).border-destructive:focus,
+  .ll-modal-surface :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    textarea,
+    button[role="combobox"]
+  ).border-destructive:focus-visible,
+  .ll-modal-surface :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    textarea,
+    button[role="combobox"]
+  )[aria-invalid="true"]:focus,
+  .ll-modal-surface :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    textarea,
+    button[role="combobox"]
+  )[aria-invalid="true"]:focus-visible {
+    border-color: hsl(var(--destructive)) !important;
+    box-shadow:
+      0 0 0 3px hsl(var(--destructive) / 0.14),
+      var(--shadow-inset-deep),
+      0 1px 2px rgba(15, 23, 42, 0.04) !important;
+  }
+
+  .ll-modal-surface input.ll-command-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  .ll-modal-surface input.ll-command-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):hover,
+  .ll-modal-surface input.ll-command-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
+  .ll-modal-surface input.ll-command-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus-visible {
+    background-color: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+  }
+
+  button[role="combobox"] > svg:last-child {
+    margin-right: -0.125rem;
+  }
+
+  .ll-page-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 16px;
+  }
+
+  .ll-page-title {
+    /* 墨案 03 效果图 ph-title：22px / 700 / 负字距 */
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+  }
+
+  .ll-page-sub {
+    margin-top: 0.25rem;
+    font-size: 12.5px;
+    color: var(--t-muted);
+  }
+
+  .ll-segmented {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 9px;
+    background: var(--bg-sunken);
+  }
+
+  .ll-seg {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    min-height: 26px;
+    padding: 0 13px;
+    border-radius: 7px;
+    color: var(--t-secondary);
+    font-size: 12.5px;
+    font-weight: 550;
+    transition:
+      background-color var(--motion-fast) var(--ease-out),
+      color var(--motion-fast) var(--ease-out),
+      box-shadow var(--motion-fast) var(--ease-out);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .ll-seg:hover {
+      color: hsl(var(--foreground));
+    }
+  }
+
+  .ll-seg-active {
+    /* 墨案 .seg.active：白底浮起，不用 teal（teal 只属于主操作） */
+    background: #fff;
+    color: var(--t-primary);
+    box-shadow: 0 1px 2px rgba(12,25,39,0.08), 0 0 0 1px var(--bd-subtle);
+  }
+
+  .ll-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    flex-shrink: 0;
+    border-radius: 999px;
+  }
+
+  .ll-form-card {
+    border: 1px solid var(--bd-hair);
+    border-radius: var(--r-lg);
+    background: var(--bg-card);
+    box-shadow: var(--sh-card), var(--sh-inset);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass-bg: rgba(248, 250, 249, 0.98);
+  }
+
+  .ll-material {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --border: 216 20% 72%;
+    --border-strong: 216 22% 58%;
+    --muted-foreground: 215 18% 34%;
+  }
+}
+
+@layer utilities {
+  .shadow-ll-low    { box-shadow: var(--shadow-low); }
+  .shadow-ll-medium { box-shadow: var(--shadow-medium); }
+  .shadow-ll-high   { box-shadow: var(--shadow-high); }
+
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+}
+
+/* v0.22: 打印 / 保 PDF 样式 —— 律师 Cmd+P 直接出报告，不引 puppeteer */
+@media print {
+  /* 隐藏 Sidebar / Topbar / 任何标 .ll-no-print 的 UI */
+  aside,
+  header,
+  .ll-no-print {
+    display: none !important;
+  }
+  /* 移除 main 的左边距（无 sidebar 占位）+ 解开 max-width */
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+  body, html {
+    background: white !important;
+  }
+  /* 表格、卡片不被分页切断 */
+  section,
+  table,
+  tr {
+    page-break-inside: avoid;
+  }
+  /* 卡片去阴影 */
+  .ll-surface {
+    box-shadow: none !important;
+  }
+  /* 链接的下划线在纸上多余 */
+  a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+}
+
+/* ============================================================
+ * v4「墨案」签名组件（docs/mockup/v4，实施基准见 P1 方案第七节）
+ * 配色纪律：teal 仅品牌/主操作；blue 进行中；green 完成终态；
+ * red 仅风险/阻断；bronze 仅归档/结案。
+ * ============================================================ */
+/* 案卷脊：列表行左侧状态色竖条（列表即档案架）。挂在 li/td 首格内——
+   表格场景禁止用 tr::before（Chrome 匿名单元格错位，见 03 页修复记录）。 */
+.ll-spine-row { position: relative; }
+.ll-spine-row::before {
+  content: ""; position: absolute; left: 0; top: 10px; bottom: 10px;
+  width: 3px; border-radius: 0 2px 2px 0;
+  background: var(--ll-spine, #CFD7D3);
+}
+/* 程序链：五段进度轨道（done=teal 实心 / cur=teal 半透明 / risk=amber / 未来=浅灰） */
+.ll-stage-track { display: flex; gap: 2.5px; }
+.ll-stage-track i { width: 16px; height: 3.5px; border-radius: 2px; background: #DDE3E0; }
+.ll-stage-track i.done { background: #007B7F; }
+.ll-stage-track i.cur  { background: #007B7F; opacity: 0.45; }
+.ll-stage-track i.risk { background: #96650B; }
+/* 期限倒计时 chip：红=逾期/阻断，amber=临近，muted=普通 */
+.ll-dl-chip {
+  font-family: ui-monospace, monospace; font-variant-numeric: tabular-nums;
+  font-size: 11px; font-weight: 600; padding: 2px 8px;
+  border-radius: 9800px; white-space: nowrap;
+}
+.ll-dl-red   { color: #B42318; background: #FBECE9; }
+.ll-dl-amber { color: #96650B; background: #FAF0DB; }
+.ll-dl-muted { color: #68747F; background: #E9EDEB; }
+
+
+/* ============================================================
+ * 墨案全局排版基线（docs/mockup/v4）：13.5px 高密度、负字距、
+ * 数字等宽特性——整站观感的底层变化（外壳已由侧栏/顶栏承载）。
+ * ============================================================ */
+body {
+  font-size: 13.5px;
+  letter-spacing: -0.004em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+/* 页题规格（03 效果图 ph-title）：主列表页标题统一 22px/700/负字距 */
+.ph-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+.ph-sub { font-size: 12.5px; color: hsl(var(--muted-foreground)); }
+.ph-sub b { font-weight: 600; }

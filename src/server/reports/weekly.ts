@@ -1,0 +1,99 @@
+import { getFinanceFacts, periodReceipts, sumAmounts } from "@/server/finance/facts";
+/**
+ * v0.21: 律师周报数据聚合（per-user 视角）
+ *
+ * 周定义：周一 00:00:00 → 下周一 00:00:00（半开区间）
+ */
+import { prisma } from "@/lib/prisma";
+import { shDayKey, civilFromKey, civilKey } from "@/lib/ui/sh-time";
+import type { ReportPeriod } from "./queries";
+
+export function weekPeriod(now = new Date()): ReportPeriod {
+  // 周一 = 0；周界按上海日历日取（容器为 UTC 时本地取日会差一天），半开区间
+  const mondayCivil = civilFromKey(shDayKey(now));
+  mondayCivil.setDate(mondayCivil.getDate() - (mondayCivil.getDay() + 6) % 7);
+  const nextMondayCivil = new Date(mondayCivil);
+  nextMondayCivil.setDate(mondayCivil.getDate() + 7);
+  const monday = new Date(`${civilKey(mondayCivil)}T00:00:00+08:00`);
+  const nextMonday = new Date(`${civilKey(nextMondayCivil)}T00:00:00+08:00`);
+  return {
+    label: `${civilKey(mondayCivil)} ~ ${civilKey(new Date(nextMondayCivil.getTime() - 86_400_000))}`,
+    start: monday,
+    end: nextMonday
+  };
+}
+
+export type LawyerWeeklyDigest = {
+  userId: string;
+  userName: string;
+  period: ReportPeriod;
+  newIntake: number;
+  closed: number;
+  archived: number;
+  receivedAmount: number;
+};
+
+/**
+ * 单个律师本周摘要。复用单条查询，调用方循环。
+ */
+export async function getLawyerWeeklyDigest(input: {
+  userId: string;
+  userName: string;
+  period?: ReportPeriod;
+}): Promise<LawyerWeeklyDigest> {
+  const period = input.period ?? weekPeriod();
+
+  const [newIntake, closed, archived, fees] = await Promise.all([
+    prisma.matter.count({
+      where: {
+        ownerId: input.userId,
+        createdAt: { gte: period.start, lt: period.end },
+        deletedAt: null
+      }
+    }),
+    prisma.matter.count({
+      where: {
+        ownerId: input.userId,
+        closedAt: { gte: period.start, lt: period.end },
+        deletedAt: null
+      }
+    }),
+    prisma.matter.count({
+      where: {
+        ownerId: input.userId,
+        archivedAt: { gte: period.start, lt: period.end },
+        deletedAt: null
+      }
+    }),
+    prisma.feeEntry.aggregate({
+      where: {
+        type: "RECEIVED",
+        confirmState: "CONFIRMED",
+        occurredAt: { gte: period.start, lt: period.end },
+        matter: { ownerId: input.userId }
+      },
+      _sum: { amount: true }
+    })
+  ]);
+
+  const facts=await getFinanceFacts({ownerId:input.userId,deletedAt:null});
+  return {
+    userId: input.userId,
+    userName: input.userName,
+    period,
+    newIntake,
+    closed,
+    archived,
+    receivedAmount: facts ? sumAmounts(periodReceipts(facts,period.start,period.end)) : fees._sum.amount ? Number(fees._sum.amount) : 0
+  };
+}
+
+export function formatWeeklyDigestContent(d: LawyerWeeklyDigest): string {
+  const parts = [
+    `新收 ${d.newIntake} 件`,
+    `已结 ${d.closed} 件`,
+    `已归档 ${d.archived} 件`,
+    `收款 ${d.receivedAmount.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 元`
+  ];
+  return parts.join(" · ");
+}

@@ -1,0 +1,294 @@
+/**
+ * v0.9.4 归档 ZIP 导出
+ *
+ * 结构：
+ *   {archiveNo}/
+ *     README.md                 — 归档说明 + 结构索引
+ *     manifest.json             — 结构化全量数据（matter + parties + procedures + ...）
+ *     封皮和目录/
+ *       卷宗封皮.docx
+ *       卷宗目录.docx
+ *     材料/
+ *       {category}/
+ *         {N}_{原文件名}
+ */
+import {Prisma} from "@prisma/client";
+import {closureReady} from "./closure";
+import PizZip from "pizzip";
+import { prisma } from "@/lib/prisma";
+import { decryptIdNumber } from "@/lib/clients/id-number-crypto";
+import { sha256 } from "@/lib/storage/crypto";
+import { shDayKey } from "@/lib/ui/sh-time";
+import { parseArchiveSnapshot } from "@/lib/archive/snapshot";
+import { verifyArchivePolicySource, verifyArchiveSnapshotDocuments } from "./verification";
+import { ActionError } from "@/lib/action-error";
+
+interface ZipResult {
+  buffer: Buffer;
+  fileName: string;
+  checksum: string;
+  size: number;
+}
+
+const CATEGORY_DIR: Record<string, string> = {
+  EVIDENCE: "证据",
+  PLEADING: "诉讼文书",
+  PROCEDURE: "程序文书",
+  JUDGMENT: "裁判文书",
+  CONTRACT: "合同",
+  OTHER: "其他"
+};
+
+function safeName(s: string): string {
+  return s.replace(/[\\/:*?"<>|]/g, "_").trim();
+}
+
+export async function buildArchiveManifest(db:Prisma.TransactionClient,archiveId:string){
+ const archive=await db.archiveRecord.findUniqueOrThrow({where:{id:archiveId}});
+ const snapshot=parseArchiveSnapshot(archive.checklistJson);if(!snapshot)throw new ActionError("归档材料快照缺失");
+ const docs=[...snapshot.documents].sort((a,b)=>a.order-b.order);
+  const matter = await db.matter.findUnique({
+    where: { id: archive.matterId },
+    include: {
+      primaryClient: true,
+      cause: { select: { name: true, code: true } },
+      parties: { orderBy: [{ role: "asc" }, { ordinal: "asc" }] },
+      procedures: { orderBy: { order: "asc" } },
+      timelineEvents: { orderBy: { occurredAt: "asc" } },
+      preservationCases: {
+        orderBy: { createdAt: "asc" },
+        include: {
+          targets: {
+            orderBy: { createdAt: "asc" },
+            include: { properties: { orderBy: { startDate: "asc" } } }
+          }
+        }
+      },
+      notes: { where: { deletedAt: null }, orderBy: { occurredAt: "asc" } },
+      billings: true,
+      feeEntries: { orderBy: { occurredAt: "asc" } },
+      owner: { select: { id: true, name: true } }
+    }
+  });
+  if(!matter)throw new ActionError("案件不存在");
+  const manifest = {
+    archiveNo: archive.archiveNo,
+    archivedAt: archive.archivedAt.toISOString(),
+    archivedBy: archive.archivedBy,
+    closedReason: archive.closedReason,
+    completedAt: archive.completedAt?.toISOString() ?? null,
+    summary: archive.summary,
+    judgmentSummary: archive.judgmentSummary,
+    checklist: archive.checklistJson,
+    missingItems: archive.missingItems,
+    matter: {
+      id: matter.id,
+      internalCode: matter.internalCode,
+      title: matter.title,
+      category: matter.category,
+      status: matter.status,
+      cause: matter.cause,
+      causeFreeText: matter.causeFreeText,
+      claimAmount: matter.claimAmount?.toString() ?? null,
+      ourStanding: matter.ourStanding,
+      intakeDate: matter.intakeDate?.toISOString() ?? null,
+      firstAcceptedAt: matter.firstAcceptedAt?.toISOString() ?? null,
+      closedAt: matter.closedAt?.toISOString() ?? null,
+      archivedAt: matter.archivedAt?.toISOString() ?? null,
+      owner: matter.owner,
+      primaryClient: matter.primaryClient
+        ? {
+            id: matter.primaryClient.id,
+            name: matter.primaryClient.name,
+            type: matter.primaryClient.type,
+            idNumber: decryptIdNumber(matter.primaryClient.idNumber) || null,
+            phone: matter.primaryClient.phone,
+            email: matter.primaryClient.email,
+            address: matter.primaryClient.address
+          }
+        : null
+    },
+    parties: matter.parties.map((p) => ({
+      role: p.role,
+      standing: p.standing,
+      ordinal: p.ordinal,
+      name: p.name,
+      idNumber: p.idNumber,
+      phone: p.phone,
+      address: p.address,
+      legalRep: p.legalRep,
+      notes: p.notes
+    })),
+    procedures: matter.procedures.map((p) => ({
+      order: p.order,
+      type: p.type,
+      customLabel: p.customLabel,
+      engagement: p.engagement,
+      caseNumber: p.caseNumber,
+      handlingAgency: p.handlingAgency,
+      panel: p.panel,
+      handler: p.handler,
+      acceptedAt: p.acceptedAt?.toISOString() ?? null,
+      status: p.status,
+      outcome: p.outcome,
+      concludedAt: p.concludedAt?.toISOString() ?? null
+    })),
+    timelineEvents: matter.timelineEvents.map((e) => ({
+      occurredAt: e.occurredAt.toISOString(),
+      eventType: e.eventType,
+      title: e.title,
+      content: e.content,
+      refType: e.refType,
+      refId: e.refId
+    })),
+    // v0.48：保全改读三层模型，manifest 仍按"每项财产一条"扁平输出，字段与旧版兼容
+    preservations: matter.preservationCases.flatMap((c) =>
+      c.targets.flatMap((t) =>
+        t.properties.map((p) => ({
+          type: c.type,
+          propertyType: p.propertyType,
+          amount: p.amount?.toString() ?? null,
+          respondent: t.name,
+          court: c.court,
+          rulingNumber: c.rulingNumber,
+          startDate: p.startDate.toISOString(),
+          expiryDate: p.expiryDate.toISOString(),
+          status: p.status,
+          note: c.note
+        }))
+      )
+    ),
+    notes: matter.notes.map((n) => ({
+      channel: n.channel,
+      withWhom: n.withWhom,
+      occurredAt: n.occurredAt.toISOString(),
+      content: n.content,
+      tags: n.tags
+    })),
+    billings: matter.billings.map((b) => ({
+      title: b.title,
+      contractAmount: b.contractAmount.toString(),
+      status: b.status,
+      signedAt: b.signedAt?.toISOString() ?? null
+    })),
+    feeEntries: matter.feeEntries.map((f) => ({
+      type: f.type,
+      amount: f.amount.toString(),
+      occurredAt: f.occurredAt.toISOString(),
+      invoiceNo: f.invoiceNo,
+      payerOrPayee: f.payerOrPayee,
+      method: f.method,
+      note: f.note
+    })),
+    documents: docs.map((d) => ({
+      id: d.id,
+      name: d.name,
+      category: d.category,
+      workflowStatus: d.workflowStatus,
+      version: d.version,
+      isLatest: d.isLatest,
+      size: d.size,
+      sha256: d.sha256,
+      folderName: d.folderName,
+      checklistItemIds: d.checklistItemIds,
+      order: d.order
+    }))
+  };
+  return manifest;
+}
+
+export async function buildArchiveZip(archiveId: string): Promise<ZipResult> {
+  const archive = await prisma.archiveRecord.findUnique({ where: { id: archiveId } });
+  if (!archive || archive.status !== "APPROVED") throw new ActionError("归档记录不存在或尚未批准");
+  const snapshot = parseArchiveSnapshot(archive.checklistJson);
+  if (!snapshot) throw new ActionError("该历史归档记录未固定批准材料，不能生成可核验归档包");
+  let manifest:Awaited<ReturnType<typeof buildArchiveManifest>>;
+  if(await closureReady(prisma)){
+    const [fixed]=await prisma.$queryRaw<{frozenManifest:Awaited<ReturnType<typeof buildArchiveManifest>>|null}[]>`SELECT "frozenManifest" FROM "ArchiveRecord" WHERE id=${archiveId}`;
+    if(!fixed?.frozenManifest)throw new ActionError("批准时未固定卷宗数据，不可生成归档包");
+    manifest=fixed.frozenManifest;
+  }else manifest=await buildArchiveManifest(prisma,archiveId);
+  const matter=manifest.matter;
+  if (!matter) throw new ActionError("案件不存在");
+  await verifyArchivePolicySource(snapshot);
+  const verified = await verifyArchiveSnapshotDocuments(snapshot, matter.id);
+  const docs = [...snapshot.documents].sort((a, b) => a.order - b.order);
+
+  const zip = new PizZip();
+  const root = safeName(archive.archiveNo);
+
+  // ===== manifest.json：结构化数据快照（脱敏：密码、apiKey、authTag 等不导出）
+  zip.file(`${root}/manifest.json`, JSON.stringify(manifest, null, 2));
+
+  // ===== README.md
+  const md = [
+    `# ${matter.title}`,
+    "",
+    `归档编号：**${archive.archiveNo}**  `,
+    `案件编号：${matter.internalCode}  `,
+    `归档日期：${shDayKey(archive.archivedAt)}  `,
+    `归档人：${archive.archivedBy}  `,
+    archive.completedAt ? `结案日期：${shDayKey(archive.completedAt)}` : "",
+    "",
+    "## 结案小结",
+    "",
+    archive.summary,
+    "",
+    archive.judgmentSummary ? "## 裁判结果\n\n" + archive.judgmentSummary + "\n" : "",
+    "## 目录",
+    "",
+    "- `manifest.json` — 案件全量结构化数据（JSON 格式）",
+    "- `封皮和目录/` — 自动生成的卷宗封皮与卷宗目录",
+    "- `材料/` — 全部上传材料按类别分目录归档",
+    "",
+    archive.missingItems.length > 0
+      ? `⚠️ 归档时存在缺项：${archive.missingItems.length} 项（详见 manifest.json）`
+      : ""
+  ]
+    .filter(Boolean)
+    .join("\n");
+  zip.file(`${root}/README.md`, md);
+
+  // ===== 封皮和目录
+  if (archive.coverDocId) {
+    const cover = docs.find((d) => d.id === archive.coverDocId);
+    if (cover) {
+      const buf = verified.buffers.get(cover.id);
+      if (!buf) throw new ActionError("卷宗封皮文件缺失");
+      zip.file(`${root}/封皮和目录/卷宗封皮.docx`, buf);
+    }
+  }
+  if (archive.catalogDocId) {
+    const catalog = docs.find((d) => d.id === archive.catalogDocId);
+    if (catalog) {
+      const buf = verified.buffers.get(catalog.id);
+      if (!buf) throw new ActionError("卷宗目录文件缺失");
+      zip.file(`${root}/封皮和目录/卷宗目录.docx`, buf);
+    }
+  }
+
+  // ===== 材料：跳过已经放进"封皮和目录"的两份
+  const skipIds = new Set(
+    [archive.coverDocId, archive.catalogDocId].filter((x): x is string => !!x)
+  );
+  const seqByCategory: Record<string, number> = {};
+  for (const d of docs) {
+    if (skipIds.has(d.id)) continue;
+    const dir = CATEGORY_DIR[d.category] ?? "其他";
+    const n = (seqByCategory[dir] ?? 0) + 1;
+    seqByCategory[dir] = n;
+    const buf = verified.buffers.get(d.id);
+    if (!buf) throw new ActionError(`归档材料“${d.name}”读取失败`);
+    const seq = String(n).padStart(3, "0");
+    zip.file(`${root}/材料/${dir}/${seq}_${safeName(d.name)}`, buf);
+  }
+
+  Object.values(zip.files).forEach(file=>{file.date=new Date(archive.archivedAt);});
+  const buffer = zip.generate({ type: "nodebuffer" }) as Buffer;
+  return {
+    buffer,
+    fileName: `${root}.zip`,
+    checksum: sha256(buffer),
+    size: buffer.length
+  };
+}

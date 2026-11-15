@@ -1,0 +1,947 @@
+"use client";
+
+import { useTransition, useRef, useState, useEffect, useMemo, useCallback } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "sonner";
+import { ExternalLink, Loader2, Scale, ScanText } from "lucide-react";
+import type { MatterCategory, ProcedureType } from "@prisma/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
+} from "@/components/ui/dialog";
+import {
+  procedureCreateSchema,
+  deadlineCreateSchema,
+  hearingCreateSchema,
+  type ProcedureCreateInput,
+  type DeadlineCreateInput
+} from "@/server/procedures/schemas";
+import {
+  addProcedure,
+  addDeadline,
+  addHearing
+} from "@/server/procedures/actions";
+import { parseSummons } from "@/server/ai/parse-summons";
+import { listDeadlineRulesForProcedure } from "@/server/deadline-rules/actions";
+import {
+  buildDeadlineBasis,
+  computeDeadlineDate,
+  formatLocalDate,
+  periodLabel,
+  HOLIDAY_NOTE
+} from "@/lib/deadline-rules";
+import { procedureTypeLabel } from "@/lib/enums";
+import type { z } from "zod";
+import { actionErrorMessage } from "@/lib/action-error";
+
+// 开庭表单的客户端形态：startsAt 走 datetime-local 字符串 state（上海时区解析），不进 zod
+const hearingFormSchema = hearingCreateSchema.omit({ startsAt: true });
+type HearingFormValues = z.infer<typeof hearingFormSchema>;
+import { proceduresByCategory } from "@/lib/procedures-by-category";
+import { shDayKey } from "@/lib/ui/sh-time";
+import {
+  agencyOptionsForProcedure,
+  isAgencyAllowedForProcedure,
+  isNationalAgency
+} from "@/lib/china-regions";
+import { JurisdictionSelect } from "@/app/(app)/intakes/_components/jurisdiction-select";
+import { cn } from "@/lib/utils";
+
+// ============ AddProcedureSheet ============
+
+const CN_NUM: Record<number, string> = {
+  1: "一",
+  2: "二",
+  3: "三",
+  4: "四",
+  5: "五",
+  6: "六",
+  7: "七",
+  8: "八",
+  9: "九",
+  10: "十"
+};
+
+export function AddProcedureSheet({
+  open,
+  onOpenChange,
+  matterId,
+  category,
+  nextOrder,
+  colleagues,
+  existingTypes
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  matterId: string;
+  category: MatterCategory;
+  nextOrder: number;
+  colleagues?: { id: string; name: string }[];
+  /** 已有的程序类型，防止重复添加 */
+  existingTypes?: string[];
+}) {
+  const [isPending, startTransition] = useTransition();
+  const allOptions = proceduresByCategory[category];
+  const existingSet = new Set(existingTypes ?? []);
+  const procedureOptions = allOptions.filter(p => !existingSet.has(p));
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    getValues,
+    setValue,
+    reset,
+    formState: { errors }
+  } = useForm<ProcedureCreateInput>({
+    resolver: zodResolver(procedureCreateSchema),
+    defaultValues: {
+      matterId,
+      type: procedureOptions[0],
+      customLabel: "",
+      engagement: "ENGAGED",
+      caseNumber: "",
+      handlingAgency: "",
+      panel: "",
+      handler: "",
+      acceptedAt: undefined,
+      jurisdiction: "",
+      leadLawyerId: null,
+      isExternalLead: false
+    }
+  });
+
+  const procedureType = useWatch({ control, name: "type" });
+  const leadLawyerId = useWatch({ control, name: "leadLawyerId" });
+  const isExternalLead = useWatch({ control, name: "isExternalLead" });
+  const jurisdiction = useWatch({ control, name: "jurisdiction" }) ?? "";
+  const handlingAgency = useWatch({ control, name: "handlingAgency" }) ?? "";
+  const agencyOpts = useMemo(
+    () => agencyOptionsForProcedure(jurisdiction, procedureType),
+    [jurisdiction, procedureType]
+  );
+
+  function handleProcedureTypeChange(p: ProcedureType) {
+    setValue("type", p);
+    // 机构可自由手输，只在新程序下不合法时清空（商事仲裁下选了法院）
+    const cur = getValues("handlingAgency");
+    if (cur && !isAgencyAllowedForProcedure(cur, p)) {
+      setValue("handlingAgency", "");
+    }
+  }
+
+  function handleJurisdictionChange(v: string) {
+    setValue("jurisdiction", v);
+    const cur = getValues("handlingAgency");
+    if (isNationalAgency(cur)) {
+      setValue("handlingAgency", "");
+    } else if (cur && !agencyOptionsForProcedure(v, getValues("type")).includes(cur)) {
+      setValue("handlingAgency", "");
+    }
+  }
+
+  function handleHandlingAgencyChange(v: string) {
+    setValue("handlingAgency", v);
+    if (isNationalAgency(v)) {
+      setValue("jurisdiction", "");
+    }
+  }
+
+  function onSubmit(values: ProcedureCreateInput) {
+    startTransition(async () => {
+      try {
+        await addProcedure(values);
+        toast.success(`程序已添加（${procedureTypeLabel[values.type]}）`);
+        reset();
+        onOpenChange(false);
+      } catch (err) {
+        toast.error("添加失败", {
+          description: actionErrorMessage(err)
+        });
+      }
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xl max-h-[85vh] flex flex-col gap-0 p-0">
+        <DialogHeader className="border-b border-border px-6 py-4">
+          <DialogTitle>添加程序（第 {nextOrder} 个）</DialogTitle>
+          <DialogDescription className="text-xs">
+            填写程序基本信息和主办律师
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-1 flex-col overflow-hidden">
+          <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+            {/* 程序类型 */}
+            <div className="space-y-2">
+              <Label className="text-xs">程序类型 *</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {procedureOptions.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => handleProcedureTypeChange(p as ProcedureType)}
+                    className={cn(
+                      "rounded-md border px-2.5 py-1 text-xs transition-colors",
+                      procedureType === p
+                        ? "border-primary bg-primary/15 text-primary"
+                        : "border-border bg-background text-muted-foreground hover:border-input hover:bg-muted hover:text-foreground"
+                    )}
+                  >
+                    {procedureTypeLabel[p]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 主办律师 */}
+            {colleagues && colleagues.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs">主办律师</Label>
+                <div className="flex items-center gap-3">
+                  <Select
+                    value={isExternalLead ? "__external__" : (leadLawyerId ?? "__none__")}
+                    onValueChange={(v) => {
+                      if (v === "__external__") {
+                        setValue("isExternalLead", true);
+                        setValue("leadLawyerId", null);
+                      } else if (v === "__none__") {
+                        setValue("isExternalLead", false);
+                        setValue("leadLawyerId", null);
+                      } else {
+                        setValue("isExternalLead", false);
+                        setValue("leadLawyerId", v);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue placeholder="选择主办律师" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">未指定</SelectItem>
+                      {colleagues.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                      <SelectItem value="__external__">非本所代理</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {isExternalLead && (
+                    <span className="text-xs text-muted-foreground">此程序由外部律师代理</span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="案号">
+                <Input
+                  className="font-mono"
+                  placeholder="如 (2026)沪0105民初1288号"
+                  {...register("caseNumber")}
+                />
+              </Field>
+              <Field label="管辖地">
+                <JurisdictionSelect
+                  value={jurisdiction}
+                  onChange={handleJurisdictionChange}
+                />
+              </Field>
+              <Field label="办理机关">
+                <Select
+                  value={handlingAgency}
+                  onValueChange={handleHandlingAgencyChange}
+                  disabled={agencyOpts.length === 0}
+                >
+                  <SelectTrigger className="h-9 bg-background">
+                    <SelectValue placeholder="选择机构" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {agencyOpts.map((a) => (
+                      <SelectItem key={a} value={a}>{a}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="主审 / 仲裁员">
+                <Input {...register("handler")} />
+              </Field>
+              <Field label="庭别 / 合议庭">
+                <Input {...register("panel")} />
+              </Field>
+              <Field
+                label="立案 / 受理日期"
+                error={errors.acceptedAt?.message as string | undefined}
+              >
+                <Input
+                  type="date"
+                  {...register("acceptedAt")}
+                  onChange={(e) => {
+                    // schema 接收 yyyy-MM-dd 字符串（内部 transform 成 Date），不能塞 Date 对象；
+                    // setValue 按 schema 输出类型（Date）约束，沿用 applyRule 的 cast 写法
+                    setValue("acceptedAt", (e.target.value || undefined) as unknown as Date, { shouldValidate: true });
+                  }}
+                />
+              </Field>
+            </div>
+          </div>
+
+          <DialogFooter className="border-t border-border px-6 py-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isPending}
+            >
+              取消
+            </Button>
+            <Button type="submit" disabled={isPending} className="gap-1.5">
+              {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              添加程序
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============ AddDeadlineSheet ============
+
+const deadlineCategoryLabel: Record<
+  DeadlineCreateInput["category"],
+  string
+> = {
+  LIMITATION: "诉讼时效",
+  EVIDENCE: "举证期限",
+  APPEAL: "上诉期",
+  PERFORMANCE: "履行期",
+  RESPONSE: "答辩期",
+  ENFORCEMENT: "执行申请",
+  ARBITRATION_SET_ASIDE: "撤销仲裁期",
+  PRESERVATION: "保全期限",
+  CUSTOM: "其他"
+};
+
+// 工厂而非内联字面量：dueAt 须在每次打开/重置时取「现在」，常驻挂载的对话框跨天后仍会默认昨天
+function deadlineDefaults(procedureId: string): DeadlineCreateInput {
+  return {
+    procedureId,
+    title: "",
+    category: "CUSTOM",
+    // yyyy-MM-dd 字符串默认值：date input 不回显 Date 对象；空串会在 zod 校验报错并显示
+    dueAt: shDayKey(new Date()) as unknown as Date,
+    basis: "",
+    remindDays: 3
+  };
+}
+
+export function AddDeadlineDialog({
+  open,
+  onOpenChange,
+  procedures,
+  defaultProcedureId
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  /** v0.45：提醒全案聚合，新增期限需明确所处程序 */
+  procedures: { id: string; label: string }[];
+  defaultProcedureId: string;
+}) {
+  const [isPending, startTransition] = useTransition();
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    setValue,
+    reset,
+    formState: { errors }
+  } = useForm<DeadlineCreateInput>({
+    resolver: zodResolver(deadlineCreateSchema),
+    defaultValues: deadlineDefaults(defaultProcedureId)
+  });
+  const procedureId = useWatch({ control, name: "procedureId" });
+  const category = useWatch({ control, name: "category" });
+
+  // v0.49：法定期限规则（按当前程序类型 + 案件类别过滤，全部经元典核验）
+  type RuleOption = Awaited<ReturnType<typeof listDeadlineRulesForProcedure>>[number];
+  const [rules, setRules] = useState<RuleOption[]>([]);
+  const [rulesLoading, setRulesLoading] = useState(false);
+  const [selectedRuleId, setSelectedRuleId] = useState("");
+  // 起算日默认「上海的今天」；后续推算链（date 字符串 → 本地午夜载体 → 本地字段）在浏览器内自洽
+  const [triggerDate, setTriggerDate] = useState(() => shDayKey(new Date()));
+  const selectedRule = rules.find((r) => r.id === selectedRuleId) ?? null;
+  const computedDue = (() => {
+    if (!selectedRule || !triggerDate) return null;
+    const trigger = new Date(`${triggerDate}T00:00:00`);
+    if (Number.isNaN(trigger.getTime())) return null;
+    return computeDeadlineDate(trigger, selectedRule.periodValue, selectedRule.periodUnit);
+  })();
+
+  useEffect(() => {
+    if (!open || !procedureId) return;
+    let cancelled = false;
+    setRulesLoading(true);
+    listDeadlineRulesForProcedure({ procedureId })
+      .then((list) => {
+        if (cancelled) return;
+        setRules(list);
+        setSelectedRuleId((cur) => (list.some((r) => r.id === cur) ? cur : ""));
+      })
+      .catch(() => {
+        if (!cancelled) setRules([]);
+      })
+      .finally(() => {
+        if (!cancelled) setRulesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, procedureId]);
+
+  function applyRule() {
+    if (!selectedRule || !computedDue) return;
+    const trigger = new Date(`${triggerDate}T00:00:00`);
+    setValue("title", selectedRule.name, { shouldDirty: true });
+    setValue("category", selectedRule.category, { shouldDirty: true });
+    // v1.x P0-8: 规则生成的期限带来源——提交后以"待确认"落库，律师核对起算事实后确认
+    setValue("sourceRuleId", selectedRule.id, { shouldDirty: true });
+    // 第六轮体检 P2-1：携带规则起算日，服务端据此按规则重算比对（不一致在 basis 标注）；
+    // 与 dueAt 同款：date 字符串经 as-cast 赋值，提交时 zod coerce.date() 转回
+    setValue("sourceTriggerDate", triggerDate as unknown as Date, { shouldDirty: true });
+    setValue("startFact", `${selectedRule.triggerLabel}（${formatLocalDate(trigger)}）`, {
+      shouldDirty: true
+    });
+    // date input 注册了 valueAsDate，程序化赋值需要 yyyy-MM-dd 字符串才能正确
+    // 回显；提交时 zod coerce.date() 会转回 Date
+    setValue("dueAt", formatLocalDate(computedDue) as unknown as Date, {
+      shouldDirty: true
+    });
+    setValue(
+      "basis",
+      buildDeadlineBasis({
+        legalBasis: selectedRule.legalBasis,
+        triggerLabel: selectedRule.triggerLabel,
+        triggerDate: trigger,
+        periodValue: selectedRule.periodValue,
+        periodUnit: selectedRule.periodUnit
+      }),
+      { shouldDirty: true }
+    );
+    setValue("remindDays", selectedRule.remindDays, { shouldDirty: true });
+    toast.success("已按法定期限填入，可再人工调整", { description: HOLIDAY_NOTE });
+  }
+
+  // 打开（变为 true）时重新生成默认值：defaultValues 只在首次渲染求值，跨天打开默认「到期日」会是昨天
+  useEffect(() => {
+    if (!open) return;
+    reset(deadlineDefaults(defaultProcedureId));
+    // 起算日默认「上海的今天」同理，随打开刷新
+    setTriggerDate(shDayKey(new Date()));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // 打开时把所处程序默认值同步为当前选中程序
+  useEffect(() => {
+    if (open) {
+      setValue("procedureId", defaultProcedureId);
+      // 手动重新打开时清空上次的规则来源（未选规则=人工录入=已确认）
+      if (!selectedRuleId) {
+        setValue("sourceRuleId", "", { shouldDirty: false });
+        setValue("startFact", "", { shouldDirty: false });
+      }
+    }
+  }, [open, defaultProcedureId, setValue, selectedRuleId]);
+
+  function onSubmit(values: DeadlineCreateInput) {
+    startTransition(async () => {
+      try {
+        await addDeadline(values);
+        toast.success("期限已添加");
+        reset();
+        onOpenChange(false);
+      } catch (err) {
+        toast.error("添加失败", {
+          description: actionErrorMessage(err)
+        });
+      }
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[85vh] max-w-md flex-col gap-0 p-0">
+        <DialogHeader className="border-b border-border px-6 py-4">
+          <DialogTitle>添加期限</DialogTitle>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-1 flex-col overflow-hidden">
+          <div className="flex-1 space-y-3 overflow-y-auto px-6 py-5">
+            <Field label="所处程序" required>
+              <Select
+                value={procedureId || undefined}
+                onValueChange={(v) => setValue("procedureId", v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="选择所处程序" />
+                </SelectTrigger>
+                <SelectContent>
+                  {procedures.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+
+            {(rulesLoading || rules.length > 0) && (
+              <section className="space-y-2.5 rounded-md border border-primary/25 bg-primary/[0.04] p-3">
+                <div className="flex items-center gap-1.5 text-[12px] font-medium text-foreground/85">
+                  <Scale className="h-3.5 w-3.5 text-primary" strokeWidth={1.8} />
+                  按法定期限生成
+                  {rulesLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">法定期限规则</Label>
+                  <Select value={selectedRuleId || undefined} onValueChange={setSelectedRuleId}>
+                    <SelectTrigger className="bg-background">
+                      <SelectValue placeholder="选择适用的法定期限" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {rules.map((rule) => (
+                        <SelectItem key={rule.id} value={rule.id}>
+                          {rule.name} · {periodLabel(rule.periodValue, rule.periodUnit)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {selectedRule && (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">
+                        {selectedRule.triggerLabel}
+                      </Label>
+                      <Input
+                        type="date"
+                        value={triggerDate}
+                        onChange={(e) => setTriggerDate(e.target.value)}
+                        className="bg-background"
+                      />
+                    </div>
+                    <div className="space-y-1 text-[11px] leading-5 text-muted-foreground">
+                      <p>
+                        {selectedRule.legalBasis}
+                        {selectedRule.legalBasisUrl && (
+                          <a
+                            href={selectedRule.legalBasisUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="ml-1 inline-flex items-center gap-0.5 text-primary hover:underline"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            查看法条
+                          </a>
+                        )}
+                        {selectedRule.verifiedAt && (
+                          <span className="ml-1.5 rounded bg-[var(--green-bg)] px-1.5 py-0.5 text-[10px] text-[var(--green)]">
+                            已核验 {shDayKey(selectedRule.verifiedAt)}
+                          </span>
+                        )}
+                      </p>
+                      {selectedRule.description && <p>{selectedRule.description}</p>}
+                      {computedDue && (
+                        <p className="font-medium text-foreground/85">
+                          到期日：
+                          <span className="font-mono tabular">
+                            {formatLocalDate(computedDue)}
+                          </span>
+                          <span className="ml-1.5 font-normal text-muted-foreground">
+                            （{HOLIDAY_NOTE}）
+                          </span>
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={applyRule}
+                      disabled={!computedDue}
+                      className="h-7 px-2.5 text-[11px]"
+                    >
+                      填入下方表单
+                    </Button>
+                  </>
+                )}
+              </section>
+            )}
+
+            <Field label="期限名称" required error={errors.title?.message}>
+              <Input
+                placeholder="如：举证截止 / 上诉到期日"
+                {...register("title")}
+              />
+            </Field>
+
+            <Field label="期限类型">
+              <Select
+                value={category}
+                onValueChange={(v) =>
+                  setValue("category", v as DeadlineCreateInput["category"])
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(deadlineCategoryLabel).map(([k, v]) => (
+                    <SelectItem key={k} value={k}>
+                      {v}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+
+            <Field label="到期日" required error={errors.dueAt?.message}>
+              <Input type="date" {...register("dueAt")} />
+            </Field>
+
+            <Field label="计算依据">
+              <Input
+                placeholder="如：判决书送达日 2026-05-01 + 15 日"
+                {...register("basis")}
+              />
+            </Field>
+
+            <Field label="提前提醒（天）" error={errors.remindDays?.message as string | undefined}>
+              <Input
+                type="number"
+                min={0}
+                max={60}
+                className="font-mono tabular"
+                {...register("remindDays", { valueAsNumber: true })}
+              />
+            </Field>
+          </div>
+
+          <DialogFooter className="border-t border-border px-6 py-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isPending}
+            >
+              取消
+            </Button>
+            <Button type="submit" disabled={isPending} className="gap-1.5">
+              {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              添加期限
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============ AddHearingDialog ============
+
+export function AddHearingDialog({
+  open,
+  onOpenChange,
+  procedures,
+  defaultProcedureId,
+  hearingCounts,
+  proceduresDetail
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  procedures: { id: string; label: string }[];
+  defaultProcedureId: string;
+  hearingCounts?: Record<string, number>;
+  /** 各程序附加信息（审理法院等），用于预填 */
+  proceduresDetail?: Record<string, { handlingAgency?: string | null; panel?: string | null; jurisdiction?: string | null }>;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    setValue,
+    formState: { errors }
+  } = useForm<HearingFormValues>({
+    // startsAt 由 datetime-local 字符串 state 承载（+08:00 解析），不经 zod 的本地时区 coerce
+    resolver: zodResolver(hearingFormSchema),
+    defaultValues: {
+      procedureId: defaultProcedureId,
+      title: "",
+      endsAt: undefined,
+      room: "",
+      address: "",
+      judge: "",
+      contact: "",
+      notes: ""
+    }
+  });
+  const [startsAtInput, setStartsAtInput] = useState("");
+  const [startsAtError, setStartsAtError] = useState("");
+
+  const hearingProcedureId = useWatch({ control, name: "procedureId" });
+
+  const autoTitle = useCallback((procId: string) => {
+    const proc = procedures.find(p => p.id === procId);
+    if (!proc) return;
+    const count = (hearingCounts?.[procId] ?? 0) + 1;
+    const numStr = CN_NUM[count] ?? String(count);
+    setValue("title", `${proc.label}第${numStr}次开庭`);
+  }, [hearingCounts, procedures, setValue]);
+
+  // 打开时同步默认程序 + 自动生成主题
+  useEffect(() => {
+    if (!open) return;
+    setValue("procedureId", defaultProcedureId);
+    autoTitle(defaultProcedureId);
+  }, [open, defaultProcedureId, setValue, autoTitle]);
+
+  function handleSummonsUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setOcrLoading(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    startTransition(async () => {
+      try {
+        const result = await parseSummons(fd);
+        // 回填同样用 datetime-local 字符串：Date 对象不会被 input 回显，用户将无法核对
+        if (result.hearingDate && result.hearingTime) {
+          setStartsAtInput(`${result.hearingDate}T${result.hearingTime}`);
+        } else if (result.hearingDate) {
+          setStartsAtInput(`${result.hearingDate}T09:00`);
+        }
+        if (result.courtRoom) setValue("room", result.courtRoom);
+        if (result.judge) setValue("judge", result.judge);
+        if (result.caseNumber || result.parties) {
+          const parts: string[] = [];
+          if (result.caseNumber) parts.push(`案号：${result.caseNumber}`);
+          if (result.parties?.length) parts.push(`当事人：${result.parties.join("、")}`);
+          setValue("notes", parts.join("\n"));
+        }
+        toast.success("传票识别完成，请核对信息");
+      } catch (err) {
+        toast.error("传票识别失败", {
+          description: err instanceof Error ? actionErrorMessage(err) : "请手动填写"
+        });
+      } finally {
+        setOcrLoading(false);
+        // reset file input so same file can be re-selected
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    });
+  }
+
+  function onSubmit(values: HearingFormValues) {
+    // datetime-local 字符串按上海时区解释（境外浏览器不漂移）；为空时就地报错，不再静默
+    if (!startsAtInput.trim()) {
+      setStartsAtError("请填写开庭时间");
+      return;
+    }
+    const parsed = new Date(`${startsAtInput}:00+08:00`);
+    if (Number.isNaN(parsed.getTime())) {
+      setStartsAtError("开庭时间格式不正确");
+      return;
+    }
+    setStartsAtError("");
+    startTransition(async () => {
+      try {
+        await addHearing({ ...values, startsAt: parsed });
+        toast.success("开庭已添加");
+        reset();
+        setStartsAtInput("");
+        setStartsAtError("");
+        onOpenChange(false);
+      } catch (err) {
+        toast.error("添加失败", {
+          description: actionErrorMessage(err)
+        });
+      }
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[85vh] max-w-md flex-col gap-0 p-0">
+        <DialogHeader className="border-b border-border px-6 py-4">
+          <DialogTitle>添加开庭</DialogTitle>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-1 flex-col overflow-hidden">
+          <div className="flex-1 space-y-3 overflow-y-auto px-6 py-5">
+            {/* 上传传票 */}
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic"
+                className="hidden"
+                onChange={handleSummonsUpload}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                disabled={ocrLoading}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {ocrLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ScanText className="h-3.5 w-3.5" />
+                )}
+                {ocrLoading ? "识别中…" : "上传传票识别"}
+              </Button>
+              <span className="text-[11px] text-muted-foreground">
+                上传传票照片，AI 自动填充开庭信息
+              </span>
+            </div>
+
+            <Field label="主题" required error={errors.title?.message}>
+              <Input placeholder="如：第一次开庭" {...register("title")} />
+            </Field>
+
+            {/* 所处程序 + 审理法院 一行 */}
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="所处程序" required>
+                <Select
+                  value={hearingProcedureId || undefined}
+                  onValueChange={(v) => {
+                    setValue("procedureId", v);
+                    autoTitle(v);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择程序" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {procedures.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="审理法院">
+                <Input
+                  readOnly
+                  value={proceduresDetail?.[hearingProcedureId]?.handlingAgency ?? "—"}
+                  className="bg-muted/50 text-muted-foreground"
+                />
+              </Field>
+            </div>
+
+            {/* 开庭时间 + 法庭 一行 */}
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="开庭时间" required error={startsAtError || undefined}>
+                <Input
+                  type="datetime-local"
+                  value={startsAtInput}
+                  onChange={(e) => {
+                    setStartsAtInput(e.target.value);
+                    if (startsAtError) setStartsAtError("");
+                  }}
+                />
+              </Field>
+              <Field label="法庭">
+                <Input placeholder="如：第三法庭" {...register("room")} />
+              </Field>
+            </div>
+
+            {/* 主审/仲裁员 + 联系方式 一行 */}
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="主审 / 仲裁员">
+                <Input {...register("judge")} />
+              </Field>
+              <Field label="联系方式">
+                <Input placeholder="法官/书记员电话" {...register("contact")} />
+              </Field>
+            </div>
+
+            <Field label="开庭地址">
+              <Input placeholder="如：XX路XX号XX法院" {...register("address")} />
+            </Field>
+
+            <Field label="备注">
+              <Textarea rows={4} {...register("notes")} />
+            </Field>
+          </div>
+
+          <DialogFooter className="border-t border-border px-6 py-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isPending}
+            >
+              取消
+            </Button>
+            <Button type="submit" disabled={isPending} className="gap-1.5">
+              {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              添加开庭
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============ Shared Field ============
+
+function Field({
+  label,
+  required,
+  error,
+  children
+}: {
+  label: string;
+  required?: boolean;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="flex items-center gap-1 text-xs">
+        {label}
+        {required && <span className="text-destructive">*</span>}
+      </Label>
+      {children}
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
