@@ -15,12 +15,12 @@ export const archiveSubmitSchema = z.object({
   closedReason: archiveClosedReasonSchema,
   completedAt: z.coerce.date(),
   judgmentSummary: z.string().max(2000).optional().or(z.literal("")),
-  checklistItems: z.record(z.object({
+  checklistItems: z.record(z.string(), z.object({
     status: z.enum(["ATTACHED", "MISSING", "NOT_APPLICABLE"]),
     documentIds: z.array(z.string().cuid()).max(200),
     note: z.string().trim().max(1000).default("")
   })),
-  manualChecks: z.record(z.object({
+  manualChecks: z.record(z.string(), z.object({
     confirmed: z.boolean(),
     note: z.string().trim().max(1000).default("")
   })),

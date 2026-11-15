@@ -22,13 +22,23 @@ export class ActionError extends Error {
   }
 }
 
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 
 // ZodError 同样经 React Flight 脱敏（2026-09-21 生产实测：schema.parse 的校验失败
 // 在客户端表现为 Minified React error #441）。zod 的 issue message 本仓库全部面向
 // 用户（中文），把首条消息经 digest 通道透出；只影响 ZodError 原型，不碰其他 Error。
-if (!("digest" in ZodError.prototype)) {
-  Object.defineProperty(ZodError.prototype, "digest", {
+// Zod 4 的 parse/safeParse 使用独立的错误原型；同时覆盖显式构造与实际解析错误。
+const parseFailure = z.never().safeParse(undefined);
+const errorPrototypes = new Set<object>([ZodError.prototype]);
+if (!parseFailure.success && parseFailure.error instanceof ZodError) {
+  const prototype = Object.getPrototypeOf(parseFailure.error);
+  if (prototype && prototype !== Error.prototype && prototype !== Object.prototype) {
+    errorPrototypes.add(prototype);
+  }
+}
+for (const prototype of errorPrototypes) {
+  if ("digest" in prototype) continue;
+  Object.defineProperty(prototype, "digest", {
     get(this: InstanceType<typeof ZodError>) {
       const msgs = this.issues.slice(0, 2).map(i => i.message).filter(Boolean);
       return `ACTION_ERROR:${msgs.join("；") || "输入信息有误，请检查后重试"}`;

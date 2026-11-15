@@ -109,7 +109,7 @@ export function AddProcedureSheet({
     setValue,
     reset,
     formState: { errors }
-  } = useForm<ProcedureCreateInput>({
+  } = useForm<z.input<typeof procedureCreateSchema>, unknown, ProcedureCreateInput>({
     resolver: zodResolver(procedureCreateSchema),
     defaultValues: {
       matterId,
@@ -294,9 +294,8 @@ export function AddProcedureSheet({
                   type="date"
                   {...register("acceptedAt")}
                   onChange={(e) => {
-                    // schema 接收 yyyy-MM-dd 字符串（内部 transform 成 Date），不能塞 Date 对象；
-                    // setValue 按 schema 输出类型（Date）约束，沿用 applyRule 的 cast 写法
-                    setValue("acceptedAt", (e.target.value || undefined) as unknown as Date, { shouldValidate: true });
+                    // 表单保存日期字符串，resolver 在提交时解析成 Date。
+                    setValue("acceptedAt", e.target.value || undefined, { shouldValidate: true });
                   }}
                 />
               </Field>
@@ -341,13 +340,13 @@ const deadlineCategoryLabel: Record<
 };
 
 // 工厂而非内联字面量：dueAt 须在每次打开/重置时取「现在」，常驻挂载的对话框跨天后仍会默认昨天
-function deadlineDefaults(procedureId: string): DeadlineCreateInput {
+function deadlineDefaults(procedureId: string): z.input<typeof deadlineCreateSchema> {
   return {
     procedureId,
     title: "",
     category: "CUSTOM",
     // yyyy-MM-dd 字符串默认值：date input 不回显 Date 对象；空串会在 zod 校验报错并显示
-    dueAt: shDayKey(new Date()) as unknown as Date,
+    dueAt: shDayKey(new Date()),
     basis: "",
     remindDays: 3
   };
@@ -374,7 +373,7 @@ export function AddDeadlineDialog({
     setValue,
     reset,
     formState: { errors }
-  } = useForm<DeadlineCreateInput>({
+  } = useForm<z.input<typeof deadlineCreateSchema>, unknown, DeadlineCreateInput>({
     resolver: zodResolver(deadlineCreateSchema),
     defaultValues: deadlineDefaults(defaultProcedureId)
   });
@@ -694,7 +693,7 @@ export function AddHearingDialog({
     reset,
     setValue,
     formState: { errors }
-  } = useForm<HearingFormValues>({
+  } = useForm<z.input<typeof hearingFormSchema>, unknown, HearingFormValues>({
     // startsAt 由 datetime-local 字符串 state 承载（+08:00 解析），不经 zod 的本地时区 coerce
     resolver: zodResolver(hearingFormSchema),
     defaultValues: {

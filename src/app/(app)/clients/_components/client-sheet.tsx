@@ -1,5 +1,7 @@
 "use client";
 
+import type { z } from "zod";
+
 import { useEffect, useState, useTransition } from "react";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -81,7 +83,7 @@ export function ClientSheet({ open, onOpenChange, editingClient }: Props) {
     setValue,
     reset,
     formState: { errors }
-  } = useForm<ClientCreateInput>({
+  } = useForm<z.input<typeof clientCreateSchema>, unknown, ClientCreateInput>({
     resolver: zodResolver(clientCreateSchema),
     defaultValues: emptyDefaults
   });

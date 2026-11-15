@@ -1,5 +1,7 @@
 "use client";
 
+import type { z } from "zod";
+
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { useForm, useWatch } from "react-hook-form";
@@ -65,7 +67,7 @@ export function AddBillingSheet({
     setValue,
     reset,
     formState: { errors }
-  } = useForm<BillingCreateInput>({
+  } = useForm<z.input<typeof billingCreateSchema>, unknown, BillingCreateInput>({
     resolver: zodResolver(billingCreateSchema),
     defaultValues: {
       matterId,
@@ -204,14 +206,14 @@ export function AddBillingSheet({
 // ============ AddFeeEntrySheet ============
 
 // 工厂而非内联字面量：occurredAt 须在每次打开/重置时取「现在」，常驻挂载的对话框跨天后仍会默认昨天
-function feeEntryDefaults(matterId: string): FeeEntryCreateInput {
+function feeEntryDefaults(matterId: string): z.input<typeof feeEntryCreateSchema> {
   return {
     matterId,
     billingId: "",
     type: "RECEIVED",
     amount: 0,
     // yyyy-MM-dd 字符串默认值：date input 才能正确回显，提交时由 zod coerce 成 Date（上海当日）
-    occurredAt: shDayKey(new Date()) as unknown as Date,
+    occurredAt: shDayKey(new Date()),
     invoiceNo: "",
     payerOrPayee: "",
     method: "",
@@ -250,7 +252,7 @@ export function AddFeeEntrySheet({
     getValues,
     reset,
     formState: { errors }
-  } = useForm<FeeEntryCreateInput>({
+  } = useForm<z.input<typeof feeEntryCreateSchema>, unknown, FeeEntryCreateInput>({
     resolver: zodResolver(feeEntryCreateSchema),
     defaultValues: feeEntryDefaults(matterId)
   });

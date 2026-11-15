@@ -42,5 +42,5 @@ export const templateRenderSchema = z.object({
   matterId: z.string().cuid(),
   templateId: z.string().cuid(),
   folderId: z.string().cuid().nullable(),
-  overrides: z.record(z.string()).default({})
+  overrides: z.record(z.string(), z.string()).default({})
 });

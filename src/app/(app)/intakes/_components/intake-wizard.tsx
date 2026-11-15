@@ -1,5 +1,7 @@
 "use client";
 
+import type { z } from "zod";
+
 /**
  * 新建收案（墨案 05 效果图：右侧抽屉 + 四步连续表单）。
  *
@@ -176,7 +178,7 @@ export function IntakeWizard({
   const [aiRecSituation, setAiRecSituation] = useState<{ category: MatterCategory; text: string } | null>(null);
   const [aiManualOpen, setAiManualOpen] = useState(false);
 
-  const methods = useForm<IntakeCreateInput>({
+  const methods = useForm<z.input<typeof intakeCreateSchema>, unknown, IntakeCreateInput>({
     resolver: zodResolver(intakeCreateSchema),
     defaultValues: { ...freshDefaults(), ownerUserId: session?.user?.id ?? "", ...editing?.values }
   });
@@ -424,14 +426,14 @@ export function IntakeWizard({
     startTransition(() => performSubmit(payload));
   }
 
-  function onInvalid(formErrors: FieldErrors<IntakeCreateInput>) {
+  function onInvalid(formErrors: FieldErrors<z.input<typeof intakeCreateSchema>>) {
     const keys = Object.keys(formErrors);
     const stepOf = (k: string) => (k === "parties" || k === "ourStanding" || k.startsWith("client") || k.startsWith("contact") ? 1 : k.startsWith("fee") || k === "contingencyTerms" || k.includes("UserId") || k === "coUserIds" ? 2 : 0);
     if (keys.length) setStep(Math.min(...keys.map(stepOf)));
     toast.warning("请补全必填项", { description: firstFormErrorMessage(formErrors) ?? "请检查表单中的红色提示" });
   }
 
-  const STEP_FIELDS: FieldPath<IntakeCreateInput>[][] = [
+  const STEP_FIELDS: FieldPath<z.input<typeof intakeCreateSchema>>[][] = [
     ["title", "category", "firstProcedureType", "causeId", "firstAgency", "jurisdiction", "claimAmount", "claimDescription", "serviceStart", "serviceEnd"],
     ["parties", "ourStanding"],
     ["feeType", "feeAmount", "contingencyTerms", "feeSchedule", "ownerUserId", "coUserIds"]

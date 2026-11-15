@@ -28,8 +28,14 @@ const defCreateSchema = z.object({
   required: z.boolean().default(false)
 });
 
-const defUpdateSchema = defCreateSchema.partial().extend({
-  id: z.string().cuid()
+// 局部更新不继承创建时的默认值，避免只改名称时覆盖类型、选项和必填设置。
+const defUpdateSchema = z.object({
+  id: z.string().cuid(),
+  entityType: entitySchema.optional(),
+  label: z.string().min(1, "字段名称必填").max(40).optional(),
+  fieldType: typeSchema.optional(),
+  options: z.array(z.string().min(1).max(40)).max(50).optional(),
+  required: z.boolean().optional()
 });
 
 /** 列出某实体的字段定义（admin 视图含禁用项；onlyEnabled=true 用于表单渲染） */

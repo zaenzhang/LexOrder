@@ -22,6 +22,8 @@
 | [来源与许可](docs/UPSTREAM_SOURCES.md) | 固定版本事实、官方来源及实际采用边界 |
 | [云环境搭建](docs/CLOUD_SETUP.md) | 环境、配置、启动、测试与访问范围 |
 | [本次验证](docs/WORKBENCH_VALIDATION.md) | 本分支实际执行的验证及未覆盖范围 |
+| [精简交接摘要](docs/PROJECT_HANDOFF.md) | 已确定的决定、完成范围和后续任务 |
+| [依赖维护](docs/DEPENDENCY_AUDIT_20261115.md) | 首次 GitHub CI 发现的问题、修复版本和复验结果 |
 
 快速启动（克隆后先按搭建文档准备私有 `.env`）：
 

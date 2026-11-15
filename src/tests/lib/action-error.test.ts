@@ -25,4 +25,14 @@ describe("action-error 业务错误通道", () => {
     expect(actionErrorMessage("str")).toBe("str");
     expect(actionErrorMessage(null)).toBe("");
   });
+
+  it("safeParse 和异步 parse 继续提供中文校验消息", async () => {
+    const schema = z.string().min(1, "请填写名称");
+    const result = schema.safeParse("");
+    expect(result.success).toBe(false);
+    if (!result.success) expect(actionErrorMessage(result.error)).toBe("请填写名称");
+    await expect(schema.parseAsync("")).rejects.toMatchObject({ digest: "ACTION_ERROR:请填写名称" });
+    expect("digest" in Error.prototype).toBe(false);
+    expect("digest" in Object.prototype).toBe(false);
+  });
 });

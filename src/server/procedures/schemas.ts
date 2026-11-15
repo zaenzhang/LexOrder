@@ -17,6 +17,12 @@ export const procedureOutcomeSchema = z.enum([
   "OTHER"
 ]);
 
+// 表单提供日期字符串，已解析的 Server Action 参数也可携带 Date；空值不参与局部更新。
+const acceptedAtSchema = z.union([z.string(), z.date()]).nullable()
+  .transform(value => (!value ? undefined : new Date(value)))
+  .pipe(z.date({ error: "立案／受理日期格式不正确" }).optional())
+  .optional();
+
 export const procedureCreateSchema = z.object({
   matterId: z.string().cuid(),
   type: procedureTypeSchema,
@@ -27,7 +33,7 @@ export const procedureCreateSchema = z.object({
   handlingAgency: z.string().max(120).optional().or(z.literal("")),
   panel: z.string().max(80).optional().or(z.literal("")),
   handler: z.string().max(40).optional().or(z.literal("")),
-  acceptedAt: z.string().optional().nullable().transform(v => (!v ? undefined : new Date(v))),
+  acceptedAt: acceptedAtSchema,
   // v0.44: 主办律师
   leadLawyerId: z.string().cuid().optional().nullable(),
   isExternalLead: z.boolean().default(false)
@@ -42,7 +48,7 @@ export const procedureUpdateSchema = z.object({
   handlingAgency: z.string().max(120).optional().or(z.literal("")),
   panel: z.string().max(80).optional().or(z.literal("")),
   handler: z.string().max(40).optional().or(z.literal("")),
-  acceptedAt: z.string().optional().nullable().transform(v => (!v ? undefined : new Date(v))),
+  acceptedAt: acceptedAtSchema,
   concludedAt: z.coerce.date().optional(),
   status: procedureStatusSchema.optional(),
   outcome: procedureOutcomeSchema.optional(),
@@ -65,14 +71,14 @@ export const deadlineCreateSchema = z.object({
   procedureId: z.string().cuid(),
   title: z.string().min(1, "期限名称必填").max(100),
   category: deadlineCategorySchema.default("CUSTOM"),
-  // 必填日期：date input 清空得到空串，先归一成 undefined，配中文 required_error 提示补填
+  // 必填日期：date input 清空得到空串，先归一成 undefined，配中文 error 提示补填
   dueAt: z.preprocess(
     v => (v === "" ? undefined : v),
-    z.coerce.date({ required_error: "请选择到期日", invalid_type_error: "请选择到期日" })
+    z.coerce.date({ error: "请选择到期日" })
   ),
   basis: z.string().max(200).optional().or(z.literal("")),
   remindDays: z.coerce
-    .number({ invalid_type_error: "请填写提醒天数" })
+    .number({ error: "请填写提醒天数" })
     .int("提醒天数须为整数")
     .min(0, "提醒天数不能为负")
     .max(60, "提醒天数不能超过 60")
