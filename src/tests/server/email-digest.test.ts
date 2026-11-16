@@ -9,9 +9,10 @@
  * - SMTP 未配置：不发送，但「跳过」写台账（P1-4，不再静默 return）；
  * - 发送失败：失败原因写台账并抛错交队列重试（任务失败，不伪装成功）。
  */
-import { it, expect, vi, beforeEach } from "vitest";
+import { it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { QueueJob } from "@/server/cron/queue";
 
-const { db, sendMail, saveEmail, saveWebhook, claimDueJobs, completeJob, failJob } = vi.hoisted(() => {
+const { db, sendMail, saveEmail, saveWebhook, claimDueJobs, completeJob, failJob, renewJobLease } = vi.hoisted(() => {
   return {
     db: { notification: { findMany: vi.fn() }, user: { findMany: vi.fn() }, jobQueue: { updateMany: vi.fn() }, reminderDelivery: { findFirst: vi.fn(), createMany: vi.fn(), updateMany: vi.fn() }, systemSetting: { upsert: vi.fn() } },
     sendMail: vi.fn(),
@@ -19,7 +20,8 @@ const { db, sendMail, saveEmail, saveWebhook, claimDueJobs, completeJob, failJob
     saveWebhook: vi.fn(),
     claimDueJobs: vi.fn(),
     completeJob: vi.fn(),
-    failJob: vi.fn()
+    failJob: vi.fn(),
+    renewJobLease: vi.fn()
   };
 });
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
@@ -29,7 +31,7 @@ vi.mock("@/lib/notifications/email", () => ({
 }));
 vi.mock("@/server/settings/email-last-result", () => ({ saveEmailLastResult: saveEmail }));
 vi.mock("@/server/settings/webhook-last-result", () => ({ saveWebhookLastResult: saveWebhook }));
-vi.mock("@/server/cron/queue", () => ({ claimDueJobs, completeJob, failJob, recoverStaleLeases: vi.fn() }));
+vi.mock("@/server/cron/queue", () => ({ claimDueJobs, completeJob, failJob, renewJobLease, recoverStaleLeases: vi.fn() }));
 vi.mock("@/server/settings/webhook", () => ({ sendWebhookText: vi.fn(async () => ({ ok: true, skipped: true })) }));
 
 import { processDueJobs } from "@/server/cron/worker";
@@ -38,14 +40,19 @@ import { isEmailConfigured } from "@/lib/notifications/email";
 const USER_A = "cuser00000000000000000001";
 const USER_B = "cuser00000000000000000002";
 
-function digestJob() {
-  return { id: "job-1", type: "email-digest", maxAttempts: 3, payload: {}, leaseUntil: new Date(Date.now() + 60_000), status: "RUNNING" };
+function digestJob(): QueueJob {
+  return { id: "job-1", type: "email-digest", maxAttempts: 3, payload: {}, leaseToken: "email-attempt-one", status: "RUNNING",
+    dedupeKey: "synthetic-email-day", runAt: new Date(), attempts: 0, lastError: null, deliveredAt: null };
 }
+const expectedLease = expect.objectContaining({ id: "job-1", leaseToken: "email-attempt-one" });
 
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(isEmailConfigured).mockReturnValue(true);
   claimDueJobs.mockResolvedValue([digestJob()]);
+  renewJobLease.mockResolvedValue(true);
+  completeJob.mockResolvedValue(true);
+  failJob.mockResolvedValue("RETRY");
   db.jobQueue.updateMany.mockResolvedValue({ count: 1 });
   sendMail.mockResolvedValue(undefined);
   saveEmail.mockResolvedValue(undefined);
@@ -54,6 +61,7 @@ beforeEach(() => {
   db.reminderDelivery.createMany.mockResolvedValue({ count: 1 });
   db.reminderDelivery.updateMany.mockResolvedValue({ count: 0 });
 });
+afterEach(() => { vi.useRealTimers(); });
 
 it("按人聚合外发：每个当日有通知的用户各收到一封，无全局截断", async () => {
   // distinct 查询返回当日用户集；逐人查询按 where.userId 分流
@@ -82,7 +90,8 @@ it("按人聚合外发：每个当日有通知的用户各收到一封，无全�
     expect.objectContaining({ objectType: "DIGEST", channel: "EMAIL", userId: USER_A, status: "SENT" }),
     expect.objectContaining({ objectType: "DIGEST", channel: "EMAIL", userId: USER_B, status: "SENT" })
   ]));
-  expect(completeJob).toHaveBeenCalledWith("job-1");
+  expect(renewJobLease).toHaveBeenCalledWith(expectedLease);
+  expect(completeJob).toHaveBeenCalledWith(expectedLease);
 });
 
 it("队列重试整批重跑：当日已 SENT 的接收人跳过不重发（台账防重复投递）", async () => {
@@ -146,7 +155,7 @@ it("发送失败：失败原因写台账并交队列重试，不伪装成功", a
 
   const result = await processDueJobs(10);
   expect(result).toMatchObject({ processed: 1, succeeded: 0, failed: 1 });
-  expect(failJob).toHaveBeenCalledWith("job-1", 3, "SMTP connection refused");
+  expect(failJob).toHaveBeenCalledWith(expectedLease, 3, "SMTP connection refused");
   expect(completeJob).not.toHaveBeenCalled();
   expect(saveEmail).toHaveBeenCalledWith(expect.objectContaining({
     skipped: false,
@@ -156,4 +165,40 @@ it("发送失败：失败原因写台账并交队列重试，不伪装成功", a
   expect(db.reminderDelivery.createMany).toHaveBeenCalledWith(expect.objectContaining({
     data: [expect.objectContaining({ objectType: "DIGEST", channel: "EMAIL", userId: USER_A, status: "FAILED" })]
   }));
+});
+
+it("执行前续租失败：不执行发送、不写成功也不覆盖其他执行器的失败状态", async () => {
+  renewJobLease.mockResolvedValue(false);
+  expect(await processDueJobs(10)).toEqual({ processed: 1, succeeded: 0, failed: 1 });
+  expect(renewJobLease).toHaveBeenCalledWith(expectedLease);
+  expect(db.notification.findMany).not.toHaveBeenCalled();
+  expect(sendMail).not.toHaveBeenCalled();
+  expect(saveEmail).not.toHaveBeenCalled();
+  expect(completeJob).not.toHaveBeenCalled();
+  expect(failJob).not.toHaveBeenCalled();
+});
+
+it("处理中续租失效：已发邮件如实留账，但迟到完成不计队列成功", async () => {
+  vi.useFakeTimers();
+  renewJobLease.mockResolvedValueOnce(true).mockResolvedValue(false);
+  completeJob.mockResolvedValue(false);
+  db.notification.findMany.mockImplementation(async (args: { distinct?: string[] }) => args.distinct ? [{ userId: USER_A }] : [{ title: "合成提醒", content: null }]);
+  db.user.findMany.mockResolvedValue([{ id: USER_A, name: "合成律师", email: "synthetic@example.invalid" }]);
+  let entered!: () => void, release!: () => void;
+  const sending = new Promise<void>(resolve => { entered = resolve; });
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  sendMail.mockImplementation(async () => { entered(); await gate; });
+  const executing = processDueJobs(10);
+  try {
+    await sending;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(renewJobLease).toHaveBeenCalledTimes(2);
+    expect(renewJobLease).toHaveBeenLastCalledWith(expectedLease);
+  } finally { release(); }
+  expect(await executing).toEqual({ processed: 1, succeeded: 0, failed: 1 });
+  expect(sendMail).toHaveBeenCalledTimes(1);
+  expect(saveEmail).toHaveBeenCalledWith(expect.objectContaining({ sentCount: 1 }));
+  expect(completeJob).toHaveBeenCalledWith(expectedLease);
+  expect(failJob).not.toHaveBeenCalled();
+  expect(vi.getTimerCount()).toBe(0);
 });

@@ -43,6 +43,8 @@ import type { UserOption as PresUserOption } from "@/app/(app)/preservation/_com
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { shDayKey, shDaysFromToday, shMonthDay, shTime } from "@/lib/ui/sh-time";
 import { actionErrorMessage } from "@/lib/action-error";
+import { MaterialProcessingStatus } from "./material-processing-status";
+import { PendingMaterialUploads } from "./pending-material-uploads";
 
 type MatterPayloadBase = Prisma.MatterGetPayload<{
   include: {
@@ -179,6 +181,8 @@ export function MatterDetailTabs({
   customFieldDefs,
   preservationCases,
   evidenceItems,
+  evidenceError,
+  contextNode,
   notes,
   reviewNode, responsibilityNode, closureNode, conflictNode,
   capabilities = { aiReview: false, caseSearch: false }
@@ -217,6 +221,8 @@ export function MatterDetailTabs({
   }[];
   preservationCases: WorkflowPreservationCase[];
   evidenceItems: EvidenceItemRow[];
+  evidenceError?: string | null;
+  contextNode?: React.ReactNode;
   notes: WorkflowNote[];
   /** AI 审查总览（服务端渲染节点），归入「信息总览」 */
   reviewNode?: React.ReactNode;
@@ -238,7 +244,10 @@ export function MatterDetailTabs({
   const [evidenceDocId, setEvidenceDocId] = useState<string | null | undefined>(undefined);
   const evidenceByDoc = useMemo(() => {
     const map = new Map<string, EvidenceItemRow[]>();
-    for (const item of evidenceItems) if (item.sourceDocumentId) map.set(item.sourceDocumentId, [...(map.get(item.sourceDocumentId) ?? []), item]);
+    for (const item of evidenceItems) {
+      const ids = new Set([item.sourceDocumentId, ...(item.sources ?? []).map(source => source.documentId)].filter((id): id is string => Boolean(id)));
+      for (const id of ids) map.set(id, [...(map.get(id) ?? []), item]);
+    }
     return map;
   }, [evidenceItems]);
   const canAddEvidence = canAssociateThisMatter && matter.status !== "ARCHIVED";
@@ -246,7 +255,7 @@ export function MatterDetailTabs({
     () => ({
       ...(capabilities.aiReview && allowed("documents.write") ? { onReview: (id: string) => setReviewDocId(id) } : {}),
       evidenceByDoc,
-      unlinkedEvidence: evidenceItems.filter((it) => !it.sourceDocumentId),
+      unlinkedEvidence: evidenceItems.filter((it) => !it.sourceDocumentId && !(it.sources ?? []).some(source => source.documentId)),
       ...(canAddEvidence ? { onAddEvidence: (docId: string | null) => setEvidenceDocId(docId) } : {})
     }),
     [capabilities.aiReview, currentUserRole, rolePermissions, evidenceByDoc, evidenceItems, canAddEvidence] // eslint-disable-line react-hooks/exhaustive-deps
@@ -295,9 +304,8 @@ export function MatterDetailTabs({
   );
 
   // 当前选中程序的文档
-  const procDocs = currentProcedure
-    ? documents
-        .filter((d) => d.procedureId === currentProcedure.id)
+  const procDocs = documents
+        .filter((d) => !d.procedureId || d.procedureId === currentProcedure?.id || !engagedProcedures.some(p => p.id === d.procedureId))
         .map((d) => ({
           id: d.id,
           name: d.name,
@@ -306,9 +314,9 @@ export function MatterDetailTabs({
           size: d.size,
           createdAt: d.createdAt,
           sourceParty: d.sourceParty,
-          path: d.path,
           tags: d.tags ?? [],
           stageId: d.stageId ?? null,
+          procedureId: d.procedureId ?? null,
           sourceOrigin: d.sourceOrigin ?? null,
           ocrStatus: d.ocrStatus ?? null,
           textSource: d.textSource ?? null,
@@ -316,8 +324,7 @@ export function MatterDetailTabs({
           sha256: d.sha256 ?? null,
           templateId: d.templateId ?? null,
           version: d.version ?? null
-        }))
-    : [];
+        }));
   const procedureParties = buildProcedurePartyOptions(matter);
   const customValues =
     matter.customValues &&
@@ -421,7 +428,7 @@ export function MatterDetailTabs({
             </div>
           </div>
           <div className="ctx-actions">
-            {canAssociateThisMatter && allowed("documents.write") && currentProcedure && !isArchived ? (
+            {canAssociateThisMatter && allowed("documents.write") && !isArchived ? (
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => workflowApi.current?.openUpload()}>
                 <Upload />
                 上传材料
@@ -533,6 +540,7 @@ export function MatterDetailTabs({
         archiveNode={<>
           <MatterArchive
             matter={matter}
+            contextNode={contextNode}
             currentProcedure={currentProcedure}
             parties={parties}
             billings={finance.billings}
@@ -553,7 +561,12 @@ export function MatterDetailTabs({
         archiveRailTop={<><TeamRailCard matter={matter} canManage={canOwnThisMatter} onManage={() => setMatterEditorOpen(true)} />{conflictNode}</>}
         expresses={expresses}
         onAddLedger={canAssociateThisMatter && currentProcedure ? (type) => setLedgerAdd(type) : undefined}
-        materialsExtra={reviewNode}
+        materialsExtra={<>
+          {evidenceError ? <p role="alert" className="text-sm text-destructive">证据要点读取失败：{evidenceError} <button type="button" className="underline" onClick={() => router.refresh()}>重新加载</button></p> : null}
+          {canAssociateThisMatter && allowed("documents.write") ? <PendingMaterialUploads key={matter.id} matterId={matter.id} /> : null}
+          {allowed("documents.read") ? <MaterialProcessingStatus matterId={matter.id} documentIds={procDocs.map(document => document.id)} canManage={canAssociateThisMatter && !isArchived && allowed("documents.write")} /> : null}
+          {reviewNode}
+        </>}
         onCaseSearch={capabilities.caseSearch && allowed("matters.write") ? () => setCaseSearchOpen(true) : undefined}
         financeNode={
           <div className="dos-main">

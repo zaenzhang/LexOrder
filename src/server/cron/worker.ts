@@ -11,11 +11,11 @@ import { isEmailConfigured, sendReminderEmail } from "@/lib/notifications/email"
 import { saveWebhookLastResult, type ReminderWebhookLastResult } from "@/server/settings/webhook-last-result";
 import { saveEmailLastResult } from "@/server/settings/email-last-result";
 import { recordDeliveryOutcome } from "@/server/reminders/ledger";
-import { claimDueJobs, completeJob, failJob } from "./queue";
+import { claimDueJobs, completeJob, failJob, renewJobLease, type JobLease } from "./queue";
 import { shDayKey } from "@/lib/ui/sh-time";
 import { ActionError } from "@/lib/action-error";
 
-type JobHandler = (payload: Record<string, unknown>) => Promise<void>;
+type JobHandler = (payload: Record<string, unknown>, lease: JobLease) => Promise<void>;
 
 /** webhook 摘要投递：扫描侧只入队，实际外发与结果落库都在这里（F-1 阶段三起同时落台账行） */
 const webhookDigestHandler: JobHandler = async (payload) => {
@@ -202,6 +202,18 @@ const smsFileAnalysisHandler: JobHandler = async (payload) => {
 };
 
 const handlers: Record<string, JobHandler> = {
+  "document.ingest-reconcile": async (payload, lease) => {
+    const { reconcileMaterialIngest } = await import("@/server/documents/material-ingest");
+    await reconcileMaterialIngest(payload, lease);
+  },
+  "document.parse": async (payload, lease) => {
+    const { processMaterialJob } = await import("@/server/documents/material-processing");
+    await processMaterialJob(payload, lease);
+  },
+  "document.purge": async (payload, lease) => {
+    const { purgeWithdrawnDocument } = await import("@/server/documents/material-ingest");
+    await purgeWithdrawnDocument(payload, lease);
+  },
   "webhook-digest": webhookDigestHandler,
   "email-digest": emailDigestHandler,
   "sms.attachment_fetch": smsAttachmentFetchHandler,
@@ -213,27 +225,28 @@ export async function processDueJobs(limit = 10): Promise<{ processed: number; s
   let succeeded = 0;
   let failed = 0;
   for (const job of jobs) {
+    if (!await renewJobLease(job)) { failed++; continue; }
     const handler = handlers[job.type];
     if (!handler) {
-      await failJob(job.id, job.maxAttempts, `未知任务类型：${job.type}`);
+      await failJob(job, job.maxAttempts, `未知任务类型：${job.type}`);
       failed++;
       continue;
     }
-    // 逐人同步发邮件可能超过默认 5 分钟租约：给摘要类任务单独延长租约，
-    // 避免执行中被第二 worker 重领造成重复投递。
-    if (job.type === "email-digest" || job.type === "webhook-digest") {
-      await prisma.jobQueue.updateMany({
-        where: { id: job.id, status: "RUNNING" },
-        data: { leaseUntil: new Date(Date.now() + 20 * 60_000) }
-      });
-    }
+    let renewal: Promise<unknown> | null = null;
+    const heartbeat = setInterval(() => {
+      if (!renewal) renewal = renewJobLease(job).catch(() => false).finally(() => { renewal = null; });
+    }, 60_000);
+    heartbeat.unref();
     try {
-      await handler((job.payload ?? {}) as Record<string, unknown>);
-      await completeJob(job.id);
-      succeeded++;
+      await handler((job.payload ?? {}) as Record<string, unknown>, job);
+      if (await completeJob(job)) succeeded++;
+      else failed++;
     } catch (err) {
-      await failJob(job.id, job.maxAttempts, err instanceof Error ? err.message : String(err));
+      await failJob(job, job.maxAttempts, err instanceof Error ? err.message : String(err));
       failed++;
+    } finally {
+      clearInterval(heartbeat);
+      if (renewal) await renewal;
     }
   }
   return { processed: jobs.length, succeeded, failed };

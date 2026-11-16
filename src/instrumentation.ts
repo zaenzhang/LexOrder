@@ -7,10 +7,11 @@
  * Node.js 运行时内动态加载调度器，让生产构建包含依赖并隔离 Edge 运行时。
  */
 export async function register() {
-  if (process.env.NEXT_RUNTIME !== "nodejs") return;
-  if (process.env.NODE_ENV !== "production") return;
-  if (process.env.DISABLE_CRON === "1") return;
-
-  const { registerCronJobs } = await import("./server/cron/scheduler");
-  registerCronJobs();
+  // Keep the dynamic import inside the literal runtime branch so Next also
+  // removes Node-only job dependencies from the Edge instrumentation bundle.
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    if (process.env.NODE_ENV !== "production" || process.env.DISABLE_CRON === "1") return;
+    const { registerCronJobs } = await import("./server/cron/scheduler");
+    registerCronJobs();
+  }
 }

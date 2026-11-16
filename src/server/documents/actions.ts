@@ -17,14 +17,12 @@ import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/session";
 import { audit } from "@/server/audit";
 import { assertDocumentWritable } from "@/lib/archive/guard";
-import { matterVisibilityFilter, matterAssociationFilter, assertCanHandleMatter, assertCanLeadMatter } from "@/lib/permissions";
-import { storage } from "@/lib/storage";
+import { matterVisibilityFilter, matterAssociationFilter, assertCanHandleMatter } from "@/lib/permissions";
 import { validateUploadedFile } from "@/lib/storage/file-validator";
 import { encryptBuffer, sha256 } from "@/lib/storage/crypto";
 import { extractDocumentTextLayer, ocrStatusFor } from "@/lib/documents/text-extraction";
 import { revalidateMatter } from "@/server/matters/route";
-import { assertDocumentNotInPendingArchive } from "@/server/archive/verification";
-import { recordTimelineEvent } from "@/server/timeline/record";
+import { ingestMaterial, withdrawMaterial } from "./material-ingest";
 import { ActionError } from "@/lib/action-error";
 
 const documentCategorySchema = z.enum([
@@ -153,104 +151,27 @@ export async function uploadDocument(formData: FormData) {
   const raw = Buffer.from(await file.arrayBuffer());
   const hash = sha256(raw);
 
-  const storageBucket = matterId ? `m_${matterId}` : `i_${intakeId}`;
-
-  let path: string;
-  let iv: string | null = null;
-  let authTag: string | null = null;
-  let algorithm: string | null = null;
-
-  if (encrypted) {
-    const enc = encryptBuffer(raw);
-    path = await storage.writeFile(storageBucket, enc.ciphertext);
-    iv = enc.iv.toString("base64");
-    authTag = enc.authTag.toString("base64");
-    algorithm = enc.algorithm;
-  } else {
-    path = await storage.writeFile(storageBucket, raw);
-  }
-
-  const archiveChecklistItemId =
-    typeof archiveChecklistItemIdRaw === "string" && archiveChecklistItemIdRaw
-      ? archiveChecklistItemIdRaw
-      : null;
-
-  const created = await documentMutation(session.user,{intakeId,matterId}, async roleDb => roleDb.document.create({
-    data: {
-      matterId,
-      intakeId,
+  const enc = encrypted ? encryptBuffer(raw) : null;
+  const requestKey = formData.get("requestKey");
+  const created = await ingestMaterial({
+    userId: session.user.id,
+    requestKey: typeof requestKey === "string" && requestKey ? requestKey : undefined,
+    bytes: enc ? enc.ciphertext : raw,
+    document: {
+      matterId, intakeId,
       procedureId: typeof procedureId === "string" && procedureId ? procedureId : null,
-      stageId: matterId ? stageId : null,
-      folderId,
-      name,
-      category: parsedCategory,
+      stageId: matterId ? stageId : null, folderId, name: name.trim(), category: parsedCategory,
       sourceOrigin,
-      sourceParty:
-        typeof sourcePartyRaw === "string" && sourcePartyRaw.trim()
-          ? sourcePartyRaw.trim()
-          : null,
-      path,
-      mimeType: validated.mimeType,
-      size: file.size,
-      sha256: hash,
-      encrypted,
-      algorithm,
-      iv,
-      authTag,
-      tags,
-      archiveChecklistItemId,
+      sourceParty: typeof sourcePartyRaw === "string" && sourcePartyRaw.trim() ? sourcePartyRaw.trim() : null,
+      mimeType: validated.mimeType, size: file.size, sha256: hash, encrypted,
+      algorithm: enc?.algorithm ?? null, iv: enc ? enc.iv.toString("base64") : null,
+      authTag: enc ? enc.authTag.toString("base64") : null, tags,
+      archiveChecklistItemId: typeof archiveChecklistItemIdRaw === "string" && archiveChecklistItemIdRaw ? archiveChecklistItemIdRaw : null,
       uploadedById: session.user.id
     }
-  }));
-
-  await audit({
-    userId: session.user.id,
-    action: "DOCUMENT_UPLOAD",
-    targetType: "Document",
-    targetId: created.id,
-    detail: { matterId, intakeId, name, encrypted, size: file.size }
   });
-
-  // v1.x 版本链：新上传即族首（familyId 指向自身，后续新版本挂同一族）
-  await prisma.document.update({
-    where: { id: created.id },
-    data: { familyId: created.id }
-  }).catch(() => undefined);
-
-  // v1.x P0-2: 抽取文本层（docx / PDF 文本层 / 纯文本；扫描件标 SKIP，
-  // 失败标 FAILED——失败页不可隐去）。抽取基于未加密内存副本，不读回存储；
-  // 抽取失败不影响上传成功，但状态落库供维护与重试。
-  try {
-    const layer = await extractDocumentTextLayer(raw, validated.mimeType);
-    await prisma.document.update({
-      where: { id: created.id },
-      data: {
-        textContent: layer.text.slice(0, 500_000),
-        pageCount: layer.pageCount,
-        textSource: layer.source,
-        ocrStatus: "READY"
-      }
-    });
-  } catch (err) {
-    await prisma.document.update({
-      where: { id: created.id },
-      data: { ocrStatus: ocrStatusFor(err) }
-    }).catch(() => {
-      // 状态落库失败随上传返回值暴露（不静默），但不阻断已成功的上传
-    });
-  }
-
-  // v0.43 项4：写入案件动态时间线（仅案件文档）
-  if (matterId) {
-    await roleMutation(session.user, "documents.write", async roleDb => recordTimelineEvent(roleDb, {
-        matterId,
-        eventType: "DOCUMENT_UPLOADED",
-        title: `上传材料：${name.trim()}`,
-        occurredAt: new Date(),
-        refType: "Document",
-        refId: created.id
-      }));
-  }
+  // Intake uses its existing text path until its separate source ownership contract is implemented.
+  if (!matterId) await extractIntakeText(created.id, raw, validated.mimeType);
 
   if (matterId) await revalidateMatter(matterId);
   if (intakeId) revalidatePath(`/intakes/${intakeId}`);
@@ -259,69 +180,34 @@ export async function uploadDocument(formData: FormData) {
 
 export async function deleteDocument(id: string) {
   const session = await requireSession("documents.write");
-  const doc = await prisma.document.findUnique({ where: { id } });
+  const doc = await withdrawMaterial(session.user.id, id, false);
   if (!doc) return { ok: false };
-  await assertDocumentNotInPendingArchive(id);
-
-  if (doc.matterId) {
-    await assertDocumentWritable(doc.matterId, { kind: "modify" });
-    if (doc.uploadedById !== session.user.id) {
-      await assertCanLeadMatter(session.user.id, doc.matterId, "只能删除自己上传的材料，或由本案主办/协办删除");
-    }
-  } else if (
-    doc.uploadedById !== session.user.id &&
-    session.user.role !== "PRINCIPAL_LAWYER"
-  ) {
-    throw new ActionError("只能删除自己上传的材料");
-  }
-
-  // 软删除（保留文件以备审计），如需物理删除走单独脚本
-  await documentMutation(session.user,doc, async roleDb => roleDb.document.update({
-    where: { id },
-    data: { deletedAt: new Date() }
-  }));
-
-  await audit({
-    userId: session.user.id,
-    action: "DOCUMENT_DELETE",
-    targetType: "Document",
-    targetId: id,
-    detail: { matterId: doc.matterId, intakeId: doc.intakeId, name: doc.name }
-  });
-
   if (doc.matterId) await revalidateMatter(doc.matterId);
-  revalidatePath("/approvals");
   if (doc.intakeId) revalidatePath(`/intakes/${doc.intakeId}`);
+  revalidatePath("/approvals");
   return { ok: true };
 }
 
 export async function hardDeleteDocument(id: string) {
   const session = await requireSession("documents.write");
-  if (session.user.role !== "PRINCIPAL_LAWYER") {
-    throw new ActionError("仅主任律师可彻底删除材料");
-  }
-  const doc = await prisma.document.findUnique({ where: { id } });
+  const doc = await withdrawMaterial(session.user.id, id, true);
   if (!doc) return { ok: false };
-  await assertDocumentNotInPendingArchive(id);
-  await assertDocumentWritable(doc.matterId, { kind: "modify" });
-
-  await documentMutation(session.user,doc, async roleDb => {
-    await storage.deleteFile(doc.path);
-    return roleDb.document.delete({ where: { id } });
-  });
-
-  await audit({
-    userId: session.user.id,
-    action: "DOCUMENT_HARD_DELETE",
-    targetType: "Document",
-    targetId: id,
-    detail: { matterId: doc.matterId, intakeId: doc.intakeId, name: doc.name }
-  });
-
   if (doc.matterId) await revalidateMatter(doc.matterId);
-  revalidatePath("/approvals");
   if (doc.intakeId) revalidatePath(`/intakes/${doc.intakeId}`);
-  return { ok: true };
+  revalidatePath("/approvals");
+  return { ok: true, queued: true };
+}
+
+async function extractIntakeText(id: string, raw: Buffer, mimeType: string) {
+  try {
+    const layer = await extractDocumentTextLayer(raw, mimeType);
+    await prisma.document.updateMany({ where: { id, deletedAt: null, parseGeneration: 0 }, data: {
+      textContent: layer.text.slice(0, 500_000), pageCount: layer.pageCount, textSource: layer.source,
+      ocrStatus: layer.text.length > 500_000 ? "PARTIAL" : "READY"
+    } });
+  } catch (error) {
+    await prisma.document.updateMany({ where: { id, deletedAt: null, parseGeneration: 0 }, data: { ocrStatus: ocrStatusFor(error) } });
+  }
 }
 
 const docListQuerySchema = z.object({
@@ -517,13 +403,15 @@ export async function uploadNewVersion(input: {
   category?: string;
   /** 受控回传（桌面连接器）：取件令牌，校验归属与基线 */
   checkoutToken?: string;
+  requestKey?: string;
 }): Promise<{ ok: true; id: string; version: number }> {
   const session = await requireSession("documents.write");
   // 2026-09-19 审计修复：此前新版本不经任何类型/大小校验、落库 MIME 取客户端值。
   const validated = validateUploadedFile(input.file, { purpose: "document", maxBytes: MAX_FILE_SIZE });
   const prior = await prisma.document.findUnique({ where: { id: input.documentId } });
   if (!prior || prior.deletedAt) throw new ActionError("原材料不存在");
-  if (!prior.isLatest) throw new ActionError("只能基于最新版本更新");
+  // The final transaction checks the head. A committed request may be replayed
+  // after its response was lost even though its prior version is no longer latest.
 
   if (prior.matterId) {
     // 替换材料内容属材料操作（P1-1）：合伙人全所口径，其余岗位（含管理权）须经办，
@@ -552,69 +440,21 @@ export async function uploadNewVersion(input: {
   // 此前写死 false 会让「传新版本」把已加密材料静默替换成明文落盘。
   const encrypted = prior.encrypted;
   const enc = encrypted ? encryptBuffer(raw) : null;
-  const path = await storage.writeFile(prior.matterId ? `m_${prior.matterId}` : `i_${prior.intakeId}`, enc ? enc.ciphertext : raw);
-
-  const created = await documentMutation(session.user,prior,async tx => {
-    await tx.document.updateMany({
-      where: { familyId: prior.familyId ?? prior.id, isLatest: true },
-      data: { isLatest: false }
-    });
-    return tx.document.create({
-      data: {
-        matterId: prior.matterId,
-        intakeId: prior.intakeId,
-        procedureId: prior.procedureId,
-        stageId: prior.stageId,
-        folderId: prior.folderId,
-        name: input.file.name || prior.name,
-        category: (input.category as never) ?? prior.category,
-        sourceParty: prior.sourceParty,
-        sourceOrigin: prior.sourceOrigin,
-        path,
-        mimeType: validated.mimeType,
-        size: input.file.size,
-        sha256: hash,
-        encrypted,
-        algorithm: enc?.algorithm ?? null,
-        iv: enc ? enc.iv.toString("base64") : null,
-        authTag: enc ? enc.authTag.toString("base64") : null,
-        familyId: prior.familyId ?? prior.id,
-        version: prior.version + 1,
-        isLatest: true,
-        uploadedById: session.user.id
-      },
-      select: { id: true, version: true }
-    });
+  const created = await ingestMaterial({
+    userId: session.user.id, priorDocumentId: prior.id, requestKey: input.requestKey, checkout,
+    bytes: enc ? enc.ciphertext : raw,
+    document: {
+      matterId: prior.matterId, intakeId: prior.intakeId, procedureId: prior.procedureId,
+      stageId: prior.stageId, folderId: prior.folderId, name: input.file.name || prior.name,
+      category: input.category ? documentCategorySchema.parse(input.category) : prior.category,
+      sourceParty: prior.sourceParty, sourceOrigin: prior.sourceOrigin,
+      mimeType: validated.mimeType, size: input.file.size, sha256: hash, encrypted,
+      algorithm: enc?.algorithm ?? null, iv: enc ? enc.iv.toString("base64") : null,
+      authTag: enc ? enc.authTag.toString("base64") : null, tags: prior.tags,
+      archiveChecklistItemId: prior.archiveChecklistItemId, uploadedById: session.user.id
+    }
   });
-
-  await audit({
-    userId: session.user.id,
-    action: "DOCUMENT_NEW_VERSION",
-    targetType: "Document",
-    targetId: created.id,
-    detail: { priorId: prior.id, familyId: prior.familyId ?? prior.id, version: created.version, sha256: hash, ...(checkout ? { controlledReturn: true, checkoutJti: checkout.jti, baselineVersion: checkout.baselineVersion } : {}) }
-  });
-
-  // 新版本同样抽取文本层（沿用上传路径口径）
-  try {
-    const { extractDocumentTextLayer } = await import("@/lib/documents/text-extraction");
-    const layer = await extractDocumentTextLayer(raw, validated.mimeType);
-    await prisma.document.update({
-      where: { id: created.id },
-      data: {
-        textContent: layer.text.slice(0, 500_000),
-        pageCount: layer.pageCount,
-        textSource: layer.source,
-        ocrStatus: "READY"
-      }
-    });
-  } catch (err) {
-    const { ocrStatusFor } = await import("@/lib/documents/text-extraction");
-    await prisma.document.update({
-      where: { id: created.id },
-      data: { ocrStatus: ocrStatusFor(err) }
-    }).catch(() => undefined);
-  }
+  if (!prior.matterId) await extractIntakeText(created.id, raw, validated.mimeType);
 
   if (prior.matterId) await revalidateMatter(prior.matterId);
   if (prior.intakeId) revalidatePath(`/intakes/${prior.intakeId}`);

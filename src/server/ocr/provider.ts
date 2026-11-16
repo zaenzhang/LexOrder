@@ -15,6 +15,8 @@
 import { prisma } from "@/lib/prisma";
 import { aiVision } from "@/lib/ai/client";
 import { ActionError } from "@/lib/action-error";
+import { encryptBuffer, decryptBuffer } from "@/lib/storage/crypto";
+import type { Prisma } from "@prisma/client";
 
 const OCR_SETTINGS_KEY = "ocrSettings";
 
@@ -25,6 +27,48 @@ export interface StoredOcrSettings {
   supportsPdf?: boolean;
 }
 
+type OcrCipher = { ct: string; iv: string; tag: string };
+type OcrConfiguration = StoredOcrSettings & { enabled?: boolean; apiKeyCipher?: OcrCipher | null };
+function encryptOcrKey(key: string): OcrCipher {
+  const encrypted = encryptBuffer(Buffer.from(key, "utf8"));
+  return { ct: encrypted.ciphertext.toString("base64"), iv: encrypted.iv.toString("base64"), tag: encrypted.authTag.toString("base64") };
+}
+async function readOcrConfiguration(migrateLegacy = true): Promise<OcrConfiguration> {
+  const row = await prisma.systemSetting.findUnique({ where: { key: OCR_SETTINGS_KEY } });
+  const raw = row?.value && typeof row.value === "object" && !Array.isArray(row.value) ? row.value as Partial<OcrConfiguration> : {};
+  const stored: OcrConfiguration = { ...raw, endpoint: typeof raw.endpoint === "string" ? raw.endpoint : "", apiKey: typeof raw.apiKey === "string" ? raw.apiKey : undefined };
+  if (migrateLegacy && typeof stored.apiKey === "string" && stored.apiKey && !stored.apiKeyCipher) {
+    // Upgrade only the exact row read. A concurrent credential edit is never overwritten.
+    const { apiKey, ...rest } = stored;
+    const next = { ...rest, apiKeyCipher: encryptOcrKey(apiKey) };
+    const changed = await prisma.systemSetting.updateMany({ where: { key: OCR_SETTINGS_KEY, value: { equals: row!.value as Prisma.InputJsonValue } }, data: { value: next as object } });
+    return changed.count ? next : readOcrConfiguration(false);
+  }
+  return stored;
+}
+function resolveOcrKey(stored: OcrConfiguration): string | undefined {
+  if (stored.apiKeyCipher) return decryptBuffer(Buffer.from(stored.apiKeyCipher.ct, "base64"), stored.apiKeyCipher.iv, stored.apiKeyCipher.tag).toString("utf8");
+  // Read compatibility for a concurrent legacy write; all new writes below use ciphertext.
+  return typeof stored.apiKey === "string" ? stored.apiKey || undefined : undefined;
+}
+
+export async function readPublicOcrSettings() {
+  let stored: OcrConfiguration;
+  let configurationError: string | undefined;
+  try { stored = await readOcrConfiguration(); resolveOcrKey(stored); }
+  catch {
+    stored = await readOcrConfiguration(false);
+    configurationError = "OCR 密钥无法解密或迁移，请重新填写密钥并保存；其他服务不受影响。";
+  }
+  return {
+    enabled: typeof stored.enabled === "boolean" ? stored.enabled : !!stored.endpoint,
+    endpoint: typeof stored.endpoint === "string" ? stored.endpoint : "",
+    apiKey: stored.apiKeyCipher || stored.apiKey ? "已保存" : "",
+    supportsPdf: stored.supportsPdf === true,
+    configurationError,
+  };
+}
+
 export class OcrNotConfiguredError extends Error {
   constructor(reason: string) {
     super(`OCR 不可用：${reason}。可在管理后台「AI 与元典」配置视觉模型，或在系统设置配置 OCR 服务`);
@@ -33,17 +77,27 @@ export class OcrNotConfiguredError extends Error {
 }
 
 export async function readOcrSettings(): Promise<StoredOcrSettings | null> {
-  const row = await prisma.systemSetting.findUnique({ where: { key: OCR_SETTINGS_KEY } });
-  const stored = row?.value as Partial<StoredOcrSettings> | null;
-  if (!stored?.endpoint) return null;
-  return { endpoint: stored.endpoint, apiKey: stored.apiKey || undefined, supportsPdf: stored.supportsPdf === true };
+  try {
+    const current = await readOcrConfiguration(false);
+    if (!current.endpoint || current.enabled === false) return null;
+    const stored = current.apiKey && !current.apiKeyCipher ? await readOcrConfiguration() : current;
+    if (!stored.endpoint || stored.enabled === false) return null;
+    return { endpoint: stored.endpoint, apiKey: resolveOcrKey(stored), supportsPdf: stored.supportsPdf === true };
+  } catch { throw new OcrNotConfiguredError("网关凭据无法读取，请管理员重新保存 OCR 配置"); }
 }
 
-export async function saveOcrSettings(input: StoredOcrSettings) {
+export async function saveOcrSettings(input: StoredOcrSettings & { enabled?: boolean; clearKey?: boolean }) {
+  const current = await readOcrConfiguration(false);
+  const key = input.apiKey?.trim();
+  const next = {
+    endpoint: input.endpoint, enabled: input.enabled ?? current.enabled ?? !!input.endpoint,
+    supportsPdf: input.supportsPdf === true,
+    apiKeyCipher: input.clearKey ? null : key ? encryptOcrKey(key) : current.apiKeyCipher ?? (current.apiKey ? encryptOcrKey(current.apiKey) : null),
+  };
   await prisma.systemSetting.upsert({
     where: { key: OCR_SETTINGS_KEY },
-    create: { key: OCR_SETTINGS_KEY, value: input as object },
-    update: { value: input as object }
+    create: { key: OCR_SETTINGS_KEY, value: next as object },
+    update: { value: next as object }
   });
 }
 

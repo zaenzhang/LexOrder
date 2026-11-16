@@ -15,6 +15,8 @@ import { matterHref } from "@/lib/matters/route";
 import { customMatterFilter } from "@/lib/permissions";
 import { clientTypeLabel, deadlineCategoryLabel, intakeStatusLabel, matterStatusLabel } from "@/lib/enums";
 import type { DocumentSourceOrigin, Prisma } from "@prisma/client";
+import { materialTextProjection, publishedMaterialSnapshot } from "@/server/documents/material-processing";
+import type { SourceAnchor } from "@/lib/workbench/contracts";
 
 export interface SearchResultItem {
   id: string;
@@ -36,6 +38,10 @@ export interface SearchResultItem {
   dueAt?: string;
   /** 材料/期限所属案件链接（「跳转案件」） */
   matterLink?: string;
+  documentVersion?: number;
+  parseRunId?: string;
+  anchorId?: string;
+  sourceLocation?: SourceAnchor["location"];
 }
 
 export interface GlobalSearchResult {
@@ -50,6 +56,33 @@ export interface GlobalSearchResult {
 
 /** 文档检索候选窗口：粗过滤后仍大于展示上限，留出逐条精校被拒的余量 */
 const DOCUMENT_CANDIDATE_LIMIT = 200;
+
+function documentVisibilityScope(userId: string, role: string, rolePermissions: unknown): Prisma.DocumentWhereInput {
+  const grants = rolePermissions as Parameters<typeof matterReadVisibilityFilter>[2];
+  return { OR: [
+    { matter: { is: matterReadVisibilityFilter(userId, role, grants) } },
+    { intake: { is: intakeReadVisibilityFilter(userId, role, grants) } },
+    { uploadedById: userId },
+  ] };
+}
+
+/** Count only readable failures. No unscoped aggregate may reveal other matters. */
+async function countDocumentFailuresAuthorized(userId: string, role: string, rolePermissions: unknown): Promise<number> {
+  if (!hasCustomPermission({ role, rolePermissions } as Parameters<typeof hasCustomPermission>[0], "documents.read")) return 0;
+  let cursor: string | undefined;
+  let count = 0;
+  for (;;) {
+    const batch = await prisma.document.findMany({
+      where: { deletedAt: null, ocrStatus: "FAILED", AND: [documentVisibilityScope(userId, role, rolePermissions)] },
+      select: { id: true, uploadedById: true, matterId: true, intakeId: true, deletedAt: true },
+      orderBy: { id: "asc" }, take: DOCUMENT_CANDIDATE_LIMIT,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+    for (const doc of batch) if (await canReadDocument(userId, doc)) count++;
+    if (batch.length < DOCUMENT_CANDIDATE_LIMIT) return count;
+    cursor = batch[batch.length - 1].id;
+  }
+}
 
 /**
  * v1.x P0-2: 文档候选池检索——名称/标签命中，或抽取文本层命中（全文检索）。
@@ -82,14 +115,7 @@ async function searchDocumentsAuthorized(
   // 已知取舍：仅凭用印/审批通道可读、且既不挂案件也不挂收案、又非本人上传的孤立
   // 文档，不进入候选池。这类文档通常仍挂在某案件下，实际影响有限；彻底解法需把
   // 审批通道物化为可查询关联，另行排期。
-  const grants = rolePermissions as Parameters<typeof matterReadVisibilityFilter>[2];
-  const visibilityScope: Prisma.DocumentWhereInput = {
-    OR: [
-      { matter: { is: matterReadVisibilityFilter(userId, role, grants) } },
-      { intake: { is: intakeReadVisibilityFilter(userId, role, grants) } },
-      { uploadedById: userId },
-    ],
-  };
+  const visibilityScope = documentVisibilityScope(userId, role, rolePermissions);
 
   const candidates = await prisma.document.findMany({
     where: {
@@ -109,9 +135,11 @@ async function searchDocumentsAuthorized(
     take: DOCUMENT_CANDIDATE_LIMIT,
     orderBy: { createdAt: "desc" },
     select: {
-      id: true, name: true, category: true, textContent: true,
+      id: true, name: true, category: true, textContent: true, tags: true,
       uploadedById: true, matterId: true, intakeId: true,
-      sourceOrigin: true, textSource: true,
+      sourceOrigin: true, textSource: true, deletedAt: true,
+      sha256: true, version: true, parseGeneration: true,
+      parseRuns: { where: { finishedAt: { not: null }, state: { in: ["READY", "PARTIAL"] } }, orderBy: { generation: "desc" }, take: 1 },
       matter: { select: { id: true, internalCode: true, title: true } },
       stage: { select: { name: true } },
       intake: { select: { id: true, title: true } },
@@ -123,17 +151,27 @@ async function searchDocumentsAuthorized(
     if (results.length >= limit) break;
     if (!(await canReadDocument(userId, doc))) continue;
 
-    // 命中片段 + 页码（正文以 \f 分页，pageOfOffset 换算 1 起页码；仅授权文档返回）
+    // New parses use only their current immutable representation. Legacy text remains searchable,
+    // but DOCX/TXT offsets never become invented physical page numbers.
     let snippet = "";
     let pageNo: number | null = null;
-    if (doc.textContent) {
-      const idx = doc.textContent.toLowerCase().indexOf(q.toLowerCase());
+    const run = doc.parseRuns[0];
+    const snapshot = run && run.generation === doc.parseGeneration ? publishedMaterialSnapshot(run, doc) : null;
+    const text = doc.parseGeneration > 0 ? snapshot ? materialTextProjection(snapshot) : null : doc.textContent;
+    let anchor: SourceAnchor | undefined;
+    if (text) {
+      const idx = text.toLowerCase().indexOf(q.toLowerCase());
       if (idx >= 0) {
-        snippet = doc.textContent.slice(Math.max(0, idx - 20), idx + q.length + 40).replace(/\s+/g, " ");
-        const { pageOfOffset } = await import("@/lib/documents/text-extraction");
-        pageNo = pageOfOffset(doc.textContent, idx);
+        snippet = text.slice(Math.max(0, idx - 20), idx + q.length + 40).replace(/\s+/g, " ");
+        anchor = snapshot?.anchors.find(item => item.text.toLowerCase().includes(q.toLowerCase()));
+        if (anchor?.location.kind === "PAGE") pageNo = anchor.location.page;
+        else if (!doc.parseGeneration && doc.textSource === "PDF_TEXT") {
+          const { pageOfOffset } = await import("@/lib/documents/text-extraction");
+          pageNo = pageOfOffset(text, idx);
+        }
       }
     }
+    if (!snippet && !doc.name.toLowerCase().includes(q.toLowerCase()) && !doc.tags.includes(q)) continue;
     const contextLabel =
       doc.matter?.internalCode
       ?? (doc.intake ? `收案 · ${doc.intake.title}` : "");
@@ -154,6 +192,11 @@ async function searchDocumentsAuthorized(
         : doc.intake ? `属于 收案 · ${doc.intake.title}` : "",
       code: doc.matter?.internalCode,
       matterLink: href || undefined,
+      documentVersion: doc.version,
+      parseRunId: snapshot ? run.id : undefined,
+      anchorId: anchor?.anchorId,
+      sourceLocation: anchor?.location,
+      meta: [doc.version > 1 ? `版本 ${doc.version}` : "", snapshot && run.state === "PARTIAL" ? "仅部分内容已处理" : ""].filter(Boolean).join(" · ") || undefined,
     });
   }
   return results;
@@ -180,7 +223,7 @@ export async function globalSearch(query: string): Promise<GlobalSearchResult> {
     ? { AND: [customMatterFilter(userId, session.user.rolePermissions, "schedule.read", true), mVis] }
     : matterReadVisibilityFilter(userId, role, session.user.rolePermissions);
 
-  const [matters, clients, intakes, documents, deadlines] = await Promise.all([
+  const [matters, clients, intakes, documents, deadlines, documentsFailedCount] = await Promise.all([
     prisma.matter.findMany({
       where: { deletedAt: null, ...mVis, OR: [
         { title: { contains: q, mode: "insensitive" } },
@@ -233,11 +276,8 @@ export async function globalSearch(query: string): Promise<GlobalSearchResult> {
           },
         })
       : Promise.resolve([]),
+    countDocumentFailuresAuthorized(userId, role, session.user.rolePermissions),
   ]);
-
-  const documentsFailedCount = await prisma.document.count({
-    where: { deletedAt: null, ocrStatus: "FAILED" }
-  });
 
   const lower = q.toLowerCase();
   const around = (text: string) => {

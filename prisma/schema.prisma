@@ -178,6 +178,7 @@ enum DocumentTextSource {
 
 // v1.x P0-2: 文本层处理状态（失败页不可隐去）
 enum DocumentOcrStatus {
+  PARTIAL // 部分可读，未处理范围见当前解析代次
   PENDING // 尚未抽取（存量数据默认值，懒抽取升级）
   READY // 已有可用文本
   FAILED // 抽取失败（原因可查，可重试）
@@ -444,6 +445,13 @@ model RolePermission {
 }
 
 model User {
+  contextAuthored MatterContextRecord[] @relation("ContextAuthor")
+  contextConfirmed MatterContextRecord[] @relation("ContextConfirmer")
+  requestedParseRuns DocumentParseRun[] @relation("ParseRequester")
+  evidenceSourcesCreated EvidenceSourceLink[] @relation("EvidenceSourceCreator")
+  evidenceSourcesRemoved EvidenceSourceLink[] @relation("EvidenceSourceRemover")
+  evidenceRevisions EvidenceItemRevision[] @relation("EvidenceRevisionEditor")
+  evidenceConfirmed EvidenceItem[] @relation("EvidenceConfirmer")
   ownedClients Client[] @relation("ClientOwner")
   clientActivities ClientActivity[] @relation("ClientActivityAuthor")
   createdClientFollowUps ClientFollowUp[] @relation("ClientFollowUpCreator")
@@ -822,6 +830,7 @@ model Intake {
 // ============================================================
 
 model Matter {
+  contextRecords MatterContextRecord[]
   closurePlan ArchiveClosurePlan?
   handovers MatterHandover[]
   urgentItems IntakeUrgentItem[]
@@ -1346,6 +1355,8 @@ model Note {
 // ============================================================
 
 model Document {
+  parseGeneration Int @default(0)
+  parseRuns DocumentParseRun[]
   invoiceAdjustmentEvidence InvoiceAdjustment[]
   reviewedById String?
   billingAttachments BillingAttachment[]
@@ -1678,6 +1689,13 @@ enum EvidenceKind {
 }
 
 model EvidenceItem {
+  revision Int @default(1)
+  updatedAt DateTime @default(now()) @updatedAt
+  confirmedById String?
+  confirmedBy User? @relation("EvidenceConfirmer", fields: [confirmedById], references: [id], onDelete: Restrict)
+  confirmedAt DateTime?
+  sources EvidenceSourceLink[]
+  revisions EvidenceItemRevision[]
   id               String       @id @default(cuid())
   matterId         String
   matter           Matter       @relation(fields: [matterId], references: [id], onDelete: Cascade)
@@ -2408,6 +2426,7 @@ enum NotificationPriority {
 // 幂等键去重（改期=覆盖未执行任务）、租约防多实例重复、指数退避重试、
 // 超过上限进 DEAD（可见可查，绝不静默丢弃）。
 model JobQueue {
+  leaseToken String?
   id          String    @id @default(cuid())
   type        String // webhook-digest / deadline-reminder …
   payload     Json
@@ -3053,4 +3072,159 @@ model InvoiceAdjustment {
  createdAt DateTime @default(now())
  @@unique([invoiceId, reference])
  @@index([replacementInvoiceId])
+}
+
+// Server M2: immutable processing representations and manual workbench history.
+enum DocumentParseState {
+  PENDING
+  RUNNING
+  READY
+  PARTIAL
+  FAILED
+  UNSUPPORTED
+  CANCELLED
+}
+
+model DocumentParseRun {
+  id String @id @default(cuid())
+  documentId String
+  document Document @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  generation Int
+  requestedById String
+  requestedBy User @relation("ParseRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  parserVersion String
+  sourceSha256 String
+  state DocumentParseState @default(PENDING)
+  coverage Json?
+  anchors Json?
+  errorCode String?
+  createdAt DateTime @default(now())
+  startedAt DateTime?
+  finishedAt DateTime?
+
+  @@unique([documentId, generation])
+  @@index([state, createdAt])
+}
+
+enum EvidenceSourceRelation {
+  SUPPORTS
+  REBUTS
+  CONTEXT
+}
+
+model EvidenceSourceLink {
+  id String @id @default(cuid())
+  evidenceItemId String
+  evidenceItem EvidenceItem @relation(fields: [evidenceItemId], references: [id], onDelete: Restrict)
+  // Specific version references stay intact if source access is revoked.
+  documentId String
+  documentSha256 String
+  relation EvidenceSourceRelation
+  location Json
+  locationKey String
+  parseRunId String?
+  anchorId String?
+  createdById String
+  createdBy User @relation("EvidenceSourceCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+  removedById String?
+  removedBy User? @relation("EvidenceSourceRemover", fields: [removedById], references: [id], onDelete: Restrict)
+  removedAt DateTime?
+
+  @@unique([evidenceItemId, documentId, relation, locationKey])
+  @@index([documentId])
+  @@index([parseRunId])
+}
+
+model EvidenceItemRevision {
+  sourceSnapshot Json @default("[]")
+  confirmedById String?
+  confirmedAt DateTime?
+  id String @id @default(cuid())
+  evidenceItemId String
+  evidenceItem EvidenceItem @relation(fields: [evidenceItemId], references: [id], onDelete: Restrict)
+  revision Int
+  title String
+  content String
+  kind EvidenceKind
+  editedById String
+  editedBy User @relation("EvidenceRevisionEditor", fields: [editedById], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+
+  @@unique([evidenceItemId, revision])
+}
+
+enum MatterContextKind {
+  GOAL
+  CONSTRAINT
+  INSTRUCTION
+  OPTION
+  DECISION
+}
+enum MatterContextVisibility {
+  MATTER
+  FINANCE
+}
+enum MatterContextConfirmation {
+  PENDING
+  CONFIRMED
+}
+
+model MatterContextRecord {
+  id String @id @default(cuid())
+  matterId String
+  matter Matter @relation(fields: [matterId], references: [id], onDelete: Restrict)
+  kind MatterContextKind
+  content String
+  occurredAt DateTime
+  reason String?
+  sourceDescription String
+  sourceNoteId String?
+  sourceClientActivityId String?
+  sourceDocumentId String?
+  authorId String
+  author User @relation("ContextAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+  seriesId String
+  version Int
+  supersedesId String? @unique
+  supersedes MatterContextRecord? @relation("ContextVersions", fields: [supersedesId], references: [id], onDelete: Restrict)
+  supersededBy MatterContextRecord? @relation("ContextVersions")
+  confirmationStatus MatterContextConfirmation @default(PENDING)
+  confirmedById String?
+  confirmedBy User? @relation("ContextConfirmer", fields: [confirmedById], references: [id], onDelete: Restrict)
+  confirmedAt DateTime?
+  visibility MatterContextVisibility @default(MATTER)
+  requestKey String
+  requestHash String
+
+  @@unique([seriesId, version])
+  @@unique([authorId, requestKey])
+  @@index([matterId, kind, createdAt])
+}
+
+enum MaterialIngestState {
+  PENDING
+  STORED
+  COMMITTED
+  FAILED
+}
+
+model MaterialIngestIntent {
+  id String @id @default(cuid())
+  storagePath String @unique
+  requestedById String
+  matterId String?
+  intakeId String?
+  priorDocumentId String?
+  sourceSha256 String
+  size Int
+  metadata Json
+  state MaterialIngestState @default(PENDING)
+  documentId String? @unique
+  errorCode String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([state, createdAt])
 }

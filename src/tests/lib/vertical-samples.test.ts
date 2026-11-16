@@ -1,146 +1,133 @@
 // @vitest-environment node
 /**
- * 纵向样例验证（TARGET-MODEL-PLAN §五）——复用/重建判定依据。
- *
- * 样例 A：材料 → 新版本 → 历史固定（版本链不变式）
- *   断言：uploadNewVersion 后旧版本 isLatest 翻转、内容与校验值不变、
- *   旧版本行永不删除——提交包/归档若引用旧版本，其 sha256 不漂移。
- *   （证据项/交付包实体属 P2 材料出处链，本样例先验证版本不变式。）
- *
- * 样例 B：期限触发 → 确认 → 入队 → 投递失败退避 → 接续成功
- *   断言：确认后 confirmStatus=CONFIRMED；webhook 摘要经队列投递，
- *   失败按退避重排、重试成功落 SUCCESS（deliveriedAt 幂等）。
+ * 纵向边界样例：
+ * A. 上传入口保留原件身份、加密策略与 checkout 基线，持久版本链交给 ingest。
+ *    真实版本链、原件保存和事务回滚由 material-ingest 集成用例验证，
+ *    此处不在 Prisma mock 内重写一套持久化状态机。
+ * B. 期限确认后，队列失败接续携带每次领取的 JobLease，旧租约不能完成重试。
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { Prisma } from "@prisma/client";
 
-/* ---------- 样例 A：版本不变式（mock prisma） ---------- */
-const { db, session } = vi.hoisted(() => {
-  const docState: Record<string, { isLatest: boolean; version: number; sha256: string; deletedAt: Date | null; familyId: string | null; matterId: string | null; intakeId: string | null }> = {
-    "d-v1": { isLatest: true, version: 1, sha256: "hash-v1", deletedAt: null, familyId: "d-v1", matterId: "m1", intakeId: null }
-  };
-  const created: { id: string; version: number; sha256: string }[] = [];
-  const db = {
-    document: {
-      findUnique: vi.fn(async ({ where }: any) => docState[where.id] ?? null),
-      updateMany: vi.fn(async ({ where, data }: any) => {
-        // 翻转同族旧版本 isLatest（where.familyId 真实参与过滤）
-        const family = where?.familyId?.equals ?? null;
-        for (const id of Object.keys(docState)) {
-          const row = docState[id];
-          if (row.isLatest && (family === null || row.familyId === family)) {
-            row.isLatest = data.isLatest;
-          }
-        }
-        return { count: 1 };
-      }),
-      create: vi.fn(async ({ data }: any) => {
-        const id = `d-v${data.version}`;
-        docState[id] = { isLatest: data.isLatest, version: data.version, sha256: data.sha256, deletedAt: null, familyId: data.familyId, matterId: data.matterId, intakeId: data.intakeId };
-        created.push({ id, version: data.version, sha256: data.sha256 });
-        return { id, version: data.version };
-      }),
-      update: vi.fn(async ({ where, data }: any) => {
-        Object.assign(docState[where.id], data);
-        return { id: where.id, version: docState[where.id].version };
-      })
-    },
+const mocks = vi.hoisted(() => ({
+  db: {
+    document: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+    deadline: { findUnique: vi.fn(), updateMany: vi.fn() },
     auditLog: { create: vi.fn() },
-    // 样例 B：期限确认 + 队列接续共用同一 prisma mock
-    deadline: {
-      findUnique: vi.fn(async () => ({ id: "cidl000000000000000000001", confirmStatus: db.__deadline.confirmStatus, procedure: { matterId: "m1" }, sourceRuleId: "r1", dueAt: new Date() })),
-      updateMany: vi.fn(async ({ data }: any) => { Object.assign(db.__deadline, data); return { count: 1 }; })
-    },
-    jobQueue: {
-      update: vi.fn(async ({ data }: any) => { Object.assign(db.__job, data); return db.__job; }),
-      // completeJob 的条件完成：仅当仍处 RUNNING 才落 SUCCESS（内容被覆盖重排的旧执行不得终结新内容）
-      updateMany: vi.fn(async ({ where, data }: any) => {
-        if (where?.status && db.__job.status !== where.status) return { count: 0 };
-        Object.assign(db.__job, data);
-        return { count: 1 };
-      })
-    },
-    // failJob 的原子计数：仅 RUNNING 时递增 attempts 并返回新值
-    $queryRaw: vi.fn(async () => {
-      if (db.__job.status === "RUNNING") {
-        db.__job.attempts += 1;
-        return [{ attempts: db.__job.attempts }];
-      }
-      return [];
-    }),
-    $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(db)),
-    __state: docState,
-    __created: created,
-    __deadline: { id: "cidl000000000000000000001", confirmStatus: "PENDING" },
-    __job: { id: "j1", status: "PENDING", attempts: 0, runAt: null as Date | null, deliveredAt: null }
-  };
-  return { db, session: { user: { id: "u1", role: "PRINCIPAL_LAWYER", rolePermissions: undefined } } };
-});
-vi.mock("@/lib/prisma", () => ({ prisma: db }));
-vi.mock("@/lib/auth/session", () => ({ requireSession: vi.fn(async () => session) }));
+    $queryRaw: vi.fn(), $executeRaw: vi.fn(), $transaction: vi.fn(),
+  },
+  session: { user: { id: "u1", role: "PRINCIPAL_LAWYER", rolePermissions: undefined } },
+  ingest: vi.fn(), encrypt: vi.fn(), hash: vi.fn(), checkout: vi.fn(),
+}));
+vi.mock("@/lib/prisma", () => ({ prisma: mocks.db }));
+vi.mock("@/lib/auth/session", () => ({ requireSession: vi.fn(async () => mocks.session) }));
 vi.mock("@/server/audit", () => ({ audit: vi.fn(), auditTx: vi.fn(), auditStrict: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/lib/archive/guard", () => ({ assertDocumentWritable: vi.fn(async () => {}), assertMatterWritable: vi.fn(async () => {}) }));
-vi.mock("@/lib/permissions", () => ({ assertCanAccessMatter: vi.fn(async () => {}), assertCanModifyMatter: vi.fn(async () => {}), assertCanHandleMatter: vi.fn(async () => {}) }));
+vi.mock("@/lib/archive/guard", () => ({ assertDocumentWritable: vi.fn(), assertMatterWritable: vi.fn() }));
+vi.mock("@/lib/permissions", () => ({ assertCanAccessMatter: vi.fn(), assertCanModifyMatter: vi.fn(), assertCanHandleMatter: vi.fn() }));
 vi.mock("@/server/reminders/schedule", () => ({ refreshScheduleReminderAfterSave: vi.fn(), retireScheduleReminders: vi.fn() }));
 vi.mock("@/server/matters/route", () => ({ revalidateMatter: vi.fn() }));
-vi.mock("@/lib/storage", () => ({
-  storage: { writeFile: vi.fn(async () => "mock-path") }
-}));
-vi.mock("@/lib/storage/crypto", () => ({
-  encryptBuffer: vi.fn(() => ({ ciphertext: Buffer.from("x"), iv: Buffer.from("y"), authTag: Buffer.from("z"), algorithm: "aes-256-gcm" })),
-  sha256: vi.fn(() => "hash-v2")
-}));
+vi.mock("@/server/documents/material-ingest", () => ({ ingestMaterial: mocks.ingest, withdrawMaterial: vi.fn() }));
+vi.mock("@/lib/storage/crypto", () => ({ encryptBuffer: mocks.encrypt, sha256: mocks.hash }));
+vi.mock("@/lib/desktop/checkout-token", () => ({ verifyCheckoutToken: mocks.checkout }));
 
 import { uploadNewVersion } from "@/server/documents/actions";
+import { confirmDeadline } from "@/server/deadlines/confirm";
+import { failJob, completeJob, backoffMs, type JobLease } from "@/server/cron/queue";
 
-describe("纵向样例 A：版本不变式", () => {
-  beforeEach(() => vi.clearAllMocks());
+function priorDocument() {
+  return { id: "d-v1", name: "合成合同.pdf", category: "OTHER", isLatest: true, version: 1,
+    sha256: "a".repeat(64), encrypted: false, deletedAt: null, familyId: "d-v1", matterId: "m1", intakeId: null,
+    procedureId: null, stageId: null, folderId: null, sourceParty: null, sourceOrigin: null,
+    tags: ["合成"], archiveChecklistItemId: null };
+}
+let prior: ReturnType<typeof priorDocument>;
+let confirmed = false;
+const bytes = new Uint8Array([1, 2, 3]);
+const file = () => new File([bytes], "合成合同-v2.pdf", { type: "application/pdf" });
 
-  it("新版本上链：旧版本停止 isLatest 但内容/校验值不变且不被删除", async () => {
-    const file = new File([new Uint8Array([1, 2, 3])], "合同 v2.pdf", { type: "application/pdf" });
-    const res = await uploadNewVersion({ documentId: "d-v1", file });
-
-    expect(res.version).toBe(2);
-    // 旧版本：isLatest 翻转，其余不变
-    expect(db.__state["d-v1"]).toMatchObject({ isLatest: false, version: 1, sha256: "hash-v1", deletedAt: null });
-    // 新版本：同族、v2、最新
-    expect(db.__state["d-v2"]).toMatchObject({ isLatest: true, version: 2, sha256: "hash-v2", familyId: "d-v1" });
-  });
-
-  it("基于非最新版本更新被拒绝（历史不可变分支）", async () => {
-    const file = new File([new Uint8Array([9])], "v3.pdf", { type: "application/pdf" });
-    await expect(uploadNewVersion({ documentId: "d-v1", file })).rejects.toThrow("只能基于最新版本");
-  });
+beforeEach(() => {
+  vi.resetAllMocks();
+  prior = priorDocument();
+  confirmed = false;
+  mocks.db.document.findUnique.mockImplementation(async () => prior);
+  mocks.ingest.mockResolvedValue({ id: "d-v2", version: 2 });
+  mocks.hash.mockReturnValue("b".repeat(64));
+  mocks.encrypt.mockReturnValue({ ciphertext: Buffer.from("synthetic cipher"), iv: Buffer.from("iv"), authTag: Buffer.from("tag"), algorithm: "aes-256-gcm" });
+  mocks.db.deadline.findUnique.mockImplementation(async () => ({
+    id: "cidl000000000000000000001", confirmStatus: confirmed ? "CONFIRMED" : "PENDING",
+    procedure: { matterId: "m1" }, sourceRuleId: "r1", dueAt: new Date(),
+  }));
+  mocks.db.deadline.updateMany.mockImplementation(async () => { confirmed = true; return { count: 1 }; });
+  mocks.db.$transaction.mockImplementation(async (work: (tx: unknown) => Promise<unknown>) => work(mocks.db));
 });
 
-/* ---------- 样例 B：期限确认 → 队列投递接续（与样例 A 共用同一 prisma mock） ---------- */
+describe("纵向样例 A：上传版本边界", () => {
+  it.each([false, true])("保留旧原件身份和加密策略 encrypted=%s，版本提交由 ingest 返回", async encrypted => {
+    prior.encrypted = encrypted;
+    const original = structuredClone(prior);
+    const result = await uploadNewVersion({ documentId: prior.id, file: file() });
+    expect(result).toEqual({ ok: true, id: "d-v2", version: 2 });
+    expect(prior).toEqual(original);
+    expect(mocks.db.document.update).not.toHaveBeenCalled();
+    expect(mocks.db.document.updateMany).not.toHaveBeenCalled();
+    expect(mocks.hash).toHaveBeenCalledExactlyOnceWith(Buffer.from(bytes));
+    const saved = mocks.ingest.mock.calls[0][0];
+    expect(saved).toMatchObject({ userId: "u1", priorDocumentId: "d-v1",
+      document: { matterId: "m1", sha256: "b".repeat(64), encrypted, mimeType: "application/pdf", size: 3, tags: ["合成"] } });
+    if (encrypted) {
+      const enc = mocks.encrypt.mock.results[0].value;
+      expect(mocks.encrypt).toHaveBeenCalledExactlyOnceWith(Buffer.from(bytes));
+      expect(saved.bytes).toEqual(enc.ciphertext);
+      expect(saved.document).toMatchObject({ algorithm: enc.algorithm, iv: enc.iv.toString("base64"), authTag: enc.authTag.toString("base64") });
+    } else {
+      expect(mocks.encrypt).not.toHaveBeenCalled();
+      expect(saved.bytes).toEqual(Buffer.from(bytes));
+      expect(saved.document).toMatchObject({ algorithm: null, iv: null, authTag: null });
+    }
+  });
 
-// 样例 B 直接使用已测模块的函数（confirmDeadline / failJob / completeJob）
-import { confirmDeadline } from "@/server/deadlines/confirm";
-import { failJob, completeJob, backoffMs } from "@/server/cron/queue";
+  it("非最新基线的新请求拒绝仍传播；已提交请求丢回执可由 ingest 幂等重放", async () => {
+    prior.isLatest = false;
+    mocks.ingest.mockRejectedValueOnce(new Error("原材料版本已变化，请刷新后重传"));
+    await expect(uploadNewVersion({ documentId: prior.id, file: file() })).rejects.toThrow("原材料版本已变化");
+    const requestKey = "d983fc86-631c-4a41-a69d-d5e935b0901f";
+    expect(await uploadNewVersion({ documentId: prior.id, file: file(), requestKey })).toMatchObject({ id: "d-v2", version: 2 });
+    expect(mocks.ingest).toHaveBeenLastCalledWith(expect.objectContaining({ priorDocumentId: prior.id, requestKey }));
+    expect(prior).toMatchObject({ isLatest: false, version: 1, sha256: "a".repeat(64) });
+  });
+
+  it("checkout 基线冲突在入库前被拒，匹配时把基线与 jti 传到最终事务", async () => {
+    mocks.checkout.mockReturnValue({ docId: prior.id, userId: "u1", baselineVersion: 2, jti: "synthetic-checkout" });
+    prior.version = 3;
+    await expect(uploadNewVersion({ documentId: prior.id, file: file(), checkoutToken: "verified-fixture" })).rejects.toThrow("已被他人更新为第 3 版");
+    expect(mocks.ingest).not.toHaveBeenCalled();
+    expect(mocks.hash).not.toHaveBeenCalled();
+    prior.version = 2;
+    mocks.ingest.mockResolvedValueOnce({ id: "d-v3", version: 3 });
+    expect(await uploadNewVersion({ documentId: prior.id, file: file(), checkoutToken: "verified-fixture" })).toMatchObject({ version: 3 });
+    expect(mocks.ingest).toHaveBeenCalledWith(expect.objectContaining({ checkout: { jti: "synthetic-checkout", baselineVersion: 2 } }));
+  });
+});
 
 describe("纵向样例 B：确认与队列接续", () => {
   it("待确认期限确认后固定；重复确认被拒", async () => {
-    const res = await confirmDeadline({ id: "cidl000000000000000000001" });
-    expect(res).toEqual({ ok: true });
-    expect(db.__deadline.confirmStatus).toBe("CONFIRMED");
+    expect(await confirmDeadline({ id: "cidl000000000000000000001" })).toEqual({ ok: true });
+    expect(confirmed).toBe(true);
     await expect(confirmDeadline({ id: "cidl000000000000000000001" })).rejects.toThrow("该期限已确认");
   });
 
-  it("投递失败退避重排 → 重试成功落 SUCCESS 且幂等", async () => {
-    // 第一次失败：真实失败时原子递增计数（attempts 0→1），按退避重排 FAILED
-    Object.assign(db.__job, { status: "RUNNING", attempts: 0 });
-    const outcome1 = await failJob("j1", 5, "webhook timeout");
-    expect(outcome1).toBe("RETRY");
-    expect(db.__job.status).toBe("FAILED");
-    expect(db.__job.attempts).toBe(1);
-    expect(db.__job.runAt!.getTime()).toBeGreaterThan(Date.now() - 1000);
-    // 第二次成功（真实流程由 claimDueJobs 重新领取置 RUNNING 后才 complete；条件完成只认 RUNNING）
-    Object.assign(db.__job, { status: "RUNNING" });
-    await completeJob("j1");
-    expect(db.__job.status).toBe("SUCCESS");
-    expect(db.__job.deliveredAt).not.toBeNull();
-    // 退避单调
+  it("失败返回退避重试，重新领取使用新 token，旧执行与重复完成不计成功", async () => {
+    const first: JobLease = { id: "j1", leaseToken: "first-attempt" };
+    const retry: JobLease = { id: "j1", leaseToken: "retry-attempt" };
+    mocks.db.$queryRaw.mockResolvedValueOnce([{ status: "FAILED" }]);
+    expect(await failJob(first, 5, "synthetic webhook timeout")).toBe("RETRY");
+    expect((mocks.db.$queryRaw.mock.calls[0][0] as Prisma.Sql).values).toContain(first.leaseToken);
+    mocks.db.$executeRaw.mockResolvedValueOnce(0).mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+    expect(await completeJob(first)).toBe(false);
+    expect(await completeJob(retry)).toBe(true);
+    expect(await completeJob(retry)).toBe(false);
+    expect((mocks.db.$executeRaw.mock.calls[1][0] as Prisma.Sql).values).toContain(retry.leaseToken);
     expect(backoffMs(2)).toBeGreaterThanOrEqual(backoffMs(1));
   });
 });

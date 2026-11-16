@@ -94,6 +94,17 @@ export class S3StorageProvider implements StorageProvider {
     this.prefix = readKeyPrefix();
   }
 
+  async writeFileAt(relPath: string, data: Buffer): Promise<void> {
+    if (!relPath || relPath.startsWith("/") || relPath.includes("\\") ||
+        relPath.split("/").some(part => !part || part === "." || part === "..")) {
+      throw new ActionError("非法存储路径");
+    }
+    await this.client.send(new PutObjectCommand({
+      Bucket: this.bucket, Key: this.prefix + relPath, Body: data,
+      ContentType: "application/octet-stream", IfNoneMatch: "*"
+    }));
+  }
+
   /**
    * 对象 key 结构：<prefix>/<scope>/<yyyymm>/<uuid>.bin
    * 与 LocalStorageProvider 保持同样的 layout，便于 local ↔ s3 迁移。
@@ -105,16 +116,7 @@ export class S3StorageProvider implements StorageProvider {
     const safeScope = scope.split("/").filter(Boolean).map(part => part.replace(/[^a-zA-Z0-9_-]/g, "_")).join("/");
     if (!safeScope) throw new ActionError("存储范围不能为空");
     const relPath = `${safeScope}/${yyyymm}/${randomUUID()}.bin`;
-    const key = this.prefix + relPath;
-
-    await this.client.send(
-      new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-        Body: data,
-        ContentType: "application/octet-stream"
-      })
-    );
+    await this.writeFileAt(relPath, data);
 
     return relPath;
   }

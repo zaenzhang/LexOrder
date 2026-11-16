@@ -30,6 +30,7 @@ export async function backfillDocumentTextLayers(): Promise<TextBackfillResult> 
   const docs = await prisma.document.findMany({
     where: {
       deletedAt: null,
+      parseGeneration: 0,
       ocrStatus: "PENDING",
       // 只处理可能有文本的类型：PDF / Word / 纯文本（其余留给 SKIP）
       OR: [
@@ -52,8 +53,8 @@ export async function backfillDocumentTextLayers(): Promise<TextBackfillResult> 
         : stored;
       try {
         const layer = await extractDocumentTextLayer(buf, doc.mimeType);
-        await prisma.document.update({
-          where: { id: doc.id },
+        await prisma.document.updateMany({
+          where: { id: doc.id, parseGeneration: 0, deletedAt: null },
           data: {
             textContent: layer.text.slice(0, 500_000),
             pageCount: layer.pageCount,
@@ -63,16 +64,16 @@ export async function backfillDocumentTextLayers(): Promise<TextBackfillResult> 
         });
         ready++;
       } catch (err) {
-        await prisma.document.update({
-          where: { id: doc.id },
+        await prisma.document.updateMany({
+          where: { id: doc.id, parseGeneration: 0, deletedAt: null },
           data: { ocrStatus: ocrStatusFor(err) }
         });
         skipped++;
       }
     } catch {
       // 存储/解密层失败：标 FAILED（与抽取失败区分，便于排查）
-      await prisma.document.update({
-        where: { id: doc.id },
+      await prisma.document.updateMany({
+        where: { id: doc.id, parseGeneration: 0, deletedAt: null },
         data: { ocrStatus: "FAILED" }
       }).catch(() => undefined);
       failed++;
@@ -82,6 +83,7 @@ export async function backfillDocumentTextLayers(): Promise<TextBackfillResult> 
   const remaining = await prisma.document.count({
     where: {
       deletedAt: null,
+      parseGeneration: 0,
       ocrStatus: "PENDING",
       OR: [
         { mimeType: { contains: "pdf" } },

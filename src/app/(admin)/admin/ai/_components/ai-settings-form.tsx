@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Sparkles, CheckCircle2, AlertTriangle, Loader2, Trash2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,9 @@ import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
 
 type Initial = {
+  enabled: boolean;
+  credentialSaved: boolean;
+  configurationError?: string;
   configured: boolean;
   baseUrl: string;
   textModel: string;
@@ -54,14 +58,6 @@ const PROVIDER_PRESETS = [
     vision: "glm-4v",
     apply: "智谱开放平台获取 key",
     link: "https://open.bigmodel.cn/"
-  },
-  {
-    name: "本地 Ollama",
-    baseUrl: "http://localhost:11434/v1",
-    text: "qwen2.5:7b",
-    vision: "llava:7b",
-    apply: "本机起 ollama 即用，无需 key",
-    link: "https://ollama.com/"
   }
 ] as const;
 
@@ -72,6 +68,8 @@ export function AiSettingsForm({
   initial: Initial;
   defaults: { baseUrl: string; textModel: string; visionModel: string };
 }) {
+  const router = useRouter();
+  const [enabled, setEnabled] = useState(initial.enabled);
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState(initial.baseUrl || defaults.baseUrl);
   const [textModel, setTextModel] = useState(initial.textModel || defaults.textModel);
@@ -79,6 +77,7 @@ export function AiSettingsForm({
   const [pending, startTransition] = useTransition();
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const changed = enabled !== initial.enabled || !!apiKey || baseUrl !== initial.baseUrl || textModel !== initial.textModel || visionModel !== initial.visionModel;
 
   const applyPreset = (p: (typeof PROVIDER_PRESETS)[number]) => {
     setBaseUrl(p.baseUrl);
@@ -91,6 +90,7 @@ export function AiSettingsForm({
     startTransition(async () => {
       try {
         await saveAiSettingsAction({
+          enabled,
           apiKey,
           baseUrl,
           textModel,
@@ -98,6 +98,8 @@ export function AiSettingsForm({
         });
         toast.success("配置已保存");
         setApiKey(""); // 不在前端持久 key
+        setTestResult(null);
+        router.refresh();
       } catch (e) {
         toast.error(e instanceof Error ? actionErrorMessage(e) : "保存失败");
       }
@@ -110,6 +112,8 @@ export function AiSettingsForm({
       try {
         await clearAiKeyAction({ confirm: true });
         toast.success("API key 已清除");
+        setTestResult(null);
+        router.refresh();
       } catch (e) {
         toast.error(e instanceof Error ? actionErrorMessage(e) : "失败");
       }
@@ -122,7 +126,7 @@ export function AiSettingsForm({
     try {
       const res = await testAiConnection();
       if (res.ok) {
-        setTestResult({ ok: true, msg: `连接成功，模型回复："${res.reply}"` });
+        setTestResult({ ok: true, msg: res.reply ?? "文本模型已响应" });
       } else {
         setTestResult({ ok: false, msg: res.message ?? "未知错误" });
       }
@@ -139,18 +143,14 @@ export function AiSettingsForm({
         <header className="mb-3 flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-primary" strokeWidth={1.8} />
           <h2 className="text-[14px] font-semibold">AI 接入</h2>
-          {initial.configured && (
-            <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-[var(--green-bg)] px-2 py-0.5 text-[10px] text-[var(--green)]">
-              <CheckCircle2 className="h-3 w-3" /> 已配置
-            </span>
-          )}
+          <span className="ml-2 text-[11px] text-muted-foreground">{!initial.enabled ? "已禁用" : initial.configurationError ? "配置需修复" : initial.configured ? "已配置 · 未验证" : "未配置"}</span>
         </header>
 
         <p className="mb-4 text-[12px] text-muted-foreground">
-          走 OpenAI 兼容协议，支持任意兼容接口地址。配置后可启用：
-          <span className="text-foreground/85"> 发票 OCR · 法院短信 AI 增强解析</span>
-          （后续模块也会复用同一组配置）
+          按需使用远程 OpenAI 兼容接口。未配置或连接失败时，保存材料、人工处理及普通业务仍可使用。
         </p>
+        {initial.configurationError && <p role="alert" className="mb-3 text-sm text-destructive">{initial.configurationError}</p>}
+        <label className="mb-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} />启用 AI 服务</label>
 
         {/* Provider 预设 */}
         <div className="mb-4">
@@ -173,7 +173,7 @@ export function AiSettingsForm({
           <div>
             <Label className="text-[11px]">
               接口密钥（API Key）
-              {initial.configured && (
+              {initial.credentialSaved && (
                 <span className="ml-2 font-mono text-[10px] text-muted-foreground">
                   当前：{initial.apiKeyMasked}（留空保留原值）
                 </span>
@@ -183,7 +183,7 @@ export function AiSettingsForm({
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder={initial.configured ? "如需更换粘贴新 key" : "粘贴 API key"}
+              placeholder={initial.credentialSaved ? "如需更换粘贴新 key" : "粘贴 API key"}
               className="mt-1 font-mono"
               autoComplete="off"
             />
@@ -231,13 +231,13 @@ export function AiSettingsForm({
           <Button
             variant="outline"
             onClick={runTest}
-            disabled={testing || !initial.configured}
+            disabled={testing || pending || changed || !initial.configured}
             className="gap-1.5"
           >
             {testing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            测试连接
+            {changed ? "保存后测试" : "测试连接"}
           </Button>
-          {initial.configured && (
+          {initial.credentialSaved && (
             <Button
               variant="ghost"
               onClick={clearKey}

@@ -25,6 +25,9 @@ import { MatterDetailTabs } from "./_components/matter-detail-tabs";
 import { listNotes } from "@/server/notes/actions";
 import { ReviewSummaryCard } from "./_components/review-summary-card";
 import { listEvidenceItems } from "@/server/evidence/actions";
+import { getMatterContext } from "@/server/matters/context-actions";
+import { MatterContextSection } from "./_components/matter-context-section";
+import { actionErrorMessage } from "@/lib/action-error";
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -82,7 +85,12 @@ export default async function MatterDetailPage({ params }: PageProps) {
     prisma.document.findMany({
       where: { matterId: matter.id, deletedAt: null, ...(!allowed("documents.read") ? { id: { in: [] } } : {}) },
       orderBy: { createdAt: "desc" },
-      include: {
+      select: {
+        id: true, name: true, category: true, mimeType: true, size: true, createdAt: true, updatedAt: true,
+        matterId: true, intakeId: true, procedureId: true, stageId: true, folderId: true, templateId: true,
+        uploadedById: true, sourceParty: true, sourceOrigin: true, tags: true,
+        ocrStatus: true, textSource: true, pageCount: true, sha256: true,
+        version: true, familyId: true, isLatest: true, status: true, archiveChecklistItemId: true,
         uploadedBy: { select: { id: true, name: true } },
         procedure: { select: { id: true, type: true, customLabel: true } }
       }
@@ -178,9 +186,10 @@ export default async function MatterDetailPage({ params }: PageProps) {
   // v0.22: 本案 AI 审查总览（聚合 ReviewRecord）
   const reviewSummary = allowed("documents.read") ? await getMatterReviewSummary(matter.id) : null;
   // v1.x P2: 委托与证据链（详情页区块；read 已在页面入口校验）
-  const [evidenceItems, notes] = await Promise.all([
-    listEvidenceItems(matter.id).catch(() => []),
-    allowed("schedule.read") ? listNotes(matter.id).catch(() => []) : Promise.resolve([])
+  const [evidenceResult, notes, contextResult] = await Promise.all([
+    listEvidenceItems(matter.id).then(items => ({ items, error: null })).catch(error => ({ items: [], error: actionErrorMessage(error) })),
+    allowed("schedule.read") ? listNotes(matter.id).catch(() => []) : Promise.resolve([]),
+    getMatterContext(matter.id).then(view => ({ view, error: null })).catch(error => ({ view: null, error: actionErrorMessage(error) }))
   ]);
   const currentMatterMember = session?.user.id
     ? matter.members.find((member) => member.userId === session.user.id)
@@ -242,7 +251,11 @@ export default async function MatterDetailPage({ params }: PageProps) {
         latestArchive={latestArchive}
         customFieldDefs={customFieldDefs}
         preservationCases={preservationCasesForClient}
-        evidenceItems={evidenceItems}
+        evidenceItems={evidenceResult.items}
+        evidenceError={evidenceResult.error}
+        contextNode={contextResult.view
+          ? <MatterContextSection matterId={matter.id} view={contextResult.view} />
+          : <section className="dos-group p-4 text-sm text-destructive" role="alert">事项上下文暂不可读取：{contextResult.error} <a className="underline" href={matterHref(matter)}>重新加载</a></section>}
         notes={notes}
         capabilities={{
           aiReview: aiSettings?.configured ?? false,

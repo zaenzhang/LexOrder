@@ -10,8 +10,12 @@ import {
 import { aiChat, AiNotConfiguredError } from "@/lib/ai/client";
 
 const saveSchema = z.object({
-  apiKey: z.string().optional().or(z.literal("")), // 留空 = 保留原值
-  baseUrl: z.string().url().optional().or(z.literal("")),
+  enabled: z.boolean().optional(),
+  apiKey: z.string().trim().max(4096).optional(), // 留空 = 保留原值
+  baseUrl: z.string().max(600).url().refine(value => {
+    try { const url = new URL(value); return url.protocol === "https:" && !url.username && !url.password && !url.search && !url.hash; }
+    catch { return false; }
+  }, "请使用不带凭据或查询参数的 HTTPS 接口地址").optional().or(z.literal("")),
   textModel: z.string().max(80).optional().or(z.literal("")),
   visionModel: z.string().max(80).optional().or(z.literal(""))
 });
@@ -28,6 +32,7 @@ export async function saveAiSettingsAction(input: z.infer<typeof saveSchema>) {
   const data = saveSchema.parse(input);
 
   await saveSettings({
+    enabled: data.enabled,
     apiKey: data.apiKey?.trim() || undefined,
     baseUrl: data.baseUrl?.trim() || undefined,
     textModel: data.textModel?.trim() || undefined,
@@ -41,7 +46,7 @@ export async function saveAiSettingsAction(input: z.infer<typeof saveSchema>) {
     targetId: "aiSettings",
     detail: {
       changedKey: !!data.apiKey,
-      baseUrl: data.baseUrl || null,
+      enabled: data.enabled,
       textModel: data.textModel || null
     }
   });
@@ -69,7 +74,7 @@ export async function clearAiKeyAction(input: z.infer<typeof clearSchema>) {
 export async function testAiConnection() {
   const session = await requireWorkspaceConfiguration();
   try {
-    const res = await aiChat({
+    await aiChat({
       userId: session.user.id,
       messages: [
         { role: "system", content: "You are a connectivity probe. Reply only with 'pong'." },
@@ -79,15 +84,15 @@ export async function testAiConnection() {
       temperature: 0,
       timeoutMs: 10_000
     });
-    const replyTrimmed = (res.content || "").slice(0, 100);
-    return { ok: true, reply: replyTrimmed };
+    await requireWorkspaceConfiguration();
+    return { ok: true, reply: "文本模型已响应；其他模型与业务能力尚未验证" };
   } catch (e) {
     if (e instanceof AiNotConfiguredError) {
       return { ok: false, message: e.message };
     }
     return {
       ok: false,
-      message: e instanceof Error ? e.message : "未知错误"
+      message: "连接检查失败，请核对接口地址、凭据和文本模型；其他业务不受影响。"
     };
   }
 }

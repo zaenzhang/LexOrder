@@ -6,7 +6,7 @@
  *    （派生搜索授权过滤，报告 P0-2/P1 §三）；
  * 2. AI 审查收案材料分支：非归属用户（非创建人/主办/协办/管理岗）被
  *    assertCanReviewDocument 拒绝，归属用户放行（报告 P0 第 4 项 / 证据 C07）；
- * 3. 队列崩溃恢复：recoverStaleLeases 只重置过期租约的 RUNNING 任务为
+ * 3. 队列崩溃恢复：recoverStaleLeases 只重置过期或缺失租约的 RUNNING 任务为
  *    PENDING（attempts 不变——没执行完不扣次数），未过期/非 RUNNING 不动。
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -68,7 +68,7 @@ describe("① 全局搜索：无 documents.read 的会话查不到任何材料",
       { permissionKey: "documents.read", scope: "OWN" }
     ];
     await globalSearch("合同");
-    expect(db.document.findMany).toHaveBeenCalledTimes(1);
+    expect(db.document.findMany).toHaveBeenCalledTimes(2); // 命中候选 + 按相同授权口径统计失败材料
   });
 
   it("候选命中但逐条授权失败时不出现在结果里（授权后过滤）", async () => {
@@ -138,14 +138,14 @@ describe("② AI 审查：全文外发资格按材料归属逐件判断（P1-2�
 });
 
 describe("③ 队列崩溃恢复：过期租约语义", () => {
-  it("只把 RUNNING 且租约过期的任务重置为 PENDING，attempts 不变", async () => {
+  it("只把 RUNNING 且租约过期或缺失的任务重置为 PENDING，attempts 不变", async () => {
     db.jobQueue.updateMany.mockResolvedValue({ count: 3 });
     const n = await recoverStaleLeases();
     expect(n).toBe(3);
     expect(db.jobQueue.updateMany).toHaveBeenCalledTimes(1);
     const [args] = db.jobQueue.updateMany.mock.calls[0];
-    expect(args.where).toMatchObject({ status: "RUNNING", leaseUntil: { lt: expect.any(Date) } });
-    expect(args.data).toEqual({ status: "PENDING", leaseUntil: null });
+    expect(args.where).toEqual({ status: "RUNNING", OR: [{ leaseUntil: { lt: expect.any(Date) } }, { leaseUntil: null }, { leaseToken: null }] });
+    expect(args.data).toEqual({ status: "PENDING", leaseUntil: null, leaseToken: null });
     expect(JSON.stringify(args.data)).not.toContain("attempts"); // 未执行完不扣次数
   });
 
