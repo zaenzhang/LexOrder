@@ -73,6 +73,20 @@
 | j-lawyer | [官方功能](https://www.j-lawyer.org/?page_id=22) | 案件表单、模板变量、文档与办案工作流 | 首期参考业务行为；具体源码按仓库和模块另核许可 |
 | Docassemble | [仓库](https://github.com/jhpyle/docassemble)、[文书装配](https://docassemble.org/docs/documents.html)、[API](https://docassemble.org/docs/api.html) | 分支访谈、变量驱动 DOCX/PDF 装配、会话 API | 先增强既有字段和模板，复杂访谈后续服务化 |
 
+### 3.1 模块实施前的参考与用户合理性记录
+
+每个模块开发前记录用户任务、实际阅读的 UI/业务来源、采用理由、不适用之处及验收路径。以下是首批 W01.2/W04.1 的研究；查看了官方截图、界面指南和固定源码，没有运行第三方应用，不作为交互测试通过的证据。
+
+| 模块与来源 | 实际观察 | LexOrder 采用与边界 |
+| --- | --- | --- |
+| 材料阅读/处理：Paperless-ngx，快照 `4610171a94e5932e85a80e480032e397cdb6f309` | [官方编辑截图](https://github.com/paperless-ngx/paperless-ngx/blob/4610171a94e5932e85a80e480032e397cdb6f309/docs/assets/screenshots/editing.png) 中元数据与原文并排，版本/页码/保存靠近对象；[上传服务](https://github.com/paperless-ngx/paperless-ngx/blob/4610171a94e5932e85a80e480032e397cdb6f309/src-ui/src/app/services/upload-documents.service.ts) 在上传响应后保存任务 ID 并进入等待，上传完成不等于处理完成；[状态区](https://github.com/paperless-ngx/paperless-ngx/blob/4610171a94e5932e85a80e480032e397cdb6f309/src-ui/src/app/components/common/upload-status-tray/upload-status-tray.component.html) 逐件显示结果与打开入口 | 吸收同屏核查、逐件状态和就地失败出口；沿用 LexOrder 事项材料行及一行一版本，不搬入全局管理导航、大量元数据字段或重复的保存按钮 |
+| 来源与事实：Kosmos，快照 `c6454fd5488c0d231e2b4756846f690c679586ca` | [事实指南](https://www.kosmos.law/docs/guide/facts/) 将原文高亮、事实和来源关联；[OCR 状态组件](https://github.com/Kosmos-Law/kosmos/blob/c6454fd5488c0d231e2b4756846f690c679586ca/templates/case/documents/ocr-badge.html) 显示实际页数、暂停及失败重试；[事实行](https://github.com/Kosmos-Law/kosmos/blob/c6454fd5488c0d231e2b4756846f690c679586ca/templates/case/facts/fact-row.html) 将来源置于事实旁；[模型](https://github.com/Kosmos-Law/kosmos/blob/c6454fd5488c0d231e2b4756846f690c679586ca/apps/case/models.py) 保存材料、页段与选区关系 | 吸收原文位置与事实就近关联。LexOrder 高频动作直接点引用回原文，复制/移除放次级菜单；自动检索或 AI 结果不得把未处理内容当作已读取依据；人工阅卷引用仍核对原文位置、版本与当前权限，采纳不自动等于事实成立 |
+| 既有事项材料：LexOrder `44a5399` | [材料行](https://github.com/zaenzhang/LexOrder/blob/44a539969db68fa94836c0a63ee51cb333f8d3b0/src/app/(app)/matters/[id]/_components/procedure-workflow-panel.tsx) 已有阅读、下载、添加要点；[证据组件](https://github.com/zaenzhang/LexOrder/blob/44a539969db68fa94836c0a63ee51cb333f8d3b0/src/app/(app)/matters/[id]/_components/evidence-panel.tsx) 可就地展开并预选材料 | 保留现有入口和上下文，后续把文字来源增强为真实定位引用；本批先补共用数据与检索边界，不另建证据中心或 AI 来源页面 |
+
+用户合理性审查结论：材料状态跟随材料，来源跟随论断，失败旁提供继续操作；普通路径用标题、标签、位置与动作表达，不显示内部锚点名、代次、向量参数等实现说明。必要的未读范围、来源变化和错误原因保留。UI 集成时用“上传→部分失败→重试→查看来源→编辑候选→采纳”验证普通/异常/窄屏/键盘路径；本批契约测试只验证这些交互所需的数据约束。
+
+参考中不适用的处理也单独审查：Kosmos 的[材料任务](https://github.com/Kosmos-Law/kosmos/blob/c6454fd5488c0d231e2b4756846f690c679586ca/apps/case/documents/tasks.py) 包含 OCR 替换原文件、按总字符量判断已有文本及限量索引/摘要。LexOrder 保留原件，并分开记录解析覆盖、召回片段与模型实际输入，不能由处理成功推断全卷已读。本批独立实现共用契约，不复制以上项目代码。
+
 ### 当前项目状态对计划的影响
 
 - 本轮初始评估为 `97867e2`，提交前已对齐 main `2997b54754565081271ca4b66139949d310e2fe0`。appleoppa 的通用功能、迁移、权限与调度适配已合入；本轮保留其源码及来源记录，进一步区分局部传票解析、15 分钟启动补扫与尚待建设的通用 OCR、完整休眠/数据恢复能力。
