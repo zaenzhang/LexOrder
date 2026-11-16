@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type FormEvent } from "react";
+import { useMemo, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarClock, Check, Loader2, MessageSquare, Plus, X } from "lucide-react";
 import { toast } from "sonner";
@@ -10,15 +10,22 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { actionErrorMessage } from "@/lib/action-error";
-import { clientChannelLabels, fromShanghaiInput, toShanghaiInput, type ClientActivityInput, type ClientRelationshipView } from "@/lib/clients/relationship";
+import { clientChannelLabels, fromShanghaiInput, toShanghaiInput, type ClientActivityInput, type ClientRelationshipView, type ClientCommunicationPage, type ClientFollowUpPage } from "@/lib/clients/relationship";
 import { shDayKey, shTime } from "@/lib/ui/sh-time";
-import { recordClientActivity } from "@/server/clients/relationship-actions";
+import { getClientCommunicationPage, getClientFollowUpPage, recordClientActivity } from "@/server/clients/relationship-actions";
+import { ClientPagination, useClientPagination } from "./client-pagination";
 
 const when = (value: string) => `${shDayKey(value)} ${shTime(value)}`;
 type Mode = { id?: string; title?: string; status: "COMPLETED" | "CANCELLED" };
 
 export function ClientRelationshipPanel({ clientId, view }: { clientId: string; view: ClientRelationshipView | null }) {
   const router = useRouter();
+  const activityInitial = useMemo<ClientCommunicationPage>(() => ({ items: view?.activities ?? [], nextCursor: view?.activityNextCursor ?? null, total: view?.activityCount ?? 0, canWrite: view?.canWrite ?? false }), [view]);
+  const followUpInitial = useMemo<ClientFollowUpPage>(() => ({ items: view?.followUps ?? [], nextCursor: view?.followUpNextCursor ?? null, total: view?.openCount ?? 0, canWrite: view?.canWrite ?? false }), [view]);
+  const activityPager = useClientPagination(clientId, activityInitial, getClientCommunicationPage);
+  const followUpPager = useClientPagination(clientId, followUpInitial, getClientFollowUpPage);
+  const activities = activityPager.page;
+  const followUps = followUpPager.page;
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
   const [mode, setMode] = useState<Mode>({ status: "COMPLETED" });
@@ -60,6 +67,8 @@ export function ClientRelationshipPanel({ clientId, view }: { clientId: string; 
         await recordClientActivity(input);
         toast.success(mode.id ? mode.status === "CANCELLED" ? "跟进已取消，原因已保存" : "跟进结果已保存" : "沟通记录已保存");
         setOpen(false);
+        activityPager.invalidate();
+        followUpPager.invalidate();
         router.refresh();
       } catch (err) {
         setError(actionErrorMessage(err) || "保存失败，请重试");
@@ -73,14 +82,14 @@ export function ClientRelationshipPanel({ clientId, view }: { clientId: string; 
     <section className="card min-w-0 overflow-hidden" aria-labelledby="client-relationship-title">
       <div className="panel-head flex-wrap gap-2">
         <h2 id="client-relationship-title" className="panel-title"><MessageSquare className="ic" strokeWidth={1.8} />沟通与跟进</h2>
-        {view?.canWrite ? <button type="button" className="btn btn-secondary btn-sm" onClick={() => begin({ status: "COMPLETED" })}><Plus />记录沟通</button> : null}
+        {view?.canWrite && activities?.canWrite && followUps?.canWrite ? <button type="button" className="btn btn-secondary btn-sm" onClick={() => begin({ status: "COMPLETED" })}><Plus />记录沟通</button> : null}
       </div>
       {!view ? <div className="panel-body t-sm t-mute">沟通记录仅向客户经办人员及获授权的管理人员开放。</div> : (
         <div className="panel-body space-y-5">
           <div>
-            <h3 className="mb-2 flex items-center gap-2 text-sm font-medium"><CalendarClock className="h-4 w-4" />待跟进 <span className="badge b-white">{view.openCount}</span></h3>
-            {view.followUps.length === 0 ? <p className="t-sm t-mute py-2">暂无待跟进。记录沟通时可安排下一次跟进。</p> : <ul className="space-y-2">
-              {view.followUps.map(item => <li key={item.id} className="flex flex-wrap items-start gap-2 rounded-lg border border-[var(--bd-hair)] p-3">
+            <h3 className="mb-2 flex items-center gap-2 text-sm font-medium"><CalendarClock className="h-4 w-4" />待跟进 {followUps ? <span className="badge b-white">{followUps.total}</span> : null}</h3>
+            {followUps?.items.length === 0 ? <p className="t-sm t-mute py-2">本页暂无待跟进。</p> : <ul className="space-y-2">
+              {followUps?.items.map(item => <li key={item.id} className="flex flex-wrap items-start gap-2 rounded-lg border border-[var(--bd-hair)] p-3">
                 <div className="min-w-0 flex-1 basis-48">
                   <p className="break-words text-sm font-medium">{item.title}</p>
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--t-muted)]">
@@ -94,18 +103,18 @@ export function ClientRelationshipPanel({ clientId, view }: { clientId: string; 
                 </div> : null}
               </li>)}
             </ul>}
-            {view.openCount > view.followUps.length ? <p className="t-xs t-mute mt-2">当前显示最早到期的 {view.followUps.length} 项，共 {view.openCount} 项。</p> : null}
+            <ClientPagination controls={followUpPager} label="待跟进" />
           </div>
           <div className="border-t border-[var(--bd-hair)] pt-4">
-            <h3 className="mb-3 text-sm font-medium">沟通历史 <span className="t-xs t-mute">{view.activityCount} 条</span></h3>
-            {view.activities.length === 0 ? <p className="t-sm t-mute">尚未记录沟通。</p> : <ol className="space-y-4">
-              {view.activities.map(item => <li key={item.id} className="border-l-2 border-[var(--bd-hair)] pl-3">
+            <h3 className="mb-3 text-sm font-medium">沟通历史 {activities ? <span className="t-xs t-mute">{activities.total} 条</span> : null}</h3>
+            {activities?.items.length === 0 ? <p className="t-sm t-mute">本页暂无沟通记录。</p> : <ol className="space-y-4">
+              {activities?.items.map(item => <li key={item.id} className="border-l-2 border-[var(--bd-hair)] pl-3">
                 <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-[var(--t-muted)]"><span className="badge b-white">{clientChannelLabels[item.channel]}</span><span>{item.authorName}</span><time dateTime={item.occurredAt}>{when(item.occurredAt)}</time></div>
                 {item.closedTitle ? <p className="mb-1 text-xs font-medium text-[var(--teal-deep)]">{item.closedStatus === "CANCELLED" ? "已取消" : "已完成"}：{item.closedTitle}</p> : null}
                 <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{item.content}</p>
               </li>)}
             </ol>}
-            {view.activityCount > view.activities.length ? <p className="t-xs t-mute mt-3">当前显示最近 {view.activities.length} 条记录。</p> : null}
+            <ClientPagination controls={activityPager} label="沟通历史" />
           </div>
           <p className="t-xs t-mute">时间均为北京时间。到期状态在打开页面时更新。</p>
         </div>

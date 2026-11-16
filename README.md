@@ -10,22 +10,24 @@
 
 现有源码包含客户与收案、案件与程序、材料与证据、期限与任务、财务、审批及归档业务。LexOrder 已增加客户沟通与跟进、客户合并，以及法规/案例服务适配、执行文书模板、传票首页解析和独立调度入口。实际采用与验证范围见[实施计划](docs/WORKBENCH_PLAN.md#8-交接完成范围证据与未覆盖项)。
 
-**重构方向已经确定，个人安装包、两版 RAG 集成与新技能执行器仍待实现。** 当前源码运行方式对应已有部署系统，不能当作已发布的 Personal 或完整 Server RAG 发行包。
+**当前唯一交付目标是 Server 部署版，Personal 直接搁置且不作为门禁。** 本轮从 `f973b87` 接续，已实现持久原件摄入/恢复、后台解析与覆盖、多来源证据修订/确认、版本化事项上下文与授权 Brief，以及独立可选的 AI/OCR/法律 MCP 设置。真实 PG、真实会话 HTTP 和生产构建已有本轮证据；实际浏览器交互受环境阻断，**M2 尚未整体验收关闭**，具体范围见实施计划 §8.4。
 
 首条工作流程：目标与客户指示 → 材料 → 事实与争点 → 带来源草稿 → 律师确认 → 行动与客户跟进 → 实际交付与归档。
 
-## 两种发行形态
+## 当前交付：Server 部署版
 
-| 项目 | Personal：本地个人版 | Server：部署版 |
-| --- | --- | --- |
-| 使用 | 安装后直接打开本地工作区 | 管理员部署，成员通过浏览器使用 |
-| 用户认证 | 无注册、登录、账号或用户管理 | 保留团队认证、人员与业务权限 |
-| 业务与存储 | 精简 Next/Node，共用 TS 业务；PGlite 为个人库优先方向 | Next.js / TypeScript / Prisma / PostgreSQL |
-| RAG | 内置 RAG，LanceDB 为首个实现目标 | RAGFlow，纳入正式部署交付 |
-| 模型 | 可连接独立模型 API，不默认捆绑生成大模型 | 同样可连接独立模型 API |
-| 交付 | 个人安装包 | 应用镜像、配套 RAGFlow 与依赖配置、升级恢复说明 |
+在现有 Next.js / TypeScript / Prisma / PostgreSQL 与 LawLink 页面上开发，保留团队认证、材料权限、财务、审批和归档规则。Personal 设计、代码及试验记录保留，但不列为后续必做，也不影响 Server 发布。
 
-两版共用案件、材料版本、技能、引用与确认流程。每个正式 release 同时提供两种可用产物；个人独立与完全离线分别验收。**性能暂不作为门禁。** 界面以正文、材料、依据和下一步为主，减少装饰。
+| 范围 | 当前策略 |
+| --- | --- |
+| 核心运行 | Web、PostgreSQL、私有材料存储与唯一调度所有者 |
+| 默认处理/搜索 | 内置解析，现有 PostgreSQL 正文检索；无外部账号仍可办理业务 |
+| 可选服务 | RAGFlow、AI、OCR、嵌入/重排、法律数据库/MCP；默认按需启用 |
+| 配置与失败 | 未配置、无权限、超时、限流及无结果分别显示；故障只影响所调用能力 |
+| 法律 MCP | 官方机构预设与自定义接入；端点、认证和来源有登记，凭据服务端保存 |
+| 交付 | Server 固定镜像/部署配置、安装升级与恢复说明；不等待个人安装包 |
+
+当前里程碑为部署版 M2 业务预览，代码与服务端闭环已交付，原界面实际交互仍待验收；完整范围和退出证据见实施计划。性能只观察，UI 改版后置，不反复运行与当前改动无关的测试或 hash 扫描。
 
 ## 项目文档
 
@@ -34,7 +36,7 @@
 | 主文档 | 内容 |
 | --- | --- |
 | [产品需求、技能与界面](docs/PRODUCT_REQUIREMENTS_ACCEPTANCE.md) | RQ01—RQ20、SK01—SK12、界面和场景验收 |
-| [架构、发布与审查](docs/REFACTOR_DESKTOP_TEAM_RAG.md) | Personal/Server、RAG、模型 API、存储试验、开发部署与恢复 |
+| [架构、发布与审查](docs/REFACTOR_DESKTOP_TEAM_RAG.md) | Server、可选服务、搁置设计、开发部署与恢复 |
 | [实施计划与交接](docs/WORKBENCH_PLAN.md) | 第一阶段 M0—M4、W01—W17 及子任务、16 组验收场景、当前证据与下一步 |
 | [研究与决策依据](docs/RESEARCH_AND_DECISIONS.md) | 项目来源、固定版本、采用边界及全球律所职业能力资料 |
 
@@ -102,24 +104,25 @@ npm run build
 
 ## 参考项目清单
 
-以下列出代码来源、拟采用组件及设计参考；采用状态按本仓库实际实现记录，不将参考对象的全部功能视为已集成。
+采用登记与详细模块来源统一见[研究与决策依据](docs/RESEARCH_AND_DECISIONS.md) §3。下表明确区分源码合入、组件/服务接入及行为参考；引用项目不等于已具有其全部功能。
 
-| 项目 | 参考或采用方向 | 当前关系 |
+| 项目与固定来源 | 采用内容 | 当前关系 |
 | --- | --- | --- |
-| [LawLink](https://github.com/lawflow-boop/LawLink/tree/4736aa100515bb15f47443cdb6b0ae65745e5fff) | 客户、事项、材料、财务、审批与归档 | 实际代码基线：v2.0.1，固定提交 `4736aa1` |
-| [appleoppa/LawLink](https://github.com/appleoppa/LawLink/tree/535a3531aa79edea1c1c6524fd6748d630170718) | 法规/案例适配、传票、执行模板与独立调度 | 通用二开已吸收，来源固定提交 `535a353` |
-| [RAGFlow](https://github.com/infiniflow/ragflow/releases/tag/v1.0.0) | Server 解析、索引、检索与重排 | 已定后端，接入与验收待实施 |
-| [LanceDB](https://lancedb.github.io/lancedb/js/) | Personal 内置检索组件 | 首个实现目标，待接入与验证 |
-| [PGlite](https://pglite.dev/docs/about) | Personal 嵌入式业务库 | 优先方向；有界兼容试验通过，应用适配待完成 |
-| [AnythingLLM](https://docs.anythingllm.com/installation-desktop/overview) / [Cherry Studio](https://github.com/CherryHQ/cherry-studio) | 双交付、组件托管、模型配置与召回检查 | 行为与工程参考 |
-| [案齐 ANQI](https://github.com/zj-ai-lab/anqi) | 今日计划、程序事件、期限解释与人工保护 | 行为参考 |
-| [Kosmos](https://github.com/Kosmos-Law/kosmos) / [诉讼可视化](https://github.com/MiaoQichuan/new-litigation-visualization) | 原文高亮、多来源事实、矛盾和时间线 | 行为与数据关系参考 |
-| [Counsel OS](https://github.com/eigenlegal/counsel-os) | 案件上下文、来源锚点、覆盖与文书版本 | 行为与工程参考 |
-| [Frappe CRM](https://github.com/frappe/crm) / [Twenty](https://github.com/twentyhq/twenty) | 客户活动、跟进和关联记录 | 行为参考 |
-| [Paperless-ngx](https://github.com/paperless-ngx/paperless-ngx) | 原件、派生处理、索引归档与失败恢复 | 行为与工程参考 |
-| [j-lawyer](https://www.j-lawyer.org/?page_id=22) / [Docassemble](https://github.com/jhpyle/docassemble) | 案件表单、模板变量、条件访谈与文书装配 | 行为与工程参考 |
-| [AppFlowy](https://github.com/AppFlowy-IO/AppFlowy) | 界面、业务与持久层边界 | 工程参考 |
-| [Clio](https://www.clio.com/features/case-management/) | 客户获取、案件办理与服务交付 | 商业产品，行为参考 |
-| [元典](https://open.chineselaw.com/) / [北大法宝](https://mcp.pkulaw.com/) / [威科](https://mcp.wkinfo.com.cn/docs) | 获授权法律数据库与检索接口 | 商业数据服务；元典已有适配代码，真实权益/接口待联调，其余为接入候选 |
-
-详细来源、固定版本、许可和采用边界见[研究与决策依据](docs/RESEARCH_AND_DECISIONS.md)。
+| [LawLink v2.0.1](https://github.com/lawflow-boop/LawLink/tree/4736aa100515bb15f47443cdb6b0ae65745e5fff) | 客户、事项、材料、财务、审批、归档和原界面 | **实际源码基线**，`4736aa1` |
+| [appleoppa/LawLink](https://github.com/appleoppa/LawLink/tree/535a3531aa79edea1c1c6524fd6748d630170718) | 法规/案例适配、传票、执行模板与独立调度 | **通用源码已吸收**，来源 `535a353` |
+| [PGlite](https://pglite.dev/docs/about) | Personal 嵌入式业务库 | **0.5.16 历史 Linux 原型**；个人版搁置 |
+| [LanceDB](https://github.com/lancedb/lancedb/tree/3936a8b3bcce8f8e073f3ec6a47e4ca4d3381b92/nodejs/lancedb) | 内置检索组件研究、词法/向量过滤 | **0.41.0 SDK/适配原型已有**，真实模型链路待验证 |
+| [RAGFlow v1.0.0](https://github.com/infiniflow/ragflow/tree/db1cd5929a7885a3074547791f5ecc4d2f891739) | Server 解析、索引与检索服务 | **可选服务**，适配/部署准备已有；真实服务未验证 |
+| [AnythingLLM](https://github.com/Mintplex-Labs/anything-llm/tree/4d09fa5f730698d39f1d783e47316744b260a700) | 双形态、工作区、模型配置与内置组件 | 已研究的行为/工程参考，`4d09fa5` |
+| [Cherry Studio](https://github.com/CherryHQ/cherry-studio/tree/6b408118141472ff472a1824f300b5a8cbdf968d) | 桌面资源、目标原生包、单实例及生命周期 | 已研究的工程参考，`6b40811`；随个人版搁置，保留既有研究 |
+| [Paperless-ngx](https://github.com/paperless-ngx/paperless-ngx/tree/4610171a94e5932e85a80e480032e397cdb6f309) | 原件、处理状态、逐件失败和恢复 | 已用于契约/验收设计的行为参考，`4610171` |
+| [Kosmos](https://github.com/Kosmos-Law/kosmos/tree/c6454fd5488c0d231e2b4756846f690c679586ca) | 原文位置、事实关系及 OCR 覆盖 | 已用于来源/覆盖设计的行为参考，`c6454fd` |
+| [Frappe CRM](https://github.com/frappe/crm/tree/3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952) | 对象导航、列表/详情、客户活动与跟进 | 后续全局交互主参考，`3509bd4`；UI 改版后置 |
+| [Twenty](https://github.com/twentyhq/twenty/tree/26fa97ebc8a5773e842ba0d2f01e0b24bed6e7d0) | 关联记录与筛选 | 已比较的辅助参考，`26fa97e` |
+| [案齐 ANQI](https://github.com/zj-ai-lab/anqi) | 今日计划、程序事件、期限解释与人工保护 | 后续行为参考，尚未合入 |
+| [诉讼可视化](https://github.com/MiaoQichuan/new-litigation-visualization) | 多来源事实、矛盾和时间线 | 后续行为/数据关系参考，尚未合入 |
+| [Counsel OS](https://github.com/eigenlegal/counsel-os) | 案件上下文、覆盖、版本引用与文书复核 | 后续行为/工程参考，尚未合入 |
+| [Docassemble](https://github.com/jhpyle/docassemble) / [j-lawyer](https://www.j-lawyer.org/?page_id=22) | 条件字段、模板变量、文书装配 | 后续业务参考，尚未合入 |
+| [Clio](https://www.clio.com/features/case-management/) | 客户获取、案件办理与服务交付 | 商业产品行为参考 |
+| [AppFlowy](https://github.com/AppFlowy-IO/AppFlowy) | 界面、业务与持久层边界 | 架构参考，不引入 Rust 重写 |
+| [元典](https://open.chineselaw.com/mcp-config/) / [北大法宝](https://mcp.pkulaw.com/docs) / [威科](https://mcp.wkinfo.com.cn/docs) / [聚法](https://www.jufaai.com/agent/guide) | 官方法律 MCP 目录、自定义远程接入及原元典 API | 四项 MCP 预设、加密配置和管理员手动只读检索已有；全部默认关闭，真实提供商/权益未验证 |

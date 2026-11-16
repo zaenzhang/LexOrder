@@ -135,6 +135,7 @@ export function MatterArchive({
   canEdit,
   canEditCustom,
   canManageRelated,
+  contextNode,
   onEdit
 }: {
   matter: MatterPayload;
@@ -151,6 +152,7 @@ export function MatterArchive({
   canEdit: boolean;
   canEditCustom: boolean;
   canManageRelated: boolean;
+  contextNode?: React.ReactNode;
   onEdit: () => void;
 }) {
   const kind = matterCategoryKind(matter.category);
@@ -227,6 +229,7 @@ export function MatterArchive({
 
       {/* 二、案件要素：一张卡片内按主题分区，字段自适应铺满（2026-09-16 重排，避免两栏高度不齐与留白） */}
       <div className="card dos-facts">
+          {contextNode}
           <Group icon={FileText} title={isCriminal ? "指控与请求" : kind === "litigation" ? "案由与请求" : "服务内容"} action={editBtn}>
             <FieldGrid cols={2} className="mo-field-grid-auto">
               <FieldItem label="案件类别">{matterCategoryLabel[matter.category]}</FieldItem>

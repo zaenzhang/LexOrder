@@ -6,15 +6,15 @@
 
 | 证据类别 | 已完成的工作 | 形成的决定 | 不能据此宣称 |
 | --- | --- | --- | --- |
-| 用户需求 | 整理事项工作流及本轮持续补充 | 双版本共用 LawLink 业务页面；Personal 内置 RAG、Server RAGFlow，均接独立模型 API；当前仅验证 Server，Personal 由用户后测，UI 改版后置 | 个人版已可运行、用户已验收，或未展示的限制已被接受 |
-| 既有项目 | 固定 LawLink/二开提交；§3.5 深读 13 个候选的指定模块，映射 SK01—SK12，保留实际移植记录 | 复用 TS、事项与财务/审批链，逐步补材料和交付 | 所有参考项目的能力都已移入 |
-| 桌面/存储 | 官方资料、固定版本隔离试验、共享根 App 与本机操作者接线、私有 PG 通道反例 | 精简 Next/Node + PGlite；保留历史局部证据，Personal 运行与 Windows 产物待用户验收 | 后续变更后的应用可运行、全量 PG 兼容或 Windows 发行已验证 |
+| 用户需求 | 汇总本轮全部纠正并三 agent 复核 | 唯一 Server；Personal 搁置无门禁/无自动恢复；内置先行、所有第三方独立可选；官方 MCP 目录；UI 原样 | 将旧双产物或外部凭据重新作为前置，或宣称可选项已接通 |
+| 既有项目 | 固定 LawLink/二开提交；保留 §3.5 对 13 个候选指定模块的深读记录与 SK01—SK12 映射，核对实际移植 | 复用 TS、事项与财务/审批链，逐步补材料和交付 | 所有参考项目的能力都已移入 |
+| 桌面/存储 | 官方资料、固定版本隔离试验、共享根 App 与本机操作者接线、私有 PG 通道反例 | 精简 Next/Node + PGlite 的历史设计保留；Personal/Windows 搁置 | 后续变更后的应用可运行、全量 PG 兼容或 Windows 发行已验证 |
 | RAG 后端 | LanceDB 0.41.0 SDK 原型、抽取/OCR 边界测试、RAGFlow 1.0.0 HTTP 适配与固定部署准备脚本 | 两个适配已有代码；Lance/OCR 新增 26 项通过；RAGFlow 为 `PREPARED_NOT_DEPLOYED`，真实服务/模型联调待配置 | 适配已接通完整业务、真实语义/OCR 质量已验证，或 RAGFlow 已部署 |
 | 专业能力 | 16 个主要官方来源，13 个国家/地区及补充材料 | SK01—SK12 的输入、步骤、成果、人工复核与评测 | 全球排名、每国穷尽调查、名所背书或 AI 执业资格 |
 
 研究采用“观察到的行为 → 输入输出与规则 → LexOrder 设计 → 场景验证”。来源事实、产品推论和已运行结果分别标明。动态页面不自动等于固定版本能力；新增依赖固定版本和完整性，实际采用源码时登记文件与许可。招聘页面状态按核查当日记录，后续实现时复核需要更新的来源。
 
-当前运行证据集中于[实施计划 §8.3](WORKBENCH_PLAN.md#83-m1-当前验证与交接2026-11-16)：Personal 共享根应用曾构建通过，后续新工作区初始化报 `M1_INITIALIZATION_COMMAND_FAILED` 后依用户指令停止验证；没有 Windows 产物。Server-only 服务脚本实跑两项 `NOT_CONFIGURED`、退出码 2，未调用 Personal；无真实模型凭据或 RAGFlow 实例时不记联调通过。
+Server M2 初批实现与验证见[实施计划 §8.4](WORKBENCH_PLAN.md#84-server-m2-本轮执行2026-11-16)，客户连续记录/人工事实日期的续做证据见[§8.6](WORKBENCH_PLAN.md#86-m2-连续记录与事实日期执行结果2026-11-16)。[§8.3](WORKBENCH_PLAN.md#83-m1-当前验证与交接2026-11-16) 保留 M1 历史证据：Personal 共享根应用曾构建通过，后续新工作区初始化报 `M1_INITIALIZATION_COMMAND_FAILED` 后依用户指令停止验证；没有 Windows 产物。Server-only 服务脚本实跑两项 `NOT_CONFIGURED`、退出码 2，未调用 Personal；无真实模型凭据或 RAGFlow 实例时不记联调通过。
 
 ## 1. 实际业务基线
 
@@ -68,7 +68,7 @@
 | Paperless-ngx | [仓库](https://github.com/paperless-ngx/paperless-ngx)、[文档](https://docs.paperless-ngx.com/) | 扫描、索引、归档和文档处理 | 独立实现原件、派生结果、处理状态与恢复流程 |
 | AnythingLLM | [Desktop](https://docs.anythingllm.com/installation-desktop/overview)、[Docker](https://docs.anythingllm.com/installation-docker/overview)、[内置 LanceDB](https://docs.anythingllm.com/setup/vector-database-configuration/local/lancedb) | 单人安装版、团队部署版、内置检索和嵌入选项 | 参考双交付与组件托管，不能推定自动离线同步 |
 | Cherry Studio | [知识库](https://www.cherryai.com/docs/en/knowledge-base/knowledge-base/)、[本地模型](https://www.cherryai.com/docs/en/pre-basic/settings/local-models/)、[仓库](https://github.com/CherryHQ/cherry-studio) | 分块检查、召回测试、重建索引、可下载本地嵌入/OCR | 参考桌面 RAG 体验；个人版不直接视为团队服务器 |
-| RAGFlow | [v1.0.0 正式发布](https://github.com/infiniflow/ragflow/releases/tag/v1.0.0)、[1.0 HTTP API](https://ragflow.io/docs/v1.0.0/http_api_reference)、[部署](https://ragflow.io/docs/v1.0.0/)、[共享权限](https://ragflow.io/docs/v1.0.0/guides/team/resource_sharing/resource_sharing_and_permissions) | 已有解析/索引/检索平台；正式版及权限语义有明确边界 | Server 已选定后端，首个联调目标 1.0.0 并锁定镜像摘要；Personal 保持内置，业务与引用由 LexOrder 管理，适配已有代码，真实联调与业务集成待完成 |
+| RAGFlow | [v1.0.0 正式发布](https://github.com/infiniflow/ragflow/releases/tag/v1.0.0)、[1.0 HTTP API](https://ragflow.io/docs/v1.0.0/http_api_reference)、[部署](https://ragflow.io/docs/v1.0.0/)、[共享权限](https://ragflow.io/docs/v1.0.0/guides/team/resource_sharing/resource_sharing_and_permissions) | 已有解析/索引/检索平台；正式版及权限语义有明确边界 | Server 可选增强，首个联调目标 1.0.0 并锁定镜像摘要；默认内置解析与 PG 搜索。HTTP 适配及部署准备已有，真实服务未部署；业务与引用由 LexOrder 管理 |
 | Counsel OS | [仓库](https://github.com/eigenlegal/counsel-os)、[LICENSE](https://github.com/eigenlegal/counsel-os/blob/main/LICENSE) | 案件上下文、记录版本引用、文书审阅；部分能力尚未完成 | 独立实现覆盖记录、来源锚点和成果版本流程 |
 | new-litigation-visualization | [仓库](https://github.com/MiaoQichuan/new-litigation-visualization) | 多来源事实、冲突并列、事实时间线和可视化 | 增强 EvidenceItem 和材料引用，不建立平行事实库 |
 | AppFlowy | [仓库](https://github.com/AppFlowy-IO/AppFlowy)、[CodeMap](https://docs.appflowy.io/docs/documentation/software-contributions/architecture/frontend/frontend/codemap) | 界面、Rust 核心与持久层的工程边界 | 参考模块划分；不据其语言选择启动 LexOrder 全面迁移 |
@@ -93,7 +93,7 @@
 
 | 模块 / 用户任务 | 已读取的参考 UI 与业务 | LexOrder 的决定与验收 |
 | --- | --- | --- |
-| 个人工作区 / 打开并继续工作 | AnythingLLM 固定 `4d09fa5f730698d39f1d783e47316744b260a700` 的 `frontend/src/pages/OnboardingFlow/Steps/{Home,LLMPreference,UserSetup}/index.jsx`、`frontend/src/components/PrivateRoute/index.jsx`、`server/utils/boot/markOnboarded.js`；[Desktop 官方说明](https://docs.anythingllm.com/installation-desktop/overview) | 采用工作区持久化、按所选服务展开配置；不采用营销欢迎流程、个人密码或运行时切换团队模式。M1 改为根应用的 Next standalone，复用原 LawLink 页面、真实 Prisma 模型和迁移；稳定本机操作者取代 Personal 登录，Server 认证不变。独立技术页已退出产品入口。创建、关闭、重开与不完整工作区的实际验收留给用户后续执行。 |
+| 个人工作区 / 打开并继续工作 | AnythingLLM 固定 `4d09fa5f730698d39f1d783e47316744b260a700` 的 `frontend/src/pages/OnboardingFlow/Steps/{Home,LLMPreference,UserSetup}/index.jsx`、`frontend/src/components/PrivateRoute/index.jsx`、`server/utils/boot/markOnboarded.js`；[Desktop 官方说明](https://docs.anythingllm.com/installation-desktop/overview) | 采用工作区持久化、按所选服务展开配置；不采用营销欢迎流程、个人密码或运行时切换团队模式。M1 改为根应用的 Next standalone，复用原 LawLink 页面、真实 Prisma 模型和迁移；稳定本机操作者取代 Personal 登录，Server 认证不变。独立技术页已退出产品入口。创建、关闭、重开与不完整工作区的实际验收未完成；本行保留 M1 历史决定，Personal 现已搁置，无当前验收责任或恢复排期。 |
 | 个人材料 / 查到可核对原文 | 延用 §3.1 实际查看的 Paperless 编辑/上传状态与 Kosmos 原文/事实、逐文件 OCR 状态；LanceDB 固定 [v0.41.0 源码](https://github.com/lancedb/lancedb/tree/3936a8b3bcce8f8e073f3ec6a47e4ca4d3381b92/nodejs/lancedb) 的 `indices.ts`、`query.ts`、`table.ts`、`merge.ts`、`connection.ts` | 用真实 SDK 持久化、ICU 中文词法、带前置过滤的向量检索及 RRF 合并；保留原始文字、PDF 页、不可变抽取文本偏移与表格单元格位置；DOCX 尚未映射回原文件段落。原生依赖隔离于 M1 工具包，Node 要求 >=22。确定性向量只检验索引工程，不冒充真实语义质量。 |
 | Server 材料 / 上传、等待、重试和撤回 | RAGFlow 固定 [v1.0.0 / db1cd5929a7885a3074547791f5ecc4d2f891739](https://github.com/infiniflow/ragflow/tree/db1cd5929a7885a3074547791f5ecc4d2f891739) 的 HTTP 文档、Go document handler/service 与资料列表/解析状态实现 | 实际状态使用 `ingestion_status`，不照搬旧文档的 `run`；取消先进入 STOPPING，删除须核对数量和列表。上传每次一份原件，唯一操作名与原件 SHA-256 用于丢回执核对，无法证明成功时待核对而非盲重传。检索显式关闭知识汇总与图谱扩展。 |
 
@@ -165,7 +165,7 @@ LawLink 与 appleoppa 仍按 §1—2 的固定业务基线复用，不重复移�
 | SK07 版本化审阅；H02/H03/H04/H05/H09 | Counsel 精确引用与显式影响链、Word 往返比较；诉讼可视化机械核对 | 定位问题—作者回应—实际处理—针对新版本复核；M3 补直接来源影响提示，保留历史批准；Word 谈判归因与批量问题表后续深化 | M3 W10.2；M5 W14 |
 | SK08 法律项目推进；H03/H05/H06/H07/H11/H14/H16 | ANQI 可解释期限，Twenty 等待/重试，j-lawyer 无未结日历项巡检 | 责任/前置/等待/检查日、期限计算依据和新旧差异；外部律师或客户等待仍有内部负责人。技术运行等待不冒充业务等待 | M3 W11.1；M5 W14 |
 | SK09 面向客户的沟通与交付；H03/H05/H06/H11/H13/H16、A01 | Frappe 沟通连续；LawLink 已有文书、审批、归档基础；未证明完整真实交付闭环 | 进展/风险/待决定/下一步简报、确切版本交付清单、实际发送证据与独立客户确认；自动生成不自动对外发送 | M3 W12.1 |
-| SK10 交接与监督；H03/H06/H07/H10/H11/H13/H14、A02 | j-lawyer 巡检、Frappe 按来源资格显示历史、Twenty 可恢复运行；不能据此宣称合伙人监督已完整实现 | 复用责任交接，形成接收检查表、关键期限/未决问题/授权材料包和反馈；Server 真实接收人确认；资料整理与本人事项巡检两版共用 | M5 W14；M3 保留既有责任守卫 |
+| SK10 交接与监督；H03/H06/H07/H10/H11/H13/H14、A02 | j-lawyer 巡检、Frappe 按来源资格显示历史、Twenty 可恢复运行；不能据此宣称合伙人监督已完整实现 | 复用责任交接，形成接收检查表、关键期限/未决问题/授权材料包和反馈；Server 真实接收人确认；当前 Server 实施资料整理与本人事项巡检；设计可复用，但 Personal 仍搁置 | M5 W14；M3 保留既有责任守卫 |
 | SK11 双语/跨法域；H01/H07/H08/H09/H12 | 本次开源阅读未证实“条款对齐—法律效果差异—当地复核”完整链；多语界面/模型不构成证明，Clio 仅产品对照 | 原/译文固定版本、术语/数字/否定/例外对齐表；按法域分栏研究、来源时点和当地律师待核实项；逐法域与样本验证 | M2 W07.1 预留；M5/M6 W15 |
 | SK12 反馈、知识与方法复用；H03/H05/H10/H11/H15、A02 | Counsel 版本化知识及来源影响、docassemble/j-lawyer 模板化方法；一般知识库不能证明脱敏/专业审核 | 首发手工选入/脱敏/审核；后续从复核反馈形成版本化作业包、条款立场与例外、复审任务及失效影响 | M3 W09.3；M5 W14/W15 |
 
@@ -180,36 +180,64 @@ LawLink 与 appleoppa 仍按 §1—2 的固定业务基线复用，不重复移�
 7. **协作复用现有责任与对象。**Frappe 的历史继承须逐来源鉴权；LexOrder 已有客户关联事项和最近动态（`clients/insights.ts`），增量是连续分页、沟通/跟进/指示/决定/交付链接，不能写成没有客户全景。Twenty 仅用于固定步骤、等待与恢复，技术任务不取代 WorkResponsibility；j-lawyer 的“无下一动作”只提示补安排，不自动造法定期限。
 8. **原件及恢复独立于可重建索引。**采用 Paperless 清单/完整性检查和 RAGFlow 同版恢复边界；索引重建读取固定原件，外部内容改变须新版本。派生复用按完整内容/解析/嵌入指纹且复核权限，不按文件名；主动取消的外发不因重启自动续做。现有队列/可靠投递继续增强，不另搭平台。
 
-本次不采用通用工作流画布、平行 CRM、完整 Docassemble/Frappe 服务、AppFlowy 语言/同步迁移或额外 RAG 后端。SSO、显式跨团队隔离墙、数据区域及企业审计导出属于 Server 后续专项候选：已有角色、受限事项和审计不是这些能力的完整证明，先明确目标部署和验收再立项；不改变 Personal 无认证。后续顺序与可验收条件见[实施计划 §3.9—3.10](WORKBENCH_PLAN.md#39-参考研究进入-m2m4-的具体增量)。
+本次不采用通用工作流画布、平行 CRM、完整 Docassemble/Frappe 服务、AppFlowy 语言/同步迁移或额外 RAG 后端。SSO、显式跨团队隔离墙、数据区域及企业审计导出属于 Server 后续专项候选：已有角色、受限事项和审计不是这些能力的完整证明，先明确目标部署和验收再立项；保留 Personal 无认证的历史设计，不因此安排其恢复。后续顺序与可验收条件见[实施计划 §3.9—3.10](WORKBENCH_PLAN.md#39-参考研究进入-m2m4-的具体增量)。
+
+### 3.6 Server M2 模块决定与阅读边界（2026-11-16）
+
+| 模块/用户任务 | 参考依据 | 采用与实际入口 | 不采用及验证边界 |
+| --- | --- | --- | --- |
+| 上传后知道每件处理结果 | Paperless-ngx 固定 `4610171`，此前已读 upload-documents service / 状态托盘 | 原材料行区分原件已保存、处理中、部分处理、失败/重试；业务规则独立实现 | 不复制整个管理平台；扫描无 OCR 不写成功 |
+| 要点同时核对支持和反证 | Kosmos 固定 `c6454fd`，此前已读模型/事实行/OCR badge | 复用 EvidenceItem，加多条原版本来源；操作就近 | 不覆盖原件、不借可变 textContent 伪造锚点；来源当前权限单独检查 |
+| 隔几天恢复客户指示 | Frappe CRM 固定 `3509bd4`，此前 Activities.vue/crm_lead.py 阅读记录 | 复用客户身份/活动；在原案件档案增加版本化目标与指示 | 不抄销售阶段或样式；本轮未重新抓取到固定源码，不声称重新验证 |
+| 管理可选服务 | 现有 /admin/ai 和官方服务接入指南 | 沿用设置入口，独立启用/状态/加密凭据；MCP 目录与自定义远程 | 不在启动探活、不自动执行第三方写工具、不把目录当真实接通 |
+
+三 agent 已按“入口、对象、下一步、失败出口、权限、文件 owner”做两轮独立/交叉审查。Next/React 代码遵循本地版本指南，UI 改版后置；本批只有必要业务分区与状态接线。
+
+### 3.7 M2 客户连续记录与事实日期实施决定（2026-11-16）
+
+沿用 §3.5 已读取的固定来源，不重复全量研究或声称运行第三方产品；两项的本地现状和用户路径已再次核对。
+
+| 用户任务 / 参考 | 本项目决定与采用边界 | 实际验收关注 |
+| --- | --- | --- |
+| 回看客户较早沟通、关联案件和指示：Frappe CRM `3509bd4` 的 activities.py / Activities.vue / 转换业务 | 保留原客户页，既有表连续分页、逐来源资格和真实可见计数；不复制 Frappe 源码、销售阶段或重复客户身份。指示版本分别呈现，实际交付仍属 M3 | 超过原 50/100/6 条窗口，同时间翻页、客户合并/软删除、事项或财务撤权、来源跳转和失败重试 |
+| 核对事实发生顺序及反证：Kosmos `c6454fd` 的 Fact/事实行；诉讼可视化 `16c480c` 的 casefile.schema.json | 日期精度独立于正文，多来源就近；LexOrder 明确 UNKNOWN 与闭区间，不照搬强制完整日期或封闭事实分类。原始日期表述保留，发生日与记录时间分开 | “某年夏天”保持未知或人工明确的区间；只改日期仍生成修订；撤权后当前/历史日期和排序位置隐藏 |
+
+用户合理性审查：入口留在客户详情、事项材料区域；分页操作与其列表就近，事实编辑沿用原弹窗，不增加全局菜单。未知、空白、加载失败可继续人工处理；不把数据查询成功等同于 UI 交互已通过。日期、授权呈现与文件所有权见架构 §6.4.2 和计划 §7.4。
+
+实施状态：上述两项已在 `da2701b` 汇合，沿用 LawLink 页面独立实现，没有移入 Frappe/Kosmos/诉讼可视化源码或增加第三方运行依赖。新增 7 个真实 PG 场景、两组开发模式真实会话 HTTP 和生产构建通过；真实浏览器因缺 originating context 仍阻塞。固定来源与采用边界以 §3.5.1 和本表为准，本轮没有重复运行或重新验证参考产品；完成账本见计划 §8.6。自动候选处理记忆和 AiRun 诊断仍为后续工作。
 
 ### 当前项目状态对计划的影响
 
-- 前批初始评估为 `97867e2`，随后对齐 main `2997b54754565081271ca4b66139949d310e2fe0`；当前 M1 从 `b313adf8` 接续。appleoppa 的通用功能、迁移、权限与调度适配已合入；本轮保留其源码及来源记录。新增抽取/OCR 原型仍未接完整业务管线，局部传票解析和 15 分钟启动补扫不等于通用 OCR、完整休眠或数据恢复已完成。
+- 前批初始评估为 `97867e2`，随后对齐 main `2997b54754565081271ca4b66139949d310e2fe0`；M1 当时从 `b313adf8` 接续，本轮 Server M2 从 `f973b87` 开始。appleoppa 的通用功能、迁移、权限与调度适配已合入；本轮保留其源码及来源记录。本轮已将内置解析、覆盖与恢复接入事项上传管线，具体证据见计划 §8.4；局部传票解析和启动补扫仍不等于通用 OCR、完整休眠或整套数据恢复已完成。
 - Kosmos 默认源码分支为 `dev`。其[当前 AI 开发文档](https://kosmos.law/docs/dev/subsystems/ai/context/)说明，原生案件聊天引擎于 2026-10-29 退役，界面于次日退役，改由远程 MCP 对外提供案件访问。旧 README 或历史设计不能作为“完整聊天可直接迁入”的证明。
 - Kosmos 的事实与高亮关系仍可参考。其某些材料处理路径会替换存储文件，本项目的设计要求保留原件，不能直接采用该行为。
 - Counsel OS 官方仓库明确说明扫描 PDF OCR、全面原始法律研究等尚未完成；源代码运行路线仍需开发和测试验证。引用与文书模块只能作为审查候选，不能承诺复制即用。
-- 用户随后明确采用 **Personal 内置、Server RAGFlow**，覆盖此前“两版内置、RAGFlow 可选”的研究建议。理由是按交付形态分工：个人保持独立，部署版采用现成解析/检索平台；这是产品与工程决定，不是质量或性能比较结论。RAGFlow 1.0.0 HTTP 适配和固定来源/镜像的准备脚本已有代码，但状态仍为 `PREPARED_NOT_DEPLOYED`；当前无 Docker/Podman、真实服务与模型凭据，未完成实际部署或联调。后续开发侧仅验证 Server，Personal 留给用户后测。
-- RAGFlow 1.0 检索的知识汇总默认开启；文档筛选不证明数据集汇总的全部来源获准。因此 Server 首发**明确设置** `include_knowledge_compilation: false`，由 LexOrder 先确定授权材料、再核对返回片段。官方普通 retrieval API 的 `use_kg: true` 不代表启用多跳图检索；共享 Team 规则也不能替代案件权限。实现边界及验收见[架构第 3 节](REFACTOR_DESKTOP_TEAM_RAG.md#3-rag-架构personal-内置server-使用-ragflow)。
-- Server 首发提供固定开源版本的配套部署配置，也允许管理员接入已验证兼容的独立实例；不以购买 Cloud 为前置。[官方 FAQ](https://ragflow.io/docs/v1.0.0/faq)说明 Cloud 功能和 REST API 可用性受服务方案影响，不把托管演示、DEV/main 或旧版功能混作该固定版本的交付承诺。个人独立版不依赖这些远程服务。
+- 早先的 Personal 内置/Server 必需 RAGFlow 已被用户最后纠正覆盖：当前只交付 Server，内置处理先接业务，RAGFlow/AI/OCR/法律 MCP 等均可选。RAGFlow 适配/固定准备代码已有，但仍为 `PREPARED_NOT_DEPLOYED`，无真实部署或模型证据；缺配置不阻塞业务。
+- RAGFlow 1.0 检索的知识汇总默认开启；文档筛选不证明数据集汇总的全部来源获准。因此 Server 首发**明确设置** `include_knowledge_compilation: false`，由 LexOrder 先确定授权材料、再核对返回片段。官方普通 retrieval API 的 `use_kg: true` 不代表启用多跳图检索；共享 Team 规则也不能替代案件权限。实现边界及验收见[架构第 3 节](REFACTOR_DESKTOP_TEAM_RAG.md#3-rag-架构内置优先服务可选)。
+- RAGFlow 只在管理员选用时提供兼容实例或独立配套配置，不加入核心启动依赖，不要求购买 Cloud。其权限、版本与持久化边界仍须按实际使用验证。
 - AnythingLLM 的默认内置检索、Cherry 的本地模型证明可以把组件交给应用管理，不证明 LexOrder 已完成集成或达到相同效果。中文法律材料仍需独立验收。
-- 技术官方来源与本轮隔离存储试验统一见[架构依据](REFACTOR_DESKTOP_TEAM_RAG.md#10-官方资料与代码依据)及第 2 节。Personal 优先精简 Next/Node + PGlite，Server 保留现有 PG；固定版本的兼容证据不等于正式发行完成。性能暂不作为门禁，原资源阈值已撤销。
+- 技术官方来源与本轮隔离存储试验统一见[架构依据](REFACTOR_DESKTOP_TEAM_RAG.md#10-官方资料与代码依据)及第 2 节。Server 保留现有 PG；Personal 的精简 Next/Node + PGlite 方案现已搁置；固定版本的兼容证据不等于正式发行完成。性能暂不作为门禁，原资源阈值已撤销。
 
-## 4. 法律数据库来源
+## 4. 可选法律服务 MCP 与来源
 
-| 提供商 | 官方入口 | 计划关注点 |
+核查日期 2026-11-16；以下为官方公开的接入信息，不是本项目已取得账号、权益或实测成功。机构目录可扩展，自定义远程 MCP 为未预置服务保留入口；不虚构“市面所有机构都提供官方 MCP”。
+
+| 提供商 | 官方说明 | 可选接入信息与边界 |
 | --- | --- | --- |
-| 元典 | [开放平台](https://open.chineselaw.com/)、[法规详情](https://open.chineselaw.com/api-docs/rh_fg_detail.html) | 从既有代码扩展；`refer_date` 定位指定日期版本；记录权限与调用结果 |
-| 北大法宝 | [MCP/CLI 官方入口](https://mcp.pkulaw.com/) | 后续按实际接口权益和支持能力接入 |
-| 威科 | [MCP 文档](https://mcp.wkinfo.com.cn/docs) | 后续按实际鉴权、权限及工具能力接入 |
+| 北大法宝 | [官方接入指南](https://mcp.pkulaw.com/docs) | 本期预设独立法规检索 `https://apim-gateway.pkulaw.com/mcp-law-search-service`，Bearer Token；其他官方能力可用自定义服务配置，不推断综合地址 |
+| 威科先行 | [官方 MCP 文档](https://mcp.wkinfo.com.cn/docs) | Streamable HTTP：`https://mcp.wkinfo.com.cn/mcp-servers/integrated/`；官方支持 OAuth/Bearer；本期只实现 Bearer，页面明确说明 OAuth 未实现 |
+| 华宇元典 | [官方 MCP 配置](https://open.chineselaw.com/mcp-config/) | `/mcp/law/stream`、`case/stream`、`company/stream`、`securities/stream`、`hallucination/stream`；Bearer，保留原 HTTP API 适配 |
+| 聚法 | [官方智能体平台](https://www.jufaai.com/agent)、[接入指南](https://www.jufaai.com/agent/guide) | 本期预设指南明确列出的 `https://www.jufaai.com/mcp/law`，Bearer API Key；案例、企业等其他官方服务可另建自定义配置 |
+| 其他机构及企业尽调服务 | 获取各机构官方协议/文档后补录 | 未核实官方 MCP 时只列候选或自定义，不把网站地址/API 拼为 MCP；见微/法信/无讼/Alpha 等当前不声称已确认端点 |
 
-接口账号未配置或权益未确认时，不声明法库已接通。网页订阅、API、全文缓存、向量化和再展示是不同授权事项。适配器应声明能力，不把“不支持”“无权限”“限流”解释为“没有法律依据”。
+本轮已实现四机构预设、自定义远程配置和管理员设置页中的手动只读检索；尚未接普通用户事项研究、自动模型调用或成果采纳。配置状态、初始化成功、工具发现、具体调用/数据权益分别登记。未配置/无权/限流/超时/无结果有不同状态，只影响该服务。默认不发送整案材料；查询由用户明确触发，候选工具只允许审核后的只读能力。Web 订阅、API、全文缓存、向量化和展示权限分别核对。首次没有真实凭据时，协议测试不能登记真实提供商通过。
 
 ## 5. 许可采用规则
 
 | 来源 | 核实到的项目许可 | 本分支规则 |
 | --- | --- | --- |
 | LawLink | MIT | 保留版权和许可，作为实际源代码基线 |
-| RAGFlow | Apache-2.0 | 按 Server 已定路线作为独立服务接入，已有原型适配，真实联调/业务集成待完成；分发或修改按许可保留必要信息 |
+| RAGFlow | Apache-2.0 | 作为 Server 可选独立服务，已有 HTTP 适配/部署准备，真实接通待验证；分发或修改按许可保留必要信息 |
 | Counsel OS、Docassemble | MIT | 可以评估代码复用，仍检查具体文件和依赖 |
 | ANQI、Kosmos、Frappe CRM | AGPLv3 项目基础 | 默认独立实现所需业务行为；直接采用源码时按许可处理 |
 | Paperless-ngx | GPLv3 项目基础 | 默认参考处理流程；实际分发、修改或集成另核边界 |

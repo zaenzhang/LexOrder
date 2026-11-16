@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   Scale,
   CheckCircle2,
@@ -26,6 +27,7 @@ type Initial = {
   baseUrl: string;
   caseDetailHost: string;
   apiKeyMasked: string;
+  configurationError?: string;
 };
 
 export function YuandianSettingsForm({
@@ -35,6 +37,7 @@ export function YuandianSettingsForm({
   initial: Initial;
   defaults: { baseUrl: string; caseDetailHost: string };
 }) {
+  const router = useRouter();
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState(initial.baseUrl || defaults.baseUrl);
   const [caseDetailHost, setCaseDetailHost] = useState(
@@ -43,6 +46,7 @@ export function YuandianSettingsForm({
   const [pending, startTransition] = useTransition();
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const changed = !!apiKey || baseUrl !== initial.baseUrl || caseDetailHost !== initial.caseDetailHost;
 
   const save = () => {
     startTransition(async () => {
@@ -50,6 +54,8 @@ export function YuandianSettingsForm({
         await saveYuandianSettingsAction({ apiKey, baseUrl, caseDetailHost });
         toast.success("元典配置已保存");
         setApiKey("");
+        setTestResult(null);
+        router.refresh();
       } catch (e) {
         toast.error(e instanceof Error ? actionErrorMessage(e) : "保存失败");
       }
@@ -62,6 +68,8 @@ export function YuandianSettingsForm({
       try {
         await clearYuandianKeyAction({ confirm: true });
         toast.success("元典 API key 已清除");
+        setTestResult(null);
+        router.refresh();
       } catch (e) {
         toast.error(e instanceof Error ? actionErrorMessage(e) : "失败");
       }
@@ -86,24 +94,21 @@ export function YuandianSettingsForm({
       <header className="mb-3 flex items-center gap-2">
         <Scale className="h-4 w-4 text-primary" strokeWidth={1.8} />
         <h2 className="text-[14px] font-semibold">元典案例库 API</h2>
-        {initial.configured && (
-          <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-[var(--green-bg)] px-2 py-0.5 text-[10px] text-[var(--green)]">
-            <CheckCircle2 className="h-3 w-3" /> 已配置
-          </span>
-        )}
+        <span className="ml-2 text-[11px] text-muted-foreground">{initial.configurationError ? "配置需修复" : initial.configured ? "已配置 · 未验证" : "未配置"}</span>
       </header>
 
       <p className="mb-4 text-[12px] text-muted-foreground">
         元典开放平台（chineselaw.com）法律案例检索 API，配置后启用：
         <span className="text-foreground/85"> 案件详情 → 类案页签 类案检索</span>。
-        按次计费（普通案例 10 积分/次）。
+        与上方 MCP 配置相互独立；实际计费和数据权益以平台账号为准。
       </p>
+      {initial.configurationError && <p role="alert" className="mb-3 text-sm text-destructive">{initial.configurationError}</p>}
 
       <div className="space-y-3">
         <div>
           <Label className="text-[11px]">
             接口密钥（API Key）
-            {initial.configured && (
+            {initial.apiKeyMasked && (
               <span className="ml-2 font-mono text-[10px] text-muted-foreground">
                 当前：{initial.apiKeyMasked}（留空保留原值）
               </span>
@@ -151,13 +156,13 @@ export function YuandianSettingsForm({
         <Button
           variant="outline"
           onClick={runTest}
-          disabled={testing || !initial.configured}
+          disabled={testing || pending || changed || !initial.configured}
           className="gap-1.5"
         >
           {testing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          测试连接（扣 10 积分）
+          {changed ? "保存后测试" : "测试案例检索（可能计费）"}
         </Button>
-        {initial.configured && (
+        {initial.apiKeyMasked && (
           <Button
             variant="ghost"
             onClick={clearKey}

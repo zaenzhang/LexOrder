@@ -13,6 +13,36 @@ const STORAGE_ROOT = process.env.APP_STORAGE_DIR
 // ---------------------------------------------------------------------------
 
 export class LocalStorageProvider implements StorageProvider {
+  private resolvePath(relPath: string): string {
+    const resolved = path.resolve(STORAGE_ROOT, relPath);
+    if (!relPath || path.isAbsolute(relPath) || relPath.includes("\\") ||
+        !resolved.startsWith(`${STORAGE_ROOT}${path.sep}`)) throw new ActionError("非法路径");
+    return resolved;
+  }
+
+  async writeFileAt(relPath: string, data: Buffer): Promise<void> {
+    const destination = this.resolvePath(relPath);
+    await fs.mkdir(path.dirname(destination), { recursive: true });
+    const temporary = `${destination}.${randomUUID()}.upload`;
+    const file = await fs.open(temporary, "wx", 0o600);
+    try {
+      try {
+        await file.writeFile(data);
+        await file.sync();
+      } finally { await file.close(); }
+      // link publishes a complete file atomically and fails if the target exists.
+      await fs.link(temporary, destination);
+      // Persist the published directory entry and newly created scope directories.
+      // Windows directory fsync is unavailable; its physical acceptance remains separate.
+      if (process.platform !== "win32") {
+        for (let directory = path.dirname(destination);; directory = path.dirname(directory)) {
+          const handle = await fs.open(directory, "r");
+          try { await handle.sync(); } finally { await handle.close(); }
+          if (directory === path.dirname(STORAGE_ROOT) || directory === path.dirname(directory)) break;
+        }
+      }
+    } finally { await fs.unlink(temporary).catch(() => undefined); }
+  }
   /**
    * 写入文件到 storage/<scope>/<yyyymm>/<uuid>.bin
    * 返回相对 STORAGE_ROOT 的 path（存到数据库）
@@ -27,26 +57,17 @@ export class LocalStorageProvider implements StorageProvider {
 
     const filename = `${randomUUID()}.bin`;
     const relPath = path.posix.join(safeScope, yyyymm, filename);
-    await fs.writeFile(path.join(STORAGE_ROOT, relPath), data);
+    await this.writeFileAt(relPath, data);
     return relPath;
   }
 
   async readFile(relPath: string): Promise<Buffer> {
-    const full = path.join(STORAGE_ROOT, relPath);
-    // 防止路径穿越
-    const resolved = path.resolve(full);
-    if (!resolved.startsWith(STORAGE_ROOT)) {
-      throw new ActionError("非法路径");
-    }
+    const resolved = this.resolvePath(relPath);
     return fs.readFile(resolved);
   }
 
   async deleteFile(relPath: string): Promise<void> {
-    const full = path.join(STORAGE_ROOT, relPath);
-    const resolved = path.resolve(full);
-    if (!resolved.startsWith(STORAGE_ROOT)) {
-      throw new ActionError("非法路径");
-    }
+    const resolved = this.resolvePath(relPath);
     try {
       await fs.unlink(resolved);
     } catch (err) {

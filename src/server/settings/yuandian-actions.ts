@@ -5,16 +5,16 @@ import { requireWorkspaceConfiguration } from "@/lib/auth/session";
 import { audit } from "@/server/audit";
 import {
   saveYuandianSettings as saveSettings,
-  readPublicYuandianSettings
+  readPublicYuandianSettings,
+  readStoredYuandianSettings
 } from "@/lib/yuandian/settings";
 import {
   searchPtalCases,
-  YuandianNotConfiguredError,
-  YuandianApiError
+  YuandianNotConfiguredError
 } from "@/lib/yuandian/client";
 
 const saveSchema = z.object({
-  apiKey: z.string().optional().or(z.literal("")),
+  apiKey: z.string().max(4096).optional().or(z.literal("")),
   baseUrl: z.string().url().optional().or(z.literal("")),
   caseDetailHost: z.string().url().optional().or(z.literal(""))
 });
@@ -23,7 +23,13 @@ const clearSchema = z.object({ confirm: z.literal(true) });
 
 export async function getYuandianSettingsPublic() {
   await requireWorkspaceConfiguration();
-  return readPublicYuandianSettings();
+  try {
+    const settings = await readPublicYuandianSettings();
+    return { ...settings, apiKeyMasked: settings.configured ? "已保存" : "", configurationError: undefined as string | undefined };
+  } catch {
+    const settings = await readStoredYuandianSettings();
+    return { configured: false, baseUrl: settings.baseUrl, caseDetailHost: settings.caseDetailHost, apiKeyMasked: settings.apiKeyCipher ? "已保存" : "", configurationError: "元典 API 凭据无法解密，请重新填写或清除密钥。" };
+  }
 }
 
 export async function saveYuandianSettingsAction(input: z.infer<typeof saveSchema>) {
@@ -41,7 +47,7 @@ export async function saveYuandianSettingsAction(input: z.infer<typeof saveSchem
     action: "YUANDIAN_SETTINGS_SAVE",
     targetType: "SystemSetting",
     targetId: "yuandianSettings",
-    detail: { changedKey: !!data.apiKey, baseUrl: data.baseUrl || null }
+    detail: { changedKey: !!data.apiKey }
   });
   return { ok: true };
 }
@@ -61,7 +67,7 @@ export async function clearYuandianKeyAction(input: z.infer<typeof clearSchema>)
 }
 
 /**
- * 用最小代价探活：用"民间借贷纠纷 / top_k=1"试探，扣 10 POINT。
+ * Explicit legacy API probe; actual charging follows the provider's current agreement.
  */
 export async function testYuandianConnection(): Promise<{
   ok: boolean;
@@ -70,14 +76,12 @@ export async function testYuandianConnection(): Promise<{
   await requireWorkspaceConfiguration();
   try {
     const r = await searchPtalCases({ ay: ["民间借贷纠纷"], top_k: 1 });
-    return { ok: true, message: `连接成功，命中 ${r.total} 条（已扣 10 POINT 试调用）` };
+    await requireWorkspaceConfiguration();
+    return { ok: true, message: `案例检索已响应，命中 ${r.total} 条；本次已发出一次真实检索请求。` };
   } catch (err) {
     if (err instanceof YuandianNotConfiguredError) {
       return { ok: false, message: err.message };
     }
-    if (err instanceof YuandianApiError) {
-      return { ok: false, message: `元典返回错误：${err.message}` };
-    }
-    return { ok: false, message: err instanceof Error ? err.message : "未知错误" };
+    return { ok: false, message: "元典 API 连接检查失败，请核对地址、凭据和数据权限。" };
   }
 }

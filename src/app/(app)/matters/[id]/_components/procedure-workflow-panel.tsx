@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -175,11 +175,11 @@ type WorkflowDocument = {
   size: number | null;
   createdAt: Date;
   sourceParty: string | null;
-  path: string;
   tags: string[];
   stageId: string | null;
+  procedureId: string | null;
   sourceOrigin: DocumentSourceOrigin | null;
-  ocrStatus: "PENDING" | "READY" | "FAILED" | "SKIP" | null;
+  ocrStatus: "PENDING" | "READY" | "PARTIAL" | "FAILED" | "SKIP" | null;
   textSource: "DOCX" | "PDF_TEXT" | "OCR" | "MANUAL" | null;
   pageCount: number | null;
   sha256: string | null;
@@ -792,10 +792,6 @@ export function ProcedureWorkflowPanel({
     if (!apiRef) return;
     apiRef.current = {
       openUpload: () => {
-        if (!selectedStage) {
-          toast.info("请先新增程序后再上传材料");
-          return;
-        }
         setUploadSignal((n) => n + 1);
       },
       openAddTask: () => {
@@ -960,7 +956,6 @@ export function ProcedureWorkflowPanel({
       </div>
 
       {/* 环节操作条与页头「上传材料」共用：打开当前选中环节的上传弹窗 */}
-      {procedure && selectedStage ? (
         <div hidden>
           <StageMaterialsPanel
             matterId={matter.id}
@@ -971,7 +966,6 @@ export function ProcedureWorkflowPanel({
             uploadSignal={uploadSignal}
           />
         </div>
-      ) : null}
 
       <TemplatePickerDialog
         open={templateOpen}
@@ -2159,10 +2153,19 @@ function MaterialsSection({
   onOpenTemplate: () => void;
 }) {
   const { onAddEvidence, unlinkedEvidence } = useDocActions();
-  if (!procedure) return null;
-  if (stage) {
+  if (!procedure) return <>
+    <StageMaterialsPanel matterId={matterId} procedure={null} stage={null} documents={documents} canManage={canManage} onOpenTemplate={onOpenTemplate} />
+    <section className="card" aria-label="人工要点">
+      <div className="panel-head"><div className="panel-title">人工要点</div>
+        {onAddEvidence ? <button type="button" className="btn btn-ghost btn-sm" onClick={() => onAddEvidence(null)}>＋人工要点</button> : null}
+      </div>
+      {unlinkedEvidence?.length ? <div className="dos-doc-evbox flat"><EvidencePoints items={unlinkedEvidence} showSource /></div>
+        : <p className="p-4 text-sm text-muted-foreground">尚未记录未挂材料的要点。</p>}
+    </section>
+  </>;
+  if (stage && procedure) {
     // 去掉「总览」后，任何环节都匹配不上的材料会失去入口，故在环节材料下方常驻一段兜底
-    const orphans = documents.filter((d) => !stages.some((st) => documentMatchesStage(d, st)));
+    const orphans = documents.filter((d) => d.procedureId !== procedure.id || !stages.some((st) => documentMatchesStage(d, st)));
     return (
       <>
         <StageMaterialsPanel
@@ -2170,19 +2173,19 @@ function MaterialsSection({
           matterId={matterId}
           procedure={procedure}
           stage={stage}
-          documents={documents.filter((d) => documentMatchesStage(d, stage))}
+          documents={documents.filter((d) => d.procedureId === procedure.id && documentMatchesStage(d, stage))}
           canManage={canManage}
           onOpenTemplate={onOpenTemplate}
         />
-        {orphans.length || unlinkedEvidence?.length ? (
+        {orphans.length || unlinkedEvidence?.length || onAddEvidence ? (
           <div className="card">
             <div className="panel-head">
               <div className="panel-title">
                 <FolderOpen className="ic" strokeWidth={1.8} />
-                未归入环节
+                其他材料与要点
                 <span className="badge b-white" style={{ marginLeft: 2 }}>{orphans.length + (unlinkedEvidence?.length ?? 0)}</span>
-                <span className="t-xs t-mute" style={{ fontWeight: 400 }}>未匹配到环节的材料与未挂材料的证据要点</span>
               </div>
+              {onAddEvidence ? <button type="button" className="btn btn-ghost btn-sm" onClick={() => onAddEvidence(null)}>＋人工要点</button> : null}
             </div>
             {orphans.map((d) => <DocRow key={d.id} doc={d} />)}
             {unlinkedEvidence?.length ? (
@@ -2205,6 +2208,7 @@ function MaterialsSection({
   // 全部环节下每份材料只出现一次：归到第一个匹配的环节（外键归属优先，模式匹配可能命中多个环节）
   const homeOf = new Map<string, string>();
   for (const d of documents) {
+    if (!procedure || d.procedureId !== procedure.id) continue;
     const home = stages.find((st) => st.id && d.stageId === st.id) ?? stages.find((st) => documentMatchesStage(d, st));
     if (home) homeOf.set(d.id, home.key);
   }
@@ -2216,7 +2220,7 @@ function MaterialsSection({
           <FolderOpen className="ic" strokeWidth={1.8} />
           材料
           <span className="badge b-white" style={{ marginLeft: 2 }}>{documents.length}</span>
-          <span className="t-xs t-mute" style={{ fontWeight: 400 }}>全部环节</span>
+          {procedure ? <span className="t-xs t-mute" style={{ fontWeight: 400 }}>全部环节</span> : null}
         </div>
         {onAddEvidence ? (
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => onAddEvidence(null)}>
@@ -2224,7 +2228,7 @@ function MaterialsSection({
           </button>
         ) : null}
       </div>
-      {documents.length === 0 ? <EmptyState compact icon={FileText} title="暂无材料" description="选择环节后上传，材料会归入该环节。" /> : null}
+      {procedure && documents.length === 0 ? <EmptyState compact icon={FileText} title="暂无材料" description="选择环节后上传，材料会归入该环节。" /> : null}
       {stages.map((s) => {
         const docs = documents.filter((d) => homeOf.get(d.id) === s.key);
         if (!docs.length) return null;
@@ -2239,7 +2243,7 @@ function MaterialsSection({
           </div>
         );
       })}
-      {unassigned.length ? (
+      {procedure && unassigned.length ? (
         <div className="dos-seg">
           <div className="dos-seg-h">
             <span className="nm">未归入环节</span>
@@ -2296,6 +2300,7 @@ function DocRow({ doc, compact = false }: { doc: WorkflowDocument; compact?: boo
             <span className={cn("dos-doc-cat", doc.category === "EVIDENCE" && "ev")}>{documentCategoryLabel[doc.category]}</span>
             {chip ? <SourceChip kind={chip.kind}>{chip.label}</SourceChip> : doc.sourceParty ? <SourceChip kind="plain">{doc.sourceParty}</SourceChip> : null}
             {doc.ocrStatus === "FAILED" ? <span className="src-chip" style={{ color: "var(--red)", borderColor: "var(--red-line)", background: "var(--red-bg)" }}>识别失败</span> : null}
+            {doc.ocrStatus === "PARTIAL" ? <SourceChip kind="plain">部分文本可用</SourceChip> : null}
             {doc.textSource === "OCR" && doc.ocrStatus === "READY" ? <SourceChip kind="ai">AI 识别</SourceChip> : null}
             {evidence.length ? (
               <button type="button" className="dos-doc-ev" aria-expanded={evOpen} onClick={() => setEvOpen((v) => !v)}>
@@ -2634,8 +2639,8 @@ function StageMaterialsPanel({
   bare = false
 }: {
   matterId: string;
-  procedure: WorkflowProcedure;
-  stage: WorkflowStage;
+  procedure: WorkflowProcedure | null;
+  stage: WorkflowStage | null;
   documents: WorkflowDocument[];
   canManage: boolean;
   /** 嵌在环节页签内：不包卡片、不重复标题 */
@@ -2646,8 +2651,10 @@ function StageMaterialsPanel({
   uploadSignal?: number;
 }) {
   const router = useRouter();
-  const stageName = stage.name;
+  const fieldId = useId();
+  const stageName = stage?.name ?? "事项材料";
   const fileRef = useRef<HTMLInputElement>(null);
+  const uploadRequest = useRef<{ signature: string; key: string } | null>(null);
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<File | null>(null);
   const [customName, setCustomName] = useState("");
@@ -2656,14 +2663,15 @@ function StageMaterialsPanel({
   const [originFilter, setOriginFilter] = useState<DocumentSourceOrigin | "ALL">("ALL");
   const [category, setCategory] = useState<DocumentCategory>(defaultCategoryForStage(stageName));
   const [isPending, startTransition] = useTransition();
-  const stageTag = stageMaterialTag(stageName);
-  const sourceOptions = useMemo(() => buildSourceOptions(procedure), [procedure]);
+  const stageTag = stage ? stageMaterialTag(stageName) : "";
+  const sourceOptions = useMemo(() => procedure ? buildSourceOptions(procedure) : [], [procedure]);
 
   function openUploadDialog() {
     setCategory(defaultCategoryForStage(stageName));
     setSourceParty("");
     setSourceOrigin("");
     setPicked(null);
+    uploadRequest.current = null;
     setCustomName("");
     if (fileRef.current) fileRef.current.value = "";
     setOpen(true);
@@ -2677,8 +2685,8 @@ function StageMaterialsPanel({
     startTransition(async () => {
       try {
         // v0.48: 材料按外键归属环节；虚拟环节先物化拿到真实 stageId
-        let stageId = stage.id;
-        if (!stageId) {
+        let stageId = stage?.id;
+        if (procedure && stage && !stageId) {
           const ensured = await ensureProcedureStage({
             procedureId: procedure.id,
             name: stageName,
@@ -2689,8 +2697,8 @@ function StageMaterialsPanel({
         }
         const fd = new FormData();
         fd.set("matterId", matterId);
-        fd.set("procedureId", procedure.id);
-        fd.set("stageId", stageId);
+        if (procedure) fd.set("procedureId", procedure.id);
+        if (stageId) fd.set("stageId", stageId);
         fd.set("file", picked);
         fd.set("category", category);
         fd.set("name", customName.trim() || picked.name);
@@ -2699,12 +2707,17 @@ function StageMaterialsPanel({
           fd.set("sourceParty", sourceParty);
         }
         if (sourceOrigin) fd.set("sourceOrigin", sourceOrigin);
+        const signature = JSON.stringify([picked.name, picked.size, picked.lastModified, customName.trim(), category, sourceParty, sourceOrigin, stageId]);
+        if (uploadRequest.current?.signature !== signature) uploadRequest.current = { signature, key: crypto.randomUUID() };
+        fd.set("requestKey", uploadRequest.current.key);
         await uploadDocument(fd);
-        toast.success("材料已上传");
+        uploadRequest.current = null;
+        toast.success("材料已保存，等待处理");
         setOpen(false);
         router.refresh();
       } catch (err) {
         toast.error("上传失败", { description: actionErrorMessage(err) });
+        router.refresh();
       }
     });
   }
@@ -2803,7 +2816,7 @@ function StageMaterialsPanel({
           <DialogHeader>
             <DialogTitle>上传材料 · {stageName}</DialogTitle>
             <DialogDescription className="text-xs">
-              文件将关联到当前程序，并自动归入本环节。
+              {procedure && stage ? "文件将关联到当前程序，并自动归入本环节。" : "文件将保存到当前事项。"}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -2863,11 +2876,12 @@ function StageMaterialsPanel({
             )}
 
             <div className="space-y-1.5">
-              <Label className="text-xs">文件 *</Label>
+              <Label className="text-xs" htmlFor={`${fieldId}-file`}>文件 *</Label>
               <Input
+                id={`${fieldId}-file`}
                 ref={fileRef}
                 type="file"
-                onChange={(event) => setPicked(event.target.files?.[0] ?? null)}
+                onChange={(event) => { uploadRequest.current = null; setPicked(event.target.files?.[0] ?? null); }}
               />
               {picked && (
                 <p className="text-[10px] text-muted-foreground">

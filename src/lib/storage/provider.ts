@@ -12,6 +12,9 @@ export interface StorageProvider {
    */
   writeFile(scope: string, data: Buffer): Promise<string>;
 
+  /** Publish a pre-recorded object key without replacing an existing original. */
+  writeFileAt(relPath: string, data: Buffer): Promise<void>;
+
   /** Read a previously written file by its relative path. */
   readFile(relPath: string): Promise<Buffer>;
 

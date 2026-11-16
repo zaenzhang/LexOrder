@@ -20,6 +20,7 @@ export const AI_DEFAULTS = {
 } as const;
 
 export interface StoredAiSettings {
+  enabled: boolean;
   apiKeyCipher: { ct: string; iv: string; tag: string } | null;
   baseUrl: string;
   textModel: string;
@@ -54,15 +55,19 @@ export async function readStoredAiSettings(): Promise<StoredAiSettings> {
   const row = await prisma.systemSetting.findUnique({ where: { key: AI_SETTINGS_KEY } });
   const stored = (row?.value as Partial<StoredAiSettings> | null) ?? {};
   return {
+    enabled: typeof stored.enabled === "boolean" ? stored.enabled : !!stored.apiKeyCipher,
     apiKeyCipher: stored.apiKeyCipher ?? null,
-    baseUrl: stored.baseUrl || AI_DEFAULTS.baseUrl,
-    textModel: stored.textModel || AI_DEFAULTS.textModel,
-    visionModel: stored.visionModel || AI_DEFAULTS.visionModel
+    baseUrl: typeof stored.baseUrl === "string" && stored.baseUrl || AI_DEFAULTS.baseUrl,
+    textModel: typeof stored.textModel === "string" && stored.textModel || AI_DEFAULTS.textModel,
+    visionModel: typeof stored.visionModel === "string" && stored.visionModel || AI_DEFAULTS.visionModel
   };
 }
 
 /** 给 UI 用：脱敏 + 是否已配置 */
 export async function readPublicAiSettings(): Promise<{
+  enabled: boolean;
+  credentialSaved: boolean;
+  configurationError?: string;
   configured: boolean;
   baseUrl: string;
   textModel: string;
@@ -70,20 +75,27 @@ export async function readPublicAiSettings(): Promise<{
   apiKeyMasked: string;
 }> {
   const s = await readStoredAiSettings();
-  const key = decryptKey(s.apiKeyCipher);
+  let configurationError: string | undefined;
+  try { if (s.apiKeyCipher) decryptKey(s.apiKeyCipher); }
+  catch { configurationError = "已保存的 AI 密钥无法解密，请重新填写或清除密钥。"; }
   return {
-    configured: !!key,
+    enabled: s.enabled,
+    credentialSaved: !!s.apiKeyCipher,
+    configurationError,
+    configured: s.enabled && !!s.apiKeyCipher && !configurationError,
     baseUrl: s.baseUrl,
     textModel: s.textModel,
     visionModel: s.visionModel,
-    apiKeyMasked: key ? `${key.slice(0, 4)}••••${key.slice(-4)}` : ""
+    apiKeyMasked: s.apiKeyCipher ? "已保存" : ""
   };
 }
 
 /** 给 server 内部调用：拿解密后的可用配置 */
 export async function getAiSettings(): Promise<ResolvedAiSettings> {
   const s = await readStoredAiSettings();
-  const apiKey = decryptKey(s.apiKeyCipher);
+  let apiKey = "";
+  // A broken optional credential is unavailable, never a startup/page-wide failure.
+  try { if (s.enabled) apiKey = decryptKey(s.apiKeyCipher); } catch { /* The settings page exposes a repair action. */ }
   return {
     apiKey,
     baseUrl: s.baseUrl,
@@ -94,6 +106,7 @@ export async function getAiSettings(): Promise<ResolvedAiSettings> {
 }
 
 export async function saveAiSettings(input: {
+  enabled?: boolean;
   apiKey?: string; // 留空则保留原值；显式传 null 清除
   baseUrl?: string;
   textModel?: string;
@@ -102,6 +115,7 @@ export async function saveAiSettings(input: {
 }) {
   const current = await readStoredAiSettings();
   const next: StoredAiSettings = {
+    enabled: input.enabled ?? current.enabled,
     apiKeyCipher: input.clearKey
       ? null
       : input.apiKey

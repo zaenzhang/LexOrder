@@ -13,7 +13,8 @@ vi.mock("@/lib/auth/session", () => ({ requireSession: async () => ({ user: mock
 vi.mock("@/server/clients/actions", () => ({ listClients: mock.list, getClientById: mock.get, getClientForEdit: mock.edit, updateClient: mock.update, createClient: mock.create, getClientFinanceSummary: mock.finance, addContact: vi.fn() }));
 vi.mock("@/server/clients/master-access", () => ({ editableClientIds: mock.editableIds }));
 vi.mock("@/server/clients/insights", () => ({ getClientInsights: mock.insights }));
-vi.mock("@/server/clients/relationship-actions", () => ({ getClientRelationship: mock.relationship, recordClientActivity: vi.fn() }));
+vi.mock("@/server/clients/relationship-actions", () => ({ getClientRelationship: mock.relationship, recordClientActivity: vi.fn(), getClientCommunicationPage: vi.fn(), getClientFollowUpPage: vi.fn() }));
+vi.mock("@/server/clients/history-actions", () => ({ getClientHistoryPage: vi.fn(async () => ({ items: [], nextCursor: null })), getClientMatterPage: vi.fn() }));
 vi.mock("@/server/clients/dedup", () => ({ mergeClientsByCode: vi.fn() }));
 vi.mock("@/server/yuandian/enterprise", () => ({ searchEnterpriseCandidates: vi.fn(), getEnterpriseDetail: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mock.refresh, replace: vi.fn() }), notFound: () => { throw new Error("not found"); } }));
@@ -50,7 +51,7 @@ beforeEach(() => {
   mock.update.mockResolvedValue({ ok: true });
   mock.create.mockResolvedValue({ ok: true });
   mock.finance.mockResolvedValue(null);
-  mock.insights.mockResolvedValue({ matters: [], suspects: [], source: null, activity: [] });
+  mock.insights.mockResolvedValue({ matterPage: { items: [], total: 0, activeCount: 0, nextCursor: null }, suspects: [], source: null });
   mock.relationship.mockResolvedValue({ canWrite: true, activityCount: 0, openCount: 0, activities: [], followUps: [] });
   vi.stubGlobal("ResizeObserver", class { observe = vi.fn(); unobserve = vi.fn(); disconnect = vi.fn(); });
 });
