@@ -114,7 +114,7 @@ export function TemplatePickerDialog({
         if (res.missing.length > 0) {
           toast.warning(`已生成「${res.fileName}」，但以下字段为空需手动补：${describeMissing(res.missing)}`);
         } else {
-          toast.success(`已生成「${res.fileName}」并归档`);
+          toast.success(`已生成「${res.fileName}」并保存到案件材料`);
         }
         // 触发下载
         window.open(`/api/documents/${res.documentId}/download`, "_blank");
@@ -130,6 +130,7 @@ export function TemplatePickerDialog({
     <Dialog
       open={open}
       onOpenChange={(o) => {
+        if (pending) return;
         if (!o) reset();
         onOpenChange(o);
       }}
@@ -235,7 +236,7 @@ export function TemplatePickerDialog({
           {selected && (
             <div>
               <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                {editableVars.length > 0 ? "3" : "2"} · 归档到哪个卷宗
+                {editableVars.length > 0 ? "3" : "2"} · 保存到哪个卷宗
               </Label>
               <Select value={targetFolderId} onValueChange={setTargetFolderId}>
                 <SelectTrigger className="mt-2">

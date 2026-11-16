@@ -91,22 +91,20 @@ export function YuandianSettingsForm({
 
   return (
     <section className="ll-surface rounded-lg border border-border p-5">
-      <header className="mb-3 flex items-center gap-2">
+      <header className="mb-3 flex flex-wrap items-center gap-2">
         <Scale className="h-4 w-4 text-primary" strokeWidth={1.8} />
         <h2 className="text-[14px] font-semibold">元典案例库 API</h2>
         <span className="ml-2 text-[11px] text-muted-foreground">{initial.configurationError ? "配置需修复" : initial.configured ? "已配置 · 未验证" : "未配置"}</span>
       </header>
 
       <p className="mb-4 text-[12px] text-muted-foreground">
-        元典开放平台（chineselaw.com）法律案例检索 API，配置后启用：
-        <span className="text-foreground/85"> 案件详情 → 办案与材料 → 类案检索</span>。
-        与上方 MCP 配置相互独立；实际计费和数据权益以平台账号为准。
+        用于类案检索与企业信息匹配。MCP 接入单独配置；计费和数据权益以平台账号为准。
       </p>
       {initial.configurationError && <p role="alert" className="mb-3 text-sm text-destructive">{initial.configurationError}</p>}
 
       <div className="space-y-3">
         <div>
-          <Label className="text-[11px]">
+          <Label htmlFor="yuandian-api-key" className="text-[11px]">
             接口密钥（API Key）
             {initial.apiKeyMasked && (
               <span className="ml-2 font-mono text-[10px] text-muted-foreground">
@@ -115,6 +113,7 @@ export function YuandianSettingsForm({
             )}
           </Label>
           <Input
+            id="yuandian-api-key"
             type="password"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
@@ -125,8 +124,9 @@ export function YuandianSettingsForm({
         </div>
 
         <div>
-          <Label className="text-[11px]">接口地址（Base URL）</Label>
+          <Label htmlFor="yuandian-base-url" className="text-[11px]">接口地址（Base URL）</Label>
           <Input
+            id="yuandian-base-url"
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
             placeholder={defaults.baseUrl}
@@ -135,8 +135,9 @@ export function YuandianSettingsForm({
         </div>
 
         <div>
-          <Label className="text-[11px]">案例详情前端域名</Label>
+          <Label htmlFor="yuandian-case-detail-host" className="text-[11px]">案例详情前端域名</Label>
           <Input
+            id="yuandian-case-detail-host"
             value={caseDetailHost}
             onChange={(e) => setCaseDetailHost(e.target.value)}
             placeholder={defaults.caseDetailHost}
@@ -148,7 +149,7 @@ export function YuandianSettingsForm({
         </div>
       </div>
 
-      <div className="mt-4 flex items-center gap-2">
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         <Button onClick={save} disabled={pending} className="gap-1.5">
           {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           保存配置

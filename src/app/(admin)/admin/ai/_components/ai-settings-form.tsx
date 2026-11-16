@@ -140,21 +140,19 @@ export function AiSettingsForm({
   return (
     <div className="space-y-5">
       <section className="ll-surface rounded-lg border border-border p-5">
-        <header className="mb-3 flex items-center gap-2">
+        <header className="mb-3 flex flex-wrap items-center gap-2">
           <Sparkles className="h-4 w-4 text-primary" strokeWidth={1.8} />
           <h2 className="text-[14px] font-semibold">AI 接入</h2>
           <span className="ml-2 text-[11px] text-muted-foreground">{!initial.enabled ? "已禁用" : initial.configurationError ? "配置需修复" : initial.configured ? "已配置 · 未验证" : "未配置"}</span>
         </header>
 
-        <p className="mb-4 text-[12px] text-muted-foreground">
-          按需使用远程 OpenAI 兼容接口。未配置或连接失败时，保存材料、人工处理及普通业务仍可使用。
-        </p>
+        <p className="mb-4 text-[12px] text-muted-foreground">支持 OpenAI 兼容接口。</p>
         {initial.configurationError && <p role="alert" className="mb-3 text-sm text-destructive">{initial.configurationError}</p>}
         <label className="mb-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} />启用 AI 服务</label>
 
         {/* Provider 预设 */}
-        <div className="mb-4">
-          <Label className="text-[11px]">快速预设</Label>
+        <fieldset className="mb-4">
+          <legend className="text-[11px]">快速预设</legend>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {PROVIDER_PRESETS.map((p) => (
               <button
@@ -167,11 +165,11 @@ export function AiSettingsForm({
               </button>
             ))}
           </div>
-        </div>
+        </fieldset>
 
         <div className="space-y-3">
           <div>
-            <Label className="text-[11px]">
+            <Label htmlFor="ai-api-key" className="text-[11px]">
               接口密钥（API Key）
               {initial.credentialSaved && (
                 <span className="ml-2 font-mono text-[10px] text-muted-foreground">
@@ -180,6 +178,7 @@ export function AiSettingsForm({
               )}
             </Label>
             <Input
+              id="ai-api-key"
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
@@ -190,8 +189,9 @@ export function AiSettingsForm({
           </div>
 
           <div>
-            <Label className="text-[11px]">接口地址（Base URL）</Label>
+            <Label htmlFor="ai-base-url" className="text-[11px]">接口地址（Base URL）</Label>
             <Input
+              id="ai-base-url"
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
               placeholder={defaults.baseUrl}
@@ -201,8 +201,9 @@ export function AiSettingsForm({
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <Label className="text-[11px]">文本模型</Label>
+              <Label htmlFor="ai-text-model" className="text-[11px]">文本模型</Label>
               <Input
+                id="ai-text-model"
                 value={textModel}
                 onChange={(e) => setTextModel(e.target.value)}
                 placeholder={defaults.textModel}
@@ -211,8 +212,9 @@ export function AiSettingsForm({
               <p className="mt-1 text-[10px] text-muted-foreground">用于法院短信 AI 解析等</p>
             </div>
             <div>
-              <Label className="text-[11px]">视觉模型</Label>
+              <Label htmlFor="ai-vision-model" className="text-[11px]">视觉模型</Label>
               <Input
+                id="ai-vision-model"
                 value={visionModel}
                 onChange={(e) => setVisionModel(e.target.value)}
                 placeholder={defaults.visionModel}
@@ -223,7 +225,7 @@ export function AiSettingsForm({
           </div>
         </div>
 
-        <div className="mt-4 flex items-center gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <Button onClick={save} disabled={pending} className="gap-1.5">
             {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             保存配置
@@ -269,11 +271,11 @@ export function AiSettingsForm({
         )}
       </section>
 
-      <section className="ll-surface rounded-lg border border-border p-5">
-        <h3 className="mb-3 text-base">获取接口密钥</h3>
-        <ul className="space-y-2 text-[12px]">
+      <details className="ll-surface rounded-lg border border-border p-5">
+        <summary className="cursor-pointer text-sm font-medium">获取接口密钥</summary>
+        <ul className="mt-3 space-y-2 text-[12px]">
           {PROVIDER_PRESETS.map((p) => (
-            <li key={p.name} className="flex items-baseline gap-3">
+            <li key={p.name} className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <span className="w-28 shrink-0 text-foreground/85">{p.name}</span>
               <span className="text-muted-foreground">{p.apply}</span>
               <a
@@ -288,11 +290,8 @@ export function AiSettingsForm({
             </li>
           ))}
         </ul>
-        <p className="mt-3 text-[11px] text-muted-foreground">
-          密钥使用 AES-256-GCM 加密保存至系统设置，与文档加密复用同一密钥（
-          <span className="font-mono">STORAGE_ENCRYPTION_KEY</span>）。前端永远不显示明文密钥。
-        </p>
-      </section>
+        <p className="mt-3 text-[11px] text-muted-foreground">密钥加密保存，不显示原文。</p>
+      </details>
     </div>
   );
 }

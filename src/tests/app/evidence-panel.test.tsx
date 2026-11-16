@@ -187,6 +187,27 @@ describe("人工新建请求重试", () => {
 });
 
 describe("证据要点组件交互", () => {
+  it.each(["materials", "timeline"] as const)("从 %s 打开来源后，Esc 和返回按钮均将焦点交回原来源", async view => {
+    mocks.resolve.mockResolvedValue({ status: "AVAILABLE", documentName: "合成合同.pdf", documentVersion: 1,
+      locationLabel: "第 2 页", originalUrl: "/api/documents/cdocume000000000000000000001/download?inline=1#page=2",
+      previewable: false, text: "用于返回路径验收的合成原文", legacy: false, historicalParse: false });
+    render(view === "timeline" ? <EvidenceTimeline items={[item]} /> : <EvidencePoints items={[item]} />);
+    if (view === "timeline") fireEvent.click(screen.getByRole("button", { name: "事实时间线" }));
+    const source = screen.getByRole("button", { name: /支持 · 合成合同.pdf/ });
+    source.focus();
+    fireEvent.click(source);
+    const preview = await screen.findByRole("dialog", { name: "合成合同.pdf" });
+    fireEvent.keyDown(preview, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "合成合同.pdf" })).not.toBeInTheDocument());
+    await waitFor(() => expect(source).toHaveFocus());
+    if (view === "timeline") expect(screen.getByRole("dialog", { name: "事项事实时间线" })).toBeInTheDocument();
+
+    fireEvent.click(source);
+    await screen.findByRole("dialog", { name: "合成合同.pdf" });
+    fireEvent.click(screen.getByRole("button", { name: "返回要点" }));
+    await waitFor(() => expect(source).toHaveFocus());
+  });
+
   it("saves a new manual revision, explicitly confirms it, reopens it and follows a historical opposing source", async () => {
     const original = structuredClone(item);
     mocks.update.mockImplementation(async input => {

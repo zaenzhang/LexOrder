@@ -17,23 +17,27 @@ const PHASE_LABELS: Record<McpPhase, string> = { connection: "初始化连接", 
 export function LegalMcpSettingsForm({ initial }: { initial: PublicMcpConfig[] }) {
   const [configs, setConfigs] = useState(initial);
   const [adding, setAdding] = useState(false);
-  function saved(config: PublicMcpConfig) {
+  const [createdId, setCreatedId] = useState<string | null>(null);
+  function saved(config: PublicMcpConfig, created = false) {
     setConfigs(previous => previous.some(item => item.id === config.id) ? previous.map(item => item.id === config.id ? config : item) : [...previous, config]);
-    setAdding(false);
+    if (created) {
+      setAdding(false);
+      setCreatedId(config.id);
+    }
   }
   return (
     <section className="ll-surface rounded-lg border border-border p-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold">法律 MCP（可选）</h2><Button size="sm" variant="outline" disabled={adding} onClick={() => setAdding(true)}>添加自定义服务</Button></div>
       <p className="mb-4 text-xs text-muted-foreground">预设仅提供官方接入地址，默认关闭。保存不会联网；检查连接、发现工具和检索分别执行，可能受平台授权与计费规则限制。</p>
       <div className="divide-y divide-border">
-        {configs.map(config => <McpServiceEditor key={`${config.id}:${config.revision}`} config={config} onSaved={saved} />)}
-        {adding && <McpServiceEditor config={{ id: "", name: "", endpoint: "", enabled: false, authentication: "bearer", revision: null, hasKey: false, allowedTools: [], state: "DISABLED", checks: {} }} onSaved={saved} onCancel={() => setAdding(false)} />}
+        {configs.map(config => <McpServiceEditor key={config.id} config={config} initiallyOpen={createdId === config.id} onSaved={saved} />)}
+        {adding && <McpServiceEditor config={{ id: "", name: "", endpoint: "", enabled: false, authentication: "bearer", revision: null, hasKey: false, allowedTools: [], state: "DISABLED", checks: {} }} onSaved={config => saved(config, true)} onCancel={() => setAdding(false)} />}
       </div>
     </section>
   );
 }
 
-function McpServiceEditor({ config, onSaved, onCancel }: { config: PublicMcpConfig; onSaved: (value: PublicMcpConfig) => void; onCancel?: () => void }) {
+function McpServiceEditor({ config, initiallyOpen = false, onSaved, onCancel }: { config: PublicMcpConfig; initiallyOpen?: boolean; onSaved: (value: PublicMcpConfig) => void; onCancel?: () => void }) {
   const preset = mcpPreset(config.id);
   const prefix = `mcp-${config.id || "new"}`;
   const [name, setName] = useState(config.name);
@@ -62,7 +66,23 @@ function McpServiceEditor({ config, onSaved, onCancel }: { config: PublicMcpConf
     startTransition(async () => {
       try {
         const value = await saveLegalMcpSettingsAction({ id: config.id || undefined, expectedRevision: config.revision, name, endpoint, enabled, authentication, apiKey, clearKey, allowedTools: allowed.split(/\r?\n/).map(value => value.trim()).filter(Boolean), confirmReadOnly: confirmed });
+        const sameService = value.endpoint === config.endpoint && value.authentication === config.authentication && value.enabled === config.enabled && !apiKey && !clearKey && !value.configurationError;
+        setName(value.name);
+        setEndpoint(value.endpoint);
+        setEnabled(value.enabled);
+        setAuthentication(value.authentication);
         setApiKey("");
+        setClearKey(false);
+        setAllowed(value.allowedTools.join("\n"));
+        setConfirmed(value.allowedTools.length > 0);
+        // A saved revision has its own checks; old query results never validate it.
+        setChecks(value.checks);
+        setResult(null);
+        if (!sameService) setTools([]);
+        if (!sameService || !value.allowedTools.includes(tool)) {
+          setTool(value.allowedTools[0] ?? "");
+          setArgumentsJson("{}");
+        }
         onSaved(value);
         toast.success("配置已保存，尚未进行连接检查");
       } catch (error) { setMessage({ ok: false, text: actionErrorMessage(error) || "保存失败" }); }
@@ -92,9 +112,9 @@ function McpServiceEditor({ config, onSaved, onCancel }: { config: PublicMcpConf
     });
   }
   return (
-    <details className="py-3" open={onCancel ? true : undefined}>
+    <details className="py-3" open={onCancel || initiallyOpen ? true : undefined}>
       <summary className="flex cursor-pointer flex-wrap items-center gap-3 text-sm"><span className="font-medium">{config.name || "新建自定义服务"}</span><span className="text-xs text-muted-foreground">{MCP_STATE_LABELS[state]}</span></summary>
-      <div className="mt-4 space-y-4">
+      <fieldset disabled={pending} className="mt-4 min-w-0 space-y-4">
         {preset && <p className="text-xs text-muted-foreground">{preset.note} <a href={preset.documentation} target="_blank" rel="noreferrer" className="text-primary underline">官方说明</a></p>}
         {config.configurationError && <p role="alert" className="text-sm text-destructive">{config.configurationError}</p>}
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} />启用此服务</label>
@@ -130,7 +150,7 @@ function McpServiceEditor({ config, onSaved, onCancel }: { config: PublicMcpConf
           {result.sources.length > 0 && <ul className="space-y-1 text-xs">{result.sources.map(source => <li key={source.url}><a className="break-all text-primary underline" href={source.url} target="_blank" rel="noreferrer">{source.title}</a></li>)}</ul>}
           <p className="text-xs text-muted-foreground">来源由服务提供，需核对原文与适用性；此结果尚未写入证据、事项上下文或确认结论。</p>
         </div>}
-      </div>
+      </fieldset>
     </details>
   );
 }

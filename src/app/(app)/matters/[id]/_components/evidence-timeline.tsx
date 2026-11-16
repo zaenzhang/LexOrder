@@ -15,13 +15,13 @@ export function EvidenceTimeline({ items }: { items: EvidenceItemRow[] }) {
     <DialogContent className="max-w-3xl">
       <DialogHeader>
         <DialogTitle>事项事实时间线</DialogTitle>
-        <DialogDescription>当前事项可读要点；区间按开始日期排列，同日显示顺序不表示发生先后。</DialogDescription>
+        <DialogDescription>按发生日期排列；区间取开始日期，同日不表示先后。</DialogDescription>
       </DialogHeader>
-      {dated.length ? <section aria-labelledby={id + "-dated"} className="space-y-2">
+      {dated.length ? <section aria-labelledby={id + "-dated"} className="flex min-w-0 flex-col gap-3">
         <h3 id={id + "-dated"} className="text-sm font-medium">已记录日期</h3>
         <EvidencePoints items={dated} showSource />
       </section> : null}
-      {unknown.length ? <section aria-labelledby={id + "-unknown"} className="space-y-2">
+      {unknown.length ? <section aria-labelledby={id + "-unknown"} className="flex min-w-0 flex-col gap-3">
         <h3 id={id + "-unknown"} className="text-sm font-medium">时间未明</h3>
         <EvidencePoints items={unknown} showSource />
       </section> : null}
