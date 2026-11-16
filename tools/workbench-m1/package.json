@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "node preview-personal.mjs",
+    "typecheck": "tsc --noEmit --incremental false -p tsconfig.json",
     "verify": "node --import tsx verify.ts",
     "verify:services": "node --import tsx verify-services.ts",
     "build:personal": "node build-personal.mjs",

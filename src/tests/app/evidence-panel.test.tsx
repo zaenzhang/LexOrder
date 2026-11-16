@@ -140,6 +140,7 @@ describe("人工新建请求重试", () => {
     fireEvent.click(screen.getByRole("button", { name: "保存要点" }));
     await screen.findByRole("alert");
     const previousKey = mocks.create.mock.calls[0][0].requestKey;
+    await waitFor(() => expect(screen.getByRole("button", { name: "取消" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "取消" }));
     expect(onOpenChange).toHaveBeenCalledWith(false);
     view.rerender(<EvidenceItemDialog {...props} open={false} />);
@@ -181,6 +182,7 @@ describe("人工新建请求重试", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("新事项响应中断");
     expect(mocks.create.mock.calls[1][0]).toMatchObject({ matterId: newMatterId, title: "新事项草稿", content: "新事项内容" });
     expect(mocks.create.mock.calls[1][0].requestKey).not.toBe(previousKey);
+    await waitFor(() => expect(screen.getByRole("button", { name: "取消" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "取消" }));
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });

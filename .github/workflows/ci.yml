@@ -65,6 +65,12 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Install isolated workbench tool dependencies
+        run: npm ci --prefix tools/workbench-m1
+
+      - name: Typecheck isolated workbench tools
+        run: npm run typecheck --prefix tools/workbench-m1
+
       - name: Validate Prisma schema
         run: npm run prisma:validate
 

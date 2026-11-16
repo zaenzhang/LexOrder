@@ -57,7 +57,7 @@ describe("MCP 配置连续操作（组件环境）", () => {
     await waitFor(() => expect(mock.save).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(within(editor).queryByText("该工具声明的输入格式")).not.toBeInTheDocument());
     expect(within(editor).queryByText("查看已发现的工具（1）")).not.toBeInTheDocument();
-    expect(within(editor).getByRole("button", { name: "检查连接" })).toBeEnabled();
+    await waitFor(() => expect(within(editor).getByRole("button", { name: "检查连接" })).toBeEnabled());
     expect(mock.test).not.toHaveBeenCalled();
     expect(mock.query).not.toHaveBeenCalled();
   });

@@ -76,7 +76,9 @@ describe("Personal client ownership and archive tail", () => {
 
   it("keeps the Server independent-lawyer client-edit policy unchanged", async () => {
     state.personal = false;
-    await expect(updateClient({ id: clientId, name: "合成客户", type: "INDIVIDUAL", contacts: [], tags: [], cooperationStatus: "SIGNED" })).rejects.toThrow("仅管理员或主办律师");
+    await expect(updateClient({ id: clientId, name: "合成客户", type: "INDIVIDUAL", contacts: [], tags: [], cooperationStatus: "SIGNED" })).rejects.toThrow("无权编辑客户信息");
+    expect(db.client.update).not.toHaveBeenCalled();
+    expect(db.$transaction).not.toHaveBeenCalled();
   });
 
   it("merges own client records through the existing lock and relationship checks", async () => {

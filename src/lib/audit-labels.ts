@@ -11,7 +11,8 @@ const targetLabels: Record<string, string> = {
   PreservationCase: "保全案件", PreservationProperty: "保全财产", Report: "报告", SealRequest: "用章申请",
   SmsMessage: "法院短信", StageTemplate: "阶段模板", SystemSetting: "系统设置", Task: "事项",
   Team: "律师团队", User: "用户", BuiltinRole: "内置角色", RoleDefinition: "自定义角色",
-  Engagement: "委托", EvidenceItem: "证据项",
+  Engagement: "委托", EvidenceItem: "证据项", MaterialIngestIntent: "材料上传请求",
+  MatterContextRecord: "案件上下文记录",
   // 第七轮体检：补齐缺失对象标签（缺失时审计页显示「其他对象」）
   ArchiveBorrowRequest: "案卷借阅申请", CommissionSettlement: "分成结算", DeadlineRule: "期限规则",
   FeeEntryList: "收付记录列表", FinanceCorrection: "财务更正", Holiday: "放假安排",
@@ -65,7 +66,10 @@ const words: Record<string, string> = {
   SIGN: "签署", TEXT: "正文", TOTP: "二次验证", VERSION: "版本",
   // 本地二开新增动作的词条（本地裁判文书检索 / 元典法规检索 / 独立 cron 启动）。
   CNCASES: "本地裁判文书", LOCAL: "本地", JUDGMENT: "裁判文书", REGULATION: "法规",
-  SCHEDULER: "调度", STARTED: "已启动"
+  SCHEDULER: "调度", STARTED: "已启动",
+  PURGE: "清理", PURGED: "已清理", ABANDON: "放弃", EDIT: "编辑", SOURCE: "来源",
+  OPEN: "打开", LEGAL: "法律", MCP: "MCP", CONFIG: "配置", OPERATION: "操作",
+  RESULT: "结果", CONTEXT: "上下文"
 };
 export function auditActionLabel(code: string): string {
   const parts = code.split("_");

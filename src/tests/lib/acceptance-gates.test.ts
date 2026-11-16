@@ -147,18 +147,20 @@ describe("G3 队列幂等", () => {
     db.jobQueue.findUnique.mockResolvedValue({ id: "j1", status: "SUCCESS" });
     await enqueueJob({ type: "webhook-digest", payload: { text: "x" }, dedupeKey: "webhook-digest:2026-09-13" });
     expect(db.jobQueue.create).not.toHaveBeenCalled();
-    expect(db.jobQueue.update).not.toHaveBeenCalled();
+    expect(db.jobQueue.updateMany).not.toHaveBeenCalled();
 
     db.jobQueue.findUnique.mockResolvedValue({ id: "j1", status: "DEAD", updatedAt: new Date(Date.now() - 60 * 60_000) });
     await enqueueJob({ type: "webhook-digest", payload: { text: "x" }, dedupeKey: "webhook-digest:2026-09-13" });
     expect(db.jobQueue.create).not.toHaveBeenCalled();
-    expect(db.jobQueue.update).not.toHaveBeenCalled();
+    expect(db.jobQueue.updateMany).not.toHaveBeenCalled();
 
     // 死信超过 6 小时：重置尝试再入队（当日扫描可自愈死信）
-    db.jobQueue.findUnique.mockResolvedValue({ id: "j1", status: "DEAD", updatedAt: new Date(Date.now() - 7 * 60 * 60_000) });
+    const updatedAt = new Date(Date.now() - 7 * 60 * 60_000);
+    db.jobQueue.findUnique.mockResolvedValue({ id: "j1", status: "DEAD", updatedAt });
     await enqueueJob({ type: "webhook-digest", payload: { text: "x" }, dedupeKey: "webhook-digest:2026-09-13" });
     expect(db.jobQueue.create).not.toHaveBeenCalled();
-    expect(db.jobQueue.update).toHaveBeenCalledWith(expect.objectContaining({
+    expect(db.jobQueue.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "j1", status: "DEAD", updatedAt },
       data: expect.objectContaining({ status: "PENDING", attempts: 0 })
     }));
   });
@@ -167,8 +169,8 @@ describe("G3 队列幂等", () => {
     db.jobQueue.findUnique.mockResolvedValue({ id: "j1", status: "PENDING" });
     const runAt = new Date("2026-09-14T09:00:00");
     await enqueueJob({ type: "webhook-digest", payload: { text: "new" }, dedupeKey: "webhook-digest:2026-09-13", runAt });
-    expect(db.jobQueue.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: "j1" },
+    expect(db.jobQueue.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "j1", status: { in: ["PENDING", "FAILED", "RUNNING"] } },
       data: expect.objectContaining({ payload: { text: "new" }, runAt })
     }));
     expect(db.jobQueue.create).not.toHaveBeenCalled();

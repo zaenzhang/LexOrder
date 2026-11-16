@@ -46,6 +46,7 @@
     "dist",
     "outputs",
     ".npm-cache",
+    "tools/workbench-m1",
     ".next",
     ".next-dev",
     ".next-build",
