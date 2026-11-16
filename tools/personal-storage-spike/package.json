@@ -1,0 +1,18 @@
+{
+  "name": "lexorder-personal-storage-spike",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.16",
+    "@electric-sql/pglite-socket": "0.2.19",
+    "@electric-sql/pglite-tools": "0.4.16",
+    "@prisma/client": "5.22.0"
+  },
+  "devDependencies": {
+    "prisma": "5.22.0"
+  },
+  "scripts": {
+    "verify": "node verify.mjs"
+  }
+}

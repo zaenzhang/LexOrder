@@ -27,20 +27,18 @@
 
 已有实例升级时，先完成备份，再执行 `npx prisma migrate deploy` 和 `npm run templates:sync`，随后重新构建、重启。模板同步只增补缺失的内置模板，不重跑其他初始化设置。部署参数、运行命令和实际验证范围见[二开吸收记录](docs/FORK_INTEGRATION_20261116.md)。
 
-| 文档 | 内容 |
+## 当前文档
+
+方案归并为四份主文档，分类入口及既有设计、运维、历史验证见 [文档导航](docs/README.md)。
+
+| 主文档 | 唯一负责的内容 |
 | --- | --- |
-| [产品需求与验收基线](docs/PRODUCT_REQUIREMENTS_ACCEPTANCE.md) | 三个产品承诺、RQ01—RQ19、完整工作流程与验收样本 |
-| [TS 主线、双交付与 RAG 重构方案](docs/REFACTOR_DESKTOP_TEAM_RAG.md) | 保留业务基线、模块边界、内置检索、原型与发布门槛 |
-| [双版本 Release 与资源预算](docs/RELEASE_VARIANTS_AND_RESOURCE_BUDGET.md) | Personal 最小化个人版、Server 部署版、产物与未实测的工程目标 |
-| [实施计划](docs/WORKBENCH_PLAN.md) | M0—M6 阶段对应的 W01—W17 任务、依赖与退出条件 |
-| [全球律所招聘能力研究](docs/LAW_FIRM_COMPETENCY_RESEARCH.md) | 官方岗位/培养资料的地区、角色、时效与技能映射 |
-| [专业技能目录](docs/LEGAL_SKILLS_CATALOG.md) | 12 项待实现技能的输入、步骤、产物、复核与评测 |
-| [来源与许可](docs/UPSTREAM_SOURCES.md) | 固定版本事实、官方来源及实际采用边界 |
-| [云环境搭建](docs/CLOUD_SETUP.md) | 环境、配置、启动、测试与访问范围 |
-| [本次验证](docs/WORKBENCH_VALIDATION.md) | 本分支实际执行的验证及未覆盖范围 |
-| [精简交接摘要](docs/PROJECT_HANDOFF.md) | 已确定的决定、完成范围和后续任务 |
-| [依赖维护](docs/DEPENDENCY_AUDIT_20261115.md) | 首次 GitHub CI 发现的问题、修复版本和复验结果 |
-| [二开吸收](docs/FORK_INTEGRATION_20261116.md) | 固定来源、采用边界、升级配置及本次验证 |
+| [产品需求、技能与界面](docs/PRODUCT_REQUIREMENTS_ACCEPTANCE.md) | RQ01—RQ20、SK01—SK12、内容优先界面与完整场景验收 |
+| [架构、发布与审查](docs/REFACTOR_DESKTOP_TEAM_RAG.md) | 两种产物、无认证个人版、独立模型 API、PGlite 试验、技术与发布边界 |
+| [实施计划与交接](docs/WORKBENCH_PLAN.md) | M0—M6 / W01—W17、依赖、当前证据、未完成项与下一步 |
+| [研究与决策依据](docs/RESEARCH_AND_DECISIONS.md) | 项目来源/固定版本/许可、全球律所官方职业能力来源及采用判断 |
+
+运行与已执行验证：[云环境搭建](docs/CLOUD_SETUP.md)、[首次验证](docs/WORKBENCH_VALIDATION.md)、[依赖维护](docs/DEPENDENCY_AUDIT_20261115.md)、[二开吸收](docs/FORK_INTEGRATION_20261116.md)。这些记录有各自日期与范围，不作为尚未实现的新能力证明。
 
 快速启动（克隆后先按搭建文档准备私有 `.env`）：
 
@@ -58,7 +56,9 @@ node tools/cloud-dev/run.mjs serve
 
 **后续工作主线**：目标与客户指示 → 材料入库 → 事实与争点 → 带来源草稿 → 律师确认 → 行动与客户跟进 → 实际交付与归档。参考项目的处理规则和官方律所能力资料分别进入业务设计与技能规格，来源见上方文档。
 
-**2026-11-16 发布与重构决策**：每个正式 release 至少同时提供 **Personal 最小化个人运行版**和 **Server 服务部署版**。共用 TS 业务能力，部署版保留 Next.js / Prisma / PostgreSQL；个人版按独立运行、普通办公机资源预算和业务兼容性选择本地运行时与存储，不预先强制整套服务端组合。两个版本均内置 RAG，个人基础档不默认捆绑生成大模型；LanceDB 为首个检索候选，实际版本/平台需验证。全面 Rust 重写和替换部署版 PG 延期，个人必要的轻量适配单独实施。目前完成的是文档，两个发行产物、统一 RAG 与技能执行器尚未实现。见[发布规格](docs/RELEASE_VARIANTS_AND_RESOURCE_BUDGET.md)及[重构方案](docs/REFACTOR_DESKTOP_TEAM_RAG.md)。
+**2026-11-16 当前决策**：每个正式 release 同时提供 **Personal 最小化个人版**与 **Server 部署版**。Personal 无用户认证，直接打开本地工作区，优先精简 Next/Node + PGlite；Server 保留 Next.js / Prisma / PostgreSQL 与团队认证。两版都内置 RAG、都可连接独立模型 API，不默认捆绑大模型。界面以案件内容、材料、依据和下一步为主，减少装饰；**性能暂不作为门禁**。全面 Rust 重写延期。
+
+本轮已完成研究、文档归并及 PGlite/Prisma 隔离兼容检查：原有五迁移、抽样守卫与同版停写恢复通过；SQLite 直接换 provider 被拒绝。具体版本、复现命令和未覆盖范围见[架构第 2 节](docs/REFACTOR_DESKTOP_TEAM_RAG.md#2-推荐的交付方式)。**个人无认证应用、两种发行产物、统一 RAG 与技能执行器仍未实现**；当前源码/下方上游运行说明仍主要对应已有部署系统。
 
 ---
 
