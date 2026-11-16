@@ -1,6 +1,8 @@
 # 上游来源与许可记录
 
-核验日期：2026-11-15。本文记录采用的基线、业务参考及许可边界。链接到 `main`、`dev` 或在线文档的内容可能变化；实际复制源码或锁定外部依赖时，必须补记具体提交或版本。本文不将业务参考自动登记为已复制源码，也不将项目介绍等同于运行验证。
+基线核验日期：2026-11-15；2026-11-16 补充个人安装版、团队部署和内置 RAG 参考。本文记录采用的基线、业务参考及来源边界。链接到 `main`、`dev` 或在线文档的内容可能变化；实际采用组件或锁定外部依赖时，补记具体提交或版本。业务参考不登记为已复制源码，项目介绍不等同于运行验证。
+
+最新用户偏好是直接研究核心规则与处理逻辑，提炼行为规格后在 LexOrder 独立实现，研究范围不按协议类型排除。交付与技术选型结论见 [REFACTOR_DESKTOP_TEAM_RAG.md](REFACTOR_DESKTOP_TEAM_RAG.md)；下方既有实际采用来源和历史记录保留。
 
 ## 1. 实际业务基线
 
@@ -37,13 +39,18 @@
 
 | 项目 | 官方来源 | 核实的优势或现状 | 计划采用方式 |
 | --- | --- | --- | --- |
-| 案齐 ANQI | [仓库](https://github.com/zj-ai-lab/anqi)、[设计文档](https://github.com/zj-ai-lab/anqi/blob/main/docs/DESIGN.md)、[LICENSE](https://github.com/zj-ai-lab/anqi/blob/main/LICENSE) | 今日计划、程序事件、期限解释、人工保护、建议处理 | 从行为和验收场景独立实现；AGPL 源码不是默认直接复制对象 |
+| 案齐 ANQI | [仓库](https://github.com/zj-ai-lab/anqi)、[设计文档](https://github.com/zj-ai-lab/anqi/blob/main/docs/DESIGN.md)、[LICENSE](https://github.com/zj-ai-lab/anqi/blob/main/LICENSE) | 今日计划、程序事件、期限解释、人工保护、建议处理 | 提炼规则和验收场景，在 LexOrder 独立实现 |
 | Kosmos | [仓库](https://github.com/Kosmos-Law/kosmos)、[案件构建](https://kosmos.law/docs/dev/subsystems/case-building/)、[LICENSE](https://github.com/Kosmos-Law/kosmos/blob/dev/LICENSE) | 事实、文档、高亮、证人及其关联 | 以既有 EvidenceItem 增强原文和事实关系；不整体迁入 Django 应用 |
 | Frappe CRM | [初始工作流程](https://docs.frappe.io/crm/setup-guide/your-first-steps-with-frappe-crm)、[任务](https://docs.frappe.io/crm/task)、[仓库](https://github.com/frappe/crm) | 客户活动与跟进，转化时保留笔记、邮件和任务 | 原生客户逻辑；不并行维护同一批客户身份 |
-| Twenty | [仓库](https://github.com/twentyhq/twenty)、[LICENSE](https://github.com/twentyhq/twenty/blob/main/LICENSE) | 关联记录与工作流；许可按包和文件区分 | 先采用交互行为，组件复用逐包评估 |
-| Paperless-ngx | [仓库](https://github.com/paperless-ngx/paperless-ngx)、[文档](https://docs.paperless-ngx.com/) | 扫描、索引、归档和文档处理 | 增强现有材料生命周期；整套服务按规模另评估 |
-| RAGFlow | [仓库](https://github.com/infiniflow/ragflow)、[1.0.0 HTTP API](https://ragflow.io/docs/v1.0.0/http_api_reference)、[LICENSE](https://github.com/infiniflow/ragflow/blob/main/LICENSE) | 文档解析、上传、片段检索及删除接口 | 外部检索服务，锁定版本并通过适配层集成 |
-| Counsel OS | [仓库](https://github.com/eigenlegal/counsel-os)、[LICENSE](https://github.com/eigenlegal/counsel-os/blob/main/LICENSE) | 案件上下文、记录版本引用、文书审阅；部分能力尚未完成 | 模块级审查后的代码候选，其余作为设计参考 |
+| Twenty | [仓库](https://github.com/twentyhq/twenty)、[LICENSE](https://github.com/twentyhq/twenty/blob/main/LICENSE) | 关联记录与工作流 | 独立实现客户关联视图、筛选和流程 |
+| Clio | [案件管理](https://www.clio.com/features/case-management/)、[客户获取](https://www.clio.com/features/law-firm-client-acquisition/) | 咨询、客户、案件与费用的业务流程 | 作为产品行为参考，统一到现有 Client/Intake/Matter |
+| Paperless-ngx | [仓库](https://github.com/paperless-ngx/paperless-ngx)、[文档](https://docs.paperless-ngx.com/) | 扫描、索引、归档和文档处理 | 独立实现原件、派生结果、处理状态与恢复流程 |
+| AnythingLLM | [Desktop](https://docs.anythingllm.com/installation-desktop/overview)、[Docker](https://docs.anythingllm.com/installation-docker/overview)、[内置 LanceDB](https://docs.anythingllm.com/setup/vector-database-configuration/local/lancedb) | 单人安装版、团队部署版、内置检索和嵌入选项 | 参考双交付与组件托管，不能推定自动离线同步 |
+| Cherry Studio | [知识库](https://www.cherryai.com/docs/en/knowledge-base/knowledge-base/)、[本地模型](https://www.cherryai.com/docs/en/pre-basic/settings/local-models/)、[仓库](https://github.com/CherryHQ/cherry-studio) | 分块检查、召回测试、重建索引、可下载本地嵌入/OCR | 参考桌面 RAG 体验；个人版不直接视为团队服务器 |
+| RAGFlow | [官网与 Cloud](https://ragflow.io/)、[1.0 FAQ](https://ragflow.io/docs/v1.0.0/faq)、[1.0 HTTP API](https://ragflow.io/docs/v1.0.0/http_api_reference)、[仓库](https://github.com/infiniflow/ragflow) | 完整解析/检索服务，提供自部署和官方托管路线 | RAG 为必备能力，RAGFlow 为可选后端；锁定并验证实际接口 |
+| Counsel OS | [仓库](https://github.com/eigenlegal/counsel-os)、[LICENSE](https://github.com/eigenlegal/counsel-os/blob/main/LICENSE) | 案件上下文、记录版本引用、文书审阅；部分能力尚未完成 | 独立实现覆盖记录、来源锚点和成果版本流程 |
+| new-litigation-visualization | [仓库](https://github.com/MiaoQichuan/new-litigation-visualization) | 多来源事实、冲突并列、事实时间线和可视化 | 增强 EvidenceItem 和材料引用，不建立平行事实库 |
+| AppFlowy | [仓库](https://github.com/AppFlowy-IO/AppFlowy)、[CodeMap](https://docs.appflowy.io/docs/documentation/software-contributions/architecture/frontend/frontend/codemap) | 界面、Rust 核心与持久层的工程边界 | 参考模块划分，具体交付组件另验证 |
 | j-lawyer | [官方功能](https://www.j-lawyer.org/?page_id=22) | 案件表单、模板变量、文档与办案工作流 | 首期参考业务行为；具体源码按仓库和模块另核许可 |
 | Docassemble | [仓库](https://github.com/jhpyle/docassemble)、[文书装配](https://docassemble.org/docs/documents.html)、[API](https://docassemble.org/docs/api.html) | 分支访谈、变量驱动 DOCX/PDF 装配、会话 API | 先增强既有字段和模板，复杂访谈后续服务化 |
 
@@ -53,6 +60,9 @@
 - Kosmos 的事实与高亮关系仍可参考。其某些材料处理路径会替换存储文件，本项目的设计要求保留原件，不能直接采用该行为。
 - Counsel OS 官方仓库明确说明扫描 PDF OCR、全面原始法律研究等尚未完成；源代码运行路线仍需开发和测试验证。引用与文书模块只能作为审查候选，不能承诺复制即用。
 - RAGFlow 1.0 的检索支持生成的知识汇总片段；首期适配拟将 `include_knowledge_compilation` 设为 `false`，以可追溯来源片段为基础。API 版本变更需要单独联调。
+- RAGFlow 官方 Cloud 当前公开提供含 API key 的套餐；本轮只核实资料，未购买或实测 API。团队也可以共享一套自部署实例。两种方式均不能替代个人独立模式所需的内置 RAG。
+- AnythingLLM 的默认内置检索、Cherry 的本地模型证明可以把组件交给应用管理，不证明 LexOrder 已完成集成或达到相同效果。中文法律材料仍需独立验收。
+- 嵌入式引擎、SQLite、pgvector、Tauri 及现有 LexOrder 代码依据统一列在[重构评估的官方资料表](REFACTOR_DESKTOP_TEAM_RAG.md#10-官方资料与代码依据)，本轮未新增运行依赖。
 
 ## 4. 法律数据库来源
 
@@ -69,7 +79,7 @@
 | 来源 | 核实到的项目许可 | 本分支规则 |
 | --- | --- | --- |
 | LawLink | MIT | 保留版权和许可，作为实际源代码基线 |
-| RAGFlow | Apache-2.0 | 首选独立服务；分发或修改按许可保留必要信息 |
+| RAGFlow | Apache-2.0 | 选用时作为独立服务接入；分发或修改按许可保留必要信息 |
 | Counsel OS、Docassemble | MIT | 可以评估代码复用，仍检查具体文件和依赖 |
 | ANQI、Kosmos、Frappe CRM | AGPLv3 项目基础 | 默认独立实现所需业务行为；直接采用源码时按许可处理 |
 | Paperless-ngx | GPLv3 项目基础 | 默认参考处理流程；实际分发、修改或集成另核边界 |

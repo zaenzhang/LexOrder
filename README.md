@@ -19,6 +19,7 @@
 | 文档 | 内容 |
 | --- | --- |
 | [实施计划](docs/WORKBENCH_PLAN.md) | 项目优势映射、分批范围、数据关系、任务和验收标准 |
+| [个人安装版、团队版与 RAG 重构评估](docs/REFACTOR_DESKTOP_TEAM_RAG.md) | 双交付目标、内置 RAG、Rust 职责、数据库选项与待验证决策 |
 | [来源与许可](docs/UPSTREAM_SOURCES.md) | 固定版本事实、官方来源及实际采用边界 |
 | [云环境搭建](docs/CLOUD_SETUP.md) | 环境、配置、启动、测试与访问范围 |
 | [本次验证](docs/WORKBENCH_VALIDATION.md) | 本分支实际执行的验证及未覆盖范围 |
@@ -39,7 +40,9 @@ node tools/cloud-dev/run.mjs serve
 
 这是云内开发／验收运行方式，`127.0.0.1` 不是公网交付地址。长期部署使用持久服务器和正式数据库，具体见搭建文档。默认初始化不添加客户、案件或财务演示数据。
 
-**后续范围**：ANQI 今日计划、Kosmos 事实与原文关联、RAGFlow 检索、Paperless 式材料处理、Counsel OS 引用和文书增强、外部法律数据库适配。这些是计划增量；本轮客户维护参考 Frappe/Twenty 的业务行为，在 LexOrder 内原生实现，没有把这些项目整体合并运行。
+**后续范围**：ANQI 今日计划、事实与原文关联、内置 RAG、Paperless 式材料处理、Counsel OS 引用和文书增强、外部法律数据库适配。参考各项目的核心逻辑，在 LexOrder 内独立实现。
+
+**2026-11-16 已确认的产品目标**：同时支持个人独立安装与团队自部署协作，两个版本均必须提供 RAG；RAGFlow 作为可选共享或托管后端。Rust/Tauri、嵌入式检索和 SQLite/PostgreSQL 适配仍在评估，当前运行方式与技术栈保持现有实现，尚未提供桌面安装包或完成 RAG 集成。完整结论见[重构评估](docs/REFACTOR_DESKTOP_TEAM_RAG.md)。
 
 ---
 
