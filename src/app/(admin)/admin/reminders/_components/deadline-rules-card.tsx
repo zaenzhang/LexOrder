@@ -26,7 +26,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
-import { shMonthDay, shTodayCivil } from "@/lib/ui/sh-time";
+import { shMonthDay, shDateFromKey, shDayKey } from "@/lib/ui/sh-time";
 import { actionErrorMessage } from "@/lib/action-error";
 
 export type AdminDeadlineRule = {
@@ -153,15 +153,14 @@ export function DeadlineRulesCard({ rules, rail, headerActions }: { rules: Admin
   // 推算示例：以今天作为起算事件发生日
   const example = useMemo(() => {
     if (!selected) return null;
-    const trigger = shTodayCivil(); // 起算日取上海当天，避免服务端 UTC 与客户端算出不同日期
+    const trigger = shDateFromKey(shDayKey(new Date())); // 起算日取上海当天，避免服务端 UTC 与客户端算出不同日期
     const due = computeDeadlineDate(trigger, selected.periodValue, selected.periodUnit);
     const offsets = deadlineReminderOffsets(selected.remindDays);
     return {
       trigger,
       due,
       tiers: offsets.map((o) => {
-        const d = new Date(due);
-        d.setDate(d.getDate() + o);
+        const d = new Date(due.getTime() + o * 86_400_000);
         return { offset: o, date: d };
       })
     };

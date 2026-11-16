@@ -43,6 +43,14 @@ export function shDayKey(value: Date | string | number): string {
   return `${p.y}-${pad(p.m)}-${pad(p.d)}`;
 }
 
+/** 有效日历日 → 上海当天 00:00。用于数据库中的检查日、假期及按日计算结果。 */
+export function shDateFromKey(key: string): Date {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) throw new RangeError("无效日历日期");
+  const date = new Date(`${key}T00:00:00+08:00`);
+  if (!Number.isFinite(date.getTime()) || shDayKey(date) !== key) throw new RangeError("无效日历日期");
+  return date;
+}
+
 /** 上海时刻 HH:mm */
 export function shTime(value: Date | string | number): string {
   const p = shParts(value);

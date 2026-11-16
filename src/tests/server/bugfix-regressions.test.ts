@@ -38,7 +38,6 @@ vi.mock("@/lib/storage", () => ({ storage: { writeFile } }));
 vi.mock("@/lib/storage/crypto", () => ({ encryptBuffer: vi.fn(() => ({ ciphertext: Buffer.from("mock"), iv: Buffer.from("mock"), authTag: Buffer.from("mock"), algorithm: "mock" })), sha256: vi.fn(() => "mock") }));
 
 import { listClients, getClientById, getClientFinanceSummary } from "@/server/clients/actions";
-import { createTask, updateTask } from "@/server/tasks/actions";
 import { scanDueReminders } from "@/server/cron/jobs/scan-due-reminders";
 import { runAuditCleanup } from "@/server/cron/jobs/audit-cleanup";
 import { approveInvoiceRequest, createInvoiceRequest as createLegacyInvoice } from "@/server/invoices/actions";
@@ -48,7 +47,6 @@ import { allocateCommissions } from "@/server/finance/commissions";
 import { clientVisibilityFilter, intakeVisibilityFilter, matterReadVisibilityFilter, matterVisibilityFilter } from "@/lib/permissions";
 
 const mine = "cmatter000000000000000001";
-const foreign = "cmatter000000000000000002";
 const taskId = "ctask0000000000000000001";
 const stageId = "cstage000000000000000001";
 const user1 = "cuser00000000000000000001";
@@ -118,37 +116,7 @@ describe("客户查询授权回归", () => {
   });
 });
 
-describe("事项必须绑定真实案件及阶段", () => {
-  it("不能用自己的案件 ID 修改其他案件的事项", async () => {
-    db.task.findUnique.mockResolvedValue({ matterId: foreign });
-    await expect(updateTask({ id: taskId, matterId: mine, title: "修改", priority: 0 })).rejects.toThrow("不属于当前案件");
-    expect(db.task.update).not.toHaveBeenCalled();
-  });
-  it("输入真实但无权访问的案件也拒绝", async () => {
-    db.task.findUnique.mockResolvedValue({ matterId: foreign });
-    await expect(updateTask({ id: taskId, matterId: foreign, title: "修改", priority: 0 })).rejects.toThrow("无权关联");
-    expect(db.task.update).not.toHaveBeenCalled();
-  });
-  it("归档案件不可修改事项", async () => {
-    db.matter.findFirst.mockResolvedValue({ id: mine, status: "ARCHIVED" });
-    await expect(updateTask({ id: taskId, matterId: mine, title: "修改", priority: 0 })).rejects.toThrow("已归档");
-    expect(db.task.update).not.toHaveBeenCalled();
-  });
-  it.each([createTask, updateTask])("创建及修改均拒绝其他案件的阶段", async action => {
-    db.matterStage.findFirst.mockResolvedValue(null);
-    await expect(action({ id: taskId, matterId: mine, title: "修改", priority: 0, stageId })).rejects.toThrow("阶段不存在");
-    expect(db.matterStage.findFirst).toHaveBeenCalledWith({ where: { id: stageId, procedure: { matterId: mine } }, select: { id: true } });
-    expect(db.task.create).not.toHaveBeenCalled(); expect(db.task.update).not.toHaveBeenCalled();
-  });
-  it("同案阶段可以更新，写入条件包含真实案件", async () => {
-    await updateTask({ id: taskId, matterId: mine, title: "修改", priority: 0, stageId });
-    expect(db.task.update.mock.calls[0][0].where).toEqual({ id: taskId, matterId: mine });
-  });
-  it("未绑定阶段的事项仍可创建", async () => {
-    await expect(createTask({ matterId: mine, title: "新增", priority: 0 })).resolves.toEqual({ ok: true, id: taskId });
-    expect(db.matterStage.findFirst).not.toHaveBeenCalled();
-  });
-});
+// Task authorization / stage ownership now run against PostgreSQL in tasks.integration.test.ts.
 
 describe("提醒与审计保留", () => {
   it("提前三天、一天、当天、逾期一天的查询和文案对应，开庭不扫描昨天", async () => {

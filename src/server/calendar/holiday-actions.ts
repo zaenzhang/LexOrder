@@ -10,12 +10,12 @@ import { isSystemAdmin } from "@/lib/auth/system-role";
 import { isPersonalMode } from "@/lib/runtime/mode";
 import { resolvePersonalActor } from "@/server/runtime/personal";
 import { audit } from "@/server/audit";
-import { civilFromKey, shParts } from "@/lib/ui/sh-time";
+import { shDateFromKey, shParts } from "@/lib/ui/sh-time";
 import { ActionError } from "@/lib/action-error";
 
 const batchSchema = z.object({
   entries: z.array(z.object({
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "日期格式应为 YYYY-MM-DD"),
+    date: z.string().refine(value => { try { shDateFromKey(value); return true; } catch { return false; } }, "请填写有效的 YYYY-MM-DD 日期"),
     name: z.string().min(1, "名称必填").max(40),
     kind: z.enum(["HOLIDAY", "WORKDAY"])
   })).min(1, "至少一条").max(200, "单批最多 200 条")
@@ -34,10 +34,10 @@ export async function listHolidays(year?: number) {
   // getFullYear/getMonth，UTC 容器下 11 月 1 日前后会跨月错判（第七轮体检 P3-4）。
   const nowSh = shParts(new Date());
   const y = year ?? nowSh.y + (nowSh.m >= 11 ? 1 : 0);
-  const from = civilFromKey(`${y}-01-01`);
-  const to = civilFromKey(`${y}-12-31`);
+  const from = shDateFromKey(`${y}-01-01`);
+  const to = shDateFromKey(`${y + 1}-01-01`);
   const rows = await prisma.holiday.findMany({
-    where: { date: { gte: from, lte: to } },
+    where: { date: { gte: from, lt: to } },
     orderBy: { date: "asc" },
     select: { id: true, date: true, name: true, kind: true }
   });
@@ -51,11 +51,11 @@ export async function saveHolidayBatch(input: z.input<typeof batchSchema>) {
   await prisma.$transaction(async (tx) => {
     if (isPersonalMode()) await resolvePersonalActor(tx, session.user.id);
     for (const e of data.entries) {
-      await tx.holiday.upsert({
-        where: { date: civilFromKey(e.date) },
-        create: { date: civilFromKey(e.date), name: e.name, kind: e.kind },
-        update: { name: e.name, kind: e.kind }
-      });
+      const date = shDateFromKey(e.date);
+      const matches = await tx.holiday.findMany({ where: { date: { gte: date, lt: new Date(date.getTime() + 86_400_000) } }, select: { id: true } });
+      if (matches.length > 1) throw new ActionError("同一天存在重复放假安排，请先核对日历配置");
+      if (matches[0]) await tx.holiday.update({ where: { id: matches[0].id }, data: { date, name: e.name, kind: e.kind } });
+      else await tx.holiday.create({ data: { date, name: e.name, kind: e.kind } });
       upserted++;
     }
   });

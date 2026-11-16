@@ -36,6 +36,8 @@ import { IntakeApprovalDialog } from "./intake-approval-dialog";
 import { InvoiceRecognition } from "./invoice-recognition";
 import { ARCHIVE_DOCUMENT_STATUS_LABELS } from "@/lib/archive/snapshot";
 import { formatDateTime } from "@/lib/utils";
+import { DocumentReviewPanel } from "@/components/document-reviews/document-review-panel";
+import { confirmDialog } from "@/components/patterns/confirm-dialog";
 
 type Data = Awaited<ReturnType<typeof listApprovalWorkspace>>;
 type Selection = { id: string; action: ApprovalAction };
@@ -54,31 +56,87 @@ export function ApprovalInbox({ data, initialSelection }: { data: Data; initialS
   const [exceptionApproved, setExceptionApproved] = useState(false);
   const [pending, start] = useTransition();
   const opened = useRef<string | null>(null);
+  const openSequence = useRef(0);
+  const [detailTab, setDetailTab] = useState("overview");
+  const [reviewDirty, setReviewDirty] = useState(false), [reviewBusy, setReviewBusy] = useState(false);
+  const [selectedReviewIssue, setSelectedReviewIssue] = useState<string | null>(null);
+  const dialogState = useRef({ selected, pending, reviewDirty, reviewBusy, note, file, invoiceNo, reviewIssue: selectedReviewIssue });
+  useEffect(() => {
+    dialogState.current = { selected, pending, reviewDirty, reviewBusy, note, file, invoiceNo, reviewIssue: selectedReviewIssue };
+  }, [selected, pending, reviewDirty, reviewBusy, note, file, invoiceNo, selectedReviewIssue]);
+  const changeIssue = useCallback((reviewIssue: string | null) => {
+    setSelectedReviewIssue(reviewIssue);
+    const url = new URL(window.location.href);
+    if (reviewIssue) url.searchParams.set("reviewIssue", reviewIssue); else url.searchParams.delete("reviewIssue");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+  }, []);
+  const finishDetail = useCallback(() => {
+    opened.current = null;
+    openSequence.current++; setSelected(null); setDetail(null); setReviewDirty(false); setReviewBusy(false);
+    setSelectedReviewIssue(null);
+    setNote(""); setFile(null); setInvoiceNo("");
+    const url = new URL(window.location.href); url.searchParams.delete("id"); url.searchParams.delete("reviewIssue");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+  }, []);
+  async function closeDetail() {
+    if (pending || reviewBusy) return;
+    if ((reviewDirty || note || file || invoiceNo) && !await confirmDialog({ title: "放弃未保存的审批或复核内容？", confirmText: "放弃并关闭", cancelText: "继续编辑", initialFocus: "cancel" })) return;
+    finishDetail();
+  }
+  useEffect(() => {
+    const protect = (event: BeforeUnloadEvent) => { if (selected && (reviewDirty || reviewBusy || note || file || invoiceNo || pending)) { event.preventDefault(); event.returnValue = ""; } };
+    window.addEventListener("beforeunload", protect); return () => window.removeEventListener("beforeunload", protect);
+  }, [selected, reviewDirty, reviewBusy, note, file, invoiceNo, pending]);
   function navigate(patch: Record<string, string | undefined>) {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("id"); params.delete("page");
     for (const [key, value] of Object.entries(patch)) { if (value) params.set(key, value); else params.delete(key); }
     router.push("/approvals?" + params.toString());
   }
-  const open = useCallback((row: Selection) => {
+  const open = useCallback(async (row: Selection) => {
+    const current = dialogState.current;
+    const url = new URL(window.location.href);
+    const exactIssue = url.searchParams.get("id") === row.id ? url.searchParams.get("reviewIssue") : null;
+    function restoreCurrentLocation() {
+      if (!current.selected) return;
+      opened.current = current.selected.action + current.selected.id + (current.reviewIssue ?? "");
+      url.searchParams.set("id", current.selected.id); url.searchParams.set("type", current.selected.action);
+      if (current.reviewIssue) url.searchParams.set("reviewIssue", current.reviewIssue); else url.searchParams.delete("reviewIssue");
+      window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+    }
+    if (current.pending || current.reviewBusy) { restoreCurrentLocation(); return; }
+    const sequence = ++openSequence.current;
+    if ((current.reviewDirty || current.note || current.file || current.invoiceNo) && !await confirmDialog({ title: "放弃未保存的审批或复核内容？", confirmText: "放弃并打开", cancelText: "继续编辑", initialFocus: "cancel" })) { restoreCurrentLocation(); return; }
+    if (sequence !== openSequence.current) return;
+    url.searchParams.set("id", row.id); url.searchParams.set("type", row.action);
+    if (!exactIssue) url.searchParams.delete("reviewIssue");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+    setSelected(row); setDetail(null); setNote(""); setFile(null); setInvoiceNo(""); setVerified(new Set()); setExceptionApproved(false);
+    setDetailTab(row.action === "DOCUMENT_APPROVE" && exactIssue ? "review" : "overview");
+    setSelectedReviewIssue(exactIssue);
+    setReviewDirty(false); setReviewBusy(false);
     start(async () => {
       try {
         const d = await getApprovalDetail(row);
-        setSelected(row); setDetail(d); setNote(""); setFile(null); setInvoiceNo(""); setVerified(new Set()); setExceptionApproved(false);
-      } catch (e) { toast.error(e instanceof Error ? actionErrorMessage(e) : "无法读取申请"); }
+        if (sequence !== openSequence.current) return;
+        setDetail(d);
+      } catch (e) { if (sequence === openSequence.current) { toast.error(e instanceof Error ? actionErrorMessage(e) : "无法读取申请"); finishDetail(); } }
     });
-  }, []);
+  }, [finishDetail]);
   useEffect(() => {
     if (!initialSelection) return;
-    const key = initialSelection.action + initialSelection.id;
+    if (searchParams.get("id") !== initialSelection.id) return;
+    const key = initialSelection.action + initialSelection.id + (searchParams.get("reviewIssue") ?? "");
     if (opened.current === key) return;
     opened.current = key;
-    open(initialSelection);
-  }, [initialSelection, open]);
+    if (dialogState.current.selected?.id === initialSelection.id && dialogState.current.selected?.action === initialSelection.action && dialogState.current.reviewIssue === searchParams.get("reviewIssue")) return;
+    void open(initialSelection);
+  }, [initialSelection, open, searchParams]);
   useEffect(() => { setQuery(data.query.q ?? ""); }, [data.query.q]);
 
   function process(decision: "approve" | "reject" | "revision") {
-    if (!selected || !detail?.task || detail.task==="terminate") return;
+    if (!selected || !detail?.task || detail.task==="terminate" || pending || reviewBusy) return;
+    if (reviewDirty) { toast.error("请先保存复核内容，再处理审批"); return; }
     const r = selected;
     if (decision === "approve" && (detail.task === "issue" || detail.task === "stamp") && !file) { toast.error(detail.task === "issue" ? "请上传电子发票" : "请上传盖章后的 PDF 扫描件"); return; }
     if (decision === "approve" && r.action === "INVOICE_APPROVE" && file && !invoiceNo.trim()) { toast.error("上传电子发票时必须填写发票号码"); return; }
@@ -102,19 +160,20 @@ export function ApprovalInbox({ data, initialSelection }: { data: Data; initialS
           if (decision === "approve") await approveSealRequest({ id: r.id, note }); else await rejectSealRequest({ id: r.id, reason: note });
         }
         toast.success("处理完成，可在“我已处理”中查阅");
-        setSelected(null); router.refresh();
+        finishDetail(); router.refresh();
       } catch (e) {
         toast.error(e instanceof Error ? actionErrorMessage(e) : "处理失败");
         // 状态或权限已变化时重读详情，不能保留失效的处理按钮。
-        try { setDetail(await getApprovalDetail(r)); } catch { setSelected(null); }
+        try { setDetail(await getApprovalDetail(r)); } catch { finishDetail(); }
         router.refresh();
       }
     });
   }
   function applicantAction(action: "resubmit" | "cancel") {
-    if (!selected) return;
+    if (!selected || pending || reviewBusy) return;
+    if (reviewDirty) { toast.error("请先保存复核内容，再处理审批"); return; }
     const id = selected.id;
-    start(async () => { try { if (action === "resubmit") { if (selected.action === "DOCUMENT_APPROVE") await submitDocumentForReview(id); else await resubmitIntake(id); } else await cancelSealRequest({ id }); toast.success(action === "resubmit" ? "已重新提交" : "已撤回申请"); setSelected(null); router.refresh(); } catch (e) { toast.error(e instanceof Error ? actionErrorMessage(e) : "操作失败"); } });
+    start(async () => { try { if (action === "resubmit") { if (selected.action === "DOCUMENT_APPROVE") await submitDocumentForReview(id); else await resubmitIntake(id); } else await cancelSealRequest({ id }); toast.success(action === "resubmit" ? "已重新提交" : "已撤回申请"); finishDetail(); router.refresh(); } catch (e) { toast.error(e instanceof Error ? actionErrorMessage(e) : "操作失败"); } });
   }
   const tabs = Object.entries(WORKSPACE_TABS).filter(([key]) => key !== "all" || data.canViewAll) as [WorkspaceTab, string][];
   function toggleVerification(id: string, checked: boolean) {
@@ -206,7 +265,7 @@ export function ApprovalInbox({ data, initialSelection }: { data: Data; initialS
       </div>
     </div>
 
-    <Dialog open={!!selected} onOpenChange={value => { if (!value && !pending) setSelected(null); }}>{detail?.intakeDetail ? <IntakeApprovalDialog key={selected?.id} detail={detail} intakeDetail={detail.intakeDetail} note={note} onNoteChange={setNote} pending={pending} onDecision={process} onResubmit={() => applicantAction("resubmit")} /> : <ReviewDialogContent
+    <Dialog open={!!selected} onOpenChange={value => { if (!value) void closeDetail(); }}>{detail?.intakeDetail ? <IntakeApprovalDialog key={selected?.id} detail={detail} intakeDetail={detail.intakeDetail} note={note} onNoteChange={setNote} pending={pending} onDecision={process} onResubmit={() => applicantAction("resubmit")} /> : <ReviewDialogContent
       key={selected?.id}
       title={detail?.title ?? "申请详情"}
       eyebrow={selected ? ACTION_LABELS[selected.action] : "审批申请"}
@@ -214,6 +273,8 @@ export function ApprovalInbox({ data, initialSelection }: { data: Data; initialS
       description={<><span>申请人 {detail?.requester ?? "—"}</span><span>· 提交于 {dateText(detail?.submittedAt ?? null)}</span>{detail?.task && detail.submittedAt ? <span>· 已等待 {waitDays(detail.submittedAt)} 天</span> : null}</>}
       summary={detail && selected && <ApprovalReviewSummary detail={detail} action={selected.action} />}
       alert={alert}
+      tab={detailTab}
+      onTabChange={setDetailTab}
       tabs={[
         { id: "overview", label: detail?.archiveReview ? "资料与核验" : "申请资料", content: <>
           <ReviewFields title="当前申请内容" icon={<FileText />} fields={detail?.fields ?? []} />
@@ -240,6 +301,7 @@ export function ApprovalInbox({ data, initialSelection }: { data: Data; initialS
           </>)}
         </> },
         { id: "attachments", label: "附件", count: detail?.attachments.length ?? 0, content: detail?.attachments.length ? <ReviewSection title="申请附件" icon={<Paperclip />}>{detail.attachments.map(d => <ReviewFileRow key={d.id} id={d.id} name={d.name} readable={d.readable} />)}</ReviewSection> : <ReviewEmpty icon={<Paperclip />} title="暂无申请附件" desc="当前申请未关联可展示的材料。" /> },
+        ...(selected?.action === "DOCUMENT_APPROVE" ? [{ id: "review", label: "人工复核", content: <DocumentReviewPanel key={selected.id} documentId={selected.id} initialIssueId={selectedReviewIssue} onIssueChange={changeIssue} onDirtyChange={setReviewDirty} onPendingChange={setReviewBusy} /> }] : []),
         { id: "history", label: "处理记录", count: detail?.history.length ?? 0, content: <ReviewHistory items={detail?.history ?? []} emptyText={detail?.status === "PENDING" ? "尚无处理记录" : "此记录未保存逐次处理历史"} emptyDesc={detail?.status === "PENDING" ? "处理后将在这里显示审批意见与结果。" : "当前结果见申请状态。"} /> },
       ]}
       sidebarTitle={detail?.task === "issue" ? "完成开票" : detail?.task === "stamp" ? "盖章回填" : detail?.task === "terminate" ? "核实终止执行" : detail?.task ? "审批" : "申请进度"}
@@ -256,11 +318,11 @@ export function ApprovalInbox({ data, initialSelection }: { data: Data; initialS
         <div className="side-note" style={{ marginTop: 16 }}><Clock3 /><span>审批结果与意见同事务写入审计日志，处理后不可重复审批；审批授权不扩大案件其他材料的访问范围。</span></div>
       </>}
       footer={detail && (detail.task || detail.canResubmit || detail.canCancel) ? <>
-        {detail.task === "approve" && <button type="button" className="btn btn-danger" disabled={pending} onClick={() => process("reject")}>驳回</button>}
+        {detail.task === "approve" && <button type="button" className="btn btn-danger" disabled={pending || reviewBusy} onClick={() => process("reject")}>驳回</button>}
         {detail.task === "approve" && selected?.action === "INTAKE_APPROVE" && <button type="button" className="btn btn-secondary" disabled={pending} onClick={() => process("revision")}>退回补正</button>}
-        {detail.task && detail.task!=="terminate" && <button type="button" className="btn btn-approve" disabled={pending || !archiveReady} onClick={() => process("approve")}>{detail.task === "stamp" ? "完成盖章回填" : detail.task === "issue" ? "完成开票" : selected?.action === "ARCHIVE_APPROVE" ? <><FileCheck2 />逐项核验并通过</> : "审批通过"}</button>}
-        {detail.canResubmit && <button type="button" className="btn btn-primary" disabled={pending} onClick={() => applicantAction("resubmit")}>重新提交审批</button>}
-        {detail.canCancel && <button type="button" className="btn btn-secondary" disabled={pending} onClick={() => applicantAction("cancel")}>撤回用章申请</button>}
+        {detail.task && detail.task!=="terminate" && <button type="button" className="btn btn-approve" disabled={pending || reviewBusy || !archiveReady} onClick={() => process("approve")}>{detail.task === "stamp" ? "完成盖章回填" : detail.task === "issue" ? "完成开票" : selected?.action === "ARCHIVE_APPROVE" ? <><FileCheck2 />逐项核验并通过</> : "审批通过"}</button>}
+        {detail.canResubmit && <button type="button" className="btn btn-primary" disabled={pending || reviewBusy} onClick={() => applicantAction("resubmit")}>重新提交审批</button>}
+        {detail.canCancel && <button type="button" className="btn btn-secondary" disabled={pending || reviewBusy} onClick={() => applicantAction("cancel")}>撤回用章申请</button>}
       </> : undefined}
     />}</Dialog>
   </div>;

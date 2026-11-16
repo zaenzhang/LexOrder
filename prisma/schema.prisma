@@ -445,6 +445,15 @@ model RolePermission {
 }
 
 model User {
+  createdTaskWaits TaskWait[] @relation("TaskWaitCreator")
+  endedTaskWaits TaskWait[] @relation("TaskWaitCloser")
+  createdTaskDependencies TaskDependency[]
+  researchAuthored ResearchRevision[] @relation("ResearchAuthor")
+  researchChecked ResearchRevision[] @relation("ResearchChecker")
+  manualReviewIssues DocumentReviewIssue[] @relation("ManualReviewAuthor")
+  manualReviewEvents DocumentReviewEvent[] @relation("ManualReviewActor")
+  preparedDeliveries DeliveryRecord[] @relation("DeliveryPreparer")
+  deliveryEvents DeliveryEvent[] @relation("DeliveryActor")
   contextAuthored MatterContextRecord[] @relation("ContextAuthor")
   contextConfirmed MatterContextRecord[] @relation("ContextConfirmer")
   requestedParseRuns DocumentParseRun[] @relation("ParseRequester")
@@ -619,6 +628,7 @@ model TeamMember {
 }
 
 model Client {
+  receivedDeliveries DeliveryRecord[]
   ownerUserId       String?
   ownerUser         User? @relation("ClientOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   activities        ClientActivity[]
@@ -830,6 +840,8 @@ model Intake {
 // ============================================================
 
 model Matter {
+  researchRevisions ResearchRevision[]
+  deliveries DeliveryRecord[]
   contextRecords MatterContextRecord[]
   closurePlan ArchiveClosurePlan?
   handovers MatterHandover[]
@@ -1074,6 +1086,11 @@ model MatterStage {
 
 model Task {
   responsibility WorkResponsibility?
+  waits TaskWait[]
+  prerequisites TaskDependency[] @relation("TaskDependent")
+  dependents TaskDependency[] @relation("TaskPrerequisite")
+  createRequestKey String? @unique
+  createRequestHash String?
   id          String       @id @default(cuid())
   matterId    String
   matter      Matter       @relation(fields: [matterId], references: [id], onDelete: Cascade)
@@ -1091,6 +1108,45 @@ model Task {
 
   @@index([matterId, completed, dueAt])
   @@index([assigneeId, completed])
+}
+
+model TaskWait {
+  id String @id @default(cuid())
+  taskId String
+  task Task @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  externalParty String
+  expectedResult String
+  reason String
+  startedAt DateTime @default(now())
+  nextCheckAt DateTime
+  endedAt DateTime?
+  result String?
+  createdById String
+  createdBy User @relation("TaskWaitCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  endedById String?
+  endedBy User? @relation("TaskWaitCloser", fields: [endedById], references: [id], onDelete: Restrict)
+  revision Int @default(1)
+  requestKey String @unique
+  requestHash String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([taskId, createdAt])
+  @@index([endedAt, nextCheckAt])
+}
+
+model TaskDependency {
+  id String @id @default(cuid())
+  taskId String
+  task Task @relation("TaskDependent", fields: [taskId], references: [id], onDelete: Restrict)
+  prerequisiteTaskId String
+  prerequisiteTask Task @relation("TaskPrerequisite", fields: [prerequisiteTaskId], references: [id], onDelete: Restrict)
+  createdById String
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+
+  @@unique([taskId, prerequisiteTaskId])
+  @@index([prerequisiteTaskId])
 }
 
 model Hearing {
@@ -1355,6 +1411,15 @@ model Note {
 // ============================================================
 
 model Document {
+  generationRequestKey String? @unique
+  generationRequestHash String?
+  researchSources ResearchSource[]
+  researchInputs DocumentResearchSource[]
+  manualReviewIssues DocumentReviewIssue[] @relation("ManualReviewDocument")
+  manualReviewBases DocumentReviewIssue[] @relation("ManualReviewBasis")
+  manualReviewRevisions DocumentReviewEvent[] @relation("ManualReviewRevision")
+  deliveryItems DeliveryItem[]
+  deliveryProofs DeliveryEvent[] @relation("DeliveryProof")
   parseGeneration Int @default(0)
   parseRuns DocumentParseRun[]
   invoiceAdjustmentEvidence InvoiceAdjustment[]
@@ -1695,6 +1760,7 @@ enum EvidenceDatePrecision {
 }
 
 model EvidenceItem {
+  researchRevisions ResearchRevision[]
   // Null only for legacy rows; a new manual creation keeps one stable submission identity.
   requestKey       String?
   requestHash      String?
@@ -2513,7 +2579,7 @@ model ArchiveBorrowRequest {
 // 法定放假安排（F-5，2026-09-21）：管理后台每年录入国务院通知，期限引擎据此把
 // 届满日为节假日的顺延到下一工作日并在依据标注（民诉法第八十五条第三款）。
 // 不内置硬编码表（每年调整会过期）；调休上班日 kind=WORKDAY 不视为休假日。
-// 表未建（迁移未执行）时引擎查询失败按「未配置」降级，不影响既有提示逻辑。
+// 使用已迁移的现行表；查询失败应提示核对配置，不能冒充未配置。
 model Holiday {
   id        String   @id @default(cuid())
   date      DateTime @unique
@@ -3151,6 +3217,7 @@ model EvidenceSourceLink {
 }
 
 model EvidenceItemRevision {
+  researchRevisions ResearchRevision[]
   sourceSnapshot Json @default("[]")
   confirmedById String?
   confirmedAt DateTime?
@@ -3245,4 +3312,215 @@ model MaterialIngestIntent {
   updatedAt DateTime @updatedAt
 
   @@index([state, createdAt])
+}
+
+// M3: each saved research revision keeps its exact inputs and legal-source metadata.
+model ResearchRevision {
+  id String @id @default(cuid())
+  matterId String
+  matter Matter @relation(fields: [matterId], references: [id], onDelete: Restrict)
+  seriesId String
+  version Int
+  supersedesId String? @unique
+  supersedes ResearchRevision? @relation("ResearchRevisionChain", fields: [supersedesId], references: [id], onDelete: Restrict)
+  successor ResearchRevision? @relation("ResearchRevisionChain")
+  issueId String?
+  issue EvidenceItem? @relation(fields: [issueId], references: [id], onDelete: Restrict)
+  issueRevisionId String?
+  issueRevision EvidenceItemRevision? @relation(fields: [issueRevisionId], references: [id], onDelete: Restrict)
+  question String
+  purpose String
+  jurisdiction String
+  relevantDate String?
+  researchedAt DateTime
+  scope String
+  queryLog Json
+  rule String
+  exceptions String
+  supportingAnalysis String
+  opposingAnalysis String
+  conclusion String
+  unresolved String
+  nextSteps String
+  authorId String
+  author User @relation("ResearchAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  requestKey String
+  requestHash String
+  checkedAt DateTime?
+  checkedById String?
+  checkedBy User? @relation("ResearchChecker", fields: [checkedById], references: [id], onDelete: Restrict)
+  checkNote String?
+  createdAt DateTime @default(now())
+  sources ResearchSource[]
+  outputDocuments DocumentResearchSource[]
+
+  @@unique([seriesId, version])
+  @@unique([authorId, requestKey])
+  @@index([matterId, createdAt])
+  @@index([issueId])
+}
+
+model ResearchSource {
+  id String @id @default(cuid())
+  researchRevisionId String
+  researchRevision ResearchRevision @relation(fields: [researchRevisionId], references: [id], onDelete: Restrict)
+  documentId String
+  document Document @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  documentSha256 String
+  relation EvidenceSourceRelation
+  location Json
+  locationKey String
+  parseRunId String?
+  anchorId String?
+  lawMetadata Json
+  createdAt DateTime @default(now())
+
+  @@unique([researchRevisionId, documentId, relation, locationKey])
+  @@index([documentId])
+}
+
+model DocumentResearchSource {
+  id String @id @default(cuid())
+  documentId String
+  document Document @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  researchRevisionId String
+  researchRevision ResearchRevision @relation(fields: [researchRevisionId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+
+  @@unique([documentId, researchRevisionId])
+  @@index([researchRevisionId])
+}
+
+enum DocumentReviewIssueState {
+  OPEN
+  WAITING_CHECK
+  RESOLVED
+}
+
+enum DocumentReviewEventKind {
+  RESPONSE
+  CHECK
+}
+
+enum DocumentReviewDisposition {
+  ACCEPT
+  PARTIAL
+  REJECT
+}
+
+model DocumentReviewIssue {
+  id String @id @default(cuid())
+  documentId String
+  document Document @relation("ManualReviewDocument", fields: [documentId], references: [id], onDelete: Restrict)
+  title String
+  location String?
+  basis String
+  basisDocumentId String?
+  basisDocument Document? @relation("ManualReviewBasis", fields: [basisDocumentId], references: [id], onDelete: Restrict)
+  createdById String
+  createdBy User @relation("ManualReviewAuthor", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+  version Int @default(1)
+  state DocumentReviewIssueState @default(OPEN)
+  requestId String @unique
+  requestHash String
+  events DocumentReviewEvent[]
+
+  @@index([documentId, createdAt])
+}
+
+model DocumentReviewEvent {
+  id String @id @default(cuid())
+  issueId String
+  issue DocumentReviewIssue @relation(fields: [issueId], references: [id], onDelete: Restrict)
+  kind DocumentReviewEventKind
+  disposition DocumentReviewDisposition?
+  note String
+  revisionDocumentId String?
+  revisionDocument Document? @relation("ManualReviewRevision", fields: [revisionDocumentId], references: [id], onDelete: Restrict)
+  revisionLocation String?
+  resolved Boolean?
+  actorId String
+  actor User @relation("ManualReviewActor", fields: [actorId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+  version Int
+  requestId String @unique
+  requestHash String
+
+  @@unique([issueId, version])
+}
+
+enum DeliveryEventKind {
+  EXPORTED
+  SENT
+  RECEIVED
+  REPLIED
+  CONTENT_CONFIRMED
+  SEND_CORRECTION
+}
+
+model DeliveryRecord {
+  id String @id @default(cuid())
+  matterId String
+  matter Matter @relation(fields: [matterId], references: [id], onDelete: Restrict)
+  requestKey String
+  requestFingerprint String
+  purpose String
+  recipientClientId String?
+  recipientClient Client? @relation(fields: [recipientClientId], references: [id], onDelete: Restrict)
+  recipientName String
+  recipientContact String
+  disclosureScope String
+  unresolvedItems String
+  supersedesId String?
+  supersedes DeliveryRecord? @relation("DeliveryReplacement", fields: [supersedesId], references: [id], onDelete: Restrict)
+  replacements DeliveryRecord[] @relation("DeliveryReplacement")
+  createdById String
+  createdBy User @relation("DeliveryPreparer", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+  items DeliveryItem[]
+  events DeliveryEvent[]
+
+  @@unique([createdById, requestKey])
+  @@index([matterId, createdAt])
+  @@index([recipientClientId, createdAt])
+}
+
+model DeliveryItem {
+  id String @id @default(cuid())
+  deliveryId String
+  delivery DeliveryRecord @relation(fields: [deliveryId], references: [id], onDelete: Restrict)
+  documentId String
+  document Document @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  position Int
+  documentName String
+  documentVersion Int
+  documentSha256 String
+  size Int?
+
+  @@unique([deliveryId, position])
+  @@unique([deliveryId, documentId])
+}
+
+model DeliveryEvent {
+  id String @id @default(cuid())
+  deliveryId String
+  delivery DeliveryRecord @relation(fields: [deliveryId], references: [id], onDelete: Restrict)
+  kind DeliveryEventKind
+  requestKey String
+  requestFingerprint String
+  occurredAt DateTime
+  recordedAt DateTime @default(now())
+  actorId String
+  actor User @relation("DeliveryActor", fields: [actorId], references: [id], onDelete: Restrict)
+  channel String?
+  note String?
+  proofDocumentId String?
+  proofDocument Document? @relation("DeliveryProof", fields: [proofDocumentId], references: [id], onDelete: Restrict)
+  correctsEventId String?
+  correctsEvent DeliveryEvent? @relation("DeliveryEventCorrection", fields: [correctsEventId], references: [id], onDelete: Restrict)
+  corrections DeliveryEvent[] @relation("DeliveryEventCorrection")
+
+  @@unique([actorId, requestKey])
+  @@index([deliveryId, recordedAt])
 }

@@ -477,7 +477,7 @@ W01.2/W04.1 首批在 `src/lib/workbench/` 建立不依赖 Prisma/Next 请求上
 
 ### 6.8 M3 最小持久关系与执行边界
 
-本节对应[计划 §7.11](WORKBENCH_PLAN.md#711-m3-详细执行计划与审查2026-11-16)和[需求 §9.4](PRODUCT_REQUIREMENTS_ACCEPTANCE.md#94-m3-专业工作与实际交付的操作规格)，为尚未实施的设计。只在真实业务切片需要时落相应最小模型与 SQL，不预建全表、通用成果平台或投影服务。现有 Document、EvidenceItem、MatterContextRecord、Task、WorkResponsibility、Deadline、ClientActivity/FollowUp、FirmFile 继续是各自权威对象。
+本节对应[计划 §7.11](WORKBENCH_PLAN.md#711-m3-详细执行计划与审查2026-11-16)和[需求 §9.4](PRODUCT_REQUIREMENTS_ACCEPTANCE.md#94-m3-专业工作与实际交付的操作规格)，是本轮已落地代码的最小技术边界；完成与未验范围见[计划 §8.14](WORKBENCH_PLAN.md#814-m3-保留范围的实现与验证2026-11-16)。仅在真实业务切片所需处增加模型与 SQL，不建立通用成果平台或投影服务。现有 Document、EvidenceItem、MatterContextRecord、Task、WorkResponsibility、Deadline、ClientActivity/FollowUp、FirmFile 继续是各自权威对象。
 
 #### 数据归属与必要新增
 
@@ -521,9 +521,23 @@ W09.3 的知识候选/审核/发布/撤回表、B 比较矩阵、E 规则/日历
 
 研究→起草/人工复核→实际交付是首条成果链。交付 owner 可先用已有 Document 开工，不等整项 W11；研究 owner 关闭首条研究切片后转事项任务/等待/同案依赖，与文书/交付并行，最后在同一事项场景汇合。root 单写必要 schema/SQL、来源资格与主壳，仅接收 C02/C05/C06/C09/C10/C12 中本批消费的合同，不等待整包专项。
 
-新增对象定位只补实际消费者：研究 ID/修订、具体 Document ID/问题 ID、固定交付清单 ID/回复关联。root 随切片更新现行路由与调用方，支持保存/刷新/审批入口/新增客户动态到同一对象，失效或失权明确返回，不静默换最新版；不改全部旧历史链接或建路由注册表。当前 main 的 `work` 与本地候选 `workPane` 事实分列于计划 §7.11.1；接收候选后采用单一现行合同，无双参数兼容。
+新增对象定位只补实际消费者：研究 ID/修订、具体 Document ID/问题 ID、固定交付清单 ID/回复关联。root 随切片更新现行路由与调用方，支持保存/刷新/审批入口/新增客户动态到同一对象，失效或失权明确返回，不静默换最新版；不改全部旧历史链接或建路由注册表。计划 §7.11.1 保留开工前基线；本轮已在主壳及消费者采用单一 `workPane` 合同，没有接入另一工作区的未合代码或保留双参数兼容。
 
-W09.3/B/E/F 和 C 通用机制不分配 owner，不预建模型。迁移/权限/审批/实际派生关系改动只做必要真实 PG 与 Server 页面验证；本轮仅更新计划。
+W09.3/B/E/F 和 C 通用机制不分配 owner，不预建模型。迁移/权限/审批/实际派生关系已有必要真实 PG 证据；实际 Server 桌面和专业验收仍分别待完成。
+
+#### 本轮落地的存储与授权合同
+
+两条新增迁移分别为 [研究/复核/交付](../prisma/migrations/20261117000000_m3_research_review_delivery/migration.sql) 与 [等待/同案依赖](../prisma/migrations/20261117010000_m3_task_waits_and_dependencies/migration.sql)。现有迁移字节保持；未增加知识发布、结构化比较、自动简报或期限重算平台。
+
+- ResearchRevision 每次保存新修订，ResearchSource 和 DocumentResearchSource 固定具体输入；数据库禁止覆盖历史，仅允许首次核对字段的规定变化。ISSUE 输入使用 EvidenceItemRevision 的固定来源快照，不读当前争点补旧研究。
+- DocumentReviewIssue 只维护当前问题状态/版本，RESPONSE/CHECK 事件追加；DeliveryRecord/Item 和各交付事件固定，首次 SENT 有唯一约束。TaskWait 单任务仅一个未结束等待，结束后保留；TaskDependency 在现有授权锁和 Serializable 事务内查同案/环并提交。完成入口只认责任 DONE。
+- READ、EXPORT、SUBMIT 是同一来源守卫的明确目的。具体 DOCUMENT_APPROVAL 只在 READ 选用，不能被递归用于导出或再次派生；来源撤回、hash/事项不符或当前失权均停止相应内容发布。不同目的不存在失败后改用另一授权的回退。
+- 新研究稿和模板稿创建时持久明确 familyId；人工简报及正常上传沿现有摄入事务。新详情/复核不推断缺失族关系，读取不写回数据；上传新版在权限验证后、写文件前拒绝缺族原件，提交事务也不猜测或补写版本关系。新稿保留实际研究输入和模板快照，但不继承批准。
+- 模板预览/缺项补全不写 Client/Party。生成请求重放在最终写入和响应恢复时校验本次身份及已提交原件；不能因为响应丢失误删已提交文件。文书送审和入卷对内置岗位也使用真实事务，状态与审计一起提交。
+- 归档沿原 ArchiveRecord.frozenManifest，在原批准事务固定选中成果的研究修订、人工问题/事件、完整交付清单/事件。额外来源、修订稿、凭据只进入引用核验，不扩增物理选件。导出只消费原冻结值，不以当前数据补造缺失清单；已有旧冻结值不事后加入新历史。
+- 完整包在文件 I/O 前后和归档响应释放前核当前账号、岗位、关联、独立财务/归档权、每份材料及冻结来源。选件原件按已有校验读取一次；在办包同次读取后核 hash/大小，失败停止整个包，不写缺件占位文件。日常详情不重新扫描原件。
+
+这些实现使用现有 Prisma、Zod、文书生成/存储、审批和责任服务，以及 shadcn/Radix 组件，没有新增依赖。真实 PG、组件、页面、部署四层证据不互相替代；生产迁移、发行镜像和整套恢复仍按 M4 执行。
 
 ## 7. 参考项目如何进入 LexOrder
 

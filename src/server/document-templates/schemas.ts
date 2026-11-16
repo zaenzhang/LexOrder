@@ -32,16 +32,28 @@ export const templateToggleSchema = z.object({
   enabled: z.boolean()
 });
 
-/**
- * 渲染模板生成文书并归档（段 3 模板引擎实现）。
- * - matterId: 目标案件
- * - templateId: 选定模板
- * - folderId: 目标卷宗（可空 = 散件）
- * - overrides: 行内补全的变量（路径化键值，如 {"client.idNumber": "320..."})；行内补全会回写源表
- */
-export const templateRenderSchema = z.object({
+export const templateSelectionSchema = z.object({
+  clientId: z.string().cuid().nullable(),
+  opposingPartyId: z.string().cuid().nullable(),
+  thirdPartyId: z.string().cuid().nullable(),
+  procedureId: z.string().cuid().nullable(),
+}).strict();
+
+export const templatePrepareSchema = z.object({
   matterId: z.string().cuid(),
   templateId: z.string().cuid(),
+  selection: templateSelectionSchema.optional(),
+});
+
+/** Values are used only for this rendered version and its immutable input snapshot. */
+export const templateRenderSchema = z.object({
+  requestKey: z.string().uuid(),
+  matterId: z.string().cuid(),
+  templateId: z.string().cuid(),
+  templateUpdatedAt: z.string().datetime(),
+  selection: templateSelectionSchema,
   folderId: z.string().cuid().nullable(),
-  overrides: z.record(z.string().max(100), z.string().max(2000)).default({})
+  expectedValues: z.record(z.string().max(100), z.string().max(20000)),
+  overrides: z.record(z.string().max(100), z.string().max(2000)),
+  reviewed: z.literal(true, { error: "请先核对本次文书字段" }),
 });

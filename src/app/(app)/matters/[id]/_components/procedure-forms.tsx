@@ -43,7 +43,6 @@ import { listDeadlineRulesForProcedure } from "@/server/deadline-rules/actions";
 import {
   buildDeadlineBasis,
   computeDeadlineDate,
-  formatLocalDate,
   periodLabel,
   HOLIDAY_NOTE
 } from "@/lib/deadline-rules";
@@ -386,12 +385,12 @@ export function AddDeadlineDialog({
   const [rules, setRules] = useState<RuleOption[]>([]);
   const [rulesLoading, setRulesLoading] = useState(false);
   const [selectedRuleId, setSelectedRuleId] = useState("");
-  // 起算日默认「上海的今天」；后续推算链（date 字符串 → 本地午夜载体 → 本地字段）在浏览器内自洽
+  // 输入的日历日按上海午夜解释，境外浏览器与服务端得到相同结果。
   const [triggerDate, setTriggerDate] = useState(() => shDayKey(new Date()));
   const selectedRule = rules.find((r) => r.id === selectedRuleId) ?? null;
   const computedDue = (() => {
     if (!selectedRule || !triggerDate) return null;
-    const trigger = new Date(`${triggerDate}T00:00:00`);
+    const trigger = new Date(`${triggerDate}T00:00:00+08:00`);
     if (Number.isNaN(trigger.getTime())) return null;
     return computeDeadlineDate(trigger, selectedRule.periodValue, selectedRule.periodUnit);
   })();
@@ -419,7 +418,7 @@ export function AddDeadlineDialog({
 
   function applyRule() {
     if (!selectedRule || !computedDue) return;
-    const trigger = new Date(`${triggerDate}T00:00:00`);
+    const trigger = new Date(`${triggerDate}T00:00:00+08:00`);
     setValue("title", selectedRule.name, { shouldDirty: true });
     setValue("category", selectedRule.category, { shouldDirty: true });
     // v1.x P0-8: 规则生成的期限带来源——提交后以"待确认"落库，律师核对起算事实后确认
@@ -427,12 +426,12 @@ export function AddDeadlineDialog({
     // 第六轮体检 P2-1：携带规则起算日，服务端据此按规则重算比对（不一致在 basis 标注）；
     // 与 dueAt 同款：date 字符串经 as-cast 赋值，提交时 zod coerce.date() 转回
     setValue("sourceTriggerDate", triggerDate as unknown as Date, { shouldDirty: true });
-    setValue("startFact", `${selectedRule.triggerLabel}（${formatLocalDate(trigger)}）`, {
+    setValue("startFact", `${selectedRule.triggerLabel}（${shDayKey(trigger)}）`, {
       shouldDirty: true
     });
     // date input 注册了 valueAsDate，程序化赋值需要 yyyy-MM-dd 字符串才能正确
     // 回显；提交时 zod coerce.date() 会转回 Date
-    setValue("dueAt", formatLocalDate(computedDue) as unknown as Date, {
+    setValue("dueAt", shDayKey(computedDue) as unknown as Date, {
       shouldDirty: true
     });
     setValue(
@@ -573,7 +572,7 @@ export function AddDeadlineDialog({
                         <p className="font-medium text-foreground/85">
                           到期日：
                           <span className="font-mono tabular">
-                            {formatLocalDate(computedDue)}
+                            {shDayKey(computedDue)}
                           </span>
                           <span className="ml-1.5 font-normal text-muted-foreground">
                             （{HOLIDAY_NOTE}）

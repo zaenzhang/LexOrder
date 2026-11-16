@@ -35,7 +35,7 @@ import {
 } from "./schemas";
 import { revalidateMatter } from "@/server/matters/route";
 import { recordTimelineEvent } from "@/server/timeline/record";
-import { shDayKey, civilFromKey, civilKey } from "@/lib/ui/sh-time";
+import { shDayKey } from "@/lib/ui/sh-time";
 import { computeDeadlineDate } from "@/lib/deadline-rules";
 import { adjustDeadlineForHolidays } from "@/lib/calendar/holidays";
 import { ActionError } from "@/lib/action-error";
@@ -440,8 +440,8 @@ export async function addDeadline(input: DeadlineCreateInput) {
   await assertMatterWritable(procedureForGuard.matterId);
 
   // 第六轮体检 P2-1：规则生成的期限此前日期值系统自己没算过也没验过。服务端按
-  // sourceTriggerDate + 规则重算（上海日历口径，civilFromKey 本地正午载体与
-  // 生产客户端同一套 civil 算法，时区无关），与提交值不一致不拒绝（允许人工调整
+  // sourceTriggerDate + 规则重算（输入/输出统一上海日期，与宿主时区无关），
+  // 与提交值不一致不拒绝（允许人工调整
   // ——表单明示「可再人工调整」），但在 basis 追加提示，确认律师核对时可见。
   let basis = data.basis || null;
   if (data.sourceRuleId && data.sourceTriggerDate) {
@@ -450,11 +450,11 @@ export async function addDeadline(input: DeadlineCreateInput) {
       select: { name: true, periodValue: true, periodUnit: true }
     });
     if (rule) {
-      const rawKey = civilKey(computeDeadlineDate(
-        civilFromKey(shDayKey(data.sourceTriggerDate)), rule.periodValue, rule.periodUnit
-      ));
-      // F-5：已配置放假安排时按民诉法第八十五条第三款顺延届满日（未配置/表未建时原样返回）
+      const rawKey = shDayKey(computeDeadlineDate(data.sourceTriggerDate, rule.periodValue, rule.periodUnit));
+      // 放假安排查询故障中止本次规则生成；空配置保留明确提示，不覆盖提交日期。
       const adjusted = await adjustDeadlineForHolidays(rawKey);
+      const notes: string[] = [];
+      if (!adjusted.calendarConfigured) notes.push("建议日期附近未录入放假安排，本次仅按周末计算，请人工核对节假日及调休");
       const submittedKey = shDayKey(data.dueAt);
       if (adjusted.key !== submittedKey) {
         // 口径＝提示，不改写 dueAt（第七轮体检 P2-3）：法定休假日顺延在个案中
@@ -463,6 +463,10 @@ export async function addDeadline(input: DeadlineCreateInput) {
         const note = adjusted.adjusted
           ? `；系统按规则「${rule.name}」重算为 ${rawKey}，建议按放假安排顺延至 ${adjusted.key}（${adjusted.reason}），与提交日期 ${submittedKey} 不一致，请核对后自行调整`
           : `；系统按规则「${rule.name}」重算为 ${rawKey}，与提交日期 ${submittedKey} 不一致，请核对`;
+        notes.push(note.replace(/^；/, ""));
+      }
+      if (notes.length) {
+        const note = `；${notes.join("；")}`;
         // 截断保护警告本身：此前 `${basis}${note}`.slice(0,300) 从尾部截，
         // 恰好把最该被看见的不一致提示切掉。改为优先保留 note，截原 basis 尾部。
         const LIMIT = 300;

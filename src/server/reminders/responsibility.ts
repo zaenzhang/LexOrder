@@ -6,6 +6,7 @@ import {currentActor,assertLiveAssignees} from '@/server/intakes/workflow';
 import {retireScheduleReminders} from './schedule';
 import {auditTx} from '@/server/audit';
 import { ActionError } from "@/lib/action-error";
+import { assertTaskCanClose } from "@/server/tasks/dependency-guard";
 export async function responsibilityReady(db:Prisma.TransactionClient){const [r]=await db.$queryRaw<{ready:boolean}[]>`SELECT to_regclass('public."WorkResponsibility"') IS NOT NULL AS ready`;return r?.ready===true;}
 export type WorkRow={id:string;targetId:string;kind:'Task'|'Deadline'|'Hearing'|'Urgent';matterId:string|null;intakeId:string|null;title:string;dueAt:Date|null;assigneeId:string;name:string;active:boolean;proposedAssigneeId:string|null;proposedName:string|null;acceptedAt:Date|null;state:'OPEN'|'DONE'|'CANCELLED';revision:number;reason:string|null};
 /** 已有对象权限由调用方进一步按 matterId/intakeId/assignee 限定。 */
@@ -34,6 +35,7 @@ export async function changeWorkTx(db:Prisma.TransactionClient,userId:string,inp
  else if(row.state!=='OPEN')throw new ActionError('事项已结束，请先重开');
  if(d.action==='ACCEPT'&&userId!==(row.proposedAssigneeId??row.assigneeId))throw new ActionError('只有指定责任人可以承接');
  if(d.action==='DECLINE'&&userId!==row.proposedAssigneeId)throw new ActionError('只有待接收人可以退回交接');
+ if(row.kind==='Task'&&['COMPLETE','CANCEL'].includes(d.action))await assertTaskCanClose(db,row.targetId,row.matterId!,d.action==='COMPLETE');
  if(d.action==='PROPOSE'){
   await assertLiveAssignees(db,[d.assigneeId!]);if(d.assigneeId===row.assigneeId)throw new ActionError('接收人与原责任人相同');
   if(row.matterId&&!await db.matter.count({where:{id:row.matterId,...matterAssociationFilter(d.assigneeId!)}}))throw new ActionError('请先将接收人加入本案团队');

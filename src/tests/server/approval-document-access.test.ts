@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const { db, canApprove } = vi.hoisted(() => ({ db: {
   systemSetting: { findUnique: vi.fn() }, user: { findUnique: vi.fn() }, matter: { count: vi.fn() }, intake: { findUnique: vi.fn() },
-  document: { findUnique: vi.fn() }, sealRequest: { findFirst: vi.fn() }, invoiceRequest: { findMany: vi.fn() }, archiveRecord: { findMany: vi.fn() }
+  document: { findUnique: vi.fn(), findMany: vi.fn() }, documentResearchSource: { findMany: vi.fn() }, auditLog: { findFirst: vi.fn() }, sealRequest: { findFirst: vi.fn() }, invoiceRequest: { findMany: vi.fn() }, archiveRecord: { findMany: vi.fn() }
 }, canApprove: vi.fn() }));
 vi.mock("@/lib/approvals/history-access", () => ({ hasHandledApproval: vi.fn(async () => false) }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
@@ -11,6 +11,8 @@ const doc = { id: "doc-id", uploadedById: "uploader", matterId: null, intakeId: 
 beforeEach(() => {
   vi.resetAllMocks(); db.user.findUnique.mockResolvedValue({ active: true, role: "LAWYER" });
   db.matter.count.mockResolvedValue(0); db.document.findUnique.mockResolvedValue({ status: "DRAFT" });
+  db.documentResearchSource.findMany.mockResolvedValue([]); db.document.findMany.mockResolvedValue([]);
+  db.auditLog.findFirst.mockResolvedValue(null);
   db.sealRequest.findFirst.mockResolvedValue(null); db.invoiceRequest.findMany.mockResolvedValue([]); db.archiveRecord.findMany.mockResolvedValue([]); canApprove.mockResolvedValue(false);
 });
 describe("审批附件对象级访问", () => {
@@ -18,7 +20,7 @@ describe("审批附件对象级访问", () => {
   it("用章审批仅开放该申请的稿件，不能传播到同案其他文件", async () => {
     db.sealRequest.findFirst.mockResolvedValue({ id: "seal-id", requestedById: "applicant", status: "PENDING" }); canApprove.mockResolvedValue(true);
     expect(await canReadDocument("reviewer", { ...doc, matterId: "matter-id" })).toBe(true);
-    expect(canApprove).toHaveBeenCalledWith("reviewer", "SEAL_APPROVE", "seal-id");
+    expect(canApprove).toHaveBeenCalledWith("reviewer", "SEAL_APPROVE", "seal-id", db);
     db.sealRequest.findFirst.mockResolvedValue(null); expect(await canReadDocument("reviewer", { ...doc, id: "another-doc", matterId: "matter-id" })).toBe(false);
   });
   it("只有团队查看权并不获得附件；财务角色也不获得全所材料", async () => {
@@ -40,7 +42,7 @@ describe("审批附件对象级访问", () => {
     canApprove.mockResolvedValue(true);
     expect(await canReadDocument("reviewer", { ...doc, id: "snapshot-doc", matterId: "matter-id" })).toBe(true);
     expect(db.archiveRecord.findMany.mock.calls[0][0].where.OR).toContainEqual({ checklistJson: { path: ["documentIds"], array_contains: ["snapshot-doc"] } });
-    expect(canApprove).toHaveBeenCalledWith("reviewer", "ARCHIVE_APPROVE", "archive-id");
+    expect(canApprove).toHaveBeenCalledWith("reviewer", "ARCHIVE_APPROVE", "archive-id", db);
   });
   it("停用账号、软删除文件都不能读取", async () => {
     db.user.findUnique.mockResolvedValue({ active: false, role: "LAWYER" }); expect(await canReadDocument("user", doc)).toBe(false);

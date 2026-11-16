@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { hasCustomPermission, type RoleGrant } from "@/lib/roles/catalog";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import type { ClientType, Prisma } from "@prisma/client";
 import { Archive, ChevronLeft, Clock3, FileSignature, Gavel, Pencil, Plus, Upload, X } from "lucide-react";
@@ -24,8 +24,13 @@ import { contactRoleLabels } from "./info-panel";
 import { MatterArchive, TeamRailCard } from "./matter-archive";
 import { FinancePanel } from "./finance-panel";
 import { ImportantItemDialog } from "./procedure-content";
-import { ProcedureWorkflowPanel, replaceDossierLocation } from "./procedure-workflow-panel";
-import type { DossierView, WaitingItem, WorkflowApi, WorkflowNote, WorkflowPreservationCase } from "./procedure-workflow-panel";
+import { ProcedureWorkflowPanel } from "./procedure-workflow-panel";
+import { replaceDossierLocation, type DossierView } from "./dossier-location";
+import { FactsWorkspace } from "./facts-workspace";
+import { DeliveryPanel } from "@/components/deliveries/delivery-panel";
+import { DocumentDetail } from "@/components/documents/document-detail";
+import { MatterTasksWorkspace } from "@/components/tasks/matter-tasks-workspace";
+import type { WaitingItem, WorkflowApi, WorkflowNote, WorkflowPreservationCase } from "./procedure-workflow-panel";
 
 import { ApprovalsPanel } from "./approvals-panel";
 import type { SealContractItem, ExpressItem } from "./info-extras";
@@ -35,7 +40,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { LifecycleActions } from "./lifecycle-actions";
 import { AddBillingSheet } from "./finance-forms";
 import { EvidenceItemDialog, type EvidenceItemRow } from "./evidence-panel";
-import { EvidenceTimeline } from "./evidence-timeline";
 import { ArchiveStatusBanner } from "./archive-status-banner";
 import { ArchiveWizardDialog } from "./archive-wizard";
 import { TeamEditorDialog, type MatterEditorSection } from "./team-editor-dialog";
@@ -253,6 +257,29 @@ export function MatterDetailTabs({
   const [ledgerAdd, setLedgerAdd] = useState<"express" | "hearing" | "deadline" | null>(null);
   const [caseSearchOpen, setCaseSearchOpen] = useState(false);
   const [reviewDocId, setReviewDocId] = useState<string | null>(null);
+  const exactDocumentId = searchParams.get("document");
+  const [taskCreateSignal, setTaskCreateSignal] = useState(0);
+  const [deliveryPrepareSignal, setDeliveryPrepareSignal] = useState(0);
+  const workDrafts = useRef({ research: { dirty: false, busy: false }, delivery: { dirty: false, busy: false }, task: { dirty: false, busy: false } });
+  const researchDraft = useCallback((dirty: boolean, busy: boolean) => { workDrafts.current.research = { dirty, busy }; }, []);
+  const deliveryDraft = useCallback((dirty: boolean, busy: boolean) => { workDrafts.current.delivery = { dirty, busy }; }, []);
+  const taskDraft = useCallback((dirty: boolean, busy: boolean) => { workDrafts.current.task = { dirty, busy }; }, []);
+  useEffect(() => {
+    const protect = (event: BeforeUnloadEvent) => { if (Object.values(workDrafts.current).some(value => value.dirty || value.busy)) { event.preventDefault(); event.returnValue = ""; } };
+    window.addEventListener("beforeunload", protect); return () => window.removeEventListener("beforeunload", protect);
+  }, []);
+  const openDocument = useCallback((document: string) => replaceDossierLocation({ document, reviewIssue: null }), []);
+  const selectReviewIssue = useCallback((reviewIssue: string | null) => replaceDossierLocation({ reviewIssue }), []);
+  const deliveryLocation = useCallback((delivery: string | null, deliveryEvent?: string | null) => replaceDossierLocation({ workPane: "records", recordsView: "delivery", delivery, deliveryEvent: deliveryEvent ?? null, deliveryDocument: null }), []);
+  const selectTask = useCallback((task: string | null) => replaceDossierLocation({ workPane: "tasks", task }), []);
+  const addMatterTask = useCallback(() => { replaceDossierLocation({ view: "work", workPane: "tasks" }); setTaskCreateSignal(value => value + 1); }, []);
+  async function prepareDocumentDelivery(document: string) {
+    if (workDrafts.current.delivery.busy) return;
+    if (workDrafts.current.delivery.dirty && !await confirmDialog({ title: "放弃未保存的交付内容？", confirmText: "放弃并重新准备", cancelText: "继续编辑", initialFocus: "cancel" })) return;
+    replaceDossierLocation({ view: "work", workPane: "records", recordsView: "delivery", document: null, reviewIssue: null, delivery: null, deliveryEvent: null, deliveryDocument: document });
+    setDeliveryPrepareSignal(value => value + 1);
+  }
+
   // 证据要点挂在材料行上（2026-09-14 证据链并入材料）
   const [evidenceDocId, setEvidenceDocId] = useState<string | null | undefined>(undefined);
   const evidenceByDoc = useMemo(() => {
@@ -266,12 +293,13 @@ export function MatterDetailTabs({
   const canAddEvidence = canAssociateThisMatter && matter.status !== "ARCHIVED";
   const docActions = useMemo(
     () => ({
+      onOpenDocument: openDocument,
       ...(capabilities.aiReview && allowed("documents.write") ? { onReview: (id: string) => setReviewDocId(id) } : {}),
       evidenceByDoc,
       unlinkedEvidence: evidenceItems.filter((it) => !it.sourceDocumentId && !(it.sources ?? []).some(source => source.documentId)),
       ...(canAddEvidence ? { onAddEvidence: (docId: string | null) => setEvidenceDocId(docId) } : {})
     }),
-    [capabilities.aiReview, currentUserRole, rolePermissions, evidenceByDoc, evidenceItems, canAddEvidence] // eslint-disable-line react-hooks/exhaustive-deps
+    [capabilities.aiReview, currentUserRole, rolePermissions, evidenceByDoc, evidenceItems, canAddEvidence, openDocument] // eslint-disable-line react-hooks/exhaustive-deps
   );
   const [progress, setProgress] = useState<{ mode: "record" | "judgment"; stage?: string; stageNames: string[] } | null>(null);
   const [deadlineOpen, setDeadlineOpen] = useState(false);
@@ -584,19 +612,21 @@ export function MatterDetailTabs({
         archiveRailTop={<><TeamRailCard matter={matter} canManage={canOwnThisMatter} onManage={() => openMatterEditor("team")} />{conflictNode}</>}
         expresses={expresses}
         onAddLedger={canAssociateThisMatter && currentProcedure ? (type) => setLedgerAdd(type) : undefined}
+        factsNode={<FactsWorkspace matterId={matter.id} items={evidenceItems} error={evidenceError} canAdd={canAddEvidence}
+          onAdd={() => setEvidenceDocId(null)} onRetry={() => router.refresh()} onOpenDocument={openDocument} onDraftStateChange={researchDraft} />}
+        tasksNode={<MatterTasksWorkspace matterId={matter.id} taskId={searchParams.get("task")} onSelectTask={selectTask} createSignal={taskCreateSignal} onDraftStateChange={taskDraft} />}
+        onAddMatterTask={canAssociateThisMatter && !isArchived ? addMatterTask : undefined}
+        deliveryNode={<DeliveryPanel matterId={matter.id} initialDeliveryId={searchParams.get("delivery")} initialEventId={searchParams.get("deliveryEvent")}
+          initialDocumentId={searchParams.get("deliveryDocument")} prepareSignal={deliveryPrepareSignal} onLocationChange={deliveryLocation} onDocumentOpen={openDocument} onDraftStateChange={deliveryDraft} />}
         materialsActions={<>
-          {evidenceError ? <p role="alert" className="text-sm text-destructive">证据要点读取失败：{evidenceError} <button type="button" className="underline" onClick={() => router.refresh()}>重新加载</button></p> : null}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            {!evidenceError ? <EvidenceTimeline key={matter.id} items={evidenceItems} /> : null}
-            {allowed("documents.read") ? <MaterialToolsSheet
-              key={`${matter.id}:${currentProcedure?.id ?? "unassigned"}`}
-              matterId={matter.id}
-              documents={procDocs.map(document => ({ id: document.id, name: document.name, version: document.version }))}
-              scopeLabel={currentProcedure ? `${procLabel(currentProcedure)}及未归属材料 · 不限环节` : "当前事项材料"}
-              canManage={canAssociateThisMatter && !isArchived && allowed("documents.write")}
-              refreshKey={materialRefreshKey}
-            /> : null}
-          </div>
+          {allowed("documents.read") ? <MaterialToolsSheet
+            key={`${matter.id}:${currentProcedure?.id ?? "unassigned"}`}
+            matterId={matter.id}
+            documents={procDocs.map(document => ({ id: document.id, name: document.name, version: document.version }))}
+            scopeLabel={currentProcedure ? `${procLabel(currentProcedure)}及未归属材料 · 不限环节` : "当前事项材料"}
+            canManage={canAssociateThisMatter && !isArchived && allowed("documents.write")}
+            refreshKey={materialRefreshKey}
+          /> : null}
           {canAssociateThisMatter && allowed("documents.write") ? <PendingMaterialUploads key={matter.id} matterId={matter.id} /> : null}
         </>}
         materialsExtra={reviewNode}
@@ -655,6 +685,8 @@ export function MatterDetailTabs({
           defaultDocumentId={evidenceDocId}
         />
       ) : null}
+      {exactDocumentId && <DocumentDetail key={`${matter.id}:${exactDocumentId}`} matterId={matter.id} documentId={exactDocumentId} issueId={searchParams.get("reviewIssue")}
+        onClose={() => replaceDossierLocation({ document: null, reviewIssue: null })} onDocumentChange={openDocument} onIssueChange={selectReviewIssue} onPrepareDelivery={id => void prepareDocumentDelivery(id)} />}
       <DocumentReviewDialog open={Boolean(reviewDocId)} documentId={reviewDocId} matterId={matter.id} onOpenChange={(o) => { if (!o) setReviewDocId(null); }} />
 
       {progress ? (
@@ -665,7 +697,7 @@ export function MatterDetailTabs({
           initialMode={progress.mode}
           initialStage={progress.stage}
           stageNames={progress.stageNames}
-          onAddTask={canAssociateThisMatter && currentProcedure ? () => workflowApi.current?.openAddTask() : undefined}
+          onAddTask={canAssociateThisMatter && !isArchived ? () => workflowApi.current?.openAddTask() : undefined}
           onAddDeadline={canAssociateThisMatter && currentProcedure ? () => setDeadlineOpen(true) : undefined}
           onAddHearing={canAssociateThisMatter && currentProcedure ? () => setHearingOpen(true) : undefined}
         />

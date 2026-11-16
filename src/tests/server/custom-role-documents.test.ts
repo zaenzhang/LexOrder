@@ -1,13 +1,13 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const { db, approve } = vi.hoisted(() => ({ db: { user: { findUnique: vi.fn() }, sealRequest: { findFirst: vi.fn() }, matter: { count: vi.fn() }, intake: { findUnique: vi.fn() }, document: { findUnique: vi.fn() }, invoiceRequest: { findMany: vi.fn() }, archiveRecord: { findMany: vi.fn() }, auditLog: { findFirst: vi.fn() } }, approve: vi.fn() }));
+const { db, approve } = vi.hoisted(() => ({ db: { user: { findUnique: vi.fn() }, sealRequest: { findFirst: vi.fn() }, matter: { count: vi.fn() }, intake: { findUnique: vi.fn() }, document: { findUnique: vi.fn() }, documentResearchSource: { findMany: vi.fn() }, invoiceRequest: { findMany: vi.fn() }, archiveRecord: { findMany: vi.fn() }, auditLog: { findFirst: vi.fn() } }, approve: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 vi.mock("@/lib/approvals/service", () => ({ canApproveItem: approve, canExecuteInvoice: vi.fn(async () => false) }));
 vi.mock("@/lib/approvals/history-access", () => ({ hasHandledApproval: vi.fn(async () => false) }));
 import { canReadDocument } from "@/lib/approvals/documents";
 const user = { active: true, role: "CUSTOM", roleDefinition: { active: true, name: "行政", permissions: [] } };
 const doc = { id: "doc", matterId: "matter", intakeId: null, uploadedById: "u" };
-beforeEach(() => { vi.resetAllMocks(); db.user.findUnique.mockResolvedValue(user); db.sealRequest.findFirst.mockResolvedValue(null); db.document.findUnique.mockResolvedValue({ status: "DRAFT" }); db.invoiceRequest.findMany.mockResolvedValue([]); db.archiveRecord.findMany.mockResolvedValue([]); db.auditLog.findFirst.mockResolvedValue(null); approve.mockResolvedValue(false); });
+beforeEach(() => { vi.resetAllMocks(); db.user.findUnique.mockResolvedValue(user); db.sealRequest.findFirst.mockResolvedValue(null); db.document.findUnique.mockResolvedValue({ status: "DRAFT" }); db.documentResearchSource.findMany.mockResolvedValue([]); db.invoiceRequest.findMany.mockResolvedValue([]); db.archiveRecord.findMany.mockResolvedValue([]); db.auditLog.findFirst.mockResolvedValue(null); approve.mockResolvedValue(false); });
 describe("自定义角色附件与申请级访问", () => {
   it("过去上传过案件草稿不等于撤权后仍可下载", async () => expect(await canReadDocument("u", doc)).toBe(false));
   it("申请人可查看已提交的文书，不要求整个案件下载权", async () => { db.document.findUnique.mockResolvedValue({ status: "PENDING_REVIEW" }); expect(await canReadDocument("u", doc)).toBe(true); });

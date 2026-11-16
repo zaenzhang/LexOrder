@@ -67,7 +67,7 @@ async function sourceView(tx: Prisma.TransactionClient, access: ContextAccess, s
   if (source.sourceDocumentId) {
     const doc = await tx.document.findFirst({ where: { id: source.sourceDocumentId, matterId: access.matter.id, deletedAt: null },
       select: { id: true, name: true, uploadedById: true, matterId: true, intakeId: true, deletedAt: true } });
-    const available = Boolean(doc && await canReadDocument(access.user.id, doc));
+    const available = Boolean(doc && await canReadDocument(access.user.id, doc, tx));
     return { type: "DOCUMENT", id: available ? doc!.id : null, label: available ? doc!.name : null, available };
   }
   if (source.sourceNoteId) {
@@ -236,7 +236,7 @@ export async function readContextSourceOptions(db: PrismaClient, actor: ContextA
       hasCustomPermission(access.user, "clients.read") ? tx.clientActivity.findMany({ where: { client: contextClientFilter(access) },
         orderBy: [{ occurredAt: "desc" }, { id: "desc" }], take: 51, select: { id: true, occurredAt: true, content: true, client: { select: { name: true } } } }) : []
     ]);
-    const readable = await Promise.all(documents.slice(0, 100).map(async doc => await canReadDocument(access.user.id, doc) ? doc : null));
+    const readable = await Promise.all(documents.slice(0, 100).map(async doc => await canReadDocument(access.user.id, doc, tx) ? doc : null));
     return {
       choices: buildContextSourceChoices({
         documents: readable.filter((doc): doc is NonNullable<typeof doc> => Boolean(doc)),

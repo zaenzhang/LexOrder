@@ -7,6 +7,8 @@ const { db, session, state } = vi.hoisted(() => {
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 vi.mock("@/lib/auth/session", () => ({ requireSession: vi.fn(async () => session) }));
 vi.mock("@/server/audit", () => ({ audit: vi.fn() }));
+// Derivation permissions have their own real-guard suite; this suite isolates the approval transition.
+vi.mock("@/server/documents/derivation-access", () => ({ assertDocumentDerivationAccess: vi.fn(async () => undefined) }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import { approveDocument } from "@/server/documents/actions";
 const revision = new Date("2026-09-06T00:00:00Z");

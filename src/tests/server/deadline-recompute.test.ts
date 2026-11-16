@@ -14,7 +14,7 @@ const { db, session } = vi.hoisted(() => ({
     timelineEvent: { create: vi.fn() },
     reminderDelivery: { createMany: vi.fn(), updateMany: vi.fn() },
     notification: { createMany: vi.fn() },
-    deadline_: {}
+    holiday: { findMany: vi.fn() }
   },
   session: { user: { id: "clawyer0000000000000000001", role: "LAWYER" } }
 }));
@@ -43,6 +43,7 @@ beforeEach(() => {
   db.matterProcedure.findUnique.mockResolvedValue({ matterId: "cmatter00000000000000000001" });
   db.deadlineRule.findUnique.mockResolvedValue({ name: "民事上诉期（不服一审判决）", periodValue: 15, periodUnit: "DAYS" });
   db.deadline.create.mockResolvedValue({ id: "created-deadline" });
+  db.holiday.findMany.mockResolvedValue([]);
 });
 
 // zod 输入侧接受日期字符串/空串，输出侧为 Date——测试按输入侧构造，类型放宽
@@ -58,11 +59,12 @@ const input = (overrides: Record<string, unknown> = {}): any => ({
   ...overrides
 });
 
-it("重算一致：basis 原样落库，confirmStatus PENDING", async () => {
+it("重算一致：不添加日期差异，空日历配置明确提示，confirmStatus PENDING", async () => {
   const result = await addDeadline(input());
   expect(result).toEqual({ ok: true, id: "created-deadline" });
   const created = db.deadline.create.mock.calls[0][0].data;
   expect(created.basis).not.toContain("重算");
+  expect(created.basis).toContain("未录入放假安排");
   expect(created.confirmStatus).toBe("PENDING");
   expect(created.sourceRuleId).toBe(RULE_ID);
 });
@@ -95,4 +97,12 @@ it("人工录入（无 sourceRuleId）：confirmStatus CONFIRMED，不做规则�
   const created = db.deadline.create.mock.calls[0][0].data;
   expect(created.confirmStatus).toBe("CONFIRMED");
   expect(db.deadlineRule.findUnique).not.toHaveBeenCalled();
+});
+
+it("日历查询故障中止规则生成，不保存误导的正常计算结果；人工登记仍可用", async () => {
+  db.holiday.findMany.mockRejectedValue(new Error("合成日历读取故障"));
+  await expect(addDeadline(input())).rejects.toThrow("放假安排读取失败");
+  expect(db.deadline.create).not.toHaveBeenCalled();
+  await addDeadline(input({ sourceRuleId: "", sourceTriggerDate: "" }));
+  expect(db.deadline.create.mock.calls[0][0].data.confirmStatus).toBe("CONFIRMED");
 });

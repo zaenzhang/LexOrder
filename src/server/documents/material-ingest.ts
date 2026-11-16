@@ -16,6 +16,7 @@ import { auditTx } from "@/server/audit";
 import { recordTimelineEvent } from "@/server/timeline/record";
 import { assertCurrentJobLease, type JobLease } from "@/server/cron/queue";
 import { enqueueMaterialProcessing, cancelMaterialProcessing } from "./material-processing";
+import { assertDocumentDerivationAccess } from "./derivation-access";
 
 const nullableId = z.string().min(1).nullable().default(null);
 const documentInput = z.object({
@@ -81,6 +82,11 @@ async function assertUploadAuthority(tx: Prisma.TransactionClient, userId: strin
       WHERE "intakeId"=${data.intakeId} AND snapshot->'documents' @> ${JSON.stringify([{ id: priorId }])}::jsonb`;
     if (Number(used.count)) throw new ActionError("已固定于送审轮次的材料须保留，请另传补充材料");
   }
+  if (priorId) {
+    const prior = await tx.document.findUnique({ where: { id: priorId }, select: { matterId: true, intakeId: true, deletedAt: true, familyId: true } });
+    if (!prior || prior.deletedAt || prior.matterId !== data.matterId || prior.intakeId !== data.intakeId) throw new ActionError("原材料版本已变化，请刷新后重传");
+    if (!prior.familyId) throw new ActionError("原文书缺少明确的版本关系，请先核对材料版本记录");
+  }
 }
 
 /** The intent is durable before file I/O; originals use a reserved non-overwriting key. */
@@ -133,18 +139,26 @@ async function commitStoredIngest(intentId: string, userId: string, lease?: JobL
     if (intent.state !== "STORED") throw new ActionError("原件尚未确认保存，请重新上传");
     let familyId: string | null = null;
     let version = 1;
+    let templateId: string | null = null;
+    let templateContextSnapshot: Prisma.InputJsonValue | typeof Prisma.JsonNull = Prisma.JsonNull;
+    let researchInputs: { researchRevisionId: string }[] = [];
     if (priorDocumentId) {
       await tx.$queryRaw`SELECT id FROM "Document" WHERE id=${priorDocumentId} FOR UPDATE`;
       const prior = await tx.document.findUnique({ where: { id: priorDocumentId } });
       if (!prior || prior.deletedAt || !prior.isLatest || prior.matterId !== data.matterId || prior.intakeId !== data.intakeId) throw new ActionError("原材料版本已变化，请刷新后重传");
+      await assertDocumentDerivationAccess(userId, prior.id, { purpose: "SUBMIT", db: tx });
       if (checkout && checkout.baselineVersion !== prior.version) throw new ActionError("取件基线已变化，请基于最新版另存");
-      familyId = prior.familyId ?? prior.id;
+      templateId = prior.templateId;
+      templateContextSnapshot = prior.templateContextSnapshot === null ? Prisma.JsonNull : prior.templateContextSnapshot;
+      researchInputs = await tx.documentResearchSource.findMany({ where: { documentId: prior.id }, select: { researchRevisionId: true } });
+      if (!prior.familyId) throw new ActionError("原文书缺少明确的版本关系，请先核对材料版本记录");
+      familyId = prior.familyId;
       version = prior.version + 1;
       await tx.document.updateMany({ where: { familyId, isLatest: true }, data: { isLatest: false } });
-      // A legacy family head without familyId still needs its latest flag cleared.
-      if (!prior.familyId) await tx.document.update({ where: { id: prior.id }, data: { isLatest: false, familyId } });
     }
-    const created = await tx.document.create({ data: { ...data, path: intent.storagePath, familyId, version, isLatest: true } });
+    const created = await tx.document.create({ data: { ...data, path: intent.storagePath, familyId, version, isLatest: true,
+      templateId, templateContextSnapshot } });
+    if (researchInputs.length) await tx.documentResearchSource.createMany({ data: researchInputs.map(source => ({ documentId: created.id, researchRevisionId: source.researchRevisionId })) });
     if (!familyId) await tx.document.update({ where: { id: created.id }, data: { familyId: created.id } });
     if (data.matterId) await enqueueMaterialProcessing(tx, { documentId: created.id, requestedById: userId });
     await tx.materialIngestIntent.update({ where: { id: intentId }, data: { state: "COMMITTED", documentId: created.id, errorCode: null } });
@@ -238,7 +252,8 @@ export async function withdrawMaterial(userId: string, documentId: string, purge
 export async function assertDocumentCanBePurged(tx: Prisma.TransactionClient, documentId: string) {
   const doc = await tx.document.findUniqueOrThrow({ where: { id: documentId } });
   await assertNotIntakeSnapshot(tx, doc.intakeId, documentId);
-  const [legacy, links, contexts, family, reviews, invoices, seals, billings, adjustments, templates] = await Promise.all([
+  const [legacy, links, contexts, family, reviews, invoices, seals, billings, adjustments, templates,
+    researchSources, researchOutputs, manualIssues, manualRevisions, deliveryItems, deliveryProofs] = await Promise.all([
     tx.evidenceItem.count({ where: { sourceDocumentId: documentId } }),
     tx.evidenceSourceLink.count({ where: { documentId } }),
     tx.matterContextRecord.count({ where: { sourceDocumentId: documentId } }),
@@ -248,10 +263,17 @@ export async function assertDocumentCanBePurged(tx: Prisma.TransactionClient, do
     tx.sealRequest.count({ where: { OR: [{ draftDocId: documentId }, { stampedDocId: documentId }] } }),
     tx.billingAttachment.count({ where: { documentId } }),
     tx.invoiceAdjustment.count({ where: { documentId } }),
-    tx.documentTemplate.count({ where: { docxBlobId: documentId } })
+    tx.documentTemplate.count({ where: { docxBlobId: documentId } }),
+    tx.researchSource.count({ where: { documentId } }),
+    tx.documentResearchSource.count({ where: { documentId } }),
+    tx.documentReviewIssue.count({ where: { OR: [{ documentId }, { basisDocumentId: documentId }] } }),
+    tx.documentReviewEvent.count({ where: { revisionDocumentId: documentId } }),
+    tx.deliveryItem.count({ where: { documentId } }),
+    tx.deliveryEvent.count({ where: { proofDocumentId: documentId } }),
   ]);
   const archives = doc.matterId ? await tx.archiveRecord.findMany({ where: { matterId: doc.matterId }, select: { checklistJson: true, coverDocId: true, catalogDocId: true } }) : [];
-  if (legacy || links || contexts || family > 1 || reviews || invoices || seals || billings || adjustments || templates || doc.version > 1 || doc.status !== "DRAFT" ||
+  if (legacy || links || contexts || family > 1 || reviews || invoices || seals || billings || adjustments || templates ||
+    researchSources || researchOutputs || manualIssues || manualRevisions || deliveryItems || deliveryProofs || doc.version > 1 || doc.status !== "DRAFT" ||
     archives.some(a => a.coverDocId === documentId || a.catalogDocId === documentId || archiveSnapshotDocumentIds(a.checklistJson).includes(documentId))) {
     throw new ActionError("材料已进入来源、版本或审批历史，须保留原件，仅可撤回");
   }

@@ -56,7 +56,7 @@ export async function sourceReader(userId: string, matterId: string, references:
   const documents = ids.length ? await db.document.findMany({ where: { id: { in: ids }, matterId }, select: documentSelect }) : [];
   const allowed = new Map<string, SourceDocument>();
   await Promise.all(documents.map(async document => {
-    if (!document.deletedAt && await canReadDocument(userId, document)) allowed.set(document.id, document);
+    if (!document.deletedAt && await canReadDocument(userId, document, db)) allowed.set(document.id, document);
   }));
   function documentFor(reference: SourceReference) {
     const document = allowed.get(reference.documentId);
@@ -80,7 +80,7 @@ export async function prepareSource(userId: string, matterId: string, input: Sou
   const document = await db.document.findUnique({ where: { id: input.documentId }, select: documentSelect });
   if (!document || document.deletedAt) throw new ActionError("来源材料不存在或已删除");
   if (document.matterId !== matterId) throw new ActionError("来源材料不属于该案件");
-  if (!await canReadDocument(userId, document)) throw new ActionError("无权读取来源材料");
+  if (!await canReadDocument(userId, document, db)) throw new ActionError("无权读取来源材料");
   if (!document.sha256 || !/^[a-f0-9]{64}$/.test(document.sha256)) throw new ActionError("该材料尚无可靠的原件标识，请先核对材料");
   let location: SourceReference["location"] = { kind: "UNLOCATED", reason: "NO_MAPPING" };
   let locationKey = "UNLOCATED";

@@ -15,23 +15,24 @@ const VALID_CATEGORIES: FirmFileCategory[] = ["CONTRACT", "LETTER", "LICENSE", "
 export default async function FirmResourcesPage({
   searchParams
 }: {
-  searchParams: { category?: string; q?: string; includeOld?: string };
+  searchParams: Promise<{ category?: string; q?: string; includeOld?: string }>;
 }) {
   const session = await getSession();
   if (!session?.user) redirect("/login");
+  const filters = await searchParams;
 
   const isManager =
     customOrLegacy(session.user, "firm-files.manage", canManage(session.user));
 
   const category =
-    searchParams.category && (VALID_CATEGORIES as string[]).includes(searchParams.category)
-      ? (searchParams.category as FirmFileCategory)
+    filters.category && (VALID_CATEGORIES as string[]).includes(filters.category)
+      ? (filters.category as FirmFileCategory)
       : undefined;
 
   const files = await listFirmFiles({
     category,
-    search: searchParams.q?.trim(),
-    includeSuperseded: searchParams.includeOld === "1"
+    search: filters.q?.trim(),
+    includeSuperseded: filters.includeOld === "1"
   });
 
   return (
@@ -39,8 +40,8 @@ export default async function FirmResourcesPage({
       files={files}
       canUpload={isManager}
       currentCategory={category}
-      currentSearch={searchParams.q ?? ""}
-      includeSuperseded={searchParams.includeOld === "1"}
+      currentSearch={filters.q ?? ""}
+      includeSuperseded={filters.includeOld === "1"}
       categorySet="firm"
     />
   );

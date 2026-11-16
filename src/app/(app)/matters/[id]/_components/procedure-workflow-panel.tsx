@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { replaceDossierLocation, type DossierView, type WorkPane } from "./dossier-location";
 import { toast } from "sonner";
 import {
   Archive,
@@ -103,7 +104,7 @@ import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { useDocActions } from "./doc-actions-context";
 import { EvidencePoints } from "./evidence-panel";
 import { evidenceKindLabel } from "@/lib/enums";
-import { shMonthDay, shMonthDayTime, shTime } from "@/lib/ui/sh-time";
+import { shDateFromKey, shMonthDay, shMonthDayTime, shTime } from "@/lib/ui/sh-time";
 import { actionErrorMessage } from "@/lib/action-error";
 
 type WorkflowTask = {
@@ -687,27 +688,6 @@ export type WorkflowApi = {
   currentStageName: string | null;
 };
 
-/** 案卷工作台页签（docs/UI-MATTER-DOSSIER-PLAN.md 第三版） */
-export type DossierView = "archive" | "work" | "money" | "seal";
-export type WorkSection = "materials" | "actions" | "records";
-
-/** Only update local display state; Next integrates native history with useSearchParams. */
-export function replaceDossierLocation(update: Partial<{
-  view: DossierView;
-  procedure: string | null;
-  stage: string | null;
-  work: WorkSection;
-  scope: "all" | null;
-}>) {
-  const url = new URL(window.location.href);
-  for (const [key, value] of Object.entries(update)) {
-    if (value === undefined) continue;
-    if (value === null) url.searchParams.delete(key);
-    else url.searchParams.set(key, value);
-  }
-  window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-}
-
 /** 待办「等待他人」：审批中的用印、归档等 */
 export type WaitingItem = { key: string; title: string; meta: string; onOpen?: () => void };
 
@@ -740,6 +720,7 @@ export function ProcedureWorkflowPanel({
   onAddLedger,
   materialsActions,
   materialsExtra,
+  factsNode, tasksNode, deliveryNode, onAddMatterTask,
   onCaseSearch,
   financeNode,
   sealNode,
@@ -774,15 +755,22 @@ export function ProcedureWorkflowPanel({
   materialsActions?: React.ReactNode;
   /** 材料工作区的补充内容（AI 审查总览）。 */
   materialsExtra?: React.ReactNode;
+  factsNode?: React.ReactNode;
+  tasksNode?: React.ReactNode;
+  deliveryNode?: React.ReactNode;
+  onAddMatterTask?: () => void;
   financeNode?: React.ReactNode;
   sealNode?: React.ReactNode;
   waiting?: WaitingItem[];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const requestedSection = searchParams.get("work");
-  const workSection: WorkSection = requestedSection === "actions" || requestedSection === "records" ? requestedSection : "materials";
-  const glanceSection = searchParams.get("scope") === "all" && workSection !== "materials" ? workSection : null;
+  const requestedSection = searchParams.get("workPane");
+  const workSection: WorkPane = requestedSection === "tasks" || requestedSection === "records" || requestedSection === "facts" ? requestedSection : "materials";
+  const glanceSection = searchParams.get("scope") === "all" && (workSection === "tasks" || workSection === "records") ? workSection : null;
+  const recordsPane = searchParams.get("recordsView") === "activity" ? "activity" : searchParams.get("recordsView") === "delivery" || searchParams.get("delivery") || searchParams.get("deliveryDocument") ? "delivery" : "activity";
+  const [visitedPanes, setVisitedPanes] = useState<WorkPane[]>(view === "work" ? [workSection] : []);
+  const [visitedDelivery, setVisitedDelivery] = useState(view === "work" && workSection === "records" && recordsPane === "delivery");
   const [visitedWorkMatterId, setVisitedWorkMatterId] = useState<string | null>(view === "work" ? matter.id : null);
   const [expandRequest, setExpandRequest] = useState(0);
   const [templateOpen, setTemplateOpen] = useState(false);
@@ -790,7 +778,7 @@ export function ProcedureWorkflowPanel({
   const [stageCreateOpen, setStageCreateOpen] = useState(false);
   const [deadlineOpen, setDeadlineOpen] = useState(false);
   const [uploadSignal, setUploadSignal] = useState(0);
-  const pendingWorkFocus = useRef<"actions" | "records" | null>(null);
+  const pendingWorkFocus = useRef<"tasks" | "records" | null>(null);
   const actionSectionRef = useRef<HTMLElement>(null);
   const recordSectionRef = useRef<HTMLElement>(null);
   const [, startStageRemovalTransition] = useTransition();
@@ -798,6 +786,11 @@ export function ProcedureWorkflowPanel({
   useEffect(() => {
     if (view === "work") setVisitedWorkMatterId(matter.id);
   }, [view, matter.id]);
+  useEffect(() => {
+    if (view !== "work") return;
+    setVisitedPanes(previous => previous.includes(workSection) ? previous : [...previous, workSection]);
+    if (workSection === "records" && recordsPane === "delivery") setVisitedDelivery(true);
+  }, [view, workSection, recordsPane]);
 
   const stages = useMemo(
     () => buildWorkflowStages(procedure, preservationCases),
@@ -822,7 +815,7 @@ export function ProcedureWorkflowPanel({
 
   useEffect(() => {
     if (view !== "work" || !pendingWorkFocus.current) return;
-    const section = pendingWorkFocus.current === "actions" ? actionSectionRef.current : recordSectionRef.current;
+    const section = pendingWorkFocus.current === "tasks" ? actionSectionRef.current : recordSectionRef.current;
     if (!section) return;
     pendingWorkFocus.current = null;
     section.focus({ preventScroll: true });
@@ -836,30 +829,30 @@ export function ProcedureWorkflowPanel({
         setUploadSignal((n) => n + 1);
       },
       openAddTask: () => {
-        if (selectedStage) setTaskStage(selectedStage);
-        else toast.info("请先新增程序后再添加任务");
+        if (onAddMatterTask) onAddMatterTask();
+        else if (selectedStage) setTaskStage(selectedStage);
       },
       stageNames: stages.map((st) => st.name),
       currentStageName: selectedStage?.name ?? null
     };
-  }, [apiRef, selectedStage, stages]);
+  }, [apiRef, selectedStage, stages, onAddMatterTask]);
 
   function selectStage(key: string) {
     pendingWorkFocus.current = null;
     setSelectedKey(key);
   }
 
-  function openWorkSection(section: "actions" | "records") {
+  function openWorkSection(section: "tasks" | "records") {
     pendingWorkFocus.current = section;
     setExpandRequest(value => value + 1);
-    replaceDossierLocation({ view: "work", work: section, scope: "all" });
+    replaceDossierLocation({ view: "work", workPane: section, scope: "all" });
     onViewChange("work");
   }
 
   function selectWorkSection(value: string) {
-    if (value !== "materials" && value !== "actions" && value !== "records") return;
+    if (value !== "materials" && value !== "facts" && value !== "tasks" && value !== "records") return;
     pendingWorkFocus.current = null;
-    replaceDossierLocation({ work: value, scope: null });
+    replaceDossierLocation({ workPane: value, scope: null });
   }
 
   function selectView(next: DossierView) {
@@ -921,16 +914,16 @@ export function ProcedureWorkflowPanel({
       {view === "work" || visitedWorkMatterId === matter.id ? (
         <div hidden={view !== "work"} className="min-w-0">
         <div className="dos-flow">
-          <StageLine
+          {workSection === "materials" || workSection === "tasks" || workSection === "records" && recordsPane === "activity" ? <StageLine
             procedure={procedure}
             stages={stages}
             selectedKey={effectiveScope === "stage" ? selectedStage?.key ?? null : null}
             currentKey={currentStage?.key ?? null}
             onSelect={selectStage}
             onAddStage={canManage && procedure ? () => setStageCreateOpen(true) : undefined}
-          />
+          /> : null}
           <div className="dos-main">
-          {selectedStage && procedure && effectiveScope === "stage" ? (
+          {(workSection === "materials" || workSection === "tasks" || workSection === "records" && recordsPane === "activity") && selectedStage && procedure && effectiveScope === "stage" ? (
             <StageBar
               stage={selectedStage}
               procedure={procedure}
@@ -942,9 +935,10 @@ export function ProcedureWorkflowPanel({
             />
           ) : null}
           <Tabs value={workSection} onValueChange={selectWorkSection}>
-            <TabsList aria-label="办案工作区" className="grid h-auto w-full grid-cols-3 gap-1">
-              <TabsTrigger value="materials">材料与要点</TabsTrigger>
-              <TabsTrigger value="actions">事项与期限</TabsTrigger>
+            <TabsList aria-label="办案工作区" className="grid h-auto w-full grid-cols-4 gap-1">
+              <TabsTrigger value="materials">材料</TabsTrigger>
+              <TabsTrigger value="facts">事实与研究</TabsTrigger>
+              <TabsTrigger value="tasks">任务与期限</TabsTrigger>
               <TabsTrigger value="records">办理记录</TabsTrigger>
             </TabsList>
             <TabsContent value="materials" forceMount hidden={workSection !== "materials"} className="data-[state=inactive]:hidden">
@@ -962,23 +956,24 @@ export function ProcedureWorkflowPanel({
                 {materialsExtra}
               </div>
             </TabsContent>
-            <TabsContent value="actions" forceMount hidden={workSection !== "actions"} className="data-[state=inactive]:hidden">
+            <TabsContent value="facts" forceMount className="data-[state=inactive]:hidden">{(workSection === "facts" || visitedPanes.includes("facts")) && factsNode}</TabsContent>
+            <TabsContent value="tasks" forceMount hidden={workSection !== "tasks"} className="data-[state=inactive]:hidden">
               <div className="flex flex-col gap-4">
-                <NextActions
-                  sectionRef={actionSectionRef}
-                  initiallyExpanded={glanceSection === "actions"}
-                  expandRequest={glanceSection === "actions" ? expandRequest : 0}
-                  actions={actions}
+                {(workSection === "tasks" || visitedPanes.includes("tasks")) && <section ref={actionSectionRef} tabIndex={-1} aria-label="全案任务">{tasksNode}</section>}
+                {procedure ? <NextActions
+                  initiallyExpanded={glanceSection === "tasks"}
+                  expandRequest={glanceSection === "tasks" ? expandRequest : 0}
+                  actions={actions.filter(action => action.kind !== "task")}
                   selectedStage={selectedStage}
-                  scope={glanceSection === "actions" ? "all" : effectiveScope}
+                  scope={glanceSection === "tasks" ? "all" : effectiveScope}
                   allScopeLabel={procedure ? `${procedure.customLabel ?? procedureTypeLabel[procedure.type]} · 全部环节` : "当前事项"}
                   canManage={canManage}
                   waiting={waiting ?? []}
-                  onAddTask={procedure && selectedStage ? () => setTaskStage(selectedStage) : undefined}
+                  onAddTask={onAddMatterTask}
                   onAddDeadline={procedure ? () => setDeadlineOpen(true) : undefined}
                   onAddHearing={procedure && onAddLedger ? () => onAddLedger("hearing") : undefined}
-                />
-                {responsibilityNode}
+                /> : null}
+                {responsibilityNode ? <details className="rounded-lg border bg-card p-4"><summary className="cursor-pointer text-sm font-medium">责任与交接</summary><div className="mt-4">{responsibilityNode}</div></details> : null}
                 {selectedStage?.kind === "preservation" && effectiveScope === "stage" && procedure ? (
                   <PreservationWorkflowContent
                     matter={matter}
@@ -997,7 +992,10 @@ export function ProcedureWorkflowPanel({
               </div>
             </TabsContent>
             <TabsContent value="records" forceMount hidden={workSection !== "records"} className="data-[state=inactive]:hidden">
-              <CaseLog
+              <Tabs value={recordsPane} onValueChange={value => replaceDossierLocation({ recordsView: value === "delivery" ? "delivery" : "activity" })}>
+                <TabsList aria-label="办理记录分区"><TabsTrigger value="activity">办理进展</TabsTrigger><TabsTrigger value="delivery">客户交付</TabsTrigger></TabsList>
+                <TabsContent value="delivery" forceMount className="data-[state=inactive]:hidden">{(workSection === "records" && recordsPane === "delivery" || visitedDelivery) && deliveryNode}</TabsContent>
+                <TabsContent value="activity" forceMount className="data-[state=inactive]:hidden"><CaseLog
                 sectionRef={recordSectionRef}
                 initiallyExpanded={glanceSection === "records"}
                 expandRequest={glanceSection === "records" ? expandRequest : 0}
@@ -1011,7 +1009,8 @@ export function ProcedureWorkflowPanel({
                 onWriteJudgment={() => onWriteNote({ judgment: true, stageName: selectedStage?.name })}
                 onAddLedger={canManage && onAddLedger ? () => onAddLedger("express") : undefined}
                 onCaseSearch={onCaseSearch}
-              />
+              /></TabsContent>
+              </Tabs>
             </TabsContent>
           </Tabs>
         </div>
@@ -2172,7 +2171,7 @@ function ArchiveGlance({
   logItems: LogItem[];
   waiting: WaitingItem[];
   procedureLabel: string | null;
-  onOpenWork: (section: "actions" | "records") => void;
+  onOpenWork: (section: "tasks" | "records") => void;
 }) {
   const overdue = actions.filter((a) => a.days !== null && a.days < 0).length;
   return (
@@ -2182,7 +2181,7 @@ function ArchiveGlance({
           <ListChecks className="h-[15px] w-[15px] text-[var(--t-muted)]" strokeWidth={1.8} />
           最近待办
           {procedureLabel ? <span className="t-xs t-mute" style={{ fontWeight: 400 }}>{procedureLabel}</span> : null}
-          {actions.length + waiting.length > 0 ? <button type="button" className="link border-0 bg-transparent p-0" onClick={() => onOpenWork("actions")}>
+          {actions.length + waiting.length > 0 ? <button type="button" className="link border-0 bg-transparent p-0" onClick={() => onOpenWork("tasks")}>
             查看全部待办 <span className="mono">{actions.length + waiting.length}</span>
           </button> : null}
         </div>
@@ -2194,14 +2193,14 @@ function ArchiveGlance({
             {actions.slice(0, 3).map((a) => {
               const when = actionWhen(a);
               return (
-                <button key={a.key} type="button" className="dos-glance-row" onClick={() => onOpenWork("actions")}>
+                <button key={a.key} type="button" className="dos-glance-row" onClick={() => onOpenWork("tasks")}>
                   <span className={cn("w", when.tone)}>{when.main}</span>
                   <span className="t">{a.title}</span>
                 </button>
               );
             })}
             {waiting.slice(0, actions.length >= 3 ? 0 : 3 - actions.length).map((w) => (
-              <button key={w.key} type="button" className="dos-glance-row" onClick={w.onOpen ?? (() => onOpenWork("actions"))}>
+              <button key={w.key} type="button" className="dos-glance-row" onClick={w.onOpen ?? (() => onOpenWork("tasks"))}>
                 <span className="w teal">审批中</span>
                 <span className="t">{w.title}</span>
               </button>
@@ -2373,7 +2372,7 @@ function MaterialsSection({
 }
 
 function DocRow({ doc, compact = false }: { doc: WorkflowDocument; compact?: boolean }) {
-  const { onReview, evidenceByDoc, onAddEvidence } = useDocActions();
+  const { onReview, onOpenDocument, evidenceByDoc, onAddEvidence } = useDocActions();
   const [evOpen, setEvOpen] = useState(false);
   const pUrl = documentPreviewUrl(doc);
   const chip = doc.sourceOrigin ? documentSourceChip[doc.sourceOrigin] : null;
@@ -2391,7 +2390,7 @@ function DocRow({ doc, compact = false }: { doc: WorkflowDocument; compact?: boo
       <div className="doc-row">
         <DocIcon tone={tone} />
         <div className="min-w-0 flex-1">
-          {pUrl ? (
+          {onOpenDocument ? <button type="button" className="doc-name block w-full truncate text-left hover:text-[var(--teal-deep)]" onClick={() => onOpenDocument(doc.id)}>{doc.name}</button> : pUrl ? (
             <a href={pUrl} target="_blank" rel="noreferrer" className="doc-name block truncate hover:text-[var(--teal-deep)]">
               {doc.name}
             </a>
@@ -2418,6 +2417,7 @@ function DocRow({ doc, compact = false }: { doc: WorkflowDocument; compact?: boo
         </div>
         {!compact ? (
           <div className="dos-doc-ops">
+            {onOpenDocument && <button type="button" className="btn btn-secondary btn-sm" onClick={() => onOpenDocument(doc.id)}>文书与复核</button>}
             {onAddEvidence ? (
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => onAddEvidence(doc.id)} title="记录这份材料证明的事实、主张或分析">
                 ＋证据要点
@@ -3046,6 +3046,7 @@ function TaskQuickDialog({
   const [description, setDescription] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
   const [priority, setPriority] = useState(0);
+  const requestKey = useRef(crypto.randomUUID());
 
   function submit() {
     if (!title.trim()) {
@@ -3065,16 +3066,18 @@ function TaskQuickDialog({
           stageId = ensured.id;
           onStageReady(stageId);
         }
-        await createTask({
+        const created = await createTask({
+          requestKey: requestKey.current,
           matterId,
           title: title.trim(),
           description,
-          dueAt: dueAt ? new Date(dueAt) : undefined,
+          dueAt: dueAt ? shDateFromKey(dueAt) : undefined,
           priority,
           assigneeId,
           stageId
         });
         toast.success("任务已添加");
+        replaceDossierLocation({ view: "work", workPane: "tasks", task: created.id });
         onOpenChange(false);
         router.refresh();
       } catch (err) {

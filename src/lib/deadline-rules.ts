@@ -10,65 +10,30 @@
  */
 import type { DeadlinePeriodUnit } from "@prisma/client";
 import { ActionError } from "@/lib/action-error";
+import { shDateFromKey, shDayKey } from "@/lib/ui/sh-time";
 
-export const HOLIDAY_NOTE = "如届满日为法定休假日，以其后第一个工作日为届满日；已配置放假安排时由系统按其顺延并在依据标注，请核对";
+export const HOLIDAY_NOTE = "如届满日为法定休假日，以其后第一个工作日为届满日；已配置放假安排时系统提供顺延建议并在依据标注，请核对";
 
-/** 去掉时间部分，按本地日期归一到当天 00:00 */
-function startOfDay(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
-function addDays(date: Date, days: number): Date {
-  const out = startOfDay(date);
-  out.setDate(out.getDate() + days);
-  return out;
-}
-
-/** 到期月对应日；无对应日（如 1/31 + 1 月）取到期月最后一日 */
-function addMonthsClamped(date: Date, months: number): Date {
-  const base = startOfDay(date);
-  const targetMonthFirst = new Date(base.getFullYear(), base.getMonth() + months, 1);
-  const lastDayOfTargetMonth = new Date(
-    targetMonthFirst.getFullYear(),
-    targetMonthFirst.getMonth() + 1,
-    0
-  ).getDate();
-  return new Date(
-    targetMonthFirst.getFullYear(),
-    targetMonthFirst.getMonth(),
-    Math.min(base.getDate(), lastDayOfTargetMonth)
-  );
-}
-
-export function computeDeadlineDate(
-  triggerDate: Date,
-  periodValue: number,
-  periodUnit: DeadlinePeriodUnit
-): Date {
-  if (!Number.isInteger(periodValue) || periodValue <= 0) {
-    throw new ActionError("期限数值必须为正整数");
+/** Calendar arithmetic uses UTC fields only; inputs and results are Shanghai instants. */
+export function computeDeadlineDate(triggerDate: Date, periodValue: number, periodUnit: DeadlinePeriodUnit): Date {
+  if (!Number.isInteger(periodValue) || periodValue <= 0) throw new ActionError("期限数值必须为正整数");
+  if (!Number.isFinite(triggerDate.getTime())) throw new ActionError("请填写有效起算日期");
+  const [year, month, day] = shDayKey(triggerDate).split("-").map(Number);
+  let result: Date;
+  if (periodUnit === "DAYS") result = new Date(Date.UTC(year, month - 1, day + periodValue));
+  else {
+    const months = periodUnit === "MONTHS" ? periodValue : periodValue * 12;
+    const first = new Date(Date.UTC(year, month - 1 + months, 1));
+    const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+    result = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), Math.min(day, last)));
   }
-  switch (periodUnit) {
-    case "DAYS":
-      return addDays(triggerDate, periodValue);
-    case "MONTHS":
-      return addMonthsClamped(triggerDate, periodValue);
-    case "YEARS":
-      return addMonthsClamped(triggerDate, periodValue * 12);
-  }
+  if (!Number.isFinite(result.getTime())) throw new ActionError("期限日期超出可计算范围");
+  return shDateFromKey(result.toISOString().slice(0, 10));
 }
 
 export function periodLabel(periodValue: number, periodUnit: DeadlinePeriodUnit): string {
   const unit = periodUnit === "DAYS" ? "日" : periodUnit === "MONTHS" ? "个月" : "年";
   return `${periodValue} ${unit}`;
-}
-
-/** 本地时区 yyyy-MM-dd。不能用 toISOString（UTC+8 下会把本地日期偏移一天） */
-export function formatLocalDate(date: Date): string {
-  const y = date.getFullYear();
-  const m = `${date.getMonth() + 1}`.padStart(2, "0");
-  const d = `${date.getDate()}`.padStart(2, "0");
-  return `${y}-${m}-${d}`;
 }
 
 /** 生成 Deadline.basis 文本：法条 + 计算过程 + 顺延提示 */
@@ -81,7 +46,7 @@ export function buildDeadlineBasis(input: {
 }): string {
   return [
     input.legalBasis,
-    `自${input.triggerLabel}（${formatLocalDate(input.triggerDate)}）起 ${periodLabel(input.periodValue, input.periodUnit)}`,
+    `自${input.triggerLabel}（${shDayKey(input.triggerDate)}）起 ${periodLabel(input.periodValue, input.periodUnit)}`,
     HOLIDAY_NOTE
   ].join("；");
 }

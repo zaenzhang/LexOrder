@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { shDateFromKey, shDayKey } from "@/lib/ui/sh-time";
 import {
   addDays,
   defaultDurationDays,
@@ -7,9 +8,8 @@ import {
   PRESERVATION_DURATION_YEARS
 } from "@/lib/preservation-defaults";
 
-const d = (s: string) => new Date(`${s}T00:00:00`);
-const f = (x: Date) =>
-  `${x.getFullYear()}-${`${x.getMonth() + 1}`.padStart(2, "0")}-${`${x.getDate()}`.padStart(2, "0")}`;
+const d = shDateFromKey;
+const f = shDayKey;
 
 describe("保全期限年限（民诉法解释第 485 条）", () => {
   it("银行存款一年、动产两年、不动产与其他财产权三年", () => {

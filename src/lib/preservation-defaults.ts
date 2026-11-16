@@ -15,6 +15,7 @@
  */
 import type { PropertyType } from "@prisma/client";
 import { computeDeadlineDate } from "@/lib/deadline-rules";
+import { shDateFromKey, shDayKey } from "@/lib/ui/sh-time";
 
 /** 财产类型中文名。放在 lib 而非页面局部组件，供 cron / 通知等服务端代码复用。 */
 export const PROPERTY_TYPE_CN: Record<PropertyType, string> = {
@@ -60,14 +61,13 @@ export function defaultExpiryDate(startDate: Date, propertyType: PropertyType): 
  * 写成常量正是旧实现算错的原因。
  */
 export function defaultDurationDays(startDate: Date, propertyType: PropertyType): number {
-  const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+  const start = shDateFromKey(shDayKey(startDate));
   const end = defaultExpiryDate(startDate, propertyType);
   return Math.round((end.getTime() - start.getTime()) / 86_400_000);
 }
 
-/** 起算日 + N 天，按本地日历推进（不用毫秒加法） */
+/** 起算日 + N 天，按上海日历推进。 */
 export function addDays(startDate: Date, days: number): Date {
-  const out = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-  out.setDate(out.getDate() + days);
-  return out;
+  const out = shDateFromKey(shDayKey(startDate));
+  return new Date(out.getTime() + days * 86_400_000);
 }

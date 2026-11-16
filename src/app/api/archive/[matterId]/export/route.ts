@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/server/audit";
-import { buildArchiveZip } from "@/server/archive/export";
+import { buildArchiveZip, assertArchiveExportAccess } from "@/server/archive/export";
 import { storage } from "@/lib/storage";
 import { ActionError, actionErrorMessage } from "@/lib/action-error";
 import { parseArchiveSnapshot } from "@/lib/archive/snapshot";
@@ -25,7 +25,7 @@ export async function GET(
   if (!hasCustomPermission(session.user, "matters.read") || !hasCustomPermission(session.user, "archive.read") || !hasCustomPermission(session.user, "documents.download")) return NextResponse.json({ error: "导出归档材料需要案件查看、归档查看和材料下载权限" }, { status: 403 });
 
   try {
-    await assertMatterExportAccess(session.user, matterId);
+    await assertMatterExportAccess(session.user, matterId, "ARCHIVE");
   } catch (error) {
     if (error instanceof MatterExportAccessError) return NextResponse.json({ error: actionErrorMessage(error) }, { status: 403 });
     throw error;
@@ -61,7 +61,7 @@ export async function GET(
     const documents = await prisma.document.findMany({ where: { id: { in: ids }, deletedAt: null }, select: exportDocumentAccessSelect });
     if (documents.length !== ids.length) throw new MatterExportAccessError("部分归档材料已不可读取，无法导出完整案卷");
     await assertExportDocumentAccess(session.user.id, documents);
-    result = await buildArchiveZip(archive.id);
+    result = await buildArchiveZip(archive.id, session.user);
   } catch (err) {
     if (err instanceof MatterExportAccessError) return NextResponse.json({ error: actionErrorMessage(err) }, { status: 403 });
     console.error("[archive export] 构建失败：", err);
@@ -89,6 +89,11 @@ export async function GET(
     targetId: archive.id,
     detail: { matterId: matter.id, archiveNo: archive.archiveNo, size: result.size, checksum: result.checksum }
   });
+
+  try { await assertArchiveExportAccess(archive.id, session.user); }
+  catch (error) {
+    return NextResponse.json({ error: actionErrorMessage(error) }, { status: error instanceof MatterExportAccessError ? 403 : 400 });
+  }
 
   const ab = result.buffer.buffer.slice(
     result.buffer.byteOffset,

@@ -26,7 +26,8 @@ vi.mock("@/app/(app)/matters/[id]/_components/template-picker-dialog", () => ({ 
 vi.mock("@/app/(app)/matters/[id]/_components/evidence-panel", () => ({ EvidencePoints: () => null }));
 vi.mock("@/app/(app)/preservation/_components/preservation-dialog", () => ({ PreservationCaseDialog: () => null, AddTargetDialog: () => null, AddPropertyDialog: () => null, RenewPropertyDialog: () => null }));
 
-import { ProcedureWorkflowPanel, type DossierView } from "@/app/(app)/matters/[id]/_components/procedure-workflow-panel";
+import { ProcedureWorkflowPanel } from "@/app/(app)/matters/[id]/_components/procedure-workflow-panel";
+import type { DossierView } from "@/app/(app)/matters/[id]/_components/dossier-location";
 
 type Props = React.ComponentProps<typeof ProcedureWorkflowPanel>;
 const date = new Date("2026-11-16T01:00:00.000Z");
@@ -47,7 +48,8 @@ const notes: Props["notes"] = ["合成当前环节", "合成其他环节"].map((
 const base: Omit<Props, "view" | "onViewChange"> = {
   matter: { id: "matter-1", internalCode: "A2026001", title: "合成事项", category: "CIVIL_COMMERCIAL" },
   procedure, documents: [], preservationCases: [], folders: [], templates: [], users: [], canManage: false,
-  notes, timelineEvents: [], onWriteNote: vi.fn(), archiveNode: <p>合成档案内容</p>
+  notes, timelineEvents: [], onWriteNote: vi.fn(), archiveNode: <p>合成档案内容</p>,
+  tasksNode: <div><p>合成当前待办</p><p>合成其他环节待办</p></div>
 };
 
 function Harness({ initialView = "archive", ...overrides }: Partial<Props> & { initialView?: DossierView }) {
@@ -94,11 +96,10 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
   it("查看全部待办切换工作页、显示其他环节及折叠待办，并聚焦待办区域", async () => {
     render(<Harness />);
     fireEvent.click(screen.getByRole("button", { name: /^查看全部待办/ }));
-    const todo = await screen.findByRole("region", { name: "待办" });
+    const todo = await screen.findByRole("region", { name: "全案任务" });
     expect(screen.getByRole("tab", { name: /^办案与材料/ })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: "事项与期限" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "任务与期限" })).toHaveAttribute("aria-selected", "true");
     expect(screen.queryByRole("region", { name: "记录" })).not.toBeInTheDocument();
-    expect(within(todo).getByText("合成一审程序 · 全部环节")).toBeVisible();
     expect(within(todo).getByText("合成当前待办")).toBeVisible();
     expect(within(todo).getByText("合成其他环节待办")).toBeVisible();
     await waitFor(() => expect(todo).toHaveFocus());
@@ -142,17 +143,17 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
     fireEvent.mouseDown(screen.getByRole("tab", { name: "办理记录" }), { button: 0, ctrlKey: false });
     expect(screen.getByRole("region", { name: "记录" })).toBeVisible();
     expect(screen.getByRole("region", { name: "环节：合成其他环节" })).toBeVisible();
-    expect(new URLSearchParams(window.location.search).get("work")).toBe("records");
+    expect(new URLSearchParams(window.location.search).get("workPane")).toBe("records");
     expect(new URLSearchParams(window.location.search).get("procedure")).toBe("procedure-1");
     expect(new URLSearchParams(window.location.search).get("stage")).toBe("stage-stage-2");
     expect(new URLSearchParams(window.location.search).get("source")).toBe("test");
     expect(window.location.hash).toBe("#work");
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "材料与要点" }), { button: 0, ctrlKey: false });
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "材料" }), { button: 0, ctrlKey: false });
     expect(screen.queryByRole("region", { name: "记录" })).not.toBeInTheDocument();
   });
 
   it("从地址恢复工作区与环节，全量记录范围在选择新环节后清除", () => {
-    window.history.replaceState(null, "", "/matters/matter-1?work=records&stage=stage-stage-2&scope=all");
+    window.history.replaceState(null, "", "/matters/matter-1?workPane=records&stage=stage-stage-2&scope=all");
     render(<Harness initialView="work" />);
     expect(screen.getByRole("tab", { name: "办理记录" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("region", { name: "环节：合成其他环节" })).toBeVisible();
@@ -164,18 +165,18 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
   });
 
   it("非法工作区与环节参数回退默认材料页和当前环节", () => {
-    window.history.replaceState(null, "", "/matters/matter-1?work=unknown&stage=another-matter-stage&scope=unknown");
+    window.history.replaceState(null, "", "/matters/matter-1?workPane=unknown&stage=another-matter-stage&scope=unknown");
     render(<Harness initialView="work" />);
-    expect(screen.getByRole("tab", { name: "材料与要点" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "材料" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("region", { name: "环节：合成当前环节" })).toBeVisible();
     expect(screen.queryByRole("region", { name: "待办" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "记录" })).not.toBeInTheDocument();
   });
 
-  it("无程序也可切换事项与期限、办理记录", () => {
+  it("无程序也可切换任务与期限、办理记录", () => {
     render(<Harness initialView="work" procedure={null} notes={[]} />);
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "事项与期限" }), { button: 0, ctrlKey: false });
-    expect(screen.getByRole("region", { name: "待办" })).toBeVisible();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "任务与期限" }), { button: 0, ctrlKey: false });
+    expect(screen.getByRole("region", { name: "全案任务" })).toBeVisible();
     fireEvent.mouseDown(screen.getByRole("tab", { name: "办理记录" }), { button: 0, ctrlKey: false });
     expect(screen.getByRole("region", { name: "记录" })).toBeVisible();
   });
@@ -185,7 +186,7 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
     fireEvent.click(screen.getByRole("button", { name: "上传" }));
     const dialog = screen.getByRole("dialog", { name: "上传材料 · 事项材料" });
     fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "合成上传草稿" } });
-    act(() => { window.history.replaceState(null, "", "/matters/matter-1?work=actions"); });
+    act(() => { window.history.replaceState(null, "", "/matters/matter-1?workPane=tasks"); });
     expect(screen.getByRole("dialog", { name: "上传材料 · 事项材料" })).toBe(dialog);
     expect(within(dialog).getByRole("textbox")).toHaveValue("合成上传草稿");
   });
@@ -214,7 +215,7 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
     expect(card.getByText("调整上方筛选条件可查看其他材料。")).toBeVisible();
     expect(card.queryByText("本环节暂无材料")).not.toBeInTheDocument();
     fireEvent.mouseDown(screen.getByRole("tab", { name: "办理记录" }), { button: 0, ctrlKey: false });
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "材料与要点" }), { button: 0, ctrlKey: false });
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "材料" }), { button: 0, ctrlKey: false });
     expect(materialCard().getByText("没有符合筛选条件的材料")).toBeVisible();
   });
 
@@ -226,9 +227,9 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
     };
     render(<Harness procedure={null} canManage financeNode={<p>合成财务内容</p>}
       documents={[document, { ...document, id: "doc-2", name: "合成证据.txt", category: "EVIDENCE", sourceOrigin: "CLIENT_PROVIDED" }]} />);
-    expect(screen.queryByRole("tab", { name: "材料与要点", hidden: true })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "材料", hidden: true })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "办案与材料" }));
-    const materialsTab = screen.getByRole("tab", { name: "材料与要点" });
+    const materialsTab = screen.getByRole("tab", { name: "材料" });
     fireEvent.click(materialCard().getByRole("button", { name: "文书 1" }));
     fireEvent.click(materialCard().getByRole("button", { name: /当事人提供 1/ }));
     fireEvent.mouseDown(screen.getByRole("tab", { name: "办理记录" }), { button: 0, ctrlKey: false });
