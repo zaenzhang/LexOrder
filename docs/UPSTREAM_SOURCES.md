@@ -1,8 +1,8 @@
 # 上游来源与许可记录
 
-基线核验日期：2026-11-15；2026-11-16 补充个人安装版、团队部署、内置 RAG 参考及 LawLink 二开实际吸收记录。本文记录采用的基线、业务参考及来源边界。链接到 `main`、`dev` 或在线文档的内容可能变化；实际采用组件或锁定外部依赖时，补记具体提交或版本。业务参考不登记为已复制源码，项目介绍不等同于运行验证。
+基线核验日期：2026-11-15；2026-11-16 补充 LawLink 二开实际吸收记录、用户需求、TS 主线、个人/团队交付、内置 RAG 与官方律所能力资料。本文记录采用的基线、业务参考及来源边界。链接到 `main`、`dev` 或在线文档的内容可能变化；实际采用组件或锁定外部依赖时，补记具体提交或版本。业务参考不登记为已复制源码，项目介绍不等同于运行验证。
 
-最新用户偏好是直接研究核心规则与处理逻辑，提炼行为规格后在 LexOrder 独立实现，研究范围不按协议类型排除。交付与技术选型结论见 [REFACTOR_DESKTOP_TEAM_RAG.md](REFACTOR_DESKTOP_TEAM_RAG.md)；下方既有实际采用来源和历史记录保留。
+最新用户偏好是直接研究核心规则与处理逻辑，提炼行为规格后在 LexOrder 独立实现，研究范围不按协议类型排除。[产品需求](PRODUCT_REQUIREMENTS_ACCEPTANCE.md)决定范围，[重构方案](REFACTOR_DESKTOP_TEAM_RAG.md)决定技术边界；[官方招聘研究](LAW_FIRM_COMPETENCY_RESEARCH.md)补充[12 项技能规格](LEGAL_SKILLS_CATALOG.md)，属于职业能力来源，不属于已复制代码。下方既有实际采用来源和历史记录保留。
 
 ## 1. 实际业务基线
 
@@ -36,7 +36,7 @@
 | [文档服务](https://github.com/lawflow-boop/LawLink/blob/4736aa100515bb15f47443cdb6b0ae65745e5fff/src/server/documents/actions.ts) | Document 版本行、familyId、最新版本与新版本写入 | 引用绑定具体版本，不另建平行版本体系 |
 | [期限规则函数](https://github.com/lawflow-boop/LawLink/blob/4736aa100515bb15f47443cdb6b0ae65745e5fff/src/lib/deadline-rules.ts) | 期间计算等基础函数 | 复用现有计算边界；法律规则由实际法域与依据核定 |
 | [期限重算保护](https://github.com/lawflow-boop/LawLink/blob/4736aa100515bb15f47443cdb6b0ae65745e5fff/src/server/deadlines/recalc-guard.ts) | 已确认或调整期限不允许规则静默覆盖 | 进一步补来源事件和差异复核，不重建保护 |
-| [任务队列](https://github.com/lawflow-boop/LawLink/blob/4736aa100515bb15f47443cdb6b0ae65745e5fff/src/server/cron/queue.ts) | 去重、租约、失败重试和失败终态 | 复用队列，长 OCR 需任务拆分或续租 |
+| [任务队列](https://github.com/lawflow-boop/LawLink/blob/4736aa100515bb15f47443cdb6b0ae65745e5fff/src/server/cron/queue.ts) | 去重、租约、失败重试和失败终态 | 复用队列，长任务待补领取所有权、续租、代次保护及材料/任务可靠提交 |
 | [批量文档审查](https://github.com/lawflow-boop/LawLink/blob/4736aa100515bb15f47443cdb6b0ae65745e5fff/src/server/ai/batch-review-matter.ts) | 逐件检查审查资格、批量范围与跳过信息 | 新 AI 流程保留材料级权限和覆盖信息 |
 | [package.json](https://github.com/lawflow-boop/LawLink/blob/4736aa100515bb15f47443cdb6b0ae65745e5fff/package.json) | 现有技术栈及 DOCX、PDF 相关依赖 | 先增强已有模板和文档能力 |
 | [AGENTS.md](https://github.com/lawflow-boop/LawLink/blob/4736aa100515bb15f47443cdb6b0ae65745e5fff/AGENTS.md) | 上游业务语义、维护规则及历史实施记录 | 历史通过结果不作为本次测试证明；字段存在不等于 UI 可用 |
@@ -47,6 +47,7 @@
 
 | 项目 | 官方来源 | 核实的优势或现状 | 计划采用方式 |
 | --- | --- | --- | --- |
+| appleoppa/LawLink | [固定 README](https://github.com/appleoppa/LawLink/blob/535a3531aa79edea1c1c6524fd6748d630170718/README.md)、[固定源码](https://github.com/appleoppa/LawLink/tree/535a3531aa79edea1c1c6524fd6748d630170718) | 法规/本地案例检索、传票解析、执行模板及独立调度增强；多角色复核门禁仅函数/测试 | 通用功能已由 `2997b54` 吸收；专用脚本和未接线门禁不迁入，详见第 1 节及独立验证记录 |
 | 案齐 ANQI | [仓库](https://github.com/zj-ai-lab/anqi)、[设计文档](https://github.com/zj-ai-lab/anqi/blob/main/docs/DESIGN.md)、[LICENSE](https://github.com/zj-ai-lab/anqi/blob/main/LICENSE) | 今日计划、程序事件、期限解释、人工保护、建议处理 | 提炼规则和验收场景，在 LexOrder 独立实现 |
 | Kosmos | [仓库](https://github.com/Kosmos-Law/kosmos)、[案件构建](https://kosmos.law/docs/dev/subsystems/case-building/)、[LICENSE](https://github.com/Kosmos-Law/kosmos/blob/dev/LICENSE) | 事实、文档、高亮、证人及其关联 | 以既有 EvidenceItem 增强原文和事实关系；不整体迁入 Django 应用 |
 | Frappe CRM | [初始工作流程](https://docs.frappe.io/crm/setup-guide/your-first-steps-with-frappe-crm)、[任务](https://docs.frappe.io/crm/task)、[仓库](https://github.com/frappe/crm) | 客户活动与跟进，转化时保留笔记、邮件和任务 | 原生客户逻辑；不并行维护同一批客户身份 |
@@ -58,19 +59,20 @@
 | RAGFlow | [官网与 Cloud](https://ragflow.io/)、[1.0 FAQ](https://ragflow.io/docs/v1.0.0/faq)、[1.0 HTTP API](https://ragflow.io/docs/v1.0.0/http_api_reference)、[仓库](https://github.com/infiniflow/ragflow) | 完整解析/检索服务，提供自部署和官方托管路线 | RAG 为必备能力，RAGFlow 为可选后端；锁定并验证实际接口 |
 | Counsel OS | [仓库](https://github.com/eigenlegal/counsel-os)、[LICENSE](https://github.com/eigenlegal/counsel-os/blob/main/LICENSE) | 案件上下文、记录版本引用、文书审阅；部分能力尚未完成 | 独立实现覆盖记录、来源锚点和成果版本流程 |
 | new-litigation-visualization | [仓库](https://github.com/MiaoQichuan/new-litigation-visualization) | 多来源事实、冲突并列、事实时间线和可视化 | 增强 EvidenceItem 和材料引用，不建立平行事实库 |
-| AppFlowy | [仓库](https://github.com/AppFlowy-IO/AppFlowy)、[CodeMap](https://docs.appflowy.io/docs/documentation/software-contributions/architecture/frontend/frontend/codemap) | 界面、Rust 核心与持久层的工程边界 | 参考模块划分，具体交付组件另验证 |
+| AppFlowy | [仓库](https://github.com/AppFlowy-IO/AppFlowy)、[CodeMap](https://docs.appflowy.io/docs/documentation/software-contributions/architecture/frontend/frontend/codemap) | 界面、Rust 核心与持久层的工程边界 | 参考模块划分；不据其语言选择启动 LexOrder 全面迁移 |
 | j-lawyer | [官方功能](https://www.j-lawyer.org/?page_id=22) | 案件表单、模板变量、文档与办案工作流 | 首期参考业务行为；具体源码按仓库和模块另核许可 |
 | Docassemble | [仓库](https://github.com/jhpyle/docassemble)、[文书装配](https://docassemble.org/docs/documents.html)、[API](https://docassemble.org/docs/api.html) | 分支访谈、变量驱动 DOCX/PDF 装配、会话 API | 先增强既有字段和模板，复杂访谈后续服务化 |
 
 ### 当前项目状态对计划的影响
 
+- 本轮初始评估为 `97867e2`，提交前已对齐 main `2997b54754565081271ca4b66139949d310e2fe0`。appleoppa 的通用功能、迁移、权限与调度适配已合入；本轮保留其源码及来源记录，进一步区分局部传票解析、15 分钟启动补扫与尚待建设的通用 OCR、完整休眠/数据恢复能力。
 - Kosmos 默认源码分支为 `dev`。其[当前 AI 开发文档](https://kosmos.law/docs/dev/subsystems/ai/context/)说明，原生案件聊天引擎于 2026-10-29 退役，界面于次日退役，改由远程 MCP 对外提供案件访问。旧 README 或历史设计不能作为“完整聊天可直接迁入”的证明。
 - Kosmos 的事实与高亮关系仍可参考。其某些材料处理路径会替换存储文件，本项目的设计要求保留原件，不能直接采用该行为。
 - Counsel OS 官方仓库明确说明扫描 PDF OCR、全面原始法律研究等尚未完成；源代码运行路线仍需开发和测试验证。引用与文书模块只能作为审查候选，不能承诺复制即用。
 - RAGFlow 1.0 的检索支持生成的知识汇总片段；首期适配拟将 `include_knowledge_compilation` 设为 `false`，以可追溯来源片段为基础。API 版本变更需要单独联调。
 - RAGFlow 官方 Cloud 当前公开提供含 API key 的套餐；本轮只核实资料，未购买或实测 API。团队也可以共享一套自部署实例。两种方式均不能替代个人独立模式所需的内置 RAG。
 - AnythingLLM 的默认内置检索、Cherry 的本地模型证明可以把组件交给应用管理，不证明 LexOrder 已完成集成或达到相同效果。中文法律材料仍需独立验收。
-- 嵌入式引擎、SQLite、pgvector、Tauri 及现有 LexOrder 代码依据统一列在[重构评估的官方资料表](REFACTOR_DESKTOP_TEAM_RAG.md#10-官方资料与代码依据)，本轮未新增运行依赖。
+- Next 动态/standalone、Electron/Node 原生模块、Tauri Node sidecar、LanceDB JS/分词、PostgreSQL 升级与 PGlite 限制等官方资料统一列在[重构方案的资料表](REFACTOR_DESKTOP_TEAM_RAG.md#10-官方资料与代码依据)。现有 TS/PG 为默认主线，桌面托管、中文检索和平台支持仍需原型；本轮未新增运行依赖。
 
 ## 4. 法律数据库来源
 
@@ -105,3 +107,11 @@
 - 不提交密钥、运行数据库、私有附件、备份、模型原始请求响应或带身份信息的截图。
 - 上游历史文档中的测试数量、安全审计结论或部署结果仅代表其对应时间和环境，不能转写为本分支已验证。
 - 本次验证记录必须给出实际提交、环境、执行命令或交互场景、结果以及未覆盖范围。只完成源码阅读时，记录为源码核实。
+
+## 7. 官方招聘与职业能力来源
+
+来源矩阵见 [LAW_FIRM_COMPETENCY_RESEARCH.md](LAW_FIRM_COMPETENCY_RESEARCH.md)：16 个主要官方岗位/培养来源，覆盖 13 个国家/地区，并附补充职业资料。该样本不是全球排名或全部国家调查，也不存在由这些来源共同发布的统一“顶级律所标准”。
+
+逐条记录办公室/地区、角色、资历、日期与可见状态；明确区分执业律师与研究支持岗位，当前职位、过期职位、选拔框架、训练项目与历史 PDF。未显示发布日期时不补造日期，官方 ATS 的索引内容不等于已验证实时申请状态。
+
+采用方式：把研究、判断、起草、复核、责任、沟通和知识反馈转成 [SK01—SK12](LEGAL_SKILLS_CATALOG.md) 的输入、步骤、成果与评测。招聘事实和产品设计推论分开；学历、执照与人的职业责任不转换成 AI 资格。技能版本、来源编号与复核日期随实现记录，不复制整篇广告，也不使用律所名称暗示背书。

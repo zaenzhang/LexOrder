@@ -1,6 +1,6 @@
 # 律序 · LexOrder
 
-面向个人律师的工作台，整合案件管理、客户维护、信息检索与 AI 辅助。
+面向个人律师和小团队、以法律事项为中心的工作台。产品目标是让上下文可恢复、重要依据可核查、责任与交付可追踪。
 
 项目仓库：[zaenzhang/LexOrder](https://github.com/zaenzhang/LexOrder)。
 
@@ -23,14 +23,17 @@
 - **法规与自建文书检索**：案件检索增加元典法规筛选、摘要及原文链接，以及可独立配置的 cncases 服务入口。没有附带裁判文书语料或供应商账号。
 - **三份执行模板**：强制执行申请书、执行异议申请书、追加被执行人申请书。执行依据、案号及法院可在生成前补填；这些临时字段只进入本次文书快照。
 - **传票解析**：文本 PDF 首页优先本地提取，图片／扫描 PDF 可选本地 OCR，无法提取时使用已配置的视觉模型；结果仍由律师确认，缺失时间不自动补成 09:00。
-- **独立运行入口**：支持独立调度 worker、Web 与 worker 联合启动、手动备份，以及启动后 15 分钟窗口内的漏跑检查；周报并发推送按人和周去重。
+- **独立运行入口**：支持独立调度 worker、Web 与 worker 联合启动、手动备份；启动时检查部分作业在计划时刻后 15 分钟内的漏跑情况，周报并发推送按人和周去重。该补扫不包含备份，也不等于完整休眠恢复。
 
 已有实例升级时，先完成备份，再执行 `npx prisma migrate deploy` 和 `npm run templates:sync`，随后重新构建、重启。模板同步只增补缺失的内置模板，不重跑其他初始化设置。部署参数、运行命令和实际验证范围见[二开吸收记录](docs/FORK_INTEGRATION_20261116.md)。
 
 | 文档 | 内容 |
 | --- | --- |
-| [实施计划](docs/WORKBENCH_PLAN.md) | 项目优势映射、分批范围、数据关系、任务和验收标准 |
-| [个人安装版、团队版与 RAG 重构评估](docs/REFACTOR_DESKTOP_TEAM_RAG.md) | 双交付目标、内置 RAG、Rust 职责、数据库选项与待验证决策 |
+| [产品需求与验收基线](docs/PRODUCT_REQUIREMENTS_ACCEPTANCE.md) | 三个产品承诺、RQ01—RQ18、完整工作流程与验收样本 |
+| [TS 主线、双交付与 RAG 重构方案](docs/REFACTOR_DESKTOP_TEAM_RAG.md) | 保留业务基线、模块边界、内置检索、原型与发布门槛 |
+| [实施计划](docs/WORKBENCH_PLAN.md) | M0—M6 阶段对应的 W01—W16 任务、依赖与退出条件 |
+| [全球律所招聘能力研究](docs/LAW_FIRM_COMPETENCY_RESEARCH.md) | 官方岗位/培养资料的地区、角色、时效与技能映射 |
+| [专业技能目录](docs/LEGAL_SKILLS_CATALOG.md) | 12 项待实现技能的输入、步骤、产物、复核与评测 |
 | [来源与许可](docs/UPSTREAM_SOURCES.md) | 固定版本事实、官方来源及实际采用边界 |
 | [云环境搭建](docs/CLOUD_SETUP.md) | 环境、配置、启动、测试与访问范围 |
 | [本次验证](docs/WORKBENCH_VALIDATION.md) | 本分支实际执行的验证及未覆盖范围 |
@@ -52,9 +55,9 @@ node tools/cloud-dev/run.mjs serve
 
 这是云内开发／验收运行方式，`127.0.0.1` 不是公网交付地址。长期部署使用持久服务器和正式数据库，具体见搭建文档。默认初始化不添加客户、案件或财务演示数据。
 
-**后续范围**：ANQI 今日计划、事实与原文关联、内置 RAG、Paperless 式材料处理、Counsel OS 引用和文书增强、外部法律数据库适配。参考各项目的核心逻辑，在 LexOrder 内独立实现。
+**后续工作主线**：目标与客户指示 → 材料入库 → 事实与争点 → 带来源草稿 → 律师确认 → 行动与客户跟进 → 实际交付与归档。参考项目的处理规则和官方律所能力资料分别进入业务设计与技能规格，来源见上方文档。
 
-**2026-11-16 已确认的产品目标**：同时支持个人独立安装与团队自部署协作，两个版本均必须提供 RAG；RAGFlow 作为可选共享或托管后端。Rust/Tauri、嵌入式检索和 SQLite/PostgreSQL 适配仍在评估，当前运行方式与技术栈保持现有实现，尚未提供桌面安装包或完成 RAG 集成。完整结论见[重构评估](docs/REFACTOR_DESKTOP_TEAM_RAG.md)。
+**2026-11-16 重构决策**：保留 Next.js / TypeScript / Prisma / PostgreSQL，按需求渐进增强；个人安装与团队自部署共用业务核心，内置 RAG 为共同能力，RAGFlow 可选。首先验证 Electron 托管 Node/Next/原生 PostgreSQL 与 TS 检索原型；LanceDB 是首个检索候选，固定版本及目标平台需实测。全面 Rust 重写和 SQLite/PGlite 业务迁移延期，局部原生优化由实际瓶颈决定。本轮完成文档，桌面安装包、统一 RAG 与技能执行器尚未实现。完整结论见[重构方案](docs/REFACTOR_DESKTOP_TEAM_RAG.md)。
 
 ---
 
