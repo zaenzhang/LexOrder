@@ -15,7 +15,7 @@ vi.mock("@/lib/prisma", async () => {
   return { prisma: new PrismaClient({ datasources: { db: { url: config.url ?? "postgresql://unused:unused@127.0.0.1:1/context_test" } } }) };
 });
 import { prisma as db } from "@/lib/prisma";
-import { saveMatterContext, confirmMatterContext, readMatterContext, readContextHistory, readContextSource } from "@/server/matters/context-service";
+import { saveMatterContext, confirmMatterContext, readMatterContext, readContextHistory, readContextSource, readContextSourceOptions } from "@/server/matters/context-service";
 import { readMatterBrief } from "@/server/matters/brief";
 
 const userIds: string[] = [], matterIds: string[] = [], clientIds: string[] = [], roleIds: string[] = [], teamIds: string[] = [];
@@ -51,7 +51,7 @@ function input(matterId: string, extra: Partial<ContextRecordInput> = {}): Conte
 const confirm = (matterId: string, id: string, expectedVersion: number) => ({ matterId, id, expectedVersion, acknowledged: true as const });
 
 describe.skipIf(!config.url)("W07 上下文：真实 PostgreSQL 历史、并发与授权", () => {
-  beforeAll(async () => { await db.$connect(); });
+  beforeAll(async () => { vi.stubEnv("NEXTAUTH_SECRET", "synthetic-context-pagination-integration-only"); await db.$connect(); });
   afterAll(async () => {
     // Keep immutable history and audit evidence; retire only this suite's synthetic identities.
     await db.matter.updateMany({ where: { id: { in: matterIds } }, data: { deletedAt: new Date() } });
@@ -60,6 +60,7 @@ describe.skipIf(!config.url)("W07 上下文：真实 PostgreSQL 历史、并发�
     await db.roleDefinition.updateMany({ where: { id: { in: roleIds } }, data: { active: false } });
     await db.team.updateMany({ where: { id: { in: teamIds } }, data: { active: false } });
     await db.$disconnect();
+    vi.unstubAllEnvs();
   });
 
   it("同键并发提交只创建一条记录、审计及事件；同键不同正文拒绝", async () => {
@@ -166,5 +167,40 @@ describe.skipIf(!config.url)("W07 上下文：真实 PostgreSQL 历史、并发�
     expect((await confirmMatterContext(db, f.user, confirm(f.matter.id, record.id, 1))).replayed).toBe(true);
     await expect(db.matterContextRecord.update({ where: { id: record.id }, data: { confirmedAt: new Date("2026-01-01") } })).rejects.toThrow();
     expect(await db.auditLog.count({ where: { targetId: record.id, action: "MATTER_CONTEXT_CONFIRM" } })).toBe(1);
+  });
+
+  it("分页：同时间超过100条不重复遗漏，财务范围和当前账号仍逐页重核", async () => {
+    const f = await fixture(), member = await restrictedMember(f.matter.id);
+    const createdAt = new Date("2026-11-16T08:00:00Z");
+    // Synthetic read fixtures only: this test does not claim to exercise creation or audit.
+    await db.matterContextRecord.createMany({ data: Array.from({ length: 102 }, (_, index) => ({
+      matterId: f.matter.id, authorId: f.user.id, kind: "GOAL", content: `合成分页记录 ${index}`,
+      sourceDescription: "合成分页夹具", occurredAt: createdAt, createdAt, seriesId: randomUUID(), version: 1,
+      requestKey: randomUUID(), requestHash: "synthetic-pagination-fixture", visibility: index === 0 ? "FINANCE" : "MATTER",
+    })) });
+    const expected = await db.matterContextRecord.findMany({ where: { matterId: f.matter.id, visibility: "MATTER" }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { id: true } });
+    const first = await readMatterContext(db, member.user, f.matter.id);
+    expect(first.records).toHaveLength(100); expect(first.hasMore).toBe(true); expect(first.nextCursor).toBeTruthy();
+    const next = await readMatterContext(db, member.user, f.matter.id, first.nextCursor!);
+    expect([...first.records, ...next.records].map(row => row.id)).toEqual(expected.map(row => row.id));
+    expect(next.records).toHaveLength(1); expect(next.hasMore).toBe(false); expect(next.nextCursor).toBeNull();
+    expect((await readMatterBrief(db, member.user, f.matter.id)).context.hasMore).toBe(true);
+    await db.user.update({ where: { id: member.user.id }, data: { active: false } });
+    await expect(readMatterContext(db, member.user, f.matter.id, first.nextCursor!)).rejects.toThrow("账号或岗位");
+  });
+
+  it("分页：沟通来源超过50条可继续，撤回来源权限后不能重放旧位置", async () => {
+    const f = await fixture(), member = await restrictedMember(f.matter.id);
+    const occurredAt = new Date("2026-11-16T08:00:00Z");
+    await db.note.createMany({ data: Array.from({ length: 60 }, (_, index) => ({ matterId: f.matter.id, authorId: f.user.id,
+      occurredAt, withWhom: `合成对象 ${index}`, content: "合成沟通分页夹具", tags: [], attachments: [] })) });
+    const expected = await db.note.findMany({ where: { matterId: f.matter.id }, orderBy: [{ occurredAt: "desc" }, { id: "desc" }], select: { id: true } });
+    const first = await readContextSourceOptions(db, member.user, f.matter.id);
+    expect(first.choices).toHaveLength(50); expect(first.nextCursors.NOTE).toBeTruthy();
+    const next = await readContextSourceOptions(db, member.user, f.matter.id, { type: "NOTE", cursor: first.nextCursors.NOTE! });
+    expect([...first.choices, ...next.choices].map(choice => choice.id)).toEqual(expected.map(row => row.id));
+    expect(next.choices).toHaveLength(10); expect(next.nextCursors.NOTE).toBeNull();
+    await db.rolePermission.delete({ where: { roleId_permissionKey: { roleId: member.role.id, permissionKey: "schedule.read" } } });
+    await expect(readContextSourceOptions(db, member.user, f.matter.id, { type: "NOTE", cursor: first.nextCursors.NOTE! })).rejects.toThrow("已无权读取");
   });
 });

@@ -1,5 +1,5 @@
 "use server";
-import {closureReady,closureFacts} from "@/server/archive/closure";
+import {closureFacts} from "@/server/archive/closure";
 import { checkRoleMutation } from "@/lib/roles/service";
 
 import { revalidatePath } from "next/cache";
@@ -38,7 +38,10 @@ export async function closeMatter(input: CloseMatterInput) {
 
   await prisma.$transaction(async (tx) => {
     await checkRoleMutation(tx, session.user, "matters.write");
-    if(await closureReady(tx)){const f=await closureFacts(tx,data.id);if(f.snapshot.procedures.length||f.snapshot.work.length||f.snapshot.preservations.length||f.snapshot.handovers.length)throw new ActionError("结案前须处理开放程序、事项、保全及未承接交接；移交到新案件的须记明处置结果");}
+    const facts = await closureFacts(tx, data.id);
+    if (facts.snapshot.procedures.length || facts.snapshot.work.length || facts.snapshot.preservations.length || facts.snapshot.handovers.length) {
+      throw new ActionError("结案前须处理开放程序、事项、保全及未承接交接；移交到新案件的须记明处置结果");
+    }
     await tx.matter.update({
       where: { id: data.id },
       data: {

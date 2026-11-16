@@ -5,7 +5,7 @@ import { hasCustomPermission, type RoleGrant } from "@/lib/roles/catalog";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import type { ClientType, Prisma } from "@prisma/client";
-import { Archive, ChevronLeft, Clock3, FileSignature, Gavel, Pencil, Plus, Upload, X } from "lucide-react";
+import { Archive, ChevronLeft, Clock3, FileSignature, Gavel, Pencil, Plus, Trash2 } from "lucide-react";
 import { CaseSearchPanel } from "./case-search-panel";
 import { DocumentReviewDialog } from "./document-review-dialog";
 import { DocActionsContext } from "./doc-actions-context";
@@ -20,30 +20,37 @@ import {
   matterCategoryLabel
 } from "@/lib/enums";
 import { cn } from "@/lib/utils";
-import { contactRoleLabels } from "./info-panel";
 import { MatterArchive, TeamRailCard } from "./matter-archive";
 import { FinancePanel } from "./finance-panel";
 import { ImportantItemDialog } from "./procedure-content";
 import { ProcedureWorkflowPanel } from "./procedure-workflow-panel";
-import type { DossierView, WaitingItem, WorkflowApi, WorkflowNote, WorkflowPreservationCase } from "./procedure-workflow-panel";
+import type { WaitingItem, WorkflowApi, WorkflowNote, WorkflowPreservationCase } from "./procedure-workflow-panel";
 
 import { ApprovalsPanel } from "./approvals-panel";
 import type { SealContractItem, ExpressItem } from "./info-extras";
 import { AddDeadlineDialog, AddHearingDialog, AddProcedureSheet } from "./procedure-forms";
 import { deleteProcedure } from "@/server/procedures/actions";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { LifecycleActions } from "./lifecycle-actions";
-import { AddBillingSheet } from "./finance-forms";
-import { EvidenceItemDialog, type EvidenceItemRow } from "./evidence-panel";
+import { matterHref } from "@/lib/matters/route";
+import { matterListReturnHref } from "@/lib/matters/list-location";
+import type { EvidenceItemRow } from "./evidence-panel";
+import { CaseMaterialWorkspace } from "./case-material-workspace";
+import { dossierEntryParams, readDossierEntry, updateDossierLocation, type CaseMaterialEntry, type DossierView } from "@/lib/matters/dossier-location";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { EvidenceTimeline } from "./evidence-timeline";
 import { ArchiveStatusBanner } from "./archive-status-banner";
 import { ArchiveWizardDialog } from "./archive-wizard";
-import { TeamEditorDialog } from "./team-editor-dialog";
+import { TeamEditorDialog, type MatterEditorSection } from "./team-editor-dialog";
 import type { FolderPayload, FolderDocument, TemplateSummary } from "./folder-types";
 import type { UserOption as PresUserOption } from "@/app/(app)/preservation/_components/preservation-types";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { shDayKey, shDaysFromToday, shMonthDay, shTime } from "@/lib/ui/sh-time";
 import { actionErrorMessage } from "@/lib/action-error";
-import { MaterialProcessingStatus } from "./material-processing-status";
+import { MaterialToolsSheet } from "./material-tools-sheet";
 import { PendingMaterialUploads } from "./pending-material-uploads";
 
 type MatterPayloadBase = Prisma.MatterGetPayload<{
@@ -182,6 +189,8 @@ export function MatterDetailTabs({
   preservationCases,
   evidenceItems,
   evidenceError,
+  materialRefreshKey,
+  briefNode,
   contextNode,
   notes,
   reviewNode, responsibilityNode, closureNode, conflictNode,
@@ -222,6 +231,8 @@ export function MatterDetailTabs({
   preservationCases: WorkflowPreservationCase[];
   evidenceItems: EvidenceItemRow[];
   evidenceError?: string | null;
+  materialRefreshKey?: number;
+  briefNode?: React.ReactNode;
   contextNode?: React.ReactNode;
   notes: WorkflowNote[];
   /** AI 审查总览（服务端渲染节点），归入「信息总览」 */
@@ -233,15 +244,26 @@ export function MatterDetailTabs({
   capabilities?: { aiReview: boolean; caseSearch: boolean; yuandian?: boolean; localJudgments?: boolean };
 }) {
   const allowed = (key: import("@/lib/roles/catalog").PermissionKey) => hasCustomPermission({ role: currentUserRole ?? "", rolePermissions }, key);
-  const [selectedProcId, setSelectedProcId] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const matterReturnTo = `${matterHref(matter)}${searchParams.size ? `?${searchParams.toString()}` : ""}`;
+  const listReturnHref = matterListReturnHref(searchParams.get("list"));
+  const selectedProcId = searchParams.get("procedure");
+  const requestedView = searchParams.get("view");
+  const view: DossierView | null = requestedView === null ? "archive"
+    : ["archive", "work", "money", "seal"].includes(requestedView) ? requestedView as DossierView : null;
+  const setView = (nextView: DossierView) => updateDossierLocation({ view: nextView });
+  const setSelectedProcId = (procedure: string | null) => updateDossierLocation({ procedure, stage: null });
+  const materialLocation = useMemo(() => readDossierEntry(searchParams), [searchParams]);
+  const changeMaterialEntry = (entry: CaseMaterialEntry | null, mode: "push" | "replace" = "push") =>
+    updateDossierLocation(dossierEntryParams(entry), mode);
   const [addProcOpen, setAddProcOpen] = useState(false);
   const [matterEditorOpen, setMatterEditorOpen] = useState(false);
-  const [view, setView] = useState<DossierView>("archive");
+  const [matterEditorSection, setMatterEditorSection] = useState<MatterEditorSection>("matter");
+  const matterEditorTrigger = useRef<HTMLElement | null>(null);
+  const matterHeading = useRef<HTMLHeadingElement>(null);
   const [ledgerAdd, setLedgerAdd] = useState<"express" | "hearing" | "deadline" | null>(null);
   const [caseSearchOpen, setCaseSearchOpen] = useState(false);
   const [reviewDocId, setReviewDocId] = useState<string | null>(null);
-  // 证据要点挂在材料行上（2026-09-14 证据链并入材料）
-  const [evidenceDocId, setEvidenceDocId] = useState<string | null | undefined>(undefined);
   const evidenceByDoc = useMemo(() => {
     const map = new Map<string, EvidenceItemRow[]>();
     for (const item of evidenceItems) {
@@ -250,16 +272,13 @@ export function MatterDetailTabs({
     }
     return map;
   }, [evidenceItems]);
-  const canAddEvidence = canAssociateThisMatter && matter.status !== "ARCHIVED";
-  const docActions = useMemo(
-    () => ({
-      ...(capabilities.aiReview && allowed("documents.write") ? { onReview: (id: string) => setReviewDocId(id) } : {}),
-      evidenceByDoc,
-      unlinkedEvidence: evidenceItems.filter((it) => !it.sourceDocumentId && !(it.sources ?? []).some(source => source.documentId)),
-      ...(canAddEvidence ? { onAddEvidence: (docId: string | null) => setEvidenceDocId(docId) } : {})
-    }),
-    [capabilities.aiReview, currentUserRole, rolePermissions, evidenceByDoc, evidenceItems, canAddEvidence] // eslint-disable-line react-hooks/exhaustive-deps
-  );
+  const canAddEvidence = canAssociateThisMatter && allowed("matters.write") && matter.status !== "ARCHIVED";
+  const docActions = {
+    onOpenDocument: (documentId: string) => changeMaterialEntry({ kind: "material", documentId }),
+    ...(allowed("documents.read") ? { onReview: (id: string) => setReviewDocId(id) } : {}),
+    evidenceByDoc,
+    ...(canAddEvidence ? { onAddEvidence: (documentId: string | null) => changeMaterialEntry({ kind: "create", documentId }) } : {})
+  };
   const [progress, setProgress] = useState<{ mode: "record" | "judgment"; stage?: string; stageNames: string[] } | null>(null);
   const [deadlineOpen, setDeadlineOpen] = useState(false);
   const [hearingOpen, setHearingOpen] = useState(false);
@@ -268,11 +287,19 @@ export function MatterDetailTabs({
   const [, startTransition] = useTransition();
   const router = useRouter();
 
+  function openMatterEditor(section: MatterEditorSection) {
+    matterEditorTrigger.current = document.activeElement instanceof HTMLElement && document.activeElement !== document.body
+      ? document.activeElement : null;
+    setMatterEditorSection(section);
+    setMatterEditorOpen(true);
+  }
+
   function handleDeleteProcedure(id: string) {
     startTransition(async () => {
       try {
         await deleteProcedure(id);
         toast.success("程序已删除");
+        if (selectedProcId === id) setSelectedProcId(null);
         router.refresh();
       } catch (err) {
         toast.error("删除失败", { description: actionErrorMessage(err) });
@@ -284,10 +311,9 @@ export function MatterDetailTabs({
     .filter((p) => p.engagement === "ENGAGED")
     .sort((a, b) => a.order - b.order);
 
-  // 默认选中第一个在办程序（若有）
-  const currentProcedure: ProcedureItem | null = selectedProcId
-    ? engagedProcedures.find((p) => p.id === selectedProcId) ?? null
-    : engagedProcedures.find((p) => p.status !== "CONCLUDED") ?? engagedProcedures[0] ?? null;
+  const currentProcedure: ProcedureItem | null = selectedProcId === null ? null
+    : engagedProcedures.find(procedure => procedure.id === selectedProcId) ?? null;
+  const invalidProcedure = selectedProcId !== null && currentProcedure === null;
   const canEditMatterInfo = canLeadThisMatter;
   const canOpenUnifiedEditor =
     canEditMatterInfo ||
@@ -299,13 +325,13 @@ export function MatterDetailTabs({
 
   // 顶栏主操作 = 添加记录（＋记录 · 沟通）
   useTopbarAction(
-    canWriteRecords ? { label: "添加记录", onClick: () => setProgress({ mode: "record", stage: workflowApi.current?.currentStageName ?? undefined, stageNames: workflowApi.current?.stageNames ?? [] }) } : null,
+    canWriteRecords ? { label: "记录办案进展", onClick: () => setProgress({ mode: "record", stage: workflowApi.current?.currentStageName ?? undefined, stageNames: workflowApi.current?.stageNames ?? [] }) } : null,
     [canWriteRecords]
   );
 
   // 当前选中程序的文档
   const procDocs = documents
-        .filter((d) => !d.procedureId || d.procedureId === currentProcedure?.id || !engagedProcedures.some(p => p.id === d.procedureId))
+        .filter((d) => selectedProcId === null || d.procedureId === currentProcedure?.id)
         .map((d) => ({
           id: d.id,
           name: d.name,
@@ -323,7 +349,10 @@ export function MatterDetailTabs({
           pageCount: d.pageCount ?? null,
           sha256: d.sha256 ?? null,
           templateId: d.templateId ?? null,
-          version: d.version ?? null
+          version: d.version,
+          familyId: d.familyId,
+          isLatest: d.isLatest,
+          status: d.status
         }));
   const procedureParties = buildProcedurePartyOptions(matter);
   const customValues =
@@ -338,7 +367,7 @@ export function MatterDetailTabs({
   // 页头「···」菜单只留页面级编辑入口；页签切换（财务/用印）、类案检索、安排开庭与新增程序
   // 均在各自常驻位置有入口，不在此重复（2026-09-20 用户确认收敛）
   const moreItems = [
-    ...(canOpenUnifiedEditor ? [{ key: "edit", label: "编辑信息与团队", icon: Pencil, onSelect: () => setMatterEditorOpen(true) }] : [])
+    ...(canOpenUnifiedEditor ? [{ key: "edit", label: "编辑案件与团队", icon: Pencil, onSelect: () => openMatterEditor("matter") }] : [])
   ];
 
   const archiveBadge = matter.status === "ARCHIVED"
@@ -372,6 +401,19 @@ export function MatterDetailTabs({
   ];
   const money = (n: number | null | undefined) => (n != null && n > 0 ? `¥${n.toLocaleString("zh-CN")}` : null);
 
+  const procedureFilter = <div className="flex flex-wrap items-center gap-2">
+    <Label htmlFor="case-procedure">程序</Label>
+    <Select value={selectedProcId ?? "all"} onValueChange={value => setSelectedProcId(value === "all" ? null : value)}>
+      <SelectTrigger id="case-procedure" className="w-full sm:w-72"><SelectValue placeholder="程序不可用" /></SelectTrigger>
+      <SelectContent>
+        <SelectItem value="all">全部程序</SelectItem>
+        {engagedProcedures.map(procedure => <SelectItem key={procedure.id} value={procedure.id}>
+          {procLabel(procedure)}{procedure.caseNumber ? ` · ${procedure.caseNumber}` : ""}
+        </SelectItem>)}
+      </SelectContent>
+    </Select>
+  </div>;
+
   return (
     <DocActionsContext.Provider value={docActions}>
     <div className="mo-matter mo-dossier">
@@ -380,15 +422,15 @@ export function MatterDetailTabs({
         <div className="dos-head-top">
           <div className="min-w-0 flex-1">
             <div className="dos-eyebrow">
-              <Link href="/matters" className="ctx-back no-underline">
+              {listReturnHref ? <Link href={listReturnHref} className="ctx-back no-underline">
                 <ChevronLeft className="h-3.5 w-3.5" />
                 案件列表
-              </Link>
+              </Link> : <span className="text-destructive">列表位置不可用 · <Link href="/matters">打开案件列表</Link></span>}
               <span className="code">{matter.internalCode}</span>
               {matter.firmCaseNo ? <span className="code">所内 {matter.firmCaseNo}</span> : null}
               <span>{[matterCategoryLabel[matter.category], matter.cause?.name ?? matter.causeFreeText].filter(Boolean).join(" · ")}</span>
             </div>
-            <h1 className="ctx-title dos-title">{matter.title}</h1>
+            <h1 ref={matterHeading} tabIndex={-1} className="ctx-title dos-title">{matter.title}</h1>
             <div className="dos-sides">
               {categoryKind === "litigation" ? (
                 <>
@@ -428,12 +470,6 @@ export function MatterDetailTabs({
             </div>
           </div>
           <div className="ctx-actions">
-            {canAssociateThisMatter && allowed("documents.write") && !isArchived ? (
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => workflowApi.current?.openUpload()}>
-                <Upload />
-                上传材料
-              </button>
-            ) : null}
             <LifecycleActions
               matterId={matter.id}
               status={matter.status}
@@ -449,65 +485,9 @@ export function MatterDetailTabs({
       {/* 吸顶摘要：标题滚出视野后常驻案件身份与下一节点 */}
       <MatterStickyBar title={matter.title} caseNumber={currentProcedure?.caseNumber ?? null} procedures={engagedProcedures} />
 
-      {/* ② 程序栏：每个程序一张卡片，点击切换，全页共用 */}
-      <section className="dos-procs" aria-label="程序">
-        <div className="dos-procs-h">
-          <span className="t">程序</span>
-        </div>
-        <div className="dos-procs-list" role="tablist">
-          {engagedProcedures.map((procedure) => {
-            const active = currentProcedure?.id === procedure.id;
-            const label = procLabel(procedure);
-            const labels = contactRoleLabels(procedure.type);
-            return (
-              <div key={procedure.id} className={cn("dos-proc", active && "on")}>
-                <button type="button" role="tab" aria-selected={active} className="dos-proc-main" onClick={() => setSelectedProcId(procedure.id)}>
-                  <span className="top">
-                    <span className="nm">{label}</span>
-                    <span className={cn("badge", procedure.status === "CONCLUDED" ? "b-slate" : procedure.status === "IN_PROGRESS" ? "b-teal" : "b-white")} style={{ fontSize: 10 }}>
-                      {PROC_STATUS_LABEL[procedure.status] ?? procedure.status}
-                    </span>
-                  </span>
-                  {categoryKind === "litigation" ? (
-                    <>
-                      <span className="no">{procedure.caseNumber || "案号未登记"}</span>
-                      <span className="ag">
-                        {[procedure.handlingAgency, procedure.presidingJudge ? `${labels.lead} ${procedure.presidingJudge}` : null].filter(Boolean).join(" · ") || "受理机构未登记"}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="ag">{procedure.stages.filter((st) => st.status !== "HIDDEN").length} 个环节 · 已完成 {procedure.stages.filter((st) => st.status !== "HIDDEN" && st.completedAt).length}</span>
-                      <span className="ag">{procedure.acceptedAt ? `开始 ${formatShortDate(procedure.acceptedAt)}` : "\u00a0"}</span>
-                    </>
-                  )}
-                </button>
-                {canLeadThisMatter ? (
-                  <button
-                    type="button"
-                    className="dos-proc-del"
-                    title="删除此程序"
-                    aria-label={`删除程序 ${label}`}
-                    onClick={async () => {
-                      if (await confirmDialog({ title: `删除程序「${label}」？`, description: deleteProcedureWarning(procedure, label).replace(/^确定删除程序「[^」]*」？\s*/, ""), confirmText: "删除程序", danger: true })) handleDeleteProcedure(procedure.id);
-                    }}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                ) : null}
-              </div>
-            );
-          })}
-          {canAssociateThisMatter && !isArchived ? (
-            <button type="button" className="dos-proc add" onClick={() => setAddProcOpen(true)}>
-              <Plus className="h-4 w-4" />
-              <span>新增程序</span>
-              <span className="t-xs t-mute">二审、执行、保全等</span>
-            </button>
-          ) : null}
-          {engagedProcedures.length === 0 && !(canAssociateThisMatter && !isArchived) ? <span className="t-xs t-mute">暂无程序</span> : null}
-        </div>
-      </section>
+      {materialLocation.invalid ? <Alert variant="destructive" className="mt-4"><AlertDescription>
+        这个材料或来源链接不可用。<Button variant="link" onClick={() => changeMaterialEntry(null)}>返回当前列表</Button>
+      </AlertDescription></Alert> : null}
 
       {latestArchive && latestArchive.status !== "APPROVED" ? (
         <div style={{ margin: "14px 0 0" }}>
@@ -524,12 +504,26 @@ export function MatterDetailTabs({
         apiRef={workflowApi}
         matter={{ id: matter.id, internalCode: matter.internalCode, title: matter.title, category: matter.category }}
         procedure={currentProcedure}
+        procedures={engagedProcedures}
+        procedureFilter={procedureFilter}
+        invalidProcedure={invalidProcedure}
+        factsNode={<div className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-base font-semibold">事实与来源</h2>
+            {canAddEvidence ? <Button onClick={() => changeMaterialEntry({ kind: "create", documentId: null })}><Plus className="size-4" />新增要点</Button> : null}
+          </div>
+          {evidenceError ? <Alert variant="destructive"><AlertDescription>要点读取失败：{evidenceError}<Button variant="link" onClick={() => router.refresh()}>重新加载</Button></AlertDescription></Alert>
+            : <EvidenceTimeline items={evidenceItems}
+              onOpenItem={evidenceItemId => changeMaterialEntry({ kind: "evidence", evidenceItemId })}
+              onOpenSource={source => changeMaterialEntry({ kind: "source", ...source })} />}
+        </div>}
         documents={procDocs}
         preservationCases={preservationCases}
         folders={folders}
         templates={templates}
         users={colleagues}
         canManage={canAssociateThisMatter && !isArchived}
+        canManageMaterials={canAssociateThisMatter && !isArchived && allowed("documents.write")}
         notes={notes}
         timelineEvents={matter.timelineEvents}
         onWriteNote={({ judgment, stageName }) => setProgress({ mode: judgment ? "judgment" : "record", stage: stageName, stageNames: workflowApi.current?.stageNames ?? [] })}
@@ -538,9 +532,19 @@ export function MatterDetailTabs({
         viewCounts={{ seal: sealContracts.filter((sc) => sc.status === "PENDING").length }}
         waiting={waiting}
         archiveNode={<>
+          <section className="card p-4 space-y-3" aria-label="程序档案">
+            <div className="flex items-center justify-between gap-3"><h2 className="font-semibold">程序</h2>
+              {canAssociateThisMatter && !isArchived ? <Button size="sm" variant="outline" onClick={() => setAddProcOpen(true)}><Plus className="size-4" />新增程序</Button> : null}
+            </div>
+            {procedureFilter}
+            {invalidProcedure ? <Alert variant="destructive"><AlertDescription>所选程序不可用。<Button variant="link" onClick={() => setSelectedProcId(null)}>查看全部程序</Button></AlertDescription></Alert> : null}
+            {currentProcedure && canLeadThisMatter && !isArchived ? <Button variant="ghost" size="sm" onClick={async () => {
+              if (await confirmDialog({ title: `删除程序「${procLabel(currentProcedure)}」？`, description: "只能删除没有业务记录的空程序；已有期限、开庭、任务、材料或审批历史的程序不能删除。", confirmText: "删除空程序", danger: true })) handleDeleteProcedure(currentProcedure.id);
+            }}><Trash2 className="size-4" />删除空程序</Button> : null}
+          </section>
+          {briefNode ? <div className="card dos-facts">{briefNode}</div> : null}
           <MatterArchive
             matter={matter}
-            contextNode={contextNode}
             currentProcedure={currentProcedure}
             parties={parties}
             billings={finance.billings}
@@ -551,24 +555,34 @@ export function MatterDetailTabs({
             onOpenFinance={() => setView("money")}
             customFieldDefs={customFieldDefs}
             customValues={customValues}
-            canEdit={canOpenUnifiedEditor}
+            canEdit={canEditMatterInfo}
+            canEditProcedure={canAssociateThisMatter && Boolean(currentProcedure)}
             canEditCustom={canLeadThisMatter}
             canManageRelated={canAssociateThisMatter}
-            onEdit={() => setMatterEditorOpen(true)}
+            onEdit={openMatterEditor}
           />
           {closureNode}
         </>}
-        archiveRailTop={<><TeamRailCard matter={matter} canManage={canOwnThisMatter} onManage={() => setMatterEditorOpen(true)} />{conflictNode}</>}
+        archiveRailTop={<><TeamRailCard matter={matter} canManage={canOwnThisMatter} onManage={() => openMatterEditor("team")} />{conflictNode}</>}
         expresses={expresses}
         onAddLedger={canAssociateThisMatter && currentProcedure ? (type) => setLedgerAdd(type) : undefined}
-        materialsExtra={<>
+        materialsActions={<>
           {evidenceError ? <p role="alert" className="text-sm text-destructive">证据要点读取失败：{evidenceError} <button type="button" className="underline" onClick={() => router.refresh()}>重新加载</button></p> : null}
-          {canAssociateThisMatter && allowed("documents.write") ? <PendingMaterialUploads key={matter.id} matterId={matter.id} /> : null}
-          {allowed("documents.read") ? <MaterialProcessingStatus matterId={matter.id} documentIds={procDocs.map(document => document.id)} canManage={canAssociateThisMatter && !isArchived && allowed("documents.write")} /> : null}
-          {reviewNode}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {allowed("documents.read") ? <MaterialToolsSheet
+              key={`${matter.id}:${currentProcedure?.id ?? "unassigned"}`}
+              matterId={matter.id}
+              documents={procDocs.map(document => ({ id: document.id, name: document.name, version: document.version }))}
+              scopeLabel={currentProcedure ? `${procLabel(currentProcedure)} · 全部环节` : "全案材料"}
+              canManage={canAssociateThisMatter && !isArchived && allowed("documents.write")}
+              refreshKey={materialRefreshKey}
+            /> : null}
+          </div>
+          {canAssociateThisMatter && !isArchived && allowed("documents.write") ? <PendingMaterialUploads key={matter.id} matterId={matter.id} /> : null}
         </>}
+        materialsExtra={reviewNode}
         onCaseSearch={capabilities.caseSearch && allowed("matters.write") ? () => setCaseSearchOpen(true) : undefined}
-        financeNode={
+        financeNode={allowed("finance.read") ?
           <div className="dos-main">
             {allowed("finance.read") ? <Link href={`/finance/reconciliation?matterId=${matter.id}`} className="btn btn-secondary btn-sm w-fit">应收与收款分配</Link> : null}
             {allowed("finance.read") ? <FinanceHero stats={finance.stats} /> : null}
@@ -577,16 +591,17 @@ export function MatterDetailTabs({
                 contractTotal={finance.stats.contractAmount}
                 matterId={matter.id}
                 billings={finance.billings}
-                canManage={canAssociateThisMatter && !isArchived}
+                canManage={canAssociateThisMatter && !isArchived && allowed("finance.write")}
+                returnTo={matterReturnTo}
               />
             ) : null}
             {allowed("finance.read") ? (
               <FinancePanel matterId={matter.id} finance={finance} userOptions={userOptions} canRequestInvoice={canAssociateThisMatter} hideStats />
             ) : null}
-          </div>
+          </div> : null
         }
         sealNode={
-          <ApprovalsPanel matterId={matter.id} matterTitle={matter.title} sealContracts={sealContracts} canRequest={canAssociateThisMatter && allowed("seals.request")} />
+          <ApprovalsPanel matterId={matter.id} matterTitle={matter.title} sealContracts={sealContracts} canRequest={canAssociateThisMatter && allowed("seals.request")} returnTo={matterReturnTo} />
         }
       />
 
@@ -613,16 +628,9 @@ export function MatterDetailTabs({
           proceduresDetail={Object.fromEntries(engagedProcedures.map((p) => [p.id, { handlingAgency: p.handlingAgency, panel: p.panel, jurisdiction: p.jurisdiction }]))}
         />
       ) : null}
-      {evidenceDocId !== undefined ? (
-        <EvidenceItemDialog
-          open
-          onOpenChange={(o) => { if (!o) setEvidenceDocId(undefined); }}
-          matterId={matter.id}
-          documents={documents.map((d: { id: string; name: string }) => ({ id: d.id, name: d.name }))}
-          defaultDocumentId={evidenceDocId}
-        />
-      ) : null}
-      <DocumentReviewDialog open={Boolean(reviewDocId)} documentId={reviewDocId} matterId={matter.id} onOpenChange={(o) => { if (!o) setReviewDocId(null); }} />
+      {contextNode}
+      <CaseMaterialWorkspace matterId={matter.id} entry={materialLocation.entry} onEntryChange={changeMaterialEntry} />
+      <DocumentReviewDialog canStartReview={capabilities.aiReview && allowed("documents.write") && !isArchived} canSaveReport={allowed("documents.write") && !isArchived} open={Boolean(reviewDocId)} documentId={reviewDocId} matterId={matter.id} onOpenChange={(o) => { if (!o) setReviewDocId(null); }} />
 
       {progress ? (
         <ProgressDialog
@@ -671,8 +679,15 @@ export function MatterDetailTabs({
         <TeamEditorDialog
           open={matterEditorOpen}
           onOpenChange={setMatterEditorOpen}
+          initialSection={matterEditorSection}
+          onOpenHandover={() => { setMatterEditorOpen(false); workflowApi.current?.openResponsibilities(); }}
+          onReturnFocus={() => {
+            if (matterEditorTrigger.current?.isConnected) matterEditorTrigger.current.focus({ preventScroll: true });
+            else matterHeading.current?.focus({ preventScroll: true });
+          }}
           matterId={matter.id}
           matterMeta={{
+            updatedAt: matter.updatedAt,
             intakeDate: matter.intakeDate ?? null,
             category: matter.category,
             title: matter.title,
@@ -714,41 +729,11 @@ export function MatterDetailTabs({
 type ProcedureItem = MatterPayload["procedures"][number];
 
 /**
- * 删除程序的确认文案。
- *
- * 原文案是「该程序下的所有开庭、期限、备忘和材料记录将被一并删除」——两个问题：
- * 1. 笼统。人对「所有相关记录」会习惯性点确定，对「3 条期限」会停手。
- * 2. 不准确。材料（Document）的外键是 SetNull，只会丢失程序关联，本身不删。
- *
- * 级联硬删的实际范围（schema onDelete: Cascade）：Deadline / Hearing /
- * MatterStage（含其下 Task 的关联）/ ProcedureMemo。
- */
-function deleteProcedureWarning(procedure: ProcedureItem, label: string): string {
-  const parts: string[] = [];
-  if (procedure.deadlines.length > 0) parts.push(`${procedure.deadlines.length} 条期限`);
-  if (procedure.hearings.length > 0) parts.push(`${procedure.hearings.length} 场开庭`);
-  if (procedure.stages.length > 0) parts.push(`${procedure.stages.length} 个环节`);
-  if (procedure.memos.length > 0) parts.push(`${procedure.memos.length} 条备忘`);
-
-  if (parts.length === 0) {
-    return `确定删除程序「${label}」？该程序下暂无期限、开庭、环节和备忘记录。`;
-  }
-  return (
-    `确定删除程序「${label}」？\n\n` +
-    `该程序下的 ${parts.join("、")} 将被一并删除，此操作不可撤销。\n` +
-    `（材料不会被删除，仅解除与本程序的关联。）`
-  );
-}
-
-const PROC_STATUS_LABEL: Record<string, string> = { PENDING: "未开始", IN_PROGRESS: "进行中", CONCLUDED: "已结" };
-
-
-/**
  * 合同与补充协议：一案一签（2026-09-16 用户确认取消独立委托模块）。
  * 中途变更收费、增加代理程序＝新增一条补充协议，原合同保留，合同额自动合计。
  */
-function BillingsCard({ matterId, billings, canManage, contractTotal }: { matterId: string; billings: FinancePayload["billings"]; canManage: boolean; contractTotal: number }) {
-  const [addOpen, setAddOpen] = useState(false);
+function BillingsCard({ matterId, billings, canManage, contractTotal, returnTo }: { matterId: string; billings: FinancePayload["billings"]; canManage: boolean; contractTotal: number; returnTo: string }) {
+  const contractHref = `/finance/reconciliation?matterId=${matterId}&tab=contracts&returnTo=${encodeURIComponent(returnTo)}`;
   const total = contractTotal;
   return (
     <section className="card">
@@ -759,10 +744,7 @@ function BillingsCard({ matterId, billings, canManage, contractTotal }: { matter
           <span className="badge b-white" style={{ marginLeft: 2 }}>{billings.length}</span>
         </div>
         {canManage ? (
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setAddOpen(true)}>
-            <Plus />
-            合同 / 补充协议
-          </button>
+          <Button asChild variant="outline" size="sm"><Link href={`${contractHref}&action=create`}><Plus className="size-4" />登记合同</Link></Button>
         ) : null}
       </div>
       {billings.length === 0 ? (
@@ -771,7 +753,7 @@ function BillingsCard({ matterId, billings, canManage, contractTotal }: { matter
         <>
           {billings.map((b) => (
             <div key={b.id} className="dos-bill row">
-              <span className="t">{b.title}</span>
+              <Link className="t underline-offset-4 hover:underline" href={`${contractHref}&billingId=${b.id}`}>{b.title}</Link>
               <span className={cn("badge", b.status === "ACTIVE" ? "b-teal" : b.status === "CLOSED" ? "b-slate" : "b-white")}>
                 {b.status === "ACTIVE" ? "执行中" : b.status === "CLOSED" ? "已结束" : "草稿"}
               </span>
@@ -785,7 +767,7 @@ function BillingsCard({ matterId, billings, canManage, contractTotal }: { matter
           </div>
         </>
       )}
-      {canManage ? <AddBillingSheet open={addOpen} onOpenChange={setAddOpen} matterId={matterId} /> : null}
+      {billings.length ? <div className="panel-foot"><Button asChild variant="link" className="px-0"><Link href={contractHref}>查看合同与变更</Link></Button></div> : null}
     </section>
   );
 }
@@ -957,7 +939,7 @@ function clientTypeToPartyType(type: ClientType) {
 }
 
 function buildProcedurePartyOptions(matter: MatterPayload) {
-  const parties = [...matter.parties];
+  const parties: (Omit<MatterPayload["parties"][number], "updatedAt"> & { updatedAt: Date | null })[] = [...matter.parties];
   const seenClientNames = new Set(
     parties.filter((party) => party.role === "CLIENT_PARTY").map((party) => party.name.trim())
   );
@@ -991,7 +973,7 @@ function buildProcedurePartyOptions(matter: MatterPayload) {
       enterpriseBoundAt: null,
       notes: "案件关联客户",
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: null
     });
   }
 

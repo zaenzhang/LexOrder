@@ -13,7 +13,6 @@
  *         {N}_{原文件名}
  */
 import {Prisma} from "@prisma/client";
-import {closureReady} from "./closure";
 import PizZip from "pizzip";
 import { prisma } from "@/lib/prisma";
 import { decryptIdNumber } from "@/lib/clients/id-number-crypto";
@@ -202,12 +201,9 @@ export async function buildArchiveZip(archiveId: string): Promise<ZipResult> {
   if (!archive || archive.status !== "APPROVED") throw new ActionError("归档记录不存在或尚未批准");
   const snapshot = parseArchiveSnapshot(archive.checklistJson);
   if (!snapshot) throw new ActionError("该历史归档记录未固定批准材料，不能生成可核验归档包");
-  let manifest:Awaited<ReturnType<typeof buildArchiveManifest>>;
-  if(await closureReady(prisma)){
-    const [fixed]=await prisma.$queryRaw<{frozenManifest:Awaited<ReturnType<typeof buildArchiveManifest>>|null}[]>`SELECT "frozenManifest" FROM "ArchiveRecord" WHERE id=${archiveId}`;
-    if(!fixed?.frozenManifest)throw new ActionError("批准时未固定卷宗数据，不可生成归档包");
-    manifest=fixed.frozenManifest;
-  }else manifest=await buildArchiveManifest(prisma,archiveId);
+  const [fixed]=await prisma.$queryRaw<{frozenManifest:Awaited<ReturnType<typeof buildArchiveManifest>>|null}[]>`SELECT "frozenManifest" FROM "ArchiveRecord" WHERE id=${archiveId}`;
+  if(!fixed?.frozenManifest)throw new ActionError("批准时未固定卷宗数据，不可生成归档包");
+  const manifest=fixed.frozenManifest;
   const matter=manifest.matter;
   if (!matter) throw new ActionError("案件不存在");
   await verifyArchivePolicySource(snapshot);

@@ -1384,7 +1384,7 @@ model Document {
   approvedAt   DateTime?
   version      Int              @default(1)
   isLatest     Boolean          @default(true)
-  familyId     String?
+  familyId     String           @default(cuid())
 
   // v1.x P1 批次③: 材料来源（墨案 04 页来源 chip：谁提供的这份材料）
   sourceOrigin DocumentSourceOrigin?
@@ -1434,12 +1434,14 @@ model Document {
 
   // v0.21: 反向 - AI 审查历史
   reviewRecords ReviewRecord[]
+  reviewReportFor ReviewRecord? @relation("ReviewReportDocument")
   smsInboundFiles    SmsInboundFile[]
 
   @@index([matterId, category])
   @@index([intakeId])
   @@index([procedureId])
   @@index([familyId])
+  @@unique([familyId, version])
   @@index([folderId])
   @@index([templateId])
   @@index([matterId, archiveChecklistItemId])
@@ -1486,6 +1488,8 @@ model InvoiceRequest {
   requestedById String
   requestedBy   User     @relation("InvoiceRequester", fields: [requestedById], references: [id])
   requestedAt   DateTime @default(now())
+  requestKey    String?
+  requestHash   String?
 
   processedById String?
   processedBy   User?     @relation("InvoiceProcessor", fields: [processedById], references: [id])
@@ -1504,6 +1508,7 @@ model InvoiceRequest {
   @@index([matterId, status])
   @@index([status, requestedAt])
   @@index([requestedById])
+  @@unique([requestedById, requestKey])
 }
 
 // ============================================================
@@ -1688,7 +1693,16 @@ enum EvidenceKind {
   TODO_VERIFY // 待核实
 }
 
+enum EvidenceDatePrecision {
+  UNKNOWN
+  EXACT
+  RANGE
+}
+
 model EvidenceItem {
+  // Null only for legacy rows; a new manual creation keeps one stable submission identity.
+  requestKey       String?
+  requestHash      String?
   revision Int @default(1)
   updatedAt DateTime @default(now()) @updatedAt
   confirmedById String?
@@ -1702,6 +1716,10 @@ model EvidenceItem {
   title            String
   content          String // 当事人主张 / 工作人员分析文本
   kind             EvidenceKind
+  eventDatePrecision EvidenceDatePrecision @default(UNKNOWN)
+  eventDateStart     DateTime? @db.Date
+  eventDateEnd       DateTime? @db.Date
+  eventDateText      String?
   sourceDocumentId String? // 纯引用（Document.id；不设外键，材料删除后保留）
   sourcePage       Int?
   createdById      String
@@ -1710,6 +1728,7 @@ model EvidenceItem {
 
   @@index([matterId, kind])
   @@index([sourceDocumentId])
+  @@unique([createdById, requestKey])
 }
 
 model Billing {
@@ -2607,6 +2626,10 @@ model ReviewRecord {
   itemsJson        Json // ReviewItem[]
   textPreviewChars Int
   truncated        Boolean @default(false)
+  sourceSha256     String?
+  coverageJson     Json?
+  reportDocumentId String? @unique
+  reportDocument   Document? @relation("ReviewReportDocument", fields: [reportDocumentId], references: [id], onDelete: Restrict)
 
   @@index([documentId, reviewedAt])
   @@index([matterId, reviewedAt])
@@ -3147,6 +3170,10 @@ model EvidenceItemRevision {
   title String
   content String
   kind EvidenceKind
+  eventDatePrecision EvidenceDatePrecision @default(UNKNOWN)
+  eventDateStart DateTime? @db.Date
+  eventDateEnd DateTime? @db.Date
+  eventDateText String?
   editedById String
   editedBy User @relation("EvidenceRevisionEditor", fields: [editedById], references: [id], onDelete: Restrict)
   createdAt DateTime @default(now())

@@ -26,7 +26,6 @@ const { db, auditMock } = vi.hoisted(() => {
 });
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 vi.mock("@/server/audit", () => ({ audit: auditMock }));
-vi.mock("@/lib/matters/route", () => ({ matterHref: (m: { id: string }) => `/matters/${m.id}` }));
 vi.mock("@/server/cron/queue", () => ({ enqueueJob: vi.fn() }));
 vi.mock("@/server/settings/webhook-last-result", () => ({ saveWebhookLastResult: vi.fn() }));
 vi.mock("@/server/notifications/create", () => ({ createNotification: vi.fn() }));

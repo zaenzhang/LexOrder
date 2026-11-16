@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { useEffect, useRef, useState, useMemo, useTransition } from "react";
 import { Sparkles, FileText, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -51,6 +51,7 @@ const EDITABLE_OVERRIDES = new Set([
 export function TemplatePickerDialog({
   open,
   onOpenChange,
+  onGenerated,
   matterId,
   matterCategory,
   folders,
@@ -58,6 +59,7 @@ export function TemplatePickerDialog({
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
+  onGenerated: (documentId: string) => void;
   matterId: string;
   matterCategory: string;
   folders: FolderPayload[];
@@ -67,6 +69,8 @@ export function TemplatePickerDialog({
   const [targetFolderId, setTargetFolderId] = useState<string>("auto");
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [pending, startTransition] = useTransition();
+  const generation = useRef(0);
+  useEffect(() => { generation.current += 1; return () => { generation.current += 1; }; }, [matterId, open]);
 
   // 适用本案件类别的模板（含未限定类别的）
   const applicable = useMemo(
@@ -102,7 +106,8 @@ export function TemplatePickerDialog({
   };
 
   const submit = () => {
-    if (!selected) return;
+    if (!selected || pending) return;
+    const submittedGeneration = generation.current;
     startTransition(async () => {
       try {
         const res = await renderTemplate({
@@ -111,17 +116,17 @@ export function TemplatePickerDialog({
           folderId: targetFolderId === "auto" ? null : targetFolderId,
           overrides
         });
+        if (submittedGeneration !== generation.current) return;
         if (res.missing.length > 0) {
           toast.warning(`已生成「${res.fileName}」，但以下字段为空需手动补：${describeMissing(res.missing)}`);
         } else {
-          toast.success(`已生成「${res.fileName}」并归档`);
+          toast.success(`已生成「${res.fileName}」并保存到案件材料`);
         }
-        // 触发下载
-        window.open(`/api/documents/${res.documentId}/download`, "_blank");
         reset();
         onOpenChange(false);
+        onGenerated(res.documentId);
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "生成失败");
+        if (submittedGeneration === generation.current) toast.error(e instanceof Error ? actionErrorMessage(e) : "生成失败");
       }
     });
   };
@@ -130,6 +135,7 @@ export function TemplatePickerDialog({
     <Dialog
       open={open}
       onOpenChange={(o) => {
+        if (pending) return;
         if (!o) reset();
         onOpenChange(o);
       }}
@@ -235,7 +241,7 @@ export function TemplatePickerDialog({
           {selected && (
             <div>
               <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                {editableVars.length > 0 ? "3" : "2"} · 归档到哪个卷宗
+                {editableVars.length > 0 ? "3" : "2"} · 保存到哪个卷宗
               </Label>
               <Select value={targetFolderId} onValueChange={setTargetFolderId}>
                 <SelectTrigger className="mt-2">
@@ -263,7 +269,7 @@ export function TemplatePickerDialog({
           </Button>
           <Button onClick={submit} disabled={!selected || pending}>
             {pending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
-            生成并下载
+            生成文书
           </Button>
         </DialogFooter>
       </DialogContent>

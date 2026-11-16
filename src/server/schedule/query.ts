@@ -11,6 +11,7 @@ import { customMatterFilter } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { shDayKey } from "@/lib/ui/sh-time";
 import { matterAssociationFilter, matterReadVisibilityFilter } from "@/lib/permissions";
+import { matterHref } from "@/lib/matters/route";
 
 export type ScheduleItem = {
   id: string;
@@ -257,8 +258,8 @@ export async function queryScheduleItems(
   if(await responsibilityReady(prisma)&&(role!=='CUSTOM'||scopeFor(access,'schedule.read'))){
     const allowed=await prisma.matter.findMany({where:{deletedAt:null,...matterFilter},select:{id:true}});
     const ids=allowed.map(m=>m.id);
-    const urgent=await prisma.$queryRaw<{id:string;title:string;dueAt:Date;kind:string;state:string;matterId:string|null;intakeId:string;caseTitle:string;code:string|null}[]>(Prisma.sql`SELECT w.id,w.title,w."dueAt",w.kind,w.state::text,w."matterId",w."intakeId",COALESCE(m.title,i.title) AS "caseTitle",m."internalCode" AS code FROM "IntakeUrgentItem" w JOIN "Intake" i ON i.id=w."intakeId" LEFT JOIN "Matter" m ON m.id=w."matterId" WHERE w."dueAt">=${from} AND w."dueAt"<=${to} AND w.state<>'CANCELLED' ${params.includeCompleted?Prisma.empty:Prisma.sql`AND w.state='OPEN'`} AND ((w."matterId" IS NULL AND (i."createdById"=${userId} OR i."ownerUserId"=${userId} OR ${userId}=ANY(i."coUserIds"))) ${ids.length?Prisma.sql`OR w."matterId" IN (${Prisma.join(ids)})`:Prisma.empty})`);
-    for(const w of urgent)items.push({id:`u-${w.id}`,type:w.kind==='HEARING'?'hearing':w.kind==='DEADLINE'?'deadline':'task',title:w.title,occurredAt:w.dueAt,matter:{id:w.matterId??w.intakeId,internalCode:w.code??'收案',title:w.caseTitle},href:w.matterId?`/matters/${w.matterId}`:`/intakes/${w.intakeId}`,clientName:null,procedureLabel:'收案紧急事项',completed:w.state==='DONE'});
+    const urgent=await prisma.$queryRaw<({id:string;title:string;dueAt:Date;kind:string;state:string;intakeId:string;caseTitle:string} & ({matterId:string;code:string}|{matterId:null;code:null}))[]>(Prisma.sql`SELECT w.id,w.title,w."dueAt",w.kind,w.state::text,w."matterId",w."intakeId",COALESCE(m.title,i.title) AS "caseTitle",m."internalCode" AS code FROM "IntakeUrgentItem" w JOIN "Intake" i ON i.id=w."intakeId" LEFT JOIN "Matter" m ON m.id=w."matterId" WHERE w."dueAt">=${from} AND w."dueAt"<=${to} AND w.state<>'CANCELLED' ${params.includeCompleted?Prisma.empty:Prisma.sql`AND w.state='OPEN'`} AND ((w."matterId" IS NULL AND (i."createdById"=${userId} OR i."ownerUserId"=${userId} OR ${userId}=ANY(i."coUserIds"))) ${ids.length?Prisma.sql`OR w."matterId" IN (${Prisma.join(ids)})`:Prisma.empty})`);
+    for(const w of urgent)items.push({id:`u-${w.id}`,type:w.kind==='HEARING'?'hearing':w.kind==='DEADLINE'?'deadline':'task',title:w.title,occurredAt:w.dueAt,matter:{id:w.matterId??w.intakeId,internalCode:w.code??'收案',title:w.caseTitle},href:w.matterId!==null?matterHref({internalCode:w.code}):`/intakes/${w.intakeId}`,clientName:null,procedureLabel:'收案紧急事项',completed:w.state==='DONE'});
   }
   items.sort((a, b) => new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime());
   return items;

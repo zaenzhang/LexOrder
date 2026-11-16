@@ -5,7 +5,6 @@ import { CorrectionWorkspace } from "./correction-workspace";
 import { RegistrationWorkspace } from "./registration-workspace";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -22,7 +21,7 @@ const yuan = (amount: string) => `¥${Number(amount).toLocaleString("zh-CN",{min
 // 2026-09-21 布局收敛（用户反馈页面过长）：原九个区块单列堆叠改为四个页签分区
 // （与 /finance 同款 Segmented 视觉），列表默认折叠为少量行、按需展开——
 // 待办与登记动作在默认页签，长表不再把操作区推出首屏。
-type Tab = "overview" | "ledger" | "invoices" | "contracts";
+export type LedgerTab = "overview" | "ledger" | "invoices" | "contracts";
 const TABLE_LIMIT = 8;
 const LIST_LIMIT = 6;
 
@@ -36,9 +35,14 @@ function ShowMoreFooter({ colSpan, total, expanded, onToggle }: { colSpan: numbe
   </td></tr>;
 }
 
-export function LedgerWorkspace({ data, canWrite, canConfirm, canCorrect, canSettle, selectedMatterId }: { data: Data; canWrite: boolean; canConfirm:boolean; canCorrect:boolean; canSettle:boolean; selectedMatterId?: string }) {
+export function LedgerWorkspace({ data, canWrite, canConfirm, canCorrect, canSettle, selectedMatterId, tab = "overview", billingId, createContract = false, returnTo }: { data: Data; canWrite: boolean; canConfirm:boolean; canCorrect:boolean; canSettle:boolean; selectedMatterId?: string; tab?: LedgerTab; billingId?: string; createContract?: boolean; returnTo?: string }) {
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>("overview");
+  function navigate(nextTab: LedgerTab, nextMatter = selectedMatterId, keepReturn = true) {
+    const params = new URLSearchParams({ tab: nextTab });
+    if (nextMatter) params.set("matterId", nextMatter);
+    if (keepReturn && returnTo) params.set("returnTo", returnTo);
+    router.push(`/finance/reconciliation?${params}`);
+  }
   const [showAllReceivables, setShowAllReceivables] = useState(false);
   const [showAllPayments, setShowAllPayments] = useState(false);
   const [showAllInvoices, setShowAllInvoices] = useState(false);
@@ -73,14 +77,13 @@ export function LedgerWorkspace({ data, canWrite, canConfirm, canCorrect, canSet
   return <>
     <div className="flex flex-wrap items-center gap-3 text-sm">
       <Label htmlFor="ledger-matter">案件范围</Label>
-      <select id="ledger-matter" className="rounded-md border bg-background p-2" value={selectedMatterId ?? ""} onChange={e => router.push(e.target.value ? `/finance/reconciliation?matterId=${encodeURIComponent(e.target.value)}` : "/finance/reconciliation")}>
+      <select id="ledger-matter" className="rounded-md border bg-background p-2" value={selectedMatterId ?? ""} onChange={e => navigate(tab, e.target.value, false)}>
         <option value="">全部可见案件</option>{data.matters.map(m => <option key={m.id} value={m.id}>{m.internalCode} · {m.title}</option>)}
       </select>
-      {selectedMatterId ? <Link className="text-primary underline" href={`/matters/${selectedMatterId}`}>返回案件</Link> : null}
     </div>
 
     <div className="fin-tabs">
-      <Segmented<Tab>
+      <Segmented<LedgerTab>
         items={[
           { key: "overview", label: "总览与登记", count: data.pending.length || null },
           { key: "ledger", label: "应收与收款", count: openReceivables.length || null },
@@ -88,7 +91,7 @@ export function LedgerWorkspace({ data, canWrite, canConfirm, canCorrect, canSet
           { key: "contracts", label: "合同与更正" }
         ]}
         value={tab}
-        onChange={setTab}
+        onChange={value => navigate(value)}
       />
     </div>
 
@@ -99,7 +102,7 @@ export function LedgerWorkspace({ data, canWrite, canConfirm, canCorrect, canSet
         <MetricCard label="律师费实收" value={yuan(data.summary.lawyerFeeReceived)} sub={`代收款另计 ${yuan(data.summary.clientFundsReceived)}`} />
         <MetricCard label="未分配收款" value={yuan(data.summary.unallocated)} sub="尚未核销应收；票款单独关联" />
       </div>
-      <RegistrationWorkspace data={data} canWrite={canWrite} canConfirm={canConfirm} selectedMatterId={selectedMatterId} />
+      <RegistrationWorkspace data={data} canWrite={canWrite} canConfirm={canConfirm} selectedMatterId={selectedMatterId} returnTo={returnTo} />
     </> : null}
 
     {tab === "ledger" ? <>
@@ -140,8 +143,8 @@ export function LedgerWorkspace({ data, canWrite, canConfirm, canCorrect, canSet
     </> : null}
 
     {tab === "contracts" ? <>
-      <ContractWorkspace data={data} canWrite={canWrite} canCorrect={canCorrect} />
-      <CorrectionWorkspace data={data} canWrite={canWrite} canCorrect={canCorrect} canSettle={canSettle} />
+      <ContractWorkspace key={`${selectedMatterId ?? "all"}:${billingId ?? "list"}:${createContract}`} data={data} canWrite={canWrite} canCorrect={canCorrect} selectedMatterId={selectedMatterId} billingId={billingId} createContract={createContract} returnTo={returnTo} />
+      {!billingId && !createContract && <CorrectionWorkspace data={data} canWrite={canWrite} canCorrect={canCorrect} canSettle={canSettle} />}
     </> : null}
 
     <Dialog open={Boolean(payment)} onOpenChange={open => { if (!open && !busy) setPayment(null); }}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>分配收款</DialogTitle><DialogDescription>同一笔款可核销应收，也可关联发票；两个维度独立计算可用余额。</DialogDescription></DialogHeader><form className="space-y-4" onSubmit={submitAllocation}>

@@ -1,40 +1,35 @@
 "use server";
-import { audit } from "@/server/audit";
-import { roleMutation } from "@/lib/roles/service";
 
-/**
- * v0.19: 文书智能审查
- *
- * 从存储读文档 → 抽文本（PDF/DOCX/纯文本）→ 喂 AI → 结构化审查清单。
- * 目前覆盖通用文书（合同、起诉状、申请书、协议、书证等），不分文书类型走同一 prompt。
- */
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/session";
-import { assertCanReviewDocument } from "@/server/ai/document-access";
 import { storage } from "@/lib/storage";
-import { decryptBuffer } from "@/lib/storage/crypto";
+import { decryptBuffer, sha256 } from "@/lib/storage/crypto";
 import { aiChat, AiNotConfiguredError } from "@/lib/ai/client";
-import {
-  parseReviewItems,
-  type ReviewItem
-} from "@/lib/ai/review-parser";
+import { getAiSettings } from "@/lib/ai/settings";
+import { parseReviewItems, type ReviewItem } from "@/lib/ai/review-parser";
+import { prepareReviewSegments, summarizeReviewCoverage, type ReviewCoverage } from "@/lib/ai/review-coverage";
 import { selectReviewPrompt, reviewPromptLabel } from "@/lib/ai/review-prompts";
+import { currentActor } from "@/server/intakes/workflow";
+import { auditTx } from "@/server/audit";
+import { assertCanReviewDocument } from "./document-access";
+import { readableReviewSource, reviewSourceInputSchema, type ReviewSourceInput } from "./review-record-service";
 import { extractText, getDocumentProxy } from "unpdf";
 import mammoth from "mammoth";
 import { ActionError } from "@/lib/action-error";
 
 export type ReviewResult = {
+  recordId: string;
+  matterId: string;
+  documentId: string;
   documentName: string;
-  textPreviewChars: number;
-  truncated: boolean;
+  documentVersion: number;
+  reviewedAt: Date;
   items: ReviewItem[];
-  /** v0.21: 落库后的 ReviewRecord.id；doc 不属于 Matter（如 intake 阶段）则为 null */
-  recordId: string | null;
+  coverage: ReviewCoverage;
+  reportDocumentId: string | null;
+  reportReady: boolean;
 };
-
-// v0.26: prompt 按 Document.category 分流（src/lib/ai/review-prompts.ts）
-
-const MAX_CHARS_FOR_AI = 6000;
 
 async function extractDocumentText(
   buf: Buffer,
@@ -64,130 +59,79 @@ async function extractDocumentText(
   );
 }
 
-export async function reviewDocument(input: {
-  documentId: string;
-}): Promise<ReviewResult> {
+export async function reviewDocument(input: ReviewSourceInput): Promise<ReviewResult> {
   const session = await requireSession("documents.write");
-
-  const doc = await prisma.document.findFirst({
-    where: { id: input.documentId, deletedAt: null }
-  });
-  if (!doc) throw new ActionError("材料不存在");
-
-  // 对象级归属断言：案件材料走案件可见性，收案材料走收案归属（与上传路径同口径）。
-  // 此前 intake 分支缺校验，任何持 documents.write 的账号可对他人收案材料
-  // 发起全文外发审查（报告 P0-4 / C07 修复）。
+  const data = reviewSourceInputSchema.parse(input);
+  const doc = await readableReviewSource(session.user.id, data);
   await assertCanReviewDocument(session, doc);
+  const matter = await prisma.matter.findUnique({ where: { id: data.matterId }, select: { status: true } });
+  if (!matter || matter.status === "ARCHIVED") throw new ActionError("案件已归档或不可用，不能发起新审查；仍可查看获准历史");
+  if (!doc.sha256 || !/^[a-f0-9]{64}$/.test(doc.sha256)) throw new ActionError("原材料缺少可信版本校验信息，请补传一个材料版本");
+  if (!(await getAiSettings()).configured) throw new ActionError("当前未启用可用的 AI 模型，不能发起新审查");
 
-  // 读取 + 解密
   const stored = await storage.readFile(doc.path);
-  let buf: Buffer;
-  if (doc.encrypted) {
-    if (!doc.iv || !doc.authTag) throw new ActionError("加密元数据损坏");
-    buf = decryptBuffer(stored, doc.iv, doc.authTag);
-  } else {
-    buf = stored;
-  }
-
-  const raw = (await extractDocumentText(buf, doc.mimeType)).trim();
-  if (raw.length < 20) {
-    throw new ActionError("无可分析文本（可能是扫描件 PDF / 空文档），请用文本层 PDF 或 DOCX");
-  }
-
-  // v1.x P1: 长文分段审查——每段独立调 AI 后合并审查项，突破单次 6000 字符上限。
-  // 上限 6 段（约 3.6 万字符）：超出部分标记截断，避免一次审查跑掉不成比例的调用成本。
-  const SEGMENT_CHARS = MAX_CHARS_FOR_AI;
-  const MAX_SEGMENTS = 6;
-  const totalSegments = Math.ceil(raw.length / SEGMENT_CHARS);
-  const segments = totalSegments <= MAX_SEGMENTS
-    ? Array.from({ length: totalSegments }, (_, i) => raw.slice(i * SEGMENT_CHARS, (i + 1) * SEGMENT_CHARS))
-    : Array.from({ length: MAX_SEGMENTS }, (_, i) => raw.slice(i * SEGMENT_CHARS, (i + 1) * SEGMENT_CHARS));
-  const truncated = totalSegments > MAX_SEGMENTS;
-
-  // v0.26: 按 Document.category 选 prompt（合同/诉状/证据/裁判 4 套专项 + 通用兜底）
+  if (doc.encrypted && (!doc.iv || !doc.authTag)) throw new ActionError("原材料加密信息不完整");
+  const bytes = doc.encrypted ? decryptBuffer(stored, doc.iv!, doc.authTag!) : stored;
+  // One hash for this original read; the verified value is reused by every dispatch and final record.
+  const sourceSha256 = sha256(bytes);
+  if (sourceSha256 !== doc.sha256 || (doc.size !== null && bytes.length !== doc.size)) throw new ActionError("原材料与保存的版本不一致，不能审查");
+  const text = (await extractDocumentText(bytes, doc.mimeType)).trim();
+  if (text.length < 20) throw new ActionError("没有足够的可分析文本，请查看原件或补传可读取文本的版本");
+  const prepared = prepareReviewSegments(text);
+  const coverage: ReviewCoverage = { totalChars: prepared.totalChars, totalSegments: prepared.totalSegments, segments: [], stopReason: null };
+  const items: ReviewItem[] = [];
   const systemPrompt = selectReviewPrompt(doc.category);
   const promptLabel = reviewPromptLabel(doc.category);
 
-  const items: ReviewItem[] = [];
-  for (let i = 0; i < segments.length; i++) {
-    const segText = segments[i];
-    const segNote =
-      segments.length > 1
-        ? `\n\n（注：本文书分 ${segments.length} 段送审，当前为第 ${i + 1} 段；请只针对本段内容给出审查项，不要臆造本段之外的信息${
-            i === segments.length - 1 && truncated
-              ? `。原文超过分段上限，本段之后的内容未送审，请在结论中提示"仅覆盖前 ${MAX_SEGMENTS} 段"`
-              : ""
-          }）`
-        : "";
-    let content = "";
+  for (const [index, segment] of prepared.segments.entries()) {
+    // A long request never grants its next segment access from the initial page/session alone.
+    await assertCanReviewDocument(session, { ...doc, sha256: sourceSha256 });
+    await auditTx(prisma, { userId: session.user.id, action: "AI_REVIEW_ATTEMPT", targetType: "Document", targetId: doc.id,
+      detail: { matterId: data.matterId, segment: index + 1, chars: segment.length } });
+    let content: string;
     try {
-      const res = await aiChat({
-      userId: session.user.id,
+      const response = await aiChat({ userId: session.user.id,
         messages: [
           { role: "system", content: systemPrompt },
-          {
-            role: "user",
-            content: `文书名称：${doc.name}\n审查类型：${promptLabel}\n\n文书正文：\n${segText}${segNote}`
-          }
-        ],
-        maxTokens: 2000,
-        temperature: 0.2,
-        timeoutMs: 45_000,
-        logAction: "review-document"
+          { role: "user", content: `文书名称：${doc.name}\n审查类型：${promptLabel}\n\n文书正文：\n${segment}\n\n本次为提取文本第 ${index + 1} / ${prepared.totalSegments} 段，请仅针对本段给出审查项，不能据此断言整份材料均已审查。` },
+        ], maxTokens: 2000, temperature: 0.2, timeoutMs: 45_000, logAction: "review-document",
       });
-      content = res.content;
-    } catch (err) {
-      if (err instanceof AiNotConfiguredError) throw err;
-      throw new Error(err instanceof Error ? err.message : "AI 审查请求失败");
+      content = response.content;
+    } catch (error) {
+      if (error instanceof AiNotConfiguredError) {
+        if (coverage.segments.length === 0) throw new ActionError("当前未启用可用的 AI 模型，未发起审查");
+        coverage.stopReason = "MODEL_UNAVAILABLE";
+      } else coverage.segments.push({ index: index + 1, chars: segment.length, status: "FAILED", errorCode: "REQUEST_FAILED" });
+      break;
     }
-    items.push(...parseReviewItems(content));
+    try {
+      items.push(...parseReviewItems(content));
+      coverage.segments.push({ index: index + 1, chars: segment.length, status: "SUCCEEDED", errorCode: null });
+    } catch {
+      coverage.segments.push({ index: index + 1, chars: segment.length, status: "FAILED", errorCode: "INVALID_RESPONSE" });
+      break;
+    }
   }
 
-  // v0.21: 写入历史（仅当 doc 属于某个 Matter 才能记录）
-  let recordId: string | null = null;
-  const reviewMatterId = doc.matterId;
-  if (reviewMatterId) {
-    const rec = await roleMutation(session.user, "documents.write", async roleDb => roleDb.reviewRecord.create({
-      data: {
-        matterId: reviewMatterId,
-        documentId: doc.id,
-        reviewedById: session.user.id,
-        itemCount: items.length,
-        itemsJson: items as unknown as object,
-        textPreviewChars: raw.length,
-        truncated
-      },
-      select: { id: true }
-    }));
-    recordId = rec.id;
-  }
-
-  // 第八轮体检：ReviewRecord.matterId 必填且带外键，收案阶段（intakeId）的材料
-  // 送 AI 审查此前不留任何痕迹——而收案恰是客户身份证、合同草稿最集中的时候。
-  // 外发留痕改走 AuditLog（不可由业务代码删除，AGENTS §八），两条路径都记：
-  // ReviewRecord 是业务记录（供案件内回看），AuditLog 是合规留痕（答「谁把哪份
-  // 材料发给了外部模型」）。不改 Schema，因而无需迁移审批。
-  await audit({
-    userId: session.user.id,
-    action: "AI_REVIEW_DOCUMENT",
-    targetType: "Document",
-    targetId: doc.id,
-    detail: {
-      matterId: doc.matterId ?? null,
-      intakeId: doc.intakeId ?? null,
-      documentName: doc.name,
-      sentChars: raw.length,
-      truncated,
-      itemCount: items.length,
-      recordId
-    }
-  });
-
-  return {
-    documentName: doc.name,
-    textPreviewChars: raw.length,
-    truncated,
-    items,
-    recordId
-  };
+  const summary = summarizeReviewCoverage(coverage);
+  const record = await prisma.$transaction(async tx => {
+    await currentActor(tx, session.user.id, "documents.write");
+    await tx.$queryRaw`SELECT id FROM "Matter" WHERE id=${data.matterId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM "Document" WHERE id=${data.documentId} FOR UPDATE`;
+    await assertCanReviewDocument(session, { ...doc, sha256: sourceSha256 }, tx);
+    const currentMatter = await tx.matter.findUnique({ where: { id: data.matterId }, select: { status: true, deletedAt: true } });
+    if (!currentMatter || currentMatter.deletedAt || currentMatter.status === "ARCHIVED") throw new ActionError("案件状态已变化，不能发布本次审查结果");
+    const created = await tx.reviewRecord.create({ data: {
+      matterId: data.matterId, documentId: doc.id, reviewedById: session.user.id,
+      itemCount: items.length, itemsJson: items as Prisma.InputJsonValue,
+      textPreviewChars: prepared.totalChars, truncated: summary.notSentChars > 0,
+      sourceSha256, coverageJson: coverage as Prisma.InputJsonValue,
+    }, select: { id: true, reviewedAt: true } });
+    await auditTx(tx, { userId: session.user.id, action: "AI_REVIEW_DOCUMENT", targetType: "Document", targetId: doc.id,
+      detail: { matterId: data.matterId, recordId: created.id, status: summary.status, sentChars: summary.sentChars,
+        completedChars: summary.completedChars, failedSegments: summary.failedSegments, notSentChars: summary.notSentChars, itemCount: items.length } });
+    return created;
+  }, { isolationLevel: "Serializable", timeout: 20000 });
+  return { recordId: record.id, matterId: data.matterId, documentId: doc.id, documentName: doc.name, documentVersion: doc.version,
+    reviewedAt: record.reviewedAt, items, coverage, reportDocumentId: null, reportReady: summary.completedSegments > 0 };
 }

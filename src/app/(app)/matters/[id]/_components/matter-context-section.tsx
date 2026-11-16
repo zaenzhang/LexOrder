@@ -1,7 +1,7 @@
 "use client";
 
-import { useId, useState, useTransition, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Check, FileText, History, Loader2, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -12,75 +12,179 @@ import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
 import { fromShanghaiInput, toShanghaiInput } from "@/lib/clients/relationship";
 import { shDayKey, shTime } from "@/lib/ui/sh-time";
+import { contextTextSummary } from "@/lib/matters/context-source-labels";
 import {
   contextKindLabels, contextVisibilityLabels, type ContextKind, type ContextVisibility,
   type MatterContextView, type ContextRecordView, type ContextHistoryView, type ContextSourceContent,
-  type ContextSourceOptions, type ContextRecordInput
+  type ContextSourceOptions, type ContextSourcePageInput, type ContextSourceType, type ContextRecordInput
 } from "@/lib/matters/context";
 import {
-  recordMatterContext, confirmMatterContextRecord, getMatterContextHistory, getMatterContextSource, getMatterContextSourceOptions
+  recordMatterContext, confirmMatterContextRecord, getMatterContext, getMatterContextHistory, getMatterContextSource, getMatterContextSourceOptions
 } from "@/server/matters/context-actions";
 
 const when = (value: string) => `${shDayKey(value)} ${shTime(value)}`;
-type Props = { matterId: string; view: MatterContextView };
-type EditorState = { key: string; record: ContextRecordView | null; options: ContextSourceOptions | null; error: string };
+type Props = { matterId: string; view: MatterContextView | null; error?: string | null };
+type EditorState = { key: string; record: ContextRecordView | null; options: ContextSourceOptions | null; loading: boolean; error: string; failedPage?: ContextSourcePageInput };
+const sourceMoreLabels: Record<ContextSourceType, string> = { DOCUMENT: "更多材料", NOTE: "更多事项沟通", CLIENT_ACTIVITY: "更多客户沟通" };
 
-/** Embedded in the existing MatterArchive group. A new matter resets transient dialogs. */
+function restoreFocus(...targets: (HTMLElement | null)[]) {
+  for (const target of targets) {
+    if (!target?.isConnected || target.matches(":disabled") || target.closest("[hidden], [inert]")) continue;
+    target.focus({ preventScroll: true });
+    if (document.activeElement === target) return;
+  }
+}
+
+/** Only the overview hides on query navigation; the current matter's Sheets remain mounted. */
 export function MatterContextSection(props: Props) {
   return <ContextSection key={props.matterId} {...props} />;
 }
 
-function ContextSection({ matterId, view }: Props) {
+function ContextSection({ matterId, view, error: initialError = null }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const overviewVisible = (searchParams.get("view") ?? "archive") === "archive";
+  const scope = useMemo(() => ({ matterId, view, initialError }), [matterId, view, initialError]);
+  type PageState = { scope: typeof scope; data: MatterContextView | null; cursor: string | null; previous: (string | null)[]; pending: boolean; error: string };
+  const [pageState, setPageState] = useState<PageState>({ scope, data: view, cursor: null, previous: [], pending: false, error: initialError ?? "" });
+  const livePage = useRef<{ scope: typeof scope | null; serial: number }>({ scope: null, serial: 0 });
+  const historyRequest = useRef(0);
+  const sourceRequest = useRef(0);
+  const page = pageState.scope === scope ? pageState : { scope, data: view, cursor: null, previous: [], pending: false, error: initialError ?? "" };
+  useLayoutEffect(() => {
+    livePage.current = { scope, serial: livePage.current.serial + 1 };
+    historyRequest.current++;
+    sourceRequest.current++;
+    return () => {
+      livePage.current = { scope: null, serial: livePage.current.serial + 1 };
+    };
+  }, [scope]);
   const titleId = useId();
+  const sectionTitle = useRef<HTMLHeadingElement>(null);
+  const addTrigger = useRef<HTMLButtonElement>(null);
+  const editorTrigger = useRef<HTMLButtonElement | null>(null);
+  const editorContent = useRef<HTMLDivElement>(null);
+  const editorClosePending = useRef(false);
+  const historyTrigger = useRef<HTMLButtonElement | null>(null);
+  const sourceTrigger = useRef<HTMLButtonElement | null>(null);
+  const historyTitle = useRef<HTMLHeadingElement>(null);
+  const sourceFromHistory = useRef(false);
   const [pending, start] = useTransition();
   const [editorBusy, setEditorBusy] = useState(false);
+  const [editorDirty, setEditorDirty] = useState(false);
   const [editor, setEditor] = useState<EditorState | null>(null);
-  const [history, setHistory] = useState<{ id: string; data: ContextHistoryView | null; error: string } | null>(null);
-  const [source, setSource] = useState<{ id: string; data: ContextSourceContent | null; error: string } | null>(null);
+  const [history, setHistory] = useState<{ id: string; kind: ContextKind; scope: typeof scope; data: ContextHistoryView | null; loading: boolean; error: string } | null>(null);
+  const [source, setSource] = useState<{ id: string; recordLabel: string; scope: typeof scope; data: ContextSourceContent | null; loading: boolean; error: string } | null>(null);
+  // A new server payload is authoritative before effects run. Editor state stays independent.
+  const historyData = history?.scope === scope ? history.data : null;
+  const sourceData = source?.scope === scope ? source.data : null;
+  const historyLoading = history?.scope === scope && history.loading;
+  const sourceLoading = source?.scope === scope && source.loading;
+  const historyError = history && history.scope !== scope ? initialError || "记录已更新，请重新读取历史。" : history?.error;
+  const sourceError = source && source.scope !== scope ? initialError || "记录已更新，请重新读取来源。" : source?.error;
 
-  function begin(record: ContextRecordView | null) {
-    const key = crypto.randomUUID();
-    setEditor({ key, record, options: null, error: "" });
-    start(async () => {
-      try {
-        const options = await getMatterContextSourceOptions(matterId);
-        setEditor(previous => previous?.key === key ? { ...previous, options } : previous);
-      } catch (error) {
-        setEditor(previous => previous?.key === key ? { ...previous, options: { choices: [], truncated: false }, error: actionErrorMessage(error) } : previous);
-      }
-    });
+  async function loadRecords(cursor: string | null, previous: (string | null)[]) {
+    const serial = ++livePage.current.serial;
+    setPageState({ scope, data: null, cursor, previous, pending: true, error: "" });
+    try {
+      const data = await getMatterContext(matterId, cursor ?? undefined);
+      if (livePage.current.scope === scope && livePage.current.serial === serial) setPageState({ scope, data, cursor, previous, pending: false, error: "" });
+    } catch (error) {
+      if (livePage.current.scope === scope && livePage.current.serial === serial) setPageState({ scope, data: null, cursor, previous, pending: false, error: actionErrorMessage(error) });
+    }
   }
 
-  function showHistory(recordId: string, beforeVersion?: number) {
-    if (beforeVersion === undefined) setHistory({ id: recordId, data: null, error: "" });
-    start(async () => {
-      try {
-        const data = await getMatterContextHistory(matterId, recordId, beforeVersion);
-        setHistory(previous => previous?.id === recordId ? { id: recordId, error: "", data: {
+  async function loadSources(key: string, request?: ContextSourcePageInput) {
+    setEditor(previous => previous?.key === key ? { ...previous, loading: true, error: "", failedPage: undefined, ...(request ? {} : { options: null }) } : previous);
+    try {
+      const next = await getMatterContextSourceOptions(matterId, request);
+      setEditor(previous => {
+        if (previous?.key !== key) return previous;
+        const options = request && previous.options ? {
+          choices: [...new Map([...previous.options.choices, ...next.choices].map(choice => [`${choice.type}:${choice.id}`, choice])).values()],
+          nextCursors: { ...previous.options.nextCursors, [request.type]: next.nextCursors[request.type] },
+        } : next;
+        return { ...previous, options, loading: false, error: "" };
+      });
+    } catch (error) {
+      setEditor(previous => previous?.key === key ? { ...previous, loading: false, error: actionErrorMessage(error), failedPage: request } : previous);
+    }
+  }
+
+  function begin(record: ContextRecordView | null, trigger: HTMLButtonElement) {
+    editorTrigger.current = trigger;
+    const key = crypto.randomUUID();
+    setEditorDirty(false);
+    setEditor({ key, record, options: null, loading: true, error: "" });
+    void loadSources(key);
+  }
+
+  async function closeEditor() {
+    if (!editor || editorBusy || editorClosePending.current) return;
+    const key = editor.key;
+    const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    editorClosePending.current = true;
+    try {
+      if (editorDirty && !await confirmDialog({
+        title: "放弃未保存的记录？",
+        confirmText: "放弃记录",
+        cancelText: "继续编辑",
+        initialFocus: "cancel",
+      })) {
+        requestAnimationFrame(() => restoreFocus(returnFocus, editorContent.current));
+        return;
+      }
+      setEditor(current => current?.key === key ? null : current);
+    } finally {
+      editorClosePending.current = false;
+    }
+  }
+
+  async function showHistory(record: Pick<ContextRecordView, "id" | "kind">, beforeVersion?: number, trigger?: HTMLButtonElement) {
+    const recordId = record.id;
+    const serial = ++historyRequest.current;
+    if (trigger) historyTrigger.current = trigger;
+    if (beforeVersion === undefined) setHistory({ id: recordId, kind: record.kind, scope, data: null, loading: true, error: "" });
+    else setHistory(previous => previous?.id === recordId && previous.scope === scope ? { ...previous, loading: true, error: "" } : previous);
+    try {
+      const data = await getMatterContextHistory(matterId, recordId, beforeVersion);
+      if (historyRequest.current === serial && livePage.current.scope === scope) {
+        setHistory(previous => previous?.id === recordId && previous.scope === scope ? { ...previous, loading: false, error: "", data: {
           ...data, records: beforeVersion === undefined ? data.records : [...(previous.data?.records ?? []), ...data.records]
         } } : previous);
-      } catch (error) {
-        setHistory(previous => previous?.id === recordId ? { ...previous, error: actionErrorMessage(error) } : previous);
       }
-    });
+    } catch (error) {
+      if (historyRequest.current === serial && livePage.current.scope === scope) {
+        setHistory(previous => previous?.id === recordId && previous.scope === scope ? { ...previous, data: null, loading: false, error: actionErrorMessage(error) } : previous);
+      }
+    }
   }
 
-  function showSource(recordId: string) {
-    setSource({ id: recordId, data: null, error: "" });
-    start(async () => {
-      try {
-        const data = await getMatterContextSource(matterId, recordId);
-        setSource(previous => previous?.id === recordId ? { id: recordId, data, error: "" } : previous);
-      } catch (error) {
-        setSource(previous => previous?.id === recordId ? { id: recordId, data: null, error: actionErrorMessage(error) } : previous);
+  function showSource(record: ContextRecordView, trigger: HTMLButtonElement, fromHistory = false) {
+    sourceTrigger.current = trigger;
+    sourceFromHistory.current = fromHistory;
+    void loadSource(record.id, `${contextKindLabels[record.kind]}第 ${record.version} 版`);
+  }
+
+  async function loadSource(recordId: string, recordLabel: string) {
+    const serial = ++sourceRequest.current;
+    setSource({ id: recordId, recordLabel, scope, data: null, loading: true, error: "" });
+    try {
+      const data = await getMatterContextSource(matterId, recordId);
+      if (sourceRequest.current === serial && livePage.current.scope === scope) {
+        setSource(previous => previous?.id === recordId && previous.scope === scope ? { ...previous, data, loading: false, error: "" } : previous);
       }
-    });
+    } catch (error) {
+      if (sourceRequest.current === serial && livePage.current.scope === scope) {
+        setSource(previous => previous?.id === recordId && previous.scope === scope ? { ...previous, data: null, loading: false, error: actionErrorMessage(error) } : previous);
+      }
+    }
   }
 
   async function confirmRecord(record: ContextRecordView) {
-    const agreed = await confirmDialog({ title: `核对确认${contextKindLabels[record.kind]}`, confirmText: "确认已核对",
-      description: `确认第 ${record.version} 版内容与来源已核对，保留本次核对人和时间；客户授权以真实指示为准。` });
+    const summary = record.readable ? contextTextSummary(record.content, 160) : "";
+    const agreed = await confirmDialog({ title: `核对确认${contextKindLabels[record.kind]}记录（第 ${record.version} 版）`, confirmText: "确认已核对", initialFocus: "cancel",
+      description: `${summary ? `本条内容：“${summary}”\n\n` : ""}确认第 ${record.version} 版内容与来源已核对，保留本次核对人和时间；客户授权以真实指示为准。` });
     if (!agreed) return;
     start(async () => {
       try {
@@ -91,62 +195,76 @@ function ContextSection({ matterId, view }: Props) {
   }
 
   return (
-    <section className="dos-group" aria-labelledby={titleId} id="matter-context">
+    <>
+    <section hidden={!overviewVisible} className="dos-group scroll-mt-44" aria-labelledby={titleId} id="matter-context" aria-busy={page.pending}>
       <div className="dos-group-h">
-        <FileText className="ic" strokeWidth={1.9} /><h2 id={titleId} className="t">目标与指示</h2>
-        {view.canWrite ? <span className="a"><button type="button" className="btn btn-secondary btn-sm" disabled={pending} onClick={() => begin(null)}><Plus />记录</button></span> : null}
+        <FileText className="ic" strokeWidth={1.9} /><h2 ref={sectionTitle} tabIndex={-1} id={titleId} className="t">目标与指示</h2>
+        {page.data?.canWrite ? <span className="a"><button ref={addTrigger} type="button" className="btn btn-secondary btn-sm" disabled={pending} onClick={event => begin(null, event.currentTarget)}><Plus />记录目标或指示</button></span> : null}
       </div>
       <div className="dos-group-b">
-        {view.records.length === 0 ? <p className="t-sm t-mute">尚未记录目标或指示。</p> : <ol className="space-y-4">
-          {view.records.map(record => <li key={record.id} className="border-b border-[var(--bd-hair)] pb-4 last:border-0 last:pb-0">
-            <RecordContent record={record} onSource={() => showSource(record.id)} />
+        {page.pending ? <p role="status" className="t-sm t-mute">正在读取记录…</p> : null}
+        {page.error ? <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive"><span>{page.error}</span><button type="button" className="btn btn-secondary btn-sm" onClick={() => void loadRecords(page.cursor, page.previous)}>重新读取记录</button></div> : null}
+        {page.data?.records.length === 0 ? <p className="t-sm t-mute">{page.cursor ? "本页暂无记录。" : "尚未记录目标或指示。"}</p> : null}
+        {page.data?.records.length ? <ol className="space-y-4">
+          {page.data.records.map(record => <li key={record.id} className="border-b border-[var(--bd-hair)] pb-4 last:border-0 last:pb-0">
+            <RecordContent record={record} onSource={trigger => showSource(record, trigger)} />
             <div className="mt-2 flex flex-wrap gap-1">
-              <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => showHistory(record.id)}><History />历史</button>
-              {record.canRevise ? <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => begin(record)}><Pencil />更正</button> : null}
-              {record.canConfirm ? <button type="button" className="btn btn-secondary btn-sm" disabled={pending} onClick={() => void confirmRecord(record)}><Check />核对确认</button> : null}
+              <button type="button" className="btn btn-ghost btn-sm" disabled={pending} aria-label={`查看${contextKindLabels[record.kind]}记录的历史版本`} onClick={event => showHistory(record, undefined, event.currentTarget)}><History />查看历史版本</button>
+              {record.canRevise ? <button type="button" className="btn btn-ghost btn-sm" disabled={pending} aria-label={`更正${contextKindLabels[record.kind]}第 ${record.version} 版记录`} onClick={event => begin(record, event.currentTarget)}><Pencil />更正此记录</button> : null}
+              {record.canConfirm ? <button type="button" className="btn btn-secondary btn-sm" disabled={pending} aria-label={`核对确认${contextKindLabels[record.kind]}第 ${record.version} 版记录`} onClick={() => void confirmRecord(record)}><Check />核对确认此版本</button> : null}
             </div>
           </li>)}
-        </ol>}
-        {view.hasMore ? <p className="mt-3 t-xs t-mute">当前显示最近 100 条记录。</p> : null}
+        </ol> : null}
+        {page.previous.length > 0 || page.data?.nextCursor ? <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" className="btn btn-secondary btn-sm" disabled={page.pending || page.previous.length === 0} aria-label="目标与指示上一页" onClick={() => void loadRecords(page.previous.at(-1) ?? null, page.previous.slice(0, -1))}>上一页</button>
+          <button type="button" className="btn btn-secondary btn-sm" disabled={page.pending || !page.data?.nextCursor} aria-label="更多目标与指示" onClick={() => { if (page.data?.nextCursor) void loadRecords(page.data.nextCursor, [...page.previous, page.cursor]); }}>更多</button>
+          {page.error ? <button type="button" className="btn btn-ghost btn-sm" disabled={page.pending} onClick={() => void loadRecords(null, [])}>最新记录</button> : null}
+        </div> : null}
       </div>
+    </section>
 
-      <Sheet open={editor !== null} onOpenChange={open => { if (!open && !editorBusy) setEditor(null); }}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
-          <SheetHeader><SheetTitle>{editor?.record ? "更正记录" : "记录目标与指示"}</SheetTitle><SheetDescription>保存后待主办或协办核对确认；更正会保留旧版。</SheetDescription></SheetHeader>
-          {editor ? <ContextEditor key={editor.key} matterId={matterId} state={editor} canReadFinance={view.canReadFinance} onSaving={setEditorBusy}
+      <Sheet open={editor !== null} onOpenChange={open => { if (!open) void closeEditor(); }}>
+        <SheetContent ref={editorContent} className="w-full overflow-y-auto sm:max-w-xl" onCloseAutoFocus={event => { event.preventDefault(); restoreFocus(editorTrigger.current, addTrigger.current, sectionTitle.current); }}>
+          <SheetHeader><SheetTitle>{editor?.record ? `更正${contextKindLabels[editor.record.kind]}记录（当前第 ${editor.record.version} 版）` : "记录目标或指示"}</SheetTitle><SheetDescription>{editor?.record ? `保存为第 ${editor.record.version + 1} 版，保留第 ${editor.record.version} 版；新版需重新核对确认。` : "保存后待主办或协办核对确认。"}</SheetDescription></SheetHeader>
+          {editor ? <ContextEditor key={editor.key} matterId={matterId} state={editor} canReadFinance={Boolean(page.data?.canReadFinance)} onSaving={setEditorBusy} onDirtyChange={setEditorDirty}
+            onLoadSources={request => void loadSources(editor.key, request)}
             onSaved={() => { setEditor(null); router.refresh(); }} /> : null}
         </SheetContent>
       </Sheet>
 
-      <Sheet open={history !== null} onOpenChange={open => { if (!open) setHistory(null); }}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
-          <SheetHeader><SheetTitle>记录历史</SheetTitle><SheetDescription>按版本倒序查看原记录、来源及当时的核对状态。</SheetDescription></SheetHeader>
+      <Sheet open={history !== null} onOpenChange={open => { if (!open) { historyRequest.current++; setHistory(null); } }}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-xl" onCloseAutoFocus={event => { event.preventDefault(); restoreFocus(historyTrigger.current, addTrigger.current, sectionTitle.current); }}>
+          <SheetHeader><SheetTitle ref={historyTitle} tabIndex={-1}>{history ? `${contextKindLabels[history.kind]}的历史版本` : "记录的历史版本"}</SheetTitle><SheetDescription>按版本倒序查看原记录、来源及当时的核对状态。</SheetDescription></SheetHeader>
           <div className="mt-5 space-y-5">
-            {history?.error ? <p role="alert" className="text-sm text-destructive">{history.error}</p> : null}
-            {!history?.data && pending ? <p role="status" className="t-sm t-mute">正在读取历史…</p> : null}
-            {history?.data?.records.map(record => <article key={record.id} className="border-b border-[var(--bd-hair)] pb-4"><RecordContent record={record} onSource={() => showSource(record.id)} /></article>)}
-            {history?.data?.nextBeforeVersion ? <button type="button" disabled={pending} className="btn btn-secondary btn-sm" onClick={() => showHistory(history.id, history.data!.nextBeforeVersion!)}>较早版本</button> : null}
-            {history?.error ? <button type="button" disabled={pending} className="btn btn-secondary btn-sm" onClick={() => showHistory(history.id)}>重新读取</button> : null}
+            {historyError ? <p role="alert" className="text-sm text-destructive">{historyError}</p> : null}
+            {historyLoading ? <p role="status" className="t-sm t-mute">正在读取历史…</p> : null}
+            {historyData?.records.map(record => <article key={record.id} className="border-b border-[var(--bd-hair)] pb-4"><RecordContent record={record} onSource={trigger => showSource(record, trigger, true)} /></article>)}
+            {history && historyData?.nextBeforeVersion ? <button type="button" disabled={historyLoading} className="btn btn-secondary btn-sm" onClick={() => void showHistory(history, historyData.nextBeforeVersion!)}>查看更早版本</button> : null}
+            {history && historyError ? <button type="button" disabled={historyLoading} className="btn btn-secondary btn-sm" onClick={() => void showHistory(history)}>重新读取历史版本</button> : null}
           </div>
         </SheetContent>
       </Sheet>
 
-      <Sheet open={source !== null} onOpenChange={open => { if (!open) setSource(null); }}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
-          <SheetHeader><SheetTitle>{source?.data?.label ?? "查看来源"}</SheetTitle><SheetDescription>按当前资格读取关联原记录。</SheetDescription></SheetHeader>
+      <Sheet open={source !== null} onOpenChange={open => { if (!open) { sourceRequest.current++; setSource(null); } }}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-xl" onCloseAutoFocus={event => {
+          event.preventDefault();
+          restoreFocus(sourceTrigger.current, sourceFromHistory.current && history !== null ? historyTitle.current : null, addTrigger.current, sectionTitle.current);
+        }}>
+          <SheetHeader><SheetTitle>{source ? `${source.recordLabel}的来源` : "查看记录来源"}</SheetTitle><SheetDescription>{sourceData?.label ?? "按当前资格读取关联原记录。"}</SheetDescription></SheetHeader>
           <div className="mt-5 space-y-4">
-            {source?.error ? <p role="alert" className="text-sm text-destructive">{source.error}</p> : null}
-            {!source?.data && !source?.error ? <p role="status" className="t-sm t-mute">正在读取来源…</p> : null}
-            {source?.data?.content ? <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{source.data.content}</p> : null}
-            {source?.data?.href ? <a className="btn btn-secondary" href={source.data.href} target="_blank" rel="noopener noreferrer">打开来源原件</a> : null}
+            {sourceError ? <p role="alert" className="text-sm text-destructive">{sourceError}</p> : null}
+            {sourceLoading ? <p role="status" className="t-sm t-mute">正在读取来源…</p> : null}
+            {sourceData?.content ? <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{sourceData.content}</p> : null}
+            {sourceData?.href ? <a className="btn btn-secondary" href={sourceData.href} target="_blank" rel="noopener noreferrer">打开来源原件</a> : null}
+            {source && sourceError ? <button type="button" className="btn btn-secondary btn-sm" disabled={sourceLoading} onClick={() => void loadSource(source.id, source.recordLabel)}>重新读取来源</button> : null}
           </div>
         </SheetContent>
       </Sheet>
-    </section>
+    </>
   );
 }
 
-function RecordContent({ record, onSource }: { record: ContextRecordView; onSource: () => void }) {
+function RecordContent({ record, onSource }: { record: ContextRecordView; onSource: (trigger: HTMLButtonElement) => void }) {
   return <>
     <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-[var(--t-muted)]">
       <span className="font-medium text-foreground">{contextKindLabels[record.kind]}</span><span>第 {record.version} 版</span>
@@ -157,7 +275,7 @@ function RecordContent({ record, onSource }: { record: ContextRecordView; onSour
       <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{record.content}</p>
       {record.reason ? <p className="mt-2 whitespace-pre-wrap break-words text-sm"><span className="t-mute">理由：</span>{record.reason}</p> : null}
       <p className="mt-2 whitespace-pre-wrap break-words text-xs text-[var(--t-muted)]">来源：{record.sourceDescription}</p>
-      {record.source?.available ? <button type="button" className="link-inline mt-1 text-xs" onClick={onSource}>{record.source.label}</button> : null}
+      {record.source?.available ? <button type="button" className="link-inline mt-1 text-xs" aria-label={`查看${contextKindLabels[record.kind]}第 ${record.version} 版的来源：${record.source.label}`} onClick={event => onSource(event.currentTarget)}>查看来源：{record.source.label}</button> : null}
     </> : <p className="text-sm text-[var(--t-muted)]">关联来源已不可读取，记录正文暂不显示。</p>}
     <p className="mt-2 flex flex-wrap gap-x-2 text-xs text-[var(--t-muted)]"><span>{record.authorName}</span><time dateTime={record.occurredAt}>{when(record.occurredAt)}</time>
       {record.confirmedAt ? <span>核对：{record.confirmedByName} · {when(record.confirmedAt)}</span> : null}
@@ -165,7 +283,7 @@ function RecordContent({ record, onSource }: { record: ContextRecordView; onSour
   </>;
 }
 
-function ContextEditor({ matterId, state, canReadFinance, onSaved, onSaving }: { matterId: string; state: EditorState; canReadFinance: boolean; onSaved: () => void; onSaving: (value: boolean) => void }) {
+function ContextEditor({ matterId, state, canReadFinance, onSaved, onSaving, onDirtyChange, onLoadSources }: { matterId: string; state: EditorState; canReadFinance: boolean; onSaved: () => void; onSaving: (value: boolean) => void; onDirtyChange: (value: boolean) => void; onLoadSources: (request?: ContextSourcePageInput) => void }) {
   const prefix = useId();
   const record = state.record;
   const [kind, setKind] = useState<ContextKind>(record?.kind ?? "GOAL");
@@ -174,11 +292,20 @@ function ContextEditor({ matterId, state, canReadFinance, onSaved, onSaving }: {
   const [reason, setReason] = useState(record?.reason ?? "");
   const [sourceDescription, setSourceDescription] = useState(record?.sourceDescription ?? "");
   const [sourceKey, setSourceKey] = useState(record?.source?.id ? `${record.source.type}:${record.source.id}` : "");
-  const [occurredAt, setOccurredAt] = useState(() => toShanghaiInput(new Date()));
+  const [sourceLabel, setSourceLabel] = useState(record?.source?.label ?? "");
+  const [initialOccurredAt] = useState(() => toShanghaiInput(new Date()));
+  const [occurredAt, setOccurredAt] = useState(initialOccurredAt);
   const [error, setError] = useState("");
   const [pending, start] = useTransition();
   const choices = state.options?.choices ?? [];
-  const previousSource = record?.source?.id && !choices.some(choice => `${choice.type}:${choice.id}` === `${record.source!.type}:${record.source!.id}`) ? record.source : null;
+  const selectedSourceMissing = sourceKey && !choices.some(choice => `${choice.type}:${choice.id}` === sourceKey);
+  const dirty = kind !== (record?.kind ?? "GOAL") || visibility !== (record?.visibility ?? "MATTER")
+    || content !== (record?.content ?? "") || reason !== (record?.reason ?? "")
+    || sourceDescription !== (record?.sourceDescription ?? "")
+    || sourceKey !== (record?.source?.id ? `${record.source.type}:${record.source.id}` : "")
+    || occurredAt !== initialOccurredAt;
+
+  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError("");
@@ -203,21 +330,21 @@ function ContextEditor({ matterId, state, canReadFinance, onSaved, onSaving }: {
     <fieldset disabled={pending} className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5"><Label htmlFor={`${prefix}-kind`}>记录类型</Label><select id={`${prefix}-kind`} value={kind} disabled={Boolean(record)} onChange={event => setKind(event.target.value as ContextKind)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">{Object.entries(contextKindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
-        <div className="space-y-1.5"><Label htmlFor={`${prefix}-visibility`}>可见范围</Label><select id={`${prefix}-visibility`} value={visibility} disabled={Boolean(record)} onChange={event => setVisibility(event.target.value as ContextVisibility)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">{Object.entries(contextVisibilityLabels).filter(([value]) => value !== "FINANCE" || canReadFinance).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
+        <div className="space-y-1.5"><Label htmlFor={`${prefix}-visibility`}>可见范围</Label><select id={`${prefix}-visibility`} value={visibility} disabled={Boolean(record)} onChange={event => setVisibility(event.target.value as ContextVisibility)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">{Object.entries(contextVisibilityLabels).filter(([value]) => value !== "FINANCE" || canReadFinance || visibility === "FINANCE").map(([value, label]) => <option key={value} value={value} disabled={value === "FINANCE" && !canReadFinance}>{label}</option>)}</select></div>
       </div>
       <div className="space-y-1.5"><Label htmlFor={`${prefix}-content`}>内容 *</Label><Textarea id={`${prefix}-content`} required maxLength={8000} rows={6} value={content} onChange={event => setContent(event.target.value)} /></div>
       {kind === "CONSTRAINT" ? <p className="t-xs t-mute">费用及预算约束请选择财务可见范围。</p> : null}
       <div className="space-y-1.5"><Label htmlFor={`${prefix}-occurred`}>发生时间（北京时间）*</Label><Input id={`${prefix}-occurred`} type="datetime-local" required value={occurredAt} onChange={event => setOccurredAt(event.target.value)} /></div>
       <div className="space-y-1.5"><Label htmlFor={`${prefix}-reason`}>{record ? "更正或决定理由" : "理由"}</Label><Textarea id={`${prefix}-reason`} rows={2} maxLength={3000} value={reason} onChange={event => setReason(event.target.value)} /></div>
-      <div className="space-y-1.5"><Label htmlFor={`${prefix}-source`}>关联来源</Label><select id={`${prefix}-source`} value={sourceKey} onChange={event => setSourceKey(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"><option value="">仅填写来源说明</option>
-        {previousSource ? <option value={`${previousSource.type}:${previousSource.id}`}>{previousSource.label}</option> : null}
+      <div className="space-y-1.5"><Label htmlFor={`${prefix}-source`}>关联来源</Label><select id={`${prefix}-source`} value={sourceKey} onChange={event => { setSourceKey(event.target.value); setSourceLabel(choices.find(choice => `${choice.type}:${choice.id}` === event.target.value)?.label ?? ""); }} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"><option value="">仅填写来源说明</option>
+        {selectedSourceMissing ? <option value={sourceKey}>{sourceLabel}（保存时重新核验）</option> : null}
         {choices.map(choice => <option key={`${choice.type}:${choice.id}`} value={`${choice.type}:${choice.id}`}>{choice.label}</option>)}
-      </select>{state.options === null ? <p role="status" className="t-xs t-mute">正在读取可关联来源…</p> : null}
-      {state.error ? <p role="alert" className="text-xs text-destructive">{state.error}</p> : null}
-      {state.options?.truncated ? <p className="t-xs t-mute">仅列出最近材料与沟通；其他来源请在下方准确说明。</p> : null}</div>
+      </select>{state.loading ? <p role="status" className="t-xs t-mute">正在读取可关联来源…</p> : null}
+      {state.error ? <div role="alert" className="flex flex-wrap items-center gap-2 text-xs text-destructive"><span>{state.error}</span><button type="button" className="btn btn-secondary btn-sm" disabled={state.loading} onClick={() => onLoadSources(state.failedPage)}>重试</button>{state.failedPage ? <button type="button" className="btn btn-ghost btn-sm" disabled={state.loading} onClick={() => onLoadSources()}>重新读取来源</button> : null}</div> : null}
+      {state.options ? <div className="flex flex-wrap gap-2">{(Object.keys(sourceMoreLabels) as ContextSourceType[]).map(type => state.options!.nextCursors[type] ? <button key={type} type="button" className="btn btn-secondary btn-sm" disabled={state.loading} onClick={() => onLoadSources({ type, cursor: state.options!.nextCursors[type]! })}>{sourceMoreLabels[type]}</button> : null)}</div> : null}</div>
       <div className="space-y-1.5"><Label htmlFor={`${prefix}-source-description`}>来源说明 *</Label><Textarea id={`${prefix}-source-description`} required rows={3} maxLength={1200} value={sourceDescription} onChange={event => setSourceDescription(event.target.value)} placeholder="指示人、沟通方式、原件位置或其他真实依据" /></div>
     </fieldset>
     {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
-    <div className="flex justify-end"><button type="submit" disabled={pending} className="btn btn-primary">{pending ? <Loader2 className="animate-spin" /> : <Check />}保存记录</button></div>
+    <div className="flex justify-end"><button type="submit" disabled={pending} className="btn btn-primary">{pending ? <Loader2 className="animate-spin" /> : <Check />}{record ? "保存更正版" : "保存记录"}</button></div>
   </form>;
 }

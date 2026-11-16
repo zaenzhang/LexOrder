@@ -12,6 +12,8 @@ import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/session";
 import { assertCanReadMatter } from "@/lib/permissions";
 import { audit } from "@/server/audit";
+import { reviewCoverageSchema, summarizeReviewCoverage } from "@/lib/ai/review-coverage";
+import { actionErrorMessage } from "@/lib/action-error";
 import { reviewDocument } from "./review-document";
 import { canReviewDocument } from "./document-access";
 import { revalidateMatter } from "@/server/matters/route";
@@ -67,9 +69,12 @@ export async function batchReviewMatterDocuments(input: {
       reviewedAt: { gte: cutoff },
       documentId: { in: eligibleDocs.map((d) => d.id) }
     },
-    select: { documentId: true }
+    select: { documentId: true, coverageJson: true }
   });
-  const recentSet = new Set(recent.map((r) => r.documentId));
+  const recentSet = new Set(recent.filter(record => {
+    const coverage = reviewCoverageSchema.safeParse(record.coverageJson);
+    return coverage.success && summarizeReviewCoverage(coverage.data).status === "COMPLETE";
+  }).map(record => record.documentId));
 
   const todo: typeof eligibleDocs = [];
   for (const d of eligibleDocs) {
@@ -108,7 +113,12 @@ export async function batchReviewMatterDocuments(input: {
   const errors: BatchReviewSummary["errors"] = [];
   for (const d of batch) {
     try {
-      const r = await reviewDocument({ documentId: d.id });
+      const r = await reviewDocument({ matterId: input.matterId, documentId: d.id });
+      const counts = summarizeReviewCoverage(r.coverage);
+      if (counts.status !== "COMPLETE") {
+        errors.push({ documentId: d.id, documentName: d.name, error: `本次未完成：有效回复 ${counts.completedSegments} / ${counts.totalSegments} 段，失败 ${counts.failedSegments} 段，未请求 ${counts.notSentSegments} 段` });
+        continue;
+      }
       reviewed.push({
         documentId: d.id,
         documentName: d.name,
@@ -118,7 +128,7 @@ export async function batchReviewMatterDocuments(input: {
       errors.push({
         documentId: d.id,
         documentName: d.name,
-        error: err instanceof Error ? err.message : "未知错误"
+        error: actionErrorMessage(err) || "审查失败"
       });
     }
   }

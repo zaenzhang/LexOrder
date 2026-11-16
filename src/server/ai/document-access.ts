@@ -10,10 +10,13 @@
  *   - 业务管理权（managerAuthorized）与审批临时阅读资格（用章/开票/文书审批的
  *     当次附件访问）都不取得全文外发资格——管理权只放大「可见」，审批权只覆盖
  *     当次申请附件的下载，不覆盖 AI 全文外发。
- * 发起资格（documents.write）由各入口 requireSession 把关；本断言只管对象归属。
+ * 每次外发与结果发布均复核当前 documents.write、原材料读取资格和对象归属。
  *
  * 注意：本模块不标 "use server"——断言 helper 一旦进入 action 模块导出就成了可伪造参数的 RPC 端点。
  */
+import type { Prisma } from "@prisma/client";
+import { hasCustomPermission } from "@/lib/roles/catalog";
+import { canReadDocument } from "@/lib/approvals/documents";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/session";
 import { isManager } from "@/lib/permissions";
@@ -24,18 +27,20 @@ type AppSession = Awaited<ReturnType<typeof requireSession>>;
 
 export async function canReviewDocument(
   userId: string,
-  doc: { id: string; uploadedById: string | null; matterId: string | null; intakeId: string | null }
+  doc: { id: string; uploadedById: string | null; matterId: string | null; intakeId: string | null },
+  db: Prisma.TransactionClient = prisma
 ): Promise<boolean> {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, active: true } });
+  const user = await db.user.findUnique({ where: { id: userId }, select: { role: true, active: true } });
   if (!user?.active) return false;
-  const access = await resolveRoleUser(userId, user.role);
-  if (!access.enabled) return false;
+  const access = await resolveRoleUser(userId, user.role, db);
+  if (!access.enabled || !hasCustomPermission(access, "documents.write")) return false;
+  if (!doc.uploadedById || !await canReadDocument(userId, { ...doc, uploadedById: doc.uploadedById })) return false;
   if (isManager(access.role)) return true;
-  if (doc.matterId && await prisma.matter.count({
+  if (doc.matterId && await db.matter.count({
     where: { id: doc.matterId, deletedAt: null, OR: [{ ownerId: userId }, { members: { some: { userId } } }] }
   })) return true;
   if (doc.intakeId) {
-    const intake = await prisma.intake.findUnique({
+    const intake = await db.intake.findUnique({
       where: { id: doc.intakeId },
       select: { createdById: true, ownerUserId: true, coUserIds: true }
     });
@@ -47,15 +52,17 @@ export async function canReviewDocument(
 
 export async function assertCanReviewDocument(
   session: AppSession,
-  docRef: { id: string; matterId?: string | null; intakeId?: string | null }
+  docRef: { id: string; matterId?: string | null; intakeId?: string | null; sha256?: string | null },
+  db: Prisma.TransactionClient = prisma
 ): Promise<void> {
-  const doc = await prisma.document.findUnique({
+  const doc = await db.document.findUnique({
     where: { id: docRef.id },
-    select: { id: true, uploadedById: true, matterId: true, intakeId: true, deletedAt: true }
+    select: { id: true, uploadedById: true, matterId: true, intakeId: true, deletedAt: true, sha256: true }
   });
   if (!doc || doc.deletedAt) throw new ActionError("材料不存在");
   if (doc.matterId !== (docRef.matterId ?? null) || doc.intakeId !== (docRef.intakeId ?? null)) {
     throw new ActionError("材料归属已变化，请刷新后重试");
   }
-  if (!(await canReviewDocument(session.user.id, doc))) throw new ActionError("无权审查该材料");
+  if (docRef.sha256 !== undefined && doc.sha256 !== docRef.sha256) throw new ActionError("原材料版本已变化，不能继续审查或发布结果");
+  if (!(await canReviewDocument(session.user.id, doc, db))) throw new ActionError("无权审查该材料");
 }

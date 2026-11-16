@@ -1,41 +1,30 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { matterHref, normalizeMatterParam } from "@/lib/matters/route";
+import { matterHref } from "@/lib/matters/route";
 
 /**
- * 把详情页路由参数解析成案件主键。
- *
- * 不去猜参数形状（cuid 还是编号），直接让数据库同时匹配两者：
- * `internalCode` 有唯一索引，cuid 不含 `-`、编号必含，两者不可能撞，
- * 一次查询即可，也不用为 cuid 的具体格式（v1/v2）写正则。
- *
- * 返回 `internalCode` 供调用方判断是否需要重定向到规范地址。
+ * Next 已解码动态路由参数；只精确匹配实际编号，不再解码或规范化。
+ * 这里只解析身份，调用页面仍须通过现有案件读取服务校验访问资格。
  */
 export async function resolveMatterRoute(
   param: string
 ): Promise<{ id: string; internalCode: string } | null> {
-  const normalized = normalizeMatterParam(param);
-
-  const matter = await prisma.matter.findFirst({
-    where: {
-      deletedAt: null,
-      OR: [{ id: param }, { internalCode: normalized }]
-    },
-    select: { id: true, internalCode: true }
+  const matter = await prisma.matter.findUnique({
+    where: { internalCode: param },
+    select: { id: true, internalCode: true, deletedAt: true }
   });
-
-  return matter;
+  return !matter || matter.deletedAt ? null : { id: matter.id, internalCode: matter.internalCode };
 }
 
 /**
  * 只拿得到 matterId 时的详情页地址（通知 href 会落库，必须用稳定的编号）。
  */
 export async function matterHrefById(matterId: string): Promise<string> {
-  const matter = await prisma.matter.findUnique({
+  const matter = await prisma.matter.findUniqueOrThrow({
     where: { id: matterId },
     select: { internalCode: true }
   });
-  return matterHref({ id: matterId, internalCode: matter?.internalCode ?? null });
+  return matterHref(matter);
 }
 
 /**
@@ -55,5 +44,5 @@ export async function revalidateMatter(matterId: string | null | undefined): Pro
   });
   if (!matter) return;
 
-  revalidatePath(`/matters/${encodeURIComponent(matter.internalCode)}`);
+  revalidatePath(matterHref(matter));
 }

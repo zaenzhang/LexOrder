@@ -6,10 +6,12 @@ const { db, canApprove } = vi.hoisted(() => ({ db: {
 vi.mock("@/lib/approvals/history-access", () => ({ hasHandledApproval: vi.fn(async () => false) }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 vi.mock("@/lib/approvals/service", () => ({ canApproveItem: canApprove }));
+const resolveSource = vi.hoisted(() => vi.fn());
+vi.mock("@/server/ai/review-report-source", () => ({ resolveReviewReportSource: resolveSource }));
 import { canReadDocument } from "@/lib/approvals/documents";
 const doc = { id: "doc-id", uploadedById: "uploader", matterId: null, intakeId: null };
 beforeEach(() => {
-  vi.resetAllMocks(); db.user.findUnique.mockResolvedValue({ active: true, role: "LAWYER" });
+  vi.resetAllMocks(); resolveSource.mockImplementation(async (id: string) => ({ kind: "ORDINARY", document: { ...doc, id, deletedAt: null } })); db.user.findUnique.mockResolvedValue({ active: true, role: "LAWYER" });
   db.matter.count.mockResolvedValue(0); db.document.findUnique.mockResolvedValue({ status: "DRAFT" });
   db.sealRequest.findFirst.mockResolvedValue(null); db.invoiceRequest.findMany.mockResolvedValue([]); db.archiveRecord.findMany.mockResolvedValue([]); canApprove.mockResolvedValue(false);
 });

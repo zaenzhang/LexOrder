@@ -1,5 +1,5 @@
 "use server";
-import {assertClosureReady,closureReady} from "./closure";
+import {assertClosureReady} from "./closure";
 import {buildArchiveManifest} from "./export";
 import {scopeFor} from "@/lib/roles/catalog";
 import { hasPersonalCapability } from "@/lib/runtime/capabilities";
@@ -25,7 +25,7 @@ import {
   type ArchiveReviewSnapshot
 } from "@/lib/archive/snapshot";
 import { nextArchiveNo } from "@/lib/archive/archive-no";
-import { assertMatterWritable } from "@/lib/archive/guard";
+import { assertMatterWritable, isArchiveFolderName } from "@/lib/archive/guard";
 import { assertCanLeadMatter, matterReadVisibilityFilter } from "@/lib/permissions";
 import { renderArchiveCover, renderArchiveCatalog } from "./render";
 import { archiveApproveSchema, archiveSubmitSchema, type ArchiveApproveInput, type ArchiveSubmitInput, CLOSED_REASON_CN } from "./schemas";
@@ -268,7 +268,7 @@ export async function archiveMatter(input: ArchiveSubmitInput) {
           reviewedAt: null
         }
       });
-      if(workflow)await tx.$executeRaw`UPDATE "ArchiveRecord" SET "workflowSnapshot"=${JSON.stringify(workflow)}::jsonb,"supplementOfId"=${parent?.id??null} WHERE id=${record.id}`;
+      await tx.$executeRaw`UPDATE "ArchiveRecord" SET "workflowSnapshot"=${JSON.stringify(workflow)}::jsonb,"supplementOfId"=${parent?.id??null} WHERE id=${record.id}`;
       await recordTimelineEvent(tx, {
           matterId: matter.id,
           eventType: "MATTER_ARCHIVE_REQUESTED",
@@ -343,12 +343,10 @@ export async function approveArchiveRecord(input: ArchiveApproveInput) {
   const now = new Date();
   await approvalTransaction(async (tx) => {
     await assertApprovalItem(session.user.id, "ARCHIVE_APPROVE", data.archiveId, tx);
-    let supplementOfId:string|null=null;
-    if(await closureReady(tx)){
-      const [saved]=await tx.$queryRaw<{workflowSnapshot:{fingerprint:string}|null;supplementOfId:string|null}[]>`SELECT "workflowSnapshot","supplementOfId" FROM "ArchiveRecord" WHERE id=${record.id}`;
-      if(!saved?.workflowSnapshot)throw new ActionError('缺少归档核对快照，请退回重新送审');
-      await assertClosureReady(tx,record.matterId,saved.workflowSnapshot.fingerprint,{supplement:Boolean(saved.supplementOfId)});supplementOfId=saved.supplementOfId;
-    }
+    const [saved]=await tx.$queryRaw<{workflowSnapshot:{fingerprint:string}|null;supplementOfId:string|null}[]>`SELECT "workflowSnapshot","supplementOfId" FROM "ArchiveRecord" WHERE id=${record.id}`;
+    if(!saved?.workflowSnapshot?.fingerprint)throw new ActionError('缺少归档核对快照，请退回重新送审');
+    const supplementOfId=saved.supplementOfId;
+    await assertClosureReady(tx,record.matterId,saved.workflowSnapshot.fingerprint,{supplement:Boolean(supplementOfId)});
     await approvalAudit(tx, session.user.id, "ARCHIVE_APPROVE", data.archiveId, {
       note: data.note?.trim() ?? "",
       attachmentIds: snapshot.documentIds,
@@ -377,12 +375,13 @@ export async function approveArchiveRecord(input: ArchiveApproveInput) {
         content: data.note?.trim() ? `审批意见：${data.note.trim()}` : "审批人已逐项核验并通过",
         occurredAt: now
       });
-    if(await closureReady(tx)){const frozen=await buildArchiveManifest(tx,record.id);await tx.$executeRaw`UPDATE "ArchiveRecord" SET "frozenManifest"=${JSON.stringify(frozen)}::jsonb WHERE id=${record.id}`;}
+    const frozen=await buildArchiveManifest(tx,record.id);
+    await tx.$executeRaw`UPDATE "ArchiveRecord" SET "frozenManifest"=${JSON.stringify(frozen)}::jsonb WHERE id=${record.id}`;
   });
 
   // v0.18: 通知申请人
   if (record.archivedById && record.archivedById !== session.user.id) {
-    const matter = await prisma.matter.findUnique({
+    const matter = await prisma.matter.findUniqueOrThrow({
       where: { id: record.matterId },
       select: { title: true, internalCode: true }
     });
@@ -391,8 +390,8 @@ export async function approveArchiveRecord(input: ArchiveApproveInput) {
       type: "ARCHIVE_APPROVED",
       priority: "NORMAL",
       title: `归档申请已通过（${record.archiveNo}）`,
-      content: `案件 ${matter?.internalCode ?? record.matterId}·${matter?.title ?? ""} 的归档申请已获管理员批准。`,
-      href: matterHref({ id: record.matterId, internalCode: matter?.internalCode ?? null }),
+      content: `案件 ${matter.internalCode}·${matter.title} 的归档申请已获管理员批准。`,
+      href: matterHref(matter),
       refType: "ArchiveRecord",
       refId: record.id
     });
@@ -457,7 +456,7 @@ export async function rejectArchiveRecord(input: { archiveId: string; note: stri
 
   // v0.18: 通知申请人
   if (record.archivedById && record.archivedById !== session.user.id) {
-    const matter = await prisma.matter.findUnique({
+    const matter = await prisma.matter.findUniqueOrThrow({
       where: { id: record.matterId },
       select: { title: true, internalCode: true }
     });
@@ -466,8 +465,8 @@ export async function rejectArchiveRecord(input: { archiveId: string; note: stri
       type: "ARCHIVE_REJECTED",
       priority: "HIGH",
       title: `归档申请被驳回（${record.archiveNo}）`,
-      content: `案件 ${matter?.internalCode ?? record.matterId}·${matter?.title ?? ""} 的归档申请被驳回。原因：${input.note.trim()}`,
-      href: matterHref({ id: record.matterId, internalCode: matter?.internalCode ?? null }),
+      content: `案件 ${matter.internalCode}·${matter.title} 的归档申请被驳回。原因：${input.note.trim()}`,
+      href: matterHref(matter),
       refType: "ArchiveRecord",
       refId: record.id
     });
@@ -526,7 +525,7 @@ export async function getArchivePrepData(matterId: string) {
     select: { content: true }
   });
 
-  const [availableDocuments, policy] = await Promise.all([
+  const [availableDocuments, policy, folders] = await Promise.all([
     prisma.document.findMany({
       where: {
         matterId,
@@ -545,10 +544,15 @@ export async function getArchivePrepData(matterId: string) {
       },
       orderBy: [{ folder: { orderIndex: "asc" } }, { createdAt: "asc" }]
     }),
-    getArchivePolicy()
+    getArchivePolicy(),
+    prisma.documentFolder.findMany({
+      where: { matterId },
+      orderBy: [{ orderIndex: "asc" }, { id: "asc" }],
+      select: { id: true, name: true }
+    })
   ]);
 
-  // 兼容已有一对一关联，作为新材料选择器的预选值；正式送审仍以本次快照为准。
+  // 按材料的清单关联预选，正式送审仍以本次选择的快照为准。
   const linkedDocs = availableDocuments.filter((doc) => !!doc.archiveChecklistItemId);
 
   // itemId → 关联材料列表（保留全部，UI 展示首条 + 余数）
@@ -562,6 +566,7 @@ export async function getArchivePrepData(matterId: string) {
     matter,
     checklist,
     policy,
+    archiveFolder: folders.find((folder) => isArchiveFolderName(folder.name)) ?? null,
     existingSummary: lastCloseEvent?.content ?? null,
     docsByItem,
     availableDocuments: availableDocuments.map((doc) => ({

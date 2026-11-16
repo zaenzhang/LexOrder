@@ -14,7 +14,7 @@ import {
   procedureTypeLabel as PROC_TYPE_LABEL
 } from "@/lib/enums";
 import { formatCurrency, cn, formatDate as fmtDate } from "@/lib/utils";
-import { matterHref } from "@/lib/matters/route";
+import { matterListEntryHref } from "@/lib/matters/list-location";
 import { shDayKey, shDaysFromToday, shTime } from "@/lib/ui/sh-time";
 
 export type MatterRow = Omit<Matter, "claimAmount"> & {
@@ -103,11 +103,13 @@ export function CaseListHeader({
 
 export function MattersTable({
   items,
+  listQuery,
   metaColumn = "hearing",
   showIntakeDateColumn = false,
   showArchiveDateColumn = false
 }: {
   items: MatterRow[];
+  listQuery?: string;
   metaColumn?: MetaColumn;
   showIntakeDateColumn?: boolean;
   showArchiveDateColumn?: boolean;
@@ -126,7 +128,7 @@ export function MattersTable({
   // 墨案 03 效果图：默认（办理中/全部）视图用效果图原始 DOM 渲染（table + spine td）
   const isMockupView = !showIntakeDateColumn && !showArchiveDateColumn && metaColumn === "hearing";
   if (isMockupView) {
-    return <MockupMattersTable items={items} />;
+    return <MockupMattersTable items={items} listQuery={listQuery} />;
   }
 
   return (
@@ -140,7 +142,7 @@ export function MattersTable({
         {items.map((m) => (
           <CaseListCard
             key={m.id}
-            href={matterHref(m)}
+            href={matterListEntryHref(m, listQuery)}
             title={m.title}
             accent={matterCategoryColor[m.category]}
             status={{
@@ -494,7 +496,7 @@ const DEADLINE_SHORT: Record<string, string> = {
 };
 
 /** 墨案 03 档案架表格：案卷脊挂在首格，整行可点进入案件 */
-export function MockupMattersTable({ items, columns }: { items: MatterRow[]; columns?: MatterColumn[] }) {
+export function MockupMattersTable({ items, columns, listQuery }: { items: MatterRow[]; columns?: MatterColumn[]; listQuery?: string }) {
   const router = useRouter();
   const show = (c: MatterColumn) => !columns || columns.includes(c);
   if (items.length === 0) {
@@ -525,7 +527,7 @@ export function MockupMattersTable({ items, columns }: { items: MatterRow[]; col
         </thead>
         <tbody>
           {items.map((m) => (
-            <MockupMatterRow key={m.id} m={m} show={show} onOpen={() => router.push(matterHref(m))} />
+            <MockupMatterRow key={m.id} m={m} show={show} href={matterListEntryHref(m, listQuery)} onOpen={() => router.push(matterListEntryHref(m, listQuery))} />
           ))}
         </tbody>
       </table>
@@ -533,7 +535,7 @@ export function MockupMattersTable({ items, columns }: { items: MatterRow[]; col
   );
 }
 
-function MockupMatterRow({ m, show, onOpen }: { m: MatterRow; show: (c: MatterColumn) => boolean; onOpen: () => void }) {
+function MockupMatterRow({ m, show, onOpen, href }: { m: MatterRow; href: string; show: (c: MatterColumn) => boolean; onOpen: () => void }) {
   const proc = m.procedures[0] ?? null;
   const stages = [...(proc?.stages ?? [])].filter((s) => (s as { status?: string }).status !== "HIDDEN").sort((a, b) => a.order - b.order);
   const doneCount = stages.filter((s) => s.completedAt).length;
@@ -554,7 +556,7 @@ function MockupMatterRow({ m, show, onOpen }: { m: MatterRow; show: (c: MatterCo
   return (
     <tr data-spine={spine} className="is-link" onClick={onOpen}>
       <td style={{ paddingLeft: 20 }}>
-        <Link href={matterHref(m)} className="block min-w-0 no-underline" onClick={(e) => e.stopPropagation()}>
+        <Link href={href} className="block min-w-0 no-underline" onClick={(e) => e.stopPropagation()}>
           <span className="matter-name block truncate text-[13px] font-semibold tracking-[-0.005em] text-[var(--t-primary)]">{m.title || "（未命名）"}</span>
           <span className="mt-0.5 flex items-center gap-[5px] truncate text-[11px] text-[var(--t-muted)]">
             {overdue && nearest ? (

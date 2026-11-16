@@ -43,6 +43,7 @@
   ],
   "exclude": [
     "node_modules",
+    "tools/workbench-m1",
     "dist",
     "outputs",
     ".npm-cache",

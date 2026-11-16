@@ -32,7 +32,7 @@ const adminGroups = [
     title: "系统接入",
     description: "配置外部服务，并维护提醒和历史数据导入。",
     items: [
-      { href: "/admin/ai", label: "AI 与元典", icon: Bot },
+      { href: "/admin/ai", label: "AI 与外部服务", icon: Bot },
       { href: "/admin/express", label: "快递接入", icon: Package },
       { href: "/admin/reminders", label: "期限规则库", icon: BellRing },
       { href: "/admin/import", label: "批量导入", icon: FileUp }

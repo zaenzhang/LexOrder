@@ -16,7 +16,7 @@ import {
 import { matterHref } from "@/lib/matters/route";
 import { actionErrorMessage } from "@/lib/action-error";
 
-type MatterRef = { id: string; internalCode: string | null; firmCaseNo?: string | null; title: string; relation?: string | null };
+type MatterRef = { id: string; internalCode: string; firmCaseNo?: string | null; title: string; relation?: string | null };
 
 const RELATION_OPTIONS = [
   { value: "RELATED_CASE", label: "一般关联" },

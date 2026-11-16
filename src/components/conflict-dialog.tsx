@@ -359,7 +359,7 @@ export function ConflictDialog({
                     const style = severityStyle[h.severity];
                     const targetHref =
                       h.matterInfo?.canViewMatter && h.matterInfo.matterId
-                        ? matterHref({ id: h.matterInfo.matterId, internalCode: h.matterInfo.internalCode })
+                        ? matterHref(h.matterInfo)
                         : h.targetType === "Client"
                           ? `/clients/${h.targetId}`
                           : null;

@@ -21,33 +21,27 @@ describe("parseReviewItems", () => {
     expect(parseReviewItems("[]")).toEqual([]);
   });
 
-  it("title/detail 缺失的条目丢弃", () => {
+  it("缺失字段使该片段失败，不能丢弃后报告无问题", () => {
     const json = JSON.stringify([
       { type: "RISK", severity: "HIGH", title: "", detail: "x" },
       { type: "RISK", severity: "HIGH", title: "有效", detail: "" },
       { type: "RISK", severity: "HIGH", title: "保留", detail: "完整" }
     ]);
-    const items = parseReviewItems(json);
-    expect(items).toHaveLength(1);
-    expect(items[0].title).toBe("保留");
+    expect(() => parseReviewItems(json)).toThrow(/无法解析/);
   });
 
-  it("非法 type/severity 回退默认值", () => {
+  it("未知类型和等级拒绝，不猜测模型意图", () => {
     const json = JSON.stringify([
       { type: "UNKNOWN_TYPE", severity: "CRIT", title: "T", detail: "D" }
     ]);
-    const items = parseReviewItems(json);
-    expect(items[0].type).toBe("ISSUE");
-    expect(items[0].severity).toBe("MEDIUM");
+    expect(() => parseReviewItems(json)).toThrow(/无法解析/);
   });
 
-  it("大小写不规范也能识别", () => {
+  it("枚举须按现行合同返回", () => {
     const json = JSON.stringify([
       { type: "missing", severity: "high", title: "T", detail: "D" }
     ]);
-    const items = parseReviewItems(json);
-    expect(items[0].type).toBe("MISSING");
-    expect(items[0].severity).toBe("HIGH");
+    expect(() => parseReviewItems(json)).toThrow(/无法解析/);
   });
 
   it("JSON 被 markdown ``` 包裹也能抽取", () => {

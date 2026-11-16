@@ -13,11 +13,8 @@ import { prisma } from "@/lib/prisma";
 import { shMonthStart } from "@/server/finance/facts";
 import { requireSession } from "@/lib/auth/session";
 import { resolvePersonalActor } from "@/server/runtime/personal";
-import { assertMatterWritable } from "@/lib/archive/guard";
 import {
   assertCanAccessMatterFinance,
-  assertCanAssociateMatter,
-  assertCanLeadMatter,
   isManager,
   matterVisibilityFilter
 } from "@/lib/permissions";
@@ -60,29 +57,6 @@ function invoiceRequestVisibilityWhere(
       }
     ]
   };
-}
-
-/** 律师在案件详情提交开票申请 */
-const createSchema = z.object({
-  matterId: z.string().cuid(),
-  amount: z.coerce.number().positive("金额需大于 0"),
-  title: z.string().max(120).optional().or(z.literal("")),
-  requestNote: z.string().max(500).optional().or(z.literal(""))
-});
-
-export async function createInvoiceRequest(input: z.infer<typeof createSchema>) {
-  const session = await requireSession("approval");
-  const data = createSchema.parse(input);
-  await assertCanAssociateMatter(session.user.id, data.matterId);
-  await assertMatterWritable(data.matterId);
-
-  await assertCanLeadMatter(session.user.id, data.matterId, "仅案件主办/协办律师可申请开票");
-
-  // 两套入口一套规则（2026-09-20 A 批 P2-15）：旧表单缺少开票类型、名目、抬头与开票依据，
-  // 无法满足「关联案件必传开票依据、专票校验购方六要素」的现行服务端规则。此入口已无页面
-  // 引用（两个表单组件均使用 finance/actions 的完整版），剩余可达路径为直接 RPC——
-  // 不以"UI 不引用"作为安全依据，一律明确报错并指引完整入口，不创建缺依据的申请。
-  throw new ActionError("旧版开票入口已停用：缺少开票类型、名目、抬头与开票依据。请在案件财务区或财务页使用完整开票表单提交");
 }
 
 export async function listInvoiceRequests(filter?: { status?: "PENDING" | "ISSUED" | "REJECTED" | "APPROVED" }) {

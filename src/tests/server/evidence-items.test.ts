@@ -1,5 +1,7 @@
 // @vitest-environment node
+import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { emptyEvidenceEventDate, evidenceEventDateToRecord, type EvidenceEventDate } from "@/lib/evidence/event-date";
 
 const mocks = vi.hoisted(() => ({
   db: {
@@ -45,7 +47,9 @@ const now = new Date("2026-11-16T08:00:00Z");
 function fixture() {
   return {
     item: { id: ITEM, matterId: MATTER, title: "合成合同款", content: "合成记录：已支付价款。", kind: "FACT",
+      requestKey: null as string | null, requestHash: null as string | null,
       sourceDocumentId: null as string | null, sourcePage: null as number | null, revision: 1, updatedAt: now,
+      ...evidenceEventDateToRecord(emptyEvidenceEventDate()),
       confirmedById: null as string | null, confirmedAt: null as Date | null, createdById: mocks.session.user.id, createdAt: now },
     documents: [
       { id: DOC, matterId: MATTER, intakeId: null, uploadedById: mocks.session.user.id, deletedAt: null as Date | null,
@@ -60,8 +64,8 @@ function fixture() {
   };
 }
 let state: ReturnType<typeof fixture>;
-function currentItem() {
-  return structuredClone({ ...state.item, sources: state.sources.filter(source => !source.removedAt),
+function currentItem(includeRemoved = false) {
+  return structuredClone({ ...state.item, sources: state.sources.filter(source => includeRemoved || !source.removedAt),
     createdBy: { name: "合成记录人" }, confirmedBy: state.item.confirmedById ? { name: "合成确认人" } : null });
 }
 beforeEach(() => {
@@ -77,7 +81,11 @@ beforeEach(() => {
   mocks.db.document.findUnique.mockImplementation(async ({ where }) => structuredClone(state.documents.find(document => document.id === where.id) ?? null));
   mocks.db.document.findMany.mockImplementation(async ({ where }) => structuredClone(state.documents.filter(document =>
     (!where.id?.in || where.id.in.includes(document.id)) && (!where.matterId || document.matterId === where.matterId))));
-  mocks.db.evidenceItem.findUnique.mockImplementation(async ({ where, select }) => where.id !== ITEM ? null : select?.matterId ? { matterId: state.item.matterId } : currentItem());
+  mocks.db.evidenceItem.findUnique.mockImplementation(async ({ where, select, include }) => {
+    const key = where.createdById_requestKey;
+    if (key) return key.createdById === state.item.createdById && key.requestKey === state.item.requestKey ? currentItem(!include?.sources?.where) : null;
+    return where.id !== ITEM ? null : select?.matterId ? { matterId: state.item.matterId } : currentItem();
+  });
   mocks.db.evidenceItem.findMany.mockImplementation(async () => [currentItem()]);
   mocks.db.evidenceItem.create.mockResolvedValue({ id: ITEM });
   mocks.db.evidenceItem.updateMany.mockImplementation(async ({ where, data }) => {
@@ -109,9 +117,163 @@ beforeEach(() => {
   });
 });
 
+describe("人工创建幂等", () => {
+  const input = () => ({ requestKey: randomUUID(), matterId: MATTER, title: "合成提交", content: "合成正文", kind: "FACT" as const });
+  beforeEach(() => {
+    state.sources = [];
+    mocks.db.evidenceItem.create.mockImplementation(async ({ data }) => {
+      const { sources, ...fields } = data;
+      Object.assign(state.item, fields);
+      if (sources) state.sources.push({ ...fixture().sources[0], ...sources.create });
+      return { id: ITEM };
+    });
+  });
+
+  it("规范请求键、trim和缺省值，同次重试只回原id，缺键不进入事务", async () => {
+    const original = { ...input(), requestKey: "ABCDEF01-2345-4678-9ABC-DEF012345678", title: " 合成提交 ", content: " 合成正文 " };
+    const created = await createEvidenceItem(original);
+    const replay = await createEvidenceItem({ ...original, requestKey: original.requestKey.toLowerCase(), title: "合成提交", content: "合成正文",
+      eventDate: emptyEvidenceEventDate(), sourceDocumentId: null, sourcePage: null, sourceRelation: "SUPPORTS" });
+    expect(replay).toEqual(created);
+    expect(state.item.requestKey).toBe(original.requestKey.toLowerCase());
+    expect(state.item.requestHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(mocks.db.evidenceItem.create).toHaveBeenCalledTimes(1);
+    expect(mocks.audit).toHaveBeenCalledTimes(1);
+    expect(mocks.db.evidenceItemRevision.create).not.toHaveBeenCalled();
+    const withoutKey = { matterId: MATTER, title: original.title, content: original.content, kind: original.kind };
+    await expect(createEvidenceItem(withoutKey as never)).rejects.toThrow();
+    await expect(createEvidenceItem({ ...original, requestKey: "invalid" })).rejects.toThrow("保存标识");
+    expect(mocks.db.$transaction).toHaveBeenCalledTimes(2);
+  });
+
+  it("创建指纹覆盖日期、来源及事项，后续更正确认不重算也不回滚", async () => {
+    const original = { ...input(), sourceDocumentId: DOC, sourcePage: 1, sourceRelation: "CONTEXT" as const,
+      eventDate: { precision: "EXACT" as const, start: "2024-02-29", end: null, text: "合成原日期" } };
+    await createEvidenceItem(original);
+    for (const change of [
+      { title: "另一标题" }, { content: "另一正文" }, { kind: "CLAIM" as const }, { matterId: OTHER },
+      { eventDate: { ...original.eventDate, start: "2024-03-01" } }, { eventDate: { ...original.eventDate, text: "另一表述" } },
+      { sourceDocumentId: DOC_B }, { sourcePage: 2 }, { sourceRelation: "SUPPORTS" as const },
+    ]) await expect(createEvidenceItem({ ...original, ...change })).rejects.toThrow("此提交已保存且内容发生变化");
+    const hash = state.item.requestHash;
+    await updateEvidenceItem({ evidenceItemId: ITEM, expectedRevision: 1, title: "更正标题", content: "更正正文", kind: "CLAIM" });
+    await confirmEvidenceItem({ evidenceItemId: ITEM, expectedRevision: 2, confirm: true });
+    const current = currentItem();
+    const auditCount = mocks.audit.mock.calls.length;
+    expect(await createEvidenceItem(original)).toEqual({ ok: true, id: ITEM });
+    expect(currentItem()).toEqual(current);
+    expect(state.item.requestHash).toBe(hash);
+    expect(mocks.db.evidenceItem.create).toHaveBeenCalledTimes(1);
+    expect(mocks.db.evidenceItemRevision.create).toHaveBeenCalledTimes(1);
+    expect(mocks.audit).toHaveBeenCalledTimes(auditCount);
+  });
+
+  it("P2034重新开始整个事务且最多三次，错误不会变成成功", async () => {
+    mocks.db.$transaction.mockRejectedValueOnce({ code: "P2034" });
+    await expect(createEvidenceItem(input())).resolves.toEqual({ ok: true, id: ITEM });
+    expect(mocks.db.$transaction).toHaveBeenCalledTimes(2);
+    mocks.db.$transaction.mockClear();
+    mocks.db.$transaction.mockRejectedValue({ code: "P2034" });
+    await expect(createEvidenceItem(input())).rejects.toThrow("并发操作");
+    expect(mocks.db.$transaction).toHaveBeenCalledTimes(3);
+    expect(mocks.db.evidenceItem.create).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { modelName: "EvidenceItem", target: ["createdById", "requestKey"] },
+    { target: "EvidenceItem_createdById_requestKey_key" },
+  ])("精确P2002在新事务读取胜者并重新鉴权：%j", async meta => {
+    const original = input();
+    await createEvidenceItem(original);
+    mocks.db.$transaction.mockClear();
+    mocks.currentRole.mockClear();
+    mocks.db.$transaction.mockRejectedValueOnce({ code: "P2002", meta });
+    await expect(createEvidenceItem(original)).resolves.toEqual({ ok: true, id: ITEM });
+    expect(mocks.db.$transaction).toHaveBeenCalledTimes(2);
+    expect(mocks.currentRole).toHaveBeenCalledTimes(1);
+    expect(mocks.db.evidenceItem.create).toHaveBeenCalledTimes(1);
+    expect(mocks.audit).toHaveBeenCalledTimes(1);
+  });
+
+  it("其他唯一冲突不重试，精确冲突却无胜者时也不能另建", async () => {
+    for (const meta of [undefined, { modelName: "EvidenceItem", target: ["id"] },
+      { modelName: "OtherModel", target: ["createdById", "requestKey"] },
+      { modelName: "EvidenceItem", target: ["createdById", "requestKey", "matterId"] }]) {
+      mocks.db.$transaction.mockClear();
+      mocks.db.$transaction.mockRejectedValueOnce({ code: "P2002", meta });
+      await expect(createEvidenceItem(input())).rejects.toThrow("并发操作");
+      expect(mocks.db.$transaction).toHaveBeenCalledTimes(1);
+    }
+    mocks.db.$transaction.mockRejectedValueOnce({ code: "P2002", meta: { modelName: "EvidenceItem", target: ["createdById", "requestKey"] } });
+    await expect(createEvidenceItem(input())).rejects.toThrow("保存结果已变化");
+    expect(mocks.db.evidenceItem.create).not.toHaveBeenCalled();
+    expect(mocks.audit).not.toHaveBeenCalled();
+  });
+
+  it("P2002后的新事务再次校验资格，撤权不会回放成功", async () => {
+    const original = input();
+    await createEvidenceItem(original);
+    mocks.db.$transaction.mockRejectedValueOnce({ code: "P2002", meta: { modelName: "EvidenceItem", target: ["createdById", "requestKey"] } });
+    mocks.currentRole.mockRejectedValueOnce(new Error("资格已撤回"));
+    await expect(createEvidenceItem(original)).rejects.toThrow("资格已撤回");
+    expect(mocks.db.evidenceItem.create).toHaveBeenCalledTimes(1);
+    expect(mocks.audit).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("事实日期服务增量", () => {
+  const exact: EvidenceEventDate = { precision: "EXACT", start: "2024-02-29", end: null, text: "二月二十九日收到" };
+
+  it("新建明确保存日历日，旧调用保持未知，残缺对象在写入前拒绝", async () => {
+    const input = { requestKey: randomUUID(), matterId: MATTER, title: "合成来件", content: "收到合成来件", kind: "FACT" as const };
+    await createEvidenceItem({ ...input, eventDate: exact });
+    expect(mocks.db.evidenceItem.create).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining(evidenceEventDateToRecord(exact)) }));
+    await createEvidenceItem({ ...input, requestKey: randomUUID() });
+    expect(mocks.db.evidenceItem.create).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining(evidenceEventDateToRecord(emptyEvidenceEventDate())) }));
+    await expect(createEvidenceItem({ ...input, eventDate: { precision: "EXACT", start: "2024-02-29" } } as never)).rejects.toThrow();
+    expect(mocks.db.evidenceItem.create).toHaveBeenCalledTimes(2);
+  });
+
+  it("只改日期也保留旧确认快照，旧文本更新不抹掉日期，显式未知才清除边界", async () => {
+    state.item.confirmedById = mocks.session.user.id; state.item.confirmedAt = now;
+    const text = { title: state.item.title, content: state.item.content, kind: "FACT" as const };
+    await updateEvidenceItem({ evidenceItemId: ITEM, expectedRevision: 1, ...text, eventDate: exact });
+    expect(state.item).toMatchObject({ revision: 2, confirmedAt: null, ...evidenceEventDateToRecord(exact) });
+    expect(state.revisions[0]).toMatchObject({ confirmedAt: now, ...evidenceEventDateToRecord(emptyEvidenceEventDate()) });
+    await updateEvidenceItem({ evidenceItemId: ITEM, expectedRevision: 2, ...text, title: "旧调用更正标题" });
+    expect(state.item).toMatchObject({ revision: 3, ...evidenceEventDateToRecord(exact) });
+    const unknown: EvidenceEventDate = { ...emptyEvidenceEventDate(), text: "现仅能确定为某年夏天" };
+    await updateEvidenceItem({ evidenceItemId: ITEM, expectedRevision: 3, ...text, eventDate: unknown });
+    expect(state.item).toMatchObject({ revision: 4, ...evidenceEventDateToRecord(unknown) });
+    await confirmEvidenceItem({ evidenceItemId: ITEM, expectedRevision: 4, confirm: true });
+    expect(state.item.confirmedAt).not.toBeNull();
+    expect(mocks.audit.mock.calls.every(([, data]) => !JSON.stringify(data).includes("某年夏天") && !JSON.stringify(data).includes("2024-02-29"))).toBe(true);
+  });
+
+  it("来源新增和撤销的历史快照同样保留当时发生时间", async () => {
+    Object.assign(state.item, evidenceEventDateToRecord(exact));
+    await addEvidenceSource({ evidenceItemId: ITEM, expectedRevision: 1, documentId: DOC_B, relation: "REBUTS", page: 1 });
+    await removeEvidenceSource({ evidenceItemId: ITEM, expectedRevision: 2, sourceId: SOURCE_B });
+    expect(state.revisions).toHaveLength(2);
+    for (const revision of state.revisions) expect(revision).toMatchObject(evidenceEventDateToRecord(exact));
+  });
+
+  it("撤权后当前、列表和历史的整个日期对象均为空", async () => {
+    Object.assign(state.item, evidenceEventDateToRecord(exact));
+    await updateEvidenceItem({ evidenceItemId: ITEM, expectedRevision: 1, title: "合成新版", content: "合成内容", kind: "FACT" });
+    expect((await getEvidenceItem(ITEM)).item.eventDate).toEqual(exact);
+    expect((await listEvidenceRevisions({ evidenceItemId: ITEM })).items[0].eventDate).toEqual(exact);
+    mocks.canReadDocument.mockResolvedValue(false);
+    expect((await getEvidenceItem(ITEM)).item.eventDate).toBeNull();
+    expect((await listEvidenceItems(MATTER))[0].eventDate).toBeNull();
+    expect((await listEvidenceRevisions({ evidenceItemId: ITEM })).items[0].eventDate).toBeNull();
+    expect(state.item.eventDateText).toBe(exact.text);
+  });
+});
+
 describe("Server 人工证据成果及来源", () => {
   it("creates a pending manual item and checks the server archive/membership guard", async () => {
-    const result = await createEvidenceItem({ matterId: MATTER, title: " 手工主张 ", content: " 合成陈述 ", kind: "CLAIM" });
+    const result = await createEvidenceItem({ requestKey: randomUUID(), matterId: MATTER, title: " 手工主张 ", content: " 合成陈述 ", kind: "CLAIM" });
     expect(result).toEqual({ ok: true, id: ITEM });
     expect(mocks.writable).toHaveBeenCalledWith(MATTER, { allowPrincipal: true });
     expect(mocks.db.evidenceItem.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ title: "手工主张", kind: "CLAIM" }) }));
@@ -240,7 +402,7 @@ describe("Server 人工证据成果及来源", () => {
 
   it("retains the original matter-read and matter-handle boundaries", async () => {
     mocks.handle.mockRejectedValue(new Error("无办理资格"));
-    await expect(createEvidenceItem({ matterId: MATTER, title: "x", content: "y", kind: "FACT" })).rejects.toThrow("无办理资格");
+    await expect(createEvidenceItem({ requestKey: randomUUID(), matterId: MATTER, title: "x", content: "y", kind: "FACT" })).rejects.toThrow("无办理资格");
     mocks.read.mockRejectedValue(new Error("无事项读取资格"));
     await expect(listEvidenceItems(MATTER)).rejects.toThrow("无事项读取资格");
     expect(mocks.db.evidenceItem.create).not.toHaveBeenCalled();

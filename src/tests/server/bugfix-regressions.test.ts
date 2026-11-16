@@ -23,7 +23,7 @@ vi.mock("@/server/reminders/responsibility",()=>({responsibilityReady:async()=>f
 vi.mock("@/server/approval-permissions/termination",()=>({assertExecutionOpen:async()=>{}}));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 vi.mock("@/lib/auth/session", () => ({ requireSession: vi.fn(async () => session) }));
-vi.mock("@/server/audit", () => ({ audit: auditMock }));
+vi.mock("@/server/audit", () => ({ audit: auditMock, auditTx: auditMock }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/server/matters/route", () => ({ revalidateMatter: vi.fn(), matterHrefById: vi.fn(async () => "/matters/example") }));
 vi.mock("@/server/notifications/create", () => ({ createNotification: notify }));
@@ -41,8 +41,9 @@ import { listClients, getClientById, getClientFinanceSummary } from "@/server/cl
 import { createTask, updateTask } from "@/server/tasks/actions";
 import { scanDueReminders } from "@/server/cron/jobs/scan-due-reminders";
 import { runAuditCleanup } from "@/server/cron/jobs/audit-cleanup";
-import { approveInvoiceRequest, createInvoiceRequest as createLegacyInvoice } from "@/server/invoices/actions";
+import { approveInvoiceRequest } from "@/server/invoices/actions";
 import { createInvoiceRequest, createFeeEntry, confirmFeeEntry, rejectFeeEntry, deleteFeeEntry, setCommissionPlan } from "@/server/finance/actions";
+import { notifyRoleApprovers } from "@/server/notifications/approval";
 import { commissionPlanSetSchema } from "@/server/finance/schemas";
 import { allocateCommissions } from "@/server/finance/commissions";
 import { clientVisibilityFilter, intakeVisibilityFilter, matterReadVisibilityFilter, matterVisibilityFilter } from "@/lib/permissions";
@@ -53,7 +54,7 @@ const taskId = "ctask0000000000000000001";
 const stageId = "cstage000000000000000001";
 const user1 = "cuser00000000000000000001";
 const user2 = "cuser00000000000000000002";
-const invoiceInput = { matterId: mine, amount: 100, invoiceType: "PLAIN" as const, invoiceItem: "LAWYER_FEE" as const, buyerName: "测试客户", evidenceDocIds: ["evidence-example"] };
+const invoiceInput = { requestKey: "bc424d64-a21a-4723-977c-f3c9c7b85767", matterId: mine, amount: 100, invoiceType: "PLAIN" as const, invoiceItem: "LAWYER_FEE" as const, buyerName: "测试客户", evidenceDocIds: ["cevidence000000000000001"] };
 beforeEach(() => {
   vi.resetAllMocks(); session.user.role = "LAWYER";
   db.matter.findFirst.mockImplementation(async ({ where }: { where: { id: string } }) => where.id === mine ? { id: mine, status: "ACTIVE" } : null);
@@ -71,15 +72,16 @@ beforeEach(() => {
   // catch（usersWhoCanConfirmReceipt 里 rows.map 抛 TypeError），断言在通知
   // 从未真正执行的情况下通过。补上默认收件人（一位具确认权的财务）。
   db.user.findMany.mockResolvedValue([{ id: "cfinance0000000000000001" }]);
+  db.user.findUnique.mockImplementation(async () => ({ active: true, role: session.user.role, managerAuthorized: false }));
   // v1.x P1 收尾：逾期升级链默认无团队（不触发），专项用例在 reminder-escalation 测试覆盖
   db.team.findMany.mockResolvedValue([]);
   db.jobQueue.findUnique.mockResolvedValue({ id: "jq", status: "SUCCESS" });
   webhook.mockResolvedValue({ ok: true }); db.auditLog.count.mockResolvedValue(12);
-  db.invoiceRequest.findUnique.mockResolvedValue({ id: "invoice-example", status: "PENDING", matterId: null, updatedAt: new Date(), evidenceDocIds: [], contractScanId: null, invoiceFileId: null });
-  db.invoiceRequest.create.mockResolvedValue({ id: "invoice-example" });
-  db.document.create.mockResolvedValue({ id: "invoice-document" }); db.document.findUnique.mockResolvedValue({ id: "evidence-example" });
+  db.invoiceRequest.findUnique.mockImplementation(async ({ where }: { where: { requestedById_requestKey?: unknown } }) => where.requestedById_requestKey ? null : { id: "invoice-example", status: "PENDING", matterId: null, updatedAt: new Date(), evidenceDocIds: [], contractScanId: null, invoiceFileId: null });
+  db.invoiceRequest.create.mockResolvedValue({ id: "invoice-example", status: "PENDING" });
+  db.document.create.mockResolvedValue({ id: "invoice-document" }); db.document.findUnique.mockResolvedValue({ id: "cevidence000000000000001", matterId: mine, intakeId: null, uploadedById: session.user.id, deletedAt: null });
   // 开票依据同案校验（2026-09-19 体检 P2）：findMany 返回与证据 id 等长的集合表示全部属于本案
-  db.document.findMany.mockResolvedValue([{ id: "evidence-example" }]);
+  db.document.findMany.mockResolvedValue([{ id: "cevidence000000000000001", matterId: mine, intakeId: null, uploadedById: session.user.id, deletedAt: null }]);
   writeFile.mockResolvedValue("mock-only-no-file-written");
   // F-1：日程提醒登记走台账（createMany 默认成功；updateMany 默认零命中）
   db.reminderDelivery.createMany.mockResolvedValue({ count: 1 });
@@ -319,15 +321,23 @@ describe("开票状态及归档门禁", () => {
     await expect(approveInvoiceRequest(form("INV"))).rejects.toThrow();
     expect(writeFile).not.toHaveBeenCalled(); expect(db.invoiceRequest.update).not.toHaveBeenCalled();
   });
-  it("新旧入口均阻止归档案件新增开票申请", async () => {
+  it("归档案件不得新增开票申请", async () => {
     db.matter.findFirst.mockResolvedValue({ id: mine, status: "ARCHIVED" });
     await expect(createInvoiceRequest(invoiceInput)).rejects.toThrow("已归档");
-    await expect(createLegacyInvoice({ matterId: mine, amount: 100 })).rejects.toThrow("已归档");
     expect(db.invoiceRequest.create).not.toHaveBeenCalled();
   });
   it("可写案件的正常开票申请可提交", async () => {
     await expect(createInvoiceRequest(invoiceInput)).resolves.toMatchObject({ id: "invoice-example" });
     expect(db.invoiceRequest.create).toHaveBeenCalledOnce();
+  });
+  it("申请已保存但通知失败，重试定位当前申请且不重复发送通知", async () => {
+    vi.mocked(notifyRoleApprovers).mockRejectedValueOnce(new Error("通知暂时失败"));
+    await expect(createInvoiceRequest(invoiceInput)).rejects.toThrow("通知暂时失败");
+    const data = db.invoiceRequest.create.mock.calls[0][0].data;
+    db.invoiceRequest.findUnique.mockResolvedValue({ id: "invoice-example", status: "APPROVED", requestHash: data.requestHash });
+    await expect(createInvoiceRequest(invoiceInput)).resolves.toEqual({ id: "invoice-example", status: "APPROVED" });
+    expect(db.invoiceRequest.create).toHaveBeenCalledOnce(); expect(notifyRoleApprovers).toHaveBeenCalledOnce();
+    expect(auditMock).toHaveBeenCalledOnce();
   });
   it("无关联案件保留财务授权并要求说明", async () => {
     await expect(createInvoiceRequest({ ...invoiceInput, matterId: null, noMatterReason: "咨询服务" })).rejects.toThrow("仅财务");

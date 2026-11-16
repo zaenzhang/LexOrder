@@ -8,23 +8,6 @@ export const feeEntryTypeSchema = z.enum([
   "COMMISSION"
 ]);
 
-export const billingStatusSchema = z.enum(["DRAFT", "ACTIVE", "CLOSED"]);
-
-export const billingCreateSchema = z.object({
-  matterId: z.string().cuid(),
-  title: z.string().min(1, "合同名称必填").max(120),
-  contractAmount: z.coerce
-    .number({ error: "请填写合同金额" })
-    .nonnegative("金额不能为负"),
-  schedule: z.string().max(1000).optional().or(z.literal("")),
-  status: billingStatusSchema.default("DRAFT"),
-  // 可选日期：date input 清空得到空串，先归一成 undefined 再走 coerce，避免英文 "Invalid date"
-  signedAt: z.preprocess(
-    v => (v === "" ? undefined : v),
-    z.coerce.date({ error: "签订日期格式不正确" }).optional()
-  )
-});
-
 export const feeEntryCreateSchema = z.object({
   matterId: z.string().cuid(),
   billingId: z.string().cuid().optional().or(z.literal("")),
@@ -67,6 +50,5 @@ export const commissionPlanSetSchema = z.object({
   });
 });
 
-export type BillingCreateInput = z.infer<typeof billingCreateSchema>;
 export type FeeEntryCreateInput = z.infer<typeof feeEntryCreateSchema>;
 export type CommissionPlanSetInput = z.infer<typeof commissionPlanSetSchema>;

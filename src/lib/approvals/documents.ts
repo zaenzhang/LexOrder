@@ -1,15 +1,33 @@
 import { resolveRoleUser } from "@/lib/roles/service";
 import {financeLedgerReady} from "@/server/finance/ledger-storage";
-import { hasCustomPermission,scopeFor } from "@/lib/roles/catalog";
+import { hasCustomPermission,scopeFor, type RoleUser } from "@/lib/roles/catalog";
 import { isManager } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { canApproveItem, canExecuteInvoice } from "./service";
 import { hasHandledApproval } from "./history-access";
+import { resolveReviewReportSource, type ReviewDocumentReadRef } from "@/server/ai/review-report-source";
 export async function canReadDocument(userId: string, doc: { id: string; uploadedById: string; matterId: string | null; intakeId: string | null; deletedAt?: Date | null }) {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, active: true } });
   if (!user?.active || doc.deletedAt) return false;
   const access = await resolveRoleUser(userId, user.role);
   if (!access.enabled) return false;
+  const visited = new Set<string>();
+  let currentId = doc.id;
+  while (!visited.has(currentId)) {
+    visited.add(currentId);
+    const resolved = await resolveReviewReportSource(currentId);
+    if (resolved.kind === "UNAVAILABLE") return false;
+    const current = resolved.kind === "SOURCE" ? resolved.report : resolved.document;
+    if (!await canReadDocumentDirect(userId, access, current)) return false;
+    if (resolved.kind === "ORDINARY") return true;
+    currentId = resolved.document.id;
+  }
+  return false;
+}
+
+// Report provenance never grants access: each concrete document still uses the
+// existing matter, intake and approval rules, including the original source.
+async function canReadDocumentDirect(userId: string, access: RoleUser, doc: ReviewDocumentReadRef) {
   if(scopeFor(access,'finance.correct')==='ALL'&&await financeLedgerReady(prisma)){
     const [basis]=await prisma.$queryRaw<{n:bigint}[]>`SELECT COUNT(*) AS n FROM "BillingAttachment" a JOIN "Billing" b ON b.id=a."billingId" WHERE a."documentId"=${doc.id} AND b.status IN ('DRAFT','ACTIVE')`;
     if(Number(basis.n))return true;

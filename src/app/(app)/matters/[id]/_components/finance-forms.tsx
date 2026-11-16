@@ -2,7 +2,6 @@
 
 import type { z } from "zod";
 
-import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -24,184 +23,20 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
 import { RadioChips } from "@/components/ui/radio-chips";
 import {
-  billingCreateSchema,
   feeEntryCreateSchema,
-  type BillingCreateInput,
   type FeeEntryCreateInput
 } from "@/server/finance/schemas";
 import {
-  getMatterFinance,
-  createBilling,
   createFeeEntry,
   listMatterInvoiceRequests
 } from "@/server/finance/actions";
-import { uploadDocument } from "@/server/documents/actions";
 import { recognizeInvoiceFromImage, type RecognizedInvoice } from "@/server/ai/actions";
 import { shDayKey } from "@/lib/ui/sh-time";
 import { actionErrorMessage } from "@/lib/action-error";
-
-// ============ AddBillingSheet ============
-
-export function AddBillingSheet({
-  open,
-  onOpenChange,
-  matterId
-}: {
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  matterId: string;
-}) {
-  const router=useRouter();
-  useEffect(()=>{if(!open)return;let active=true;void getMatterFinance(matterId).then(fin=>{if(active&&fin.ledgerReady){onOpenChange(false);router.push(`/finance/reconciliation?matterId=${matterId}`);}}).catch(()=>{});return()=>{active=false;};},[open,matterId,onOpenChange,router]);
-  const [isPending, startTransition] = useTransition();
-  const [contractFile, setContractFile] = useState<File | null>(null);
-  const {
-    register,
-    control,
-    handleSubmit,
-    setValue,
-    reset,
-    formState: { errors }
-  } = useForm<z.input<typeof billingCreateSchema>, unknown, BillingCreateInput>({
-    resolver: zodResolver(billingCreateSchema),
-    defaultValues: {
-      matterId,
-      title: "",
-      contractAmount: 0,
-      schedule: "",
-      status: "ACTIVE"
-    }
-  });
-  const billingStatus = useWatch({ control, name: "status" });
-
-  function onSubmit(values: BillingCreateInput) {
-    startTransition(async () => {
-      try {
-        await createBilling(values);
-        if (contractFile) {
-          const fd = new FormData();
-          fd.set("matterId", matterId);
-          fd.set("name", contractFile.name);
-          fd.set("category", "CONTRACT");
-          fd.set("encrypted", "true");
-          fd.set("tags", `合同,${values.title}`);
-          fd.set("file", contractFile);
-          await uploadDocument(fd);
-          toast.success("合同已创建，附件已加密入库");
-        } else {
-          toast.success("合同已创建");
-        }
-        reset();
-        setContractFile(null);
-        onOpenChange(false);
-      } catch (err) {
-        toast.error("失败", { description: actionErrorMessage(err) });
-      }
-    });
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[88vh] w-[92vw] max-w-2xl flex-col gap-0 p-0">
-        <DialogHeader className="border-b border-border px-6 py-4">
-          <DialogTitle>新增合同</DialogTitle>
-          <DialogDescription className="text-xs">
-            一个案件可以有多份合同（如分阶段委托）。可同时上传合同扫描件，加密入库后归到本案材料库。
-          </DialogDescription>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-1 flex-col">
-          <div className="flex-1 space-y-3 overflow-y-auto px-6 py-5">
-            <Field label="合同名称" required error={errors.title?.message}>
-              <Input
-                placeholder="如：委托代理合同 - 一审阶段"
-                {...register("title")}
-              />
-            </Field>
-
-            <Field label="合同金额（元）" required error={errors.contractAmount?.message as string | undefined}>
-              <Input
-                type="number"
-                step="0.01"
-                className="font-mono tabular"
-                {...register("contractAmount", { valueAsNumber: true })}
-              />
-            </Field>
-
-            <Field label="状态">
-              <RadioChips
-                size="sm"
-                items={[
-                  { value: "DRAFT", label: "草稿" },
-                  { value: "ACTIVE", label: "生效中" },
-                  { value: "CLOSED", label: "已结清" }
-                ]}
-                value={billingStatus}
-                onChange={(v) => setValue("status", v as BillingCreateInput["status"])}
-              />
-            </Field>
-
-            <Field label="签订日期" error={errors.signedAt?.message}>
-              {/* 留空时保持 undefined（草稿）；用字符串注册，空串会在 zod 校验报错并显示，避免 Invalid Date 静默失败 */}
-              <Input type="date" {...register("signedAt")} />
-            </Field>
-
-            <Field label="阶段付款约定">
-              <Textarea
-                rows={3}
-                placeholder="如：签约时收 30%，立案时收 30%，判决生效后收 40%"
-                {...register("schedule")}
-              />
-            </Field>
-
-            <Field label="合同附件（可选）">
-              <label className="flex cursor-pointer items-center gap-2 rounded border border-dashed border-border px-3 py-3 text-[12px] text-muted-foreground hover:bg-muted/30">
-                <Paperclip className="h-3.5 w-3.5" />
-                {contractFile ? (
-                  <span className="flex items-center gap-1 text-foreground">
-                    <FileText className="h-3 w-3" />
-                    {contractFile.name}
-                    <span className="ml-1 text-[10px] text-muted-foreground">
-                      ({(contractFile.size / 1024).toFixed(0)} KB)
-                    </span>
-                  </span>
-                ) : (
-                  "选择 PDF / docx 文件，提交时自动加密入库"
-                )}
-                <input
-                  type="file"
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                  className="hidden"
-                  onChange={(e) => setContractFile(e.target.files?.[0] ?? null)}
-                />
-              </label>
-            </Field>
-          </div>
-
-          <DialogFooter className="border-t border-border px-6 py-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isPending}
-            >
-              取消
-            </Button>
-            <Button type="submit" disabled={isPending} className="gap-1.5">
-              {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              创建
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 // ============ AddFeeEntrySheet ============
 

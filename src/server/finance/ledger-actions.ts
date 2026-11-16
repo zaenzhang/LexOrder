@@ -18,7 +18,7 @@ import { prisma } from "@/lib/prisma";
 import { matterAssociationFilter, matterFinanceVisibilityFilter } from "@/lib/permissions";
 import { readLedger } from "./ledger-storage";
 import { allocateLedgerTx } from "./ledger-mutations";
-import { closureReady } from "@/server/archive/closure";
+import { revalidateMatter } from "@/server/matters/route";
 import { dueBucket, paymentBalance, receivableBalance, type AllocateLedgerInput } from "@/lib/finance/ledger";
 import { ActionError } from "@/lib/action-error";
 
@@ -48,7 +48,7 @@ export async function getFinanceLedger(matterId?: string) {
     // status!=='ARCHIVED' 一刀切禁用，收尾流程走不通（2026-09-19 审计）。
     const tailMatterIds=new Set<string>();
     const archivedIds=matters.filter(m=>m.status==="ARCHIVED").map(m=>m.id);
-    if(data.ready&&archivedIds.length&&await closureReady(db)&&(hasPersonalCapability(session.user,"finance.tail")||scopeFor(session.user,"finance.tail")==="ALL")){
+    if(data.ready&&archivedIds.length&&(hasPersonalCapability(session.user,"finance.tail")||scopeFor(session.user,"finance.tail")==="ALL")){
       const plans=await db.$queryRaw<{matterId:string;financeOwnerId:string|null}[]>(Prisma.sql`SELECT "matterId","financeOwnerId" FROM "ArchiveClosurePlan" WHERE "matterId" IN (${Prisma.join(archivedIds)})`);
       for(const p of plans)if(p.financeOwnerId===session.user.id)tailMatterIds.add(p.matterId);
     }
@@ -67,14 +67,14 @@ export async function getFinanceLedger(matterId?: string) {
     };
   }, { isolationLevel: "RepeatableRead" });
 }
-async function mutate(work: (db: Prisma.TransactionClient, userId: string) => Promise<{ matterId: string }>, permission: "personal" | "finance.write" | "finance.confirm" | "finance.correct" | "finance.settle") {
+async function mutate<T extends { matterId: string }>(work: (db: Prisma.TransactionClient, userId: string) => Promise<T>, permission: "personal" | "finance.write" | "finance.confirm" | "finance.correct" | "finance.settle") {
   const session = await requireSession(permission);
   try {
     const result = await prisma.$transaction(db => work(db, session.user.id), { isolationLevel: "Serializable", timeout: 20000 });
     revalidatePath("/finance");
     revalidatePath("/finance/reconciliation");
-    revalidatePath(`/matters/${result.matterId}`);
-    return { ok: true as const };
+    await revalidateMatter(result.matterId);
+    return { ok: true as const, ...result };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) return {ok:false as const,message:["P2034","P2002","P2025"].includes(error.code) || (error.code==="P2010" && ["40001","40P01","23505"].includes(String(error.meta?.code))) ? "账务或授权已变化，请刷新后重试" : "账务保存失败，未完成本次操作"};
     if(error instanceof z.ZodError) return {ok:false as const,message:error.issues[0]?.message ?? "请检查填写内容"};

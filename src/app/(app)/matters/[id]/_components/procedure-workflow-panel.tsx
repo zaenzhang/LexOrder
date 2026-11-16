@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   Archive,
@@ -32,6 +32,7 @@ import {
 import type {
   DeadlineCategory,
   DocumentCategory,
+  DocumentStatus,
   DocumentSourceOrigin,
   GuaranteeType,
   LitigationStanding,
@@ -40,6 +41,9 @@ import type {
   ProcedureType
 } from "@prisma/client";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { ARCHIVE_DOCUMENT_STATUS_LABELS } from "@/lib/archive/snapshot";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -58,7 +62,6 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { uploadDocument } from "@/server/documents/actions";
 import { createTask, toggleTaskCompleted } from "@/server/tasks/actions";
 import { createProcedureStage, deleteProcedureMemo, ensureProcedureStage, removeProcedureStage, toggleDeadlineCompleted, toggleProcedureMemo } from "@/server/procedures/actions";
 import { deleteExpress } from "@/server/express/actions";
@@ -66,7 +69,7 @@ import type { ExpressItem } from "./info-extras";
 import { AddDeadlineDialog } from "./procedure-forms";
 import { liftProperty } from "@/server/preservations/actions-v2";
 import { cn, daysUntil, formatCurrency } from "@/lib/utils";
-import { litigationStandingLabel, procedureTypeLabel } from "@/lib/enums";
+import { documentCategoryLabel, litigationStandingLabel, procedureTypeLabel } from "@/lib/enums";
 import {
   defaultStageNamesForProcedure,
   normalizeProcedureStageName,
@@ -74,7 +77,6 @@ import {
   stagePresetForName,
   type StagePresetKind
 } from "@/lib/procedure-stage-defaults";
-import { canPreview, officePreviewKind } from "@/lib/storage/mime-ext";
 import {
   PreservationCaseDialog,
   AddTargetDialog,
@@ -100,10 +102,12 @@ import { documentSourceChip } from "@/lib/ui/moan-tones";
 import type { FolderPayload, TemplateSummary } from "./folder-types";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { useDocActions } from "./doc-actions-context";
-import { EvidencePoints } from "./evidence-panel";
-import { evidenceKindLabel } from "@/lib/enums";
-import { shMonthDay, shMonthDayTime, shTime } from "@/lib/ui/sh-time";
+import { CaseMaterialUpload, type MaterialUploadTarget } from "./case-material-upload";
+import { shDayKey, shMonthDay, shMonthDayTime, shTime } from "@/lib/ui/sh-time";
 import { actionErrorMessage } from "@/lib/action-error";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { updateDossierLocation, type DossierView, type WorkPane } from "@/lib/matters/dossier-location";
+export type { DossierView } from "@/lib/matters/dossier-location";
 
 type WorkflowTask = {
   id: string;
@@ -184,7 +188,10 @@ type WorkflowDocument = {
   pageCount: number | null;
   sha256: string | null;
   templateId: string | null;
-  version: number | null;
+  version: number;
+  familyId: string;
+  isLatest: boolean;
+  status: DocumentStatus;
 };
 
 type WorkflowMatter = {
@@ -643,15 +650,6 @@ const STAGE_GUIDES: { keys: string[]; guide: StageGuide }[] = [
   }
 ];
 
-const DOCUMENT_CATEGORY_OPTIONS: DocumentCategory[] = [
-  "CONTRACT",
-  "PLEADING",
-  "EVIDENCE",
-  "PROCEDURE",
-  "JUDGMENT",
-  "OTHER"
-];
-const SOURCE_MATERIAL_CATEGORIES: DocumentCategory[] = ["PLEADING", "EVIDENCE"];
 const COURT_PROCEDURE_SOURCE = "法院程序文件";
 
 export type WorkflowNote = {
@@ -677,17 +675,13 @@ export const JUDGMENT_NOTE_TAG = "研判笔记";
 export const stageNoteTag = (stageName: string) => `环节:${stageName}`;
 
 export type WorkflowApi = {
-  /** 从外部（页头「上传材料」）打开当前环节的上传 */
-  openUpload: () => void;
   /** 从「登记进展」打开当前环节的添加任务 */
   openAddTask: () => void;
+  openResponsibilities: () => void;
   /** 当前可归档环节名（研判笔记归档用） */
   stageNames: string[];
   currentStageName: string | null;
 };
-
-/** 案卷工作台页签（docs/UI-MATTER-DOSSIER-PLAN.md 第三版） */
-export type DossierView = "archive" | "work" | "money" | "seal";
 
 /** 待办「等待他人」：审批中的用印、归档等 */
 export type WaitingItem = { key: string; title: string; meta: string; onOpen?: () => void };
@@ -695,19 +689,24 @@ export type WaitingItem = { key: string; title: string; meta: string; onOpen?: (
 /**
  * 案卷工作台（程序栏之下）：页签 → 各视图。
  * - 案件档案：案件页注入的档案主栏 + 侧栏（承办团队 + 最近待办 / 最近记录）
- * - 办案进程：环节竖列 + 环节操作条 + 待办 + 材料（含证据要点）+ 经办记录（含快递与备忘）
+ * - 办案与材料：共同的环节上下文 + 材料与要点 / 事项与期限 / 办理记录
  * - 委托与财务、审批用印：案件页注入
  * 同一份数据只在一处展示：未完成事项只在待办，已发生事项只在经办记录，材料与证据链只在办案进程。
  */
 export function ProcedureWorkflowPanel({
   matter,
   procedure,
+  procedures,
+  procedureFilter,
+  invalidProcedure,
+  factsNode,
   documents,
   preservationCases,
   folders,
   templates,
   users,
   canManage,
+  canManageMaterials,
   notes,
   timelineEvents,
   onWriteNote,
@@ -719,6 +718,7 @@ export function ProcedureWorkflowPanel({
   archiveRailTop,
   expresses,
   onAddLedger,
+  materialsActions,
   materialsExtra,
   onCaseSearch,
   financeNode,
@@ -727,17 +727,22 @@ export function ProcedureWorkflowPanel({
 }: {
   matter: WorkflowMatter;
   procedure: WorkflowProcedure | null;
+  procedures: WorkflowProcedure[];
+  procedureFilter: React.ReactNode;
+  invalidProcedure: boolean;
+  factsNode: React.ReactNode;
   documents: WorkflowDocument[];
   preservationCases: WorkflowPreservationCase[];
   folders: FolderPayload[];
   templates: TemplateSummary[];
   users: UserOption[];
   canManage: boolean;
+  canManageMaterials: boolean;
   notes: WorkflowNote[];
   timelineEvents: WorkflowTimelineEvent[];
   onWriteNote: (opts: { judgment: boolean; stageName?: string }) => void;
   apiRef?: React.MutableRefObject<WorkflowApi | null>;
-  view: DossierView;
+  view: DossierView | null;
   onViewChange: (view: DossierView) => void;
   viewCounts?: Partial<Record<DossierView, number>>;
   archiveNode: React.ReactNode;
@@ -750,25 +755,42 @@ export function ProcedureWorkflowPanel({
   onAddLedger?: (type: "express" | "hearing" | "deadline") => void;
   /** 类案检索入口（元典已配置时） */
   onCaseSearch?: () => void;
-  /** 全部环节范围下材料之后的补充内容（AI 审查总览） */
+  /** 当前材料工作区的工具入口及恢复提示。 */
+  materialsActions?: React.ReactNode;
+  /** 材料工作区的补充内容（AI 审查总览）。 */
   materialsExtra?: React.ReactNode;
   financeNode?: React.ReactNode;
   sealNode?: React.ReactNode;
   waiting?: WaitingItem[];
 }) {
   const router = useRouter();
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const { onOpenDocument } = useDocActions();
+  const searchParams = useSearchParams();
+  const requestedPane = searchParams.get("workPane");
+  const workSection: WorkPane | null = requestedPane === null ? "materials"
+    : ["materials", "facts", "tasks", "records"].includes(requestedPane) ? requestedPane as WorkPane : null;
+  const obsoleteLocation = searchParams.has("work") || searchParams.has("scope");
+  const filtersVisible = workSection === "materials" || workSection === "tasks";
+  const [expandRequest, setExpandRequest] = useState(0);
   const [templateOpen, setTemplateOpen] = useState(false);
+  const [uploadTarget, setUploadTarget] = useState<MaterialUploadTarget | null>(null);
   const [taskStage, setTaskStage] = useState<WorkflowStage | null>(null);
   const [stageCreateOpen, setStageCreateOpen] = useState(false);
   const [deadlineOpen, setDeadlineOpen] = useState(false);
-  const [uploadSignal, setUploadSignal] = useState(0);
+  const pendingWorkFocus = useRef<"tasks" | "records" | "responsibilities" | null>(null);
+  const actionSectionRef = useRef<HTMLElement>(null);
+  const recordSectionRef = useRef<HTMLElement>(null);
+  const responsibilitySectionRef = useRef<HTMLDivElement>(null);
   const [, startStageRemovalTransition] = useTransition();
 
   const stages = useMemo(
     () => buildWorkflowStages(procedure, preservationCases),
     [procedure, preservationCases]
   );
+  const requestedStage = searchParams.get("stage");
+  const materialStages = stages.filter(stage => stage.id !== null);
+  const invalidStage = requestedStage !== null && !materialStages.some(stage => stage.key === requestedStage);
+  const setSelectedKey = (stage: string | null) => updateDossierLocation({ stage });
   // 保全是贯穿程序的并行事项（在保期间一直「进行中 / 临期」），不作为当前环节
   const mainStages = stages.filter((s) => s.kind !== "preservation");
   const currentStage =
@@ -777,34 +799,65 @@ export function ProcedureWorkflowPanel({
     mainStages[mainStages.length - 1] ??
     stages[0] ??
     null;
-  const selectedStage = stages.find((s) => s.key === selectedKey) ?? currentStage;
-  // 2026-09-19 用户确认去掉「总览」：始终以选中环节为范围；没有环节（尚无程序）时才退回全部
+  const selectedStage = requestedStage === null ? null : materialStages.find(stage => stage.key === requestedStage) ?? null;
   const effectiveScope: "all" | "stage" = selectedStage ? "stage" : "all";
-  const actions = useMemo(() => buildActionItems(procedure, stages, users), [procedure, stages, users]);
-  const logItems = useMemo(() => buildLogItems({ procedure, stages, notes, events: timelineEvents, users, expresses: expresses ?? [] }), [procedure, stages, notes, timelineEvents, users, expresses]);
+  const actions = useMemo(() => procedure ? buildActionItems(procedure, stages, users)
+    : procedures.flatMap(item => buildActionItems(item, buildWorkflowStages(item, preservationCases), users)),
+    [procedure, procedures, stages, preservationCases, users]);
+  const logItems = useMemo(() => {
+    const shared = buildLogItems({ procedure: null, stages: [], notes, events: timelineEvents, users, expresses: expresses ?? [] });
+    const procedureRecords = procedures.flatMap(item => buildLogItems({ procedure: item,
+      stages: buildWorkflowStages(item, preservationCases), notes: [], events: [], users, expresses: [] }));
+    return [...shared, ...procedureRecords].sort((a, b) => b.at.getTime() - a.at.getTime());
+  }, [procedures, preservationCases, notes, timelineEvents, users, expresses]);
 
-  // 切换程序后回到该程序的当前环节
   useEffect(() => {
-    setSelectedKey(null);
-  }, [procedure?.id]);
+    if (view !== "work" || !pendingWorkFocus.current) return;
+    const frame = requestAnimationFrame(() => {
+      const section = pendingWorkFocus.current === "tasks" ? actionSectionRef.current
+        : pendingWorkFocus.current === "responsibilities" ? responsibilitySectionRef.current : recordSectionRef.current;
+      if (!section) return;
+      pendingWorkFocus.current = null;
+      section.focus({ preventScroll: true });
+      section.scrollIntoView({ block: "start", behavior: "auto" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [view, workSection, expandRequest]);
 
   useEffect(() => {
     if (!apiRef) return;
     apiRef.current = {
-      openUpload: () => {
-        setUploadSignal((n) => n + 1);
+      openResponsibilities: () => {
+        pendingWorkFocus.current = "responsibilities";
+        setExpandRequest(value => value + 1);
+        updateDossierLocation({ view: "work", workPane: "tasks", procedure: null, stage: null });
+        onViewChange("work");
       },
       openAddTask: () => {
         if (selectedStage) setTaskStage(selectedStage);
-        else toast.info("请先新增程序后再添加任务");
+        else toast.info("请先选择程序和环节");
       },
       stageNames: stages.map((st) => st.name),
       currentStageName: selectedStage?.name ?? null
     };
-  }, [apiRef, selectedStage, stages]);
+  }, [apiRef, selectedStage, stages, onViewChange]);
 
-  function selectStage(key: string) {
-    setSelectedKey(key);
+  function openWorkSection(section: "tasks" | "records") {
+    pendingWorkFocus.current = section;
+    setExpandRequest(value => value + 1);
+    updateDossierLocation({ view: "work", workPane: section, ...(section === "tasks" ? { stage: null } : {}) });
+    onViewChange("work");
+  }
+
+  function selectWorkSection(value: string) {
+    if (!["materials", "facts", "tasks", "records"].includes(value)) return;
+    pendingWorkFocus.current = null;
+    updateDossierLocation({ workPane: value as WorkPane });
+  }
+
+  function selectView(next: DossierView) {
+    pendingWorkFocus.current = null;
+    onViewChange(next);
   }
 
   async function handleRemoveStage(stage: WorkflowStage) {
@@ -832,141 +885,120 @@ export function ProcedureWorkflowPanel({
 
 
   const VIEWS: { key: DossierView; label: string; show: boolean; icon: typeof FileText; count?: number; hot?: boolean }[] = [
-    { key: "archive", label: "案件档案", show: true, icon: FileText },
-    { key: "work", label: "办案进程", show: true, icon: ListChecks, count: actions.length, hot: actions.some((a) => a.days !== null && a.days < 0) },
+    { key: "archive", label: "档案与摘要", show: true, icon: FileText },
+    { key: "work", label: "办案与材料", show: true, icon: ListChecks, count: actions.length, hot: actions.some((a) => a.days !== null && a.days < 0) },
     { key: "money", label: "委托与财务", show: Boolean(financeNode), icon: CircleDollarSign },
     { key: "seal", label: "审批用印", show: Boolean(sealNode), icon: Stamp, count: viewCounts?.seal }
   ];
 
   return (
     <>
-      <div className="dos-views" role="tablist" aria-label="案件视图">
-        {VIEWS.filter((v) => v.show).map((v) => {
-          const Icon = v.icon;
-          return (
-            <button key={v.key} type="button" role="tab" aria-selected={view === v.key} className={cn("dos-view", view === v.key && "on")} onClick={() => onViewChange(v.key)}>
-              <Icon strokeWidth={1.9} />
-              {v.label}
-              {v.count ? <span className={cn("n", v.hot && "hot")}>{v.count}</span> : null}
-            </button>
-          );
-        })}
-      </div>
+      <Tabs value={view ?? ""} onValueChange={value => selectView(value as DossierView)}>
+        <TabsList aria-label="案件视图" className="flex h-auto w-full flex-wrap justify-start">
+          {VIEWS.filter(item => item.show).map(item => <TabsTrigger key={item.key} value={item.key}>
+            <item.icon aria-hidden className="size-4" />{item.label}
+            {item.count ? <span className="text-xs">{item.count}</span> : null}
+          </TabsTrigger>)}
+        </TabsList>
 
-      {/* 侧栏在四个页签间常驻（2026-09-14 用户要求）：承办团队 + 最近待办 + 最近记录 */}
-      <div className="dos-work">
+      <div className={view === "archive" ? "dos-work" : "min-w-0"}>
         <div className="dos-main">
-      {view === "archive" ? archiveNode : null}
+      <TabsContent value="archive">{archiveNode}</TabsContent>
 
-      {view === "work" ? (
-        <div className="dos-flow">
-          <StageLine
-            procedure={procedure}
-            stages={stages}
-            selectedKey={effectiveScope === "stage" ? selectedStage?.key ?? null : null}
-            currentKey={currentStage?.key ?? null}
-            onSelect={selectStage}
-            onAddStage={canManage && procedure ? () => setStageCreateOpen(true) : undefined}
-          />
-          <div className="dos-main">
-          {responsibilityNode}
-          {selectedStage && procedure && effectiveScope === "stage" ? (
-            <StageBar
-              stage={selectedStage}
-              procedure={procedure}
-              documents={documents}
-              notes={notes}
-              isCurrent={selectedStage.key === currentStage?.key}
-              canManage={canManage}
-              onRemoveStage={canManage && selectedStage.removable ? () => handleRemoveStage(selectedStage) : undefined}
-            />
-          ) : null}
-          <div>
-            <div className="dos-main">
-              {selectedStage?.kind === "preservation" && effectiveScope === "stage" && procedure ? (
-                <PreservationWorkflowContent
-                  matter={matter}
-                  procedure={procedure}
-                  stage={selectedStage}
-                  cases={preservationCases}
-                  documents={documents}
-                  users={users}
-                  canManage={canManage}
-                  onOpenTemplate={() => setTemplateOpen(true)}
-                  onAddTask={() => setTaskStage(selectedStage)}
-                  onRemoveStage={canManage && selectedStage.removable ? () => handleRemoveStage(selectedStage) : undefined}
-                  uploadSignal={0}
-                />
-              ) : null}
-              <MaterialsSection
-                matterId={matter.id}
-                procedure={procedure}
-                stages={stages}
-                documents={documents}
-                stage={effectiveScope === "stage" ? selectedStage : null}
-                canManage={canManage}
-                onOpenTemplate={() => setTemplateOpen(true)}
-              />
-              {materialsExtra}
-              <CaseLog
-                items={logItems}
-                stages={stages}
-                procedure={procedure}
-                focusStageName={effectiveScope === "stage" ? selectedStage?.name ?? null : null}
-                canManage={canManage}
-                onWriteRecord={() => onWriteNote({ judgment: false, stageName: selectedStage?.name })}
-                onWriteJudgment={() => onWriteNote({ judgment: true, stageName: selectedStage?.name })}
-                onAddLedger={canManage && onAddLedger ? () => onAddLedger("express") : undefined}
-                onCaseSearch={onCaseSearch}
-              />
+      {!view || !VIEWS.some(item => item.key === view && item.show) ? <Alert variant="destructive"><AlertDescription>
+        这个案件视图不可用。<Button variant="link" onClick={() => onViewChange("archive")}>查看案件档案</Button>
+      </AlertDescription></Alert> : null}
+      <TabsContent value="work" className="min-w-0">
+        <Tabs value={workSection ?? ""} onValueChange={selectWorkSection}>
+          <TabsList aria-label="办案工作区" className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
+            <TabsTrigger value="materials">材料</TabsTrigger>
+            <TabsTrigger value="facts">事实与来源</TabsTrigger>
+            <TabsTrigger value="tasks">待办</TabsTrigger>
+            <TabsTrigger value="records">办案记录</TabsTrigger>
+          </TabsList>
+          {!workSection || obsoleteLocation ? <Alert variant="destructive" className="mt-4"><AlertDescription>
+            这个工作区链接已失效。<Button variant="link" onClick={() => selectWorkSection("materials")}>查看材料</Button>
+          </AlertDescription></Alert> : null}
+          {filtersVisible ? <div className="my-4 flex flex-wrap items-end gap-3">
+            {procedureFilter}
+            <div className="flex min-w-40 flex-col gap-1.5">
+              <Label htmlFor="case-stage-filter">环节</Label>
+              <Select value={requestedStage ?? "all"} onValueChange={value => setSelectedKey(value === "all" ? null : value)} disabled={!procedure}>
+                <SelectTrigger id="case-stage-filter"><SelectValue placeholder="请选择环节" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">全部环节</SelectItem>
+                  {materialStages.map(stage => <SelectItem key={stage.key} value={stage.key}>{stage.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
-          </div>
-        </div>
-          </div>
-      ) : null}
+            {canManage && procedure ? <Button variant="outline" size="sm" onClick={() => setStageCreateOpen(true)}>添加环节</Button> : null}
+          </div> : null}
+          {filtersVisible && (invalidProcedure || invalidStage) ? <Alert variant="destructive"><AlertDescription>
+            {invalidProcedure ? "所选程序不可用。" : "所选环节不可用。"}
+            <Button variant="link" onClick={() => updateDossierLocation(invalidProcedure ? { procedure: null, stage: null } : { stage: null })}>重新选择范围</Button>
+          </AlertDescription></Alert> : null}
+          {!obsoleteLocation ? <>
+            <TabsContent value="materials">
+              {!invalidProcedure && !invalidStage ? <div className="flex flex-col gap-4">
+                {selectedStage && procedure ? <StageBar stage={selectedStage} procedure={procedure} documents={documents} notes={notes}
+                  isCurrent={selectedStage.key === currentStage?.key} canManage={canManage}
+                  onRemoveStage={canManage && selectedStage.removable ? () => handleRemoveStage(selectedStage) : undefined} /> : null}
+                {materialsActions}
+                <MaterialsSection procedure={procedure} documents={documents} stage={selectedStage}
+                  canManage={canManageMaterials} onOpenTemplate={() => setTemplateOpen(true)}
+                  onUpload={() => setUploadTarget({ procedureId: procedure?.id ?? null, stageId: selectedStage?.id ?? null,
+                    label: selectedStage ? `${procedure?.customLabel ?? (procedure ? procedureTypeLabel[procedure.type] : "")} · ${selectedStage.name}`
+                      : procedure ? procedure.customLabel ?? procedureTypeLabel[procedure.type] : "全案材料",
+                    category: defaultCategoryForStage(selectedStage?.name ?? ""), sourceOptions: procedure ? buildSourceOptions(procedure) : [] })} />
+                {materialsExtra}
+              </div> : null}
+            </TabsContent>
+            <TabsContent value="facts">{factsNode}</TabsContent>
+            <TabsContent value="tasks">
+              {!invalidProcedure && !invalidStage ? <div className="flex flex-col gap-4">
+                <NextActions sectionRef={actionSectionRef} initiallyExpanded expandRequest={expandRequest}
+                  actions={actions} selectedStage={selectedStage} scope={effectiveScope}
+                  allScopeLabel={procedure ? `${procedure.customLabel ?? procedureTypeLabel[procedure.type]} · 全部环节` : "全案待办"}
+                  canManage={canManage} waiting={waiting ?? []}
+                  onAddTask={procedure && selectedStage ? () => setTaskStage(selectedStage) : undefined}
+                  onAddDeadline={procedure ? () => setDeadlineOpen(true) : undefined}
+                  onAddHearing={procedure && onAddLedger ? () => onAddLedger("hearing") : undefined} />
+                <div ref={responsibilitySectionRef} tabIndex={-1} aria-label="事项责任与交接">{responsibilityNode}</div>
+                {selectedStage?.kind === "preservation" && procedure ? <PreservationWorkflowContent
+                  matter={matter} cases={preservationCases}
+                  users={users} canManage={canManage}
+                  onAddTask={() => setTaskStage(selectedStage)}
+                  onRemoveStage={canManage && selectedStage.removable ? () => handleRemoveStage(selectedStage) : undefined} /> : null}
+              </div> : null}
+            </TabsContent>
+            <TabsContent value="records">
+              <CaseLog sectionRef={recordSectionRef} initiallyExpanded expandRequest={expandRequest}
+                items={logItems}
+                canManage={canManage} onWriteRecord={() => onWriteNote({ judgment: false })}
+                onWriteJudgment={() => onWriteNote({ judgment: true })}
+                onAddLedger={canManage && onAddLedger ? () => onAddLedger("express") : undefined} onCaseSearch={onCaseSearch} />
+            </TabsContent>
+          </> : null}
+        </Tabs>
+      </TabsContent>
 
-      {view === "money" ? financeNode : null}
-      {view === "seal" ? sealNode : null}
+      {financeNode ? <TabsContent value="money">{financeNode}</TabsContent> : null}
+      {sealNode ? <TabsContent value="seal">{sealNode}</TabsContent> : null}
         </div>
-        <aside className="dos-rail">
+        {view === "archive" ? <aside className="dos-rail">
           {archiveRailTop}
-          {/* 待办在侧栏（2026-09-16 用户要求）：主栏留给材料与记录；其余页签显示最近待办与记录摘要 */}
-          {view === "work" ? (
-            <NextActions
-              compact
-              actions={actions}
-              selectedStage={selectedStage}
-              scope={effectiveScope}
-              canManage={canManage}
-              waiting={waiting ?? []}
-              onAddTask={procedure && selectedStage ? () => setTaskStage(selectedStage) : undefined}
-              onAddDeadline={procedure ? () => setDeadlineOpen(true) : undefined}
-              onAddHearing={procedure && onAddLedger ? () => onAddLedger("hearing") : undefined}
-            />
-          ) : (
           <ArchiveGlance
             actions={actions}
             logItems={logItems}
             waiting={waiting ?? []}
             procedureLabel={procedure ? procedure.customLabel ?? procedureTypeLabel[procedure.type] : null}
-            onOpenWork={() => onViewChange("work")}
+            onOpenWork={openWorkSection}
           />
-          )}
-        </aside>
+        </aside> : null}
       </div>
+      </Tabs>
 
-      {/* 环节操作条与页头「上传材料」共用：打开当前选中环节的上传弹窗 */}
-        <div hidden>
-          <StageMaterialsPanel
-            matterId={matter.id}
-            procedure={procedure}
-            stage={selectedStage}
-            documents={[]}
-            canManage={canManage}
-            uploadSignal={uploadSignal}
-          />
-        </div>
-
+      {uploadTarget ? <CaseMaterialUpload matterId={matter.id} target={uploadTarget}
+        onClose={() => setUploadTarget(null)} onSaved={documentId => { setUploadTarget(null); onOpenDocument(documentId); router.refresh(); }} /> : null}
       <TemplatePickerDialog
         open={templateOpen}
         onOpenChange={setTemplateOpen}
@@ -974,6 +1006,7 @@ export function ProcedureWorkflowPanel({
         matterCategory={matter.category}
         folders={folders}
         templates={templates}
+        onGenerated={onOpenDocument}
       />
       {procedure && taskStage && (
         <TaskQuickDialog
@@ -1007,15 +1040,6 @@ export function ProcedureWorkflowPanel({
       ) : null}
     </>
   );
-}
-
-function stageChainDate(stage: WorkflowStage, procedure: WorkflowProcedure | null): string | null {
-  const src = procedure?.stages.find((s) => s.id === stage.id);
-  if (src?.completedAt) return shortDay(src.completedAt);
-  const due = stage.tasks.filter((t) => !t.completed && t.dueAt).map((t) => new Date(t.dueAt!).getTime()).sort((a, b) => a - b)[0];
-  if (due) return shortDay(new Date(due));
-  if (src?.startedAt) return shortDay(src.startedAt);
-  return null;
 }
 
 function StageGlyph({ name, kind, className }: { name: string; kind: WorkflowStage["kind"]; className?: string }) {
@@ -1159,107 +1183,6 @@ const EVENT_TONE: Record<string, { bg: string; fg: string; icon: typeof FileText
   MATTER_CLOSED: { bg: "var(--green-bg)", fg: "var(--green)", icon: Check }
 };
 
-/* ------------------------------------------------------------------ */
-/* 环节线：当前程序的全部环节，末尾是「＋ 添加环节」                     */
-/* ------------------------------------------------------------------ */
-
-function StageLine({
-  procedure,
-  stages,
-  selectedKey,
-  currentKey,
-  onSelect,
-  onAddStage
-}: {
-  procedure: WorkflowProcedure | null;
-  stages: WorkflowStage[];
-  selectedKey: string | null;
-  currentKey: string | null;
-  onSelect: (key: string) => void;
-  onAddStage?: () => void;
-}) {
-  if (!procedure) {
-    return (
-      <nav className="card dos-vline" aria-label="办案环节">
-        <div className="dos-vline-head">
-          <span className="t">办案环节</span>
-        </div>
-        <p className="t-xs t-mute" style={{ padding: "4px 14px 14px" }}>暂无在办程序，请在上方程序栏新增程序。</p>
-      </nav>
-    );
-  }
-  const currentIndex = stages.findIndex((s) => s.key === currentKey);
-  const hearingStageKey = (stages.find((s) => /开庭|庭审|询问/.test(s.name)) ?? stages.find((s) => stageGuideFor(s.name).includeHearings))?.key ?? null;
-  const nextHearing = [...procedure.hearings].filter((h) => daysUntil(h.startsAt) >= 0).sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())[0] ?? null;
-
-  function flagFor(stage: WorkflowStage): { text: string; tone: "red" | "amber" | "blue" } | null {
-    const guide = stageGuideFor(stage.name);
-    const overdue =
-      stage.tasks.filter((t) => !t.completed && t.dueAt && daysUntil(t.dueAt) < 0).length +
-      procedure!.deadlines.filter((d) => !d.completed && guide.deadlineCategories.includes(d.category) && daysUntil(d.dueAt) < 0).length;
-    if (overdue > 0) return { text: `逾期 ${overdue}`, tone: "red" };
-    if (stage.kind === "preservation" && stage.badge?.hot) return { text: `${stage.badge.text.split(" · ")[1] ?? "临期"}到期`, tone: "amber" };
-    if (stage.key === hearingStageKey && nextHearing) return { text: `开庭 ${shortDay(nextHearing.startsAt)}`, tone: "blue" };
-    const soon = procedure!.deadlines
-      .filter((d) => !d.completed && guide.deadlineCategories.includes(d.category))
-      .map((d) => daysUntil(d.dueAt))
-      .filter((n) => n >= 0 && n <= 7);
-    if (soon.length) return { text: `剩 ${Math.min(...soon)} 天`, tone: "amber" };
-    return null;
-  }
-
-  return (
-    <nav className="card dos-vline" aria-label="办案环节">
-      <div className="dos-vline-head">
-        <span className="t">办案环节</span>
-        <span className="t-xs t-mute">
-          {currentIndex >= 0 ? `第 ${currentIndex + 1}/${stages.length}` : `${stages.length} 个`} · 已完成 {stages.filter((s) => s.status === "done").length}
-        </span>
-      </div>
-      <ol className="dos-vline-list">
-        {stages.map((stage, i) => {
-          const state = stage.status === "done" ? "done" : stage.key === currentKey ? "cur" : stage.status === "risk" ? "risk" : "todo";
-          const flag = flagFor(stage);
-          const date = stageChainDate(stage, procedure);
-          const openTasks = stage.tasks.filter((t) => !t.completed).length;
-          return (
-            <li key={stage.key} className={cn("dos-vnode", state, stage.key === selectedKey && "sel", i < currentIndex && "passed")}>
-              <button type="button" onClick={() => onSelect(stage.key)} aria-current={stage.key === selectedKey ? "step" : undefined} title={`${stage.name} · ${STAGE_STATUS_TEXT[stage.status]}`}>
-                <span className="pin" aria-hidden>{state === "done" ? <Check strokeWidth={3} /> : null}</span>
-                <span className="body">
-                  <span className="nm">
-                    {stage.name}
-                    {state === "cur" ? <span className="now">当前</span> : null}
-                  </span>
-                  <span className="sub">
-                    {flag ? <span className={cn("dos-flag", flag.tone)}>{flag.text}</span> : null}
-                    <span className="dt">{date ?? (openTasks ? `${openTasks} 项待办` : "—")}</span>
-                  </span>
-                </span>
-              </button>
-            </li>
-          );
-        })}
-        {onAddStage ? (
-          <li className="dos-vnode add">
-            <button type="button" onClick={onAddStage}>
-              <span className="pin" aria-hidden>
-                <Plus strokeWidth={2.6} />
-              </span>
-              <span className="body">
-                <span className="nm">添加环节</span>
-                <span className="sub">
-                  <span className="dt">可插入任意位置</span>
-                </span>
-              </span>
-            </button>
-          </li>
-        ) : null}
-      </ol>
-    </nav>
-  );
-}
-
 /** 一个按钮 + 类型菜单：待办用「＋事项」，记录用「＋记录」（2026-09-15 入口合并） */
 function AddMenu({
   label,
@@ -1339,30 +1262,22 @@ function buildActionItems(procedure: WorkflowProcedure | null, stages: WorkflowS
       });
     }
   }
-  const stageForDeadline = (category: DeadlineCategory) => stages.find((s) => stageGuideFor(s.name).deadlineCategories.includes(category))
-    // 无映射类目（如「其他」）此前归 null，环节视图下待办区永不显示、确认/调整入口不可达
-    // （2026-09-21 全流程验收发现）——回退到当前推进环节，保证任何期限都可被看见与处置。
-    ?? stages.find((s) => s.status === "active")
-    ?? stages[0]
-    ?? null;
   for (const deadline of procedure.deadlines) {
     if (deadline.completed) continue;
-    const stage = stageForDeadline(deadline.category);
     items.push({
       key: `d-${deadline.id}`,
       kind: "deadline",
       title: deadline.title,
       at: deadline.dueAt,
       days: daysUntil(deadline.dueAt),
-      stageKey: stage?.key ?? null,
-      stageName: stage?.name ?? null,
+      stageKey: null,
+      stageName: null,
       meta: deadline.basis ?? "",
       priority: 2,
       deadlineId: deadline.id,
       pendingConfirm: deadline.confirmStatus === "PENDING"
     });
   }
-  const hearingStage = stages.find((s) => /开庭|庭审|询问/.test(s.name)) ?? stages.find((s) => stageGuideFor(s.name).includeHearings) ?? null;
   for (const hearing of procedure.hearings) {
     const days = daysUntil(hearing.startsAt);
     if (days < 0) continue;
@@ -1372,8 +1287,8 @@ function buildActionItems(procedure: WorkflowProcedure | null, stages: WorkflowS
       title: hearing.title,
       at: hearing.startsAt,
       days,
-      stageKey: hearingStage?.key ?? null,
-      stageName: hearingStage?.name ?? null,
+      stageKey: null,
+      stageName: null,
       meta: [hearing.room, hearing.address].filter(Boolean).join(" · "),
       priority: 1
     });
@@ -1415,21 +1330,29 @@ function actionWhen(item: ActionItem) {
 }
 
 function NextActions({
+  sectionRef,
+  initiallyExpanded = false,
+  expandRequest = 0,
   compact = false,
   actions,
   selectedStage,
   scope,
+  allScopeLabel,
   canManage,
   waiting,
   onAddTask,
   onAddDeadline,
   onAddHearing
 }: {
+  sectionRef?: React.Ref<HTMLElement>;
+  initiallyExpanded?: boolean;
+  expandRequest?: number;
   /** 侧栏紧凑排布（办案进程页签） */
   compact?: boolean;
   actions: ActionItem[];
   selectedStage: WorkflowStage | null;
   scope: "all" | "stage";
+  allScopeLabel: string;
   canManage: boolean;
   waiting: WaitingItem[];
   onAddTask?: () => void;
@@ -1438,8 +1361,13 @@ function NextActions({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [showLater, setShowLater] = useState(false);
-  const [showOthers, setShowOthers] = useState(false);
+  const [showLater, setShowLater] = useState(initiallyExpanded);
+  const [showOthers, setShowOthers] = useState(initiallyExpanded);
+  useEffect(() => {
+    if (!expandRequest) return;
+    setShowLater(true);
+    setShowOthers(true);
+  }, [expandRequest]);
   const [adjusting, setAdjusting] = useState<{ id: string; title: string; dueAt: Date } | null>(null);
   const inScope = scope === "stage" && selectedStage ? actions.filter((i) => i.stageKey === selectedStage.key) : actions;
   const overdue = inScope.filter((i) => i.days !== null && i.days < 0);
@@ -1590,16 +1518,12 @@ function NextActions({
   const empty = overdue.length + soon.length + later.length === 0;
 
   return (
-    <section className={cn("card", compact && "dos-todo-rail")} aria-label="待办">
+    <section ref={sectionRef} tabIndex={-1} className={cn("card scroll-mt-44", compact && "dos-todo-rail")} aria-label="待办">
       <div className={cn("panel-head flex-wrap", compact && "rail-sec-head")}>
         <div className={compact ? "flex items-center gap-2" : "panel-title"}>
           <ListChecks className={compact ? "h-[15px] w-[15px] text-[var(--t-muted)]" : "ic"} strokeWidth={1.8} />
           待办
-          {compact ? (
-            <span className="t-xs t-mute" style={{ fontWeight: 400 }}>{scope === "stage" && selectedStage ? selectedStage.name : "全部环节"}</span>
-          ) : (
-            <span className="t-xs t-mute" style={{ fontWeight: 400 }}>{scope === "stage" && selectedStage ? selectedStage.name : "全部环节"}</span>
-          )}
+          <span className="t-xs t-mute" style={{ fontWeight: 400 }}>{scope === "stage" && selectedStage ? selectedStage.name : allScopeLabel}</span>
         </div>
         <div className="flex items-center gap-2">
           {canManage ? (
@@ -1749,15 +1673,6 @@ function buildLogItems({
   users: UserOption[];
   expresses: ExpressItem[];
 }): LogItem[] {
-  // 时间归段：记录落在其前最近开始的环节；研判笔记环节标签、任务所属环节优先
-  const started = (procedure?.stages ?? [])
-    .filter((s) => s.status !== "HIDDEN" && s.startedAt)
-    .sort((a, b) => new Date(a.startedAt!).getTime() - new Date(b.startedAt!).getTime());
-  const stageByTime = (at: Date) => {
-    let hit: string | null = null;
-    for (const s of started) if (new Date(s.startedAt!).getTime() <= at.getTime()) hit = s.name;
-    return hit;
-  };
   const nameOf = (id: string | null) => (id ? users.find((u) => u.id === id)?.name ?? null : null);
   const items: LogItem[] = [];
   const now = Date.now();
@@ -1770,7 +1685,7 @@ function buildLogItems({
       key: `n-${note.id}`,
       kind,
       at,
-      stageName: noteStage(note) ?? stageByTime(at),
+      stageName: noteStage(note),
       title: judgment ? "研判笔记" : `${NOTE_CHANNEL_LABEL[note.channel] ?? "办案记录"}${note.withWhom ? ` · ${note.withWhom}` : ""}`,
       body: note.content,
       meta: `${note.author.name} · ${formatDateTimeShort(at)}`,
@@ -1793,18 +1708,15 @@ function buildLogItems({
       });
     }
   }
-  const hearingStage = stages.find((s) => /开庭|庭审|询问/.test(s.name))?.name ?? null;
   for (const hearing of procedure?.hearings ?? []) {
     const at = new Date(hearing.startsAt);
     if (at.getTime() > now) continue;
-    // 标题点名了环节（如「庭前会议」）时归该环节，否则归开庭环节
-    const named = stages.find((s) => hearing.title.includes(s.name))?.name ?? null;
     items.push({
       key: `h-${hearing.id}`,
       kind: "court",
       at,
-      stageName: named ?? hearingStage ?? stageByTime(at),
-      title: `已开庭：${hearing.title}`,
+      stageName: null,
+      title: `开庭安排：${hearing.title}`,
       body: null,
       meta: [hearing.room, formatDateTimeShort(at)].filter(Boolean).join(" · "),
       channelTone: "court"
@@ -1816,7 +1728,7 @@ function buildLogItems({
       key: `m-${memo.id}`,
       kind: "memo",
       at,
-      stageName: stageByTime(at),
+      stageName: null,
       title: memo.done ? "备忘（已办）" : "备忘",
       body: memo.content,
       meta: [formatDateTimeShort(at), memo.done && memo.doneAt ? `${formatDateTimeShort(new Date(memo.doneAt))} 办结` : null].filter(Boolean).join(" · "),
@@ -1830,7 +1742,7 @@ function buildLogItems({
       key: `x-${ex.id}`,
       kind: "express",
       at,
-      stageName: stageByTime(at),
+      stageName: null,
       title: `${outbound ? "寄出" : "收件"}：${ex.purpose}`,
       body: null,
       meta: [ex.companyCode ?? "快递公司待识别", ex.trackingNo, ex.lastState ?? "待跟踪", ex.lastUpdateAt ? `更新 ${formatDateTimeShort(new Date(ex.lastUpdateAt))}` : null].filter(Boolean).join(" · "),
@@ -1845,7 +1757,7 @@ function buildLogItems({
       key: `e-${event.id}`,
       kind: "sys",
       at,
-      stageName: stageByTime(at),
+      stageName: null,
       title: event.title,
       body: null,
       meta: [formatDateTimeShort(at), event.content].filter(Boolean).join(" · "),
@@ -1946,115 +1858,48 @@ function LogRow({ item, canManage }: { item: LogItem; canManage?: boolean }) {
   );
 }
 
-function CaseLog({
-  items,
-  stages,
-  procedure,
-  focusStageName,
-  canManage,
-  onWriteRecord,
-  onWriteJudgment,
-  onAddLedger,
-  onCaseSearch
-}: {
-  onAddLedger?: (type: "express") => void;
-  onCaseSearch?: () => void;
-  items: LogItem[];
-  stages: WorkflowStage[];
-  procedure: WorkflowProcedure | null;
-  focusStageName: string | null;
-  canManage: boolean;
-  onWriteRecord: () => void;
-  onWriteJudgment: () => void;
+function CaseLog({ sectionRef, initiallyExpanded = false, expandRequest = 0, items, canManage,
+  onWriteRecord, onWriteJudgment, onAddLedger, onCaseSearch }: {
+  sectionRef?: React.Ref<HTMLElement>; initiallyExpanded?: boolean; expandRequest?: number;
+  items: LogItem[]; canManage: boolean; onWriteRecord: () => void; onWriteJudgment: () => void;
+  onAddLedger?: (type: "express") => void; onCaseSearch?: () => void;
 }) {
-  const [filter, setFilter] = useState<"all" | LogKind>("all");
-  const [expanded, setExpanded] = useState(false);
-
-  // 去掉「总览」后，未归环节的记录（快递、程序级事件等）若只按环节过滤就再也看不到
-  const scoped = focusStageName ? items.filter((e) => e.stageName === focusStageName || !e.stageName) : items;
-  const shown = scoped.filter((e) => filter === "all" || e.kind === filter);
-  const order = [...stages.map((s) => s.name)].reverse();
+  const params = useSearchParams();
+  const filter = params.get("recordKind") ?? "all";
+  const validFilter = LOG_FILTERS.some(item => item.key === filter);
+  const expanded = params.get("recordsExpanded") === "1" || initiallyExpanded;
+  useEffect(() => { if (expandRequest) updateDossierLocation({ recordKind: null, recordsExpanded: "1" }, "replace"); }, [expandRequest]);
+  const shown = items.filter(item => filter === "all" || item.kind === filter);
   const groups = new Map<string, LogItem[]>();
-  for (const e of shown) {
-    const key = e.stageName && order.includes(e.stageName) ? e.stageName : "__none";
-    groups.set(key, [...(groups.get(key) ?? []), e]);
+  for (const item of shown) {
+    const day = shDayKey(item.at);
+    const group = groups.get(day);
+    if (group) group.push(item); else groups.set(day, [item]);
   }
-  const segs = [...order.filter((n) => groups.has(n)), ...(groups.has("__none") ? ["__none"] : [])].map((name) => ({ name, items: groups.get(name) ?? [] }));
-  const visibleSegs = expanded ? segs : segs.slice(0, 3);
-
-  const stageMeta = (name: string) => {
-    const stage = stages.find((s) => s.name === name);
-    const src = stage?.id ? procedure?.stages.find((s) => s.id === stage.id) : null;
-    const period = src?.startedAt ? `${shortDay(src.startedAt)} — ${src.completedAt ? shortDay(src.completedAt) : ""}` : "";
-    return { status: stage ? STAGE_STATUS_TEXT[stage.status] : "", period };
-  };
-
-  return (
-    <section className="card" aria-label="记录">
-      <div className="panel-head flex-wrap">
-        <div className="panel-title">
-          <BookOpen className="ic" strokeWidth={1.8} />
-          记录
-          <span className="t-xs t-mute" style={{ fontWeight: 400 }}>{focusStageName ?? "全部环节"}</span>
-        </div>
-        <div className="flex items-center gap-[7px]">
-        {onCaseSearch ? (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onCaseSearch}>
-            <Scale />
-            类案检索
-          </button>
-        ) : null}
-        {canManage ? (
-          <AddMenu
-            label="记录"
-            items={[
-              { key: "talk", label: "沟通", hint: "电话、微信、邮件、会见、法院沟通", icon: MessageSquare, onSelect: onWriteRecord },
-              ...(onAddLedger ? [{ key: "express", label: "快递", hint: "填单号，物流状态自动更新", icon: Truck, onSelect: () => onAddLedger("express") }] : []),
-              { key: "judgment", label: "研判", hint: "我的判断与分析，独立样式陈列", icon: PenLine, onSelect: onWriteJudgment }
-            ]}
-          />
-        ) : null}
-        </div>
+  const days = [...groups];
+  const visible = expanded ? days : days.slice(0, 3);
+  return <section ref={sectionRef} tabIndex={-1} className="card scroll-mt-44" aria-label="记录">
+    <div className="panel-head flex-wrap">
+      <h2 className="panel-title"><BookOpen className="ic" />办案记录<span className="text-sm font-normal text-muted-foreground">{items.length}</span></h2>
+      <div className="flex items-center gap-2">
+        {onCaseSearch ? <Button variant="ghost" size="sm" onClick={onCaseSearch}><Scale className="size-4" />类案检索</Button> : null}
+        {canManage ? <AddMenu label="记录" items={[
+          { key: "talk", label: "沟通", hint: "电话、微信、邮件、会见、法院沟通", icon: MessageSquare, onSelect: onWriteRecord },
+          ...(onAddLedger ? [{ key: "express", label: "快递", hint: "寄送或接收材料", icon: Truck, onSelect: () => onAddLedger("express") }] : []),
+          { key: "judgment", label: "研判", hint: "记录判断与分析", icon: PenLine, onSelect: onWriteJudgment }
+        ]} /> : null}
       </div>
-      <div className="dos-log-filters" role="group" aria-label="记录筛选">
-        {LOG_FILTERS.map((f) => {
-          const count = f.key === "all" ? scoped.length : scoped.filter((e) => e.kind === f.key).length;
-          return (
-            <button key={f.key} type="button" className={cn("dos-filter", filter === f.key && "on")} aria-pressed={filter === f.key} onClick={() => setFilter(f.key)}>
-              {f.label}
-              {count ? <span>{count}</span> : null}
-            </button>
-          );
-        })}
-      </div>
-      {segs.length === 0 ? (
-        <EmptyState compact title={focusStageName ? "本环节暂无记录" : "暂无记录"} description="沟通、法院、研判、快递都记在这里" />
-      ) : (
-        visibleSegs.map((seg) => {
-          const meta = seg.name === "__none" ? { status: "", period: "" } : stageMeta(seg.name);
-          return (
-            <div key={seg.name} className="dos-seg">
-              <div className="dos-seg-h">
-                <span className="nm">{seg.name === "__none" ? "收案及其他" : seg.name}</span>
-                {meta.status ? <span className="st">{meta.status}</span> : null}
-                <span className="rule" />
-                {meta.period ? <span className="pd">{meta.period}</span> : null}
-                <span className="pd">{seg.items.length} 条</span>
-              </div>
-              {seg.items.map((e) => (
-                <LogRow key={e.key} item={e} canManage={canManage} />
-              ))}
-            </div>
-          );
-        })
-      )}
-      {segs.length > visibleSegs.length ? (
-        <button type="button" className="dos-more" onClick={() => setExpanded(true)}>
-          展开更早的 {segs.length - visibleSegs.length} 个环节
-        </button>
-      ) : null}
-    </section>
-  );
+    </div>
+    <div className="flex flex-wrap gap-1 px-4 py-3" role="group" aria-label="记录筛选">
+      {LOG_FILTERS.map(item => <Button key={item.key} size="sm" variant={filter === item.key ? "secondary" : "ghost"}
+        aria-pressed={filter === item.key} onClick={() => updateDossierLocation({ recordKind: item.key === "all" ? null : item.key })}>{item.label}</Button>)}
+    </div>
+    {!validFilter ? <Alert variant="destructive"><AlertDescription>记录筛选不可用。<Button variant="link" onClick={() => updateDossierLocation({ recordKind: null })}>查看全部记录</Button></AlertDescription></Alert> : visible.length ? visible.map(([day, records]) => <section key={day} aria-label={day}>
+      <h3 className="border-b px-4 py-2 text-sm font-medium text-muted-foreground">{day}</h3>
+      {records.map(item => <LogRow key={item.key} item={item} canManage={canManage} />)}
+    </section>) : <EmptyState compact title={filter === "all" ? "暂无记录" : "暂无此类记录"} />}
+    {days.length > visible.length ? <Button variant="ghost" className="w-full" onClick={() => updateDossierLocation({ recordsExpanded: "1" })}>显示更早记录</Button> : null}
+  </section>;
 }
 
 /** 案件档案右侧提醒：最近待办 + 最近记录，只做提醒，完整内容在办案进程 */
@@ -2069,7 +1914,7 @@ function ArchiveGlance({
   logItems: LogItem[];
   waiting: WaitingItem[];
   procedureLabel: string | null;
-  onOpenWork: () => void;
+  onOpenWork: (section: "tasks" | "records") => void;
 }) {
   const overdue = actions.filter((a) => a.days !== null && a.days < 0).length;
   return (
@@ -2079,9 +1924,9 @@ function ArchiveGlance({
           <ListChecks className="h-[15px] w-[15px] text-[var(--t-muted)]" strokeWidth={1.8} />
           最近待办
           {procedureLabel ? <span className="t-xs t-mute" style={{ fontWeight: 400 }}>{procedureLabel}</span> : null}
-          <button type="button" className="link border-0 bg-transparent p-0" onClick={onOpenWork}>
-            全部 {actions.length + waiting.length}
-          </button>
+          {actions.length + waiting.length > 0 ? <button type="button" className="link border-0 bg-transparent p-0" onClick={() => onOpenWork("tasks")}>
+            查看全部待办 <span className="mono">{actions.length + waiting.length}</span>
+          </button> : null}
         </div>
         {actions.length === 0 && waiting.length === 0 ? (
           <div className="panel-body t-xs t-mute">没有待办</div>
@@ -2091,14 +1936,14 @@ function ArchiveGlance({
             {actions.slice(0, 3).map((a) => {
               const when = actionWhen(a);
               return (
-                <button key={a.key} type="button" className="dos-glance-row" onClick={onOpenWork}>
+                <button key={a.key} type="button" className="dos-glance-row" onClick={() => onOpenWork("tasks")}>
                   <span className={cn("w", when.tone)}>{when.main}</span>
                   <span className="t">{a.title}</span>
                 </button>
               );
             })}
             {waiting.slice(0, actions.length >= 3 ? 0 : 3 - actions.length).map((w) => (
-              <button key={w.key} type="button" className="dos-glance-row" onClick={w.onOpen ?? onOpenWork}>
+              <button key={w.key} type="button" className="dos-glance-row" onClick={w.onOpen ?? (() => onOpenWork("tasks"))}>
                 <span className="w teal">审批中</span>
                 <span className="t">{w.title}</span>
               </button>
@@ -2110,15 +1955,15 @@ function ArchiveGlance({
         <div className="rail-sec-head">
           <BookOpen className="h-[15px] w-[15px] text-[var(--t-muted)]" strokeWidth={1.8} />
           最近记录
-          <button type="button" className="link border-0 bg-transparent p-0" onClick={onOpenWork}>
-            全部 {logItems.length}
-          </button>
+          {logItems.length > 0 ? <button type="button" className="link border-0 bg-transparent p-0" onClick={() => onOpenWork("records")}>
+            查看全部记录 <span className="mono">{logItems.length}</span>
+          </button> : null}
         </div>
         {logItems.length === 0 ? (
           <div className="panel-body t-xs t-mute">暂无记录</div>
         ) : (
           logItems.slice(0, 3).map((l) => (
-            <button key={l.key} type="button" className="dos-glance-row col" onClick={onOpenWork}>
+            <button key={l.key} type="button" className="dos-glance-row col" onClick={() => onOpenWork("records")}>
               <span className="t">{l.title}</span>
               {l.body ? <span className="b">{l.body}</span> : null}
               <span className="m">{l.meta}</span>
@@ -2134,215 +1979,44 @@ function ArchiveGlance({
 /* 材料：随环节范围展示（本环节带上传与来源筛选，全部环节按环节分组）   */
 /* ------------------------------------------------------------------ */
 
-function MaterialsSection({
-  matterId,
-  procedure,
-  stages,
-  documents,
-  stage,
-  canManage,
-  onOpenTemplate
-}: {
-  matterId: string;
-  procedure: WorkflowProcedure | null;
-  stages: WorkflowStage[];
-  documents: WorkflowDocument[];
-  /** null = 全部环节 */
-  stage: WorkflowStage | null;
-  canManage: boolean;
-  onOpenTemplate: () => void;
+function MaterialsSection({ procedure, documents, stage, canManage, onOpenTemplate, onUpload }: {
+  procedure: WorkflowProcedure | null; documents: WorkflowDocument[]; stage: WorkflowStage | null;
+  canManage: boolean; onOpenTemplate: () => void; onUpload: () => void;
 }) {
-  const { onAddEvidence, unlinkedEvidence } = useDocActions();
-  if (!procedure) return <>
-    <StageMaterialsPanel matterId={matterId} procedure={null} stage={null} documents={documents} canManage={canManage} onOpenTemplate={onOpenTemplate} />
-    <section className="card" aria-label="人工要点">
-      <div className="panel-head"><div className="panel-title">人工要点</div>
-        {onAddEvidence ? <button type="button" className="btn btn-ghost btn-sm" onClick={() => onAddEvidence(null)}>＋人工要点</button> : null}
-      </div>
-      {unlinkedEvidence?.length ? <div className="dos-doc-evbox flat"><EvidencePoints items={unlinkedEvidence} showSource /></div>
-        : <p className="p-4 text-sm text-muted-foreground">尚未记录未挂材料的要点。</p>}
-    </section>
-  </>;
-  if (stage && procedure) {
-    // 去掉「总览」后，任何环节都匹配不上的材料会失去入口，故在环节材料下方常驻一段兜底
-    const orphans = documents.filter((d) => d.procedureId !== procedure.id || !stages.some((st) => documentMatchesStage(d, st)));
-    return (
-      <>
-        <StageMaterialsPanel
-          key={stage.key}
-          matterId={matterId}
-          procedure={procedure}
-          stage={stage}
-          documents={documents.filter((d) => d.procedureId === procedure.id && documentMatchesStage(d, stage))}
-          canManage={canManage}
-          onOpenTemplate={onOpenTemplate}
-        />
-        {orphans.length || unlinkedEvidence?.length || onAddEvidence ? (
-          <div className="card">
-            <div className="panel-head">
-              <div className="panel-title">
-                <FolderOpen className="ic" strokeWidth={1.8} />
-                其他材料与要点
-                <span className="badge b-white" style={{ marginLeft: 2 }}>{orphans.length + (unlinkedEvidence?.length ?? 0)}</span>
-              </div>
-              {onAddEvidence ? <button type="button" className="btn btn-ghost btn-sm" onClick={() => onAddEvidence(null)}>＋人工要点</button> : null}
-            </div>
-            {orphans.map((d) => <DocRow key={d.id} doc={d} />)}
-            {unlinkedEvidence?.length ? (
-              <div className="dos-seg">
-                <div className="dos-seg-h">
-                  <span className="nm">未挂材料的证据要点</span>
-                  <span className="rule" />
-                  <span className="pd">{unlinkedEvidence.length} 条</span>
-                </div>
-                <div className="dos-doc-evbox flat">
-                  <EvidencePoints items={unlinkedEvidence} showSource />
-                </div>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-      </>
-    );
-  }
-  // 全部环节下每份材料只出现一次：归到第一个匹配的环节（外键归属优先，模式匹配可能命中多个环节）
-  const homeOf = new Map<string, string>();
-  for (const d of documents) {
-    if (!procedure || d.procedureId !== procedure.id) continue;
-    const home = stages.find((st) => st.id && d.stageId === st.id) ?? stages.find((st) => documentMatchesStage(d, st));
-    if (home) homeOf.set(d.id, home.key);
-  }
-  const unassigned = documents.filter((d) => !homeOf.has(d.id));
-  return (
-    <div className="card">
-      <div className="panel-head">
-        <div className="panel-title">
-          <FolderOpen className="ic" strokeWidth={1.8} />
-          材料
-          <span className="badge b-white" style={{ marginLeft: 2 }}>{documents.length}</span>
-          {procedure ? <span className="t-xs t-mute" style={{ fontWeight: 400 }}>全部环节</span> : null}
-        </div>
-        {onAddEvidence ? (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => onAddEvidence(null)}>
-            ＋证据要点
-          </button>
-        ) : null}
-      </div>
-      {procedure && documents.length === 0 ? <EmptyState compact icon={FileText} title="暂无材料" description="选择环节后上传，材料会归入该环节。" /> : null}
-      {stages.map((s) => {
-        const docs = documents.filter((d) => homeOf.get(d.id) === s.key);
-        if (!docs.length) return null;
-        return (
-          <div key={s.key} className="dos-seg">
-            <div className="dos-seg-h">
-              <span className="nm">{s.name}</span>
-              <span className="rule" />
-              <span className="pd">{docs.length} 份</span>
-            </div>
-            {docs.map((d) => <DocRow key={d.id} doc={d} />)}
-          </div>
-        );
-      })}
-      {procedure && unassigned.length ? (
-        <div className="dos-seg">
-          <div className="dos-seg-h">
-            <span className="nm">未归入环节</span>
-            <span className="rule" />
-            <span className="pd">{unassigned.length} 份</span>
-          </div>
-          {unassigned.map((d) => <DocRow key={d.id} doc={d} />)}
-        </div>
-      ) : null}
-      {unlinkedEvidence?.length ? (
-        <div className="dos-seg">
-          <div className="dos-seg-h">
-            <span className="nm">未挂材料的证据要点</span>
-            <span className="rule" />
-            <span className="pd">{unlinkedEvidence.length} 条</span>
-          </div>
-          <div className="dos-doc-evbox flat">
-            <EvidencePoints items={unlinkedEvidence} showSource />
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
+  const scoped = stage ? documents.filter(doc => doc.procedureId === procedure?.id && documentMatchesStage(doc, stage)) : documents;
+  return <StageMaterialsPanel procedure={procedure} stage={stage} documents={scoped}
+    canManage={canManage} onOpenTemplate={onOpenTemplate} onUpload={onUpload} />;
 }
 
 function DocRow({ doc, compact = false }: { doc: WorkflowDocument; compact?: boolean }) {
-  const { onReview, evidenceByDoc, onAddEvidence } = useDocActions();
-  const [evOpen, setEvOpen] = useState(false);
-  const pUrl = documentPreviewUrl(doc);
+  const { onReview, evidenceByDoc, onOpenDocument } = useDocActions();
   const chip = doc.sourceOrigin ? documentSourceChip[doc.sourceOrigin] : null;
   const ext = doc.name.split(".").pop()?.toLowerCase() ?? "";
   const tone = ext === "pdf" ? "red" : ["doc", "docx"].includes(ext) ? "blue" : doc.textSource === "OCR" ? "violet" : "slate";
   const evidence = evidenceByDoc?.get(doc.id) ?? [];
-  const meta: string[] = [];
-  if (doc.size) meta.push(formatBytes(doc.size));
-  meta.push(`${shortDay(doc.createdAt)} ${doc.templateId ? "从模板生成" : "上传"}`);
-  if (doc.ocrStatus === "READY" && doc.pageCount) meta.push(`已抽取文本 · ${doc.pageCount} 页`);
-  if (!compact && doc.sha256) meta.push(`校验值 ${doc.sha256.slice(0, 4)}…${doc.sha256.slice(-4)}`);
-  if (doc.version && doc.version > 1) meta.push(`版本 ${doc.version}`);
-  return (
-    <div className={cn("dos-doc", evOpen && "open")}>
-      <div className="doc-row">
-        <DocIcon tone={tone} />
-        <div className="min-w-0 flex-1">
-          {pUrl ? (
-            <a href={pUrl} target="_blank" rel="noreferrer" className="doc-name block truncate hover:text-[var(--teal-deep)]">
-              {doc.name}
-            </a>
-          ) : (
-            <div className="doc-name truncate">{doc.name}</div>
-          )}
-          {/* 标签行：材料性质 / 来源 / 识别状态 / 证据要点（2026-09-14 证据链并入材料） */}
-          <div className="dos-doc-tags">
-            <span className={cn("dos-doc-cat", doc.category === "EVIDENCE" && "ev")}>{documentCategoryLabel[doc.category]}</span>
-            {chip ? <SourceChip kind={chip.kind}>{chip.label}</SourceChip> : doc.sourceParty ? <SourceChip kind="plain">{doc.sourceParty}</SourceChip> : null}
-            {doc.ocrStatus === "FAILED" ? <span className="src-chip" style={{ color: "var(--red)", borderColor: "var(--red-line)", background: "var(--red-bg)" }}>识别失败</span> : null}
-            {doc.ocrStatus === "PARTIAL" ? <SourceChip kind="plain">部分文本可用</SourceChip> : null}
-            {doc.textSource === "OCR" && doc.ocrStatus === "READY" ? <SourceChip kind="ai">AI 识别</SourceChip> : null}
-            {evidence.length ? (
-              <button type="button" className="dos-doc-ev" aria-expanded={evOpen} onClick={() => setEvOpen((v) => !v)}>
-                证据要点 {evidence.length}
-                {[...new Set(evidence.map((e) => evidenceKindLabel[e.kind]))].slice(0, 2).map((k) => (
-                  <span key={k}>· {k}</span>
-                ))}
-              </button>
-            ) : null}
-            <span className="doc-meta truncate">{meta.join(" · ")}</span>
-          </div>
-        </div>
-        {!compact ? (
-          <div className="dos-doc-ops">
-            {onAddEvidence ? (
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => onAddEvidence(doc.id)} title="记录这份材料证明的事实、主张或分析">
-                ＋证据要点
-              </button>
-            ) : null}
-            {pUrl ? (
-              <a href={pUrl} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm">
-                预览
-              </a>
-            ) : null}
-            <a href={`/api/documents/${doc.id}/download`} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm">
-              下载
-            </a>
-            {onReview && doc.ocrStatus !== "FAILED" ? (
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => onReview(doc.id)} title="AI 审查缺失要素、法律风险与条款问题">
-                AI 审查
-              </button>
-            ) : null}
-          </div>
-        ) : null}
+  const meta = [doc.size ? formatBytes(doc.size) : null, shortDay(doc.createdAt), `第 ${doc.version} 版`].filter(Boolean);
+  return <div className="dos-doc"><div className="doc-row">
+    <DocIcon tone={tone} />
+    <div className="min-w-0 flex-1">
+      <Button variant="link" className="h-auto max-w-full justify-start px-0 text-left" onClick={() => onOpenDocument(doc.id)}>
+        <span className="truncate">{doc.name}</span>
+      </Button>
+      <div className="dos-doc-tags">
+        <span className="dos-doc-cat">{documentCategoryLabel[doc.category]}</span>
+        <Badge variant={doc.isLatest ? "secondary" : "outline"}>{doc.isLatest ? "当前版本" : "历史版本"}</Badge>
+        <span className="text-xs text-muted-foreground">{ARCHIVE_DOCUMENT_STATUS_LABELS[doc.status]}</span>
+        {chip ? <SourceChip kind={chip.kind}>{chip.label}</SourceChip> : null}
+        {doc.ocrStatus === "FAILED" ? <span className="text-xs text-destructive">处理失败</span> : null}
+        {doc.ocrStatus === "PARTIAL" ? <SourceChip kind="plain">部分文本可用</SourceChip> : null}
+        {evidence.length ? <span className="text-xs text-muted-foreground">{evidence.length} 条要点</span> : null}
+        <span className="doc-meta truncate">{meta.join(" · ")}</span>
       </div>
-      {evOpen && evidence.length ? (
-        <div className="dos-doc-evbox">
-          <EvidencePoints items={evidence} />
-        </div>
-      ) : null}
     </div>
-  );
+    {!compact ? <div className="dos-doc-ops">
+      <Button variant="ghost" size="sm" onClick={() => onOpenDocument(doc.id)}>查看材料</Button>
+      {onReview ? <Button variant="ghost" size="sm" onClick={() => onReview(doc.id)}>AI 审查</Button> : null}
+    </div> : null}
+  </div></div>;
 }
 
 function formatBytes(size: number) {
@@ -2353,28 +2027,18 @@ function formatBytes(size: number) {
 
 function PreservationWorkflowContent({
   matter,
-  procedure,
-  stage,
   cases,
-  documents,
   users,
   canManage,
-  onOpenTemplate,
   onAddTask,
-  onRemoveStage,
-  uploadSignal
+  onRemoveStage
 }: {
   matter: WorkflowMatter;
-  procedure: WorkflowProcedure;
-  stage: WorkflowStage;
   cases: WorkflowPreservationCase[];
-  documents: WorkflowDocument[];
   users: UserOption[];
   canManage: boolean;
-  onOpenTemplate: () => void;
   onAddTask: () => void;
   onRemoveStage?: () => void;
-  uploadSignal: number;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -2392,7 +2056,6 @@ function PreservationWorkflowContent({
   const activeProperties = properties.filter((p) => p.status === "ACTIVE" || p.status === "RENEWED");
   const expiringCount = activeProperties.filter((p) => daysUntil(p.expiryDate) <= 30).length;
   const renewableProperty = properties.find((p) => p.id === renewPropertyId) ?? null;
-  const relevantDocs = documents.filter((d) => documentMatchesStage(d, stage));
 
   function handleLift(propertyId: string) {
     startTransition(async () => {
@@ -2522,19 +2185,6 @@ function PreservationWorkflowContent({
       </div>
     </div>
 
-      {/* 保全材料列表在「材料」视图；这里只挂载上传弹窗，供环节操作与页头「上传材料」使用 */}
-      <div hidden>
-        <StageMaterialsPanel
-          matterId={matter.id}
-          procedure={procedure}
-          stage={stage}
-          documents={relevantDocs}
-          canManage={canManage}
-          onOpenTemplate={onOpenTemplate}
-          uploadSignal={uploadSignal}
-        />
-      </div>
-
       <PreservationCaseDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
@@ -2628,124 +2278,45 @@ function PreservationPropertyRow({
   );
 }
 
-function StageMaterialsPanel({
-  matterId,
-  procedure,
-  stage,
-  documents,
-  canManage,
-  onOpenTemplate,
-  uploadSignal = 0,
-  bare = false
-}: {
-  matterId: string;
+function StageMaterialsPanel({ procedure, stage, documents, canManage, onOpenTemplate, onUpload }: {
   procedure: WorkflowProcedure | null;
   stage: WorkflowStage | null;
   documents: WorkflowDocument[];
   canManage: boolean;
-  /** 嵌在环节页签内：不包卡片、不重复标题 */
-  bare?: boolean;
-  /** v1.1 UI（方案 D）：模板生成收口到材料区的单一入口 */
-  onOpenTemplate?: () => void;
-  /** 页头「上传材料」递增信号：打开本环节上传弹窗 */
-  uploadSignal?: number;
+  onOpenTemplate: () => void;
+  onUpload: () => void;
 }) {
-  const router = useRouter();
-  const fieldId = useId();
-  const stageName = stage?.name ?? "事项材料";
-  const fileRef = useRef<HTMLInputElement>(null);
-  const uploadRequest = useRef<{ signature: string; key: string } | null>(null);
-  const [open, setOpen] = useState(false);
-  const [picked, setPicked] = useState<File | null>(null);
-  const [customName, setCustomName] = useState("");
-  const [sourceParty, setSourceParty] = useState("");
-  const [sourceOrigin, setSourceOrigin] = useState<DocumentSourceOrigin | "">("");
-  const [originFilter, setOriginFilter] = useState<DocumentSourceOrigin | "ALL">("ALL");
-  const [category, setCategory] = useState<DocumentCategory>(defaultCategoryForStage(stageName));
-  const [isPending, startTransition] = useTransition();
-  const stageTag = stage ? stageMaterialTag(stageName) : "";
-  const sourceOptions = useMemo(() => procedure ? buildSourceOptions(procedure) : [], [procedure]);
-
-  function openUploadDialog() {
-    setCategory(defaultCategoryForStage(stageName));
-    setSourceParty("");
-    setSourceOrigin("");
-    setPicked(null);
-    uploadRequest.current = null;
-    setCustomName("");
-    if (fileRef.current) fileRef.current.value = "";
-    setOpen(true);
-  }
-
-  function submitUpload() {
-    if (!picked) {
-      toast.warning("请先选择文件");
-      return;
-    }
-    startTransition(async () => {
-      try {
-        // v0.48: 材料按外键归属环节；虚拟环节先物化拿到真实 stageId
-        let stageId = stage?.id;
-        if (procedure && stage && !stageId) {
-          const ensured = await ensureProcedureStage({
-            procedureId: procedure.id,
-            name: stageName,
-            description: "",
-            insertPosition: "END"
-          });
-          stageId = ensured.id;
-        }
-        const fd = new FormData();
-        fd.set("matterId", matterId);
-        if (procedure) fd.set("procedureId", procedure.id);
-        if (stageId) fd.set("stageId", stageId);
-        fd.set("file", picked);
-        fd.set("category", category);
-        fd.set("name", customName.trim() || picked.name);
-        fd.set("tags", stageTag);
-        if (SOURCE_MATERIAL_CATEGORIES.includes(category) && sourceParty) {
-          fd.set("sourceParty", sourceParty);
-        }
-        if (sourceOrigin) fd.set("sourceOrigin", sourceOrigin);
-        const signature = JSON.stringify([picked.name, picked.size, picked.lastModified, customName.trim(), category, sourceParty, sourceOrigin, stageId]);
-        if (uploadRequest.current?.signature !== signature) uploadRequest.current = { signature, key: crypto.randomUUID() };
-        fd.set("requestKey", uploadRequest.current.key);
-        await uploadDocument(fd);
-        uploadRequest.current = null;
-        toast.success("材料已保存，等待处理");
-        setOpen(false);
-        router.refresh();
-      } catch (err) {
-        toast.error("上传失败", { description: actionErrorMessage(err) });
-        router.refresh();
-      }
-    });
-  }
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (uploadSignal > 0 && canManage) openUploadDialog(); }, [uploadSignal]);
-
+  const params = useSearchParams();
+  const originValue = params.get("materialOrigin");
+  const originFilter = originValue ?? "ALL";
+  const validFilter = (originValue === null || Object.hasOwn(documentSourceChip, originValue))
+    && [null, "1"].includes(params.get("materialWritten")) && [null, "1"].includes(params.get("materialEvidence"));
   const originCounts = documents.reduce<Partial<Record<DocumentSourceOrigin, number>>>((acc, d) => {
     if (d.sourceOrigin) acc[d.sourceOrigin] = (acc[d.sourceOrigin] ?? 0) + 1;
     return acc;
   }, {});
   const isWritten = (d: WorkflowDocument) => Boolean(d.templateId) || d.category === "PLEADING" || d.category === "JUDGMENT";
   const writtenCount = documents.filter(isWritten).length;
-  const [writtenOnly, setWrittenOnly] = useState(false);
-  const [evidenceOnly, setEvidenceOnly] = useState(false);
+  const writtenOnly = params.get("materialWritten") === "1";
+  const evidenceOnly = params.get("materialEvidence") === "1";
   const { evidenceByDoc } = useDocActions();
   const evidenceDocCount = documents.filter((d) => (evidenceByDoc?.get(d.id)?.length ?? 0) > 0).length;
   const shownDocs = (originFilter === "ALL" ? documents : documents.filter((d) => d.sourceOrigin === originFilter))
     .filter((d) => !writtenOnly || isWritten(d))
     .filter((d) => !evidenceOnly || (evidenceByDoc?.get(d.id)?.length ?? 0) > 0);
 
+  const families = new Map<string, WorkflowDocument[]>();
+  for (const doc of shownDocs) {
+    const family = families.get(doc.familyId);
+    if (family) family.push(doc); else families.set(doc.familyId, [doc]);
+  }
   const originChips = (
   <>
           {(Object.keys(originCounts) as DocumentSourceOrigin[]).map((origin, i) => (
             <button
               key={origin}
               type="button"
-              onClick={() => setOriginFilter((v) => (v === origin ? "ALL" : origin))}
+              onClick={() => updateDossierLocation({ materialOrigin: originFilter === origin ? null : origin })}
               className={cn("src-chip cursor-pointer", originFilter === origin && documentSourceChip[origin].kind !== "team" && documentSourceChip[origin].kind)}
               aria-pressed={originFilter === origin}
             >
@@ -2757,9 +2328,9 @@ function StageMaterialsPanel({
   );
 
   return (
-    <div className={bare ? undefined : "card"}>
+    <div className="card">
       {/* 头部两行：标题与操作按钮固定一行，筛选标签单独一行（窄宽度下不再挤乱） */}
-      <div className={cn("panel-head", bare && "!border-b-0 !pb-1")}>
+      <div className="panel-head">
         <div className="panel-title min-w-0">
           <FileText className="ic" strokeWidth={1.8} />
           材料
@@ -2773,7 +2344,7 @@ function StageMaterialsPanel({
             </button>
           ) : null}
           {canManage ? (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={openUploadDialog}>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={onUpload}>
               <Upload />
               上传
             </button>
@@ -2786,17 +2357,17 @@ function StageMaterialsPanel({
             type="button"
             className={cn("src-chip cursor-pointer", !writtenOnly && !evidenceOnly && originFilter === "ALL" && "self")}
             aria-pressed={!writtenOnly && !evidenceOnly && originFilter === "ALL"}
-            onClick={() => { setWrittenOnly(false); setEvidenceOnly(false); setOriginFilter("ALL"); }}
+            onClick={() => updateDossierLocation({ materialOrigin: null, materialWritten: null, materialEvidence: null })}
           >
             <b style={{ fontWeight: 550 }}>全部 {documents.length}</b>
           </button>
           {evidenceDocCount > 0 ? (
-            <button type="button" className={cn("src-chip cursor-pointer", evidenceOnly && "self")} aria-pressed={evidenceOnly} onClick={() => setEvidenceOnly((v) => !v)}>
+            <button type="button" className={cn("src-chip cursor-pointer", evidenceOnly && "self")} aria-pressed={evidenceOnly} onClick={() => updateDossierLocation({ materialEvidence: evidenceOnly ? null : "1" })}>
               <b style={{ fontWeight: 550 }}>有证据要点 {evidenceDocCount}</b>
             </button>
           ) : null}
           {writtenCount > 0 ? (
-            <button type="button" className={cn("src-chip cursor-pointer", writtenOnly && "self")} aria-pressed={writtenOnly} onClick={() => setWrittenOnly((v) => !v)}>
+            <button type="button" className={cn("src-chip cursor-pointer", writtenOnly && "self")} aria-pressed={writtenOnly} onClick={() => updateDossierLocation({ materialWritten: writtenOnly ? null : "1" })}>
               <b style={{ fontWeight: 550 }}>文书 {writtenCount}</b>
             </button>
           ) : null}
@@ -2805,111 +2376,24 @@ function StageMaterialsPanel({
         </div>
       ) : null}
 
-      {shownDocs.length === 0 ? (
-        <EmptyState compact icon={FileText} title="本环节暂无材料" description={canManage ? "上传后自动归入本环节" : undefined} />
+      {!validFilter ? <Alert variant="destructive"><AlertDescription>材料筛选不可用。<Button variant="link" onClick={() => updateDossierLocation({ materialOrigin: null, materialWritten: null, materialEvidence: null })}>清除筛选</Button></AlertDescription></Alert> : shownDocs.length === 0 ? (
+        <EmptyState compact icon={FileText}
+          title={documents.length > 0 ? "没有符合筛选条件的材料" : stage ? "本环节暂无材料" : procedure ? "本程序暂无材料" : "本事项暂无材料"}
+          description={documents.length > 0 ? "调整上方筛选条件可查看其他材料。" : undefined} />
       ) : (
-        shownDocs.map((doc) => <DocRow key={doc.id} doc={doc} />)
+        [...families].map(([familyId, versions]) => {
+          const current = versions.find(doc => doc.isLatest);
+          const history = versions.filter(doc => !doc.isLatest).sort((a, b) => b.version - a.version);
+          return <section key={familyId} className="border-b last:border-0" aria-label="材料版本">
+            {current ? <DocRow doc={current} /> : <p className="px-4 pt-3 text-xs text-muted-foreground">此范围仅有历史版本</p>}
+            {history.length ? <details className="px-4 pb-3" open={!current}>
+              <summary className="cursor-pointer py-2 text-sm text-muted-foreground">历史版本（{history.length}）</summary>
+              {history.map(doc => <DocRow key={doc.id} doc={doc} />)}
+            </details> : null}
+          </section>;
+        })
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>上传材料 · {stageName}</DialogTitle>
-            <DialogDescription className="text-xs">
-              {procedure && stage ? "文件将关联到当前程序，并自动归入本环节。" : "文件将保存到当前事项。"}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">材料类别 *</Label>
-              <Select value={category} onValueChange={(value) => setCategory(value as DocumentCategory)}>
-                <SelectTrigger className="h-10 bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DOCUMENT_CATEGORY_OPTIONS.map((item) => (
-                    <SelectItem key={item} value={item}>
-                      {documentCategoryLabel[item]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">材料来源</Label>
-              <Select value={sourceOrigin || "__none__"} onValueChange={(value) => setSourceOrigin(value === "__none__" ? "" : (value as DocumentSourceOrigin))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="选择材料来源" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">不标注</SelectItem>
-                  {(Object.keys(documentSourceChip) as DocumentSourceOrigin[]).map((origin) => (
-                    <SelectItem key={origin} value={origin}>
-                      {documentSourceChip[origin].label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {SOURCE_MATERIAL_CATEGORIES.includes(category) && sourceOptions.length > 0 && (
-              <div className="space-y-1.5">
-                <Label className="text-xs">归属/来源（可选）</Label>
-                <Select
-                  value={sourceParty || "__none__"}
-                  onValueChange={(value) => setSourceParty(value === "__none__" ? "" : value)}
-                >
-                  <SelectTrigger className="h-10 bg-background">
-                    <SelectValue placeholder="选择归属/来源" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">不标注</SelectItem>
-                    {sourceOptions.map((item) => (
-                      <SelectItem key={item} value={item}>
-                        {item}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            <div className="space-y-1.5">
-              <Label className="text-xs" htmlFor={`${fieldId}-file`}>文件 *</Label>
-              <Input
-                id={`${fieldId}-file`}
-                ref={fileRef}
-                type="file"
-                onChange={(event) => { uploadRequest.current = null; setPicked(event.target.files?.[0] ?? null); }}
-              />
-              {picked && (
-                <p className="text-[10px] text-muted-foreground">
-                  已选 {picked.name}（{(picked.size / 1024).toFixed(0)} KB）
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">显示名（可选）</Label>
-              <Input
-                value={customName}
-                onChange={(event) => setCustomName(event.target.value)}
-                placeholder={`${stageName}材料`}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
-              取消
-            </Button>
-            <Button onClick={submitUpload} disabled={isPending || !picked} className="gap-1.5">
-              {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              上传
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
@@ -3431,19 +2915,8 @@ function stageGuideFor(stageName: string) {
     DEFAULT_STAGE_GUIDE;
 }
 
-function stageMaterialTag(stageName: string) {
-  return `阶段:${stageName}`;
-}
-
-function documentMatchesStage(
-  document: WorkflowDocument,
-  stage: { id: string | null; name: string }
-) {
-  // v0.48: 外键归属优先——已明确归属某环节的材料不再按模式匹配到其他环节
-  if (document.stageId) return stage.id !== null && document.stageId === stage.id;
-  if (document.tags?.includes(stageMaterialTag(stage.name))) return true;
-  const guide = stageGuideFor(stage.name);
-  return guide.materialCategories.includes(document.category) || guide.materialPattern.test(document.name);
+function documentMatchesStage(document: WorkflowDocument, stage: WorkflowStage): boolean {
+  return stage.id !== null && document.stageId === stage.id;
 }
 
 function defaultCategoryForStage(stageName: string): DocumentCategory {
@@ -3466,23 +2939,3 @@ function buildSourceOptions(procedure: WorkflowProcedure) {
     });
   return [COURT_PROCEDURE_SOURCE, ...partyOptions];
 }
-
-function documentPreviewUrl(document: Pick<WorkflowDocument, "id" | "mimeType" | "name">) {
-  if (officePreviewKind(document.mimeType, document.name)) {
-    return `/api/documents/${document.id}/preview`;
-  }
-  if (canPreview(document.mimeType, document.name)) {
-    return `/api/documents/${document.id}/download?inline=1`;
-  }
-  return null;
-}
-
-
-const documentCategoryLabel: Record<DocumentCategory, string> = {
-  EVIDENCE: "证据",
-  PLEADING: "诉辩文件",
-  PROCEDURE: "程序文件",
-  JUDGMENT: "裁决",
-  CONTRACT: "合同",
-  OTHER: "其他"
-};

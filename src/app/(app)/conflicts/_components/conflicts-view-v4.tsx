@@ -371,7 +371,7 @@ function TargetRow({ target }: { target: TargetGroup }) {
   const it = top.intakeInfo;
   const role = m ?? it;
   const roleText = role ? (role.partyStanding ? `${HIT_ROLE[role.partyRole] ?? "当事人"} · ${litigationStandingLabel[role.partyStanding]}` : HIT_ROLE[role.partyRole] ?? "当事人") : null;
-  const href = m?.canViewMatter && m.matterId ? matterHref({ id: m.matterId, internalCode: m.internalCode }) : null;
+  const href = m?.canViewMatter && m.matterId ? matterHref(m) : null;
   const idHit = hits.find((h) => h.matchedField === "idNumber");
   return (
     <div className="hit-match" style={{ borderBottom: "none", display: "block" }}>

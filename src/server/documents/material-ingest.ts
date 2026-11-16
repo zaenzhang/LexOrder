@@ -81,6 +81,13 @@ async function assertUploadAuthority(tx: Prisma.TransactionClient, userId: strin
       WHERE "intakeId"=${data.intakeId} AND snapshot->'documents' @> ${JSON.stringify([{ id: priorId }])}::jsonb`;
     if (Number(used.count)) throw new ActionError("已固定于送审轮次的材料须保留，请另传补充材料");
   }
+  if (!priorId) return null;
+  await tx.$queryRaw`SELECT id FROM "Document" WHERE id=${priorId} FOR UPDATE`;
+  const prior = await tx.document.findUnique({ where: { id: priorId }, include: { reviewReportFor: { select: { id: true } } } });
+  if (prior?.reviewReportFor || prior?.tags.includes("AI审查")) {
+    throw new ActionError("审查报告为固定记录，请重新审查原材料，或独立上传修订文件");
+  }
+  return prior;
 }
 
 /** The intent is durable before file I/O; originals use a reserved non-overwriting key. */
@@ -128,24 +135,19 @@ async function commitStoredIngest(intentId: string, userId: string, lease?: JobL
     if (intent.requestedById !== userId) throw new ActionError("无权处理此上传");
     if (intent.errorCode === "UPLOAD_ABANDONED") throw new ActionError("此上传已关闭，请重新选择文件开始新上传");
     const { document: data, priorDocumentId, checkout } = metadataSchema.parse(intent.metadata);
-    await assertUploadAuthority(tx, userId, data, priorDocumentId);
+    const prior = await assertUploadAuthority(tx, userId, data, priorDocumentId);
     if (intent.documentId) return tx.document.findUniqueOrThrow({ where: { id: intent.documentId }, select: { id: true, version: true } });
     if (intent.state !== "STORED") throw new ActionError("原件尚未确认保存，请重新上传");
-    let familyId: string | null = null;
+    let familyId: string | undefined;
     let version = 1;
     if (priorDocumentId) {
-      await tx.$queryRaw`SELECT id FROM "Document" WHERE id=${priorDocumentId} FOR UPDATE`;
-      const prior = await tx.document.findUnique({ where: { id: priorDocumentId } });
       if (!prior || prior.deletedAt || !prior.isLatest || prior.matterId !== data.matterId || prior.intakeId !== data.intakeId) throw new ActionError("原材料版本已变化，请刷新后重传");
       if (checkout && checkout.baselineVersion !== prior.version) throw new ActionError("取件基线已变化，请基于最新版另存");
-      familyId = prior.familyId ?? prior.id;
+      familyId = prior.familyId;
       version = prior.version + 1;
       await tx.document.updateMany({ where: { familyId, isLatest: true }, data: { isLatest: false } });
-      // A legacy family head without familyId still needs its latest flag cleared.
-      if (!prior.familyId) await tx.document.update({ where: { id: prior.id }, data: { isLatest: false, familyId } });
     }
     const created = await tx.document.create({ data: { ...data, path: intent.storagePath, familyId, version, isLatest: true } });
-    if (!familyId) await tx.document.update({ where: { id: created.id }, data: { familyId: created.id } });
     if (data.matterId) await enqueueMaterialProcessing(tx, { documentId: created.id, requestedById: userId });
     await tx.materialIngestIntent.update({ where: { id: intentId }, data: { state: "COMMITTED", documentId: created.id, errorCode: null } });
     await auditTx(tx, { userId, action: priorDocumentId ? "DOCUMENT_NEW_VERSION" : "DOCUMENT_UPLOAD",
@@ -242,7 +244,7 @@ export async function assertDocumentCanBePurged(tx: Prisma.TransactionClient, do
     tx.evidenceItem.count({ where: { sourceDocumentId: documentId } }),
     tx.evidenceSourceLink.count({ where: { documentId } }),
     tx.matterContextRecord.count({ where: { sourceDocumentId: documentId } }),
-    tx.document.count({ where: { familyId: doc.familyId ?? doc.id } }),
+    tx.document.count({ where: { familyId: doc.familyId } }),
     tx.reviewRecord.count({ where: { documentId } }),
     tx.invoiceRequest.count({ where: { OR: [{ contractScanId: documentId }, { invoiceFileId: documentId }, { evidenceDocIds: { has: documentId } }] } }),
     tx.sealRequest.count({ where: { OR: [{ draftDocId: documentId }, { stampedDocId: documentId }] } }),

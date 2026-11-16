@@ -17,7 +17,7 @@ import { CustomFieldsPanel } from "./custom-fields-panel";
 import type { MatterPayload } from "./matter-detail-tabs";
 
 type Procedure = MatterPayload["procedures"][number];
-type PartyRow = MatterPayload["parties"][number];
+type PartyRow = Omit<MatterPayload["parties"][number], "updatedAt"> & { updatedAt: Date | null };
 
 const ROLE_LABEL: Record<string, string> = {
   CLIENT_PARTY: "委托方",
@@ -133,6 +133,7 @@ export function MatterArchive({
   customFieldDefs,
   customValues,
   canEdit,
+  canEditProcedure,
   canEditCustom,
   canManageRelated,
   contextNode,
@@ -150,10 +151,11 @@ export function MatterArchive({
   customFieldDefs: React.ComponentProps<typeof CustomFieldsPanel>["defs"];
   customValues: Record<string, string>;
   canEdit: boolean;
+  canEditProcedure: boolean;
   canEditCustom: boolean;
   canManageRelated: boolean;
   contextNode?: React.ReactNode;
-  onEdit: () => void;
+  onEdit: (section: "matter" | "procedure" | "parties") => void;
 }) {
   const kind = matterCategoryKind(matter.category);
   const isCriminal = matter.category === "CRIMINAL";
@@ -167,12 +169,12 @@ export function MatterArchive({
   const standing = currentProcedure?.ourStanding ?? matter.ourStanding;
   const outcome = currentProcedure?.outcomeNote?.trim() || (currentProcedure?.outcome ? PROCEDURE_OUTCOME_LABEL[currentProcedure.outcome] : "");
   const procLabel = currentProcedure ? currentProcedure.customLabel ?? procedureTypeLabel[currentProcedure.type] : null;
-  const editBtn = canEdit ? (
-    <button type="button" className="btn btn-ghost btn-sm" onClick={onEdit}>
+  const editButton = (section: "matter" | "procedure" | "parties", label: string) => (
+    <button type="button" className="btn btn-ghost btn-sm" onClick={() => onEdit(section)}>
       <Pencil />
-      编辑
+      {label}
     </button>
-  ) : null;
+  );
 
   // 本程序诉讼地位：一个当事人在同一程序可有多个地位（如被告兼反诉原告）
   const normalize = (st: string) => (st === "JOINT_PLAINTIFF" ? "PLAINTIFF" : st === "JOINT_DEFENDANT" ? "DEFENDANT" : st);
@@ -201,7 +203,7 @@ export function MatterArchive({
               共 {parties.length} 方{procLabel ? ` · ${procLabel}` : ""}
             </span>
           </div>
-          {editBtn}
+          {currentProcedure && canEditProcedure ? editButton("parties", "编辑当事人") : null}
         </div>
         <div className="dos-vs-body">
           <div className="dos-vs-side">
@@ -230,7 +232,7 @@ export function MatterArchive({
       {/* 二、案件要素：一张卡片内按主题分区，字段自适应铺满（2026-09-16 重排，避免两栏高度不齐与留白） */}
       <div className="card dos-facts">
           {contextNode}
-          <Group icon={FileText} title={isCriminal ? "指控与请求" : kind === "litigation" ? "案由与请求" : "服务内容"} action={editBtn}>
+          <Group icon={FileText} title={isCriminal ? "指控与请求" : kind === "litigation" ? "案由与请求" : "服务内容"} action={canEdit ? editButton("matter", "编辑案件信息") : null}>
             <FieldGrid cols={2} className="mo-field-grid-auto">
               <FieldItem label="案件类别">{matterCategoryLabel[matter.category]}</FieldItem>
               <FieldItem label={isCriminal ? "涉嫌罪名" : kind === "litigation" ? "案由" : kind === "counsel" ? "顾问类型" : "业务类型"}>
@@ -264,7 +266,7 @@ export function MatterArchive({
           </Group>
 
           {kind === "litigation" && currentProcedure ? (
-            <Group icon={Landmark} title="管辖与承办" hint={procLabel ?? undefined} action={editBtn}>
+            <Group icon={Landmark} title="管辖与承办" hint={procLabel ?? undefined} action={canEditProcedure ? editButton("procedure", "编辑程序信息") : null}>
               <FieldGrid cols={2} className="mo-field-grid-auto">
                 <FieldItem label="案号" mono>{dash(currentProcedure.caseNumber)}</FieldItem>
                 <FieldItem label={isArbitration ? "仲裁机构" : isCriminal ? "办案机关" : "受理机构"}>{dash(currentProcedure.handlingAgency)}</FieldItem>
@@ -395,7 +397,7 @@ export function TeamRailCard({ matter, canManage, onManage }: { matter: MatterPa
         承办团队
         {canManage ? (
           <button type="button" className="link border-0 bg-transparent p-0" onClick={onManage}>
-            管理
+            管理承办团队
           </button>
         ) : null}
       </div>

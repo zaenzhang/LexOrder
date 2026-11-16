@@ -2,6 +2,7 @@
 import {ExecutionTerminationPanel} from "@/components/matters/execution-termination-panel";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import type { ApprovalAction } from "@prisma/client";
 import { toast } from "sonner";
 import { AlertTriangle, BookOpenCheck, ChevronRight, Clock3, FileCheck2, FileText, Paperclip, History, Search, ShieldCheck } from "lucide-react";
@@ -25,7 +26,10 @@ import { approveArchiveRecord, rejectArchiveRecord } from "@/server/archive/acti
 import { approveInvoiceRequest, rejectInvoiceRequest } from "@/server/invoices/actions";
 import { approveSealRequest, rejectSealRequest, stampSealRequest, cancelSealRequest } from "@/server/seals/actions";
 import { Input } from "@/components/ui/input";
-import { Dialog } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { ReviewDialogContent, ReviewEmpty, ReviewFields, ReviewFileRow, ReviewHistory, ReviewSection, ReviewStatusLine } from "@/components/patterns/review-dialog";
 import { PageHeader, Pager, Segmented } from "@/components/patterns/moan";
 import { FilterSelect } from "@/components/patterns/filter-select";
@@ -39,50 +43,137 @@ import { formatDateTime } from "@/lib/utils";
 
 type Data = Awaited<ReturnType<typeof listApprovalWorkspace>>;
 type Selection = { id: string; action: ApprovalAction };
+type Detail = Awaited<ReturnType<typeof getApprovalDetail>>;
+const selectionKey = (selection: Selection | null | undefined) => selection ? `${selection.action}:${selection.id}` : "closed";
 const dateText = (date: Date | string | null) => date ? formatDateTime(date) : "—";
 
-export function ApprovalInbox({ data, initialSelection }: { data: Data; initialSelection?: Selection }) {
+export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data; initialSelection?: Selection; returnTo?: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [query, setQuery] = useState(data.query.q ?? "");
   const [selected, setSelected] = useState<Selection | null>(null);
-  const [detail, setDetail] = useState<Awaited<ReturnType<typeof getApprovalDetail>> | null>(null);
+  const [detail, setDetail] = useState<Detail | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
+  const [returnTarget, setReturnTarget] = useState<Detail["returnTarget"]>(returnTo === undefined || initialSelection ? null : { status: "UNAVAILABLE", href: null });
   const [note, setNote] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [invoiceNo, setInvoiceNo] = useState("");
   const [verified, setVerified] = useState<Set<string>>(new Set());
   const [exceptionApproved, setExceptionApproved] = useState(false);
   const [pending, start] = useTransition();
-  const opened = useRef<string | null>(null);
+  const generation = useRef(0);
+  const active = useRef<{ row: Selection | null; source: string | undefined }>({ row: null, source: returnTo });
+  const alive = useRef(true);
+  const confirming = useRef(false);
+  const mutationBusy = useRef(false);
+  const draft = useRef(false);
+  const paramsRef = useRef(searchParams.toString());
+  const routerRef = useRef(router);
+  const desired = useRef("");
+  const dirty = Boolean(note.trim() || file || invoiceNo.trim() || verified.size || exceptionApproved);
+  useEffect(() => { paramsRef.current = searchParams.toString(); }, [searchParams]);
+  useEffect(() => { routerRef.current = router; }, [router]);
+  useEffect(() => { draft.current = dirty; }, [dirty]);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; generation.current += 1; }; }, []);
+  useEffect(() => {
+    if (!dirty && !pending) return;
+    const protect = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", protect);
+    return () => window.removeEventListener("beforeunload", protect);
+  }, [dirty, pending]);
+  const selectionHref = useCallback((row: Selection | null, source: string | undefined) => {
+    const params = new URLSearchParams(paramsRef.current);
+    if (row) { params.set("type", row.action); params.set("id", row.id); } else params.delete("id");
+    if (source === undefined) params.delete("returnTo"); else params.set("returnTo", source);
+    return `/approvals${params.size ? `?${params}` : ""}`;
+  }, []);
+  const clearDraft = useCallback(() => {
+    draft.current = false; setNote(""); setFile(null); setInvoiceNo(""); setVerified(new Set()); setExceptionApproved(false);
+  }, []);
+  const mayLeave = useCallback(async () => {
+    if (mutationBusy.current || confirming.current) return false;
+    if (!draft.current) return true;
+    confirming.current = true;
+    const discard = await confirmDialog({ title: "放弃未保存的审批内容？", confirmText: "放弃修改", cancelText: "继续填写", initialFocus: "cancel" });
+    confirming.current = false;
+    return alive.current && discard;
+  }, []);
+  const read = useCallback(async (row: Selection, source: string | undefined, preserveDraft = false) => {
+    const request = ++generation.current;
+    active.current = { row, source };
+    setSelected(row); setDetail(null); setDetailError(""); setLoading(true); setReturnTarget(null);
+    if (!preserveDraft) clearDraft();
+    try {
+      const result = await getApprovalDetail({ ...row, ...(source === undefined ? {} : { returnTo: source }) });
+      if (!alive.current || request !== generation.current) return;
+      setDetail(result); setReturnTarget(result.returnTarget);
+    } catch (error) {
+      if (!alive.current || request !== generation.current) return;
+      setDetailError(actionErrorMessage(error));
+      setReturnTarget(source === undefined ? null : { status: "UNAVAILABLE", href: null });
+    } finally { if (alive.current && request === generation.current) setLoading(false); }
+  }, [clearDraft]);
+  const changeSelection = useCallback(async (row: Selection | null, source: string | undefined, external = false) => {
+    const previous = active.current;
+    const sameObject = selectionKey(row) === selectionKey(previous.row);
+    if (sameObject && source === previous.source) return;
+    if (mutationBusy.current || confirming.current || (!sameObject && !await mayLeave())) {
+      if (external) routerRef.current.replace(selectionHref(previous.row, previous.source), { scroll: false });
+      return;
+    }
+    if (!alive.current) return;
+    if (external && desired.current !== JSON.stringify([selectionKey(row), source])) {
+      routerRef.current.replace(selectionHref(previous.row, previous.source), { scroll: false }); return;
+    }
+    if (row) void read(row, source, sameObject);
+    else {
+      generation.current += 1; active.current = { row: null, source }; setSelected(null); setDetail(null); setLoading(false); setDetailError(""); clearDraft();
+      // Retain the last authorized return target when closing this detail.
+      if (source !== previous.source) setReturnTarget(source === undefined ? null : { status: "UNAVAILABLE", href: null });
+    }
+    if (!external) routerRef.current.push(selectionHref(row, source), { scroll: false });
+  }, [clearDraft, mayLeave, read, selectionHref]);
+  const open = (row: Selection) => { void changeSelection(row, returnTo); };
+  const close = () => { void changeSelection(null, active.current.source); };
+  const initialAction = initialSelection?.action;
+  const initialId = initialSelection?.id;
+  useEffect(() => {
+    const row = initialAction && initialId ? { action: initialAction, id: initialId } : null;
+    desired.current = JSON.stringify([selectionKey(row), returnTo]);
+    void changeSelection(row, returnTo, true);
+  }, [initialAction, initialId, returnTo, changeSelection]);
   function navigate(patch: Record<string, string | undefined>) {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("id"); params.delete("page");
     for (const [key, value] of Object.entries(patch)) { if (value) params.set(key, value); else params.delete(key); }
     router.push("/approvals?" + params.toString());
   }
-  const open = useCallback((row: Selection) => {
-    start(async () => {
-      try {
-        const d = await getApprovalDetail(row);
-        setSelected(row); setDetail(d); setNote(""); setFile(null); setInvoiceNo(""); setVerified(new Set()); setExceptionApproved(false);
-      } catch (e) { toast.error(e instanceof Error ? actionErrorMessage(e) : "无法读取申请"); }
-    });
-  }, []);
-  useEffect(() => {
-    if (!initialSelection) return;
-    const key = initialSelection.action + initialSelection.id;
-    if (opened.current === key) return;
-    opened.current = key;
-    open(initialSelection);
-  }, [initialSelection, open]);
   useEffect(() => { setQuery(data.query.q ?? ""); }, [data.query.q]);
 
+  function finishProcessing() {
+    generation.current += 1;
+    active.current = { ...active.current, row: null };
+    setSelected(null); setDetail(null); setDetailError(""); clearDraft();
+    router.replace(selectionHref(null, active.current.source), { scroll: false }); router.refresh();
+  }
+  async function leaveFor(href: string) {
+    if (await mayLeave()) router.push(href);
+  }
+  const returnControl = returnTarget ? returnTarget.status === "AVAILABLE"
+    ? <Button asChild variant="outline"><Link href={returnTarget.href} prefetch={false} onNavigate={event => { event.preventDefault(); void leaveFor(returnTarget.href); }}>返回案件</Link></Button>
+    : <div className="flex flex-wrap items-center gap-2"><span className="text-sm text-muted-foreground">返回案件链接不可用。</span><Button asChild variant="outline"><Link href="/matters" prefetch={false} onNavigate={event => { event.preventDefault(); void leaveFor("/matters"); }}>案件列表</Link></Button></div>
+    : null;
+
   function process(decision: "approve" | "reject" | "revision") {
-    if (!selected || !detail?.task || detail.task==="terminate") return;
+    if (!selected || !detail?.task || detail.task==="terminate" || mutationBusy.current) return;
     const r = selected;
     if (decision === "approve" && (detail.task === "issue" || detail.task === "stamp") && !file) { toast.error(detail.task === "issue" ? "请上传电子发票" : "请上传盖章后的 PDF 扫描件"); return; }
     if (decision === "approve" && r.action === "INVOICE_APPROVE" && file && !invoiceNo.trim()) { toast.error("上传电子发票时必须填写发票号码"); return; }
     if (decision !== "approve" && !note.trim()) { toast.error("请填写原因"); return; }
+    const request = generation.current;
+    const source = active.current.source;
+    mutationBusy.current = true;
     start(async () => {
       try {
         if (detail.task === "stamp") {
@@ -101,20 +192,32 @@ export function ApprovalInbox({ data, initialSelection }: { data: Data; initialS
         } else {
           if (decision === "approve") await approveSealRequest({ id: r.id, note }); else await rejectSealRequest({ id: r.id, reason: note });
         }
+        if (!alive.current || request !== generation.current) return;
         toast.success("处理完成，可在“我已处理”中查阅");
-        setSelected(null); router.refresh();
+        finishProcessing();
       } catch (e) {
+        if (!alive.current || request !== generation.current) return;
         toast.error(e instanceof Error ? actionErrorMessage(e) : "处理失败");
         // 状态或权限已变化时重读详情，不能保留失效的处理按钮。
-        try { setDetail(await getApprovalDetail(r)); } catch { setSelected(null); }
+        await read(r, source, true);
+        if (!alive.current || selectionKey(active.current.row) !== selectionKey(r)) return;
         router.refresh();
-      }
+      } finally { mutationBusy.current = false; }
     });
   }
   function applicantAction(action: "resubmit" | "cancel") {
-    if (!selected) return;
-    const id = selected.id;
-    start(async () => { try { if (action === "resubmit") { if (selected.action === "DOCUMENT_APPROVE") await submitDocumentForReview(id); else await resubmitIntake(id); } else await cancelSealRequest({ id }); toast.success(action === "resubmit" ? "已重新提交" : "已撤回申请"); setSelected(null); router.refresh(); } catch (e) { toast.error(e instanceof Error ? actionErrorMessage(e) : "操作失败"); } });
+    if (!selected || mutationBusy.current) return;
+    const row = selected, request = generation.current;
+    mutationBusy.current = true;
+    start(async () => {
+      try {
+        if (action === "resubmit") { if (row.action === "DOCUMENT_APPROVE") await submitDocumentForReview(row.id); else await resubmitIntake(row.id); }
+        else await cancelSealRequest({ id: row.id });
+        if (!alive.current || request !== generation.current) return;
+        toast.success(action === "resubmit" ? "已重新提交" : "已撤回申请"); finishProcessing();
+      } catch (error) { if (alive.current && request === generation.current) toast.error(actionErrorMessage(error)); }
+      finally { mutationBusy.current = false; }
+    });
   }
   const tabs = Object.entries(WORKSPACE_TABS).filter(([key]) => key !== "all" || data.canViewAll) as [WorkspaceTab, string][];
   function toggleVerification(id: string, checked: boolean) {
@@ -141,6 +244,7 @@ export function ApprovalInbox({ data, initialSelection }: { data: Data; initialS
   const waitDays = (d: Date | string) => Math.max(0, Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000));
   const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
   const alert = detail && selected ? approvalAlert(detail) : null;
+  const displayedGeneration = generation.current;
 
   const actionOptions = Object.entries(ACTION_LABELS).filter(([key]) => key !== "SEAL_STAMP").map(([value, label]) => ({ value, label }));
   const statusOptions = Object.entries(APPROVAL_STATUS_LABELS).map(([value, label]) => ({ value, label }));
@@ -151,6 +255,7 @@ export function ApprovalInbox({ data, initialSelection }: { data: Data; initialS
       sub={<>收案、文书、归档、开票与用章统一审阅 · 待我审批 <b>{data.counts.pending}</b> 件{data.query.tab === "pending" ? " · 含批准后待开票与待盖章回填" : ""}</>}
       actions={<ApprovalCreateMenu />}
     />
+    {returnControl ? <div className="mb-3">{returnControl}</div> : null}
 
     <Segmented
       className="mb-3"
@@ -206,7 +311,11 @@ export function ApprovalInbox({ data, initialSelection }: { data: Data; initialS
       </div>
     </div>
 
-    <Dialog open={!!selected} onOpenChange={value => { if (!value && !pending) setSelected(null); }}>{detail?.intakeDetail ? <IntakeApprovalDialog key={selected?.id} detail={detail} intakeDetail={detail.intakeDetail} note={note} onNoteChange={setNote} pending={pending} onDecision={process} onResubmit={() => applicantAction("resubmit")} /> : <ReviewDialogContent
+    <Dialog open={!!selected} onOpenChange={value => { if (!value) close(); }}>{loading || detailError || !detail ? <DialogContent>
+      <DialogHeader><DialogTitle>申请详情</DialogTitle><DialogDescription>{detailError ? "读取失败" : "正在读取…"}</DialogDescription></DialogHeader>
+      {detailError ? <Alert variant="destructive"><AlertDescription>{detailError}</AlertDescription></Alert> : <p role="status" className="text-sm text-muted-foreground">正在读取…</p>}
+      <DialogFooter><Button variant="outline" onClick={close}>返回审批列表</Button>{detailError && selected ? <Button onClick={() => void read(selected, active.current.source, true)}>重新读取</Button> : null}</DialogFooter>
+    </DialogContent> : detail.intakeDetail ? <IntakeApprovalDialog key={selected?.id} detail={detail} intakeDetail={detail.intakeDetail} note={note} onNoteChange={setNote} pending={pending} onDecision={process} onResubmit={() => applicantAction("resubmit")} /> : <ReviewDialogContent
       key={selected?.id}
       title={detail?.title ?? "申请详情"}
       eyebrow={selected ? ACTION_LABELS[selected.action] : "审批申请"}
@@ -245,23 +354,24 @@ export function ApprovalInbox({ data, initialSelection }: { data: Data; initialS
       sidebarTitle={detail?.task === "issue" ? "完成开票" : detail?.task === "stamp" ? "盖章回填" : detail?.task === "terminate" ? "核实终止执行" : detail?.task ? "审批" : "申请进度"}
       sidebar={<>
         {detail?.task === "approve" && <ReviewStatusLine tone="amber" title="等待你的审批" desc={`你有本事项的${selected ? ACTION_LABELS[selected.action] : "审批"}授权${detail.submittedAt ? ` · 已等待 ${waitDays(detail.submittedAt)} 天` : ""}`} />}
-        {selected&&["INVOICE_APPROVE","SEAL_APPROVE"].includes(selected.action)&&<ExecutionTerminationPanel kind={selected.action==="INVOICE_APPROVE"?"INVOICE":"SEAL"} id={selected.id} onChanged={()=>{open(selected);router.refresh();}}/>}
+        {selected&&["INVOICE_APPROVE","SEAL_APPROVE"].includes(selected.action)&&<ExecutionTerminationPanel kind={selected.action==="INVOICE_APPROVE"?"INVOICE":"SEAL"} id={selected.id} onChanged={()=>{if (alive.current && generation.current === displayedGeneration) {void read(selected, active.current.source, true);router.refresh();}}}/>}
         {(detail?.task === "issue" || detail?.task === "stamp") && <ReviewStatusLine tone="teal" title={detail.task === "issue" ? "审批已通过 · 等待开具发票" : "审批已通过 · 等待盖章回填"} desc="执行环节不可再次驳回" />}
         {detail && !detail.task && <ReviewStatusLine tone={detail.status === "REJECTED" ? "red" : detail.status === "PENDING" ? "amber" : "green"} title={APPROVAL_STATUS_LABELS[detail.status] ?? "状态待核实"} desc={detail.canResubmit ? "补充完善后可重新提交审批" : "当前为只读查阅，后续进度会继续记录在此申请中"} />}
         {detail?.task && detail.task !== "stamp" && detail.task!=="terminate" && <><label htmlFor="approval-note" className="op-label">审批意见</label><textarea id="approval-note" className="op-area" aria-label="审批意见或驳回原因" placeholder="请记录处理意见；驳回时必填" value={note} onChange={e => setNote(e.target.value)} maxLength={500} disabled={pending} /><div className="t-xs t-faint mt-1 text-right font-mono">{note.length} / 500</div></>}
         {detail?.task && (detail.task === "stamp" || (selected?.action === "INVOICE_APPROVE" && detail.task!=="terminate")) && <label className="mt-3 block space-y-2"><span className="op-label" style={{ margin: "12px 0 7px" }}>{detail.task === "stamp" ? "盖章后的 PDF 扫描件（必传）" : "电子发票（上传后记为已开具）"}</span><Input type="file" aria-label={detail.task === "stamp" ? "盖章后的 PDF 扫描件（必传）" : "电子发票（上传后记为已开具）"} accept={detail.task === "stamp" ? "application/pdf" : "application/pdf,image/*"} onChange={e => setFile(e.target.files?.[0] ?? null)} /></label>}
         {detail?.task && detail.task!=="terminate" && selected?.action === "INVOICE_APPROVE" && <Input className="mt-2" aria-label="发票号码" placeholder="发票号码" value={invoiceNo} onChange={e => setInvoiceNo(e.target.value)} />}
-        {detail?.task && detail.task!=="terminate" && selected?.action === "INVOICE_APPROVE" && <InvoiceRecognition file={file} onNumber={setInvoiceNo} requestedAmount={detail.fields.find(f => f.label === "金额（元）")?.value} />}
+        {detail?.task && detail.task!=="terminate" && selected?.action === "INVOICE_APPROVE" && <InvoiceRecognition file={file} onNumber={value => { if (alive.current && generation.current === displayedGeneration) setInvoiceNo(value); }} requestedAmount={detail.fields.find(f => f.label === "金额（元）")?.value} />}
         {detail?.archiveReview && detail.task === "approve" && <div className="op-check"><span className={`box ${archiveReady ? "checked" : ""}`}>{archiveReady ? <FileCheck2 /> : null}</span><span>{archiveReady ? "清单、材料与人工核验事项已全部核对。" : "请在「资料与核验」逐项勾选清单、文件与人工核验事项后再通过。"}</span></div>}
         <div className="side-note" style={{ marginTop: 16 }}><Clock3 /><span>审批结果与意见同事务写入审计日志，处理后不可重复审批；审批授权不扩大案件其他材料的访问范围。</span></div>
       </>}
-      footer={detail && (detail.task || detail.canResubmit || detail.canCancel) ? <>
+      footer={<>
+        {returnControl}
         {detail.task === "approve" && <button type="button" className="btn btn-danger" disabled={pending} onClick={() => process("reject")}>驳回</button>}
         {detail.task === "approve" && selected?.action === "INTAKE_APPROVE" && <button type="button" className="btn btn-secondary" disabled={pending} onClick={() => process("revision")}>退回补正</button>}
         {detail.task && detail.task!=="terminate" && <button type="button" className="btn btn-approve" disabled={pending || !archiveReady} onClick={() => process("approve")}>{detail.task === "stamp" ? "完成盖章回填" : detail.task === "issue" ? "完成开票" : selected?.action === "ARCHIVE_APPROVE" ? <><FileCheck2 />逐项核验并通过</> : "审批通过"}</button>}
         {detail.canResubmit && <button type="button" className="btn btn-primary" disabled={pending} onClick={() => applicantAction("resubmit")}>重新提交审批</button>}
         {detail.canCancel && <button type="button" className="btn btn-secondary" disabled={pending} onClick={() => applicantAction("cancel")}>撤回用章申请</button>}
-      </> : undefined}
+      </>}
     />}</Dialog>
   </div>;
 }

@@ -87,6 +87,74 @@ describe.skipIf(!databaseUrl)("Server 原件摄入：真实 PG 恢复与幂等�
     syntheticStorage.objects.clear();
   });
 
+  it("版本族首版采用现行创建默认值，新版是独立草稿，撤回不提升历史版或重绑旧来源", async () => {
+    const f = await fixture();
+    const first = await ingestMaterial(request(f));
+    const original = await db.document.update({ where: { id: first.id }, data: { status: "APPROVED" } });
+    expect(original.familyId).toBeTruthy();
+    expect(original.familyId).not.toBe(original.id);
+    const evidence = await db.evidenceItem.create({ data: { matterId: f.matter.id, title: "合成旧版事实", content: "合成原始版本中的记载", kind: "FACT", sourceDocumentId: original.id, createdById: f.user.id } });
+    const location = { kind: "UNLOCATED", reason: "NO_MAPPING" };
+    const source = await db.evidenceSourceLink.create({ data: { evidenceItemId: evidence.id, documentId: original.id,
+      documentSha256: original.sha256!, relation: "SUPPORTS", location, locationKey: JSON.stringify(location), createdById: f.user.id } });
+    const sourceSnapshot = [{ id: source.id, documentId: original.id, documentSha256: original.sha256,
+      relation: "SUPPORTS", location, parseRunId: null, anchorId: null, legacy: false }];
+    const revision = await db.evidenceItemRevision.create({ data: { evidenceItemId: evidence.id, revision: 1,
+      title: evidence.title, content: evidence.content, kind: evidence.kind, editedById: f.user.id, sourceSnapshot } });
+    const bytes = Buffer.from("合成新版：增加交付条件，原版依据保持原样。", "utf8");
+    const next = await ingestMaterial({ ...request(f, { ...f.document, name: "合成摄入-v2.txt", size: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") }), bytes, priorDocumentId: original.id });
+    const current = await db.document.findUniqueOrThrow({ where: { id: next.id } });
+    expect(current).toMatchObject({ familyId: original.familyId, version: 2, isLatest: true, status: "DRAFT", approvedAt: null, approvedById: null });
+    const previous = await db.document.findUniqueOrThrow({ where: { id: original.id } });
+    expect(previous).toMatchObject({ isLatest: false, status: "APPROVED", sha256: original.sha256, path: original.path });
+    expect(await db.evidenceSourceLink.findUniqueOrThrow({ where: { id: source.id } })).toMatchObject({ documentId: original.id, documentSha256: original.sha256, removedAt: null });
+    expect((await db.evidenceItemRevision.findUniqueOrThrow({ where: { id: revision.id } })).sourceSnapshot).toEqual(sourceSnapshot);
+    await withdrawMaterial(f.user.id, next.id, false);
+    expect(await db.document.count({ where: { familyId: original.familyId, isLatest: true, deletedAt: null } })).toBe(0);
+    expect((await db.document.findUniqueOrThrow({ where: { id: original.id } })).isLatest).toBe(false);
+    await withdrawMaterial(f.user.id, original.id, false);
+    expect((await db.evidenceItem.findUniqueOrThrow({ where: { id: evidence.id } })).sourceDocumentId).toBe(original.id);
+    expect(await db.evidenceSourceLink.findUniqueOrThrow({ where: { id: source.id } })).toMatchObject({ documentId: original.id, documentSha256: original.sha256, removedAt: null });
+    expect((await db.evidenceItemRevision.findUniqueOrThrow({ where: { id: revision.id } })).sourceSnapshot).toEqual(sourceSnapshot);
+    expect(syntheticStorage.objects.has(original.path)).toBe(true);
+    expect(syntheticStorage.remove).not.toHaveBeenCalled();
+  });
+
+  it.each(["relation", "unbound-marker"])("固定审查报告按 %s 拒绝摄入新版，原关联和当前版不变", async kind => {
+    const f = await fixture();
+    const source = await ingestMaterial(request(f));
+    const report = await db.document.create({ data: { matterId: f.matter.id, uploadedById: f.user.id,
+      name: "合成固定审查报告.md", category: "OTHER", mimeType: "text/markdown", path: `synthetic-only/${randomUUID()}`,
+      sha256: "b".repeat(64), size: 1, tags: kind === "unbound-marker" ? ["AI审查"] : [] } });
+    const record = kind === "relation" ? await db.reviewRecord.create({ data: {
+      matterId: f.matter.id, documentId: source.id, reviewedById: f.user.id, reportDocumentId: report.id,
+      sourceSha256: f.document.sha256, itemCount: 0, itemsJson: [], textPreviewChars: 1,
+      coverageJson: { totalChars: 1, totalSegments: 1, segments: [{ index: 1, chars: 1, status: "SUCCEEDED", errorCode: null }], stopReason: null },
+    } }) : null;
+    syntheticStorage.write.mockClear();
+    const input = { ...request(f, { ...f.document, tags: [] }), priorDocumentId: report.id };
+    await expect(ingestMaterial(input)).rejects.toThrow("审查报告为固定记录");
+    expect(syntheticStorage.write).not.toHaveBeenCalled();
+    expect(await db.materialIngestIntent.count({ where: { id: input.requestKey } })).toBe(0);
+    expect(await db.document.count({ where: { familyId: report.familyId } })).toBe(1);
+    expect((await db.document.findUniqueOrThrow({ where: { id: report.id } })).isLatest).toBe(true);
+    if (record) expect((await db.reviewRecord.findUniqueOrThrow({ where: { id: record.id } })).reportDocumentId).toBe(report.id);
+  });
+
+  it("固定审查报告状态在原件保存后变化时，提交仍拒绝新版本", async () => {
+    const f = await fixture();
+    const first = await ingestMaterial(request(f));
+    const prior = await db.document.findUniqueOrThrow({ where: { id: first.id } });
+    syntheticStorage.afterWrite = async () => {
+      await db.document.update({ where: { id: first.id }, data: { tags: ["AI审查"] } });
+    };
+    const input = { ...request(f), priorDocumentId: first.id };
+    await expect(ingestMaterial(input)).rejects.toThrow("审查报告为固定记录");
+    expect(await db.document.count({ where: { familyId: prior.familyId } })).toBe(1);
+    expect((await db.document.findUniqueOrThrow({ where: { id: first.id } })).isLatest).toBe(true);
+    expect(await db.materialIngestIntent.findUniqueOrThrow({ where: { id: input.requestKey } })).toMatchObject({ state: "STORED", documentId: null });
+  });
+
   it("恢复先完成时迟到写回执不能重开 COMMITTED，同键重放返回原材料而异载被拒", async () => {
     const f = await fixture(), input = request(f);
     let recoveredId = "";

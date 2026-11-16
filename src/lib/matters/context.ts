@@ -7,6 +7,11 @@ export const contextVisibilityLabels = { MATTER: "事项可见人员", FINANCE: 
 export type ContextKind = keyof typeof contextKindLabels;
 export type ContextVisibility = keyof typeof contextVisibilityLabels;
 export type ContextSourceType = "DOCUMENT" | "NOTE" | "CLIENT_ACTIVITY";
+export const contextCursorSchema = z.string().min(1, "分页位置无效，请重新读取").max(1200, "分页位置无效，请重新读取");
+export const contextSourcePageSchema = z.object({
+  type: z.enum(["DOCUMENT", "NOTE", "CLIENT_ACTIVITY"]), cursor: contextCursorSchema,
+}).strict();
+export type ContextSourcePageInput = z.input<typeof contextSourcePageSchema>;
 
 const optionalId = z.string().cuid("来源标识无效").nullable().optional();
 const instant = z.string().datetime({ offset: true, message: "请输入有效日期和时间" })
@@ -71,10 +76,11 @@ export type MatterContextView = {
   canConfirm: boolean;
   records: ContextRecordView[];
   hasMore: boolean;
+  nextCursor: string | null;
 };
 export type ContextHistoryView = { records: ContextRecordView[]; nextBeforeVersion: number | null };
 export type ContextSourceContent = { type: ContextSourceType; label: string; content: string | null; href: string | null };
-export type ContextSourceOptions = { choices: ContextSourceChoice[]; truncated: boolean };
+export type ContextSourceOptions = { choices: ContextSourceChoice[]; nextCursors: Record<ContextSourceType, string | null> };
 
 export type MatterBrief = {
   matterId: string;

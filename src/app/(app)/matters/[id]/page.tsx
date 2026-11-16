@@ -18,7 +18,6 @@ import { getAiSettings } from "@/lib/ai/settings";
 import { isLocalJudgmentConfigured } from "@/lib/cncases/settings";
 import { getYuandianSettings } from "@/lib/yuandian/settings";
 import { resolveMatterRoute } from "@/server/matters/route";
-import { matterHref } from "@/lib/matters/route";
 import { prisma } from "@/lib/prisma";
 import { nullableDecimalToNumber, serializeDecimals } from "@/lib/decimal";
 import { MatterDetailTabs } from "./_components/matter-detail-tabs";
@@ -27,6 +26,7 @@ import { ReviewSummaryCard } from "./_components/review-summary-card";
 import { listEvidenceItems } from "@/server/evidence/actions";
 import { getMatterContext } from "@/server/matters/context-actions";
 import { MatterContextSection } from "./_components/matter-context-section";
+import { MatterBriefSection } from "./_components/matter-brief-section";
 import { actionErrorMessage } from "@/lib/action-error";
 
 type PageProps = {
@@ -36,8 +36,6 @@ type PageProps = {
 export default async function MatterDetailPage({ params }: PageProps) {
   const { id: param } = await params;
 
-  // 路由键是 internalCode（`LL-2026-CC-0001`），但历史书签、通知与审计日志里
-  // 存的是 cuid 地址，两者都要认；命中 cuid 时在鉴权通过后再跳规范地址。
   const route = await resolveMatterRoute(param);
   if (!route) notFound();
 
@@ -46,8 +44,6 @@ export default async function MatterDetailPage({ params }: PageProps) {
     getSession()
   ]);
   if (!matterRaw) notFound();
-
-  if (param !== route.internalCode) redirect(matterHref(route));
 
   if (session?.user && !await hasMatterBusinessAccess(session.user.id, session.user.role, matterRaw.id, session.user.rolePermissions)) {
     return <TeamMatterOverview matter={matterRaw} />;
@@ -253,9 +249,9 @@ export default async function MatterDetailPage({ params }: PageProps) {
         preservationCases={preservationCasesForClient}
         evidenceItems={evidenceResult.items}
         evidenceError={evidenceResult.error}
-        contextNode={contextResult.view
-          ? <MatterContextSection matterId={matter.id} view={contextResult.view} />
-          : <section className="dos-group p-4 text-sm text-destructive" role="alert">事项上下文暂不可读取：{contextResult.error} <a className="underline" href={matterHref(matter)}>重新加载</a></section>}
+        materialRefreshKey={Date.now()}
+        briefNode={<MatterBriefSection matterId={matter.id} refreshKey={Date.now()} />}
+        contextNode={<MatterContextSection matterId={matter.id} view={contextResult.view} error={contextResult.error} />}
         notes={notes}
         capabilities={{
           aiReview: aiSettings?.configured ?? false,

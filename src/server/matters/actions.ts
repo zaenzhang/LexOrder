@@ -1,5 +1,5 @@
 "use server";
-import {responsibilityReady,readWorkRows,closedHearingIds} from "@/server/reminders/responsibility";
+import {readWorkRows,closedHearingIds} from "@/server/reminders/responsibility";
 import { withRoleNames } from "@/lib/roles/presentation";
 import { hasCustomPermission } from "@/lib/roles/catalog";
 import { checkRoleMutation, roleMutation } from "@/lib/roles/service";
@@ -8,11 +8,13 @@ import { approvalSettings } from "@/lib/approvals/service";
 import { assertAssignableColleagues } from "@/lib/teams/validate-colleagues";
 
 import { revalidatePath } from "next/cache";
-import { LitigationStanding, PartyRole, PartyType, Prisma, type ClientIdType } from "@prisma/client";
+import { LitigationStanding, PartyRole, PartyType, Prisma } from "@prisma/client";
 import { decryptIdNumber } from "@/lib/clients/id-number-crypto";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/session";
-import { audit } from "@/server/audit";
+import { audit, auditTx } from "@/server/audit";
+import { currentActor } from "@/server/intakes/workflow";
+import { matterBasicEditSchema, matterTeamEditSchema, procedureInfoEditSchema, type MatterBasicEditInput, type MatterTeamEditInput, type ProcedureInfoEditInput } from "./editor-input";
 import { assertMatterWritable } from "@/lib/archive/guard";
 import { serializeDecimals } from "@/lib/decimal";
 import {
@@ -23,8 +25,6 @@ import {
   hasMatterBusinessAccess,
   assertCanAccessMatterFinance,
   assertCanAssociateMatter,
-  assertCanHandleMatter,
-  assertCanLeadMatter,
   assertCanOwnMatter
 } from "@/lib/permissions";
 import { generateInternalCode, generateFirmCaseNo } from "./code-generator";
@@ -37,14 +37,12 @@ import {
 import {
   matterCreateSchema,
   matterListQuerySchema,
-  matterUpdateBasicSchema,
   type MatterCreateInput,
-  type MatterListQuery,
-  type MatterUpdateBasicInput
+  type MatterListQuery
 } from "./schemas";
 import { revalidateMatter } from "@/server/matters/route";
 import { recordTimelineEvent } from "@/server/timeline/record";
-import { PERSON_ID_TYPES, personIdError } from "@/lib/clients/person-id";
+import { personIdError } from "@/lib/clients/person-id";
 import { ActionError } from "@/lib/action-error";
 
 function emptyToNull<T extends Record<string, unknown>>(obj: T): T {
@@ -253,274 +251,143 @@ export async function listMatters(input: Partial<MatterListQuery> = {}) {
   return { items, total, page: query.page, pageSize: query.pageSize };
 }
 
-// v0.32: 程序级基本信息编辑
-export async function updateProcedureInfo(input: {
-  procedureId: string;
-  jurisdiction?: string;
-  handlingAgency?: string;
-  caseNumber?: string;
-  presidingJudge?: string;
-  presidingJudgeContact?: string;
-  judgeAssistant?: string;
-  judgeAssistantContact?: string;
-  ourStanding?: string | null;
-  acceptedAt?: string | null;
-  concludedAt?: string | null;
-  procedureParties?: { partyId: string; standing: LitigationStanding }[];
-  updatedParties?: {
-    partyId: string;
-    name: string;
-    role: PartyRole;
-    partyType: PartyType;
-    idType?: string | null;
-    idNumber?: string;
-    enterpriseSocialCode?: string;
-    legalRep?: string;
-    contactName?: string;
-    phone?: string;
-    address?: string;
-  }[];
-  newProcedureParties?: {
-    existingPartyId?: string | null;
-    name: string;
-    role: PartyRole;
-    partyType: PartyType;
-    idType?: string | null;
-    idNumber?: string;
-    enterpriseSocialCode?: string;
-    standings: LitigationStanding[];
-  }[];
-}) {
+/** 程序信息和本程序当事人一次提交；省略程序字段保持原值，明确空值才清除。 */
+export async function updateProcedureInfo(input: ProcedureInfoEditInput) {
   const session = await requireSession("matters.write");
-  const proc = await prisma.matterProcedure.findUnique({
-    where: { id: input.procedureId },
-    select: { matterId: true, type: true }
-  });
-  if (!proc) throw new ActionError("程序不存在");
-  // 案件办理断言（P1-1）：程序当事人信息属结构性案件写入，合伙人全所口径、其余岗位须经办。
-  await assertCanHandleMatter(session.user, proc.matterId);
-  await assertMatterWritable(proc.matterId);
-  assertAgencyAllowedForProcedure(input.handlingAgency, proc.type);
-
-  const partyRows = input.procedureParties
-    ? normalizeProcedureParties(input.procedureParties)
-    : null;
-  const updatedPartyRows = normalizeUpdatedParties(input.updatedParties ?? []);
-  for (const row of updatedPartyRows) {
-    if (row.partyType !== "NATURAL_PERSON" || !row.idNumber) continue;
-    const idError = personIdError(row.idType, row.idNumber);
-    if (idError) throw new ActionError(`当事人「${row.name}」：${idError}`);
+  const data = procedureInfoEditSchema.parse(input);
+  const partyRows = data.procedureParties;
+  for (const party of data.updatedParties) {
+    if (party.partyType !== "NATURAL_PERSON") continue;
+    if (party.idNumber && !party.idType) throw new ActionError(`当事人「${party.name}」请选择证件类型`);
+    const error = personIdError(party.idType, party.idNumber);
+    if (error) throw new ActionError(`当事人「${party.name}」：${error}`);
   }
-  const newPartyRows = normalizeNewProcedureParties(input.newProcedureParties ?? []);
-  for (const row of newPartyRows) {
-    if (row.partyType !== "NATURAL_PERSON" || row.existingPartyId) continue;
-    const idError = personIdError(row.idType, row.idNumber);
-    if (idError) throw new ActionError(`新增当事人「${row.name}」：${idError}`);
+  for (const party of data.newProcedureParties) {
+    if (party.partyType === "NATURAL_PERSON" && !party.idType) throw new ActionError(`新增当事人「${party.name}」请选择证件类型`);
+    const number = party.partyType === "NATURAL_PERSON" ? party.idNumber : party.enterpriseSocialCode;
+    if (!number) throw new ActionError(`新增当事人「${party.name}」请填写证件号码`);
+    const error = personIdError(party.partyType === "NATURAL_PERSON" ? party.idType : "USCC", number);
+    if (error) throw new ActionError(`新增当事人「${party.name}」：${error}`);
   }
-  if ((input.updatedParties?.length ?? 0) !== updatedPartyRows.length) {
-    throw new ActionError("已有当事人信息不完整");
-  }
-  if ((input.newProcedureParties?.length ?? 0) !== newPartyRows.length) {
-    throw new ActionError("新增程序当事人信息不完整");
+  if (new Set(data.updatedParties.map(party => party.partyId)).size !== data.updatedParties.length) {
+    throw new ActionError("同一当事人不能重复提交修改");
   }
 
-  if (partyRows || updatedPartyRows.length > 0) {
-    const partyIds = [
-      ...new Set([
-        ...(partyRows?.map((row) => row.partyId) ?? []),
-        ...updatedPartyRows.map((row) => row.partyId)
-      ])
-    ];
-    const realPartyIds = partyIds.filter((partyId) => !partyId.startsWith("client:"));
-    const clientIds = partyIds
-      .filter((partyId) => partyId.startsWith("client:"))
-      .map((partyId) => partyId.slice("client:".length));
-    const validParties = await prisma.party.findMany({
-      where: { matterId: proc.matterId, id: { in: realPartyIds } },
-      select: { id: true }
+  const matterId = await prisma.$transaction(async tx => {
+    await currentActor(tx, session.user.id, "matters.write");
+    const proc = await tx.matterProcedure.findFirst({
+      where: { id: data.procedureId, matter: { deletedAt: null, ...matterAssociationFilter(session.user.id) } },
+      include: {
+        matter: { select: { status: true, primaryClientId: true, clientLinks: { select: { clientId: true } } } },
+        procedureParties: true
+      }
     });
-    const validPartyIds = new Set(validParties.map((p) => p.id));
-    const matterClients =
-      clientIds.length > 0
-        ? await prisma.matter.findUnique({
-            where: { id: proc.matterId },
-            select: {
-              primaryClientId: true,
-              clientLinks: { select: { clientId: true } }
-            }
-          })
-        : null;
-    const validClientIds = new Set([
-      ...(matterClients?.primaryClientId ? [matterClients.primaryClientId] : []),
-      ...(matterClients?.clientLinks.map((link) => link.clientId) ?? [])
-    ]);
-    if (
-      (partyRows?.some(
-        (row) =>
-          !row.partyId.startsWith("client:") &&
-          !validPartyIds.has(row.partyId)
-      ) ?? false) ||
-      clientIds.some((clientId) => !validClientIds.has(clientId))
-    ) {
-      throw new ActionError("存在不属于本案的当事人");
+    if (!proc) throw new ActionError("程序不存在或无权修改");
+    await tx.$queryRaw`SELECT id FROM "Matter" WHERE id=${proc.matterId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM "MatterProcedure" WHERE id=${proc.id} FOR UPDATE`;
+    if (proc.matter.status === "ARCHIVED") throw new ActionError("案件已归档，禁止修改");
+    if (proc.updatedAt.getTime() !== data.expectedUpdatedAt.getTime()) {
+      throw new ActionError("程序已被其他人修改，请保留输入并重新核对");
     }
-  }
+    const handlingAgency = data.handlingAgency === undefined ? proc.handlingAgency : data.handlingAgency;
+    assertAgencyAllowedForProcedure(handlingAgency, proc.type);
 
-  await prisma.$transaction(async (tx) => {
-    await checkRoleMutation(tx, session.user, "matters.write");
-    const mergedProcedureParties = [...(partyRows ?? [])];
-    for (const row of updatedPartyRows) {
-      await tx.party.update({
-        where: { id: row.partyId },
+    const partyIds = [...new Set([...(partyRows?.map(row => row.partyId) ?? []), ...data.updatedParties.map(row => row.partyId)])];
+    const realIds = partyIds.filter(id => !id.startsWith("client:"));
+    const realParties = realIds.length ? await tx.party.findMany({
+      where: { id: { in: realIds }, matterId: proc.matterId }, select: { id: true, updatedAt: true }
+    }) : [];
+    if (realParties.length !== realIds.length) throw new ActionError("存在不属于本案的当事人");
+    const versions = new Map(realParties.map(party => [party.id, party.updatedAt]));
+    for (const party of data.updatedParties) {
+      if (versions.get(party.partyId)?.getTime() !== party.expectedUpdatedAt.getTime()) {
+        throw new ActionError(`当事人「${party.name}」已被其他人修改，请保留输入并重新核对`);
+      }
+    }
+    const linkedClients = new Set([
+      ...(proc.matter.primaryClientId ? [proc.matter.primaryClientId] : []),
+      ...proc.matter.clientLinks.map(link => link.clientId)
+    ]);
+    if (partyIds.some(id => id.startsWith("client:") && !linkedClients.has(id.slice(7)))) {
+      throw new ActionError("存在不属于本案的客户");
+    }
+
+    for (const party of data.updatedParties) {
+      const result = await tx.party.updateMany({
+        where: { id: party.partyId, matterId: proc.matterId, updatedAt: party.expectedUpdatedAt },
         data: {
-          role: row.role,
-          name: row.name,
-          partyType: row.partyType,
-          idType: row.partyType === "NATURAL_PERSON" ? row.idType : null,
-          idNumber: row.partyType === "NATURAL_PERSON" ? row.idNumber || null : null,
-          enterpriseSocialCode:
-            row.partyType === "NATURAL_PERSON" ? null : row.enterpriseSocialCode || null,
-          enterpriseName: row.partyType === "NATURAL_PERSON" ? null : row.name,
-          legalRep: row.partyType === "NATURAL_PERSON" ? null : row.legalRep || null,
-          contactName: row.contactName || null,
-          phone: row.phone || null,
-          address: row.address || null
+          role: party.role, name: party.name, partyType: party.partyType,
+          idType: party.partyType === "NATURAL_PERSON" ? party.idType : null,
+          idNumber: party.partyType === "NATURAL_PERSON" ? party.idNumber.toUpperCase() || null : null,
+          enterpriseSocialCode: party.partyType === "NATURAL_PERSON" ? null : party.enterpriseSocialCode.toUpperCase() || null,
+          enterpriseName: party.partyType === "NATURAL_PERSON" ? null : party.name,
+          legalRep: party.partyType === "NATURAL_PERSON" ? null : party.legalRep || null,
+          contactName: party.contactName || null, phone: party.phone || null, address: party.address || null
         }
       });
+      if (result.count !== 1) throw new ActionError("当事人已变化，请保留输入并重新核对");
     }
-    for (const row of mergedProcedureParties) {
+
+    const mergedParties = [...(partyRows ?? proc.procedureParties.map(row => ({ partyId: row.partyId, standing: row.standing })))];
+    for (const row of mergedParties) {
       if (row.partyId.startsWith("client:")) {
-        row.partyId = await ensureClientParty(tx, proc.matterId, row.partyId.slice("client:".length), row.standing);
+        row.partyId = await ensureClientParty(tx, proc.matterId, row.partyId.slice(7), row.standing);
       }
     }
-    if (newPartyRows.length > 0) {
-      const nextOrdinalByRole = new Map<PartyRole, number>();
-      for (const role of [...new Set(newPartyRows.map((row) => row.role))]) {
-        const max = await tx.party.aggregate({
-          where: { matterId: proc.matterId, role },
-          _max: { ordinal: true }
-        });
-        nextOrdinalByRole.set(role, (max._max.ordinal ?? 0) + 1);
+    const nextOrdinalByRole = new Map<PartyRole, number>();
+    for (const party of data.newProcedureParties) {
+      if (!nextOrdinalByRole.has(party.role)) {
+        const max = await tx.party.aggregate({ where: { matterId: proc.matterId, role: party.role }, _max: { ordinal: true } });
+        nextOrdinalByRole.set(party.role, (max._max.ordinal ?? 0) + 1);
       }
-
-      for (const row of newPartyRows) {
-        let partyId = row.existingPartyId ?? null;
-        if (partyId) {
-          const existingParty = await tx.party.findFirst({
-            where: { id: partyId, matterId: proc.matterId },
-            select: { id: true }
-          });
-          if (!existingParty) throw new ActionError("存在不属于本案的当事人");
-          await tx.party.update({
-            where: { id: existingParty.id },
-            data: {
-              role: row.role,
-              name: row.name,
-              partyType: row.partyType,
-              standing: row.standings[0] ?? null,
-              idType: row.partyType === "NATURAL_PERSON" ? row.idType : null,
-              idNumber: row.partyType === "NATURAL_PERSON" ? row.idNumber : null,
-              enterpriseSocialCode:
-                row.partyType === "NATURAL_PERSON" ? null : row.enterpriseSocialCode,
-              enterpriseName: row.partyType === "NATURAL_PERSON" ? null : row.name
-            }
-          });
-        } else {
-          const ordinal = nextOrdinalByRole.get(row.role) ?? 1;
-          nextOrdinalByRole.set(row.role, ordinal + 1);
-          const createdParty = await tx.party.create({
-            data: {
-              matterId: proc.matterId,
-              role: row.role,
-              ordinal,
-              name: row.name,
-              partyType: row.partyType,
-              standing: row.standings[0] ?? null,
-              idNumber: row.partyType === "NATURAL_PERSON" ? row.idNumber : null,
-              enterpriseSocialCode:
-                row.partyType === "NATURAL_PERSON" ? null : row.enterpriseSocialCode,
-              enterpriseName: row.partyType === "NATURAL_PERSON" ? null : row.name
-            },
-            select: { id: true }
-          });
-          partyId = createdParty.id;
-        }
-
-        for (const standing of row.standings) {
-          mergedProcedureParties.push({ partyId, standing });
-        }
-      }
+      const ordinal = nextOrdinalByRole.get(party.role)!;
+      nextOrdinalByRole.set(party.role, ordinal + 1);
+      const created = await tx.party.create({
+        data: {
+          matterId: proc.matterId, ordinal, role: party.role, name: party.name, partyType: party.partyType,
+          standing: party.standings[0],
+          idType: party.partyType === "NATURAL_PERSON" ? party.idType : null,
+          idNumber: party.partyType === "NATURAL_PERSON" ? party.idNumber.toUpperCase() : null,
+          enterpriseSocialCode: party.partyType === "NATURAL_PERSON" ? null : party.enterpriseSocialCode.toUpperCase(),
+          enterpriseName: party.partyType === "NATURAL_PERSON" ? null : party.name
+        }, select: { id: true }
+      });
+      for (const standing of party.standings) mergedParties.push({ partyId: created.id, standing: standing });
     }
 
-    await tx.matterProcedure.update({
-      where: { id: input.procedureId },
-      data: {
-        jurisdiction: normalizeJurisdictionForAgency(input.handlingAgency, input.jurisdiction),
-        handlingAgency: input.handlingAgency?.trim() || null,
-        caseNumber: input.caseNumber?.trim() || null,
-        presidingJudge: input.presidingJudge?.trim() || null,
-        presidingJudgeContact: input.presidingJudgeContact?.trim() || null,
-        judgeAssistant: input.judgeAssistant?.trim() || null,
-        judgeAssistantContact: input.judgeAssistantContact?.trim() || null,
-        ourStanding: input.ourStanding ? (input.ourStanding as LitigationStanding) : null,
-        acceptedAt: input.acceptedAt ? new Date(input.acceptedAt) : null,
-        concludedAt: input.concludedAt ? new Date(input.concludedAt) : null,
-        // 填写裁决/结案时间即视为程序终结（2026-09-21 全流程验收发现：此前无任何 UI
-        // 入口能把 ENGAGED 程序置为 CONCLUDED，结案门禁因此永远拦截）。清空时间不回退
-        // 状态——重新启用程序走 updateProcedure 的 status 通道。
-        ...(input.concludedAt ? { status: "CONCLUDED" as const } : {})
-      }
+    const procedureData: Prisma.MatterProcedureUpdateManyMutationInput = {};
+    for (const field of ["handlingAgency", "caseNumber", "presidingJudge", "presidingJudgeContact", "judgeAssistant", "judgeAssistantContact"] as const) {
+      if (data[field] !== undefined) procedureData[field] = data[field] || null;
+    }
+    if (data.jurisdiction !== undefined || data.handlingAgency !== undefined) {
+      procedureData.jurisdiction = normalizeJurisdictionForAgency(handlingAgency, data.jurisdiction === undefined ? proc.jurisdiction : data.jurisdiction);
+    }
+    if (data.ourStanding !== undefined) procedureData.ourStanding = data.ourStanding;
+    if (data.acceptedAt !== undefined) procedureData.acceptedAt = data.acceptedAt;
+    if (data.concludedAt !== undefined) procedureData.concludedAt = data.concludedAt;
+    if (data.concludedAt) procedureData.status = "CONCLUDED";
+    // 关联和实际 Party 修改也更新本次程序任务的前置值。
+    procedureData.updatedAt = new Date();
+    const updated = await tx.matterProcedure.updateMany({
+      where: { id: proc.id, updatedAt: data.expectedUpdatedAt }, data: procedureData
     });
+    if (updated.count !== 1) throw new ActionError("程序已变化，请保留输入并重新核对");
 
-    if (partyRows || newPartyRows.length > 0) {
-      await tx.procedureParty.deleteMany({ where: { procedureId: input.procedureId } });
-      if (mergedProcedureParties.length > 0) {
-        await tx.procedureParty.createMany({
-          data: mergedProcedureParties.map((row, idx) => ({
-            procedureId: input.procedureId,
-            partyId: row.partyId,
-            standing: row.standing,
-            ordinal: idx + 1
-          })),
-          skipDuplicates: true
-        });
+    if (partyRows !== undefined || data.newProcedureParties.length) {
+      const rows = uniqueProcedureParties(mergedParties);
+      const removedIds = proc.procedureParties.filter(old => !rows.some(row => row.partyId === old.partyId && row.standing === old.standing)).map(row => row.id);
+      if (removedIds.length) await tx.procedureParty.deleteMany({ where: { id: { in: removedIds }, procedureId: proc.id } });
+      let nextOrdinal = Math.max(0, ...proc.procedureParties.map(row => row.ordinal)) + 1;
+      for (const row of rows) {
+        const existing = proc.procedureParties.find(old => old.partyId === row.partyId && old.standing === row.standing);
+        if (!existing) await tx.procedureParty.create({ data: { procedureId: proc.id, ...row, ordinal: nextOrdinal++ } });
       }
     }
-  });
-  await audit({
-    userId: session.user.id,
-    action: "PROCEDURE_INFO_UPDATE",
-    targetType: "MatterProcedure",
-    targetId: input.procedureId,
-    detail: { matterId: proc.matterId }
-  });
-  await revalidateMatter(proc.matterId);
+    await auditTx(tx, { userId: session.user.id, action: "PROCEDURE_INFO_UPDATE", targetType: "MatterProcedure", targetId: proc.id, detail: { matterId: proc.matterId } });
+    return proc.matterId;
+  }, { isolationLevel: "Serializable", timeout: 20000 });
+  await revalidateMatter(matterId);
 }
-
-type NewProcedurePartyInput = {
-  existingPartyId?: string | null;
-  name: string;
-  role: PartyRole;
-  partyType: PartyType;
-  idType?: string | null;
-  idNumber?: string;
-  enterpriseSocialCode?: string;
-  standings: LitigationStanding[];
-};
-
-type UpdatedPartyInput = {
-  partyId: string;
-  name: string;
-  role: PartyRole;
-  partyType: PartyType;
-  idType?: string | null;
-  idNumber?: string;
-  enterpriseSocialCode?: string;
-  legalRep?: string;
-  contactName?: string;
-  phone?: string;
-  address?: string;
-};
 
 function clientTypeToPartyType(type: "INDIVIDUAL" | "COMPANY" | "ORGANIZATION"): PartyType {
   if (type === "INDIVIDUAL") return "NATURAL_PERSON";
@@ -576,85 +443,17 @@ async function ensureClientParty(
   return created.id;
 }
 
-function normalizeProcedureParties(
+function uniqueProcedureParties(
   rows: { partyId: string; standing: LitigationStanding }[]
 ) {
-  const standingValues = new Set(Object.values(LitigationStanding));
   const seen = new Set<string>();
   return rows
-    .filter((row) => row.partyId && standingValues.has(row.standing))
-    .map((row) => ({ ...row, standing: normalizeLitigationStanding(row.standing) }))
     .filter((row) => {
       const key = `${row.partyId}:${row.standing}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
-}
-
-function normalizeLitigationStanding(standing: LitigationStanding): LitigationStanding {
-  if (standing === "JOINT_PLAINTIFF") return "PLAINTIFF";
-  if (standing === "JOINT_DEFENDANT") return "DEFENDANT";
-  return standing;
-}
-
-function normalizeUpdatedParties(rows: UpdatedPartyInput[]) {
-  const roleValues = new Set(Object.values(PartyRole));
-  const partyTypeValues = new Set(Object.values(PartyType));
-  return rows
-    .map((row) => ({
-      partyId: row.partyId,
-      name: row.name.trim(),
-      role: row.role,
-      partyType: row.partyType,
-      idType: (PERSON_ID_TYPES as readonly string[]).includes(row.idType ?? "") ? (row.idType as ClientIdType) : "ID_CARD",
-      idNumber: row.idNumber?.trim().toUpperCase() ?? "",
-      enterpriseSocialCode: row.enterpriseSocialCode?.trim() ?? "",
-      legalRep: row.legalRep?.trim() ?? "",
-      contactName: row.contactName?.trim() ?? "",
-      phone: row.phone?.trim() ?? "",
-      address: row.address?.trim() ?? ""
-    }))
-    .filter(
-      (row) =>
-        row.partyId &&
-        row.name &&
-        roleValues.has(row.role) &&
-        partyTypeValues.has(row.partyType)
-    );
-}
-
-function normalizeNewProcedureParties(rows: NewProcedurePartyInput[]) {
-  const standingValues = new Set(Object.values(LitigationStanding));
-  const roleValues = new Set(Object.values(PartyRole));
-  const partyTypeValues = new Set(Object.values(PartyType));
-  return rows
-    .map((row) => ({
-      existingPartyId: row.existingPartyId || null,
-      name: row.name.trim(),
-      role: row.role,
-      partyType: row.partyType,
-      idType: ((PERSON_ID_TYPES as readonly string[]).includes(row.idType ?? "") ? row.idType : "ID_CARD") as ClientIdType,
-      idNumber: row.idNumber?.trim().toUpperCase() ?? "",
-      enterpriseSocialCode: row.enterpriseSocialCode?.trim().toUpperCase() ?? "",
-      standings: [
-        ...new Set(
-          row.standings
-            .filter((standing) => standingValues.has(standing))
-            .map((standing) => normalizeLitigationStanding(standing))
-        )
-      ]
-    }))
-    .filter(
-      (row) =>
-        row.name &&
-        roleValues.has(row.role) &&
-        partyTypeValues.has(row.partyType) &&
-        row.standings.length > 0 &&
-        (row.partyType === "NATURAL_PERSON"
-          ? row.idNumber
-          : row.enterpriseSocialCode)
-    );
 }
 
 // v0.32: 关联案件 —— 搜索 / 关联 / 解除
@@ -953,148 +752,82 @@ export async function createMatter(input: MatterCreateInput) {
   return { ok: true, id: created.id, internalCode: created.internalCode };
 }
 
-/**
- * v0.5: 更新案件团队。
- * - 仅当前主办律师可操作；管理角色只负责审批，不因角色放开他人案件处理权
- * - ownerId 改变时同步替换 MatterMember 中的 LEAD
- * - coLeadIds 和 assistantIds 覆盖式更新对应角色（不影响主办自动 LEAD）
- */
-export async function updateMatterTeam(input: {
-  matterId: string;
-  ownerId: string;
-  coLeadIds: string[];
-  assistantIds: string[];
-}) {
+/** 成员编辑只改协办和助理；主办由既有责任交接流程决定。 */
+export async function updateMatterTeam(input: MatterTeamEditInput) {
   const session = await requireSession("matters.write");
-  const matter = await prisma.matter.findUnique({
-    where: { id: input.matterId, deletedAt: null },
-    select: { id: true, ownerId: true, members: { select: { userId: true } } }
-  });
-  if (!matter) throw new ActionError("案件不存在");
-  await assertMatterWritable(input.matterId);
-  await assertCanOwnMatter(session.user.id, input.matterId, "只有当前主办律师可以修改承办团队");
-
-  await assertAssignableColleagues([input.ownerId, ...input.coLeadIds, ...input.assistantIds], matter.members.map((m) => m.userId));
-  if (input.ownerId !== matter.ownerId) await assertAssignableColleagues([input.ownerId]);
-
-  // 校验：coLeadIds / assistantIds 不能与 ownerId 重叠
-  const co = input.coLeadIds.filter((id) => id !== input.ownerId);
-  const ass = input.assistantIds.filter(
-    (id) => id !== input.ownerId && !co.includes(id)
-  );
-
-  await prisma.$transaction(async (tx) => {
-    await checkRoleMutation(tx, session.user, "matters.write");
-    await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(72606101)`;
-    if(await responsibilityReady(tx)){
-      const current=await tx.matter.findUniqueOrThrow({where:{id:input.matterId},select:{ownerId:true,members:{select:{userId:true}}}});
-      if(current.ownerId!==input.ownerId)throw new ActionError("更换主办请使用「事项责任与交接」，由接收人确认后生效");
-      const retained=new Set([input.ownerId,...input.coLeadIds,...input.assistantIds]);
-      const removed=current.members.filter(m=>!retained.has(m.userId)).map(m=>m.userId);
-      if((await readWorkRows(tx)).some(w=>w.matterId===input.matterId&&w.state==='OPEN'&&(removed.includes(w.assigneeId)||Boolean(w.proposedAssigneeId&&removed.includes(w.proposedAssigneeId)))))throw new ActionError("拟移除成员仍有未完成或待接收事项，请先逐项交接");
-      if(await tx.matterProcedure.count({where:{matterId:input.matterId,status:{not:'CONCLUDED'},leadLawyerId:{in:removed}}}))throw new ActionError("拟移除成员仍负责未结程序，请先完成程序责任交接");
+  const data = matterTeamEditSchema.parse(input);
+  await prisma.$transaction(async tx => {
+    await currentActor(tx, session.user.id, "matters.write");
+    const matter = await tx.matter.findFirst({
+      where: { id: data.matterId, deletedAt: null, ownerId: session.user.id },
+      select: { id: true, ownerId: true, status: true, members: { select: { userId: true, role: true } } }
+    });
+    if (!matter) throw new ActionError("只有当前主办律师可以修改承办团队");
+    await tx.$queryRaw`SELECT id FROM "Matter" WHERE id=${matter.id} FOR UPDATE`;
+    if (matter.status === "ARCHIVED") throw new ActionError("案件已归档，禁止修改");
+    const expected = new Map(data.expectedMembers.map(member => [member.userId, member.role]));
+    if (matter.ownerId !== data.expectedOwnerId || matter.members.length !== expected.size || matter.members.some(member => expected.get(member.userId) !== member.role)) {
+      throw new ActionError("承办团队已变化，请保留选择并重新核对");
     }
-    // 更新 Matter.ownerId
-    if (matter.ownerId !== input.ownerId) {
-      await tx.matter.update({
-        where: { id: input.matterId },
-        data: { ownerId: input.ownerId }
-      });
-    }
-
-    // 重建 MatterMember：先删除全部，再按新结构插入
-    await tx.matterMember.deleteMany({ where: { matterId: input.matterId } });
-
     const rows = [
-      { matterId: input.matterId, userId: input.ownerId, role: "LEAD" as const },
-      ...co.map((uid) => ({
-        matterId: input.matterId,
-        userId: uid,
-        role: "CO_LEAD" as const
-      })),
-      ...ass.map((uid) => ({
-        matterId: input.matterId,
-        userId: uid,
-        role: "ASSISTANT" as const
-      }))
+      { matterId: matter.id, userId: matter.ownerId, role: "LEAD" as const },
+      ...data.coLeadIds.map(userId => ({ matterId: matter.id, userId, role: "CO_LEAD" as const })),
+      ...data.assistantIds.map(userId => ({ matterId: matter.id, userId, role: "ASSISTANT" as const }))
     ];
-    await tx.matterMember.createMany({ data: rows, skipDuplicates: true });
-  });
-
-  await audit({
-    userId: session.user.id,
-    action: "MATTER_TEAM_UPDATE",
-    targetType: "Matter",
-    targetId: input.matterId,
-    detail: { ownerId: input.ownerId, coLeads: co.length, assistants: ass.length }
-  });
-
-  // v0.43 项4：写入案件动态时间线
-  await roleMutation(session.user, "matters.write", async roleDb => recordTimelineEvent(roleDb, {
-      matterId: input.matterId,
-      eventType: "TEAM_CHANGED",
-      title: "更新办案团队",
-      occurredAt: new Date(),
-      refType: "Matter",
-      refId: input.matterId
-    }));
-
-  await revalidateMatter(input.matterId);
+    await assertAssignableColleagues(rows.map(member => member.userId), matter.members.map(member => member.userId), tx);
+    const removed = matter.members.filter(member => !rows.some(next => next.userId === member.userId)).map(member => member.userId);
+    if (removed.length) {
+      const affectedPeople = { OR: [{ assigneeId: { in: removed } }, { proposedAssigneeId: { in: removed } }] };
+      const [work, urgent, procedures] = await Promise.all([
+        tx.workResponsibility.count({ where: { state: "OPEN", AND: [affectedPeople, { OR: [
+          { task: { matterId: matter.id } }, { deadline: { procedure: { matterId: matter.id } } }, { hearing: { procedure: { matterId: matter.id } } }
+        ] }] } }),
+        tx.intakeUrgentItem.count({ where: { matterId: matter.id, state: "OPEN", ...affectedPeople } }),
+        tx.matterProcedure.count({ where: { matterId: matter.id, status: { not: "CONCLUDED" }, leadLawyerId: { in: removed } } })
+      ]);
+      if (work || urgent) throw new ActionError("拟移除成员仍有未完成或待接收事项，请先逐项交接");
+      if (procedures) throw new ActionError("拟移除成员仍负责未结程序，请先完成程序责任交接");
+      await tx.matterMember.deleteMany({ where: { matterId: matter.id, userId: { in: removed } } });
+    }
+    for (const member of rows) {
+      const existing = matter.members.find(current => current.userId === member.userId);
+      if (!existing) await tx.matterMember.create({ data: member });
+      else if (existing.role !== member.role) await tx.matterMember.update({ where: { matterId_userId: { matterId: matter.id, userId: member.userId } }, data: { role: member.role } });
+    }
+    await recordTimelineEvent(tx, { matterId: matter.id, eventType: "TEAM_CHANGED", title: "更新办案团队", occurredAt: new Date(), refType: "Matter", refId: matter.id });
+    await auditTx(tx, { userId: session.user.id, action: "MATTER_TEAM_UPDATE", targetType: "Matter", targetId: matter.id,
+      detail: { ownerId: matter.ownerId, coLeads: data.coLeadIds.length, assistants: data.assistantIds.length } });
+  }, { isolationLevel: "Serializable", timeout: 20000 });
+  await revalidateMatter(data.matterId);
   return { ok: true };
 }
 
-// v0.27: 编辑案件基本信息（收案日期 readonly，状态走 lifecycle）
-export async function updateMatterBasicInfo(input: MatterUpdateBasicInput) {
+/** 案件基本信息独立保存；收案日期和状态不由此入口改变。 */
+export async function updateMatterBasicInfo(input: MatterBasicEditInput) {
   const session = await requireSession("matters.write");
-  const data = matterUpdateBasicSchema.parse(input);
-
-  const matter = await prisma.matter.findUnique({
-    where: { id: data.id, deletedAt: null },
-    select: {
-      id: true,
-      ownerId: true,
-      title: true,
-      category: true,
-      teamAccessRestricted: true
-    }
-  });
-  if (!matter) throw new ActionError("案件不存在");
-  await assertMatterWritable(data.id);
-  await assertCanLeadMatter(session.user.id, data.id, "只有案件主办/协办可以编辑案件基本信息");
-  await assertCauseAllowedForMatter(data.id, data.causeId);
-
-  await roleMutation(session.user, "matters.write", async roleDb => roleDb.matter.update({
-    where: { id: data.id },
-    data: {
-      title: data.title,
-      causeId: data.causeId ? data.causeId : null,
-      causeFreeText: data.causeFreeText ? data.causeFreeText : null,
-      claimAmount:
-        data.claimAmount === null || data.claimAmount === undefined
-          ? null
-          : new Prisma.Decimal(data.claimAmount),
-      ourStanding: data.ourStanding ?? null,
-      ...(data.teamAccessRestricted !== undefined
-        ? { teamAccessRestricted: data.teamAccessRestricted }
-        : {})
-    }
-  }));
-
-  await audit({
-    userId: session.user.id,
-    action: "MATTER_BASIC_UPDATE",
-    targetType: "Matter",
-    targetId: data.id,
-    detail: {
-      titleBefore: matter.title,
-      titleAfter: data.title,
-      ...(data.teamAccessRestricted !== undefined &&
-      data.teamAccessRestricted !== matter.teamAccessRestricted
-        ? { teamAccessRestricted: data.teamAccessRestricted }
-        : {})
-    }
-  });
-
+  const data = matterBasicEditSchema.parse(input);
+  await prisma.$transaction(async tx => {
+    await currentActor(tx, session.user.id, "matters.write");
+    const matter = await tx.matter.findFirst({
+      where: { id: data.id, deletedAt: null, OR: [{ ownerId: session.user.id }, { members: { some: { userId: session.user.id, role: { in: ["LEAD", "CO_LEAD"] } } } }] },
+      select: { id: true, title: true, status: true, updatedAt: true, teamAccessRestricted: true }
+    });
+    if (!matter) throw new ActionError("只有案件主办/协办可以编辑案件基本信息");
+    await tx.$queryRaw`SELECT id FROM "Matter" WHERE id=${matter.id} FOR UPDATE`;
+    if (matter.status === "ARCHIVED") throw new ActionError("案件已归档，禁止修改");
+    if (matter.updatedAt.getTime() !== data.expectedUpdatedAt.getTime()) throw new ActionError("案件信息已变化，请保留输入并重新核对");
+    await assertCauseAllowedForMatter(data.id, data.causeId, tx);
+    const updated = await tx.matter.updateMany({
+      where: { id: data.id, updatedAt: data.expectedUpdatedAt },
+      data: { title: data.title, causeId: data.causeId || null, causeFreeText: data.causeFreeText || null,
+        claimAmount: data.claimAmount == null ? null : new Prisma.Decimal(data.claimAmount), ourStanding: data.ourStanding ?? null,
+        ...(data.teamAccessRestricted !== undefined ? { teamAccessRestricted: data.teamAccessRestricted } : {}) }
+    });
+    if (updated.count !== 1) throw new ActionError("案件信息已变化，请保留输入并重新核对");
+    await auditTx(tx, { userId: session.user.id, action: "MATTER_BASIC_UPDATE", targetType: "Matter", targetId: data.id,
+      detail: { titleBefore: matter.title, titleAfter: data.title,
+        ...(data.teamAccessRestricted !== undefined && data.teamAccessRestricted !== matter.teamAccessRestricted ? { teamAccessRestricted: data.teamAccessRestricted } : {}) } });
+  }, { isolationLevel: "Serializable", timeout: 20000 });
   await revalidateMatter(data.id);
   return { ok: true };
 }

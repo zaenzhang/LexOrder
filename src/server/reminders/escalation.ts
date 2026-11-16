@@ -165,7 +165,7 @@ export async function escalateOverdueDeadlineToTeamLeaders(
     targetId: params.deadlineId,
     title: `【升级】逾期 ${params.offset} 天：${params.deadlineTitle}`,
     content: `案件 ${params.internalCode}·${params.matterTitle} 的期限已逾期 ${params.offset} 天仍未完成，请关注督办。`,
-    href: matterHref({ id: params.matterId, internalCode: params.internalCode }),
+    href: matterHref(params),
     offset: params.offset,
     todayStart: params.todayStart
   });
@@ -200,7 +200,7 @@ export async function escalateOverduePreservationToTeamLeaders(params: {
     title: `【升级】保全已过期 ${params.daysOverdue} 天未续封：${params.targetName} · ${params.propertyLabel}`,
     content: `${matterText} 的保全已过期 ${params.daysOverdue} 天仍未办理续封，查封、扣押、冻结的效力已消灭（查扣冻规定第二十七条），请关注督办。`,
     href: params.matterId && params.internalCode
-      ? matterHref({ id: params.matterId, internalCode: params.internalCode })
+      ? matterHref({ internalCode: params.internalCode })
       : "/preservation",
     offset: params.daysOverdue,
     todayStart: params.todayStart

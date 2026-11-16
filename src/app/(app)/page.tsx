@@ -51,7 +51,7 @@ export default async function DashboardPage() {
   const lunar = lunarDateLabel(now);
 
   const focus = scheduleItems.find((s) => s.type === "deadline") ?? scheduleItems[0] ?? null;
-  const focusHref = focus?.matterId ? matterHref({ id: focus.matterId, internalCode: focus.matterCode }) : "/schedule";
+  const focusHref = focus?.matterId ? matterHref({ internalCode: focus.matterCode }) : "/schedule";
   const urgentApprovals = queue.approvals.filter((a) => a.waitDays >= 2).length;
   const todoCount = hero.todayDeadlineCount + queue.tasks.filter((t) => t.overdue).length;
 
@@ -209,7 +209,7 @@ export default async function DashboardPage() {
                         </>
                       );
                       return it.matterId ? (
-                        <Link key={it.id} href={matterHref({ id: it.matterId, internalCode: it.matterCode })} className="sched-item no-underline">{body}</Link>
+                        <Link key={it.id} href={matterHref({ internalCode: it.matterCode })} className="sched-item no-underline">{body}</Link>
                       ) : (
                         <div key={it.id} className="sched-item">{body}</div>
                       );

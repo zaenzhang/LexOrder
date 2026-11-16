@@ -1,5 +1,5 @@
 "use server";
-import type { ProcedureStatus } from "@prisma/client";
+import type { Prisma, ProcedureStatus } from "@prisma/client";
 import {assertMatterReviewCurrent} from "@/server/conflicts/matter-review";
 import {assertProcedureCovered} from "@/server/finance/ledger-contracts";
 import { approvalTransaction } from "@/lib/approvals/service";
@@ -9,9 +9,10 @@ import { roleMutation, checkRoleMutation } from "@/lib/roles/service";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/session";
 import { refreshScheduleReminderAfterSave, retireScheduleReminders } from "@/server/reminders/schedule";
-import { audit } from "@/server/audit";
+import { audit, auditTx } from "@/server/audit";
+import { currentActor } from "@/server/intakes/workflow";
 import { assertMatterWritable } from "@/lib/archive/guard";
-import { assertCanHandleMatter, assertCanLeadMatter } from "@/lib/permissions";
+import { assertCanHandleMatter, matterAssociationFilter } from "@/lib/permissions";
 import { assertAgencyAllowedForProcedure, normalizeJurisdictionForAgency } from "@/lib/china-regions";
 import {
   defaultStageNamesForProcedure,
@@ -158,28 +159,52 @@ export async function updateProcedure(input: ProcedureUpdateInput) {
 }
 
 export async function deleteProcedure(id: string) {
-  // 级联删除期限/开庭会撞 WorkResponsibility 的 Restrict 外键（英文 P2003），先按同族入口拦截
-  if (await responsibilityReady(prisma) && await prisma.deadline.count({ where: { procedureId: id } }) + await prisma.hearing.count({ where: { procedureId: id } }) > 0) {
-    throw new ActionError("该程序含期限/开庭事项，请先在事项责任面板逐项取消后再删除程序");
-  }
   const session = await requireSession("schedule.write");
-  const procedure = await prisma.matterProcedure.findUnique({ where: { id } });
-  if (!procedure) return { ok: false };
+  const matterId = await prisma.$transaction(async tx => {
+    await currentActor(tx, session.user.id, "schedule.write");
+    const procedure = await tx.matterProcedure.findFirst({
+      where: {
+        id,
+        matter: {
+          deletedAt: null,
+          OR: [
+            { ownerId: session.user.id },
+            { members: { some: { userId: session.user.id, role: { in: ["LEAD", "CO_LEAD"] } } } }
+          ]
+        }
+      },
+      include: { matter: { select: { status: true } } }
+    });
+    if (!procedure) throw new ActionError("程序不存在或无权删除");
+    await tx.$queryRaw`SELECT id FROM "Matter" WHERE id=${procedure.matterId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM "MatterProcedure" WHERE id=${id} FOR UPDATE`;
+    if (procedure.matter.status === "ARCHIVED") throw new ActionError("案件已归档，禁止修改");
 
-  await assertCanHandleMatter(session.user, procedure.matterId);
-  await assertMatterWritable(procedure.matterId);
-  await assertCanLeadMatter(session.user.id, procedure.matterId, "仅案件主办/协办可以删除程序");
-
-  await roleMutation(session.user, "schedule.write", async roleDb => roleDb.matterProcedure.delete({ where: { id } }));
-  await audit({
-    userId: session.user.id,
-    action: "PROCEDURE_DELETE",
-    targetType: "MatterProcedure",
-    targetId: id,
-    detail: { matterId: procedure.matterId }
-  });
-
-  await revalidateMatter(procedure.matterId);
+    // 不按完成、取消、隐藏或软删除状态过滤：这些记录仍是程序历史。
+    const [dependencies, audits, events] = await Promise.all([
+      tx.matterProcedure.findUniqueOrThrow({
+        where: { id },
+        select: { _count: { select: { stages: true, deadlines: true, hearings: true, documents: true, procedureParties: true, memos: true, billingScopes: true } } }
+      }),
+      tx.auditLog.count({
+        where: {
+          action: { not: "PROCEDURE_CREATE" },
+          OR: [
+            { targetType: "MatterProcedure", targetId: id },
+            { detail: { path: ["procedureId"], equals: id } }
+          ]
+        }
+      }),
+      tx.timelineEvent.count({ where: { matterId: procedure.matterId, refType: "MatterProcedure", refId: id, eventType: { not: "PROCEDURE_ADDED" } } })
+    ]);
+    if (Object.values(dependencies._count).some(count => count > 0) || audits || events || procedure.concludedAt || procedure.outcome || procedure.outcomeNote) {
+      throw new ActionError("该程序已有业务记录，不能删除；已取消的期限、开庭和历史记录也需保留");
+    }
+    await tx.matterProcedure.delete({ where: { id } });
+    await auditTx(tx, { userId: session.user.id, action: "PROCEDURE_DELETE", targetType: "MatterProcedure", targetId: id, detail: { matterId: procedure.matterId } });
+    return procedure.matterId;
+  }, { isolationLevel: "Serializable", timeout: 20000 });
+  await revalidateMatter(matterId);
   return { ok: true };
 }
 
@@ -681,56 +706,61 @@ export async function addProcedureMemo(input: {
   const content = input.content.trim();
   if (!content) throw new ActionError("备忘内容不能为空");
   if (content.length > 1000) throw new ActionError("备忘内容过长（≤1000字）");
+  const result = await prisma.$transaction(async tx => {
+    await currentActor(tx, session.user.id, "schedule.write");
+    const procedure = await tx.matterProcedure.findFirst({
+      where: { id: input.procedureId, matter: { deletedAt: null, ...matterAssociationFilter(session.user.id) } },
+      select: { id: true, matterId: true, matter: { select: { status: true } } }
+    });
+    if (!procedure) throw new ActionError("程序不存在或无权修改");
+    await tx.$queryRaw`SELECT id FROM "Matter" WHERE id=${procedure.matterId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM "MatterProcedure" WHERE id=${procedure.id} FOR UPDATE`;
+    if (procedure.matter.status === "ARCHIVED") throw new ActionError("案件已归档，禁止修改");
+    const memo = await tx.procedureMemo.create({ data: { procedureId: procedure.id, content, createdById: session.user.id } });
+    await auditTx(tx, { userId: session.user.id, action: "PROCEDURE_MEMO_CREATE", targetType: "ProcedureMemo", targetId: memo.id,
+      detail: { matterId: procedure.matterId, procedureId: procedure.id } });
+    return { id: memo.id, matterId: procedure.matterId };
+  }, { isolationLevel: "Serializable", timeout: 20000 });
+  await revalidateMatter(result.matterId);
+  return { ok: true, id: result.id };
+}
 
-  const proc = await prisma.matterProcedure.findUnique({
-    where: { id: input.procedureId },
-    select: { matterId: true }
+async function editableMemo(tx: Prisma.TransactionClient, userId: string, id: string) {
+  await currentActor(tx, userId, "schedule.write");
+  const memo = await tx.procedureMemo.findFirst({
+    where: { id, procedure: { matter: { deletedAt: null, ...matterAssociationFilter(userId) } } },
+    include: { procedure: { select: { matterId: true, matter: { select: { status: true } } } } }
   });
-  if (!proc) throw new ActionError("程序不存在");
-  await assertCanHandleMatter(session.user, proc.matterId);
-  await assertMatterWritable(proc.matterId);
-
-  const created = await roleMutation(session.user, "schedule.write", async roleDb => roleDb.procedureMemo.create({
-    data: {
-      procedureId: input.procedureId,
-      content,
-      createdById: session.user.id
-    }
-  }));
-  await revalidateMatter(proc.matterId);
-  return { ok: true, id: created.id };
+  if (!memo) throw new ActionError("备忘不存在或无权修改");
+  await tx.$queryRaw`SELECT id FROM "Matter" WHERE id=${memo.procedure.matterId} FOR UPDATE`;
+  await tx.$queryRaw`SELECT id FROM "MatterProcedure" WHERE id=${memo.procedureId} FOR UPDATE`;
+  if (memo.procedure.matter.status === "ARCHIVED") throw new ActionError("案件已归档，禁止修改");
+  return memo;
 }
 
 export async function toggleProcedureMemo(id: string) {
   const session = await requireSession("schedule.write");
-  const current = await prisma.procedureMemo.findUnique({
-    where: { id },
-    include: { procedure: { select: { matterId: true } } }
-  });
-  if (!current) return { ok: false };
-  await assertCanHandleMatter(session.user, current.procedure.matterId);
-  await assertMatterWritable(current.procedure.matterId);
-
-  const next = !current.done;
-  await roleMutation(session.user, "schedule.write", async roleDb => roleDb.procedureMemo.update({
-    where: { id },
-    data: { done: next, doneAt: next ? new Date() : null }
-  }));
-  await revalidateMatter(current.procedure.matterId);
+  const matterId = await prisma.$transaction(async tx => {
+    const memo = await editableMemo(tx, session.user.id, id);
+    const next = !memo.done;
+    await tx.procedureMemo.update({ where: { id }, data: { done: next, doneAt: next ? new Date() : null } });
+    await auditTx(tx, { userId: session.user.id, action: next ? "PROCEDURE_MEMO_COMPLETE" : "PROCEDURE_MEMO_REOPEN", targetType: "ProcedureMemo", targetId: id,
+      detail: { matterId: memo.procedure.matterId, procedureId: memo.procedureId } });
+    return memo.procedure.matterId;
+  }, { isolationLevel: "Serializable", timeout: 20000 });
+  await revalidateMatter(matterId);
   return { ok: true };
 }
 
 export async function deleteProcedureMemo(id: string) {
   const session = await requireSession("schedule.write");
-  const current = await prisma.procedureMemo.findUnique({
-    where: { id },
-    include: { procedure: { select: { matterId: true } } }
-  });
-  if (!current) return { ok: false };
-  await assertCanHandleMatter(session.user, current.procedure.matterId);
-  await assertMatterWritable(current.procedure.matterId);
-
-  await roleMutation(session.user, "schedule.write", async roleDb => roleDb.procedureMemo.delete({ where: { id } }));
-  await revalidateMatter(current.procedure.matterId);
+  const matterId = await prisma.$transaction(async tx => {
+    const memo = await editableMemo(tx, session.user.id, id);
+    await tx.procedureMemo.delete({ where: { id } });
+    await auditTx(tx, { userId: session.user.id, action: "PROCEDURE_MEMO_DELETE", targetType: "ProcedureMemo", targetId: id,
+      detail: { matterId: memo.procedure.matterId, procedureId: memo.procedureId } });
+    return memo.procedure.matterId;
+  }, { isolationLevel: "Serializable", timeout: 20000 });
+  await revalidateMatter(matterId);
   return { ok: true };
 }

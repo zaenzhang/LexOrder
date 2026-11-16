@@ -1,4 +1,4 @@
-import type { MatterCategory, ProcedureType } from "@prisma/client";
+import type { MatterCategory, ProcedureType, Prisma } from "@prisma/client";
 import {
   causeScopeForSelection,
   isCauseAllowedForSelection,
@@ -16,8 +16,8 @@ import { ActionError } from "@/lib/action-error";
  *
  * 所有「改案件案由」的入口都应走这里，不要各自去查程序类型。
  */
-export async function assertCauseAllowedForMatter(matterId: string, causeId?: string | null) {
-  const matter = await prisma.matter.findUnique({
+export async function assertCauseAllowedForMatter(matterId: string, causeId?: string | null, db: Prisma.TransactionClient = prisma) {
+  const matter = await db.matter.findUnique({
     where: { id: matterId },
     select: {
       category: true,
@@ -35,17 +35,17 @@ export async function assertCauseAllowedForMatter(matterId: string, causeId?: st
     causeId,
     category: matter.category,
     procedureType: matter.procedures[0]?.type
-  });
+  }, db);
 }
 
 export async function assertCauseAllowedForSelection(input: {
   causeId?: string | null;
   category: MatterCategory;
   procedureType?: ProcedureType | null;
-}) {
+}, db: Prisma.TransactionClient = prisma) {
   if (!input.causeId) return;
 
-  const cause = await prisma.causeOfAction.findUnique({
+  const cause = await db.causeOfAction.findUnique({
     where: { id: input.causeId },
     select: { id: true, name: true, category: true, code: true, active: true }
   });

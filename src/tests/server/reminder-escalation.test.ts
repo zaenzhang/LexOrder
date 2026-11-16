@@ -25,7 +25,6 @@ const { db, notify, auditMock } = vi.hoisted(() => {
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 vi.mock("@/server/audit", () => ({ audit: auditMock }));
 vi.mock("@/server/notifications/create", () => ({ createNotification: notify }));
-vi.mock("@/lib/matters/route", () => ({ matterHref: (m: { id: string }) => `/matters/${m.id}` }));
 
 import { escalateOverdueDeadlineToTeamLeaders } from "@/server/reminders/escalation";
 

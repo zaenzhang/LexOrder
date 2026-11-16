@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 const { approve, detail, error, success, refresh } = vi.hoisted(() => ({
   approve: vi.fn(), detail: vi.fn(), error: vi.fn(), success: vi.fn(), refresh: vi.fn()
 }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push: vi.fn() }), useSearchParams: () => new URLSearchParams() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push: vi.fn(), replace: vi.fn() }), useSearchParams: () => new URLSearchParams() }));
 vi.mock("sonner", () => ({ toast: { error, success } }));
 vi.mock("@/server/approval-permissions/inbox", () => ({ getApprovalDetail: detail }));
 vi.mock("@/app/(app)/approvals/approval-create-menu", () => ({ ApprovalCreateMenu: () => null }));

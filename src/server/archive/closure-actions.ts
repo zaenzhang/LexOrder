@@ -1,10 +1,9 @@
 'use server';
 import { resolvePersonalActor } from '@/server/runtime/personal';
 import { hasPersonalCapability } from '@/lib/runtime/capabilities';
-import {z} from 'zod';import {prisma} from '@/lib/prisma';import {requireSession} from '@/lib/auth/session';import {scopeFor,hasCustomPermission} from '@/lib/roles/catalog';import {matterAssociationFilter} from '@/lib/permissions';import {approvalTransaction} from '@/lib/approvals/service';import {revalidatePath} from 'next/cache';import {closureReady,closureFacts,closureInput,saveClosureTx} from './closure';
+import {z} from 'zod';import {prisma} from '@/lib/prisma';import {requireSession} from '@/lib/auth/session';import {scopeFor,hasCustomPermission} from '@/lib/roles/catalog';import {matterAssociationFilter} from '@/lib/permissions';import {approvalTransaction} from '@/lib/approvals/service';import {revalidatePath} from 'next/cache';import {closureFacts,closureInput,saveClosureTx} from './closure';
 export async function getClosureBoard(matterId:string){
  const session=await requireSession('archive.read');
- if(!await closureReady(prisma))return null;
  const matter=await prisma.matter.findFirst({where:{id:matterId,deletedAt:null,...matterAssociationFilter(session.user.id)},select:{status:true}});if(!matter)return null;
  const facts=await closureFacts(prisma,matterId);
  const [plan]=await prisma.$queryRaw<{financeOwnerId:string|null;name:string|null;serviceCompletedAt:Date;reason:string;revision:number;fingerprint:string}[]>`SELECT p.*,u.name FROM "ArchiveClosurePlan" p LEFT JOIN "User" u ON u.id=p."financeOwnerId" WHERE p."matterId"=${matterId}`;

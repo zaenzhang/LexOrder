@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CaseSearchPanel } from "@/app/(app)/matters/[id]/_components/case-search-panel";
 import { TemplatePickerDialog } from "@/app/(app)/matters/[id]/_components/template-picker-dialog";
 import type { TemplateSummary } from "@/app/(app)/matters/[id]/_components/folder-types";
 
-const mocks = vi.hoisted(() => ({ local: vi.fn(), regulations: vi.fn(), render: vi.fn() }));
+const mocks = vi.hoisted(() => ({ local: vi.fn(), regulations: vi.fn(), render: vi.fn(), generated: vi.fn() }));
 vi.mock("@/server/yuandian/cases", () => ({ searchSimilarCases: vi.fn(), searchSimilarCasesByVector: vi.fn() }));
 vi.mock("@/server/yuandian/regulations", () => ({ searchRegulationsAction: mocks.regulations }));
 vi.mock("@/server/cncases/search", () => ({ searchLocalJudgmentsAction: mocks.local }));
@@ -19,7 +19,7 @@ const templates: TemplateSummary[] = [
 ];
 function PickerHarness() {
   const [open, setOpen] = useState(true);
-  return <><button onClick={() => setOpen(true)}>重新打开模板</button><TemplatePickerDialog open={open} onOpenChange={setOpen} matterId={matterId} matterCategory="CIVIL_COMMERCIAL" folders={[]} templates={templates} /></>;
+  return <><button onClick={() => setOpen(true)}>重新打开模板</button><TemplatePickerDialog open={open} onOpenChange={setOpen} onGenerated={mocks.generated} matterId={matterId} matterCategory="CIVIL_COMMERCIAL" folders={[]} templates={templates} /></>;
 }
 beforeEach(() => {
   vi.resetAllMocks();
@@ -50,7 +50,7 @@ describe("二开界面适配（组件交互）", () => {
     expect(await screen.findByRole("link", { name: "查看原文" })).toHaveAttribute("href", "https://source.example.invalid/law/1");
   });
   it("clears temporary execution fields when switching templates while retaining client edits", async () => {
-    vi.spyOn(window, "open").mockReturnValue(null);
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
     render(<PickerHarness />);
     fireEvent.click(screen.getByRole("button", { name: "执行验收模板" }));
     fireEvent.change(screen.getByLabelText("执行依据名称（本次文书）"), { target: { value: "旧执行依据" } });
@@ -61,8 +61,11 @@ describe("二开界面适配（组件交互）", () => {
     expect(screen.getByLabelText("执行依据名称（本次文书）")).toHaveValue("");
     expect(screen.getByLabelText("受理法院（本次文书）")).toHaveValue("");
     expect(screen.getByLabelText("委托人电话")).toHaveValue("TEST-PHONE");
-    fireEvent.click(screen.getByRole("button", { name: "生成并下载" }));
+    fireEvent.click(screen.getByRole("button", { name: "生成文书" }));
     await waitFor(() => expect(mocks.render).toHaveBeenCalledWith({ matterId, templateId: "execution", folderId: null, overrides: { "client.phone": "TEST-PHONE" } }));
+    await waitFor(() => expect(mocks.generated).toHaveBeenCalledExactlyOnceWith("fixture"));
+    expect(open).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
   it("cancels and reopens with no selected template or stale values", () => {
     render(<PickerHarness />);
@@ -70,8 +73,19 @@ describe("二开界面适配（组件交互）", () => {
     fireEvent.change(screen.getByLabelText("执行依据名称（本次文书）"), { target: { value: "旧执行依据" } });
     fireEvent.click(screen.getByRole("button", { name: "取消" }));
     fireEvent.click(screen.getByRole("button", { name: "重新打开模板" }));
-    expect(screen.getByRole("button", { name: "生成并下载" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "生成文书" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "执行验收模板" }));
     expect(screen.getByLabelText("执行依据名称（本次文书）")).toHaveValue("");
+  });
+  it("does not navigate a different case after its template dialog unmounts", async () => {
+    let finish!: (value: { missing: string[]; fileName: string; documentId: string }) => void;
+    mocks.render.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const { unmount } = render(<PickerHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "执行验收模板" }));
+    fireEvent.click(screen.getByRole("button", { name: "生成文书" }));
+    await waitFor(() => expect(mocks.render).toHaveBeenCalledOnce());
+    unmount();
+    await act(async () => { finish({ missing: [], fileName: "迟到的合成文书.docx", documentId: "late-document" }); });
+    expect(mocks.generated).not.toHaveBeenCalled();
   });
 });
