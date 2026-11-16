@@ -21,6 +21,10 @@ import type { EvidenceDocumentOption, EvidenceItemView, EvidenceRevisionView, Ev
 import { evidenceKindLabel } from "@/lib/enums";
 import { formatDate } from "@/lib/utils";
 import { actionErrorMessage } from "@/lib/action-error";
+import {
+  emptyEvidenceEventDate, evidenceDatePrecisionLabel, evidenceEventDateSchema,
+  evidenceEventDatesEqual, formatEvidenceEventDate, type EvidenceEventDate,
+} from "@/lib/evidence/event-date";
 
 type EvidenceKind = keyof typeof evidenceKindLabel;
 type Relation = keyof typeof sourceRelationLabel;
@@ -33,6 +37,7 @@ export type EvidenceItemRow = {
   createdByName: string | null; createdAt: Date | string;
   revision?: number; confirmedAt?: Date | string | null; confirmedByName?: string | null;
   sources?: EvidenceSourceView[]; restricted?: boolean; canEdit?: boolean;
+  eventDate?: EvidenceEventDate | null;
 };
 export const EVIDENCE_KIND_STYLE: Record<EvidenceKind, string> = {
   FACT: "border-[#B7D8D6] bg-[#E4F1F0] text-[#005054]",
@@ -49,6 +54,42 @@ function KindSelect({ value, onChange, id, disabled }: { value: EvidenceKind; on
     <SelectTrigger id={id}><SelectValue /></SelectTrigger>
     <SelectContent>{KIND_KEYS.map(kind => <SelectItem key={kind} value={kind}>{evidenceKindLabel[kind]}</SelectItem>)}</SelectContent>
   </Select>;
+}
+
+function EventDateFields({ value, onChange, id, disabled }: {
+  value: EvidenceEventDate; onChange: (value: EvidenceEventDate) => void; id: string; disabled?: boolean;
+}) {
+  function precision(next: EvidenceEventDate["precision"]) {
+    onChange({ ...value, precision: next, start: next === "UNKNOWN" ? null : value.start, end: next === "RANGE" ? value.end : null });
+  }
+  return <fieldset className="space-y-2" disabled={disabled}>
+    <legend className="mb-1 text-sm font-medium">发生时间</legend>
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="space-y-1.5"><Label htmlFor={id + "-precision"}>日期精度</Label>
+        <Select value={value.precision} onValueChange={next => precision(next as EvidenceEventDate["precision"])} disabled={disabled}>
+          <SelectTrigger id={id + "-precision"}><SelectValue /></SelectTrigger>
+          <SelectContent>{Object.entries(evidenceDatePrecisionLabel).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+      {value.precision !== "UNKNOWN" ? <div className="space-y-1.5"><Label htmlFor={id + "-date-start"}>{value.precision === "EXACT" ? "发生日期" : "开始日期"}</Label>
+        <Input id={id + "-date-start"} type="date" min="0001-01-01" max="9999-12-31" value={value.start ?? ""} onChange={event => onChange({ ...value, start: event.target.value || null })} />
+      </div> : null}
+      {value.precision === "RANGE" ? <div className="space-y-1.5"><Label htmlFor={id + "-date-end"}>结束日期</Label>
+        <Input id={id + "-date-end"} type="date" min="0001-01-01" max="9999-12-31" value={value.end ?? ""} onChange={event => onChange({ ...value, end: event.target.value || null })} />
+      </div> : null}
+    </div>
+    <div className="space-y-1.5"><Label htmlFor={id + "-date-text"}>原始时间表述（可选）</Label>
+      <Textarea id={id + "-date-text"} value={value.text ?? ""} onChange={event => onChange({ ...value, text: event.target.value || null })} maxLength={500} rows={2} placeholder="如：某年夏天、收到通知后的第二天" />
+    </div>
+  </fieldset>;
+}
+
+function EventDateDetails({ value }: { value?: EvidenceEventDate | null }) {
+  if (!value) return null;
+  return <div className="space-y-1 text-xs text-muted-foreground">
+    <p>发生日期：<span className="font-mono">{formatEvidenceEventDate(value)}</span></p>
+    {value.text ? <p className="whitespace-pre-wrap break-words">原始表述：{value.text}</p> : null}
+  </div>;
 }
 
 function SourceButton({ itemId, revision, source }: { itemId: string; revision?: number; source: EvidenceSourceView }) {
@@ -105,14 +146,15 @@ export function EvidencePoints({ items, showSource = false }: { items: EvidenceI
         {item.revision ? <span className="dos-ev-page">第 {item.revision} 版 · {item.confirmedAt ? "已确认" : "待确认"}</span> : item.sourcePage ? <span className="dos-ev-page">第 {item.sourcePage} 页</span> : null}
       </div>
       <p className="dos-ev-text break-words">{item.restricted ? "部分来源当前不可用，内容暂不展示。" : item.content}</p>
+      {!item.restricted ? <EventDateDetails value={item.eventDate} /> : null}
       {item.sources?.length ? <ul className="space-y-1 text-xs">{item.sources.map(source => <li key={source.id}><SourceButton itemId={item.id} revision={item.revision} source={source} /></li>)}</ul> : null}
       <div className="dos-ev-meta">
         {showSource && !item.sources?.length ? <span>{item.sourceDocumentId ? item.sourceDocumentName ?? "来源不可用（引用保留）" : "未挂来源材料"}</span> : null}
         {item.createdByName ? <span>记录人 {item.createdByName}</span> : null}
-        <span className="font-mono">{formatDate(new Date(item.createdAt))}</span>
+        <span className="font-mono">记录时间 {formatDate(new Date(item.createdAt))}</span>
       </div>
     </li>)}</ul>
-    {detail ? <EvidenceDetailDialog key={detail.item.id} initial={detail} onClose={() => setDetail(null)} /> : null}
+    {detail && items.some(item => item.id === detail.item.id && !item.restricted) ? <EvidenceDetailDialog key={detail.item.id} initial={detail} onClose={() => setDetail(null)} /> : null}
   </>;
 }
 
@@ -123,16 +165,18 @@ function EvidenceDetailDialog({ initial, onClose }: { initial: EditorData; onClo
   const [title, setTitle] = useState(initial.item.title);
   const [content, setContent] = useState(initial.item.content);
   const [kind, setKind] = useState<EvidenceKind>(initial.item.kind);
+  const [eventDate, setEventDate] = useState<EvidenceEventDate>(initial.item.eventDate ?? emptyEvidenceEventDate());
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
   const [sourceBusy, setSourceBusy] = useState(false);
   const [history, setHistory] = useState<EvidenceRevisionView[] | null>(null);
   const [nextBefore, setNextBefore] = useState<number | null>(null);
   const item = data.item;
-  const dirty = title !== item.title || content !== item.content || kind !== item.kind;
+  const dirty = title !== item.title || content !== item.content || kind !== item.kind || !evidenceEventDatesEqual(eventDate, item.eventDate ?? emptyEvidenceEventDate());
   async function reload() {
     const refreshed = await getEvidenceItem(item.id);
     setData(refreshed); setTitle(refreshed.item.title); setContent(refreshed.item.content); setKind(refreshed.item.kind);
+    setEventDate(refreshed.item.eventDate ?? emptyEvidenceEventDate());
     setHistory(null); setNextBefore(null); router.refresh();
   }
   function change(work: () => Promise<unknown>, success: string) {
@@ -148,7 +192,7 @@ function EvidenceDetailDialog({ initial, onClose }: { initial: EditorData; onClo
     onClose();
   }
   async function confirm() {
-    if (!await confirmDialog({ title: `确认第 ${item.revision} 版？`, description: "请核对内容、性质及支持和反驳来源。确认保留当前性质，后续修改将形成新修订并重新确认。", confirmText: "确认此版本" })) return;
+    if (!await confirmDialog({ title: `确认第 ${item.revision} 版？`, description: "请核对内容、性质、发生时间及支持和反驳来源。确认保留当前性质，后续修改将形成新修订并重新确认。", confirmText: "确认此版本" })) return;
     change(() => confirmEvidenceItem({ evidenceItemId: item.id, expectedRevision: item.revision, confirm: true }), "此版本已确认");
   }
   async function remove(source: EvidenceSourceView) {
@@ -164,6 +208,11 @@ function EvidenceDetailDialog({ initial, onClose }: { initial: EditorData; onClo
       } catch (failure) { setError(actionErrorMessage(failure)); }
     });
   }
+  function save() {
+    const date = evidenceEventDateSchema.safeParse(eventDate);
+    if (!date.success) { setError(date.error.issues[0].message); return; }
+    change(() => updateEvidenceItem({ evidenceItemId: item.id, expectedRevision: item.revision, title, content, kind, eventDate: date.data }), "修改已保存，待确认");
+  }
   return <Dialog open onOpenChange={open => { if (!open) void close(); }}>
     <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
       <DialogHeader><DialogTitle>证据要点</DialogTitle><DialogDescription>
@@ -175,6 +224,7 @@ function EvidenceDetailDialog({ initial, onClose }: { initial: EditorData; onClo
           <div className="space-y-1.5"><Label htmlFor={id + "-kind"}>性质</Label><KindSelect id={id + "-kind"} value={kind} onChange={setKind} disabled={!item.canEdit || pending || sourceBusy} /></div>
         </div>
         <div className="space-y-1.5"><Label htmlFor={id + "-content"}>内容</Label><Textarea id={id + "-content"} value={content} onChange={event => setContent(event.target.value)} maxLength={5000} rows={5} disabled={!item.canEdit || pending || sourceBusy} /></div>
+        <EventDateFields id={id} value={eventDate} onChange={setEventDate} disabled={!item.canEdit || pending || sourceBusy} />
       </>}
       <section className="space-y-2" aria-label="来源材料">
         <h3 className="text-sm font-medium">来源</h3>
@@ -193,6 +243,7 @@ function EvidenceDetailDialog({ initial, onClose }: { initial: EditorData; onClo
             <div className="text-xs text-muted-foreground">第 {entry.revision} 版 · {entry.confirmedAt ? `当时已由 ${entry.confirmedByName ?? "记录的确认人"} 确认` : "当时未确认"} · {formatDate(new Date(entry.createdAt))}</div>
             <p className="break-words font-medium">{entry.title}</p>
             <p className="whitespace-pre-wrap break-words">{entry.restricted ? "当前无权读取部分历史来源，内容暂不展示。" : entry.content}</p>
+            {!entry.restricted ? <EventDateDetails value={entry.eventDate} /> : null}
             {entry.sources.map(source => <div key={source.id}><SourceButton itemId={item.id} revision={entry.revision} source={source} /></div>)}
           </li>)}</ol> : <p className="text-sm text-muted-foreground">尚无历史修订</p>}
           {nextBefore ? <Button variant="ghost" size="sm" disabled={pending} onClick={() => loadHistory(true)}>更早修订</Button> : null}
@@ -202,7 +253,7 @@ function EvidenceDetailDialog({ initial, onClose }: { initial: EditorData; onClo
         <Button variant="outline" disabled={pending || sourceBusy} onClick={() => void close()}>关闭</Button>
         {item.canEdit ? <>
           <Button variant="outline" disabled={pending || sourceBusy || dirty || Boolean(item.confirmedAt)} onClick={() => void confirm()}>确认此版本</Button>
-          <Button disabled={pending || sourceBusy || !dirty || !title.trim() || !content.trim()} onClick={() => change(() => updateEvidenceItem({ evidenceItemId: item.id, expectedRevision: item.revision, title, content, kind }), "修改已保存，待确认")}>
+          <Button disabled={pending || sourceBusy || !dirty || !title.trim() || !content.trim()} onClick={save}>
             {pending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}保存修改
           </Button>
         </> : null}
@@ -295,6 +346,7 @@ function EvidenceCreateForm({ matterId, documents, defaultDocumentId, onClose, o
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<EvidenceKind>("FACT");
   const [content, setContent] = useState("");
+  const [eventDate, setEventDate] = useState<EvidenceEventDate>(emptyEvidenceEventDate);
   const [sourceDocumentId, setSourceDocumentId] = useState(defaultDocumentId ?? "none");
   const [sourcePage, setSourcePage] = useState("");
   const [relation, setRelation] = useState<Relation>("CONTEXT");
@@ -303,12 +355,14 @@ function EvidenceCreateForm({ matterId, documents, defaultDocumentId, onClose, o
     const page = sourcePage ? Number(sourcePage) : null;
     if (!title.trim() || !content.trim()) { setError("请填写标题与内容"); return; }
     if (page !== null && (!Number.isInteger(page) || page < 1 || page > 10000)) { setError("页码须为 1–10000 的整数"); return; }
+    const date = evidenceEventDateSchema.safeParse(eventDate);
+    if (!date.success) { setError(date.error.issues[0].message); return; }
     setError("");
     onBusyChange(true);
     startTransition(async () => {
       try {
         await createEvidenceItem({ matterId, title: title.trim(), content: content.trim(), kind,
-          sourceDocumentId: sourceDocumentId === "none" ? null : sourceDocumentId, sourcePage: page, sourceRelation: relation });
+          sourceDocumentId: sourceDocumentId === "none" ? null : sourceDocumentId, sourcePage: page, sourceRelation: relation, eventDate: date.data });
         toast.success("证据要点已保存，待确认"); onClose(); router.refresh();
       } catch (failure) { setError(actionErrorMessage(failure)); }
       finally { onBusyChange(false); }
@@ -321,6 +375,7 @@ function EvidenceCreateForm({ matterId, documents, defaultDocumentId, onClose, o
       <div className="space-y-1.5"><Label htmlFor={id + "-kind"}>性质</Label><KindSelect id={id + "-kind"} value={kind} onChange={setKind} disabled={pending} /></div>
     </div>
     <div className="space-y-1.5"><Label htmlFor={id + "-content"}>内容</Label><Textarea id={id + "-content"} value={content} onChange={event => setContent(event.target.value)} maxLength={5000} rows={4} disabled={pending} /></div>
+    <EventDateFields id={id} value={eventDate} onChange={setEventDate} disabled={pending} />
     <div className="space-y-1.5"><Label htmlFor={id + "-source"}>来源材料</Label>
       <Select value={sourceDocumentId} onValueChange={value => { setSourceDocumentId(value); setSourcePage(""); }} disabled={pending}>
         <SelectTrigger id={id + "-source"}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">不挂来源</SelectItem>{documents.map(document => <SelectItem key={document.id} value={document.id}>{document.name}</SelectItem>)}</SelectContent>

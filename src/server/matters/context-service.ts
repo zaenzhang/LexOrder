@@ -111,6 +111,23 @@ export async function contextViewInTransaction(tx: Prisma.TransactionClient, acc
     records: await Promise.all(rows.slice(0, 100).map(row => present(tx, access, row))), hasMore: rows.length > 100 };
 }
 
+/** Internal read projection for client history; callers obtain current contextAccess first. */
+export async function readContextRecordsForHistory(
+  tx: Prisma.TransactionClient,
+  access: ContextAccess,
+  recordIds: readonly string[],
+): Promise<ContextRecordView[]> {
+  if (recordIds.length > 200) throw new ActionError("本页记录过多，请刷新后重试");
+  if (recordIds.length === 0) return [];
+  // IDs are positions only. Matter, finance and original-source permission remain authoritative.
+  const rows = await tx.matterContextRecord.findMany({
+    where: { ...recordWhere(access), id: { in: [...new Set(recordIds)] } },
+    include: recordInclude,
+  });
+  const views = await Promise.all(rows.map(row => present(tx, access, row)));
+  return views.filter(row => row.readable);
+}
+
 export async function readMatterContext(db: PrismaClient, actor: ContextActor, matterId: string): Promise<MatterContextView> {
   return db.$transaction(async tx => contextViewInTransaction(tx, await contextAccess(tx, actor, matterId)), { timeout: 20_000 });
 }

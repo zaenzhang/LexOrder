@@ -1,6 +1,7 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EvidenceItemView } from "@/server/evidence/contracts";
+import { emptyEvidenceEventDate } from "@/lib/evidence/event-date";
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(), update: vi.fn(), confirm: vi.fn(), history: vi.fn(), resolve: vi.fn(), add: vi.fn(), remove: vi.fn(), create: vi.fn(),
@@ -16,7 +17,8 @@ vi.mock("@/server/evidence/actions", () => ({
 }));
 vi.mock("@/server/documents/processing-actions", () => ({ listMaterialSources: mocks.positions }));
 
-import { EvidencePoints } from "@/app/(app)/matters/[id]/_components/evidence-panel";
+import { EvidenceItemDialog, EvidencePoints } from "@/app/(app)/matters/[id]/_components/evidence-panel";
+import { EvidenceTimeline } from "@/app/(app)/matters/[id]/_components/evidence-timeline";
 
 const date = new Date("2026-11-16T08:00:00Z");
 let item: EvidenceItemView;
@@ -27,12 +29,64 @@ beforeEach(() => {
     sourceDocumentId: null, sourceDocumentName: null, sourcePage: null, revision: 1, updatedAt: date,
     confirmedAt: date, confirmedByName: "合成确认人", createdById: "clawyer0000000000000000001", createdByName: "合成记录人", createdAt: date,
     restricted: false, canEdit: true,
+    eventDate: emptyEvidenceEventDate(),
     sources: [{ id: "csource00000000000000000001", relation: "SUPPORTS", legacy: false, status: "AVAILABLE", documentId: "cdocume000000000000000000001", documentName: "合成合同.pdf", documentVersion: 1, locationLabel: "第 2 页", hasAnchor: false },
       { id: "csource00000000000000000002", relation: "REBUTS", legacy: false, status: "AVAILABLE", documentId: "cdocume000000000000000000002", documentName: "合成反向材料.pdf", documentVersion: 1, locationLabel: "第 1 页", hasAnchor: true }],
   };
   mocks.get.mockImplementation(async () => ({ item: structuredClone(item), documents: [] }));
   mocks.ask.mockResolvedValue(true);
   mocks.positions.mockResolvedValue({ items: [], nextOffset: null });
+});
+
+describe("事实日期组件增量", () => {
+  it("只改发生日期可保存，历史日期保持原值，记录时间另行标注", async () => {
+    item.eventDate = { precision: "EXACT", start: "2024-02-29", end: null, text: "原文：二月二十九日" };
+    const original = structuredClone(item);
+    mocks.update.mockImplementation(async input => {
+      item = { ...item, eventDate: input.eventDate, revision: 2, confirmedAt: null, confirmedByName: null };
+      return { ok: true, revision: 2 };
+    });
+    mocks.history.mockResolvedValue({ items: [{ ...original, editedByName: "合成编辑人" }], nextBeforeRevision: null });
+    render(<EvidencePoints items={[original]} />);
+    expect(screen.getByText(/记录时间/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "合成要点" }));
+    fireEvent.change(await screen.findByLabelText("发生日期"), { target: { value: "2024-03-01" } });
+    expect(screen.getByRole("button", { name: "确认此版本" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
+    await waitFor(() => expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ expectedRevision: 1, eventDate: { ...original.eventDate, start: "2024-03-01" } })));
+    await waitFor(() => expect(screen.getByRole("button", { name: "查看历史修订" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "查看历史修订" }));
+    const dialog = screen.getByRole("dialog");
+    expect(await within(dialog).findByText("2024-02-29")).toBeInTheDocument();
+    expect(screen.getByLabelText("发生日期")).toHaveValue("2024-03-01");
+  });
+
+  it("新建未知时间只保存原始表述，不根据记录日或季节补造日期", async () => {
+    mocks.create.mockResolvedValue({ ok: true, id: item.id });
+    render(<EvidenceItemDialog open onOpenChange={vi.fn()} matterId={item.matterId} documents={[]} defaultDocumentId={null} />);
+    fireEvent.change(screen.getByLabelText("标题"), { target: { value: "合成会面" } });
+    fireEvent.change(screen.getByLabelText("内容"), { target: { value: "当事人称曾会面" } });
+    fireEvent.change(screen.getByLabelText("原始时间表述（可选）"), { target: { value: "某年夏天" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存要点" }));
+    await waitFor(() => expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ eventDate: { precision: "UNKNOWN", start: null, end: null, text: "某年夏天" } })));
+  });
+
+  it("时间线按日期而非记录时间排列，未知单列且刷新后受限项不留在分组", async () => {
+    const earlier: EvidenceItemView = { ...item, id: "earlier", title: "早期事实", createdAt: new Date("2026-11-16"), eventDate: { precision: "RANGE", start: "2020-01-01", end: "2020-12-31", text: "全年期间" } };
+    const later: EvidenceItemView = { ...item, id: "later", title: "晚期主张", createdAt: new Date("2020-01-01"), kind: "CLAIM", eventDate: { precision: "EXACT", start: "2024-01-01", end: null, text: null } };
+    const unknown = { ...item, title: "时间未明的要点" };
+    const restricted = { ...earlier, id: "restricted", title: "不得展示的合成日期", restricted: true, eventDate: { ...earlier.eventDate!, text: "受限时间原文" } };
+    const view = render(<EvidenceTimeline items={[later, restricted, unknown, earlier]} />);
+    fireEvent.click(screen.getByRole("button", { name: "事实时间线" }));
+    const dated = screen.getByRole("region", { name: "已记录日期" });
+    expect(within(dated).getAllByRole("button").filter(button => ["早期事实", "晚期主张"].includes(button.textContent ?? "")).map(button => button.textContent)).toEqual(["早期事实", "晚期主张"]);
+    expect(within(dated).getByText("2020-01-01 至 2020-12-31")).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "时间未明" })).getByRole("button", { name: "时间未明的要点" })).toBeInTheDocument();
+    expect(screen.queryByText("受限时间原文")).not.toBeInTheDocument();
+    view.rerender(<EvidenceTimeline items={[{ ...earlier, restricted: true, eventDate: null }, unknown]} />);
+    expect(screen.queryByRole("region", { name: "已记录日期" })).not.toBeInTheDocument();
+    expect(screen.queryByText("全年期间")).not.toBeInTheDocument();
+  });
 });
 afterEach(cleanup);
 

@@ -3,28 +3,28 @@ import { requireSession } from "@/lib/auth/session";
 import { hasCustomPermission } from "@/lib/roles/catalog";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Folder, Users, CreditCard, UserRound } from "lucide-react";
+import { ChevronLeft, Users, CreditCard, UserRound } from "lucide-react";
 import { getClientById, getClientFinanceSummary } from "@/server/clients/actions";
 import { getClientInsights } from "@/server/clients/insights";
 import { getClientRelationship } from "@/server/clients/relationship-actions";
 import { editableClientIds } from "@/server/clients/master-access";
 import { ClientRelationshipPanel } from "./_components/client-relationship-panel";
+import { ClientMattersPanel } from "./_components/client-matters-panel";
+import { ClientHistoryPanel } from "./_components/client-history-panel";
+import { getClientHistoryPage } from "@/server/clients/history-actions";
 import { decryptIdNumber } from "@/lib/clients/id-number-crypto";
-import { clientTypeLabel, cooperationStatusLabel, genderLabel, matterCategoryLabel, matterStatusLabel } from "@/lib/enums";
-import { matterHref } from "@/lib/matters/route";
-import { avatarTone, matterSpineTone, matterStatusTone } from "@/lib/ui/moan-tones";
+import { clientTypeLabel, cooperationStatusLabel, genderLabel } from "@/lib/enums";
+import { avatarTone } from "@/lib/ui/moan-tones";
 import { FieldGrid, FieldItem, InitialAvatar } from "@/components/patterns/moan";
 import { TopbarLinkAction } from "@/components/layout/topbar-link-action";
 import { ClientEditButton } from "./_components/client-edit-button";
 import { AddContactButton, MergeBanner } from "./_components/client-detail-parts";
 
 const COOP_BADGE: Record<string, string> = { POTENTIAL: "b-slate", NEGOTIATING: "b-amber", SIGNED: "b-teal", TERMINATED: "b-bronze" };
-const ACTIVE = new Set(["PENDING_ACCEPTANCE", "IN_PROGRESS", "ON_HOLD"]);
 
 const compact = (n: number) => (n >= 1_000_000 ? `¥${(n / 1_000_000).toFixed(2)}M` : n >= 10_000 ? `¥${Math.round(n / 1000)}K` : `¥${Math.round(n).toLocaleString("zh-CN")}`);
 const yuan = (n: number) => `¥${Math.round(n).toLocaleString("zh-CN")}`;
 const ymd = (d: Date | string | null | undefined) => (d ? new Date(d).toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" }) : "—");
-const mmdd = (d: string) => new Date(d).toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit", timeZone: "Asia/Shanghai" }).replace("/", "-");
 
 export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -34,16 +34,16 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const canReadFinance = hasCustomPermission(session.user, "finance.read");
   const canWrite = (await editableClientIds(session.user, [id])).includes(id);
   const canMerge = canWrite;
-  const [finance, insights, relationship] = await Promise.all([
+  const [finance, insights, relationship, history] = await Promise.all([
     canReadFinance ? getClientFinanceSummary(id) : Promise.resolve(null),
     getClientInsights(id),
-    getClientRelationship(id)
+    getClientRelationship(id),
+    getClientHistoryPage({ clientId: id })
   ]);
 
   const isIndividual = client.type === "INDIVIDUAL";
-  const activeCount = insights.matters.filter((m) => ACTIVE.has(m.status)).length;
+  const activeCount = insights.matterPage.activeCount;
   const idNumber = decryptIdNumber(client.idNumber);
-  const visibleMatters = insights.matters.slice(0, 6);
   // 回款进度分子分母同口径：有应收时按「已核销/应收」（与案件详情 allocated/receivable 一致），
   // 无应收时退回「累计实收/合同总额」——不再把含未核销的实收直接除以应收
   const paidRate = finance
@@ -88,7 +88,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             </div>
           </div>
           <div className="ch-stats">
-            <div className="ch-stat"><div className="n">{insights.matters.length}</div><div className="l">累计案件</div></div>
+            <div className="ch-stat"><div className="n">{insights.matterPage.total}</div><div className="l">累计案件</div></div>
             <div className="ch-stat"><div className="n" style={{ color: "var(--teal-deep)" }}>{activeCount}</div><div className="l">办理中</div></div>
             <div className="ch-stat"><div className="n">{finance ? compact(finance.received) : "—"}</div><div className="l">累计实收</div></div>
             <div className="ch-stat"><div className="n" style={{ color: finance && finance.pending > 0 ? "var(--amber)" : undefined }}>{finance ? compact(finance.pending) : "—"}</div><div className="l">待回款</div></div>
@@ -105,44 +105,14 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
 
       <div className="grid grid-cols-1 items-start gap-3.5 xl:grid-cols-[minmax(0,1fr)_296px]">
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
-          <ClientRelationshipPanel clientId={client.id} view={relationship} />
-          <div className="card" style={{ overflow: "hidden" }}>
-            <div className="panel-head">
-              <div className="panel-title">
-                <Folder className="ic" strokeWidth={1.8} />
-                关联案件 <span className="badge b-white" style={{ marginLeft: 2 }}>{insights.matters.length}</span>
-              </div>
-              <Link href={`/matters?tab=all&search=${encodeURIComponent(client.name)}`} className="t-sm t-mute">按客户筛选案件列表 →</Link>
-            </div>
-            {visibleMatters.length === 0 ? (
-              <div className="empty mo-empty-compact"><div className="mo-empty-title">暂无可见的关联案件</div><div className="mo-empty-desc">案件正文按各自权限访问；无权查看的案件不在此列出。</div></div>
-            ) : (
-              visibleMatters.map((m) => (
-                <Link key={m.id} href={matterHref(m)} className="mrow mo-spine no-underline" data-spine={matterSpineTone(m.status)} style={{ color: "inherit" }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="mr-name truncate">{m.title}</div>
-                    <div className="mr-meta truncate">
-                      {[m.procedure ?? matterCategoryLabel[m.category], m.stage, m.ownerName ? `主办 ${m.ownerName}` : null, ACTIVE.has(m.status) ? m.internalCode : `${m.year}`].filter(Boolean).join(" · ")}
-                    </div>
-                  </div>
-                  <span className={`badge b-${matterStatusTone(m.status)}`}><span className="bdot" />{matterStatusLabel[m.status]}</span>
-                  <span className="mr-money">{m.contract ? compact(m.contract) : ""}</span>
-                </Link>
-              ))
-            )}
-            {insights.matters.length > visibleMatters.length ? (
-              <div className="panel-foot" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span className="t-xs t-mute">还有 {insights.matters.length - visibleMatters.length} 件 · 归档案件正文按归档权限访问</span>
-                <Link href={`/matters?tab=all&search=${encodeURIComponent(client.name)}`} className="t-sm" style={{ color: "var(--teal-deep)", fontWeight: 550 }}>查看全部 →</Link>
-              </div>
-            ) : null}
-          </div>
+          <ClientRelationshipPanel key={client.id} clientId={client.id} view={relationship} />
+          <ClientMattersPanel clientId={client.id} initial={insights.matterPage} />
 
           <div className="card" style={{ overflow: "hidden" }}>
             <div className="panel-head">
               <div className="panel-title">
                 <Users className="ic" strokeWidth={1.8} />
-                联系人 <span className="badge b-white" style={{ marginLeft: 2 }}>{client.contacts.length}</span>
+                <span id="client-contacts">联系人</span> <span className="badge b-white" style={{ marginLeft: 2 }}>{client.contacts.length}</span>
               </div>
               {canWrite ? <AddContactButton clientId={client.id} /> : null}
             </div>
@@ -213,7 +183,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           <div className="card">
             <div className="panel-head">
               <div className="panel-title" style={{ fontSize: 13 }}><UserRound className="ic" strokeWidth={1.8} />来源渠道</div>
-              <span className="t-xs t-mute">{insights.matters.length} 个案件</span>
+              <span className="t-xs t-mute">{insights.matterPage.total} 个案件</span>
             </div>
             {insights.source ? (
               <div className="src-bars">
@@ -222,30 +192,15 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                   <div className="track"><div className="fill" style={{ width: `${Math.max(6, (insights.source.sameSourceClients / Math.max(1, insights.source.totalClients)) * 100)}%`, background: "var(--teal)" }} /></div>
                   <span className="v">{insights.source.sameSourceClients} 家</span>
                 </div>
-                <div className="t-xs t-mute" style={{ marginTop: 6 }}>所内同渠道客户占比 {Math.round((insights.source.sameSourceClients / Math.max(1, insights.source.totalClients)) * 100)}%</div>
+                <div className="t-xs t-mute" style={{ marginTop: 6 }}>可见客户中同渠道占比 {Math.round((insights.source.sameSourceClients / Math.max(1, insights.source.totalClients)) * 100)}%</div>
               </div>
             ) : (
               <div className="panel-body t-xs t-mute">{canWrite ? "建档时未登记客户来源，可在「编辑资料」补充。" : "未登记客户来源"}</div>
             )}
           </div>
 
-          <div className="card">
-            <div className="panel-head"><div className="panel-title" style={{ fontSize: 13 }}>最近动态</div></div>
-            <div className="panel-body" style={{ paddingTop: 12 }}>
-              {insights.activity.length === 0 ? (
-                <div className="t-xs t-mute">暂无动态</div>
-              ) : (
-                <div className="timeline">
-                  {insights.activity.map((a) => (
-                    <div key={a.key} className={`tl-item ${a.tone}`}>
-                      <div style={{ fontSize: 12.5, fontWeight: 550 }}>{a.title}</div>
-                      <div className="t-xs t-mute" style={{ marginTop: 2 }}>{mmdd(a.at)} · {a.meta}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          <ClientHistoryPanel clientId={client.id} initial={history} />
+
         </aside>
       </div>
     </div>

@@ -4,7 +4,7 @@ import { ClientRelationshipPanel } from "@/app/(app)/clients/[id]/_components/cl
 import type { ClientRelationshipView } from "@/lib/clients/relationship";
 
 const mock = vi.hoisted(() => ({ save: vi.fn(), refresh: vi.fn() }));
-vi.mock("@/server/clients/relationship-actions", () => ({ recordClientActivity: mock.save }));
+vi.mock("@/server/clients/relationship-actions", () => ({ recordClientActivity: mock.save, getClientCommunicationPage: vi.fn(), getClientFollowUpPage: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mock.refresh }) }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
 const view: ClientRelationshipView = { canWrite: true, activityCount: 0, openCount: 1, activities: [], followUps: [{ id: "cmtestfollowup000000000001", title: "核对材料", dueAt: "2027-01-02T02:00:00Z", assigneeName: "验收律师", overdue: false, canClose: true }] };

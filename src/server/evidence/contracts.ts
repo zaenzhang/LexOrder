@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { sourceLocationSchema } from "@/lib/workbench/contracts";
+import { evidenceEventDateSchema, type EvidenceEventDate } from "@/lib/evidence/event-date";
 
 export const evidenceKindSchema = z.enum(["FACT", "CLAIM", "ANALYSIS", "ISSUE", "TODO_VERIFY"]);
 export const sourceRelationSchema = z.enum(["SUPPORTS", "REBUTS", "CONTEXT"]);
@@ -8,6 +9,8 @@ export const evidenceTextSchema = z.object({
   title: z.string().trim().min(1, "标题必填").max(200),
   content: z.string().trim().min(1, "内容必填").max(5000),
   kind: evidenceKindSchema,
+  // Omitted by old callers. Updates must preserve the current date in that case.
+  eventDate: evidenceEventDateSchema.optional(),
 });
 export const revisionInputSchema = z.object({
   evidenceItemId: z.string().cuid(),
@@ -43,12 +46,14 @@ export type EvidenceItemView = {
   revision: number; updatedAt: Date; confirmedAt: Date | null; confirmedByName: string | null;
   createdById: string; createdByName: string | null; createdAt: Date;
   sources: EvidenceSourceView[]; restricted: boolean; canEdit: boolean;
+  eventDate: EvidenceEventDate | null;
 };
 export type EvidenceDocumentOption = { id: string; name: string; version: number; pageCount: number | null; isPdf: boolean; hasIdentity: boolean };
 export type EvidenceRevisionView = {
   revision: number; title: string; content: string; kind: z.infer<typeof evidenceKindSchema>;
   createdAt: Date; editedByName: string | null; confirmedAt: Date | null; confirmedByName: string | null;
   sources: EvidenceSourceView[]; restricted: boolean;
+  eventDate: EvidenceEventDate | null;
 };
 export type EvidenceSourceResult = { status: "UNAVAILABLE" } | {
   status: "AVAILABLE"; documentName: string; documentVersion: number; locationLabel: string;

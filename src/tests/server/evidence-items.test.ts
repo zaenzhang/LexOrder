@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { emptyEvidenceEventDate, evidenceEventDateToRecord, type EvidenceEventDate } from "@/lib/evidence/event-date";
 
 const mocks = vi.hoisted(() => ({
   db: {
@@ -46,6 +47,7 @@ function fixture() {
   return {
     item: { id: ITEM, matterId: MATTER, title: "合成合同款", content: "合成记录：已支付价款。", kind: "FACT",
       sourceDocumentId: null as string | null, sourcePage: null as number | null, revision: 1, updatedAt: now,
+      ...evidenceEventDateToRecord(emptyEvidenceEventDate()),
       confirmedById: null as string | null, confirmedAt: null as Date | null, createdById: mocks.session.user.id, createdAt: now },
     documents: [
       { id: DOC, matterId: MATTER, intakeId: null, uploadedById: mocks.session.user.id, deletedAt: null as Date | null,
@@ -106,6 +108,56 @@ beforeEach(() => {
   });
   mocks.db.evidenceSourceLink.update.mockImplementation(async ({ where, data }) => {
     const source = state.sources.find(row => row.id === where.id)!; Object.assign(source, data); return { id: source.id };
+  });
+});
+
+describe("事实日期服务增量", () => {
+  const exact: EvidenceEventDate = { precision: "EXACT", start: "2024-02-29", end: null, text: "二月二十九日收到" };
+
+  it("新建明确保存日历日，旧调用保持未知，残缺对象在写入前拒绝", async () => {
+    const input = { matterId: MATTER, title: "合成来件", content: "收到合成来件", kind: "FACT" as const };
+    await createEvidenceItem({ ...input, eventDate: exact });
+    expect(mocks.db.evidenceItem.create).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining(evidenceEventDateToRecord(exact)) }));
+    await createEvidenceItem(input);
+    expect(mocks.db.evidenceItem.create).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining(evidenceEventDateToRecord(emptyEvidenceEventDate())) }));
+    await expect(createEvidenceItem({ ...input, eventDate: { precision: "EXACT", start: "2024-02-29" } } as never)).rejects.toThrow();
+    expect(mocks.db.evidenceItem.create).toHaveBeenCalledTimes(2);
+  });
+
+  it("只改日期也保留旧确认快照，旧文本更新不抹掉日期，显式未知才清除边界", async () => {
+    state.item.confirmedById = mocks.session.user.id; state.item.confirmedAt = now;
+    const text = { title: state.item.title, content: state.item.content, kind: "FACT" as const };
+    await updateEvidenceItem({ evidenceItemId: ITEM, expectedRevision: 1, ...text, eventDate: exact });
+    expect(state.item).toMatchObject({ revision: 2, confirmedAt: null, ...evidenceEventDateToRecord(exact) });
+    expect(state.revisions[0]).toMatchObject({ confirmedAt: now, ...evidenceEventDateToRecord(emptyEvidenceEventDate()) });
+    await updateEvidenceItem({ evidenceItemId: ITEM, expectedRevision: 2, ...text, title: "旧调用更正标题" });
+    expect(state.item).toMatchObject({ revision: 3, ...evidenceEventDateToRecord(exact) });
+    const unknown: EvidenceEventDate = { ...emptyEvidenceEventDate(), text: "现仅能确定为某年夏天" };
+    await updateEvidenceItem({ evidenceItemId: ITEM, expectedRevision: 3, ...text, eventDate: unknown });
+    expect(state.item).toMatchObject({ revision: 4, ...evidenceEventDateToRecord(unknown) });
+    await confirmEvidenceItem({ evidenceItemId: ITEM, expectedRevision: 4, confirm: true });
+    expect(state.item.confirmedAt).not.toBeNull();
+    expect(mocks.audit.mock.calls.every(([, data]) => !JSON.stringify(data).includes("某年夏天") && !JSON.stringify(data).includes("2024-02-29"))).toBe(true);
+  });
+
+  it("来源新增和撤销的历史快照同样保留当时发生时间", async () => {
+    Object.assign(state.item, evidenceEventDateToRecord(exact));
+    await addEvidenceSource({ evidenceItemId: ITEM, expectedRevision: 1, documentId: DOC_B, relation: "REBUTS", page: 1 });
+    await removeEvidenceSource({ evidenceItemId: ITEM, expectedRevision: 2, sourceId: SOURCE_B });
+    expect(state.revisions).toHaveLength(2);
+    for (const revision of state.revisions) expect(revision).toMatchObject(evidenceEventDateToRecord(exact));
+  });
+
+  it("撤权后当前、列表和历史的整个日期对象均为空", async () => {
+    Object.assign(state.item, evidenceEventDateToRecord(exact));
+    await updateEvidenceItem({ evidenceItemId: ITEM, expectedRevision: 1, title: "合成新版", content: "合成内容", kind: "FACT" });
+    expect((await getEvidenceItem(ITEM)).item.eventDate).toEqual(exact);
+    expect((await listEvidenceRevisions({ evidenceItemId: ITEM })).items[0].eventDate).toEqual(exact);
+    mocks.canReadDocument.mockResolvedValue(false);
+    expect((await getEvidenceItem(ITEM)).item.eventDate).toBeNull();
+    expect((await listEvidenceItems(MATTER))[0].eventDate).toBeNull();
+    expect((await listEvidenceRevisions({ evidenceItemId: ITEM })).items[0].eventDate).toBeNull();
+    expect(state.item.eventDateText).toBe(exact.text);
   });
 });
 

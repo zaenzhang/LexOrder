@@ -1688,6 +1688,12 @@ enum EvidenceKind {
   TODO_VERIFY // 待核实
 }
 
+enum EvidenceDatePrecision {
+  UNKNOWN
+  EXACT
+  RANGE
+}
+
 model EvidenceItem {
   revision Int @default(1)
   updatedAt DateTime @default(now()) @updatedAt
@@ -1702,6 +1708,10 @@ model EvidenceItem {
   title            String
   content          String // 当事人主张 / 工作人员分析文本
   kind             EvidenceKind
+  eventDatePrecision EvidenceDatePrecision @default(UNKNOWN)
+  eventDateStart     DateTime? @db.Date
+  eventDateEnd       DateTime? @db.Date
+  eventDateText      String?
   sourceDocumentId String? // 纯引用（Document.id；不设外键，材料删除后保留）
   sourcePage       Int?
   createdById      String
@@ -3147,6 +3157,10 @@ model EvidenceItemRevision {
   title String
   content String
   kind EvidenceKind
+  eventDatePrecision EvidenceDatePrecision @default(UNKNOWN)
+  eventDateStart DateTime? @db.Date
+  eventDateEnd DateTime? @db.Date
+  eventDateText String?
   editedById String
   editedBy User @relation("EvidenceRevisionEditor", fields: [editedById], references: [id], onDelete: Restrict)
   createdAt DateTime @default(now())

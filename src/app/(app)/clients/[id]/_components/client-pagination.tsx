@@ -1,0 +1,58 @@
+"use client";
+
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { actionErrorMessage } from "@/lib/action-error";
+import type { ClientPageInput } from "@/lib/clients/history";
+
+/** Stores only the current page and opaque navigation positions, never old bodies. */
+export function useClientPagination<T extends { nextCursor: string | null }>(
+  clientId: string, initial: T, read: (input: ClientPageInput) => Promise<T>
+) {
+  const scope = useMemo(() => ({ clientId, initial }), [clientId, initial]);
+  const live = useRef<{ scope: typeof scope | null; serial: number }>({ scope: null, serial: 0 });
+  type State = { scope: typeof scope; page: T | null; cursor: string | null; previous: (string | null)[]; pending: boolean; error: string };
+  const [state, setState] = useState<State>({ scope, page: initial, cursor: null, previous: [], pending: false, error: "" });
+  // A fresh server payload is authoritative immediately, before passive cleanup.
+  const current = state.scope === scope ? state : { scope, page: initial, cursor: null, previous: [], pending: false, error: "" };
+  useLayoutEffect(() => {
+    live.current = { scope, serial: live.current.serial + 1 };
+    return () => { live.current = { scope: null, serial: live.current.serial + 1 }; };
+  }, [scope]);
+
+  async function load(cursor: string | null, previous: (string | null)[]) {
+    if (live.current.scope !== scope) return;
+    const serial = ++live.current.serial;
+    setState({ scope, page: null, cursor, previous, pending: true, error: "" });
+    try {
+      const page = await read({ clientId, ...(cursor ? { cursor } : {}) });
+      if (live.current.scope === scope && serial === live.current.serial) setState({ scope, page, cursor, previous, pending: false, error: "" });
+    } catch (error) {
+      if (live.current.scope === scope && serial === live.current.serial) setState({ scope, page: null, cursor, previous, pending: false,
+        error: actionErrorMessage(error) || "加载失败，请重试" });
+    }
+  }
+  return {
+    page: current.page, pending: current.pending, error: current.error,
+    hasPrevious: current.previous.length > 0,
+    next: () => { if (!current.pending && current.page?.nextCursor) void load(current.page.nextCursor, [...current.previous, current.cursor]); },
+    previous: () => { if (!current.pending && current.previous.length) void load(current.previous.at(-1) ?? null, current.previous.slice(0, -1)); },
+    refresh: () => { void load(null, []); },
+    retry: () => { void load(current.cursor, current.previous); },
+    invalidate: () => { live.current.serial++; setState({ scope, page: null, cursor: null, previous: [], pending: true, error: "" }); }
+  };
+}
+
+type Controls = ReturnType<typeof useClientPagination<{ nextCursor: string | null }>>;
+export function ClientPagination({ controls, label }: { controls: Controls; label: string }) {
+  return <div className="mt-3 space-y-2">
+    {controls.pending ? <p className="t-xs t-mute" role="status">正在加载{label}…</p> : null}
+    {controls.error ? <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-[var(--red)]">
+      <span>{controls.error}</span><button type="button" className="btn btn-secondary btn-sm" onClick={controls.retry}>重试{label}</button>
+    </div> : null}
+    <div className="flex flex-wrap items-center gap-2">
+      <button type="button" className="btn btn-secondary btn-sm" disabled={controls.pending || !controls.hasPrevious} aria-label={`${label}上一页`} onClick={controls.previous}>上一页</button>
+      <button type="button" className="btn btn-secondary btn-sm" disabled={controls.pending || !controls.page?.nextCursor} aria-label={`${label}下一页`} onClick={controls.next}>下一页</button>
+      <button type="button" className="btn btn-ghost btn-sm" aria-label={`刷新${label}`} onClick={controls.refresh}>刷新</button>
+    </div>
+  </div>;
+}

@@ -11,6 +11,7 @@ import { checkRoleMutation } from "@/lib/roles/service";
 import { hasCustomPermission } from "@/lib/roles/catalog";
 import { ActionError } from "@/lib/action-error";
 import { revalidateMatter } from "@/server/matters/route";
+import { emptyEvidenceEventDate, evidenceEventDateFromRecord, evidenceEventDateToRecord, evidenceEventDatesEqual } from "@/lib/evidence/event-date";
 import {
   evidenceTextSchema, revisionInputSchema, sourceInputSchema, sourceRelationSchema,
   type EvidenceItemView, type EvidenceRevisionView, type SourceReference,
@@ -89,6 +90,8 @@ async function snapshotAndAdvance(tx: Prisma.TransactionClient, item: Item, user
     evidenceItemId: item.id, revision: item.revision, title: item.title, content: item.content, kind: item.kind,
     sourceSnapshot: sourceReferences(item) as Prisma.InputJsonValue,
     confirmedById: item.confirmedById, confirmedAt: item.confirmedAt, editedById: userId,
+    eventDatePrecision: item.eventDatePrecision, eventDateStart: item.eventDateStart,
+    eventDateEnd: item.eventDateEnd, eventDateText: item.eventDateText,
   } });
   const changed = await tx.evidenceItem.updateMany({
     where: { id: item.id, revision: item.revision },
@@ -110,6 +113,7 @@ export async function createEvidenceItem(input: CreateEvidenceItemInput) {
     }, tx) : null;
     const item = await tx.evidenceItem.create({ data: {
       matterId: data.matterId, title: data.title, content: data.content, kind: data.kind, createdById: session.user.id,
+      ...evidenceEventDateToRecord(data.eventDate ?? emptyEvidenceEventDate()),
       ...(source ? { sources: { create: { ...source, createdById: session.user.id } } } : {}),
     }, select: { id: true } });
     await auditTx(tx, { userId: session.user.id, action: "EVIDENCE_ITEM_CREATE", targetType: "EvidenceItem", targetId: item.id,
@@ -124,8 +128,12 @@ export async function updateEvidenceItem(input: z.infer<typeof revisionInputSche
   const data = revisionInputSchema.merge(evidenceTextSchema).parse(input);
   return changeItem(data, async (tx, item, session) => {
     await assertSourcesReadable(tx, item, session.user.id);
-    if (item.title === data.title && item.content === data.content && item.kind === data.kind) return { ok: true as const, revision: item.revision };
-    const revision = await snapshotAndAdvance(tx, item, session.user.id, { title: data.title, content: data.content, kind: data.kind });
+    const currentDate = evidenceEventDateFromRecord(item);
+    const eventDate = data.eventDate ?? currentDate;
+    if (item.title === data.title && item.content === data.content && item.kind === data.kind && evidenceEventDatesEqual(currentDate, eventDate)) return { ok: true as const, revision: item.revision };
+    const revision = await snapshotAndAdvance(tx, item, session.user.id, {
+      title: data.title, content: data.content, kind: data.kind, ...evidenceEventDateToRecord(eventDate),
+    });
     await auditTx(tx, { userId: session.user.id, action: "EVIDENCE_ITEM_EDIT", targetType: "EvidenceItem", targetId: item.id,
       detail: { matterId: item.matterId, previousRevision: item.revision, revision, confirmationCleared: Boolean(item.confirmedAt) } });
     return { ok: true as const, revision };
@@ -215,6 +223,7 @@ async function itemViews(items: Item[], session: Session, matterId: string): Pro
       sourcePage: legacy ? item.sourcePage : null, revision: item.revision, updatedAt: item.updatedAt,
       confirmedAt: item.confirmedAt, confirmedByName: item.confirmedBy?.name ?? null,
       createdById: item.createdById, createdByName: item.createdBy?.name ?? null, createdAt: item.createdAt, sources, restricted, canEdit: canEdit && !restricted,
+      eventDate: restricted ? null : evidenceEventDateFromRecord(item),
     };
   });
 }
@@ -252,7 +261,8 @@ export async function listEvidenceRevisions(input: { evidenceItemId: string; bef
     const restricted = snapshot === null || sources.some(source => source.status !== "AVAILABLE");
     return { revision: row.revision, title: restricted ? "来源不可用的历史修订" : row.title, content: restricted ? "" : row.content,
       kind: row.kind, createdAt: row.createdAt, editedByName: row.editedBy?.name ?? null,
-      confirmedAt: row.confirmedAt, confirmedByName: row.confirmedById ? names.get(row.confirmedById) ?? null : null, sources, restricted };
+      confirmedAt: row.confirmedAt, confirmedByName: row.confirmedById ? names.get(row.confirmedById) ?? null : null, sources, restricted,
+      eventDate: restricted ? null : evidenceEventDateFromRecord(row) };
   });
   return { items, nextBeforeRevision: rows.length > 20 ? page.at(-1)!.revision : null };
 }

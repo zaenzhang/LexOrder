@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { shDayKey, shTime } from "@/lib/ui/sh-time";
+import type { ClientPage } from "./history";
 
 export const clientChannelLabels = {
   PHONE: "电话", WECHAT: "微信", EMAIL: "邮件", MEETING: "面谈", COURT: "庭审", OTHER: "其他"
@@ -42,4 +43,8 @@ export type ClientRelationshipView = {
   openCount: number;
   activities: { id: string; content: string; channel: keyof typeof clientChannelLabels; occurredAt: string; authorName: string; closedTitle: string | null; closedStatus: string | null }[];
   followUps: { id: string; title: string; dueAt: string; assigneeName: string; overdue: boolean; canClose: boolean }[];
+  activityNextCursor?: string | null;
+  followUpNextCursor?: string | null;
 };
+export type ClientCommunicationPage = ClientPage<ClientRelationshipView["activities"][number]> & { total: number; canWrite: boolean };
+export type ClientFollowUpPage = ClientPage<ClientRelationshipView["followUps"][number]> & { total: number; canWrite: boolean };

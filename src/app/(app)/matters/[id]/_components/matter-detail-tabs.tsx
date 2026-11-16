@@ -35,6 +35,7 @@ import { useRouter } from "next/navigation";
 import { LifecycleActions } from "./lifecycle-actions";
 import { AddBillingSheet } from "./finance-forms";
 import { EvidenceItemDialog, type EvidenceItemRow } from "./evidence-panel";
+import { EvidenceTimeline } from "./evidence-timeline";
 import { ArchiveStatusBanner } from "./archive-status-banner";
 import { ArchiveWizardDialog } from "./archive-wizard";
 import { TeamEditorDialog } from "./team-editor-dialog";
@@ -563,6 +564,7 @@ export function MatterDetailTabs({
         onAddLedger={canAssociateThisMatter && currentProcedure ? (type) => setLedgerAdd(type) : undefined}
         materialsExtra={<>
           {evidenceError ? <p role="alert" className="text-sm text-destructive">证据要点读取失败：{evidenceError} <button type="button" className="underline" onClick={() => router.refresh()}>重新加载</button></p> : null}
+          {!evidenceError ? <EvidenceTimeline key={matter.id} items={evidenceItems} /> : null}
           {canAssociateThisMatter && allowed("documents.write") ? <PendingMaterialUploads key={matter.id} matterId={matter.id} /> : null}
           {allowed("documents.read") ? <MaterialProcessingStatus matterId={matter.id} documentIds={procDocs.map(document => document.id)} canManage={canAssociateThisMatter && !isArchived && allowed("documents.write")} /> : null}
           {reviewNode}
