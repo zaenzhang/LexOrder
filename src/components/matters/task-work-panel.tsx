@@ -25,6 +25,7 @@ type TaskWorkPanelProps = {
   matterId: string;
   canWrite?: boolean;
   createRequest?: number;
+  createStage?: { id: string; name: string } | null;
   refreshRequest?: number;
   selectedTaskId?: string | null;
   onTaskSelect?: (taskId: string | null, mode?: "push" | "replace") => void;
@@ -32,13 +33,14 @@ type TaskWorkPanelProps = {
 };
 
 /** 全案待办的 Task 入口；不从程序环节投影任务，也不生成平行任务状态。 */
-export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, refreshRequest = 0, selectedTaskId, onTaskSelect, onTaskCreated }: TaskWorkPanelProps) {
+export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, createStage = null, refreshRequest = 0, selectedTaskId, onTaskSelect, onTaskCreated }: TaskWorkPanelProps) {
   const router = useRouter();
   const [data, setData] = useState<TaskWorkflowWorkspace | null>(null);
   const [error, setError] = useState("");
   const [includeClosed, setIncludeClosed] = useState(false);
   const [reload, setReload] = useState(0);
   const [creating, setCreating] = useState(false);
+  const [creatingStage, setCreatingStage] = useState<{ id: string; name: string } | null>(null);
   const [localTaskId, setLocalTaskId] = useState<string | null>(null);
   const handledCreateRequest = useRef(0);
   const taskHeading = useRef<HTMLHeadingElement>(null);
@@ -62,9 +64,10 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, re
   useEffect(() => {
     if (createRequest > 0 && createRequest !== handledCreateRequest.current && canWrite && data?.canWrite) {
       handledCreateRequest.current = createRequest;
+      setCreatingStage(createStage);
       setCreating(true);
     }
-  }, [createRequest, canWrite, data]);
+  }, [createRequest, createStage, canWrite, data]);
 
   function selectTask(id: string | null, mode: "push" | "replace" = "push") {
     if (selectedTaskId === undefined) setLocalTaskId(id);
@@ -101,12 +104,12 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, re
           <Checkbox checked={includeClosed} onCheckedChange={value => setIncludeClosed(value === true)} />
           显示已办结和已取消
         </label>
-        {canWrite && data?.canWrite && <Button ref={createButton} size="sm" onClick={() => setCreating(true)}><Plus />新建任务</Button>}
+        {canWrite && data?.canWrite && <Button ref={createButton} size="sm" onClick={() => { setCreatingStage(null); setCreating(true); }}><Plus />新建任务</Button>}
       </div>
     </div>
     {error ? <div role="alert" className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm">
       <span>{error}</span><Button variant="outline" size="sm" onClick={() => setReload(value => value + 1)}>重试</Button>
-    </div> : !data ? <p role="status" className="py-4 text-sm text-muted-foreground">正在读取任务…</p> : data.tasks.length === 0 ? <p className="py-4 text-sm text-muted-foreground">{includeClosed ? "还没有任务。" : "没有办理中的任务。"}</p> : <div className="overflow-x-auto rounded-lg border">
+    </div> : !data ? <p role="status" className="py-4 text-sm text-muted-foreground">正在读取任务…</p> : data.tasks.length === 0 ? <p className="py-4 text-sm text-muted-foreground">{data.untrackedTasks.length ? "没有责任记录完整的任务。" : includeClosed ? "还没有任务。" : "没有办理中的任务。"}</p> : <div className="overflow-x-auto rounded-lg border">
       <table className="w-full text-left text-sm">
         <thead className="border-b bg-muted/40 text-muted-foreground"><tr>
           <th className="px-3 py-2 font-medium">任务</th>
@@ -129,12 +132,16 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, re
         </tr>)}</tbody>
       </table>
     </div>}
-    {creating && data && <CreateTaskDialog matterId={matterId} data={data} onClose={() => setCreating(false)} onCreated={taskCreated} onReturnFocus={returnCreateFocus} />}
+    {data && data.untrackedTasks.length > 0 && <div role="alert" className="rounded-lg border p-3 text-sm">
+      <p>以下既有任务缺少责任记录，暂不能在任务工作区办理；请联系管理员核实责任、截止日期和提醒。原任务字段仅供核对：</p>
+      <ul className="mt-2 list-disc pl-5">{data.untrackedTasks.map(task => <li key={task.id}>{task.title} · {task.completed ? "原记录已标完成" : "原记录未标完成"} · 截止：{task.dueAt ? formatDateTime(task.dueAt) : "未安排"} · 原负责人：{task.assigneeName ?? "未记录或不可用"}{task.procedureTitle ? ` · ${task.procedureTitle}` : ""}{task.stageName ? ` · ${task.stageName}` : ""}</li>)}</ul>
+    </div>}
+    {creating && data && <CreateTaskDialog matterId={matterId} data={data} stage={creatingStage} onClose={() => setCreating(false)} onCreated={taskCreated} onReturnFocus={returnCreateFocus} />}
     <TaskDetailDialog taskId={taskId} expectedMatterId={matterId} open={Boolean(taskId)} onOpenChange={open => { if (!open) selectTask(null); }} onTaskChangeRejected={id => selectTask(id, "replace")} onChanged={() => setReload(value => value + 1)} onReturnFocus={returnTaskFocus} />
   </section>;
 }
 
-function CreateTaskDialog({ matterId, data, onClose, onCreated, onReturnFocus }: { matterId: string; data: TaskWorkflowWorkspace; onClose: () => void; onCreated: (id: string) => void; onReturnFocus: () => void }) {
+function CreateTaskDialog({ matterId, data, stage, onClose, onCreated, onReturnFocus }: { matterId: string; data: TaskWorkflowWorkspace; stage: { id: string; name: string } | null; onClose: () => void; onCreated: (id: string) => void; onReturnFocus: () => void }) {
   const initialPerson = data.people.some(person => person.id === data.currentUserId) ? data.currentUserId : "";
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -159,7 +166,7 @@ function CreateTaskDialog({ matterId, data, onClose, onCreated, onReturnFocus }:
     setBusy(true);
     setError("");
     try {
-      const result = await createTask({ matterId, title: title.trim(), description: description.trim(), assigneeId, priority: Number(priority), dueAt: dueAt ? new Date(`${dueAt}:00+08:00`) : undefined });
+      const result = await createTask({ matterId, title: title.trim(), description: description.trim(), assigneeId, priority: Number(priority), dueAt: dueAt ? new Date(`${dueAt}:00+08:00`) : undefined, ...(stage ? { stageId: stage.id } : {}) });
       created.current = true;
       toast.success("任务已创建");
       onCreated(result.id);
@@ -172,7 +179,7 @@ function CreateTaskDialog({ matterId, data, onClose, onCreated, onReturnFocus }:
 
   return <Dialog open onOpenChange={open => { if (!open) void close(); }}>
     <FormDialogContent onCloseAutoFocus={event => { event.preventDefault(); if (!created.current) onReturnFocus(); }}>
-      <DialogHeader><DialogTitle>新建事项级任务</DialogTitle><DialogDescription>不关联程序或环节</DialogDescription></DialogHeader>
+      <DialogHeader><DialogTitle>{stage ? "新建环节任务" : "新建事项级任务"}</DialogTitle><DialogDescription>{stage ? `关联环节：${stage.name}` : "不关联程序或环节"}</DialogDescription></DialogHeader>
       <FormDialogBody>
         <form id="create-matter-task" onSubmit={submit} className="space-y-4">
           <div className="space-y-2"><Label htmlFor="task-create-title">任务名称</Label><Input id="task-create-title" autoFocus required maxLength={200} value={title} onChange={event => setTitle(event.target.value)} disabled={busy} /></div>

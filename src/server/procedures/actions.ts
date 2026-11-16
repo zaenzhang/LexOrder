@@ -12,7 +12,7 @@ import { refreshScheduleReminderAfterSave, retireScheduleReminders } from "@/ser
 import { audit, auditTx } from "@/server/audit";
 import { lockWritableMatters } from "@/server/matters/write-access";
 import { assertMatterWritable } from "@/lib/archive/guard";
-import { assertCanHandleMatter, assertCanLeadMatter } from "@/lib/permissions";
+import { assertCanHandleMatter, matterAssociationFilter } from "@/lib/permissions";
 import { assertAgencyAllowedForProcedure, normalizeJurisdictionForAgency } from "@/lib/china-regions";
 import {
   defaultStageNamesForProcedure,
@@ -149,28 +149,32 @@ export async function updateProcedure(input: ProcedureUpdateInput) {
 }
 
 export async function deleteProcedure(id: string) {
-  // 级联删除期限/开庭会撞 WorkResponsibility 的 Restrict 外键（英文 P2003），先按同族入口拦截
-  if (await responsibilityReady(prisma) && await prisma.deadline.count({ where: { procedureId: id } }) + await prisma.hearing.count({ where: { procedureId: id } }) > 0) {
-    throw new ActionError("该程序含期限/开庭事项，请先在事项责任面板逐项取消后再删除程序");
-  }
   const session = await requireSession("schedule.write");
-  const procedure = await prisma.matterProcedure.findUnique({ where: { id } });
-  if (!procedure) return { ok: false };
-
-  await assertCanHandleMatter(session.user, procedure.matterId);
-  await assertMatterWritable(procedure.matterId);
-  await assertCanLeadMatter(session.user.id, procedure.matterId, "仅案件主办/协办可以删除程序");
-
-  await roleMutation(session.user, "schedule.write", async roleDb => roleDb.matterProcedure.delete({ where: { id } }));
-  await audit({
-    userId: session.user.id,
-    action: "PROCEDURE_DELETE",
-    targetType: "MatterProcedure",
-    targetId: id,
-    detail: { matterId: procedure.matterId }
-  });
-
-  await revalidateMatter(procedure.matterId);
+  const reference = await prisma.matterProcedure.findUnique({ where: { id }, select: { matterId: true } });
+  if (!reference) return { ok: false };
+  const deleted = await approvalTransaction(async tx => {
+    await lockWritableMatters(tx, session.user, "schedule.write", [reference.matterId], true);
+    await tx.$queryRaw`SELECT id FROM "MatterProcedure" WHERE id=${id} FOR UPDATE`;
+    const procedure = await tx.matterProcedure.findFirst({ where: { id, matterId: reference.matterId },
+      include: { _count: { select: { stages: true, deadlines: true, hearings: true, documents: true, procedureParties: true, memos: true, billingScopes: true } } } });
+    if (!procedure) return false;
+    const [uploadIntents, audits, events] = await Promise.all([
+      tx.materialIngestIntent.count({ where: { matterId: reference.matterId, metadata: { path: ["document", "procedureId"], equals: id } } }),
+      tx.auditLog.count({ where: { action: { not: "PROCEDURE_CREATE" }, OR: [{ targetType: "MatterProcedure", targetId: id }, { detail: { path: ["procedureId"], equals: id } }] } }),
+      tx.timelineEvent.count({ where: { matterId: reference.matterId, refType: "MatterProcedure", refId: id, eventType: { not: "PROCEDURE_ADDED" } } })
+    ]);
+    if (Object.values(procedure._count).some(count => count > 0) || uploadIntents || audits || events ||
+        procedure.status !== "PENDING" || procedure.caseNumber || procedure.acceptedAt || procedure.concludedAt || procedure.outcome || procedure.outcomeNote ||
+        procedure.handlingAgency || procedure.jurisdiction || procedure.panel || procedure.handler || procedure.presidingJudge || procedure.presidingJudgeContact ||
+        procedure.judgeAssistant || procedure.judgeAssistantContact || procedure.ourStanding) {
+      throw new ActionError("该程序已有业务或历史记录，不能删除；已取消、隐藏及未完成上传的记录也需保留");
+    }
+    await tx.matterProcedure.delete({ where: { id } });
+    await auditTx(tx, { userId: session.user.id, action: "PROCEDURE_DELETE", targetType: "MatterProcedure", targetId: id, detail: { matterId: reference.matterId } });
+    return true;
+  }, Prisma.TransactionIsolationLevel.ReadCommitted);
+  if (!deleted) return { ok: false };
+  await revalidateMatter(reference.matterId);
   return { ok: true };
 }
 
@@ -189,13 +193,32 @@ async function materializeProcedureStage(
   });
   if (!procedure) throw new ActionError("程序不存在");
 
-  await assertCanHandleMatter(session.user, procedure.matterId);
-  await assertMatterWritable(procedure.matterId);
-
   const targetName = data.name.trim();
   const normalizedTarget = normalizeProcedureStageName(targetName);
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await approvalTransaction(async (tx) => {
     await checkRoleMutation(tx, session.user, "schedule.write");
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id=${session.user.id} FOR SHARE`;
+    const user = await tx.user.findUnique({ where: { id: session.user.id }, select: { active: true, role: true } });
+    if (!user?.active || user.role !== session.user.role) throw new ActionError("账号或岗位已变化，请刷新后重试");
+    await tx.$queryRaw`SELECT id FROM "Matter" WHERE id=${procedure.matterId} FOR UPDATE`;
+    // The existing writable-matter guard also requires principal lawyers to be associated with this matter.
+    const matter = await tx.matter.findFirst({ where: { id: procedure.matterId, deletedAt: null,
+      ...matterAssociationFilter(session.user.id) }, select: { status: true } });
+    if (!matter) throw new ActionError("案件不存在或无权处理");
+    if (matter.status === "ARCHIVED") throw new ActionError("案件已归档，禁止修改");
+    await tx.$queryRaw`SELECT id FROM "MatterProcedure" WHERE id=${data.procedureId} FOR UPDATE`;
+    const lockedProcedure = await tx.matterProcedure.findFirst({ where: { id: data.procedureId, matterId: procedure.matterId }, select: { type: true } });
+    if (!lockedProcedure) throw new ActionError("程序不存在或已变化");
+    const record = async (value: { stage: { id: string; name: string; order: number }; created: boolean; revived: boolean; materializedCount: number }) => {
+      if (value.created || value.revived) {
+        await recordTimelineEvent(tx, { matterId: procedure.matterId, eventType: "STAGE_ADDED",
+          title: value.revived ? `恢复环节：${value.stage.name}` : `新增环节：${value.stage.name}`,
+          occurredAt: new Date(), refType: "MatterStage", refId: value.stage.id });
+        await auditTx(tx, { userId: session.user.id, action: "MATTER_STAGE_CREATE", targetType: "MatterStage",
+          targetId: value.stage.id, detail: { matterId: procedure.matterId, procedureId: data.procedureId, materializedCount: value.materializedCount } });
+      }
+      return value;
+    };
     const existingStages = await tx.matterStage.findMany({
       where: { procedureId: data.procedureId },
       orderBy: { order: "asc" },
@@ -211,16 +234,16 @@ async function materializeProcedureStage(
           data: { status: "ACTIVE" },
           select: { id: true, name: true, order: true }
         });
-        return { stage: revived, created: false, revived: true, materializedCount: 0 };
+        return record({ stage: revived, created: false, revived: true, materializedCount: 0 });
       }
       if (options.allowExisting) {
-        return { stage: existing, created: false, revived: false, materializedCount: 0 };
+        return record({ stage: existing, created: false, revived: false, materializedCount: 0 });
       }
       throw new ActionError("该环节已存在");
     }
 
     if (existingStages.length === 0) {
-      const names = [...defaultStageNamesForProcedure(procedure.type)];
+      const names = [...defaultStageNamesForProcedure(lockedProcedure.type)];
       if (!names.some((name) => normalizeProcedureStageName(name) === normalizedTarget)) {
         const insertionIndex = insertionIndexForNames(names, data);
         names.splice(insertionIndex, 0, targetName);
@@ -245,7 +268,7 @@ async function materializeProcedureStage(
       }
 
       if (!targetStage) throw new ActionError("环节创建失败");
-      return { stage: targetStage, created: true, revived: false, materializedCount: names.length };
+      return record({ stage: targetStage, created: true, revived: false, materializedCount: names.length });
     }
 
     const insertOrder = nextStageOrder(existingStages, data);
@@ -263,31 +286,10 @@ async function materializeProcedureStage(
       },
       select: { id: true, name: true, order: true }
     });
-    return { stage: created, created: true, revived: false, materializedCount: 1 };
-  });
+    return record({ stage: created, created: true, revived: false, materializedCount: 1 });
+  }, Prisma.TransactionIsolationLevel.ReadCommitted);
 
   if (result.created || result.revived) {
-    await roleMutation(session.user, "schedule.write", async roleDb => recordTimelineEvent(roleDb, {
-        matterId: procedure.matterId,
-        eventType: "STAGE_ADDED",
-        title: result.revived ? `恢复环节：${result.stage.name}` : `新增环节：${result.stage.name}`,
-        occurredAt: new Date(),
-        refType: "MatterStage",
-        refId: result.stage.id
-      }));
-
-    await audit({
-      userId: session.user.id,
-      action: "MATTER_STAGE_CREATE",
-      targetType: "MatterStage",
-      targetId: result.stage.id,
-      detail: {
-        matterId: procedure.matterId,
-        procedureId: data.procedureId,
-        materializedCount: result.materializedCount
-      }
-    });
-
     await revalidateMatter(procedure.matterId);
   }
 
@@ -333,96 +335,53 @@ function nextStageOrder(
 export async function removeProcedureStage(input: ProcedureStageRemoveInput) {
   const session = await requireSession("schedule.write");
   const data = procedureStageRemoveSchema.parse(input);
+  const reference = await prisma.matterStage.findUnique({ where: { id: data.id },
+    select: { procedureId: true, procedure: { select: { matterId: true } } } });
+  if (!reference) return { ok: false };
 
-  const stage = await prisma.matterStage.findUnique({
-    where: { id: data.id },
-    include: {
-      procedure: { select: { matterId: true, type: true } },
-      _count: { select: { tasks: true } }
+  const result = await approvalTransaction(async tx => {
+    await checkRoleMutation(tx, session.user, "schedule.write");
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id=${session.user.id} FOR SHARE`;
+    const user = await tx.user.findUnique({ where: { id: session.user.id }, select: { active: true, role: true } });
+    if (!user?.active || user.role !== session.user.role) throw new ActionError("账号或岗位已变化，请刷新后重试");
+    await tx.$queryRaw`SELECT id FROM "Matter" WHERE id=${reference.procedure.matterId} FOR UPDATE`;
+    const matter = await tx.matter.findFirst({ where: { id: reference.procedure.matterId, deletedAt: null,
+      ...matterAssociationFilter(session.user.id) }, select: { status: true } });
+    if (!matter) throw new ActionError("案件不存在或无权处理");
+    if (matter.status === "ARCHIVED") throw new ActionError("案件已归档，禁止修改");
+    await tx.$queryRaw`SELECT id FROM "MatterProcedure" WHERE id=${reference.procedureId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM "MatterStage" WHERE id=${data.id} FOR UPDATE`;
+    const stage = await tx.matterStage.findFirst({ where: { id: data.id, procedureId: reference.procedureId,
+      procedure: { matterId: reference.procedure.matterId } }, include: { procedure: { select: { type: true } }, _count: { select: { tasks: true } } } });
+    if (!stage) return null;
+    if (stage.status === "HIDDEN") return { hidden: true, changed: false };
+    if (stagePresetForName(stage.procedure.type, stage.name)?.kind === "required") throw new ActionError("必备环节不能移除");
+
+    // Count historical documents and reserved uploads as well as committed work.
+    // Task and ingest writes use the same transaction lock, so a concurrent write
+    // cannot be detached by an out-of-date empty-stage decision.
+    const [documents, preservationRecords, uploadIntents] = await Promise.all([
+      tx.document.count({ where: { stageId: stage.id } }),
+      stage.name.includes("保全") ? tx.preservationCase.count({ where: { matterId: reference.procedure.matterId } }) : Promise.resolve(0),
+      tx.materialIngestIntent.count({ where: { matterId: reference.procedure.matterId, metadata: { path: ["document", "stageId"], equals: stage.id } } })
+    ]);
+    const hidden = stage._count.tasks > 0 || documents > 0 || preservationRecords > 0 || uploadIntents > 0;
+    if (hidden) await tx.matterStage.update({ where: { id: stage.id }, data: { status: "HIDDEN" } });
+    else {
+      await tx.matterStage.delete({ where: { id: stage.id } });
+      await tx.matterStage.updateMany({ where: { procedureId: stage.procedureId, order: { gt: stage.order } }, data: { order: { decrement: 1 } } });
     }
-  });
-  if (!stage) return { ok: false };
-
-  await assertCanHandleMatter(session.user, stage.procedure.matterId);
-  await assertMatterWritable(stage.procedure.matterId);
-
-  const preset = stagePresetForName(stage.procedure.type, stage.name);
-  if (preset?.kind === "required") {
-    throw new ActionError("必备环节不能移除");
-  }
-
-  // v0.48: 关联材料按 stageId 外键统计（标签仅作展示），环节改名不再影响判定
-  const linkedDocuments = await prisma.document.count({
-    where: { stageId: stage.id, deletedAt: null }
-  });
-  const preservationRecords = stage.name.includes("保全")
-    ? await prisma.preservationCase.count({ where: { matterId: stage.procedure.matterId } })
-    : 0;
-  const hasContent = stage._count.tasks > 0 || linkedDocuments > 0 || preservationRecords > 0;
-
-  if (hasContent) {
-    // 有任务/材料/专项记录：置 HIDDEN 保留数据，重新添加同名环节时可恢复
-    await prisma.$transaction(async (tx) => {
-    await checkRoleMutation(tx, session.user, "schedule.write");
-      await tx.matterStage.update({
-        where: { id: stage.id },
-        data: { status: "HIDDEN" }
-      });
-      await recordTimelineEvent(tx, {
-          matterId: stage.procedure.matterId,
-          eventType: "STAGE_REMOVED",
-          title: `隐藏环节：${stage.name}（数据保留）`,
-          occurredAt: new Date(),
-          refType: "MatterStage",
-          refId: stage.id
-        });
-    });
-
-    await audit({
-      userId: session.user.id,
-      action: "MATTER_STAGE_HIDE",
-      targetType: "MatterStage",
-      targetId: stage.id,
-      detail: {
-        matterId: stage.procedure.matterId,
-        procedureId: stage.procedureId,
-        tasks: stage._count.tasks,
-        documents: linkedDocuments,
-        preservationRecords
-      }
-    });
-
-    await revalidateMatter(stage.procedure.matterId);
-    return { ok: true, hidden: true };
-  }
-
-  await prisma.$transaction(async (tx) => {
-    await checkRoleMutation(tx, session.user, "schedule.write");
-    await tx.matterStage.delete({ where: { id: stage.id } });
-    await tx.matterStage.updateMany({
-      where: { procedureId: stage.procedureId, order: { gt: stage.order } },
-      data: { order: { decrement: 1 } }
-    });
-    await recordTimelineEvent(tx, {
-        matterId: stage.procedure.matterId,
-        eventType: "STAGE_REMOVED",
-        title: `移除环节：${stage.name}`,
-        occurredAt: new Date(),
-        refType: "MatterStage",
-        refId: stage.id
-      });
-  });
-
-  await audit({
-    userId: session.user.id,
-    action: "MATTER_STAGE_REMOVE",
-    targetType: "MatterStage",
-    targetId: stage.id,
-    detail: { matterId: stage.procedure.matterId, procedureId: stage.procedureId }
-  });
-
-  await revalidateMatter(stage.procedure.matterId);
-  return { ok: true, hidden: false };
+    await recordTimelineEvent(tx, { matterId: reference.procedure.matterId, eventType: "STAGE_REMOVED",
+      title: hidden ? `隐藏环节：${stage.name}（数据保留）` : `移除环节：${stage.name}`,
+      occurredAt: new Date(), refType: "MatterStage", refId: stage.id });
+    await auditTx(tx, { userId: session.user.id, action: hidden ? "MATTER_STAGE_HIDE" : "MATTER_STAGE_REMOVE",
+      targetType: "MatterStage", targetId: stage.id, detail: { matterId: reference.procedure.matterId,
+        procedureId: stage.procedureId, tasks: stage._count.tasks, documents, preservationRecords, uploadIntents } });
+    return { hidden, changed: true };
+  }, Prisma.TransactionIsolationLevel.ReadCommitted);
+  if (!result) return { ok: false };
+  if (result.changed) await revalidateMatter(reference.procedure.matterId);
+  return { ok: true, hidden: result.hidden };
 }
 
 // ============ Deadline ============

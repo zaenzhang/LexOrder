@@ -145,7 +145,7 @@ describe("任务必须绑定真实事项及可选环节", () => {
   it.each([createTask, updateTask])("创建及修改均拒绝其他案件的阶段", async action => {
     db.matterStage.findFirst.mockResolvedValue(null);
     await expect(action({ id: taskId, matterId: mine, title: "修改", priority: 0, stageId, revision: 0 })).rejects.toThrow("环节不存在");
-    expect(db.matterStage.findFirst).toHaveBeenCalledWith({ where: { id: stageId, procedure: { matterId: mine } }, select: { id: true } });
+    expect(db.matterStage.findFirst).toHaveBeenCalledWith({ where: { id: stageId, procedure: { matterId: mine }, status: "ACTIVE" }, select: { id: true } });
     expect(db.task.create).not.toHaveBeenCalled(); expect(db.task.update).not.toHaveBeenCalled();
   });
   it("同案阶段可以更新，写入条件包含真实案件", async () => {

@@ -16,11 +16,14 @@ vi.mock("@/lib/prisma", async () => {
   return { prisma: url ? new PrismaClient({ datasources: { db: { url } } }) : undefined };
 });
 vi.mock("@/lib/auth/session", () => ({ requireSession: vi.fn(), getSession: vi.fn() }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/storage", () => ({ storage: {
   writeFileAt: syntheticStorage.write, readFile: syntheticStorage.read, deleteFile: syntheticStorage.remove,
 } }));
 
 import { prisma as db } from "@/lib/prisma";
+import { requireSession } from "@/lib/auth/session";
+import { removeProcedureStage } from "@/server/procedures/actions";
 import { completeJob } from "@/server/cron/queue";
 import { intakeState } from "@/server/intakes/workflow";
 import { ingestMaterial, resumeMaterialIngest, withdrawMaterial, type MaterialDocumentInput } from "@/server/documents/material-ingest";
@@ -86,6 +89,75 @@ describe.skipIf(!databaseUrl)("Server 原件摄入：真实 PG 恢复与幂等�
     await db.$disconnect();
     syntheticStorage.objects.clear();
   });
+
+  it("已预留原件的环节被移除时保留环节与上传，新上传不能再绑定隐藏环节", async () => {
+    const f = await fixture();
+    vi.mocked(requireSession).mockResolvedValue({ user: { id: f.user.id, role: f.user.role, runtimeMode: "SERVER" }, expires: "2099-01-01" } as Awaited<ReturnType<typeof requireSession>>);
+    const procedure = await db.matterProcedure.create({ data: { matterId: f.matter.id, type: "FIRST_INSTANCE", order: 0 } });
+    const stage = await db.matterStage.create({ data: { procedureId: procedure.id, name: "合成可移除环节", order: 1 } });
+    const input = request(f, { ...f.document, procedureId: procedure.id, stageId: stage.id });
+    syntheticStorage.afterWrite = async () => {
+      expect(await removeProcedureStage({ id: stage.id })).toMatchObject({ ok: true, hidden: true });
+    };
+    const uploaded = await ingestMaterial(input);
+    expect(await db.document.findUniqueOrThrow({ where: { id: uploaded.id } })).toMatchObject({ procedureId: procedure.id, stageId: stage.id });
+    expect(await db.matterStage.findUniqueOrThrow({ where: { id: stage.id } })).toMatchObject({ status: "HIDDEN" });
+    syntheticStorage.afterWrite = undefined;
+    expect(await ingestMaterial(input)).toEqual(uploaded);
+    await expect(ingestMaterial(request(f, { ...f.document, procedureId: procedure.id, stageId: stage.id }))).rejects.toThrow("环节与案件不匹配或已不可用");
+  }, 30_000);
+
+  it("新材料绑定环节时必须指定真实所属程序", async () => {
+    const f = await fixture();
+    const procedure = await db.matterProcedure.create({ data: { matterId: f.matter.id, type: "FIRST_INSTANCE", order: 0 } });
+    const stage = await db.matterStage.create({ data: { procedureId: procedure.id, name: "合成环节", order: 1 } });
+    await expect(ingestMaterial(request(f, { ...f.document, stageId: stage.id }))).rejects.toThrow("必须指定所属程序");
+    expect(syntheticStorage.write).not.toHaveBeenCalled();
+  }, 30_000);
+
+  it("上传新版期间原材料移动卷宗，不会用旧归属提交新版", async () => {
+    const f = await fixture();
+    const saved = await ingestMaterial(request(f));
+    const folder = await db.documentFolder.create({ data: { matterId: f.matter.id, name: "合成新卷宗", orderIndex: 1 } });
+    const next = request(f, { ...f.document, name: "合成新版.txt" });
+    syntheticStorage.afterWrite = async () => { await db.document.update({ where: { id: saved.id }, data: { folderId: folder.id } }); };
+    await expect(ingestMaterial({ ...next, priorDocumentId: saved.id })).rejects.toThrow("原材料归属已变化");
+    expect(await db.document.findUniqueOrThrow({ where: { id: saved.id } })).toMatchObject({ isLatest: true, folderId: folder.id });
+    expect(await db.materialIngestIntent.findUniqueOrThrow({ where: { id: next.requestKey } })).toMatchObject({ state: "STORED", documentId: null });
+  }, 30_000);
+
+  it("等待授权锁期间撤销经办关系后不能预留材料上传", async () => {
+    const f = await fixture();
+    const member = await db.user.create({ data: { name: "合成待撤销成员", email: `${randomUUID()}@example.invalid`, passwordHash: "disabled-test-only", role: "LAWYER" } });
+    userIds.push(member.id);
+    await db.matterMember.create({ data: { matterId: f.matter.id, userId: member.id, role: "ASSISTANT" } });
+    let release!: () => void;
+    let ready!: () => void;
+    const locked = new Promise<void>(resolve => { ready = resolve; });
+    const proceed = new Promise<void>(resolve => { release = resolve; });
+    const removal = db.$transaction(async tx => {
+      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(72606101)`;
+      await tx.matterMember.delete({ where: { matterId_userId: { matterId: f.matter.id, userId: member.id } } });
+      ready();
+      await proceed;
+    }, { timeout: 20000 });
+    await locked;
+    const input = { ...request(f, { ...f.document, uploadedById: member.id }), userId: member.id };
+    const attempted = ingestMaterial(input).then(() => true, () => false);
+    let waiting = 0;
+    try {
+      for (let i = 0; i < 200 && waiting < 1; i++) {
+        const [row] = await db.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM pg_locks WHERE locktype='advisory' AND NOT granted AND objid=72606101`;
+        waiting = row.count;
+        if (waiting < 1) await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(waiting).toBeGreaterThanOrEqual(1);
+    } finally { release(); }
+    await removal;
+    expect(await attempted).toBe(false);
+    expect(await db.materialIngestIntent.findUnique({ where: { id: input.requestKey } })).toBeNull();
+    expect(syntheticStorage.write).not.toHaveBeenCalled();
+  }, 30_000);
 
   it("恢复先完成时迟到写回执不能重开 COMMITTED，同键重放返回原材料而异载被拒", async () => {
     const f = await fixture(), input = request(f);

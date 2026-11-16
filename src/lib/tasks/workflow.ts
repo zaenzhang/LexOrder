@@ -49,7 +49,11 @@ type TaskWorkflowAccess = {
   canWrite: boolean;
   currentUserId: string;
 };
-export type TaskWorkflowWorkspace = TaskWorkflowAccess & { tasks: TaskWorkflowItem[] };
+export type TaskWorkflowWorkspace = TaskWorkflowAccess & {
+  tasks: TaskWorkflowItem[];
+  /** Existing tasks without a responsibility record cannot use the workflow yet. */
+  untrackedTasks: { id: string; title: string; stageName: string | null; procedureTitle: string | null; dueAt: Date | null; completed: boolean; assigneeName: string | null }[];
+};
 export type TaskWorkflowDetail = TaskWorkflowAccess & { task: TaskWorkflowItem };
 
 const taskId = z.string().cuid();

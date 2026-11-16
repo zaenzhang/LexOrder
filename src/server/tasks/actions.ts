@@ -1,6 +1,6 @@
 "use server";
 
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { approvalTransaction } from "@/lib/approvals/service";
@@ -28,9 +28,10 @@ const taskUpdateSchema = taskCreateSchema.extend({ id: z.string().cuid(), revisi
 export type TaskCreateInput = z.infer<typeof taskCreateSchema>;
 export type TaskUpdateInput = z.infer<typeof taskUpdateSchema>;
 
-async function assertTaskStage(db: Prisma.TransactionClient, matterId: string, stageId?: string) {
+async function assertTaskStage(db: Prisma.TransactionClient, matterId: string, stageId?: string, allowHidden = false) {
   if (!stageId) return;
-  const stage = await db.matterStage.findFirst({ where: { id: stageId, procedure: { matterId } }, select: { id: true } });
+  await db.$queryRaw`SELECT id FROM "MatterStage" WHERE id=${stageId} FOR SHARE`;
+  const stage = await db.matterStage.findFirst({ where: { id: stageId, procedure: { matterId }, ...(allowHidden ? {} : { status: "ACTIVE" }) }, select: { id: true } });
   if (!stage) throw new ActionError("环节不存在或不属于当前事项");
 }
 
@@ -71,7 +72,7 @@ export async function createTask(input: TaskCreateInput) {
       });
     }
     return task;
-  });
+  }, Prisma.TransactionIsolationLevel.ReadCommitted);
   await refreshTasks(created.matterId);
   return { ok: true, id: created.id };
 }
@@ -90,7 +91,7 @@ export async function updateTask(input: TaskUpdateInput) {
     if (data.dueAt !== undefined && data.dueAt.getTime() !== task.dueAt?.getTime()) {
       throw new ActionError("任务安排改期请从责任操作填写新日期和原因");
     }
-    await assertTaskStage(db, task.matterId, data.stageId);
+    await assertTaskStage(db, task.matterId, data.stageId, data.stageId === task.stageId);
     await db.task.update({
       where: { id: task.id, matterId: task.matterId },
       data: {
@@ -104,7 +105,7 @@ export async function updateTask(input: TaskUpdateInput) {
       detail: { previousRevision: data.revision }
     });
     return task.matterId;
-  });
+  }, Prisma.TransactionIsolationLevel.ReadCommitted);
   await refreshTasks(matterId);
   return { ok: true };
 }

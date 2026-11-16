@@ -83,7 +83,7 @@ async function main() {
   for (const name of expectedChecks) assert(checks.some((c) => c.name === name && c.validated), name);
   const tables = [...sql.matchAll(/CREATE TABLE "([^"]+)"/g)].map((m) => m[1]);
   for (const table of tables) {
-    const found = await test.$queryRaw<{ name: string | null }[]>(Prisma.sql`SELECT to_regclass(${`public."${table}"`})::text AS name`);
+    const found: { name: string | null }[] = await test.$queryRaw(Prisma.sql`SELECT to_regclass(${`public."${table}"`})::text AS name`);
     assert(found[0].name, table);
   }
   results.push(`${tables.length} 张新表及 ${expectedChecks.length} 条 CHECK 已存在且生效`);

@@ -72,9 +72,11 @@ const taskWorkflowSelect = {
   id: true,
   matterId: true,
   stageId: true,
-  stage: { select: { name: true, procedure: { select: { type: true, customLabel: true } } } },
+  stage: { select: { name: true, procedure: { select: { matterId: true, type: true, customLabel: true } } } },
   title: true,
   description: true,
+  completed: true,
+  assigneeId: true,
   dueAt: true,
   priority: true,
   createdAt: true,
@@ -103,6 +105,7 @@ const taskWorkflowSelect = {
 function taskWorkflowItem(task: Prisma.TaskGetPayload<{ select: typeof taskWorkflowSelect }>): TaskWorkflowItem {
   const responsibility = task.responsibility;
   if (!responsibility) throw new ActionError("任务责任记录缺失");
+  if (task.stage && task.stage.procedure.matterId !== task.matterId) throw new ActionError("任务的环节归属异常，请核对记录");
   const assignee = responsibility.assignee;
   const active = assignee.active && (assignee.role !== "CUSTOM" || Boolean(assignee.roleDefinition?.active && assignee.roleDefinition.permissions.length));
   return {
@@ -149,11 +152,27 @@ export async function readTaskWorkspaceTx(
   const data = taskWorkspaceInput.parse(input);
   const { matter, canWrite } = await assertTaskMatterAccess(db, userId, data.matterId, "read");
   const tasks = await db.task.findMany({
-    where: { matterId: matter.id, ...(data.includeClosed ? {} : { responsibility: { is: { state: "OPEN" } } }) },
+    where: {
+      matterId: matter.id,
+      ...(data.includeClosed ? {} : { OR: [{ responsibility: { is: { state: "OPEN" } } }, { responsibility: null }] })
+    },
     orderBy: [{ priority: "desc" }, { dueAt: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }, { id: "asc" }],
     select: taskWorkflowSelect
   });
-  return { tasks: tasks.map(taskWorkflowItem), people: await taskPeople(db, matter), canWrite, currentUserId: userId };
+  const missingResponsibility = tasks.filter(task => task.responsibility === null);
+  const assigneeIds = [...new Set(missingResponsibility.map(task => task.assigneeId).filter((id): id is string => Boolean(id)))];
+  const assignees = assigneeIds.length ? await db.user.findMany({ where: { id: { in: assigneeIds } }, select: { id: true, name: true } }) : [];
+  const assigneeNames = new Map(assignees.map(person => [person.id, person.name]));
+  return {
+    tasks: tasks.filter(task => task.responsibility !== null).map(taskWorkflowItem),
+    untrackedTasks: missingResponsibility.map(task => {
+      const validStage = task.stage?.procedure.matterId === task.matterId;
+      return { id: task.id, title: task.title, stageName: validStage ? task.stage?.name ?? null : task.stage ? "环节归属待核实" : null,
+        procedureTitle: validStage && task.stage ? task.stage.procedure.customLabel ?? procedureTypeLabel[task.stage.procedure.type] : null,
+        dueAt: task.dueAt, completed: task.completed, assigneeName: task.assigneeId ? assigneeNames.get(task.assigneeId) ?? null : null };
+    }),
+    people: await taskPeople(db, matter), canWrite, currentUserId: userId
+  };
 }
 
 export async function readTaskWorkflowTx(db: Prisma.TransactionClient, userId: string, taskId: string, expectedMatterId?: string): Promise<TaskWorkflowDetail> {

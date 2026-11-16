@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mock = vi.hoisted(() => ({ upload: vi.fn(), refresh: vi.fn(), scroll: vi.fn(), search: "", listeners: new Set<() => void>() }));
+const mock = vi.hoisted(() => ({ upload: vi.fn(), ensureStage: vi.fn(), refresh: vi.fn(), scroll: vi.fn(), search: "", listeners: new Set<() => void>() }));
 vi.mock("next/navigation", async () => {
   const { useSyncExternalStore } = await import("react");
   return {
@@ -22,7 +22,7 @@ vi.mock("@/components/matters/task-work-panel", () => ({
     <button onClick={() => onTaskSelect("task-1")}>打开合成任务</button><button onClick={() => onTaskCreated("task-created")}>创建合成任务</button>
   </section>
 }));
-vi.mock("@/server/procedures/actions", () => ({ createProcedureStage: vi.fn(), deleteProcedureMemo: vi.fn(), ensureProcedureStage: vi.fn(), removeProcedureStage: vi.fn(), toggleDeadlineCompleted: vi.fn(), toggleProcedureMemo: vi.fn() }));
+vi.mock("@/server/procedures/actions", () => ({ createProcedureStage: vi.fn(), deleteProcedureMemo: vi.fn(), ensureProcedureStage: mock.ensureStage, removeProcedureStage: vi.fn(), toggleDeadlineCompleted: vi.fn(), toggleProcedureMemo: vi.fn() }));
 vi.mock("@/server/express/actions", () => ({ deleteExpress: vi.fn() }));
 vi.mock("@/server/preservations/actions-v2", () => ({ liftProperty: vi.fn() }));
 vi.mock("@/server/deadlines/confirm", () => ({ confirmDeadline: vi.fn() }));
@@ -96,6 +96,37 @@ afterEach(() => {
 });
 
 describe("事项工作区入口与材料范围（组件环境）", () => {
+  it("取消唯一任务不会把该环节显示为已完成", () => {
+    const cancelled = {
+      ...procedure,
+      stages: [{ ...procedure.stages[0], tasks: [{ ...procedure.stages[0].tasks[0], completed: true, responsibility: { state: "CANCELLED" as const, closedAt: date } }] }]
+    };
+    render(<Harness initialView="work" procedure={cancelled} />);
+    expect(screen.getByRole("button", { name: /合成当前环节/ })).not.toHaveAttribute("title", expect.stringContaining("已完成"));
+    expect(screen.getByRole("button", { name: /合成当前环节/ })).toHaveAttribute("title", expect.stringContaining("进行中"));
+  });
+
+  it("所选真实环节可进入任务创建，失效环节不展示材料操作", () => {
+    render(<Harness initialView="work" canWriteTasks />);
+    fireEvent.click(screen.getByRole("button", { name: "为此环节新建任务" }));
+    expect(screen.getByRole("tab", { name: "待办" })).toHaveAttribute("aria-selected", "true");
+    cleanup();
+    window.history.replaceState(null, "", "/matters/matter-1?workPane=materials&stage=invalid");
+    render(<Harness initialView="work" canManage canWriteTasks materialsActions={<button>材料工具</button>} />);
+    expect(screen.getByText("指定环节不可用。")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "材料工具" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "为此环节新建任务" })).not.toBeInTheDocument();
+  });
+
+  it("新程序的虚拟环节可显式启用并定位到真实环节", async () => {
+    mock.ensureStage.mockResolvedValue({ id: "created-stage", created: true });
+    render(<Harness initialView="work" canManage canWriteTasks procedure={{ ...procedure, stages: [] }} />);
+    fireEvent.click(screen.getByRole("button", { name: "启用此环节" }));
+    await waitFor(() => expect(mock.ensureStage).toHaveBeenCalledWith(expect.objectContaining({ procedureId: procedure.id })));
+    await waitFor(() => expect(new URLSearchParams(window.location.search).get("stage")).toBe("stage-created-stage"));
+    expect(mock.refresh).toHaveBeenCalled();
+  });
+
   it("具有案件维护资格但没有记录写入资格时，只保留获准的快递入口", async () => {
     window.history.replaceState(null, "", "/matters/matter-1?workPane=records");
     const onAddLedger = vi.fn();
@@ -112,7 +143,7 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
     expect(base.onWriteNote).not.toHaveBeenCalled();
   });
 
-  it("有记录写入资格时沟通与研判入口正常，并携带当前环节", async () => {
+  it("有记录写入资格时沟通与研判入口正常，全案记录不默认附带环节", async () => {
     window.history.replaceState(null, "", "/matters/matter-1?workPane=records");
     const onWriteNote = vi.fn();
     render(<Harness initialView="work" canManage canWriteRecords onWriteNote={onWriteNote} />);
@@ -123,7 +154,7 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
     const communication = await screen.findByRole("menuitem", { name: /^沟通/ });
     expect(screen.getByRole("menuitem", { name: /^研判/ })).toBeVisible();
     fireEvent.click(communication);
-    expect(onWriteNote).toHaveBeenCalledWith({ judgment: false, stageName: "合成当前环节" });
+    expect(onWriteNote).toHaveBeenCalledWith({ judgment: false });
   });
 
   it("普通沟通不计入环节研判数，只统计同环节的研判笔记", () => {
@@ -243,6 +274,22 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
     expect(within(dialog).getByRole("textbox")).toHaveValue("合成上传草稿");
   });
 
+  it("页头上传草稿打开后切换环节不能改写上传目标", () => {
+    const apiRef: NonNullable<Props["apiRef"]> = { current: null };
+    render(<Harness initialView="work" canManage apiRef={apiRef} />);
+    act(() => apiRef.current?.openUpload());
+    const dialog = screen.getByRole("dialog", { name: "上传材料 · 合成当前环节" });
+    fireEvent.change(within(dialog).getByLabelText("文件 *"), { target: { files: [new File(["内容"], "材料.txt", { type: "text/plain" })] } });
+    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "保留的草稿" } });
+    act(() => { window.history.replaceState(null, "", "/matters/matter-1?workPane=materials&stage=stage-stage-2"); });
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("上传目标已变化");
+    expect(within(dialog).getByRole("button", { name: "上传" })).toBeDisabled();
+    expect(within(dialog).getByRole("textbox")).toHaveValue("保留的草稿");
+    expect(mock.upload).not.toHaveBeenCalled();
+    act(() => { window.history.replaceState(null, "", "/matters/matter-1?workPane=materials&stage=stage-stage-1"); });
+    expect(within(dialog).getByRole("button", { name: "上传" })).toBeEnabled();
+  });
+
   it("真实环节材料空态保留准确归属说明", () => {
     render(<Harness initialView="work" canManage />);
     expect(materialCard().getByText("本环节暂无材料")).toBeVisible();
@@ -251,6 +298,18 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
     const dialog = screen.getByRole("dialog", { name: "上传材料 · 合成当前环节" });
     expect(within(dialog).getByText("文件将关联到当前程序，并自动归入本环节。")).toBeVisible();
     expect(mock.upload).not.toHaveBeenCalled();
+  });
+
+  it("未绑定环节的材料不因名称或标签相同被算作该环节材料", () => {
+    const unassigned: Props["documents"][number] = {
+      id: "doc-unassigned", name: "合成当前环节材料.txt", category: "PLEADING", mimeType: "text/plain", size: 10, createdAt: date,
+      sourceParty: null, tags: ["阶段:合成当前环节"], stageId: null, procedureId: "procedure-1", sourceOrigin: "SELF_COLLECTED",
+      ocrStatus: "READY", textSource: "MANUAL", pageCount: null, sha256: null, templateId: null, version: 1
+    };
+    render(<Harness initialView="work" canManage documents={[unassigned]} />);
+    expect(materialCard().getByText("本环节暂无材料")).toBeVisible();
+    expect(materialCard().queryByText("合成当前环节材料.txt")).not.toBeInTheDocument();
+    expect(screen.getByText("合成当前环节材料.txt")).toBeVisible();
   });
 
   it("已有材料但筛选无命中时说明筛选结果，不声称材料为空", () => {

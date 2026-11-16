@@ -17,7 +17,8 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import { prisma as db } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/session";
 import { approvalTransaction } from "@/lib/approvals/service";
-import { createTask } from "@/server/tasks/actions";
+import { createTask, updateTask } from "@/server/tasks/actions";
+import { deleteProcedure, ensureProcedureStage, removeProcedureStage } from "@/server/procedures/actions";
 import {
   finishTaskWaiting, getTaskWorkflow, getTaskWorkspace, rescheduleTaskWaiting,
   saveTaskDependencies, startTaskWaiting
@@ -89,6 +90,98 @@ describe.skipIf(!databaseUrl)("W11 任务推进：真实 PostgreSQL 事务、授
     await db.$disconnect();
     vi.unstubAllEnvs();
   });
+
+  it("并发启用同一程序环节只生成一套，并原子写入时间线与审计", async () => {
+    const f = await fixture();
+    const procedure = await db.matterProcedure.create({ data: { matterId: f.matter.id, type: "FIRST_INSTANCE", order: 0 } });
+    const input = { procedureId: procedure.id, name: "合成额外环节", insertPosition: "END" as const };
+    const [first, second] = await Promise.all([ensureProcedureStage(input), ensureProcedureStage(input)]);
+    expect(first.id).toBe(second.id);
+    const stages = await db.matterStage.findMany({ where: { procedureId: procedure.id } });
+    expect(new Set(stages.map(stage => stage.name)).size).toBe(stages.length);
+    expect(stages.filter(stage => stage.name === input.name)).toHaveLength(1);
+    expect(await db.auditLog.count({ where: { targetType: "MatterStage", targetId: first.id, action: "MATTER_STAGE_CREATE" } })).toBe(1);
+    expect(await db.timelineEvent.count({ where: { matterId: f.matter.id, refType: "MatterStage", refId: first.id, eventType: "STAGE_ADDED" } })).toBe(1);
+  }, 30_000);
+
+  it("并发移除环节与新建任务不会静默丢失环节归属", async () => {
+    const f = await fixture();
+    const procedure = await db.matterProcedure.create({ data: { matterId: f.matter.id, type: "FIRST_INSTANCE", order: 0 } });
+    const stage = await db.matterStage.create({ data: { procedureId: procedure.id, name: "合成可移除环节", order: 1 } });
+    const [created, removed] = await Promise.allSettled([
+      createTask({ matterId: f.matter.id, title: "合成环节任务", assigneeId: f.user.id, priority: 0, stageId: stage.id }),
+      removeProcedureStage({ id: stage.id })
+    ]);
+    expect(removed.status).toBe("fulfilled");
+    if (created.status === "fulfilled") {
+      expect(await db.task.findUniqueOrThrow({ where: { id: created.value.id } })).toMatchObject({ stageId: stage.id });
+      expect(await db.matterStage.findUniqueOrThrow({ where: { id: stage.id } })).toMatchObject({ status: "HIDDEN" });
+    } else {
+      expect(await db.task.count({ where: { matterId: f.matter.id, title: "合成环节任务" } })).toBe(0);
+    }
+  }, 30_000);
+
+  it("隐藏环节拒绝新绑定，但原任务可保留历史关联并编辑", async () => {
+    const f = await fixture();
+    const procedure = await db.matterProcedure.create({ data: { matterId: f.matter.id, type: "FIRST_INSTANCE", order: 0 } });
+    const stage = await db.matterStage.create({ data: { procedureId: procedure.id, name: "合成历史环节", order: 1 } });
+    const existing = await createTask({ matterId: f.matter.id, title: "已有任务", assigneeId: f.user.id, priority: 0, stageId: stage.id });
+    expect(await removeProcedureStage({ id: stage.id })).toMatchObject({ ok: true, hidden: true });
+    await expect(createTask({ matterId: f.matter.id, title: "不应绑定", assigneeId: f.user.id, priority: 0, stageId: stage.id })).rejects.toThrow("环节不存在");
+    const work = await responsibility(existing.id);
+    await updateTask({ id: existing.id, matterId: f.matter.id, title: "已有任务更新", priority: 0, stageId: stage.id, revision: work.revision });
+    expect(await db.task.findUniqueOrThrow({ where: { id: existing.id } })).toMatchObject({ title: "已有任务更新", stageId: stage.id });
+  }, 30_000);
+
+  it("只能删除无历史的空程序，已有环节和任务保留归属", async () => {
+    const f = await fixture();
+    const empty = await db.matterProcedure.create({ data: { matterId: f.matter.id, type: "FIRST_INSTANCE", order: 0 } });
+    expect(await deleteProcedure(empty.id)).toEqual({ ok: true });
+    const procedure = await db.matterProcedure.create({ data: { matterId: f.matter.id, type: "FIRST_INSTANCE", order: 1 } });
+    const stage = await db.matterStage.create({ data: { procedureId: procedure.id, name: "已有环节", order: 1 } });
+    const existing = await createTask({ matterId: f.matter.id, title: "已有任务", assigneeId: f.user.id, priority: 0, stageId: stage.id });
+    await expect(deleteProcedure(procedure.id)).rejects.toThrow("已有业务或历史记录");
+    expect(await db.task.findUniqueOrThrow({ where: { id: existing.id } })).toMatchObject({ stageId: stage.id });
+    expect(await db.matterStage.findUniqueOrThrow({ where: { id: stage.id } })).toMatchObject({ procedureId: procedure.id });
+  }, 30_000);
+
+  it("等待授权锁期间移除经办成员后，不得按旧快照新建任务或启用环节", async () => {
+    const f = await fixture();
+    const member = await db.user.create({ data: { name: "合成待撤销成员", email: `${randomUUID()}@example.invalid`, passwordHash: "disabled-test-only", role: "LAWYER" } });
+    userIds.push(member.id);
+    await db.matterMember.create({ data: { matterId: f.matter.id, userId: member.id, role: "ASSISTANT" } });
+    const procedure = await db.matterProcedure.create({ data: { matterId: f.matter.id, type: "FIRST_INSTANCE", order: 0 } });
+    sessionFor(member);
+    let release!: () => void;
+    let ready!: () => void;
+    const locked = new Promise<void>(resolve => { ready = resolve; });
+    const continueRemoval = new Promise<void>(resolve => { release = resolve; });
+    const removal = db.$transaction(async tx => {
+      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(72606101)`;
+      await tx.matterMember.delete({ where: { matterId_userId: { matterId: f.matter.id, userId: member.id } } });
+      ready();
+      await continueRemoval;
+    }, { timeout: 20000 });
+    await locked;
+    const attempts = [
+      createTask({ matterId: f.matter.id, title: "撤权后任务", priority: 0 }),
+      ensureProcedureStage({ procedureId: procedure.id, name: "撤权后环节", insertPosition: "END" })
+    ].map(promise => promise.then(value => ({ ok: true, value }), error => ({ ok: false, error })));
+    let waiting = 0;
+    try {
+      for (let i = 0; i < 200 && waiting < 2; i++) {
+        const [row] = await db.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM pg_locks WHERE locktype='advisory' AND NOT granted AND objid=72606101`;
+        waiting = row.count;
+        if (waiting < 2) await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(waiting).toBeGreaterThanOrEqual(2);
+    } finally { release(); }
+    await removal;
+    const outcomes = await Promise.all(attempts);
+    expect(outcomes.map(outcome => outcome.ok)).toEqual([false, false]);
+    expect(await db.task.count({ where: { matterId: f.matter.id, title: "撤权后任务" } })).toBe(0);
+    expect(await db.matterStage.count({ where: { procedureId: procedure.id, name: "撤权后环节" } })).toBe(0);
+  }, 30_000);
 
   it("只能添加同事项前置，拒绝自身和真实递归图中的环，失败不留关系或审计", async () => {
     const f = await fixture();

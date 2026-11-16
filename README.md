@@ -44,7 +44,7 @@
 
 ## 源码运行
 
-以下用于全新、独立的开发或验收环境；当前页面仍使用 Server 登录。推荐与仓库 CI/容器一致的 Node.js 22、npm 和 PostgreSQL 16。命令适用于 Linux、macOS 或 WSL。
+以下用于全新、独立的开发或验收环境；当前页面仍使用 Server 登录。使用 Node.js 22.19 或更高版本、npm 和 PostgreSQL 16；CI 与容器使用 Node.js 22。命令适用于 Linux、macOS 或 WSL。
 
 ```bash
 git clone https://github.com/zaenzhang/LexOrder.git

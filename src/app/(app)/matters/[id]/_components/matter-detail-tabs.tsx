@@ -451,7 +451,7 @@ export function MatterDetailTabs({
           </div>
           <div className="ctx-actions">
             {canAssociateThisMatter && allowed("documents.write") && !isArchived ? (
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => workflowApi.current?.openUpload()}>
+              <button type="button" className="btn btn-secondary btn-sm" disabled={invalidProcedure} onClick={() => workflowApi.current?.openUpload()}>
                 <Upload />
                 上传材料
               </button>
@@ -554,9 +554,11 @@ export function MatterDetailTabs({
         folders={folders}
         templates={templates}
         users={colleagues}
+        taskUsers={colleagues.filter(user => user.id === matter.ownerId || matter.members.some(member => member.userId === user.id))}
         canManage={canAssociateThisMatter && !isArchived}
         canWriteRecords={canWriteRecords}
         canWriteTasks={canAssociateThisMatter && !isArchived && allowed("schedule.write")}
+        invalidProcedure={invalidProcedure}
         notes={notes}
         timelineEvents={matter.timelineEvents}
         onWriteNote={({ judgment, stageName }) => setProgress({ mode: judgment ? "judgment" : "record", stage: stageName, stageNames: workflowApi.current?.stageNames ?? [] })}

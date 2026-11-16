@@ -708,6 +708,7 @@ export function ProcedureWorkflowPanel({
   folders,
   templates,
   users,
+  taskUsers = [],
   canManage,
   canWriteRecords,
   notes,
@@ -725,6 +726,7 @@ export function ProcedureWorkflowPanel({
   materialsExtra,
   factsNode,
   canWriteTasks,
+  invalidProcedure = false,
   onCaseSearch,
   financeNode,
   sealNode,
@@ -737,6 +739,7 @@ export function ProcedureWorkflowPanel({
   folders: FolderPayload[];
   templates: TemplateSummary[];
   users: UserOption[];
+  taskUsers?: UserOption[];
   canManage: boolean;
   canWriteRecords: boolean;
   notes: WorkflowNote[];
@@ -762,6 +765,7 @@ export function ProcedureWorkflowPanel({
   materialsExtra?: React.ReactNode;
   factsNode?: React.ReactNode;
   canWriteTasks?: boolean;
+  invalidProcedure?: boolean;
   financeNode?: React.ReactNode;
   sealNode?: React.ReactNode;
   waiting?: WaitingItem[];
@@ -772,6 +776,7 @@ export function ProcedureWorkflowPanel({
   const workPane: WorkPane | null = requestedPane === null ? "materials" : ["materials", "facts", "tasks", "records"].includes(requestedPane) ? requestedPane as WorkPane : null;
   const recordsExpanded = searchParams.get("recordsExpanded") === "1";
   const [createTaskRequest, setCreateTaskRequest] = useState(0);
+  const [createTaskStage, setCreateTaskStage] = useState<{ id: string; name: string } | null>(null);
   const [taskRefreshRequest, setTaskRefreshRequest] = useState(0);
   const [tasksVisited, setTasksVisited] = useState(view === "work" && workPane === "tasks");
   const [visitedWorkMatterId, setVisitedWorkMatterId] = useState<string | null>(view === "work" ? matter.id : null);
@@ -780,6 +785,7 @@ export function ProcedureWorkflowPanel({
   const [taskStage, setTaskStage] = useState<WorkflowStage | null>(null);
   const [stageCreateOpen, setStageCreateOpen] = useState(false);
   const [deadlineOpen, setDeadlineOpen] = useState(false);
+  const [stageActivationPending, startStageActivation] = useTransition();
   const [uploadSignal, setUploadSignal] = useState(0);
   const pendingWorkFocus = useRef<"tasks" | "records" | null>(null);
   const actionSectionRef = useRef<HTMLDivElement>(null);
@@ -826,16 +832,21 @@ export function ProcedureWorkflowPanel({
     if (!apiRef) return;
     apiRef.current = {
       openUpload: () => {
+        if (invalidStage || invalidProcedure) {
+          toast.error("请先重新选择有效程序和环节");
+          return;
+        }
         setUploadSignal((n) => n + 1);
       },
       openAddTask: () => {
+        setCreateTaskStage(null);
         updateDossierLocation({ view: "work", workPane: "tasks" });
         setCreateTaskRequest(value => value + 1);
       },
       stageNames: stages.map((st) => st.name),
       currentStageName: selectedStage?.name ?? null
     };
-  }, [apiRef, selectedStage, stages]);
+  }, [apiRef, selectedStage, stages, invalidStage, invalidProcedure]);
 
   function selectStage(key: string) {
     pendingWorkFocus.current = null;
@@ -925,6 +936,7 @@ export function ProcedureWorkflowPanel({
           /> : null}
           <div className="dos-main">
           {workPane === "materials" && selectedStage && procedure && effectiveScope === "stage" ? (
+            <>
             <StageBar
               stage={selectedStage}
               procedure={procedure}
@@ -934,6 +946,24 @@ export function ProcedureWorkflowPanel({
               canManage={canManage}
               onRemoveStage={canManage && selectedStage.removable ? () => handleRemoveStage(selectedStage) : undefined}
             />
+            {selectedStage.id && (canWriteTasks ?? canManage) && !invalidStage && !invalidProcedure ? <Button size="sm" variant="outline" onClick={() => {
+              setCreateTaskStage({ id: selectedStage.id!, name: selectedStage.name });
+              setCreateTaskRequest(value => value + 1);
+              updateDossierLocation({ view: "work", workPane: "tasks" });
+              onViewChange("work");
+            }}>为此环节新建任务</Button> : null}
+            {!selectedStage.id && canManage && (canWriteTasks ?? canManage) && !invalidStage && !invalidProcedure ? <Button size="sm" variant="outline" disabled={stageActivationPending} onClick={() => {
+              startStageActivation(async () => {
+                try {
+                  const result = await ensureProcedureStage({ procedureId: procedure.id, name: selectedStage.name, description: "", insertPosition: "END" });
+                  setSelectedKey(`stage-${result.id}`);
+                  router.refresh();
+                } catch (error) {
+                  toast.error("启用环节失败", { description: actionErrorMessage(error) });
+                }
+              });
+            }}>{stageActivationPending ? "正在启用…" : "启用此环节"}</Button> : null}
+            </>
           ) : null}
           <Tabs value={workPane ?? "unavailable"} onValueChange={selectWorkSection}>
             <TabsList aria-label="办案工作区" className="grid h-auto w-full grid-cols-4 gap-1">
@@ -944,7 +974,7 @@ export function ProcedureWorkflowPanel({
             </TabsList>
             <TabsContent value="materials" forceMount hidden={workPane !== "materials"} className="data-[state=inactive]:hidden">
               <div className="flex flex-col gap-4">
-                {materialsActions}
+                {!invalidStage && !invalidProcedure ? <>{materialsActions}
                 <MaterialsSection
                   matterId={matter.id}
                   procedure={procedure}
@@ -953,8 +983,9 @@ export function ProcedureWorkflowPanel({
                   stage={effectiveScope === "stage" ? selectedStage : null}
                   canManage={canManage}
                   onOpenTemplate={() => setTemplateOpen(true)}
+                  onRequestUpload={() => setUploadSignal(value => value + 1)}
                 />
-                {materialsExtra}
+                {materialsExtra}</> : null}
               </div>
             </TabsContent>
             {!workPane ? <p role="alert" className="py-4 text-sm text-destructive">指定工作区不可用，请选择上方工作区。</p> : null}
@@ -965,6 +996,7 @@ export function ProcedureWorkflowPanel({
                   matterId={matter.id}
                   canWrite={canWriteTasks ?? canManage}
                   createRequest={createTaskRequest}
+                  createStage={createTaskStage}
                   refreshRequest={taskRefreshRequest}
                   selectedTaskId={searchParams.get("task")}
                   onTaskSelect={(task, mode) => updateDossierLocation({ ...(task ? { view: "work", workPane: "tasks" } : {}), task }, mode)}
@@ -993,7 +1025,11 @@ export function ProcedureWorkflowPanel({
                     users={users}
                     canManage={canManage}
                     onOpenTemplate={() => setTemplateOpen(true)}
-                    onAddTask={() => setTaskStage(selectedStage)}
+                    onAddTask={(canWriteTasks ?? canManage) ? () => {
+                      if (!selectedStage.id) { setTaskStage(selectedStage); return; }
+                      setCreateTaskStage({ id: selectedStage.id, name: selectedStage.name });
+                      setCreateTaskRequest(value => value + 1);
+                    } : undefined}
                     onRemoveStage={canManage && selectedStage.removable ? () => handleRemoveStage(selectedStage) : undefined}
                     uploadSignal={0}
                   />
@@ -1012,8 +1048,8 @@ export function ProcedureWorkflowPanel({
                 allScopeLabel="当前记录 · 不限环节"
                 canManage={canManage}
                 canWriteRecords={canWriteRecords}
-                onWriteRecord={() => onWriteNote({ judgment: false, stageName: selectedStage?.name })}
-                onWriteJudgment={() => onWriteNote({ judgment: true, stageName: selectedStage?.name })}
+                onWriteRecord={() => onWriteNote({ judgment: false })}
+                onWriteJudgment={() => onWriteNote({ judgment: true })}
                 onAddLedger={canManage && onAddLedger ? () => onAddLedger("express") : undefined}
                 onCaseSearch={onCaseSearch}
               />
@@ -1048,7 +1084,7 @@ export function ProcedureWorkflowPanel({
             procedure={procedure}
             stage={selectedStage}
             documents={[]}
-            canManage={canManage}
+            canManage={canManage && !invalidStage && !invalidProcedure}
             uploadSignal={uploadSignal}
           />
         </div>
@@ -1068,7 +1104,7 @@ export function ProcedureWorkflowPanel({
           matterId={matter.id}
           procedureId={procedure.id}
           stage={taskStage}
-          users={users}
+          users={taskUsers}
           onStageReady={(stageId) => setSelectedKey(`stage-${stageId}`)}
           onCreated={task => {
             setTaskRefreshRequest(value => value + 1);
@@ -2216,7 +2252,8 @@ function MaterialsSection({
   documents,
   stage,
   canManage,
-  onOpenTemplate
+  onOpenTemplate,
+  onRequestUpload
 }: {
   matterId: string;
   procedure: WorkflowProcedure | null;
@@ -2226,10 +2263,11 @@ function MaterialsSection({
   stage: WorkflowStage | null;
   canManage: boolean;
   onOpenTemplate: () => void;
+  onRequestUpload: () => void;
 }) {
   const { onAddEvidence, unlinkedEvidence } = useDocActions();
   if (!procedure) return <>
-    <StageMaterialsPanel matterId={matterId} procedure={null} stage={null} documents={documents} canManage={canManage} onOpenTemplate={onOpenTemplate} />
+    <StageMaterialsPanel matterId={matterId} procedure={null} stage={null} documents={documents} canManage={canManage} onOpenTemplate={onOpenTemplate} onRequestUpload={onRequestUpload} />
     <section className="card" aria-label="人工要点">
       <div className="panel-head"><div className="panel-title">人工要点</div>
         {onAddEvidence ? <button type="button" className="btn btn-ghost btn-sm" onClick={() => onAddEvidence(null)}>＋人工要点</button> : null}
@@ -2251,6 +2289,7 @@ function MaterialsSection({
           documents={documents.filter((d) => d.procedureId === procedure.id && documentMatchesStage(d, stage))}
           canManage={canManage}
           onOpenTemplate={onOpenTemplate}
+          onRequestUpload={onRequestUpload}
         />
         {orphans.length || unlinkedEvidence?.length || onAddEvidence ? (
           <div className="card">
@@ -2447,7 +2486,7 @@ function PreservationWorkflowContent({
   users: UserOption[];
   canManage: boolean;
   onOpenTemplate: () => void;
-  onAddTask: () => void;
+  onAddTask?: () => void;
   onRemoveStage?: () => void;
   uploadSignal: number;
 }) {
@@ -2504,10 +2543,10 @@ function PreservationWorkflowContent({
             ) : null}
             {canManage ? (
               <>
-                <button type="button" className="btn btn-secondary btn-sm" onClick={onAddTask}>
+                {onAddTask ? <button type="button" className="btn btn-secondary btn-sm" onClick={onAddTask}>
                   <Plus />
                   任务
-                </button>
+                </button> : null}
                 <button type="button" className="btn btn-primary btn-sm" onClick={() => setCreateOpen(true)}>
                   <Plus />
                   新建保全
@@ -2710,6 +2749,7 @@ function StageMaterialsPanel({
   documents,
   canManage,
   onOpenTemplate,
+  onRequestUpload,
   uploadSignal = 0,
   bare = false
 }: {
@@ -2722,6 +2762,7 @@ function StageMaterialsPanel({
   bare?: boolean;
   /** v1.1 UI（方案 D）：模板生成收口到材料区的单一入口 */
   onOpenTemplate?: () => void;
+  onRequestUpload?: () => void;
   /** 页头「上传材料」递增信号：打开本环节上传弹窗 */
   uploadSignal?: number;
 }) {
@@ -2733,6 +2774,13 @@ function StageMaterialsPanel({
     : procedure ? "文件将保存到当前程序，暂不归入具体环节。" : "文件将保存到当前事项。";
   const fileRef = useRef<HTMLInputElement>(null);
   const uploadRequest = useRef<{ signature: string; key: string } | null>(null);
+  const currentTarget = { matterId, procedureId: procedure?.id ?? null, stageKey: stage?.key ?? null, stageId: stage?.id ?? null, canManage };
+  const currentTargetRef = useRef(currentTarget);
+  useEffect(() => { currentTargetRef.current = currentTarget; });
+  const [uploadTarget, setUploadTarget] = useState<{
+    matterId: string; procedureId: string | null; stageKey: string | null; stageId: string | null;
+    stageName: string; title: string; description: string; sourceOptions: string[];
+  } | null>(null);
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<File | null>(null);
   const [customName, setCustomName] = useState("");
@@ -2741,10 +2789,19 @@ function StageMaterialsPanel({
   const [originFilter, setOriginFilter] = useState<DocumentSourceOrigin | "ALL">("ALL");
   const [category, setCategory] = useState<DocumentCategory>(defaultCategoryForStage(stageName));
   const [isPending, startTransition] = useTransition();
-  const stageTag = stage ? stageMaterialTag(stageName) : "";
   const sourceOptions = useMemo(() => procedure ? buildSourceOptions(procedure) : [], [procedure]);
 
+  function targetIsCurrent(target: NonNullable<typeof uploadTarget>) {
+    const current = currentTargetRef.current;
+    return current.canManage && current.matterId === target.matterId && current.procedureId === target.procedureId &&
+      (current.stageKey === target.stageKey || (target.stageId !== null && current.stageId === target.stageId));
+  }
+
   function openUploadDialog() {
+    if (!canManage) return;
+    if (open) { toast.info("请先处理已打开的上传草稿"); return; }
+    setUploadTarget({ matterId, procedureId: procedure?.id ?? null, stageKey: stage?.key ?? null, stageId: stage?.id ?? null,
+      stageName, title: uploadScopeTitle, description: uploadScopeDescription, sourceOptions });
     setCategory(defaultCategoryForStage(stageName));
     setSourceParty("");
     setSourceOrigin("");
@@ -2756,31 +2813,40 @@ function StageMaterialsPanel({
   }
 
   function submitUpload() {
+    const target = uploadTarget;
+    if (!target || !targetIsCurrent(target)) {
+      toast.error("上传目标已变化，请返回原程序和环节核对草稿");
+      return;
+    }
     if (!picked) {
       toast.warning("请先选择文件");
       return;
     }
     startTransition(async () => {
       try {
+        let submissionTarget = target;
         // v0.48: 材料按外键归属环节；虚拟环节先物化拿到真实 stageId
-        let stageId = stage?.id;
-        if (procedure && stage && !stageId) {
+        let stageId = submissionTarget.stageId;
+        if (submissionTarget.procedureId && submissionTarget.stageKey && !stageId) {
           const ensured = await ensureProcedureStage({
-            procedureId: procedure.id,
-            name: stageName,
+            procedureId: submissionTarget.procedureId,
+            name: submissionTarget.stageName,
             description: "",
             insertPosition: "END"
           });
           stageId = ensured.id;
+          submissionTarget = { ...submissionTarget, stageId };
+          setUploadTarget(submissionTarget);
         }
+        if (!targetIsCurrent(submissionTarget)) throw new Error("上传目标已变化，请返回原程序和环节核对草稿");
         const fd = new FormData();
-        fd.set("matterId", matterId);
-        if (procedure) fd.set("procedureId", procedure.id);
+        fd.set("matterId", submissionTarget.matterId);
+        if (submissionTarget.procedureId) fd.set("procedureId", submissionTarget.procedureId);
         if (stageId) fd.set("stageId", stageId);
         fd.set("file", picked);
         fd.set("category", category);
         fd.set("name", customName.trim() || picked.name);
-        fd.set("tags", stageTag);
+        fd.set("tags", submissionTarget.stageKey ? stageMaterialTag(submissionTarget.stageName) : "");
         if (SOURCE_MATERIAL_CATEGORIES.includes(category) && sourceParty) {
           fd.set("sourceParty", sourceParty);
         }
@@ -2851,7 +2917,7 @@ function StageMaterialsPanel({
             </button>
           ) : null}
           {canManage ? (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={openUploadDialog}>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={onRequestUpload ?? openUploadDialog}>
               <Upload />
               上传
             </button>
@@ -2894,12 +2960,13 @@ function StageMaterialsPanel({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>上传材料 · {uploadScopeTitle}</DialogTitle>
+            <DialogTitle>上传材料 · {uploadTarget?.title ?? uploadScopeTitle}</DialogTitle>
             <DialogDescription className="text-xs">
-              {uploadScopeDescription}
+              {uploadTarget?.description ?? uploadScopeDescription}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
+            {uploadTarget && (!canManage || matterId !== uploadTarget.matterId || (procedure?.id ?? null) !== uploadTarget.procedureId || ((stage?.key ?? null) !== uploadTarget.stageKey && (uploadTarget.stageId === null || stage?.id !== uploadTarget.stageId))) ? <p role="alert" className="text-sm text-destructive">上传目标已变化，请返回原程序和环节核对草稿。</p> : null}
             <div className="space-y-1.5">
               <Label className="text-xs">材料类别 *</Label>
               <Select value={category} onValueChange={(value) => setCategory(value as DocumentCategory)}>
@@ -2933,7 +3000,7 @@ function StageMaterialsPanel({
               </Select>
             </div>
 
-            {SOURCE_MATERIAL_CATEGORIES.includes(category) && sourceOptions.length > 0 && (
+            {SOURCE_MATERIAL_CATEGORIES.includes(category) && (uploadTarget?.sourceOptions ?? sourceOptions).length > 0 && (
               <div className="space-y-1.5">
                 <Label className="text-xs">归属/来源（可选）</Label>
                 <Select
@@ -2945,7 +3012,7 @@ function StageMaterialsPanel({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">不标注</SelectItem>
-                    {sourceOptions.map((item) => (
+                    {(uploadTarget?.sourceOptions ?? sourceOptions).map((item) => (
                       <SelectItem key={item} value={item}>
                         {item}
                       </SelectItem>
@@ -2983,7 +3050,7 @@ function StageMaterialsPanel({
             <Button variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
               取消
             </Button>
-            <Button onClick={submitUpload} disabled={isPending || !picked} className="gap-1.5">
+            <Button onClick={submitUpload} disabled={isPending || !picked || !uploadTarget || !canManage || matterId !== uploadTarget.matterId || (procedure?.id ?? null) !== uploadTarget.procedureId || ((stage?.key ?? null) !== uploadTarget.stageKey && (uploadTarget.stageId === null || stage?.id !== uploadTarget.stageId))} className="gap-1.5">
               {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               上传
             </Button>
@@ -3096,10 +3163,10 @@ function TaskQuickDialog({
             <Label className="text-xs">指派给</Label>
             <Select value={assigneeId || "__none__"} onValueChange={(v) => setAssigneeId(v === "__none__" ? "" : v)}>
               <SelectTrigger>
-                <SelectValue placeholder="暂不指派" />
+                <SelectValue placeholder="默认案件主办" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">暂不指派</SelectItem>
+                <SelectItem value="__none__">默认案件主办</SelectItem>
                 {users.map((u) => (
                   <SelectItem key={u.id} value={u.id}>
                     {u.name}
@@ -3475,6 +3542,7 @@ function statusForStage(
   procedure: WorkflowProcedure,
   preservationCases: WorkflowPreservationCase[]
 ): WorkflowStageStatus {
+  if (stage?.completedAt) return "done";
   if (name.includes("保全")) {
     const properties = preservationCases.flatMap((item) => item.targets.flatMap((target) => target.properties));
     const active = properties.filter((property) => property.status === "ACTIVE" || property.status === "RENEWED");
@@ -3483,10 +3551,10 @@ function statusForStage(
     if (properties.length > 0) return "done";
     return "todo";
   }
-  if (stage?.completedAt) return "done";
   const tasks = stage?.tasks ?? [];
   if (tasks.some((task) => !task.completed && task.dueAt && daysUntil(task.dueAt) <= 3)) return "risk";
-  if (tasks.length > 0 && tasks.every((task) => task.completed)) return "done";
+  // Task completion or cancellation does not establish the legal stage's completion.
+  if (stage?.startedAt) return "active";
   if (tasks.some((task) => !task.completed)) return "active";
   if ((name.includes("立案") || name.includes("起诉")) && procedure.acceptedAt) return "done";
   if (name.includes("开庭") && procedure.hearings.some((hearing) => daysUntil(hearing.startsAt) >= 0)) return "active";
@@ -3522,11 +3590,8 @@ function documentMatchesStage(
   document: WorkflowDocument,
   stage: { id: string | null; name: string }
 ) {
-  // v0.48: 外键归属优先——已明确归属某环节的材料不再按模式匹配到其他环节
-  if (document.stageId) return stage.id !== null && document.stageId === stage.id;
-  if (document.tags?.includes(stageMaterialTag(stage.name))) return true;
-  const guide = stageGuideFor(stage.name);
-  return guide.materialCategories.includes(document.category) || guide.materialPattern.test(document.name);
+  // A matching name, category or tag is not proof of a material's stage.
+  return stage.id !== null && document.stageId === stage.id;
 }
 
 function defaultCategoryForStage(stageName: string): DocumentCategory {

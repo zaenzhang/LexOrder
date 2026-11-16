@@ -43,7 +43,7 @@ function detail(value = task()): TaskWorkflowDetail {
 
 function workspace(tasks = [task()]): TaskWorkflowWorkspace {
   const { people, currentUserId, canWrite } = detail();
-  return { people, currentUserId, canWrite, tasks };
+  return { people, currentUserId, canWrite, tasks, untrackedTasks: [] };
 }
 
 function activeWaiting() {
@@ -63,6 +63,27 @@ beforeEach(() => {
 });
 
 describe("任务弹窗的键盘返回", () => {
+  it("从真实环节新建任务时提交该环节 ID", async () => {
+    actions.createTask.mockResolvedValue({ ok: true, id: otherTaskId });
+    render(<TaskWorkPanel matterId={matterId} createRequest={1} createStage={{ id: "cstage0000000000000000001", name: "举证" }} />);
+    expect(await screen.findByRole("heading", { name: "新建环节任务" })).toBeVisible();
+    expect(screen.getByText("关联环节：举证")).toBeVisible();
+    fireEvent.change(screen.getByLabelText("任务名称"), { target: { value: "核对证据" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建任务" }));
+    await waitFor(() => expect(actions.createTask).toHaveBeenCalledWith(expect.objectContaining({ matterId, stageId: "cstage0000000000000000001", title: "核对证据" })));
+  });
+
+  it("只读显示无责任记录的旧任务及截止信息", async () => {
+    actions.getTaskWorkspace.mockResolvedValue({ ...workspace([]), canWrite: false, untrackedTasks: [{ id: taskId, title: "旧任务", stageName: "举证", procedureTitle: "一审", dueAt: stamp, completed: false, assigneeName: "承办律师" }] });
+    render(<TaskWorkPanel matterId={matterId} canWrite={false} />);
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("旧任务");
+    expect(alert).toHaveTextContent("原记录未标完成");
+    expect(alert).toHaveTextContent("承办律师");
+    expect(alert).toHaveTextContent("举证");
+    expect(screen.queryByRole("button", { name: "新建任务" })).not.toBeInTheDocument();
+  });
+
   it("保存重读替换任务行后，Esc 回到当前同一任务行", async () => {
     actions.updateTask.mockResolvedValue({ ok: true });
     render(<TaskWorkPanel matterId={matterId} />);

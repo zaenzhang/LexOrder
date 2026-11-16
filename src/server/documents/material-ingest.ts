@@ -44,7 +44,7 @@ function sameUpload(left: z.output<typeof metadataSchema>, right: z.output<typeo
 
 /** Recheck current role, ownership, archive and parent relations in the commit transaction. */
 async function assertUploadAuthority(tx: Prisma.TransactionClient, userId: string,
-  data: z.output<typeof documentInput>, priorId: string | null) {
+  data: z.output<typeof documentInput>, priorId: string | null, newReservation = false) {
   await tx.$queryRaw`SELECT id FROM "User" WHERE id=${userId} FOR SHARE`;
   const user = await tx.user.findUnique({ where: { id: userId }, select: { active: true, role: true } });
   if (!user?.active) throw new ActionError("当前账号不可用");
@@ -52,6 +52,7 @@ async function assertUploadAuthority(tx: Prisma.TransactionClient, userId: strin
   if (!actor.enabled || !hasCustomPermission(actor, "documents.write") || data.uploadedById !== userId) {
     throw new ActionError("当前无权上传材料");
   }
+  if (newReservation && !priorId && data.stageId && !data.procedureId) throw new ActionError("关联环节时必须指定所属程序");
   if (data.matterId) {
     await tx.$queryRaw`SELECT id FROM "Matter" WHERE id=${data.matterId} FOR UPDATE`;
     const matter = await tx.matter.findFirst({ where: { id: data.matterId, deletedAt: null,
@@ -62,8 +63,12 @@ async function assertUploadAuthority(tx: Prisma.TransactionClient, userId: strin
     const folder = data.folderId ? await tx.documentFolder.findUnique({ where: { id: data.folderId }, select: { matterId: true, name: true } }) : null;
     if (data.folderId && folder?.matterId !== matter.id) throw new ActionError("卷宗与案件不匹配");
     if (data.procedureId && !await tx.matterProcedure.count({ where: { id: data.procedureId, matterId: matter.id } })) throw new ActionError("程序与案件不匹配");
-    if (data.stageId && !await tx.matterStage.count({ where: { id: data.stageId, procedure: { matterId: matter.id },
-      ...(data.procedureId ? { procedureId: data.procedureId } : {}) } })) throw new ActionError("环节与案件不匹配");
+    if (data.stageId) {
+      await tx.$queryRaw`SELECT id FROM "MatterStage" WHERE id=${data.stageId} FOR SHARE`;
+      if (!await tx.matterStage.count({ where: { id: data.stageId, procedure: { matterId: matter.id },
+        ...(data.procedureId ? { procedureId: data.procedureId } : {}),
+        ...(newReservation && !priorId ? { status: "ACTIVE" } : {}) } })) throw new ActionError("环节与案件不匹配或已不可用");
+    }
     if (matter.status === "ARCHIVED" && (priorId || scopeFor(actor, "archive.supplement") !== "OWN" || !isArchiveFolderName(folder?.name))) {
       throw new ActionError("归档案件仅允许有补充归档权限者向归档卷宗追加材料");
     }
@@ -98,13 +103,13 @@ export async function ingestMaterial(input: { userId: string; document: Material
   }
   const storagePath = `${data.matterId ? `m_${data.matterId}` : `i_${data.intakeId}`}/${new Date().toISOString().slice(0, 7).replace("-", "")}/${id}.bin`;
   try { await approvalTransaction(async tx => {
-    await assertUploadAuthority(tx, input.userId, data, priorDocumentId);
+    await assertUploadAuthority(tx, input.userId, data, priorDocumentId, true);
     await tx.materialIngestIntent.create({ data: { id, storagePath, requestedById: input.userId,
       matterId: data.matterId, intakeId: data.matterId ? null : data.intakeId, priorDocumentId,
       sourceSha256: data.sha256, size: data.size, metadata: metadata as Prisma.InputJsonValue } });
     await tx.jobQueue.create({ data: { type: "document.ingest-reconcile", payload: { intentId: id },
       dedupeKey: `document.ingest:${id}`, runAt: new Date(Date.now() + 120_000), maxAttempts: 3 } });
-  }); } catch (error) {
+  }, Prisma.TransactionIsolationLevel.ReadCommitted); } catch (error) {
     const raced = await prisma.materialIngestIntent.findUnique({ where: { id } });
     if (raced?.requestedById === input.userId && sameUpload(metadataSchema.parse(raced.metadata), metadata)) return resumeMaterialIngest(id, input.userId);
     throw error;
@@ -137,6 +142,9 @@ async function commitStoredIngest(intentId: string, userId: string, lease?: JobL
       await tx.$queryRaw`SELECT id FROM "Document" WHERE id=${priorDocumentId} FOR UPDATE`;
       const prior = await tx.document.findUnique({ where: { id: priorDocumentId } });
       if (!prior || prior.deletedAt || !prior.isLatest || prior.matterId !== data.matterId || prior.intakeId !== data.intakeId) throw new ActionError("原材料版本已变化，请刷新后重传");
+      if (prior.procedureId !== data.procedureId || prior.stageId !== data.stageId || prior.folderId !== data.folderId) {
+        throw new ActionError("原材料归属已变化，请刷新后核对并重传");
+      }
       if (checkout && checkout.baselineVersion !== prior.version) throw new ActionError("取件基线已变化，请基于最新版另存");
       familyId = prior.familyId ?? prior.id;
       version = prior.version + 1;
@@ -155,7 +163,7 @@ async function commitStoredIngest(intentId: string, userId: string, lease?: JobL
     if (data.matterId) await recordTimelineEvent(tx, { matterId: data.matterId, eventType: "DOCUMENT_UPLOADED",
       title: `上传材料：${data.name}`, occurredAt: new Date(), refType: "Document", refId: created.id });
     return { id: created.id, version: created.version };
-  });
+  }, Prisma.TransactionIsolationLevel.ReadCommitted);
 }
 
 /** Recovery examines this intent's object only, never scans or re-hashes the material store. */
@@ -169,7 +177,7 @@ export async function resumeMaterialIngest(intentId: string, userId: string, lea
   await approvalTransaction(async tx => {
     if (lease) await assertCurrentJobLease(tx, lease);
     await assertUploadAuthority(tx, userId, data, intent.priorDocumentId);
-  });
+  }, Prisma.TransactionIsolationLevel.ReadCommitted);
   const recoverState = async (state: "FAILED" | "STORED", errorCode: string | null) => approvalTransaction(async tx => {
     if (lease) await assertCurrentJobLease(tx, lease);
     await tx.materialIngestIntent.updateMany({ where: { id: intentId, state: { not: "COMMITTED" }, documentId: null,
@@ -232,7 +240,7 @@ export async function withdrawMaterial(userId: string, documentId: string, purge
       await auditTx(tx, { userId, action: "DOCUMENT_PURGE_REQUEST", targetType: "Document", targetId: documentId });
     }
     return { matterId: doc.matterId, intakeId: doc.intakeId };
-  });
+  }, Prisma.TransactionIsolationLevel.ReadCommitted);
 }
 
 export async function assertDocumentCanBePurged(tx: Prisma.TransactionClient, documentId: string) {
@@ -279,7 +287,7 @@ export async function abandonMaterialIngest(intentId: string, userId: string) {
       data: { status: "DEAD", leaseToken: null, leaseUntil: null, lastError: "用户已关闭未完成上传" } });
     await auditTx(tx, { userId, action: "DOCUMENT_UPLOAD_ABANDON", targetType: "MaterialIngestIntent", targetId: intentId });
     return { matterId: intent.matterId, intakeId: intent.intakeId };
-  });
+  }, Prisma.TransactionIsolationLevel.ReadCommitted);
 }
 
 /** Durable withdrawal precedes the irreversible file delete; retries keep the same object identity. */
@@ -295,7 +303,7 @@ export async function purgeWithdrawnDocument(payload: Record<string, unknown>, l
     if (!current.deletedAt) throw new ActionError("材料尚未撤回，不能清理原件");
     await auditTx(tx, { userId, action: "DOCUMENT_PURGE_STARTED", targetType: "Document", targetId: documentId, detail: { jobId: lease.id } });
     return current;
-  });
+  }, Prisma.TransactionIsolationLevel.ReadCommitted);
   await storage.deleteFile(doc.path);
   await approvalTransaction(async tx => {
     await assertCurrentJobLease(tx, lease);

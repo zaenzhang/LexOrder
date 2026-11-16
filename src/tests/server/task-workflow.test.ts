@@ -201,6 +201,13 @@ describe("事项级任务读取", () => {
     expect(detail).toMatchObject({ task: { id: taskId, matterId, stageId: null, stageName: null, procedureTitle: null }, canWrite: true, currentUserId: userId });
   });
 
+  it("既有任务缺少责任记录时，列表仍显示该任务且不伪造责任状态", async () => {
+    db.task.findMany.mockResolvedValue([{ ...task(), title: "历史待核任务", assigneeId: userId, stage: { name: "举证", procedure: { matterId, type: "FIRST_INSTANCE", customLabel: null } }, responsibility: null }]);
+    const workspace = await readTaskWorkspaceTx(tx, userId, { matterId, includeClosed: true });
+    expect(workspace.tasks).toEqual([]);
+    expect(workspace.untrackedTasks).toEqual([{ id: taskId, title: "历史待核任务", stageName: "举证", procedureTitle: "一审", dueAt: null, completed: false, assigneeName: "经办" }]);
+  });
+
   it("只有任务读取权时返回只读；团队只读不能取代当前事项关联", async () => {
     resolveRoleUser.mockResolvedValue({ enabled: true, role: "CUSTOM", rolePermissions: [{ permissionKey: "schedule.read", scope: "OWN" }, { permissionKey: "matters.read", scope: "OWN" }] });
     db.task.findMany.mockResolvedValue([]);

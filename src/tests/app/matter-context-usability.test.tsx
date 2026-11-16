@@ -68,7 +68,13 @@ describe("目标与指示的明确动作与焦点", () => {
     const editor = await screen.findByRole("dialog", { name: "更正客户目标记录（当前第 2 版）" });
     await waitFor(() => expect(revise).toBeEnabled());
     fireEvent.change(within(editor).getByLabelText("更正或决定理由"), { target: { value: "待核对的合成更正理由" } });
-    fireEvent.pointerDown(document.body, { pointerType: "mouse", button: 0 });
+    // Radix defers an outside-pointer interaction until the full click completes.
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+    const overlay = document.querySelector('[data-state="open"].ll-material');
+    expect(overlay).not.toBeNull();
+    fireEvent.pointerDown(overlay!, { pointerType: "mouse", button: 0 });
+    fireEvent.pointerUp(overlay!, { pointerType: "mouse", button: 0 });
+    fireEvent.click(overlay!);
     await waitFor(() => expect(mocks.ask).toHaveBeenCalledTimes(1));
     fireEvent.keyDown(editor, { key: "Escape" });
     expect(mocks.ask).toHaveBeenCalledTimes(1);
