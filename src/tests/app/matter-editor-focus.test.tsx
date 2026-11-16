@@ -19,7 +19,6 @@ vi.mock("@/app/(app)/matters/[id]/_components/matter-archive", () => ({
 }));
 vi.mock("@/app/(app)/matters/[id]/_components/procedure-workflow-panel", () => ({
   ProcedureWorkflowPanel: ({ archiveNode, archiveRailTop }: { archiveNode: React.ReactNode; archiveRailTop: React.ReactNode }) => <>{archiveNode}{archiveRailTop}</>,
-  replaceDossierLocation: vi.fn(),
 }));
 vi.mock("@/app/(app)/matters/[id]/_components/finance-panel", () => ({ FinancePanel: () => null }));
 vi.mock("@/app/(app)/matters/[id]/_components/procedure-content", () => ({ ImportantItemDialog: () => null }));

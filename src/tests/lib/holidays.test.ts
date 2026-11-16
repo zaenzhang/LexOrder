@@ -1,81 +1,137 @@
 // @vitest-environment node
-/**
- * 法定放假安排引擎（F-5）：届满日顺延——放假日/普通周末顺延到下一工作日，
- * 调休上班日（WORKDAY）不视为休假日；未配置或表未建（迁移未执行）时
- * 按原日期返回 adjusted=false（优雅降级）。
- */
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { db } = vi.hoisted(() => ({ db: { holiday: { findMany: vi.fn(), count: vi.fn() } } }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
-import { nextWorkdayKey, adjustDeadlineForHolidays, loadHolidayMap, hasHolidayConfig, type HolidayMap } from "@/lib/calendar/holidays";
-import { civilFromKey } from "@/lib/ui/sh-time";
+import { ActionError } from "@/lib/action-error";
+import {
+  nextWorkdayKey, adjustDeadlineForHolidays, loadHolidayMap, hasHolidayConfig,
+  holidayDateForKey, holidayDateRange, type HolidayMap
+} from "@/lib/calendar/holidays";
 
-const mk = (entries: Record<string, "HOLIDAY" | "WORKDAY">): HolidayMap => {
-  const m: HolidayMap = new Map();
-  for (const [k, kind] of Object.entries(entries)) m.set(k, { name: "测试假日", kind });
-  return m;
-};
+const mk = (entries: Record<string, "HOLIDAY" | "WORKDAY">): HolidayMap =>
+  new Map(Object.entries(entries).map(([key, kind]) => [key, { name: "测试假日", kind }]));
+const row = (key: string, kind: "HOLIDAY" | "WORKDAY" = "HOLIDAY") => ({
+  date: new Date(`${key}T12:00:00+08:00`), name: "测试假日", kind
+});
 
-describe("nextWorkdayKey（纯日历逻辑）", () => {
-  it("工作日不顺延", () => {
-    // 2026-07-01 是周三
+beforeEach(() => vi.resetAllMocks());
+
+describe("nextWorkdayKey", () => {
+  it("工作日不顺延，普通周末顺延到周一", () => {
     expect(nextWorkdayKey("2026-07-01", mk({}))).toBe("2026-07-01");
-  });
-  it("普通周末顺延到周一", () => {
-    // 2026-07-04 周六 → 07-06 周一
     expect(nextWorkdayKey("2026-07-04", mk({}))).toBe("2026-07-06");
-    // 2026-07-05 周日 → 07-06
     expect(nextWorkdayKey("2026-07-05", mk({}))).toBe("2026-07-06");
   });
-  it("放假日顺延；跨放假日连休顺延到首个非休假日", () => {
-    // 10-01（周四）起放假三天，10-02/03 也是放假日 → 顺延到 10-04（周日）？→ 周日也休 → 10-05 周一
-    expect(nextWorkdayKey("2026-10-01", mk({ "2026-10-01": "HOLIDAY", "2026-10-02": "HOLIDAY", "2026-10-03": "HOLIDAY" }))).toBe("2026-10-05");
-  });
-  it("调休上班日（WORKDAY）不视为休假日——周末上班可作届满日", () => {
-    // 2026-09-26 周六，国务院安排调休上班
+
+  it("连续放假后取首个非休假日，调休上班优先于周末", () => {
+    expect(nextWorkdayKey("2026-10-01", mk({
+      "2026-10-01": "HOLIDAY", "2026-10-02": "HOLIDAY", "2026-10-03": "HOLIDAY"
+    }))).toBe("2026-10-05");
     expect(nextWorkdayKey("2026-09-26", mk({ "2026-09-26": "WORKDAY" }))).toBe("2026-09-26");
   });
-});
 
-describe("adjustDeadlineForHolidays（含降级）", () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it("已配置：届满日在放假日 → 顺延并给出原因", async () => {
-    db.holiday.findMany.mockResolvedValue([
-      { date: civilFromKey("2026-10-01"), name: "国庆节", kind: "HOLIDAY" }
-    ]);
-    const r = await adjustDeadlineForHolidays("2026-10-01");
-    expect(r.adjusted).toBe(true);
-    expect(r.key).toBe("2026-10-02"); // 仅 10-01 放假：10-02（周五）为下一工作日
+  it("宿主夏令时切换不影响业务日顺延", () => {
+    expect(nextWorkdayKey("2026-03-07", mk({}))).toBe("2026-03-09");
+    expect(nextWorkdayKey("2026-10-31", mk({}))).toBe("2026-11-02");
   });
 
-  it("未命中安排的工作日：原样返回", async () => {
+  it("检查第 30 个候选日；全部休假时明确失败，不回原日", () => {
+    const map = mk(Object.fromEntries(Array.from({ length: 30 }, (_, i) => [
+      `2026-07-${String(i + 1).padStart(2, "0")}`, "HOLIDAY"
+    ])));
+    expect(() => nextWorkdayKey("2026-07-01", map)).toThrow("连续 30 日未找到可用工作日");
+    map.set("2026-07-30", { name: "调休", kind: "WORKDAY" });
+    expect(nextWorkdayKey("2026-07-01", map)).toBe("2026-07-30");
+  });
+
+  it.each(["2026-02-30", "2026-13-01", "2026-2-01", "not-a-date"])("拒绝无效日期 %s", key => {
+    expect(() => nextWorkdayKey(key, mk({}))).toThrow(ActionError);
+  });
+});
+
+describe("日历读取与上海存取日期", () => {
+  it("新日期固定上海正午，查询覆盖完整上海业务日", () => {
+    expect(holidayDateForKey("2026-07-01").toISOString()).toBe("2026-07-01T04:00:00.000Z");
+    expect(holidayDateRange("2026-07-01", "2026-07-01")).toEqual({
+      gte: new Date("2026-06-30T16:00:00.000Z"),
+      lte: new Date("2026-07-01T15:59:59.999Z")
+    });
+  });
+
+  it("读出的瞬时值按界面同一上海日期归属，和宿主时区无关", async () => {
+    db.holiday.findMany.mockResolvedValue([
+      { date: new Date("2026-09-30T20:00:00Z"), name: "国庆节", kind: "HOLIDAY" },
+      { date: new Date("2026-09-26T12:00:00Z"), name: "上班", kind: "WORKDAY" }
+    ]);
+    const map = await loadHolidayMap("2026-09-01", "2026-12-31");
+    expect(map.get("2026-10-01")).toEqual({ name: "国庆节", kind: "HOLIDAY" });
+    expect(map.get("2026-09-26")?.kind).toBe("WORKDAY");
+  });
+
+  it("成功读取空表是有效空结果", async () => {
     db.holiday.findMany.mockResolvedValue([]);
-    const r = await adjustDeadlineForHolidays("2026-07-01");
-    expect(r).toEqual({ key: "2026-07-01", adjusted: false });
+    expect(await loadHolidayMap("2026-07-01", "2026-07-31")).toEqual(new Map());
+    db.holiday.count.mockResolvedValue(0);
+    expect(await hasHolidayConfig()).toBe(false);
+    db.holiday.count.mockResolvedValue(1);
+    expect(await hasHolidayConfig()).toBe(true);
   });
 
-  it("表未建（迁移未执行）：查询报错按未配置降级", async () => {
-    db.holiday.findMany.mockRejectedValue(new Error("relation \"holiday\" does not exist"));
-    const r = await adjustDeadlineForHolidays("2026-10-01");
-    expect(r.adjusted).toBe(false);
-    expect(r.key).toBe("2026-10-01");
-    expect(await hasHolidayConfig()).toBe(false);
+  it.each([{ code: "P2021" }, new Error("database unavailable")])("读取失败不能变成空表或未配置", async error => {
+    db.holiday.findMany.mockRejectedValue(error);
+    db.holiday.count.mockRejectedValue(error);
+    await expect(loadHolidayMap("2026-07-01", "2026-07-31")).rejects.toThrow("暂时无法读取");
+    await expect(hasHolidayConfig()).rejects.toThrow("暂时无法读取");
+    await expect(adjustDeadlineForHolidays("2026-07-04")).rejects.toThrow(ActionError);
+  });
+
+  it("同一上海日的两条安排不能被静默覆盖", async () => {
+    db.holiday.findMany.mockResolvedValue([
+      row("2026-07-01"),
+      { ...row("2026-07-01", "WORKDAY"), date: new Date("2026-07-01T12:00:00Z") }
+    ]);
+    await expect(loadHolidayMap("2026-07-01", "2026-07-31")).rejects.toThrow("有重复的放假安排");
+  });
+
+  it("未知安排类型不能被强行视作休假", async () => {
+    db.holiday.findMany.mockResolvedValue([{ ...row("2026-07-01"), kind: "UNKNOWN" }]);
+    await expect(loadHolidayMap("2026-07-01", "2026-07-31")).rejects.toThrow("类型无效");
   });
 });
 
-describe("loadHolidayMap", () => {
-  beforeEach(() => vi.clearAllMocks());
+describe("adjustDeadlineForHolidays", () => {
+  it("该年有录入但窗口内无特别安排，可核对普通工作日和周末", async () => {
+    db.holiday.findMany.mockResolvedValue([row("2026-01-01")]);
+    expect(await adjustDeadlineForHolidays("2026-07-01")).toEqual({ status: "AVAILABLE", key: "2026-07-01", adjusted: false });
+    expect(await adjustDeadlineForHolidays("2026-07-04")).toMatchObject({ status: "AVAILABLE", key: "2026-07-06", adjusted: true });
+  });
 
-  it("读出的安排按上海日历日键入表", async () => {
-    db.holiday.findMany.mockResolvedValue([
-      { date: civilFromKey("2026-10-01"), name: "国庆节", kind: "HOLIDAY" },
-      { date: civilFromKey("2026-09-26"), name: "上班", kind: "WORKDAY" }
-    ]);
-    const m = await loadHolidayMap("2026-09-01", "2026-12-31");
-    expect(m.get("2026-10-01")).toEqual({ name: "国庆节", kind: "HOLIDAY" });
-    expect(m.get("2026-09-26")?.kind).toBe("WORKDAY");
+  it("年度未录入时不产出顺延日期，不能把普通周末计算当成已核对", async () => {
+    db.holiday.findMany.mockResolvedValue([]);
+    expect(await adjustDeadlineForHolidays("2026-07-04")).toEqual({ status: "UNCONFIGURED", missingYears: [2026] });
+  });
+
+  it("已录入放假日顺延并给出原因", async () => {
+    db.holiday.findMany.mockResolvedValue([row("2026-10-01")]);
+    expect(await adjustDeadlineForHolidays("2026-10-01")).toEqual({
+      status: "AVAILABLE", key: "2026-10-02", adjusted: true, fromKey: "2026-10-01", reason: "测试假日（法定休假日）顺延"
+    });
+  });
+
+  it("数据库读取覆盖全部 30 个候选日，不在第 15 天之后漏读安排", async () => {
+    const rows = Array.from({ length: 20 }, (_, i) => row(`2026-07-${String(i + 1).padStart(2, "0")}`));
+    db.holiday.findMany.mockImplementation(async ({ where: { date } }) =>
+      rows.filter(row => row.date >= date.gte && row.date <= date.lte));
+    expect(await adjustDeadlineForHolidays("2026-07-01")).toMatchObject({ status: "AVAILABLE", key: "2026-07-21", adjusted: true });
+  });
+
+  it("顺延实际跨年需要下一年度已有录入，未跨年不误报缺配置", async () => {
+    db.holiday.findMany.mockResolvedValue([row("2026-12-31")]);
+    expect(await adjustDeadlineForHolidays("2026-12-20")).toMatchObject({ status: "AVAILABLE", key: "2026-12-21" });
+    expect(await adjustDeadlineForHolidays("2026-12-31")).toEqual({ status: "UNCONFIGURED", missingYears: [2027] });
+    db.holiday.findMany.mockResolvedValue([row("2026-12-31"), row("2027-01-01"), row("2027-01-02", "WORKDAY")]);
+    expect(await adjustDeadlineForHolidays("2026-12-31")).toMatchObject({ status: "AVAILABLE", key: "2027-01-02" });
   });
 });

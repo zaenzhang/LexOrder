@@ -1,85 +1,118 @@
 /**
- * 法定放假安排引擎（F-5，2026-09-21，第六轮体检）。
- *
- * 民诉法第八十五条第三款：期间届满的最后一日是法定休假日的，以休假日后的
- * 第一日为届满日。系统不内置硬编码放假表（每年国务院调整会过期），由管理
- * 后台每年录入；本引擎据此把届满日顺延到下一工作日（调休上班日 WORKDAY
- * 不视为休假日）。
- *
- * 降级约定：Holiday 表未建（迁移未执行）或查询失败时按「未配置」处理——
- * 此时不掌握任何法定节假日安排，仅按周末顺延（周末属民诉法第八十五条第三款
- * 的法定休假日），春节、国庆等假期不会被顺延，既有「请人工核对顺延」提示
- * 因此仍然必要。注意此种情形下仍可能返回 adjusted=true（届满日落在周末）。
+ * 放假安排只参与既有期限建议，不改写人工填写或已经确认的日期。
+ * 查询失败必须中止本次规则核对；未录入年度安排与已录入年度内无特殊安排分开。
  */
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
 import { prisma } from "@/lib/prisma";
-import { civilFromKey, civilKey } from "@/lib/ui/sh-time";
+import { ActionError } from "@/lib/action-error";
+import { SH_TZ, shDayKey } from "@/lib/ui/sh-time";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+const DATE_FORMAT = "YYYY-MM-DD";
+const SEARCH_DAYS = 30;
+const CALENDAR_UNAVAILABLE = "放假安排暂时无法读取，本次未完成期限核对，请稍后重试；也可核对后人工录入期限";
 
 export type HolidayMap = Map<string, { name: string; kind: "HOLIDAY" | "WORKDAY" }>;
 
-/** 读取一段日期范围内的放假安排（上海日历日键 → 安排）；表未建/出错返回空表 */
+/** 日期键的运算使用 UTC 载体，不把宿主机器的时区或夏令时带入业务日。 */
+function calendarDay(key: string) {
+  const date = dayjs.utc(`${key}T00:00:00.000Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key) || key < "0001-01-01" || !date.isValid() || date.format(DATE_FORMAT) !== key) {
+    throw new ActionError("放假安排日期无效，请填写有效的 YYYY-MM-DD 日期");
+  }
+  return date;
+}
+
+/** 新放假安排固定存为上海正午；DateTime 的日期归属与界面的上海日期一致。 */
+export function holidayDateForKey(key: string): Date {
+  calendarDay(key);
+  return dayjs.tz(`${key}T12:00:00`, SH_TZ).toDate();
+}
+
+/** 按完整的上海业务日查询，不要求历史记录恰好存于某个正午时刻。 */
+export function holidayDateRange(fromKey: string, toKey: string): { gte: Date; lte: Date } {
+  calendarDay(fromKey);
+  calendarDay(toKey);
+  if (fromKey > toKey) throw new ActionError("放假安排的结束日期不得早于开始日期");
+  return {
+    gte: dayjs.tz(`${fromKey}T00:00:00`, SH_TZ).toDate(),
+    lte: dayjs.tz(`${toKey}T23:59:59.999`, SH_TZ).toDate()
+  };
+}
+
+/** 成功查询可以返回空表；数据库不可用不能被当作空配置。 */
 export async function loadHolidayMap(fromKey: string, toKey: string): Promise<HolidayMap> {
-  const map: HolidayMap = new Map();
+  const date = holidayDateRange(fromKey, toKey);
+  let rows;
   try {
-    const rows = await prisma.holiday.findMany({
-      where: { date: { gte: civilFromKey(fromKey), lte: civilFromKey(toKey) } },
+    rows = await prisma.holiday.findMany({
+      where: { date },
       select: { date: true, name: true, kind: true }
     });
-    for (const r of rows) {
-      map.set(civilKey(r.date), { name: r.name, kind: r.kind === "WORKDAY" ? "WORKDAY" : "HOLIDAY" });
+  } catch {
+    throw new ActionError(CALENDAR_UNAVAILABLE);
+  }
+  const map: HolidayMap = new Map();
+  for (const row of rows) {
+    const key = shDayKey(row.date);
+    if (map.has(key)) throw new ActionError(`${key} 有重复的放假安排，请管理员核对后重试`);
+    if (row.kind !== "HOLIDAY" && row.kind !== "WORKDAY") {
+      throw new ActionError(`${key} 的放假安排类型无效，请管理员核对后重试`);
     }
-  } catch (err) {
-    // 表未建（迁移未执行，P2021）属预期降级；其余错误（连接失败、权限等）
-    // 不能静默——期限引擎按「未配置」降级意味着法定节假日不顺延，
-    // 必须留痕以免故障被当成正常状态（第七轮体检 P3-2）。
-    const code = (err as { code?: string } | null)?.code;
-    if (code !== "P2021") {
-      console.error("[holidays] 放假安排读取失败，本次按未配置降级（节假日不顺延）：", err);
-    }
+    map.set(key, { name: row.name, kind: row.kind });
   }
   return map;
 }
 
-/** 是否已配置任意放假安排（供界面决定提示口径） */
+/** false 只表示成功读取后无记录，不表示数据库或表不可用。 */
 export async function hasHolidayConfig(): Promise<boolean> {
   try {
     return (await prisma.holiday.count({ take: 1 })) > 0;
   } catch {
-    return false;
+    throw new ActionError(CALENDAR_UNAVAILABLE);
   }
 }
 
-/**
- * 届满日顺延：届满日落在放假安排的 HOLIDAY 上时，顺延到后续第一个非休假日
- * （周末不在 Holiday 表中——国务院通知的调休安排已用 WORKDAY 表达上班的周末，
- * 未出现在表中的周末仍按休假日顺延，与「法定休假日」的文义一致）。
- */
+/** 调休上班优先于周末；30 个候选日内无工作日就明确报错，不返回原休假日。 */
 export function nextWorkdayKey(key: string, map: HolidayMap): string {
-  let cur = civilFromKey(key);
-  for (let i = 0; i < 30; i++) {
-    const k = civilKey(cur);
-    const entry = map.get(k);
-    const weekend = cur.getDay() === 0 || cur.getDay() === 6;
-    const isRest = entry ? entry.kind === "HOLIDAY" : weekend;
-    if (!isRest) return k;
-    cur = new Date(cur.getTime() + 86_400_000);
+  let current = calendarDay(key);
+  for (let i = 0; i < SEARCH_DAYS; i++) {
+    const currentKey = current.format(DATE_FORMAT);
+    const entry = map.get(currentKey);
+    const weekend = current.day() === 0 || current.day() === 6;
+    if (!(entry ? entry.kind === "HOLIDAY" : weekend)) return currentKey;
+    current = current.add(1, "day");
   }
-  return key; // 超长连休异常兜底：不顺延
+  throw new ActionError("连续 30 日未找到可用工作日，请管理员核对放假安排后重试");
 }
 
-export type AdjustedDeadline = { key: string; adjusted: boolean; fromKey?: string; reason?: string };
+export type AdjustedDeadline =
+  | { status: "UNCONFIGURED"; missingYears: number[] }
+  | { status: "AVAILABLE"; key: string; adjusted: boolean; fromKey?: string; reason?: string };
 
 /**
- * 期限届满日按放假安排顺延（服务端重算与确认场景使用）。
- * adjusted=false 表示无需顺延；adjusted=true 表示给出了建议顺延日——
- * 调用方按「提示」口径使用，不得据此自动改写律师填写的 dueAt（第七轮体检 P2-3）。
+ * 只核当前所需年份是否已有录入，不据此声称该年安排完整。
+ * 无该年记录不给出顺延结果；读取故障抛错。调用方始终保留人工提交的 dueAt。
  */
 export async function adjustDeadlineForHolidays(dueKey: string): Promise<AdjustedDeadline> {
-  // 只需看届满日起一小段窗口（长假最长约 8 天，取 15 天余量）
-  const map = await loadHolidayMap(dueKey, civilKey(new Date(civilFromKey(dueKey).getTime() + 15 * 86_400_000)));
+  const start = calendarDay(dueKey);
+  const end = start.add(SEARCH_DAYS - 1, "day");
+  // 读取搜索窗口所跨的完整年份，既覆盖全部候选日，也能区分窗口无安排与年度未录入。
+  const map = await loadHolidayMap(`${start.format("YYYY")}-01-01`, `${end.format("YYYY")}-12-31`);
+  const configuredYears = new Set([...map.keys()].map(key => Number(key.slice(0, 4))));
+  if (!configuredYears.has(start.year())) return { status: "UNCONFIGURED", missingYears: [start.year()] };
+
   const adjustedKey = nextWorkdayKey(dueKey, map);
-  if (adjustedKey === dueKey) return { key: dueKey, adjusted: false };
+  const adjustedYear = Number(adjustedKey.slice(0, 4));
+  if (!configuredYears.has(adjustedYear)) return { status: "UNCONFIGURED", missingYears: [adjustedYear] };
+  if (adjustedKey === dueKey) return { status: "AVAILABLE", key: dueKey, adjusted: false };
   const hit = map.get(dueKey);
   return {
+    status: "AVAILABLE",
     key: adjustedKey,
     adjusted: true,
     fromKey: dueKey,

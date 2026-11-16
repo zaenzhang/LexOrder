@@ -783,7 +783,7 @@ export async function getMatterById(id: string) {
           stages: {
             orderBy: { order: "asc" },
             include: {
-              tasks: { ...scheduleDenied, orderBy: [{ completed: "asc" }, { dueAt: "asc" }, { createdAt: "asc" }] }
+              tasks: { ...scheduleDenied, include: { responsibility: { select: { state: true, closedAt: true } } }, orderBy: [{ completed: "asc" }, { dueAt: "asc" }, { createdAt: "asc" }] }
             }
           },
           procedureParties: {

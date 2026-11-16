@@ -5,6 +5,7 @@ import {matterAssociationFilter} from '@/lib/permissions';
 import {currentActor,assertLiveAssignees} from '@/server/intakes/workflow';
 import {retireScheduleReminders} from './schedule';
 import {auditTx} from '@/server/audit';
+import {assertTaskCompletionTx,cancelTaskWaitingTx} from '@/server/tasks/workflow-service';
 import { ActionError } from "@/lib/action-error";
 export async function responsibilityReady(db:Prisma.TransactionClient){const [r]=await db.$queryRaw<{ready:boolean}[]>`SELECT to_regclass('public."WorkResponsibility"') IS NOT NULL AS ready`;return r?.ready===true;}
 export type WorkRow={id:string;targetId:string;kind:'Task'|'Deadline'|'Hearing'|'Urgent';matterId:string|null;intakeId:string|null;title:string;dueAt:Date|null;assigneeId:string;name:string;active:boolean;proposedAssigneeId:string|null;proposedName:string|null;acceptedAt:Date|null;state:'OPEN'|'DONE'|'CANCELLED';revision:number;reason:string|null};
@@ -41,6 +42,8 @@ export async function changeWorkTx(db:Prisma.TransactionClient,userId:string,inp
  }
  const nextOwner=d.action==='ACCEPT'?(row.proposedAssigneeId??row.assigneeId):row.assigneeId;
  if(d.action==='ACCEPT'||d.action==='REOPEN')await assertLiveAssignees(db,[nextOwner]);
+ if(row.kind==='Task'&&d.action==='COMPLETE')await assertTaskCompletionTx(db,row.targetId,row.matterId!);
+ const cancelledWaitingId=row.kind==='Task'&&d.action==='CANCEL'?await cancelTaskWaitingTx(db,userId,row.targetId,d.reason):null;
  const nextState=d.action==='COMPLETE'?'DONE':d.action==='CANCEL'?'CANCELLED':d.action==='REOPEN'?'OPEN':row.state;
  const proposed=d.action==='PROPOSE'?d.assigneeId!:['ACCEPT','DECLINE','CANCEL','COMPLETE'].includes(d.action)?null:row.proposedAssigneeId;
  const accepted=d.action==='ACCEPT'?new Date():['RESCHEDULE','REOPEN'].includes(d.action)?null:row.acceptedAt;
@@ -53,7 +56,7 @@ export async function changeWorkTx(db:Prisma.TransactionClient,userId:string,inp
  if(row.kind==='Urgent')await db.notification.updateMany({where:{refType:'IntakeUrgentItem',refId:row.id},data:{read:true,readAt:new Date(),content:'事项已调整，请以当前记录为准'}});
  if(['CANCEL','COMPLETE','RESCHEDULE'].includes(d.action)&&row.assigneeId!==userId)await db.notification.create({data:{userId:row.assigneeId,type:'SYSTEM',priority:'HIGH',title:'负责事项已调整',content:`${row.title}；${d.reason}`,href:'/schedule',refType:'WorkResponsibility',refId:row.id}});
  if(d.action==='PROPOSE')await db.notification.create({data:{userId:d.assigneeId!,type:'SYSTEM',priority:'HIGH',title:'事项待承接',content:row.title,href:'/schedule',refType:'WorkResponsibility',refId:row.id}});
- await auditTx(db,{userId,action:`WORK_ITEM_${d.action}`,targetType:row.kind,targetId:row.targetId,detail:{reason:d.reason,previousRevision:row.revision,previousAssigneeId:row.assigneeId,assigneeId:nextOwner,proposedAssigneeId:proposed,previousDate:row.dueAt?.toISOString(),newDate:d.dueAt?.toISOString()}});
+ await auditTx(db,{userId,action:`WORK_ITEM_${d.action}`,targetType:row.kind,targetId:row.targetId,detail:{reason:d.reason,previousRevision:row.revision,previousAssigneeId:row.assigneeId,assigneeId:nextOwner,proposedAssigneeId:proposed,previousDate:row.dueAt?.toISOString(),newDate:d.dueAt?.toISOString(),...(cancelledWaitingId?{cancelledWaitingId}: {})}});
  return row;
 }
 /** 供旧入口、日历及通知统一排除已经取消/完成的开庭。 */

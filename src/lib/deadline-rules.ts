@@ -13,7 +13,10 @@ import { ActionError } from "@/lib/action-error";
 
 export const HOLIDAY_NOTE = "如届满日为法定休假日，以其后第一个工作日为届满日；已配置放假安排时由系统按其顺延并在依据标注，请核对";
 
-/** 去掉时间部分，按本地日期归一到当天 00:00 */
+/**
+ * 这里的 Date 是 civil 日期载体，只读写其年月日字段，不能直接传入业务时刻。
+ * 时刻应先经 shDayKey 取上海日期，再经 civilFromKey 构造；现有表单日期沿此合同使用。
+ */
 function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }

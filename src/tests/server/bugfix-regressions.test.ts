@@ -4,7 +4,7 @@ vi.mock("@/server/finance/ledger-storage", () => ({ financeLedgerReady: vi.fn().
 import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
 import { Prisma } from "@prisma/client";
 const { db, notify, webhook, session, writeFile, auditMock } = vi.hoisted(() => {
-  const tables = ["client", "matter", "matterStage", "task", "timelineEvent", "billing", "feeEntry", "commissionPlan", "deadline", "hearing", "notification", "preservationProperty", "auditLog", "document", "invoiceRequest", "systemSetting", "jobQueue", "payment", "receivable", "team", "user", "reminderDelivery"] as const;
+  const tables = ["client", "matter", "matterStage", "task", "workResponsibility", "timelineEvent", "billing", "feeEntry", "commissionPlan", "deadline", "hearing", "notification", "preservationProperty", "auditLog", "document", "invoiceRequest", "systemSetting", "jobQueue", "payment", "receivable", "team", "user", "reminderDelivery"] as const;
   const methods = ["findMany", "findFirst", "findUnique", "findUniqueOrThrow", "count", "create", "update", "updateMany", "upsert", "createMany", "delete", "deleteMany"] as const;
   const models = Object.fromEntries(tables.map(table => [table,
     Object.fromEntries(methods.map(method => [method, vi.fn()]))
@@ -23,7 +23,7 @@ vi.mock("@/server/reminders/responsibility",()=>({responsibilityReady:async()=>f
 vi.mock("@/server/approval-permissions/termination",()=>({assertExecutionOpen:async()=>{}}));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 vi.mock("@/lib/auth/session", () => ({ requireSession: vi.fn(async () => session) }));
-vi.mock("@/server/audit", () => ({ audit: auditMock }));
+vi.mock("@/server/audit", () => ({ audit: auditMock, auditTx: vi.fn(async (_tx, input) => auditMock(input)) }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/server/matters/route", () => ({ revalidateMatter: vi.fn(), matterHrefById: vi.fn(async () => "/matters/example") }));
 vi.mock("@/server/notifications/create", () => ({ createNotification: notify }));
@@ -118,30 +118,38 @@ describe("客户查询授权回归", () => {
   });
 });
 
-describe("事项必须绑定真实案件及阶段", () => {
+describe("任务必须绑定真实事项及可选环节", () => {
+  beforeEach(() => {
+    db.user.findUnique.mockResolvedValue({ id: session.user.id, active: true, role: "LAWYER", managerAuthorized: false });
+    db.matter.findFirst.mockImplementation(async ({ where }: { where: { id: string } }) => where.id === mine
+      ? { id: mine, internalCode: "TEST", status: "ACTIVE", ownerId: session.user.id, members: [] } : null);
+    db.task.findUnique.mockResolvedValue({ id: taskId, matterId: mine, dueAt: null,
+      responsibility: { id: "work_task", revision: 0, state: "OPEN", assigneeId: session.user.id } });
+    db.task.create.mockResolvedValue({ id: taskId, matterId: mine, title: "测试事项" });
+  });
   it("不能用自己的案件 ID 修改其他案件的事项", async () => {
     db.task.findUnique.mockResolvedValue({ matterId: foreign });
-    await expect(updateTask({ id: taskId, matterId: mine, title: "修改", priority: 0 })).rejects.toThrow("不属于当前案件");
+    await expect(updateTask({ id: taskId, matterId: mine, title: "修改", priority: 0, revision: 0 })).rejects.toThrow("无权处理");
     expect(db.task.update).not.toHaveBeenCalled();
   });
   it("输入真实但无权访问的案件也拒绝", async () => {
     db.task.findUnique.mockResolvedValue({ matterId: foreign });
-    await expect(updateTask({ id: taskId, matterId: foreign, title: "修改", priority: 0 })).rejects.toThrow("无权关联");
+    await expect(updateTask({ id: taskId, matterId: foreign, title: "修改", priority: 0, revision: 0 })).rejects.toThrow("无权处理");
     expect(db.task.update).not.toHaveBeenCalled();
   });
   it("归档案件不可修改事项", async () => {
     db.matter.findFirst.mockResolvedValue({ id: mine, status: "ARCHIVED" });
-    await expect(updateTask({ id: taskId, matterId: mine, title: "修改", priority: 0 })).rejects.toThrow("已归档");
+    await expect(updateTask({ id: taskId, matterId: mine, title: "修改", priority: 0, revision: 0 })).rejects.toThrow("已归档");
     expect(db.task.update).not.toHaveBeenCalled();
   });
   it.each([createTask, updateTask])("创建及修改均拒绝其他案件的阶段", async action => {
     db.matterStage.findFirst.mockResolvedValue(null);
-    await expect(action({ id: taskId, matterId: mine, title: "修改", priority: 0, stageId })).rejects.toThrow("阶段不存在");
+    await expect(action({ id: taskId, matterId: mine, title: "修改", priority: 0, stageId, revision: 0 })).rejects.toThrow("环节不存在");
     expect(db.matterStage.findFirst).toHaveBeenCalledWith({ where: { id: stageId, procedure: { matterId: mine } }, select: { id: true } });
     expect(db.task.create).not.toHaveBeenCalled(); expect(db.task.update).not.toHaveBeenCalled();
   });
   it("同案阶段可以更新，写入条件包含真实案件", async () => {
-    await updateTask({ id: taskId, matterId: mine, title: "修改", priority: 0, stageId });
+    await updateTask({ id: taskId, matterId: mine, title: "修改", priority: 0, stageId, revision: 0 });
     expect(db.task.update.mock.calls[0][0].where).toEqual({ id: taskId, matterId: mine });
   });
   it("未绑定阶段的事项仍可创建", async () => {
