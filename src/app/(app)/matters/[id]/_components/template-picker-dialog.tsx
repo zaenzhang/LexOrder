@@ -29,6 +29,7 @@ import {
   VARIABLE_LABEL_CN
 } from "./folder-types";
 import { actionErrorMessage } from "@/lib/action-error";
+import { RENDER_ONLY_TEMPLATE_FIELDS } from "@/lib/template-render-fields";
 
 function describeMissing(paths: string[]): string {
   if (paths.length === 0) return "";
@@ -91,7 +92,7 @@ export function TemplatePickerDialog({
 
   // 列出该模板的可编辑变量（白名单内的）
   const editableVars = selected
-    ? selected.variables.filter((v) => EDITABLE_OVERRIDES.has(v))
+    ? selected.variables.filter((v) => EDITABLE_OVERRIDES.has(v) || (selected.category === "EXECUTION" && RENDER_ONLY_TEMPLATE_FIELDS.has(v)))
     : [];
 
   const reset = () => {
@@ -162,7 +163,13 @@ export function TemplatePickerDialog({
                       <button
                         key={t.id}
                         type="button"
-                        onClick={() => setSelectedId(t.id)}
+                        disabled={pending}
+                        onClick={() => {
+                          if (selectedId !== t.id) {
+                            setOverrides(previous => Object.fromEntries(Object.entries(previous).filter(([path]) => !RENDER_ONLY_TEMPLATE_FIELDS.has(path))));
+                            setSelectedId(t.id);
+                          }
+                        }}
                         className={cn(
                           "flex w-full items-start gap-3 border-t border-border px-3 py-2 text-left transition-colors",
                           selectedId === t.id
@@ -203,18 +210,19 @@ export function TemplatePickerDialog({
               </Label>
               <p className="mt-1 flex items-start gap-1.5 text-[11px] text-muted-foreground">
                 <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
-                这些字段会即时写入源表（委托人/对方资料），下次自动带出
+                委托人和对方资料会在生成时保存，留空沿用现有资料。执行依据、案号及法院的补填仅用于本次文书。
               </p>
               <div className="mt-2 grid grid-cols-2 gap-2">
                 {editableVars.map((path) => (
                   <div key={path}>
-                    <Label className="text-[11px]">{VARIABLE_LABEL_CN[path] ?? path}</Label>
+                    <Label htmlFor={`template-field-${path}`} className="text-[11px]">{VARIABLE_LABEL_CN[path] ?? path}{RENDER_ONLY_TEMPLATE_FIELDS.has(path) ? "（本次文书）" : ""}</Label>
                     <Input
+                      id={`template-field-${path}`}
                       value={overrides[path] ?? ""}
                       onChange={(e) =>
                         setOverrides((prev) => ({ ...prev, [path]: e.target.value }))
                       }
-                      placeholder="如已存在 DB 留空即可"
+                      placeholder={RENDER_ONLY_TEMPLATE_FIELDS.has(path) ? "请核对本次文书内容" : "留空沿用已保存资料"}
                       className="h-8 text-[12px]"
                     />
                   </div>
@@ -250,7 +258,7 @@ export function TemplatePickerDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" disabled={pending} onClick={() => { reset(); onOpenChange(false); }}>
             取消
           </Button>
           <Button onClick={submit} disabled={!selected || pending}>

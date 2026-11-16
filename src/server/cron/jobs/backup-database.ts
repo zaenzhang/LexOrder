@@ -146,6 +146,11 @@ export async function runDatabaseBackup(): Promise<BackupResult> {
     return { ok: false, skipped: true };
   }
 
+  return runDatabaseBackupNow();
+}
+
+/** 显式执行备份，供 CLI/宿主定时器使用；不受应用内备份定时开关影响。 */
+export async function runDatabaseBackupNow(): Promise<BackupResult> {
   const baseDir = backupBaseDir();
   try {
     await preflightBackup(BACKUP_SCRIPT, baseDir);
@@ -169,7 +174,7 @@ export async function runDatabaseBackup(): Promise<BackupResult> {
       "数据库自动备份失败",
       `${message.slice(0, 300)}｜请检查 pg_dump 是否可用、BACKUP_DIR 是否可写；修复前系统没有新备份。`
     );
-    // 抛出让 scheduler 统一写 *_FAILED_CRON audit
+    // 抛出让调用方（scheduler 或 CLI）统一写 *_FAILED_CRON audit
     throw err;
   }
 }

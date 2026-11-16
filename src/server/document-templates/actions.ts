@@ -136,7 +136,8 @@ export async function renderTemplate(input: z.infer<typeof templateRenderSchema>
   const context = await buildContext({
     matterId: data.matterId,
     userId: session.user.id,
-    overrides: data.overrides
+    overrides: data.overrides,
+    templateCategory: tmpl.category
   });
 
   // 检测未填变量（行内补全已落库 → buildContext 会读到；剩下的是真缺）
@@ -202,7 +203,7 @@ export async function renderTemplate(input: z.infer<typeof templateRenderSchema>
 const uploadTemplateSchema = z.object({
   name: z.string().min(1, "模板名称必填").max(80),
   category: z.enum([
-    "INTAKE", "RETAINER", "LITIGATION", "HEARING",
+    "INTAKE", "RETAINER", "LITIGATION", "EXECUTION", "HEARING",
     "WORK_PRODUCT", "ARCHIVE", "CLOSING", "BLANK"
   ]),
   description: z.string().max(300).optional().or(z.literal("")),

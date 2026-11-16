@@ -3,14 +3,17 @@
 /**
  * v0.44: 法院传票 OCR
  *
- * 律师上传传票图片 → aiVision 提取开庭日期、时间、法庭、案号、法官、当事人
+ * 律师上传传票图片/PDF → 本地提取优先，失败时使用已配置视觉模型
  * 失败时返回 null 字段，让律师手动填写
  */
 import { requireSession } from "@/lib/auth/session";
 import { aiVision, extractJson, AiNotConfiguredError } from "@/lib/ai/client";
 import { ActionError } from "@/lib/action-error";
+import { parseSummonsWithLocalOcr, summonsVisionImage, normalizeSummonsFields } from "./parse-summons-local";
 
 export type ParsedSummons = {
+  source?: "local_text" | "local_ocr" | "ai";
+  pageLimit?: number;
   hearingDate: string | null;   // YYYY-MM-DD
   hearingTime: string | null;   // HH:mm
   courtRoom: string | null;     // 法庭（如：第三法庭）
@@ -42,31 +45,32 @@ export async function parseSummons(form: FormData): Promise<ParsedSummons> {
   const file = form.get("file");
   if (!(file instanceof File)) throw new ActionError("缺少文件");
   if (!SUPPORTED.has(file.type)) {
-    throw new ActionError(`仅支持图片（JPG/PNG）格式，当前 ${file.type || "未知"}`);
+    throw new ActionError(`仅支持图片（JPG/PNG/WebP/HEIC）或 PDF 格式，当前 ${file.type || "未知"}`);
   }
   if (file.size > 10 * 1024 * 1024) throw new ActionError("文件超过 10MB");
 
-  const buf = Buffer.from(await file.arrayBuffer());
-  const dataUrl = `data:${file.type};base64,${buf.toString("base64")}`;
-
+  // 本地解析不外发文件；仅本地不可用或无法提取时回退到已配置的视觉模型。
   try {
+    return await parseSummonsWithLocalOcr(file);
+  } catch {
+    // 缺少可选 OCR 依赖或图片无可识别文字时继续既有 AI 通道。
+  }
+  try {
+    const dataUrl = await summonsVisionImage(file);
     const { content } = await aiVision({
       userId: session.user.id,
-      image: { dataUrl },
-      prompt: PROMPT,
-      maxTokens: 500
+      logAction: "parse-summons",
+      image: { dataUrl }, prompt: PROMPT, maxTokens: 500
     });
-    const parsed = extractJson<ParsedSummons>(content);
-    return {
-      hearingDate: parsed?.hearingDate?.trim() || null,
-      hearingTime: parsed?.hearingTime?.trim() || null,
-      courtRoom: parsed?.courtRoom?.trim() || null,
-      caseNumber: parsed?.caseNumber?.trim() || null,
-      judge: parsed?.judge?.trim() || null,
-      parties: Array.isArray(parsed?.parties) ? parsed.parties.filter(Boolean) : null
-    };
+    const result = normalizeSummonsFields(extractJson<ParsedSummons>(content));
+    if (!result.hearingDate && !result.caseNumber && !result.courtRoom) {
+      throw new ActionError("未识别到可靠的传票字段，请手动填写");
+    }
+    return { ...result, source: "ai", ...(file.type === "application/pdf" ? { pageLimit: 1 } : {}) };
   } catch (err) {
-    if (err instanceof AiNotConfiguredError) throw err;
-    throw new Error(err instanceof Error ? err.message : "传票识别失败");
+    if (err instanceof AiNotConfiguredError) {
+      throw new ActionError("本地未能识别传票，且未配置视觉模型。可安装本地 OCR 及中文语言包，或手动填写");
+    }
+    throw new ActionError("传票识别未完成，请检查本地 OCR 或视觉模型配置，也可手动填写；PDF 仅处理首页");
   }
 }

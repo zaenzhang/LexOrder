@@ -122,7 +122,8 @@ export const procedureStageRemoveSchema = z.object({
 
 export type ProcedureCreateInput = z.infer<typeof procedureCreateSchema>;
 export type ProcedureUpdateInput = z.infer<typeof procedureUpdateSchema>;
-export type DeadlineCreateInput = z.infer<typeof deadlineCreateSchema>;
-export type HearingCreateInput = z.infer<typeof hearingCreateSchema>;
 export type ProcedureStageCreateInput = z.infer<typeof procedureStageCreateSchema>;
 export type ProcedureStageRemoveInput = z.infer<typeof procedureStageRemoveSchema>;
+export type DeadlineCategory = z.infer<typeof deadlineCategorySchema>;
+export type DeadlineCreateInput = z.infer<typeof deadlineCreateSchema>;
+export type HearingCreateInput = z.infer<typeof hearingCreateSchema>;

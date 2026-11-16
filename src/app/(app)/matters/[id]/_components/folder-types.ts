@@ -25,6 +25,7 @@ export type TemplateSummary = {
     | "INTAKE"
     | "RETAINER"
     | "LITIGATION"
+    | "EXECUTION"
     | "HEARING"
     | "WORK_PRODUCT"
     | "ARCHIVE"
@@ -40,6 +41,7 @@ export const TEMPLATE_CATEGORY_CN: Record<TemplateSummary["category"], string> =
   INTAKE: "收案文书",
   RETAINER: "委托文书",
   LITIGATION: "诉讼文书",
+  EXECUTION: "执行文书",
   HEARING: "庭审文书",
   WORK_PRODUCT: "工作成果",
   ARCHIVE: "卷宗文书",
@@ -69,5 +71,8 @@ export const VARIABLE_LABEL_CN: Record<string, string> = {
   "opposing.phone": "对方电话",
   "proceeding.court": "受理法院",
   "proceeding.caseNo": "案号",
+  "execution.basis": "执行依据名称",
+  "execution.basisNo": "执行依据文号",
+  "execution.basisDate": "执行依据生效日期",
   "todayCN": "生成日期"
 };

@@ -13,6 +13,7 @@ import Docxtemplater from "docxtemplater";
 import { shParts, shDayKey } from "@/lib/ui/sh-time";
 import { prisma } from "./prisma";
 import { ActionError } from "@/lib/action-error";
+import type { TemplateCategory } from "@prisma/client";
 
 const FIRM_NAME_KEY = "firmName";
 const FIRM_ADDRESS_KEY = "firmAddress";
@@ -44,6 +45,7 @@ export interface RenderContext {
   opposing: PartySnapshot; // 第一个对方
   third: PartySnapshot; // 第一个第三人
   proceeding: { type: string; caseNo: string; court: string };
+  execution: { basis: string; basisNo: string; basisDate: string };
   // 数组循环用
   plaintiffs: PartySnapshot[];
   defendants: PartySnapshot[];
@@ -144,6 +146,7 @@ async function getFirmInfo(): Promise<{ name: string; address: string; phone: st
  */
 async function applyOverrides(matterId: string | undefined, overrides: Record<string, string>) {
   if (!matterId) return;
+  if (!["client.idNumber", "client.address", "client.phone", "opposing.idNumber", "opposing.address", "opposing.phone"].some(key => overrides[key])) return;
   const matter = await prisma.matter.findUnique({
     where: { id: matterId },
     select: { primaryClientId: true }
@@ -185,12 +188,19 @@ export async function buildContext(opts: {
   matterId?: string;
   userId: string;
   overrides?: Record<string, string>;
+  templateCategory?: TemplateCategory;
 }): Promise<RenderContext> {
   if (opts.matterId && opts.overrides && Object.keys(opts.overrides).length > 0) {
     await applyOverrides(opts.matterId, opts.overrides);
   }
 
   const today = new Date();
+  const renderOverrides = opts.templateCategory === "EXECUTION" ? opts.overrides : undefined;
+  const execution = {
+    basis: renderOverrides?.["execution.basis"]?.trim() ?? "",
+    basisNo: renderOverrides?.["execution.basisNo"]?.trim() ?? "",
+    basisDate: renderOverrides?.["execution.basisDate"]?.trim() ?? ""
+  };
   const firm = await getFirmInfo();
   const user = await prisma.user.findUnique({
     where: { id: opts.userId },
@@ -216,6 +226,7 @@ export async function buildContext(opts: {
       opposing: EMPTY_PARTY,
       third: EMPTY_PARTY,
       proceeding: { type: "", caseNo: "", court: "" },
+      execution,
       plaintiffs: [],
       defendants: [],
       thirds: []
@@ -228,7 +239,10 @@ export async function buildContext(opts: {
       cause: { select: { name: true } },
       primaryClient: true,
       parties: { orderBy: [{ role: "asc" }, { ordinal: "asc" }] },
-      procedures: { orderBy: { order: "asc" }, where: { engagement: "ENGAGED" }, take: 1 }
+      procedures: { orderBy: { order: "asc" }, where: {
+        engagement: "ENGAGED",
+        ...(opts.templateCategory === "EXECUTION" ? { type: { in: ["ENFORCEMENT", "ENFORCEMENT_OBJECTION"] as ("ENFORCEMENT" | "ENFORCEMENT_OBJECTION")[] } } : {})
+      }, take: 1 }
     }
   });
   if (!matter) throw new ActionError("案件不存在");
@@ -279,9 +293,10 @@ export async function buildContext(opts: {
     third: thirdParties[0] ?? EMPTY_PARTY,
     proceeding: {
       type: firstProc?.type ?? "",
-      caseNo: firstProc?.caseNumber ?? "",
-      court: firstProc?.handlingAgency ?? ""
+      caseNo: renderOverrides?.["proceeding.caseNo"]?.trim() || firstProc?.caseNumber || "",
+      court: renderOverrides?.["proceeding.court"]?.trim() || firstProc?.handlingAgency || ""
     },
+    execution,
     plaintiffs,
     defendants,
     thirds: thirdParties
@@ -343,7 +358,10 @@ export function renderDocxBuffer(
   const doc = new Docxtemplater(zip, {
     paragraphLoop: true,
     linebreaks: true,
-    delimiters: { start: "{{", end: "}}" }
+    delimiters: { start: "{{", end: "}}" },
+    // 仅读取普通路径，不启用表达式求值或原型链访问。
+    parser: tag => ({ get: scope => readPath(scope, tag.trim()) }),
+    nullGetter: () => ""
   });
 
   try {
@@ -371,10 +389,12 @@ export function detectMissing(required: string[], context: RenderContext): strin
 }
 
 function readPath(obj: unknown, path: string): unknown {
+  if (path === ".") return obj;
   const parts = path.split(".");
+  if (parts.some(p => !p || ["__proto__", "constructor", "prototype"].includes(p))) return undefined;
   let cur: unknown = obj;
   for (const p of parts) {
-    if (cur && typeof cur === "object" && p in (cur as Record<string, unknown>)) {
+    if (cur && typeof cur === "object" && Object.prototype.hasOwnProperty.call(cur, p)) {
       cur = (cur as Record<string, unknown>)[p];
     } else {
       return undefined;

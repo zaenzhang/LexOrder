@@ -2,7 +2,7 @@
  * 若放进 action 模块会变成无鉴权的可寻址 RPC 端点（见 allocation-internals 同款约定）。 */
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/server/audit";
-import { createNotification } from "@/server/notifications/create";
+import { createHash } from "node:crypto";
 import { weekPeriod, getLawyerWeeklyDigest, formatWeeklyDigestContent } from "./weekly";
 
 export type WeeklyPushResult = {
@@ -30,12 +30,24 @@ export async function runWeeklyReportPush(
   let succeeded = 0;
   for (const u of recipients) {
     try {
+      // 保留旧通知兼容；新通知以确定性主键 + ON CONFLICT 防并发重复。
+      const existing = await prisma.notification.findFirst({
+        where: { userId: u.id, refType: "WeeklyReport", refId: period.label },
+        select: { id: true }
+      });
+      if (existing) {
+        succeeded++;
+        continue;
+      }
+
       const digest = await getLawyerWeeklyDigest({
         userId: u.id,
         userName: u.name,
         period
       });
-      await createNotification({
+      const id = `weekly_${createHash("sha256").update(JSON.stringify([u.id, period.label])).digest("hex")}`;
+      await prisma.notification.createMany({ data: [{
+        id,
         userId: u.id,
         type: "SYSTEM",
         priority: "NORMAL",
@@ -44,7 +56,7 @@ export async function runWeeklyReportPush(
         href: "/reports?period=month",
         refType: "WeeklyReport",
         refId: period.label
-      });
+      }], skipDuplicates: true });
       succeeded++;
     } catch (err) {
       failed.push({

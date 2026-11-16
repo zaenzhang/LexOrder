@@ -1013,7 +1013,8 @@ export function ImportantItemDialog({
         if (result.hearingDate && result.hearingTime) {
           setHearingStartsAt(`${result.hearingDate}T${result.hearingTime}`);
         } else if (result.hearingDate) {
-          setHearingStartsAt(`${result.hearingDate}T09:00`);
+          setHearingStartsAt("");
+          toast.warning(`已识别开庭日期 ${result.hearingDate}，具体时刻未识别，请手动填写`);
         }
         if (result.courtRoom) setHearingRoom(result.courtRoom);
         if (result.judge) setHearingJudge(result.judge);
@@ -1023,7 +1024,7 @@ export function ImportantItemDialog({
           if (result.parties?.length) parts.push(`当事人：${result.parties.join("、")}`);
           setHearingNotes(parts.join("\n"));
         }
-        toast.success("传票识别完成，请核对信息");
+        toast.success(result.pageLimit ? "已识别传票首页，请核对信息；其他页未处理" : "传票识别完成，请核对信息");
       } catch (err) {
         toast.error("传票识别失败", {
           description: err instanceof Error ? actionErrorMessage(err) : "请手动填写"
@@ -1247,7 +1248,7 @@ export function ImportantItemDialog({
                   <input
                     ref={summonsRef}
                     type="file"
-                    accept="image/jpeg,image/png,image/webp,image/heic"
+                    accept="image/jpeg,image/png,image/webp,image/heic,application/pdf"
                     className="hidden"
                     onChange={(e) => {
                       const file = e.target.files?.[0];

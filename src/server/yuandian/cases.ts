@@ -13,6 +13,8 @@ import {
   YuandianNotConfiguredError
 } from "@/lib/yuandian/client";
 import { getYuandianSettings } from "@/lib/yuandian/settings";
+import { assertCanReadMatter } from "@/lib/permissions";
+import { z } from "zod";
 import { audit } from "@/server/audit";
 
 export type CaseSearchHit = Omit<PtalCase, "url"> & {
@@ -23,6 +25,10 @@ export async function searchSimilarCases(
   params: PtalSearchParams & { matterId?: string }
 ): Promise<{ total: number; items: CaseSearchHit[]; pointsCharged: number }> {
   const session = await requireSession("matters.write");
+  if (params.matterId) {
+    const matterId = z.string().cuid().parse(params.matterId);
+    await assertCanReadMatter(session.user.id, session.user.role, matterId, session.user.rolePermissions);
+  }
 
   const settings = await getYuandianSettings();
   if (!settings.configured) throw new YuandianNotConfiguredError();
@@ -68,6 +74,10 @@ export async function searchSimilarCasesByVector(
   params: VectorSearchParams & { matterId?: string }
 ): Promise<{ items: VectorCaseHit[]; pointsCharged: number }> {
   const session = await requireSession("matters.write");
+  if (params.matterId) {
+    const matterId = z.string().cuid().parse(params.matterId);
+    await assertCanReadMatter(session.user.id, session.user.role, matterId, session.user.rolePermissions);
+  }
   const settings = await getYuandianSettings();
   if (!settings.configured) throw new YuandianNotConfiguredError();
 

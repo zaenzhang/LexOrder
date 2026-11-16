@@ -6,6 +6,8 @@ import bcrypt from 'bcryptjs';
 import { saveClientActivity } from '../../src/server/clients/relationship-service.ts';
 import { readFile } from '../../src/lib/storage/local.ts';
 import { decryptBuffer, sha256 } from '../../src/lib/storage/crypto.ts';
+import { runWeeklyReportPush } from '../../src/server/reports/weekly-push-core.ts';
+import { prisma as appDb } from '../../src/lib/prisma.ts';
 
 const db = new PrismaClient();
 const base = `http://127.0.0.1:${process.env.PORT || 3000}`;
@@ -37,8 +39,9 @@ async function signIn(request, email, password) {
 }
 
 try {
-  const templates = await db.documentTemplate.findMany({ where: { isBuiltIn: true }, select: { docxBlobId: true } });
+  const templates = await db.documentTemplate.findMany({ where: { isBuiltIn: true }, select: { docxBlobId: true, category: true } });
   assert(templates.length > 0, 'Built-in templates missing');
+  assert.equal(templates.filter(template => template.category === 'EXECUTION').length, 3, 'Execution templates missing from fresh install');
   for (const template of templates) {
     const doc = await db.document.findUniqueOrThrow({ where: { id: template.docxBlobId } });
     const file = await readFile(doc.path);
@@ -78,9 +81,14 @@ try {
   const anonymous = await fetch(`${base}/clients/${clientId}`, { redirect: 'manual' });
   assert([302, 303, 307, 308].includes(anonymous.status));
   checks.push('Unrelated account receives no customer content; anonymous request redirects to login');
+  const pushes = await Promise.all([runWeeklyReportPush(owner.id), runWeeklyReportPush(null)]);
+  for (const push of pushes) assert.deepEqual(push.failed, [], 'Weekly push failed in the real database');
+  assert.equal(await db.notification.count({ where: { userId: otherId, refType: 'WeeklyReport', refId: pushes[0].weekLabel } }), 1, 'Concurrent manual/cron calls must persist exactly one weekly notification');
+  checks.push('Concurrent manual and cron weekly pushes persist exactly one notification per recipient/week in PostgreSQL');
   console.log(JSON.stringify({ httpSmoke: 'passed', checks, browserVisualQA: 'not performed by this script' }, null, 2));
 } finally {
   if (clientId) await db.client.update({ where: { id: clientId }, data: { deletedAt: new Date() } });
   if (otherId) await db.user.update({ where: { id: otherId }, data: { active: false } });
   await db.$disconnect();
+  await appDb.$disconnect();
 }

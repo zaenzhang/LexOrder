@@ -15,6 +15,7 @@ import { getLatestArchiveRecord } from "@/server/archive/actions";
 import { getMatterReviewSummary } from "@/server/ai/matter-review-summary";
 import { getSession } from "@/lib/auth/session";
 import { getAiSettings } from "@/lib/ai/settings";
+import { isLocalJudgmentConfigured } from "@/lib/cncases/settings";
 import { getYuandianSettings } from "@/lib/yuandian/settings";
 import { resolveMatterRoute } from "@/server/matters/route";
 import { matterHref } from "@/lib/matters/route";
@@ -50,6 +51,10 @@ export default async function MatterDetailPage({ params }: PageProps) {
   }
 
   if (!session?.user) redirect("/login");
+  const [aiSettings, yuandianSettings] = await Promise.all([
+    getAiSettings().catch(() => null), getYuandianSettings().catch(() => null)
+  ]);
+  const localJudgmentsConfigured = isLocalJudgmentConfigured();
   const allowed = (key: import("@/lib/roles/catalog").PermissionKey) => hasCustomPermission(session.user, key);
   const matter = {
     ...matterRaw,
@@ -240,8 +245,10 @@ export default async function MatterDetailPage({ params }: PageProps) {
         evidenceItems={evidenceItems}
         notes={notes}
         capabilities={{
-          aiReview: (await getAiSettings().catch(() => null))?.configured ?? false,
-          caseSearch: (await getYuandianSettings().catch(() => null))?.configured ?? false
+          aiReview: aiSettings?.configured ?? false,
+          caseSearch: !!yuandianSettings?.configured || localJudgmentsConfigured,
+          yuandian: !!yuandianSettings?.configured,
+          localJudgments: localJudgmentsConfigured
         }}
         reviewNode={
           reviewSummary ? <ReviewSummaryCard summary={reviewSummary} matterId={matter.id} /> : undefined

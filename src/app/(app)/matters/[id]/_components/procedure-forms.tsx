@@ -30,6 +30,7 @@ import {
   deadlineCreateSchema,
   hearingCreateSchema,
   type ProcedureCreateInput,
+  type DeadlineCategory,
   type DeadlineCreateInput
 } from "@/server/procedures/schemas";
 import {
@@ -325,7 +326,7 @@ export function AddProcedureSheet({
 // ============ AddDeadlineSheet ============
 
 const deadlineCategoryLabel: Record<
-  DeadlineCreateInput["category"],
+  DeadlineCategory,
   string
 > = {
   LIMITATION: "诉讼时效",
@@ -740,7 +741,8 @@ export function AddHearingDialog({
         if (result.hearingDate && result.hearingTime) {
           setStartsAtInput(`${result.hearingDate}T${result.hearingTime}`);
         } else if (result.hearingDate) {
-          setStartsAtInput(`${result.hearingDate}T09:00`);
+          setStartsAtInput("");
+          setStartsAtError(`已识别开庭日期 ${result.hearingDate}，具体时刻未识别，请手动填写`);
         }
         if (result.courtRoom) setValue("room", result.courtRoom);
         if (result.judge) setValue("judge", result.judge);
@@ -750,7 +752,7 @@ export function AddHearingDialog({
           if (result.parties?.length) parts.push(`当事人：${result.parties.join("、")}`);
           setValue("notes", parts.join("\n"));
         }
-        toast.success("传票识别完成，请核对信息");
+        toast.success(result.pageLimit ? "已识别传票首页，请核对信息；其他页未处理" : "传票识别完成，请核对信息");
       } catch (err) {
         toast.error("传票识别失败", {
           description: err instanceof Error ? actionErrorMessage(err) : "请手动填写"
@@ -805,7 +807,7 @@ export function AddHearingDialog({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/jpeg,image/png,image/webp,image/heic"
+                accept="image/jpeg,image/png,image/webp,image/heic,application/pdf"
                 className="hidden"
                 onChange={handleSummonsUpload}
               />

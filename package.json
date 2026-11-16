@@ -16,7 +16,11 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "start:with-cron": "node scripts/run-with-cron.mjs",
+    "cron:worker": "node --import tsx src/server/cron/standalone.ts",
+    "backup:now": "node --import tsx scripts/run-database-backup.ts",
+    "templates:sync": "node --import tsx scripts/sync-document-templates.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1053.0",
@@ -69,7 +73,8 @@
     "tailwindcss-animate": "^1.0.7",
     "undici": "7.30.2",
     "unpdf": "^1.6.2",
-    "zod": "^4.6.7"
+    "zod": "^4.6.7",
+    "tsx": "^4.19.2"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
@@ -87,7 +92,6 @@
     "postcss": "^8.5.28",
     "prisma": "^5.22.0",
     "tailwindcss": "^3.4.15",
-    "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^4.1.12"
   },

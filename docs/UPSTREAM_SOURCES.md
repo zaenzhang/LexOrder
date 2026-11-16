@@ -1,6 +1,6 @@
 # 上游来源与许可记录
 
-基线核验日期：2026-11-15；2026-11-16 补充个人安装版、团队部署和内置 RAG 参考。本文记录采用的基线、业务参考及来源边界。链接到 `main`、`dev` 或在线文档的内容可能变化；实际采用组件或锁定外部依赖时，补记具体提交或版本。业务参考不登记为已复制源码，项目介绍不等同于运行验证。
+基线核验日期：2026-11-15；2026-11-16 补充个人安装版、团队部署、内置 RAG 参考及 LawLink 二开实际吸收记录。本文记录采用的基线、业务参考及来源边界。链接到 `main`、`dev` 或在线文档的内容可能变化；实际采用组件或锁定外部依赖时，补记具体提交或版本。业务参考不登记为已复制源码，项目介绍不等同于运行验证。
 
 最新用户偏好是直接研究核心规则与处理逻辑，提炼行为规格后在 LexOrder 独立实现，研究范围不按协议类型排除。交付与技术选型结论见 [REFACTOR_DESKTOP_TEAM_RAG.md](REFACTOR_DESKTOP_TEAM_RAG.md)；下方既有实际采用来源和历史记录保留。
 
@@ -19,6 +19,14 @@
 固定版本的 [MIT LICENSE](https://github.com/lawflow-boop/LawLink/blob/4736aa100515bb15f47443cdb6b0ae65745e5fff/LICENSE) 中的版权为 `Copyright (c) 2026 叶森 (Sen Ye)`。本分支不能移除或以自身署名替换上游通知。
 
 `v2.0.1` 的标签对象指向上述提交；该版本修复容器内 OpenSSL 和运行配置文件问题。发布标签名、Git 提交与实际部署提交应分别核对，不能以标签名称代替工作目录验证。
+
+### 2026-11-16：实际吸收的二开贡献
+
+来源为 [appleoppa/LawLink 固定提交](https://github.com/appleoppa/LawLink/tree/535a3531aa79edea1c1c6524fd6748d630170718) `535a3531aa79edea1c1c6524fd6748d630170718`，相对上述 LawLink 基线为 23 个提交、49 个文件的最终差异。该固定版本根目录 [LICENSE](https://github.com/appleoppa/LawLink/blob/535a3531aa79edea1c1c6524fd6748d630170718/LICENSE) 保留原 MIT 通知。本仓库保留该通知，并在此记录 appleoppa 的二开来源。
+
+实际采用模块包括 `src/lib/cncases`、元典法规检索、`template-builder.ts` 的执行模板、`parse-summons-local.ts`、独立 cron／备份入口、调度恢复与周报去重。LexOrder 补充了服务端及案件权限、严格检索审计、安全出站请求、部署配置、DOCX 嵌套字段替换、临时字段隔离、日期校验、并发去重和运行依赖。使用既有 PDF／DOCX 依赖，`tsx` 调整为生产依赖，未接入新的语料包。
+
+作者 PGG 专用导入／同步脚本、旧库迁移补偿、未接线的保全组件、作者机器路径及无效测试未作为运行代码移植。逐项范围、适配理由和当前验证见[二开吸收记录](FORK_INTEGRATION_20261116.md)。元典法规检索协议核对 [rh_fg_search 官方文档](https://open.chineselaw.com/api-docs/rh_fg_search.html)；响应片段只作为摘要展示。cncases 是外部服务协议适配，未将其服务器源码或裁判文书数据加入本仓库。
 
 ## 2. 已检查的 LawLink 源码事实
 

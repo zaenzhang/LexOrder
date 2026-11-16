@@ -12,7 +12,7 @@
  * 当前定时作业：
  * - 每周一 09:00 推送本周报告
  * - 每天 09:00 扫描归档逾期 30 天的案件
- * - 每天 03:00 清理超过 N 天的 AuditLog
+ * - 每天 03:00 检查 AuditLog 保留情况（不删除审计）
  *
  * 时区：所有 cron 用 Asia/Shanghai（避免容器 UTC 跑出来 8 小时偏差）。
  *
@@ -22,6 +22,8 @@
  */
 import cron from "node-cron";
 import { runWeeklyReportPush } from "@/server/reports/weekly-push-core";
+import { weekPeriod } from "@/server/reports/weekly";
+import { prisma } from "@/lib/prisma";
 import { scanArchiveOverdue } from "./jobs/archive-overdue";
 import { runAuditCleanup } from "./jobs/audit-cleanup";
 import { runReminderLedgerCleanup } from "./jobs/reminder-ledger-cleanup";
@@ -36,20 +38,102 @@ import { shParts } from "@/lib/ui/sh-time";
 import { recoverStaleLeases } from "./queue";
 
 const TIMEZONE = "Asia/Shanghai";
+const STARTUP_RECOVERY_WINDOW_MS = 15 * 60 * 1000;
+const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000;
 let started = false;
+let stopping = false;
+const scheduledJobs: ReturnType<typeof cron.schedule>[] = [];
+const activeRuns = new Set<Promise<unknown>>();
+function trackRun<T>(promise: Promise<T>): Promise<T> {
+  activeRuns.add(promise);
+  void promise.then(() => activeRuns.delete(promise), () => activeRuns.delete(promise));
+  return promise;
+}
+function scheduleCron(...args: Parameters<typeof cron.schedule>) {
+  const task = cron.schedule(...args);
+  scheduledJobs.push(task);
+  return task;
+}
 
-async function runWithFailureAudit(
+/** 独立 worker 停机时先停计时器，再等待已开始的作业完成。 */
+export async function stopCronJobs(): Promise<void> {
+  stopping = true;
+  await Promise.all(scheduledJobs.splice(0).map(job => job.stop()));
+  await Promise.allSettled([...activeRuns]);
+  started = false;
+}
+const runningJobs = new Set<string>();
+
+const SHANGHAI_PARTS_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: TIMEZONE,
+  calendar: "iso8601",
+  numberingSystem: "latn",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit"
+});
+
+function shanghaiDateParts(now: Date) {
+  const parts = Object.fromEntries(
+    SHANGHAI_PARTS_FORMATTER.formatToParts(now).map(({ type, value }) => [type, value])
+  );
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+    weekday: new Date(now.getTime() + SHANGHAI_OFFSET_MS).getUTCDay()
+  };
+}
+
+/** Calculate the UTC instant for a wall-clock slot in Asia/Shanghai. */
+export function scheduledAtForShanghai(
+  now: Date,
+  hour: number,
+  minute: number,
+  weekday?: number
+) {
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+    throw new RangeError("hour must be an integer between 0 and 23");
+  }
+  if (!Number.isInteger(minute) || minute < 0 || minute > 59) {
+    throw new RangeError("minute must be an integer between 0 and 59");
+  }
+
+  const { year, month, day, weekday: shanghaiWeekday } = shanghaiDateParts(now);
+  if (weekday !== undefined && shanghaiWeekday !== weekday) return null;
+  return new Date(Date.UTC(year, month - 1, day, hour, minute) - SHANGHAI_OFFSET_MS);
+}
+
+export function isWithinStartupRecoveryWindow(now: Date, scheduledAt: Date | null) {
+  if (!scheduledAt) return false;
+  const elapsed = now.getTime() - scheduledAt.getTime();
+  return elapsed >= 0 && elapsed < STARTUP_RECOVERY_WINDOW_MS;
+}
+
+export function runWithFailureAudit(jobName: string, failureAction: string, fn: () => Promise<unknown>): Promise<boolean> {
+  if (stopping) return Promise.resolve(false);
+  return trackRun(executeWithFailureAudit(jobName, failureAction, fn));
+}
+
+async function executeWithFailureAudit(
   jobName: string,
   failureAction: string,
   fn: () => Promise<unknown>
-) {
+): Promise<boolean> {
+  if (runningJobs.has(jobName)) {
+    console.warn(`[cron] ${jobName} 已在运行，跳过重入`);
+    return false;
+  }
+  runningJobs.add(jobName);
   const startedAt = Date.now();
   const triggeredAt = new Date().toISOString();
   console.log(`[cron] ${triggeredAt} 触发：${jobName}`);
   try {
     const result = await fn();
     const durationMs = Date.now() - startedAt;
-    console.log(`[cron] ${jobName} 完成（${durationMs}ms）`, result);
+    void result;
+    console.log(`[cron] ${jobName} 完成（${durationMs}ms）`);
+    return true;
   } catch (err) {
     const durationMs = Date.now() - startedAt;
     const message = err instanceof Error ? err.message : String(err);
@@ -65,7 +149,96 @@ async function runWithFailureAudit(
       targetId: jobName,
       detail: { error: message, stack, durationMs, triggeredAt }
     });
+    return false;
+  } finally {
+    runningJobs.delete(jobName);
   }
+}
+
+export async function recoverMissedCronJobs(now = new Date()) {
+  const weeklyTargetId = weekPeriod(now).label;
+  const candidates = [
+    {
+      name: "周报推送",
+      action: "WEEKLY_REPORT_PUSH_CRON",
+      targetType: "Report",
+      targetId: weeklyTargetId,
+      failureAction: "WEEKLY_REPORT_PUSH_FAILED_CRON",
+      scheduledAt: scheduledAtForShanghai(now, 9, 0, 1),
+      run: () => runWeeklyReportPush(null)
+    },
+    {
+      name: "归档逾期扫描",
+      action: "ARCHIVE_OVERDUE_SCAN_CRON",
+      targetType: "Report",
+      targetId: "archive-overdue",
+      failureAction: "ARCHIVE_OVERDUE_SCAN_FAILED_CRON",
+      scheduledAt: scheduledAtForShanghai(now, 9, 0),
+      run: () => scanArchiveOverdue()
+    },
+    {
+      name: "AuditLog 保留检查",
+      action: "AUDIT_RETENTION_CHECK_CRON",
+      targetType: "AuditLog",
+      targetId: "retention",
+      failureAction: "AUDIT_RETENTION_CHECK_FAILED_CRON",
+      scheduledAt: scheduledAtForShanghai(now, 3, 0),
+      run: () => runAuditCleanup()
+    },
+    {
+      name: "到期提醒扫描",
+      action: "DUE_REMINDER_SCAN_CRON",
+      targetType: "Report",
+      targetId: "due-reminder",
+      failureAction: "DUE_REMINDER_SCAN_FAILED_CRON",
+      scheduledAt: scheduledAtForShanghai(now, 9, 0),
+      run: () => scanDueReminders()
+    },
+    {
+      name: "用章盖章件回填提醒扫描",
+      action: "SEAL_BACKFILL_REMINDER_SCAN_CRON",
+      targetType: "Report",
+      targetId: "seal-backfill-reminder",
+      failureAction: "SEAL_BACKFILL_REMINDER_SCAN_FAILED_CRON",
+      scheduledAt: scheduledAtForShanghai(now, 9, 10),
+      run: () => scanSealBackfillReminders()
+    }
+  ];
+
+  const recovered: string[] = [];
+  for (const job of candidates) {
+    if (!isWithinStartupRecoveryWindow(now, job.scheduledAt) || !job.scheduledAt) {
+      continue;
+    }
+
+    // A successful audit for this exact slot is the durable idempotency marker.
+    const alreadyRan = await prisma.auditLog.findFirst({
+      where: {
+        action: job.action,
+        targetType: job.targetType,
+        targetId: job.targetId,
+        createdAt: { gte: job.scheduledAt, lte: now },
+        ...(job.action === "WEEKLY_REPORT_PUSH_CRON" ? { detail: { path: ["failed"], equals: 0 } } : {})
+      },
+      select: { id: true }
+    });
+    if (alreadyRan) continue;
+
+    if (await runWithFailureAudit(job.name, job.failureAction, job.run)) {
+      recovered.push(job.name);
+    }
+  }
+
+  await audit({
+    userId: null,
+    action: "CRON_SCHEDULER_STARTED",
+    targetType: "Cron",
+    targetId: "scheduler",
+    detail: {
+      recoveryWindowMinutes: STARTUP_RECOVERY_WINDOW_MS / 60_000,
+      recoveredJobs: recovered
+    }
+  });
 }
 
 export function registerCronJobs() {
@@ -74,9 +247,10 @@ export function registerCronJobs() {
     return;
   }
   started = true;
+  stopping = false;
 
   // 每周一 09:00 推周报
-  cron.schedule(
+  scheduleCron(
     "0 9 * * 1",
     () =>
       runWithFailureAudit(
@@ -88,7 +262,7 @@ export function registerCronJobs() {
   );
 
   // 每天 09:00 扫归档逾期
-  cron.schedule(
+  scheduleCron(
     "0 9 * * *",
     () =>
       runWithFailureAudit(
@@ -100,7 +274,7 @@ export function registerCronJobs() {
   );
 
   // 每天 03:00 统计可考虑归档的 AuditLog，全部记录仍保留
-  cron.schedule(
+  scheduleCron(
     "0 3 * * *",
     () =>
       runWithFailureAudit(
@@ -112,7 +286,7 @@ export function registerCronJobs() {
   );
 
   // F-1 阶段三：提醒台账保留清理（超期 PENDING 置终态 + 删除超期明细，03:10）
-  cron.schedule(
+  scheduleCron(
     "10 3 * * *",
     () =>
       runWithFailureAudit(
@@ -125,7 +299,7 @@ export function registerCronJobs() {
 
   // v0.27: 每天 09:00 扫到期期限与开庭，发 DEADLINE_REMINDER /
   // HEARING_REMINDER（期限档位 = 固定档 ∪ 各期限 remindDays，开庭固定 T-3/T-1/T）
-  cron.schedule(
+  scheduleCron(
     "0 9 * * *",
     () =>
       runWithFailureAudit(
@@ -137,7 +311,7 @@ export function registerCronJobs() {
   );
 
   // 每天 09:10 扫描已审批但未回填盖章件的用章申请；同一申请 3 天内不重复提醒
-  cron.schedule(
+  scheduleCron(
     "10 9 * * *",
     () =>
       runWithFailureAudit(
@@ -150,7 +324,7 @@ export function registerCronJobs() {
 
   // v0.50: 每天 02:30 数据库+文件存储备份（BACKUP_CRON_ENABLED=false 可关）
   if (backupCronEnabled()) {
-    cron.schedule(
+    scheduleCron(
       "30 2 * * *",
       () =>
         runWithFailureAudit(
@@ -164,10 +338,10 @@ export function registerCronJobs() {
 
   // v1.x P1-1: 持久队列 worker——每 2 分钟处理到期任务（含失败退避重试）；
   // 启动时先恢复宕机遗留的租约过期任务
-  void recoverStaleLeases().catch((err) => {
+  void trackRun(recoverStaleLeases()).catch((err) => {
     console.error("[queue] 启动恢复租约失败：", err);
   });
-  cron.schedule(
+  scheduleCron(
     "*/2 * * * *",
     () =>
       runWithFailureAudit("队列 worker", "QUEUE_WORKER_FAILED_CRON", () =>
@@ -193,6 +367,11 @@ export function registerCronJobs() {
   );
 
   console.log(
-    `[cron] 已注册 ${backupCronEnabled() ? 8 : 7} 个定时作业（周报推送 / 归档逾期扫描 / AuditLog 清理 / 台账保留清理 / 到期提醒扫描 / 用章回填提醒扫描${backupCronEnabled() ? " / 数据库备份" : ""} / 队列 worker），时区 Asia/Shanghai`
+    `[cron] 已注册 ${backupCronEnabled() ? 8 : 7} 个定时作业（周报推送 / 归档逾期扫描 / AuditLog 保留检查 / 台账保留清理 / 到期提醒扫描 / 用章回填提醒扫描${backupCronEnabled() ? " / 数据库备份" : ""} / 队列 worker），时区 Asia/Shanghai`
   );
+
+  // Recovery is deliberately bounded and audit-gated; registration itself never runs jobs unconditionally.
+  void trackRun(recoverMissedCronJobs()).catch((err) => {
+    console.error("[cron] 启动恢复检查失败：", err instanceof Error ? err.message : String(err));
+  });
 }

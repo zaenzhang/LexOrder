@@ -224,7 +224,7 @@ export function MatterDetailTabs({
   closureNode?: React.ReactNode;
   conflictNode?: React.ReactNode;
   /** 外部能力是否已配置：AI 文书审查 / 元典类案检索（未配置不显示入口） */
-  capabilities?: { aiReview: boolean; caseSearch: boolean };
+  capabilities?: { aiReview: boolean; caseSearch: boolean; yuandian?: boolean; localJudgments?: boolean };
 }) {
   const allowed = (key: import("@/lib/roles/catalog").PermissionKey) => hasCustomPermission({ role: currentUserRole ?? "", rolePermissions }, key);
   const [selectedProcId, setSelectedProcId] = useState<string | null>(null);
@@ -583,7 +583,7 @@ export function MatterDetailTabs({
             <SheetTitle>类案检索 · {matter.title}</SheetTitle>
           </SheetHeader>
           <div className="p-5">
-            {caseSearchOpen ? <CaseSearchPanel matterId={matter.id} matterCategory={matter.category} defaultCauseName={matter.cause?.name ?? matter.causeFreeText ?? null} /> : null}
+            {caseSearchOpen ? <CaseSearchPanel providers={{ yuandian: capabilities.yuandian ?? false, localJudgments: capabilities.localJudgments ?? false }} matterId={matter.id} matterCategory={matter.category} defaultCauseName={matter.cause?.name ?? matter.causeFreeText ?? null} /> : null}
           </div>
         </SheetContent>
       </Sheet>

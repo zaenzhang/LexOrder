@@ -47,6 +47,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/next.config.mjs ./next.config.mjs
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 # 备份脚本必须进镜像：cron job 通过 process.cwd()/scripts/backup.sh 调用
 COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
+# 独立调度/备份入口通过 tsx 加载服务层及路径别名。
+COPY --from=builder --chown=nextjs:nodejs /app/src ./src
+COPY --from=builder --chown=nextjs:nodejs /app/tsconfig.json ./tsconfig.json
 
 # backups 目录预先建好并授权：命名卷首次挂载会继承镜像内目录属主，
 # 运行用户 nextjs 才能写入（BACKUP_DIR 默认 /app/backups）
