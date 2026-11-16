@@ -1,5 +1,5 @@
 "use server";
-import type { ProcedureStatus } from "@prisma/client";
+import { Prisma, type ProcedureStatus } from "@prisma/client";
 import {assertMatterReviewCurrent} from "@/server/conflicts/matter-review";
 import {assertProcedureCovered} from "@/server/finance/ledger-contracts";
 import { approvalTransaction } from "@/lib/approvals/service";
@@ -9,7 +9,8 @@ import { roleMutation, checkRoleMutation } from "@/lib/roles/service";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/session";
 import { refreshScheduleReminderAfterSave, retireScheduleReminders } from "@/server/reminders/schedule";
-import { audit } from "@/server/audit";
+import { audit, auditTx } from "@/server/audit";
+import { lockWritableMatters } from "@/server/matters/write-access";
 import { assertMatterWritable } from "@/lib/archive/guard";
 import { assertCanHandleMatter, assertCanLeadMatter } from "@/lib/permissions";
 import { assertAgencyAllowedForProcedure, normalizeJurisdictionForAgency } from "@/lib/china-regions";
@@ -52,19 +53,15 @@ function emptyToNull<T extends Record<string, unknown>>(obj: T): T {
 export async function addProcedure(input: ProcedureCreateInput) {
   const session = await requireSession("schedule.write");
   const data = procedureCreateSchema.parse(input);
-  await assertCanHandleMatter(session.user, data.matterId);
-  await assertMatterWritable(data.matterId);
   assertAgencyAllowedForProcedure(data.handlingAgency, data.type);
 
-  const lastOrder = await prisma.matterProcedure.findFirst({
-    where: { matterId: data.matterId },
-    orderBy: { order: "desc" },
-    select: { order: true }
-  });
-
-  const workflow=await responsibilityReady(prisma);
-  const created = await roleMutation(session.user, "schedule.write", async roleDb => roleDb.matterProcedure.create({
-    data: {
+  const created = await prisma.$transaction(async tx => {
+    await lockWritableMatters(tx, session.user, "schedule.write", [data.matterId]);
+    const lastOrder = await tx.matterProcedure.findFirst({
+      where: { matterId: data.matterId }, orderBy: { order: "desc" }, select: { order: true }
+    });
+    const workflow = await responsibilityReady(tx);
+    const procedure = await tx.matterProcedure.create({ data: {
       matterId: data.matterId,
       type: data.type,
       customLabel: data.customLabel || null,
@@ -79,25 +76,19 @@ export async function addProcedure(input: ProcedureCreateInput) {
       leadLawyerId: data.isExternalLead ? null : (data.leadLawyerId || null),
       isExternalLead: data.isExternalLead,
       status: data.engagement === "INFORMATIONAL" ? "CONCLUDED" : workflow?"PENDING":"IN_PROGRESS"
-    }
-  }));
-
-  await roleMutation(session.user, "schedule.write", async roleDb => recordTimelineEvent(roleDb, {
+    } });
+    await recordTimelineEvent(tx, {
       matterId: data.matterId,
       eventType: "PROCEDURE_ADDED",
-      title: `新增程序：${created.customLabel ?? created.type}`,
+      title: `新增程序：${procedure.customLabel ?? procedure.type}`,
       occurredAt: new Date(),
       refType: "MatterProcedure",
-      refId: created.id
-    }));
-
-  await audit({
-    userId: session.user.id,
-    action: "PROCEDURE_CREATE",
-    targetType: "MatterProcedure",
-    targetId: created.id,
-    detail: { matterId: data.matterId, type: data.type }
-  });
+      refId: procedure.id
+    });
+    await auditTx(tx, { userId: session.user.id, action: "PROCEDURE_CREATE", targetType: "MatterProcedure",
+      targetId: procedure.id, detail: { matterId: data.matterId, type: data.type } });
+    return procedure;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 20000 });
 
   await revalidateMatter(data.matterId);
   return { ok: true, id: created.id };

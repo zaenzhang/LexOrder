@@ -90,13 +90,13 @@ export async function approvalRecipients(context: ApprovalContext, db: ApprovalD
 export async function requireApprovalRoute(context: ApprovalContext, db: ApprovalDb = prisma) {
   if (!(await approvalRecipients(context, db)).length) throw new ActionError("此事项尚无可审批人员，请联系管理员配置审批权限后再提交");
 }
-export async function approvalTransaction<T>(fn: (db: ApprovalDb) => Promise<T>) {
+export async function approvalTransaction<T>(fn: (db: ApprovalDb) => Promise<T>, isolationLevel: Prisma.TransactionIsolationLevel = Prisma.TransactionIsolationLevel.Serializable) {
   try {
     return await prisma.$transaction(async db => {
       // 与授权变更共用事务锁，确保撤权与审批具有明确的提交先后顺序。
       await db.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(72606101)`;
       return fn(db);
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20000 });
+    }, { isolationLevel, timeout: 20000 });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && ["P2034", "P2025"].includes(error.code)) {
       throw new ActionError("权限或申请状态已发生变化，请刷新后重新处理");

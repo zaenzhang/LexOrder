@@ -23,7 +23,7 @@ const { db, session, guards, roleSvc } = vi.hoisted(() => {
     db,
     state,
     session: { user: { id: "clawyer0000000000000000001", role: "LAWYER", rolePermissions: undefined } },
-    guards: { assertMatterWritable: vi.fn(async () => {}), assertCanLeadMatter: vi.fn(async () => {}) },
+    guards: { lockWritableMatters: vi.fn() },
     roleSvc: { checkRoleMutation: vi.fn(async () => {}) }
   };
 });
@@ -31,27 +31,24 @@ vi.mock("@/lib/prisma", () => ({ prisma: db }));
 vi.mock("@/lib/auth/session", () => ({ requireSession: vi.fn(async () => session) }));
 vi.mock("@/server/audit", () => ({ audit: vi.fn(), auditTx: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/lib/archive/guard", () => guards);
-vi.mock("@/lib/permissions", () => ({ assertCanLeadMatter: guards.assertCanLeadMatter }));
+vi.mock("@/server/matters/write-access", () => guards);
 vi.mock("@/lib/roles/service", () => roleSvc);
 vi.mock("@/server/matters/route", () => ({ revalidateMatter: vi.fn() }));
 
 import { completeMatterService, activateMatterService } from "@/server/matters/lifecycle";
-import { audit } from "@/server/audit";
+import { auditTx } from "@/server/audit";
 
 const M = "cmatter00000000000000000001";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  guards.assertCanLeadMatter.mockReset();
-  guards.assertCanLeadMatter.mockResolvedValue(undefined);
+  guards.lockWritableMatters.mockReset();
+  guards.lockWritableMatters.mockResolvedValue([{ id: M, status: "CLOSED", serviceStatus: "SERVICE_ACTIVE" }]);
   db.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => fn(db));
 });
 
 describe("完成服务（服务轴与程序轴分离）", () => {
   it("服务完成只改 serviceStatus，不改程序轴 status", async () => {
-    db.matter.findUnique.mockResolvedValue({ serviceStatus: "SERVICE_ACTIVE", status: "CLOSED" }); // 样例 6：程序已结案但服务未完成
-
     const res = await completeMatterService({ id: M, note: "代书与陪同开庭义务已履行完毕" });
     expect(res).toEqual({ ok: true });
     expect(db.matter.update).toHaveBeenCalledWith(expect.objectContaining({
@@ -62,20 +59,19 @@ describe("完成服务（服务轴与程序轴分离）", () => {
     expect(db.timelineEvent.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ eventType: "MATTER_SERVICE_COMPLETED", matterId: M })
     }));
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({
+    expect(auditTx).toHaveBeenCalledWith(db, expect.objectContaining({
       action: "MATTER_SERVICE_COMPLETE", targetType: "Matter", targetId: M
     }));
   });
 
   it("重复完成被拒绝", async () => {
-    db.matter.findUnique.mockResolvedValue({ serviceStatus: "SERVICE_COMPLETED" });
+    guards.lockWritableMatters.mockResolvedValue([{ id: M, status: "CLOSED", serviceStatus: "SERVICE_COMPLETED" }]);
     await expect(completeMatterService({ id: M })).rejects.toThrow("服务已完成");
     expect(db.matter.update).not.toHaveBeenCalled();
   });
 
   it("非主办/协办被拦截", async () => {
-    db.matter.findUnique.mockResolvedValue({ serviceStatus: "SERVICE_ACTIVE" });
-    guards.assertCanLeadMatter.mockRejectedValue(new Error("仅案件主办/协办可以完成服务"));
+    guards.lockWritableMatters.mockRejectedValue(new Error("仅案件主办/协办可以完成服务"));
     await expect(completeMatterService({ id: M })).rejects.toThrow("仅案件主办/协办");
     expect(db.matter.update).not.toHaveBeenCalled();
   });
@@ -83,7 +79,7 @@ describe("完成服务（服务轴与程序轴分离）", () => {
 
 describe("恢复服务进行中", () => {
   it("从完成态回退到 SERVICE_ACTIVE 并写时间线", async () => {
-    db.matter.findUnique.mockResolvedValue({ serviceStatus: "SERVICE_COMPLETED" });
+    guards.lockWritableMatters.mockResolvedValue([{ id: M, status: "CLOSED", serviceStatus: "SERVICE_COMPLETED" }]);
     const res = await activateMatterService(M);
     expect(res).toEqual({ ok: true });
     expect(db.matter.update).toHaveBeenCalledWith(expect.objectContaining({
@@ -92,11 +88,10 @@ describe("恢复服务进行中", () => {
     expect(db.timelineEvent.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ eventType: "MATTER_SERVICE_ACTIVATED" })
     }));
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: "MATTER_SERVICE_ACTIVATE" }));
+    expect(auditTx).toHaveBeenCalledWith(db, expect.objectContaining({ action: "MATTER_SERVICE_ACTIVATE" }));
   });
 
   it("服务尚在进行中时回退被拒绝", async () => {
-    db.matter.findUnique.mockResolvedValue({ serviceStatus: "SERVICE_ACTIVE" });
     await expect(activateMatterService(M)).rejects.toThrow("服务尚在进行中");
   });
 });

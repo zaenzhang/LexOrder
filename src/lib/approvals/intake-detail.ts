@@ -36,9 +36,12 @@ export function buildIntakeConflictQueries(intake: {
   client: { name: string; idNumber: string | null } | null;
   parties: { role: PartyRole; name: string; idNumber: string | null; enterpriseSocialCode?: string | null }[];
 }, decodeClientId: (stored: string | null) => string = (v) => v ?? "") {
+  const client = intake.client ? { role: "CLIENT_PARTY" as const, name: intake.client.name, idNumber: decodeClientId(intake.client.idNumber) } : null;
+  const hasClientParty = intake.parties.some(p => p.role === "CLIENT_PARTY");
   const queries = [
-    ...(intake.client && !intake.parties.some(p => p.role === "CLIENT_PARTY") ? [{ role: "CLIENT_PARTY" as const, name: intake.client.name, idNumber: decodeClientId(intake.client.idNumber) }] : []),
-    ...intake.parties.map(p => ({ role: p.role, name: p.name, idNumber: p.idNumber || p.enterpriseSocialCode || "" }))
+    ...(!hasClientParty && client ? [client] : []),
+    ...intake.parties.map(p => ({ role: p.role, name: p.name, idNumber: p.idNumber || p.enterpriseSocialCode || "" })),
+    ...(hasClientParty && client ? [client] : [])
   ].map(q => ({ ...q, name: q.name.trim(), idNumber: q.idNumber.trim() })).filter(q => q.name || q.idNumber);
   const unique = new Map(queries.map(q => [JSON.stringify([q.role, q.name, q.idNumber]), q]));
   // 带证件的查询也检索名称，无须为相同身份和名称再发送一次空证件查询。

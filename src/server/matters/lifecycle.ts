@@ -1,14 +1,13 @@
 "use server";
 import {closureReady,closureFacts} from "@/server/archive/closure";
-import { checkRoleMutation } from "@/lib/roles/service";
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/session";
-import { audit } from "@/server/audit";
-import { assertMatterWritable } from "@/lib/archive/guard";
-import { assertCanLeadMatter } from "@/lib/permissions";
+import { auditTx } from "@/server/audit";
+import { lockWritableMatters } from "./write-access";
 import { revalidateMatter } from "@/server/matters/route";
 import { recordTimelineEvent } from "@/server/timeline/record";
 import { ActionError } from "@/lib/action-error";
@@ -33,11 +32,9 @@ export type HoldMatterInput = z.infer<typeof holdMatterSchema>;
 export async function closeMatter(input: CloseMatterInput) {
   const session = await requireSession("matters.write");
   const data = closeMatterSchema.parse(input);
-  await assertMatterWritable(data.id);
-  await assertCanLeadMatter(session.user.id, data.id, "仅案件主办/协办可以结案");
-
   await prisma.$transaction(async (tx) => {
-    await checkRoleMutation(tx, session.user, "matters.write");
+    const [matter] = await lockWritableMatters(tx, session.user, "matters.write", [data.id], true);
+    if (matter.status === "CLOSED") throw new ActionError("案件已结案，请勿重复操作");
     if(await closureReady(tx)){const f=await closureFacts(tx,data.id);if(f.snapshot.procedures.length||f.snapshot.work.length||f.snapshot.preservations.length||f.snapshot.handovers.length)throw new ActionError("结案前须处理开放程序、事项、保全及未承接交接；移交到新案件的须记明处置结果");}
     await tx.matter.update({
       where: { id: data.id },
@@ -53,15 +50,9 @@ export async function closeMatter(input: CloseMatterInput) {
         content: data.summary,
         occurredAt: new Date()
       });
-  });
-
-  await audit({
-    userId: session.user.id,
-    action: "MATTER_CLOSE",
-    targetType: "Matter",
-    targetId: data.id,
-    detail: { summaryLen: data.summary.length }
-  });
+    await auditTx(tx, { userId: session.user.id, action: "MATTER_CLOSE", targetType: "Matter",
+      targetId: data.id, detail: { summaryLen: data.summary.length } });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 20000 });
 
   await revalidateMatter(data.id);
   revalidatePath("/matters");
@@ -79,16 +70,9 @@ export async function closeMatter(input: CloseMatterInput) {
  */
 export async function reopenMatter(id: string) {
   const session = await requireSession("matters.write");
-  const matter = await prisma.matter.findUnique({ where: { id }, select: { status: true } });
-  if (!matter) throw new ActionError("案件不存在");
-  await assertMatterWritable(id);
-  await assertCanLeadMatter(session.user.id, id, "仅案件主办/协办可以重新开放案件");
-  if (matter.status === "ARCHIVED") {
-    throw new ActionError("已归档案件不能重新开放");
-  }
-
   await prisma.$transaction(async (tx) => {
-    await checkRoleMutation(tx, session.user, "matters.write");
+    const [matter] = await lockWritableMatters(tx, session.user, "matters.write", [id], true);
+    if (matter.status !== "ON_HOLD" && matter.status !== "CLOSED") throw new ActionError("案件状态已变化，请刷新后重试");
     await tx.matter.update({
       where: { id },
       data: {
@@ -102,14 +86,8 @@ export async function reopenMatter(id: string) {
         title: "案件已重新开放",
         occurredAt: new Date()
       });
-  });
-
-  await audit({
-    userId: session.user.id,
-    action: "MATTER_REOPEN",
-    targetType: "Matter",
-    targetId: id
-  });
+    await auditTx(tx, { userId: session.user.id, action: "MATTER_REOPEN", targetType: "Matter", targetId: id });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 20000 });
 
   await revalidateMatter(id);
   revalidatePath("/matters");
@@ -122,11 +100,9 @@ export async function reopenMatter(id: string) {
 export async function holdMatter(input: HoldMatterInput) {
   const session = await requireSession("matters.write");
   const data = holdMatterSchema.parse(input);
-  await assertMatterWritable(data.id);
-  await assertCanLeadMatter(session.user.id, data.id, "仅案件主办/协办可以暂停案件");
-
   await prisma.$transaction(async (tx) => {
-    await checkRoleMutation(tx, session.user, "matters.write");
+    const [matter] = await lockWritableMatters(tx, session.user, "matters.write", [data.id], true);
+    if (matter.status !== "IN_PROGRESS") throw new ActionError("案件状态已变化，请刷新后重试");
     await tx.matter.update({
       where: { id: data.id },
       data: { status: "ON_HOLD" }
@@ -138,15 +114,9 @@ export async function holdMatter(input: HoldMatterInput) {
         content: data.reason || undefined,
         occurredAt: new Date()
       });
-  });
-
-  await audit({
-    userId: session.user.id,
-    action: "MATTER_HOLD",
-    targetType: "Matter",
-    targetId: data.id,
-    detail: { reason: data.reason }
-  });
+    await auditTx(tx, { userId: session.user.id, action: "MATTER_HOLD", targetType: "Matter",
+      targetId: data.id, detail: { reason: data.reason } });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 20000 });
 
   await revalidateMatter(data.id);
   revalidatePath("/matters");
@@ -171,14 +141,9 @@ export async function completeMatterService(input: CompleteMatterServiceInput) {
   const session = await requireSession("matters.write");
   const data = completeServiceSchema.parse(input);
 
-  const matter = await prisma.matter.findUnique({ where: { id: data.id }, select: { serviceStatus: true } });
-  if (!matter) throw new ActionError("案件不存在");
-  await assertMatterWritable(data.id);
-  await assertCanLeadMatter(session.user.id, data.id, "仅案件主办/协办可以完成服务");
-  if (matter.serviceStatus === "SERVICE_COMPLETED") throw new ActionError("服务已完成，请勿重复操作");
-
   await prisma.$transaction(async (tx) => {
-    await checkRoleMutation(tx, session.user, "matters.write");
+    const [matter] = await lockWritableMatters(tx, session.user, "matters.write", [data.id], true);
+    if (matter.serviceStatus === "SERVICE_COMPLETED") throw new ActionError("服务已完成，请勿重复操作");
     await tx.matter.update({
       where: { id: data.id },
       data: { serviceStatus: "SERVICE_COMPLETED" }
@@ -190,15 +155,9 @@ export async function completeMatterService(input: CompleteMatterServiceInput) {
         content: data.note || undefined,
         occurredAt: new Date()
       });
-  });
-
-  await audit({
-    userId: session.user.id,
-    action: "MATTER_SERVICE_COMPLETE",
-    targetType: "Matter",
-    targetId: data.id,
-    detail: { noteLen: data.note?.length ?? 0 }
-  });
+    await auditTx(tx, { userId: session.user.id, action: "MATTER_SERVICE_COMPLETE", targetType: "Matter",
+      targetId: data.id, detail: { noteLen: data.note?.length ?? 0 } });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 20000 });
 
   await revalidateMatter(data.id);
   revalidatePath("/matters");
@@ -212,14 +171,9 @@ export async function completeMatterService(input: CompleteMatterServiceInput) {
 export async function activateMatterService(id: string) {
   const session = await requireSession("matters.write");
 
-  const matter = await prisma.matter.findUnique({ where: { id }, select: { serviceStatus: true } });
-  if (!matter) throw new ActionError("案件不存在");
-  await assertMatterWritable(id);
-  await assertCanLeadMatter(session.user.id, id, "仅案件主办/协办可以恢复服务");
-  if (matter.serviceStatus === "SERVICE_ACTIVE") throw new ActionError("服务尚在进行中");
-
   await prisma.$transaction(async (tx) => {
-    await checkRoleMutation(tx, session.user, "matters.write");
+    const [matter] = await lockWritableMatters(tx, session.user, "matters.write", [id], true);
+    if (matter.serviceStatus === "SERVICE_ACTIVE") throw new ActionError("服务尚在进行中");
     await tx.matter.update({
       where: { id },
       data: { serviceStatus: "SERVICE_ACTIVE" }
@@ -230,14 +184,8 @@ export async function activateMatterService(id: string) {
         title: "服务已恢复进行中",
         occurredAt: new Date()
       });
-  });
-
-  await audit({
-    userId: session.user.id,
-    action: "MATTER_SERVICE_ACTIVATE",
-    targetType: "Matter",
-    targetId: id
-  });
+    await auditTx(tx, { userId: session.user.id, action: "MATTER_SERVICE_ACTIVATE", targetType: "Matter", targetId: id });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 20000 });
 
   await revalidateMatter(id);
   revalidatePath("/matters");

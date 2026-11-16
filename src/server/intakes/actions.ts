@@ -3,8 +3,9 @@ import {insertFinanceRowTx} from "@/server/finance/allocation-internals";
 import { assertNoOpenIntakeUrgency, transferIntakeUrgency } from "@/server/reminders/urgent";
 import { recordMatterReviewTx } from "@/server/conflicts/matter-review";
 import { assertLiveAssignees, currentActor, intakeWorkflowReady, submitIntakeTx, assertIntakeConvertible, assertIntakeEditor } from "./workflow";
-import { hasCustomPermission, scopeFor } from "@/lib/roles/catalog";
+import { hasCustomPermission } from "@/lib/roles/catalog";
 import { clientVisibilityFilter } from "@/lib/permissions";
+import { canMaintainClientMaster, clientMasterWriteFilter } from "@/server/clients/master-access";
 import { normalizeIdNumber, duplicateWhereInput, suggestIdType } from "@/lib/clients/identity";
 import { sealIdNumber, decryptIdNumber } from "@/lib/clients/id-number-crypto";
 import { roleMutation } from "@/lib/roles/service";
@@ -20,7 +21,7 @@ import { Prisma, type ClientIdType, type ClientType, type LitigationStanding, ty
 import { prisma } from "@/lib/prisma";
 import { defaultStageNamesForProcedure } from "@/lib/procedure-stage-defaults";
 import { requireSession } from "@/lib/auth/session";
-import { audit } from "@/server/audit";
+import { audit, auditTx } from "@/server/audit";
 import { intakeVisibilityFilter, intakeReadVisibilityFilter, teamIntakeFilter } from "@/lib/permissions";
 import { assertAgencyAllowedForProcedure, normalizeJurisdictionForAgency } from "@/lib/china-regions";
 import { serializeDecimals } from "@/lib/decimal";
@@ -294,7 +295,7 @@ export async function getIntakeById(id: string) {
 export async function createIntake(input: IntakeCreateInput) {
   const session = await requireSession("intakes.create");
   const data = intakeCreateSchema.parse(input);
-  await requireApprovalRoute({ action: "INTAKE_APPROVE", category: data.category, requesterId: session.user.id });
+  if (data.parties.some(party => party.role === "CLIENT_PARTY")) throw new ActionError("请通过委托方字段登记客户，不要重复提交委托方");
   assertAgencyAllowedForProcedure(data.firstAgency, data.firstProcedureType);
   await assertCauseAllowedForSelection({
     causeId: data.causeId,
@@ -304,7 +305,14 @@ export async function createIntake(input: IntakeCreateInput) {
 
   await assertAssignableColleagues([data.ownerUserId || session.user.id, ...data.coUserIds]);
 
-  // ----- 解析客户：已选 / 自由输入新建 -----
+  const result = await approvalTransaction(async roleDb => {
+  const actor = await currentActor(roleDb, session.user.id, "intakes.create");
+  if (actor.role !== session.user.role) throw new ActionError("账号或岗位已变化，请刷新后重试");
+  const liveUser = { ...actor, id: session.user.id };
+  await requireApprovalRoute({ action: "INTAKE_APPROVE", category: data.category, requesterId: session.user.id }, roleDb);
+  const workflowEnabled = await intakeWorkflowReady(roleDb);
+  if (workflowEnabled) await assertLiveAssignees(roleDb, [data.ownerUserId || session.user.id, ...data.coUserIds]);
+  // Check access before creating this intake: the new relation must not grant its own access.
   let resolvedClientId: string | null = data.clientId || null;
   let resolvedClientName: string | null = null;
 
@@ -315,19 +323,15 @@ export async function createIntake(input: IntakeCreateInput) {
     const normalizedIdNumber = normalizeIdNumber(data.clientIdNumber);
     const intakeIdType: ClientIdType | null = (data.clientIdType || null) as ClientIdType | null ?? suggestIdType(data.clientType ?? "INDIVIDUAL");
     if (normalizedIdNumber && intakeIdType) {
-      const dup = await prisma.client.findFirst({
+      const dup = await roleDb.client.findFirst({
         where: duplicateWhereInput({ idType: intakeIdType, idNumber: normalizedIdNumber }),
         select: { id: true, name: true, deletedAt: true }
       });
       if (dup) {
-        throw new Error(
-          dup.deletedAt
-            ? `客户证件号已登记于停用客户「${dup.name}」，请先恢复该客户或在客户档案中合并`
-            : `客户证件号已登记于「${dup.name}」，请在客户栏选择该客户而非重新输入`
-        );
+        throw new ActionError("客户证件号已登记，请联系管理员核对已有档案");
       }
     }
-    const newClient = await roleMutation(session.user, "intakes.create", async roleDb => roleDb.client.create({
+    const newClient = await roleDb.client.create({
       data: {
         ownerUserId: session.user.id,
         name,
@@ -349,10 +353,10 @@ export async function createIntake(input: IntakeCreateInput) {
               }
             : undefined
       }
-    }));
+    });
     resolvedClientId = newClient.id;
     resolvedClientName = name;
-    await audit({
+    await auditTx(roleDb, {
       userId: session.user.id,
       action: "CLIENT_AUTO_CREATE",
       targetType: "Client",
@@ -360,35 +364,45 @@ export async function createIntake(input: IntakeCreateInput) {
       detail: { name, type: newClient.type, source: "intake" }
     });
   } else if (resolvedClientId) {
-    if (session.user.role === "CUSTOM" && !await prisma.client.count({ where: { id: resolvedClientId, deletedAt: null, ...clientVisibilityFilter(session.user.id, session.user.role, session.user.rolePermissions) } })) throw new ActionError("客户不存在或无权选择");
-    const c = await prisma.client.findUnique({
-      where: { id: resolvedClientId },
-      select: { name: true }
+    await roleDb.$queryRaw`SELECT id FROM "Client" WHERE id = ${resolvedClientId} FOR UPDATE`;
+    const c = await roleDb.client.findFirst({
+      where: { id: resolvedClientId, deletedAt: null, AND: [clientVisibilityFilter(liveUser.id, liveUser.role, liveUser.rolePermissions)] },
+      select: { name: true, type: true, idType: true, idNumber: true }
     });
-    resolvedClientName = c?.name ?? null;
+    if (!c) throw new ActionError("客户不存在或无权选择，请联系管理员核对");
+    const storedNumber = normalizeIdNumber(decryptIdNumber(c.idNumber));
+    const suppliedNumber = normalizeIdNumber(data.clientIdNumber);
+    if (c.idNumber && !storedNumber) throw new ActionError("客户证件信息无法读取，请联系管理员核对");
+    if ((data.clientName?.trim() && data.clientName.trim() !== c.name) ||
+      (data.clientType && data.clientType !== c.type) ||
+      (storedNumber && suppliedNumber && storedNumber !== suppliedNumber) ||
+      (storedNumber && suppliedNumber && data.clientIdType && c.idType && data.clientIdType !== c.idType)) {
+      throw new ActionError("委托方身份与所选客户不一致，请选择正确客户或核对身份");
+    }
+    data.clientName = c.name;
+    data.clientType = c.type;
+    if (storedNumber) data.clientIdNumber = storedNumber;
+    if (c.idType) data.clientIdType = c.idType;
+    resolvedClientName = c.name;
 
     // 已有客户也补一条联系人（如果填了且现有不存在同名联系人）
-    if ((data.contactName?.trim() || data.contactPhone?.trim()) && hasCustomPermission(session.user, "clients.write")) {
-      if (session.user.role === "CUSTOM") {
-        const scope = scopeFor(session.user, "clients.write");
-        if (!scope || !await prisma.client.count({ where: { id: resolvedClientId, ...clientVisibilityFilter(session.user.id, session.user.role, [{ permissionKey: "clients.read", scope }]) } })) throw new ActionError("无权维护此客户的联系人");
-      }
-      const existing = await prisma.contact.findFirst({
+    if ((data.contactName?.trim() || data.contactPhone?.trim()) && canMaintainClientMaster(liveUser) &&
+      await roleDb.client.count({ where: { id: resolvedClientId, deletedAt: null, AND: [clientMasterWriteFilter(liveUser)] } })) {
+      const existing = await roleDb.contact.findFirst({
         where: {
           clientId: resolvedClientId,
           name: (data.contactName || resolvedClientName || "").trim() || undefined
         }
       });
       if (!existing) {
-    const contactClientId = resolvedClientId;
-        await roleMutation(session.user, "intakes.create", async roleDb => roleDb.contact.create({
+        await roleDb.contact.create({
           data: {
-            clientId: contactClientId,
+            clientId: resolvedClientId,
             name: (data.contactName || resolvedClientName || "联系人").trim(),
             phone: data.contactPhone?.trim() || null,
             isPrimary: false
           }
-        }));
+        });
       }
     }
   }
@@ -396,7 +410,7 @@ export async function createIntake(input: IntakeCreateInput) {
   // ----- 案由名（用于自动 title）-----
   let causeName: string | null = data.causeFreeText || null;
   if (data.causeId) {
-    const cause = await prisma.causeOfAction.findUnique({
+    const cause = await roleDb.causeOfAction.findUnique({
       where: { id: data.causeId },
       select: { name: true }
     });
@@ -413,10 +427,7 @@ export async function createIntake(input: IntakeCreateInput) {
       ? data.title.trim()
       : generateTitle(resolvedClientName, opposingNames, causeName);
 
-  const workflowEnabled=await intakeWorkflowReady(prisma);
-  const created = await approvalTransaction(async roleDb => {
-    if(workflowEnabled){await currentActor(roleDb,session.user.id,"intakes.create");await assertLiveAssignees(roleDb,[data.ownerUserId||session.user.id,...data.coUserIds]);}
-    return roleDb.intake.create({
+  const created = await roleDb.intake.create({
     data: {
       title: finalTitle,
       category: data.category,
@@ -458,7 +469,7 @@ export async function createIntake(input: IntakeCreateInput) {
 
       createdById: session.user.id,
       parties: {
-        create: [...(workflowEnabled && data.clientName ? [{role:"CLIENT_PARTY" as const,name:data.clientName,partyType:data.clientType==="INDIVIDUAL"?"NATURAL_PERSON" as const:"COMPANY" as const,ordinal:1,standing:data.ourStanding,idType:(data.clientIdType||undefined),idNumber:data.clientType==="INDIVIDUAL"?data.clientIdNumber:undefined,enterpriseSocialCode:data.clientType!=="INDIVIDUAL"?data.clientIdNumber:undefined,phone:data.contactPhone,address:data.clientAddress,legalRep:data.clientLegalRep,contactName:data.contactName,enterpriseName:data.clientType!=="INDIVIDUAL"?data.clientName:undefined,notes:undefined}] : []),...data.parties].map((p) =>
+        create: [...(workflowEnabled && data.clientName ? [{role:"CLIENT_PARTY" as const,name:data.clientName,partyType:data.clientType==="INDIVIDUAL"?"NATURAL_PERSON" as const:data.clientType==="ORGANIZATION"?"ORGANIZATION" as const:"COMPANY" as const,ordinal:1,standing:data.ourStanding,idType:(data.clientIdType||undefined),idNumber:data.clientType==="INDIVIDUAL"?data.clientIdNumber:undefined,enterpriseSocialCode:data.clientType!=="INDIVIDUAL"?data.clientIdNumber:undefined,phone:data.contactPhone,address:data.clientAddress,legalRep:data.clientLegalRep,contactName:data.contactName,enterpriseName:data.clientType!=="INDIVIDUAL"?data.clientName:undefined,notes:undefined}] : []),...data.parties].map((p) =>
           emptyToNull({
             role: p.role,
             standing: p.standing ?? null,
@@ -480,9 +491,7 @@ export async function createIntake(input: IntakeCreateInput) {
       }
     }
   });
-  });
-
-  await audit({
+  await auditTx(roleDb, {
     userId: session.user.id,
     action: "INTAKE_CREATE",
     targetType: "Intake",
@@ -494,6 +503,9 @@ export async function createIntake(input: IntakeCreateInput) {
       autoClient: !!resolvedClientName && !data.clientId
     }
   });
+  return { created, resolvedClientId, workflowEnabled };
+  }, Prisma.TransactionIsolationLevel.ReadCommitted);
+  const { created, resolvedClientId, workflowEnabled } = result;
 
   if(!workflowEnabled) await notifyRoleApprovers({
     roles: ["PRINCIPAL_LAWYER"],

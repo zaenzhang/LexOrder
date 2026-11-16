@@ -12,7 +12,8 @@ import { LitigationStanding, PartyRole, PartyType, Prisma, type ClientIdType } f
 import { decryptIdNumber } from "@/lib/clients/id-number-crypto";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/session";
-import { audit } from "@/server/audit";
+import { audit, auditTx } from "@/server/audit";
+import { lockWritableMatters } from "./write-access";
 import { assertMatterWritable } from "@/lib/archive/guard";
 import { serializeDecimals } from "@/lib/decimal";
 import {
@@ -22,7 +23,6 @@ import {
   assertCanReadMatter,
   hasMatterBusinessAccess,
   assertCanAccessMatterFinance,
-  assertCanAssociateMatter,
   assertCanHandleMatter,
   assertCanLeadMatter,
   assertCanOwnMatter
@@ -660,10 +660,11 @@ function normalizeNewProcedureParties(rows: NewProcedurePartyInput[]) {
 // v0.32: 关联案件 —— 搜索 / 关联 / 解除
 export async function searchMattersForLink(matterId: string, q: string) {
   const session = await requireSession("matters.read");
-  await assertCanAssociateMatter(session.user.id, matterId);
   const query = q.trim();
+  return prisma.$transaction(async tx => {
+  await lockWritableMatters(tx, session.user, "matters.read", [matterId]);
   // 已关联的（两个方向）排除
-  const links = await prisma.matterLink.findMany({
+  const links = await tx.matterLink.findMany({
     where: { OR: [{ matterId }, { relatedMatterId: matterId }] },
     select: { matterId: true, relatedMatterId: true }
   });
@@ -672,25 +673,26 @@ export async function searchMattersForLink(matterId: string, q: string) {
     excludeIds.add(l.matterId);
     excludeIds.add(l.relatedMatterId);
   });
-  const items = await prisma.matter.findMany({
+  const items = await tx.matter.findMany({
     where: {
       deletedAt: null,
+      status: { not: "ARCHIVED" },
       id: { notIn: Array.from(excludeIds) },
-      ...matterAssociationFilter(session.user.id),
-      ...(query
-        ? {
+      AND: [matterAssociationFilter(session.user.id), ...(query
+        ? [{
             OR: [
-              { title: { contains: query, mode: "insensitive" } },
-              { firmCaseNo: { contains: query, mode: "insensitive" } }
+              { title: { contains: query, mode: "insensitive" as const } },
+              { firmCaseNo: { contains: query, mode: "insensitive" as const } }
             ]
-          }
-        : {})
+          }]
+        : [])]
     },
     select: { id: true, internalCode: true, firmCaseNo: true, title: true },
     orderBy: { createdAt: "desc" },
     take: 8
   });
   return items;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 20000 });
 }
 
 export async function addMatterLink(
@@ -699,46 +701,33 @@ export async function addMatterLink(
   relation?: "RELATED_CASE" | "REMAND" | "DERIVED_ENFORCEMENT" | "RELATED_CONTRACT" | "REFERENCE_ONLY"
 ) {
   const session = await requireSession("matters.write");
-  await assertCanAssociateMatter(session.user.id, matterId);
-  await assertCanAssociateMatter(session.user.id, relatedMatterId);
   if (matterId === relatedMatterId) throw new ActionError("不能关联到自身");
   // v1.x P1-7: 关联关系类型（缺省兼容旧行为=一般关联）+ 建链人
   const nextRelation = relation ?? "RELATED_CASE";
-  await roleMutation(session.user, "matters.write", async roleDb => roleDb.matterLink.upsert({
-    where: { matterId_relatedMatterId: { matterId, relatedMatterId } },
-    create: { matterId, relatedMatterId, relation: nextRelation, notedById: session.user.id },
-    update: { relation: nextRelation, notedById: session.user.id }
-  }));
-  await audit({
-    userId: session.user.id,
-    action: "MATTER_LINK_ADD",
-    targetType: "Matter",
-    targetId: matterId,
-    detail: { relatedMatterId, relation: nextRelation }
-  });
+  await prisma.$transaction(async tx => {
+    await lockWritableMatters(tx, session.user, "matters.write", [matterId, relatedMatterId]);
+    await tx.matterLink.upsert({
+      where: { matterId_relatedMatterId: { matterId, relatedMatterId } },
+      create: { matterId, relatedMatterId, relation: nextRelation, notedById: session.user.id },
+      update: { relation: nextRelation, notedById: session.user.id }
+    });
+    await auditTx(tx, { userId: session.user.id, action: "MATTER_LINK_ADD", targetType: "Matter",
+      targetId: matterId, detail: { relatedMatterId, relation: nextRelation } });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 20000 });
   await revalidateMatter(matterId);
 }
 
 export async function removeMatterLink(matterId: string, relatedMatterId: string) {
   const session = await requireSession("matters.write");
-  await assertCanAssociateMatter(session.user.id, matterId);
-  await assertCanAssociateMatter(session.user.id, relatedMatterId);
   // 两个方向都删（无论当初谁关联谁）
-  await roleMutation(session.user, "matters.write", async roleDb => roleDb.matterLink.deleteMany({
-    where: {
-      OR: [
-        { matterId, relatedMatterId },
-        { matterId: relatedMatterId, relatedMatterId: matterId }
-      ]
-    }
-  }));
-  await audit({
-    userId: session.user.id,
-    action: "MATTER_LINK_REMOVE",
-    targetType: "Matter",
-    targetId: matterId,
-    detail: { relatedMatterId }
-  });
+  await prisma.$transaction(async tx => {
+    await lockWritableMatters(tx, session.user, "matters.write", [matterId, relatedMatterId]);
+    await tx.matterLink.deleteMany({ where: { OR: [
+      { matterId, relatedMatterId }, { matterId: relatedMatterId, relatedMatterId: matterId }
+    ] } });
+    await auditTx(tx, { userId: session.user.id, action: "MATTER_LINK_REMOVE", targetType: "Matter",
+      targetId: matterId, detail: { relatedMatterId } });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 20000 });
   await revalidateMatter(matterId);
 }
 
@@ -780,11 +769,11 @@ export async function getMatterById(id: string) {
       },
       linksFrom: {
         where: { relatedMatter: { deletedAt: null, ...matterReadVisibilityFilter(session.user.id, session.user.role, session.user.rolePermissions) } },
-        include: { relatedMatter: { select: { id: true, internalCode: true, firmCaseNo: true, title: true } } }
+        include: { relatedMatter: { select: { id: true, internalCode: true, firmCaseNo: true, title: true, status: true } } }
       },
       linksTo: {
         where: { matter: { deletedAt: null, ...matterReadVisibilityFilter(session.user.id, session.user.role, session.user.rolePermissions) } },
-        include: { matter: { select: { id: true, internalCode: true, firmCaseNo: true, title: true } } }
+        include: { matter: { select: { id: true, internalCode: true, firmCaseNo: true, title: true, status: true } } }
       },
       procedures: {
         orderBy: { order: "asc" },

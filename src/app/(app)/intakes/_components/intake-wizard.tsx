@@ -192,7 +192,9 @@ export function IntakeWizard({
   const firstProcedureType = watch<ProcedureType | undefined>("firstProcedureType");
   const clientId = watch("clientId") ?? "";
   const party0Name = watch("parties.0.name") ?? "";
-  const party0IdNumber = watch("parties.0.partyType") !== "NATURAL_PERSON" ? (watch("parties.0.enterpriseSocialCode") ?? "") : (watch("parties.0.idNumber") ?? "");
+  const party0Type = watch("parties.0.partyType");
+  const party0IdType = watch("parties.0.idType");
+  const party0IdNumber = party0Type !== "NATURAL_PERSON" ? (watch("parties.0.enterpriseSocialCode") ?? "") : (watch("parties.0.idNumber") ?? "");
   const feeType = watch<FeeType | undefined>("feeType");
   const ownerUserId = watch("ownerUserId");
   const coUserIds = watch<string[]>("coUserIds") ?? [];
@@ -202,6 +204,16 @@ export function IntakeWizard({
   const agencyOpts = useMemo(() => agencyOptionsForProcedure(jurisdiction, firstProcedureType), [jurisdiction, firstProcedureType]);
   const kind: CategoryKind = matterCategoryKind(category);
   const nameLabel = kind === "counsel" ? "顾问事项名称" : kind === "project" ? "项目名称" : "案件名称";
+
+  function pickExistingClient(id: string, name: string, type: string | undefined, keepIdentity = false) {
+    setValue("clientId", id, { shouldDirty: true });
+    setValue("parties.0.name", name, { shouldDirty: true, shouldValidate: true });
+    setValue("parties.0.partyType", type === "COMPANY" ? "COMPANY" : type === "ORGANIZATION" ? "ORGANIZATION" : "NATURAL_PERSON", { shouldDirty: true });
+    if (!keepIdentity) {
+      setValue("parties.0.idNumber", "", { shouldDirty: true });
+      setValue("parties.0.enterpriseSocialCode", "", { shouldDirty: true });
+    }
+  }
 
   // 打开（非编辑）即重置：向导常驻挂载，defaultValues 只在首次渲染求值，跨天打开须取「现在」
   useEffect(() => {
@@ -217,11 +229,12 @@ export function IntakeWizard({
     if (!c) return;
     setValue("clientId", c.id, { shouldDirty: true });
     setValue("parties.0.name", c.name, { shouldDirty: true, shouldValidate: true });
-    if (c.type !== "INDIVIDUAL") setValue("parties.0.partyType", c.type === "COMPANY" ? "COMPANY" : "ORGANIZATION", { shouldDirty: true });
+    setValue("parties.0.partyType", c.type === "COMPANY" ? "COMPANY" : c.type === "ORGANIZATION" ? "ORGANIZATION" : "NATURAL_PERSON", { shouldDirty: true });
   }, [open, initialClientId, clientOptions, getValues, setValue]);
 
   // 委托方建档查重（P0-1）：按名称 + 证件号防抖，证件精确命中可一键关联
   useEffect(() => {
+    setDupResult(null);
     if (clientId || dupDismissed) {
       setDupResult(null);
       return;
@@ -252,7 +265,7 @@ export function IntakeWizard({
     }, 500);
     return () => { cancelled = true; clearTimeout(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId, party0Name, party0IdNumber, dupDismissed]);
+  }, [clientId, party0Name, party0IdNumber, party0Type, party0IdType, dupDismissed]);
 
   // 标题自动生成：委托方 与 对方 + 案由；用户手改后不再覆盖
   const [titleTouched, setTitleTouched] = useState(Boolean(editing));
@@ -816,7 +829,7 @@ export function IntakeWizard({
                     ) : null}
                   </div>
                   <div className="fsec-body">
-                    {dupResult && (dupResult.idNumberDuplicate || dupResult.nameDuplicates.length > 0) ? (
+                    {dupResult && (dupResult.idNumberExists || dupResult.nameDuplicates.length > 0) ? (
                       <div className="match-banner">
                         <AlertTriangle />
                         <div className="match-body">
@@ -824,6 +837,11 @@ export function IntakeWizard({
                             <>
                               <div className="match-title">查重命中：已存在同一主体的客户档案{dupResult.idNumberDuplicate.deletedAt ? "（停用档案）" : ""}</div>
                               <div className="match-desc">证件号码已登记于「{dupResult.idNumberDuplicate.name}」。身份持续唯一：建议关联已有档案，避免重复建档；若为重复建档，请到客户档案中合并处理。</div>
+                            </>
+                          ) : dupResult.idNumberExists ? (
+                            <>
+                              <div className="match-title">该证件已登记</div>
+                              <div className="match-desc">请联系管理员核对已有档案。</div>
                             </>
                           ) : (
                             <>
@@ -833,14 +851,14 @@ export function IntakeWizard({
                           )}
                           <div className="match-acts">
                             {dupResult.idNumberDuplicate && !dupResult.idNumberDuplicate.deletedAt ? (
-                              <button type="button" className="btn btn-primary btn-sm" onClick={() => { const d = dupResult.idNumberDuplicate!; setValue("clientId", d.id, { shouldDirty: true }); setValue("parties.0.name", d.name, { shouldDirty: true, shouldValidate: true }); }}>
+                              <button type="button" className="btn btn-primary btn-sm" onClick={() => { const d = dupResult.idNumberDuplicate!; pickExistingClient(d.id, d.name, d.type, true); }}>
                                 关联已有客户
                               </button>
                             ) : null}
                             {dupResult.idNumberDuplicate ? (
                               <a className="btn btn-secondary btn-sm" href={`/clients/${dupResult.idNumberDuplicate.id}`} target="_blank" rel="noreferrer">查看档案</a>
                             ) : null}
-                            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDupDismissed(true)}>仍要新建</button>
+                            {!dupResult.idNumberExists ? <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDupDismissed(true)}>仍要新建</button> : null}
                           </div>
                         </div>
                       </div>
@@ -853,7 +871,7 @@ export function IntakeWizard({
                         clientName={party0Name}
                         clientType={watch("parties.0.partyType") === "ORGANIZATION" ? "COMPANY" : "INDIVIDUAL"}
                         options={clientOptions}
-                        onPickExisting={(id, name) => { setValue("clientId", id, { shouldDirty: true }); setValue("parties.0.name", name, { shouldDirty: true, shouldValidate: true }); }}
+                        onPickExisting={(id, name) => pickExistingClient(id, name, clientOptions.find(option => option.id === id)?.type)}
                         onTypeNew={(name) => { setValue("clientId", "", { shouldDirty: true }); setValue("parties.0.name", name, { shouldDirty: true, shouldValidate: true }); }}
                         onPickYuandian={handlePickYuandian}
                         onClear={() => {
