@@ -40,6 +40,14 @@ describe("新收案完整检索条件", () => {
     expect(run.mock.calls[0][0]).toMatchObject([{ role: "CLIENT_PARTY", idNumber: "TEST-CODE" }, { role: "CO_LITIGANT" }, { role: "THIRD_PARTY", idNumber: "TEST-ID" }]);
     expect(create.mock.calls[0][0].data.queryPayload.queries.map((q: { role: string }) => q.role)).toEqual(["CLIENT_PARTY", "CO_LITIGANT", "THIRD_PARTY"]);
   });
+  it("关联客户与委托方不一致时均须核查，一致时保留原有查询顺序", () => {
+    const other = { role: "OPPOSING_PARTY" as const, name: "对方", idNumber: "OTHER-ID" };
+    const party = { role: "CLIENT_PARTY" as const, name: "客户甲", idNumber: "CLIENT-ID" };
+    const same = buildIntakeConflictQueries({ client: { name: "客户甲", idNumber: "CLIENT-ID" }, parties: [other, party] });
+    expect(same).toEqual([other, party]);
+    const mismatch = buildIntakeConflictQueries({ client: { name: "客户乙", idNumber: "REAL-ID" }, parties: [other, party] });
+    expect(mismatch).toEqual([other, party, { role: "CLIENT_PARTY", name: "客户乙", idNumber: "REAL-ID" }]);
+  });
   it("独立快捷检索仍允许只输入名称", async () => {
     await expect(runCheckAndSave({ queries: [{ name: "测试公司" }] })).resolves.toMatchObject({ ok: true });
   });

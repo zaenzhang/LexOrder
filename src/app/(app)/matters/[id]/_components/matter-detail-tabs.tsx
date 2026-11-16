@@ -576,7 +576,7 @@ export function MatterDetailTabs({
             canEdit={canEditMatterInfo}
             canEditProcedure={canAssociateThisMatter && Boolean(currentProcedure)}
             canEditCustom={canLeadThisMatter}
-            canManageRelated={canAssociateThisMatter}
+            canManageRelated={canAssociateThisMatter && !isArchived}
             onEdit={openMatterEditor}
           />
           {closureNode}

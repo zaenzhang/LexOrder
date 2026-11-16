@@ -33,7 +33,9 @@ export interface ClientDuplicateCandidate {
 }
 
 export interface ClientDuplicateCheck {
-  /** 同证件类型 + 规范化号码的现存客户（含软删——身份持续唯一） */
+  /** 全局证件冲突只暴露是否存在，不因缺少权限而允许重复建档。 */
+  idNumberExists: boolean;
+  /** 操作者有权读取的有效客户。 */
   idNumberDuplicate: ClientDuplicateCandidate | null;
   /** 同名未删除客户（仅提示疑似，不作为自动合并依据） */
   nameDuplicates: ClientDuplicateCandidate[];

@@ -19,11 +19,13 @@ import {
   nameWhereInput,
   type ClientDuplicateCheck
 } from "@/lib/clients/identity";
-import type { ClientIdType } from "@prisma/client";
+import { Prisma, type ClientIdType } from "@prisma/client";
 import { z } from "zod";
 import { ActionError } from "@/lib/action-error";
 import { liveRelationshipWriter, lockClientRelationship } from "./relationship-access";
 import { canMaintainClientMaster } from "./master-access";
+import { clientVisibilityFilter } from "@/lib/permissions";
+import { hasCustomPermission } from "@/lib/roles/catalog";
 
 const candidateSelect = {
   id: true,
@@ -39,29 +41,24 @@ export async function checkClientDuplicate(input: {
   name?: string;
   excludeId?: string;
 }): Promise<ClientDuplicateCheck> {
-  await requireSession("clients.write");
+  const { user } = await requireSession("clients.write");
   const idType = (input.idType || null) as ClientIdType | null;
   const idNumber = normalizeIdNumber(input.idNumber);
-
-  if (!idType || !idNumber) {
-    // 未提供证件信息：仅做同名提示
-    const nameDuplicates = input.name
-      ? await prisma.client.findMany({ where: nameWhereInput({ name: input.name, excludeId: input.excludeId }), select: candidateSelect })
+  return prisma.$transaction(async tx => {
+    const actor = await liveRelationshipWriter(tx, user);
+    const visible = hasCustomPermission(actor, "clients.read")
+      ? clientVisibilityFilter(actor.id, actor.role, actor.rolePermissions) : { id: { in: [] as string[] } };
+    const names = input.name
+      ? await tx.client.findMany({ where: { AND: [nameWhereInput({ name: input.name, excludeId: input.excludeId }), visible] }, select: candidateSelect })
       : [];
-    return { idNumberDuplicate: null, nameDuplicates };
-  }
-
-  const [exact, names] = await Promise.all([
-    prisma.client.findFirst({
-      where: duplicateWhereInput({ idType, idNumber, excludeId: input.excludeId }),
-      select: candidateSelect,
-      orderBy: { deletedAt: { sort: "asc", nulls: "last" } }
-    }),
-    input.name
-      ? prisma.client.findMany({ where: nameWhereInput({ name: input.name, excludeId: input.excludeId }), select: candidateSelect })
-      : Promise.resolve([])
-  ]);
-  return { idNumberDuplicate: exact, nameDuplicates: names };
+    if (!idType || !idNumber) return { idNumberExists: false, idNumberDuplicate: null, nameDuplicates: names };
+    const duplicate = duplicateWhereInput({ idType, idNumber, excludeId: input.excludeId });
+    const [exists, exact] = await Promise.all([
+      tx.client.count({ where: duplicate }),
+      tx.client.findFirst({ where: { deletedAt: null, AND: [duplicate, visible] }, select: candidateSelect })
+    ]);
+    return { idNumberExists: exists > 0, idNumberDuplicate: exact, nameDuplicates: names };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 20000 });
 }
 
 const mergeSchema = z.object({
