@@ -29,9 +29,10 @@
 
 | 文档 | 内容 |
 | --- | --- |
-| [产品需求与验收基线](docs/PRODUCT_REQUIREMENTS_ACCEPTANCE.md) | 三个产品承诺、RQ01—RQ18、完整工作流程与验收样本 |
+| [产品需求与验收基线](docs/PRODUCT_REQUIREMENTS_ACCEPTANCE.md) | 三个产品承诺、RQ01—RQ19、完整工作流程与验收样本 |
 | [TS 主线、双交付与 RAG 重构方案](docs/REFACTOR_DESKTOP_TEAM_RAG.md) | 保留业务基线、模块边界、内置检索、原型与发布门槛 |
-| [实施计划](docs/WORKBENCH_PLAN.md) | M0—M6 阶段对应的 W01—W16 任务、依赖与退出条件 |
+| [双版本 Release 与资源预算](docs/RELEASE_VARIANTS_AND_RESOURCE_BUDGET.md) | Personal 最小化个人版、Server 部署版、产物与未实测的工程目标 |
+| [实施计划](docs/WORKBENCH_PLAN.md) | M0—M6 阶段对应的 W01—W17 任务、依赖与退出条件 |
 | [全球律所招聘能力研究](docs/LAW_FIRM_COMPETENCY_RESEARCH.md) | 官方岗位/培养资料的地区、角色、时效与技能映射 |
 | [专业技能目录](docs/LEGAL_SKILLS_CATALOG.md) | 12 项待实现技能的输入、步骤、产物、复核与评测 |
 | [来源与许可](docs/UPSTREAM_SOURCES.md) | 固定版本事实、官方来源及实际采用边界 |
@@ -57,7 +58,7 @@ node tools/cloud-dev/run.mjs serve
 
 **后续工作主线**：目标与客户指示 → 材料入库 → 事实与争点 → 带来源草稿 → 律师确认 → 行动与客户跟进 → 实际交付与归档。参考项目的处理规则和官方律所能力资料分别进入业务设计与技能规格，来源见上方文档。
 
-**2026-11-16 重构决策**：保留 Next.js / TypeScript / Prisma / PostgreSQL，按需求渐进增强；个人安装与团队自部署共用业务核心，内置 RAG 为共同能力，RAGFlow 可选。首先验证 Electron 托管 Node/Next/原生 PostgreSQL 与 TS 检索原型；LanceDB 是首个检索候选，固定版本及目标平台需实测。全面 Rust 重写和 SQLite/PGlite 业务迁移延期，局部原生优化由实际瓶颈决定。本轮完成文档，桌面安装包、统一 RAG 与技能执行器尚未实现。完整结论见[重构方案](docs/REFACTOR_DESKTOP_TEAM_RAG.md)。
+**2026-11-16 发布与重构决策**：每个正式 release 至少同时提供 **Personal 最小化个人运行版**和 **Server 服务部署版**。共用 TS 业务能力，部署版保留 Next.js / Prisma / PostgreSQL；个人版按独立运行、普通办公机资源预算和业务兼容性选择本地运行时与存储，不预先强制整套服务端组合。两个版本均内置 RAG，个人基础档不默认捆绑生成大模型；LanceDB 为首个检索候选，实际版本/平台需验证。全面 Rust 重写和替换部署版 PG 延期，个人必要的轻量适配单独实施。目前完成的是文档，两个发行产物、统一 RAG 与技能执行器尚未实现。见[发布规格](docs/RELEASE_VARIANTS_AND_RESOURCE_BUDGET.md)及[重构方案](docs/REFACTOR_DESKTOP_TEAM_RAG.md)。
 
 ---
 

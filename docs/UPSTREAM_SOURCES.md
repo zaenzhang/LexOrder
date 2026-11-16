@@ -72,7 +72,7 @@
 - RAGFlow 1.0 的检索支持生成的知识汇总片段；首期适配拟将 `include_knowledge_compilation` 设为 `false`，以可追溯来源片段为基础。API 版本变更需要单独联调。
 - RAGFlow 官方 Cloud 当前公开提供含 API key 的套餐；本轮只核实资料，未购买或实测 API。团队也可以共享一套自部署实例。两种方式均不能替代个人独立模式所需的内置 RAG。
 - AnythingLLM 的默认内置检索、Cherry 的本地模型证明可以把组件交给应用管理，不证明 LexOrder 已完成集成或达到相同效果。中文法律材料仍需独立验收。
-- Next 动态/standalone、Electron/Node 原生模块、Tauri Node sidecar、LanceDB JS/分词、PostgreSQL 升级与 PGlite 限制等官方资料统一列在[重构方案的资料表](REFACTOR_DESKTOP_TEAM_RAG.md#10-官方资料与代码依据)。现有 TS/PG 为默认主线，桌面托管、中文检索和平台支持仍需原型；本轮未新增运行依赖。
+- Next 动态/standalone、Electron/Node 原生模块、Tauri Node sidecar、LanceDB JS/分词、PostgreSQL 升级与 PGlite 限制等官方资料统一列在[重构方案的资料表](REFACTOR_DESKTOP_TEAM_RAG.md#10-官方资料与代码依据)。部署版保留现有 TS/PG，个人运行时与单机存储按资源和业务兼容性选择。SQLite/PGlite 与组件测量依据补见[双版本发布规格](RELEASE_VARIANTS_AND_RESOURCE_BUDGET.md#6-官方与代码依据)；预算数字是本项目工程目标，本轮未新增依赖或运行实测。
 
 ## 4. 法律数据库来源
 

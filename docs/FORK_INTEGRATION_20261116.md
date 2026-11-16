@@ -139,4 +139,4 @@ node tools/cloud-dev/run.mjs verify
 
 推送前发现主分支新增 `97867e2eaec6aa5595de6a1957806f517efcb04e`（个人安装版／团队版／内置 RAG 决策文档）。本次同步保留该文档更新；它没有改变本次验证的应用代码。该批次未实现内置 RAG 或个人安装包。
 
-后续路线更新：同日的[需求与架构修订](REFACTOR_DESKTOP_TEAM_RAG.md)保留 TypeScript / Prisma / PostgreSQL 为业务主线，继续实现个人/团队共同 RAG，并加入[专业技能规格](LEGAL_SKILLS_CATALOG.md)。全面 Rust 迁移不再是默认目标。本记录的二开实施与验证事实不因此改变，新增能力另行验收。
+后续路线更新：同日的[需求与架构修订](REFACTOR_DESKTOP_TEAM_RAG.md)保留 TypeScript 共用业务能力及部署版 Prisma / PostgreSQL 基线，个人运行时与存储按[双版本发布/资源要求](RELEASE_VARIANTS_AND_RESOURCE_BUDGET.md)验证；继续实现共同 RAG 与[专业技能](LEGAL_SKILLS_CATALOG.md)。全面 Rust 迁移不再是默认目标。本记录的二开实施与验证事实不因此改变，新增能力另行验收。

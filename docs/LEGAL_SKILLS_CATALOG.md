@@ -4,7 +4,7 @@
 
 **状态：以下 12 项是待实现的产品工作技能规格，不是已安装的个人助手技能，也不表示执行器、模型质量或法域能力已经验收。** 本轮不新增运行时依赖。实现按[实施计划](WORKBENCH_PLAN.md)接入现有 TS 服务。
 
-需求依据：[RQ01—RQ18](PRODUCT_REQUIREMENTS_ACCEPTANCE.md)。能力参考：[全球律所官方招聘与培养研究](LAW_FIRM_COMPETENCY_RESEARCH.md)，下文 H/A 编号均指该文。招聘能力到产品行为的转换是本项目设计，不表示任何律所认可或认证 LexOrder。
+需求依据：[RQ01—RQ19](PRODUCT_REQUIREMENTS_ACCEPTANCE.md)。能力参考：[全球律所官方招聘与培养研究](LAW_FIRM_COMPETENCY_RESEARCH.md)，下文 H/A 编号均指该文。招聘能力到产品行为的转换是本项目设计，不表示任何律所认可或认证 LexOrder。
 
 ## 1. 技能是什么
 
