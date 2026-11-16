@@ -6,9 +6,10 @@
 
 | 证据类别 | 已完成的工作 | 形成的决定 | 不能据此宣称 |
 | --- | --- | --- | --- |
-| 用户需求 | 整理事项工作流及本轮持续补充 | 双版本、共同独立模型 API、个人无认证、克制界面；性能不设门禁 | 用户已接受未展示的其他限制 |
+| 用户需求 | 整理事项工作流及本轮持续补充 | 双版本：Personal 内置 RAG、Server RAGFlow；均接独立模型 API、个人无认证、克制界面；性能不设门禁 | 用户已接受未展示的其他限制 |
 | 既有项目 | 固定 LawLink/二开提交，核对数据与服务，保留实际移植记录 | 复用 TS、事项与财务/审批链，逐步补材料和交付 | 所有参考项目的能力都已移入 |
 | 桌面/存储 | 官方技术资料、源码耦合盘点、固定版本隔离运行 | 精简 Next/Node；PGlite 为个人库优先实现候选，SQLite 暂不并行迁移 | 性能优劣、全量 PG 兼容或 Windows 发行已验证 |
+| RAG 后端 | 核查 RAGFlow 1.0.0 正式发布、HTTP API、部署与共享权限资料 | 按用户决定：Personal 内置适配以 LanceDB 为首个目标，Server 通过 HTTP 接入 RAGFlow；共用业务/技能/引用 | 两个适配已实现、RAGFlow 全部功能已开放、检索质量或性能比较已完成 |
 | 专业能力 | 16 个主要官方来源，13 个国家/地区及补充材料 | SK01—SK12 的输入、步骤、成果、人工复核与评测 | 全球排名、每国穷尽调查、名所背书或 AI 执业资格 |
 
 研究采用“观察到的行为 → 输入输出与规则 → LexOrder 设计 → 场景验证”。来源事实、产品推论和已运行结果分别标明。动态页面不自动等于固定版本能力；新增依赖固定版本和完整性，实际采用源码时登记文件与许可。招聘页面状态按核查当日记录，后续实现时复核需要更新的来源。
@@ -65,7 +66,7 @@
 | Paperless-ngx | [仓库](https://github.com/paperless-ngx/paperless-ngx)、[文档](https://docs.paperless-ngx.com/) | 扫描、索引、归档和文档处理 | 独立实现原件、派生结果、处理状态与恢复流程 |
 | AnythingLLM | [Desktop](https://docs.anythingllm.com/installation-desktop/overview)、[Docker](https://docs.anythingllm.com/installation-docker/overview)、[内置 LanceDB](https://docs.anythingllm.com/setup/vector-database-configuration/local/lancedb) | 单人安装版、团队部署版、内置检索和嵌入选项 | 参考双交付与组件托管，不能推定自动离线同步 |
 | Cherry Studio | [知识库](https://www.cherryai.com/docs/en/knowledge-base/knowledge-base/)、[本地模型](https://www.cherryai.com/docs/en/pre-basic/settings/local-models/)、[仓库](https://github.com/CherryHQ/cherry-studio) | 分块检查、召回测试、重建索引、可下载本地嵌入/OCR | 参考桌面 RAG 体验；个人版不直接视为团队服务器 |
-| RAGFlow | [官网与 Cloud](https://ragflow.io/)、[1.0 FAQ](https://ragflow.io/docs/v1.0.0/faq)、[1.0 HTTP API](https://ragflow.io/docs/v1.0.0/http_api_reference)、[仓库](https://github.com/infiniflow/ragflow) | 完整解析/检索服务，提供自部署和官方托管路线 | RAG 为必备能力，RAGFlow 为可选后端；锁定并验证实际接口 |
+| RAGFlow | [v1.0.0 正式发布](https://github.com/infiniflow/ragflow/releases/tag/v1.0.0)、[1.0 HTTP API](https://ragflow.io/docs/v1.0.0/http_api_reference)、[部署](https://ragflow.io/docs/v1.0.0/)、[共享权限](https://ragflow.io/docs/v1.0.0/guides/team/resource_sharing/resource_sharing_and_permissions) | 已有解析/索引/检索平台；正式版及权限语义有明确边界 | Server 已选定后端，首个联调目标 1.0.0 并锁定镜像摘要；Personal 保持内置，业务与引用由 LexOrder 管理，接入仍待实施 |
 | Counsel OS | [仓库](https://github.com/eigenlegal/counsel-os)、[LICENSE](https://github.com/eigenlegal/counsel-os/blob/main/LICENSE) | 案件上下文、记录版本引用、文书审阅；部分能力尚未完成 | 独立实现覆盖记录、来源锚点和成果版本流程 |
 | new-litigation-visualization | [仓库](https://github.com/MiaoQichuan/new-litigation-visualization) | 多来源事实、冲突并列、事实时间线和可视化 | 增强 EvidenceItem 和材料引用，不建立平行事实库 |
 | AppFlowy | [仓库](https://github.com/AppFlowy-IO/AppFlowy)、[CodeMap](https://docs.appflowy.io/docs/documentation/software-contributions/architecture/frontend/frontend/codemap) | 界面、Rust 核心与持久层的工程边界 | 参考模块划分；不据其语言选择启动 LexOrder 全面迁移 |
@@ -78,8 +79,9 @@
 - Kosmos 默认源码分支为 `dev`。其[当前 AI 开发文档](https://kosmos.law/docs/dev/subsystems/ai/context/)说明，原生案件聊天引擎于 2026-10-29 退役，界面于次日退役，改由远程 MCP 对外提供案件访问。旧 README 或历史设计不能作为“完整聊天可直接迁入”的证明。
 - Kosmos 的事实与高亮关系仍可参考。其某些材料处理路径会替换存储文件，本项目的设计要求保留原件，不能直接采用该行为。
 - Counsel OS 官方仓库明确说明扫描 PDF OCR、全面原始法律研究等尚未完成；源代码运行路线仍需开发和测试验证。引用与文书模块只能作为审查候选，不能承诺复制即用。
-- RAGFlow 1.0 的检索支持生成的知识汇总片段；首期适配拟将 `include_knowledge_compilation` 设为 `false`，以可追溯来源片段为基础。API 版本变更需要单独联调。
-- RAGFlow 官方 Cloud 当前公开提供含 API key 的套餐；本轮只核实资料，未购买或实测 API。团队也可以共享一套自部署实例。两种方式均不能替代个人独立模式所需的内置 RAG。
+- 用户随后明确采用 **Personal 内置、Server RAGFlow**，覆盖此前“两版内置、RAGFlow 可选”的研究建议。理由是按交付形态分工：个人保持独立，部署版采用现成解析/检索平台；这是产品与工程决定，不是已经运行出的质量或性能比较结论。RAGFlow 1.0.0 为本次固定联调目标，未安装、未联调。
+- RAGFlow 1.0 检索的知识汇总默认开启；文档筛选不证明数据集汇总的全部来源获准。因此 Server 首发**明确设置** `include_knowledge_compilation: false`，由 LexOrder 先确定授权材料、再核对返回片段。官方普通 retrieval API 的 `use_kg: true` 不代表启用多跳图检索；共享 Team 规则也不能替代案件权限。实现边界及验收见[架构第 3 节](REFACTOR_DESKTOP_TEAM_RAG.md#3-rag-架构personal-内置server-使用-ragflow)。
+- Server 首发提供固定开源版本的配套部署配置，也允许管理员接入已验证兼容的独立实例；不以购买 Cloud 为前置。[官方 FAQ](https://ragflow.io/docs/v1.0.0/faq)说明 Cloud 功能和 REST API 可用性受服务方案影响，不把托管演示、DEV/main 或旧版功能混作该固定版本的交付承诺。个人独立版不依赖这些远程服务。
 - AnythingLLM 的默认内置检索、Cherry 的本地模型证明可以把组件交给应用管理，不证明 LexOrder 已完成集成或达到相同效果。中文法律材料仍需独立验收。
 - 技术官方来源与本轮隔离存储试验统一见[架构依据](REFACTOR_DESKTOP_TEAM_RAG.md#10-官方资料与代码依据)及第 2 节。Personal 优先精简 Next/Node + PGlite，Server 保留现有 PG；固定版本的兼容证据不等于正式发行完成。性能暂不作为门禁，原资源阈值已撤销。
 
@@ -98,7 +100,7 @@
 | 来源 | 核实到的项目许可 | 本分支规则 |
 | --- | --- | --- |
 | LawLink | MIT | 保留版权和许可，作为实际源代码基线 |
-| RAGFlow | Apache-2.0 | 选用时作为独立服务接入；分发或修改按许可保留必要信息 |
+| RAGFlow | Apache-2.0 | 按 Server 已定路线作为独立服务接入，实际集成待实施；分发或修改按许可保留必要信息 |
 | Counsel OS、Docassemble | MIT | 可以评估代码复用，仍检查具体文件和依赖 |
 | ANQI、Kosmos、Frappe CRM | AGPLv3 项目基础 | 默认独立实现所需业务行为；直接采用源码时按许可处理 |
 | Paperless-ngx | GPLv3 项目基础 | 默认参考处理流程；实际分发、修改或集成另核边界 |
