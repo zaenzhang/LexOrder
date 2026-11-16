@@ -7,7 +7,7 @@
 | 证据类别 | 已完成的工作 | 形成的决定 | 不能据此宣称 |
 | --- | --- | --- | --- |
 | 用户需求 | 整理事项工作流及本轮持续补充 | 双版本共用 LawLink 业务页面；Personal 内置 RAG、Server RAGFlow，均接独立模型 API；当前仅验证 Server，Personal 由用户后测，UI 改版后置 | 个人版已可运行、用户已验收，或未展示的限制已被接受 |
-| 既有项目 | 固定 LawLink/二开提交，核对数据与服务，保留实际移植记录 | 复用 TS、事项与财务/审批链，逐步补材料和交付 | 所有参考项目的能力都已移入 |
+| 既有项目 | 固定 LawLink/二开提交；§3.5 深读 13 个候选的指定模块，映射 SK01—SK12，保留实际移植记录 | 复用 TS、事项与财务/审批链，逐步补材料和交付 | 所有参考项目的能力都已移入 |
 | 桌面/存储 | 官方资料、固定版本隔离试验、共享根 App 与本机操作者接线、私有 PG 通道反例 | 精简 Next/Node + PGlite；保留历史局部证据，Personal 运行与 Windows 产物待用户验收 | 后续变更后的应用可运行、全量 PG 兼容或 Windows 发行已验证 |
 | RAG 后端 | LanceDB 0.41.0 SDK 原型、抽取/OCR 边界测试、RAGFlow 1.0.0 HTTP 适配与固定部署准备脚本 | 两个适配已有代码；Lance/OCR 新增 26 项通过；RAGFlow 为 `PREPARED_NOT_DEPLOYED`，真实服务/模型联调待配置 | 适配已接通完整业务、真实语义/OCR 质量已验证，或 RAGFlow 已部署 |
 | 专业能力 | 16 个主要官方来源，13 个国家/地区及补充材料 | SK01—SK12 的输入、步骤、成果、人工复核与评测 | 全球排名、每国穷尽调查、名所背书或 AI 执业资格 |
@@ -68,7 +68,7 @@
 | Paperless-ngx | [仓库](https://github.com/paperless-ngx/paperless-ngx)、[文档](https://docs.paperless-ngx.com/) | 扫描、索引、归档和文档处理 | 独立实现原件、派生结果、处理状态与恢复流程 |
 | AnythingLLM | [Desktop](https://docs.anythingllm.com/installation-desktop/overview)、[Docker](https://docs.anythingllm.com/installation-docker/overview)、[内置 LanceDB](https://docs.anythingllm.com/setup/vector-database-configuration/local/lancedb) | 单人安装版、团队部署版、内置检索和嵌入选项 | 参考双交付与组件托管，不能推定自动离线同步 |
 | Cherry Studio | [知识库](https://www.cherryai.com/docs/en/knowledge-base/knowledge-base/)、[本地模型](https://www.cherryai.com/docs/en/pre-basic/settings/local-models/)、[仓库](https://github.com/CherryHQ/cherry-studio) | 分块检查、召回测试、重建索引、可下载本地嵌入/OCR | 参考桌面 RAG 体验；个人版不直接视为团队服务器 |
-| RAGFlow | [v1.0.0 正式发布](https://github.com/infiniflow/ragflow/releases/tag/v1.0.0)、[1.0 HTTP API](https://ragflow.io/docs/v1.0.0/http_api_reference)、[部署](https://ragflow.io/docs/v1.0.0/)、[共享权限](https://ragflow.io/docs/v1.0.0/guides/team/resource_sharing/resource_sharing_and_permissions) | 已有解析/索引/检索平台；正式版及权限语义有明确边界 | Server 已选定后端，首个联调目标 1.0.0 并锁定镜像摘要；Personal 保持内置，业务与引用由 LexOrder 管理，接入仍待实施 |
+| RAGFlow | [v1.0.0 正式发布](https://github.com/infiniflow/ragflow/releases/tag/v1.0.0)、[1.0 HTTP API](https://ragflow.io/docs/v1.0.0/http_api_reference)、[部署](https://ragflow.io/docs/v1.0.0/)、[共享权限](https://ragflow.io/docs/v1.0.0/guides/team/resource_sharing/resource_sharing_and_permissions) | 已有解析/索引/检索平台；正式版及权限语义有明确边界 | Server 已选定后端，首个联调目标 1.0.0 并锁定镜像摘要；Personal 保持内置，业务与引用由 LexOrder 管理，适配已有代码，真实联调与业务集成待完成 |
 | Counsel OS | [仓库](https://github.com/eigenlegal/counsel-os)、[LICENSE](https://github.com/eigenlegal/counsel-os/blob/main/LICENSE) | 案件上下文、记录版本引用、文书审阅；部分能力尚未完成 | 独立实现覆盖记录、来源锚点和成果版本流程 |
 | new-litigation-visualization | [仓库](https://github.com/MiaoQichuan/new-litigation-visualization) | 多来源事实、冲突并列、事实时间线和可视化 | 增强 EvidenceItem 和材料引用，不建立平行事实库 |
 | AppFlowy | [仓库](https://github.com/AppFlowy-IO/AppFlowy)、[CodeMap](https://docs.appflowy.io/docs/documentation/software-contributions/architecture/frontend/frontend/codemap) | 界面、Rust 核心与持久层的工程边界 | 参考模块划分；不据其语言选择启动 LexOrder 全面迁移 |
@@ -122,6 +122,66 @@
 
 本批没有改迁移、审批资格或默认材料加密策略。普通材料、合同/发票及归档附件的加密参数并不相同；私有访问与磁盘加密分别核验，先前密文下载 smoke 不作为普通材料 UI 默认加密的证明。实际范围及剩余前置条件见[实施计划 §8.3](WORKBENCH_PLAN.md#83-m1-当前验证与交接2026-11-16)。
 
+### 3.5 按国际执业能力审查参考实现（2026-11-16）
+
+本次按用户补充，将第 7 节 H01—H16/A01—A02 的职业能力与 SK01—SK12 作为主线，反查参考项目的实际工具、状态转换和失败出口。优先级由“专业产物价值、LexOrder 的真实缺口、现有依赖”决定。国际执业方法用于提高工作质量；首发仍服务中国大陆个人律师与小团队，跨法域实质分析及大型团队治理分别后置验证。
+
+**证据口径：**三组只读研究覆盖下表固定代码的模型、服务、调用出口及部分 UI/测试；主代理复核关键实现并对照 LexOrder `f973b8729bf9214740e507b8ca8a34072e8c5902`。没有运行第三方应用；有服务实现不等于该项目整条产品链已验收。Clio 是商业产品官方说明，只作能力标杆，不当作可移植源码或质量实测；职业资料映射是本项目设计判断。合并文档时已接续主分支 `0ffe98e` 的表单修复与验证记录；当前 M1 实施状态仍见计划 §8.3，本次只更新研究、需求、架构和后续任务。
+
+#### 3.5.1 固定源码与阅读边界
+
+| 项目 / 固定提交 | 本次实际阅读的关键入口 | 可支持的判断与边界 |
+| --- | --- | --- |
+| ANQI `25efcf7f2a3329f9ecdc092b3ced0e17a685c83a` | [候选事实](https://github.com/zj-ai-lab/anqi/blob/25efcf7f2a3329f9ecdc092b3ced0e17a685c83a/src/lib/candidate-facts.js)、[抽取入库](https://github.com/zj-ai-lab/anqi/blob/25efcf7f2a3329f9ecdc092b3ced0e17a685c83a/src/lib/legalrag-bridge.js)、[采纳/拒绝/恢复](https://github.com/zj-ai-lab/anqi/blob/25efcf7f2a3329f9ecdc092b3ced0e17a685c83a/src/routes/legalrag.js)、[期限核心](https://github.com/zj-ai-lab/anqi/blob/25efcf7f2a3329f9ecdc092b3ced0e17a685c83a/src/lib/deadline-core.js)、[重算](https://github.com/zj-ai-lab/anqi/blob/25efcf7f2a3329f9ecdc092b3ced0e17a685c83a/src/lib/engine.js) | 同案逻辑候选与逐材料来源分开、人工处理状态跨重跑保留；期限条件与重算可解释。法律规则内容不因代码存在而视为已核实 |
+| Kosmos `c6454fd5488c0d231e2b4756846f690c679586ca` | [模型](https://github.com/Kosmos-Law/kosmos/blob/c6454fd5488c0d231e2b4756846f690c679586ca/apps/case/models.py)、[来源归属](https://github.com/Kosmos-Law/kosmos/blob/c6454fd5488c0d231e2b4756846f690c679586ca/apps/case/facts/access.py)、[动作](https://github.com/Kosmos-Law/kosmos/blob/c6454fd5488c0d231e2b4756846f690c679586ca/apps/case/facts/views.py)、[事实行](https://github.com/Kosmos-Law/kosmos/blob/c6454fd5488c0d231e2b4756846f690c679586ca/templates/case/facts/fact-row.html)及跨事项来源测试 | 高亮与事实多来源关系、原文邻近操作、同案校验可参考；不照搬 AI block 直接创建正式 Fact 或强制完整日期的行为 |
+| Counsel OS `c4f40f1ffd40146531bcaa7f43e6877a733f92ca` | [上下文](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/src/workspace/context-preparation.ts)、[引用定位](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/src/workspace/citation-location.ts)、[读/引工具](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/src/workspace/chat-tools.ts)、[影响链](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/src/workspace/reference-impact.ts)及[服务调用](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/src/workspace/store.ts)/[HTTP 接线](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/src/workspace/http.ts)、[Word 轮次](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/src/docx/rounds.ts)、[隔离比较](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/src/workspace/document-rounds.ts) | 实际供给范围、歧义引用拒绝、显式版本依赖和两/三版本谈判比较（逐原件/hash 与权限复核，段落/修订/批注有界覆盖，未证明完整 Word 比较或人工意见闭环）。影响链已有后端调用，不能继续据旧 README 认定只有设想；未验证第三方完整 UI |
+| 诉讼可视化 `16c480c3947e78ba49623423ea0486277f5fe99d` | [诉请/材料检查](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-trial-confrontation-master/scripts/check_claims.py)、[事实规格](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-chronicle-master/schemas/casefile.schema.json)及事实/遗漏校验 | 材料未取得与内容未记载分开、金额构成机械核对、事实时间精度。请求权/举证责任封闭表不能作为通用法律真值；金额运算在 LexOrder 用 Decimal |
+| Paperless-ngx `4610171a94e5932e85a80e480032e397cdb6f309` | [摄入全链](https://github.com/paperless-ngx/paperless-ngx/blob/4610171a94e5932e85a80e480032e397cdb6f309/src/documents/consumer.py)、tasks.py、[导出清单](https://github.com/paperless-ngx/paperless-ngx/blob/4610171a94e5932e85a80e480032e397cdb6f309/src/documents/management/commands/document_exporter.py)、[完整性核对](https://github.com/paperless-ngx/paperless-ngx/blob/4610171a94e5932e85a80e480032e397cdb6f309/src/documents/sanity_checker.py) | 分阶段摄入、原件/派生与 manifest、缺失/哈希/孤立文件核对；其可配置的重复件删除不能照搬为法律来件去重 |
+| AnythingLLM `4d09fa5f730698d39f1d783e47316744b260a700` | [逐件材料写入/补偿](https://github.com/Mintplex-Labs/anything-llm/blob/4d09fa5f730698d39f1d783e47316744b260a700/server/models/documents.js)、[上下文组装](https://github.com/Mintplex-Labs/anything-llm/blob/4d09fa5f730698d39f1d783e47316744b260a700/server/utils/chats/stream.js)、[缓存](https://github.com/Mintplex-Labs/anything-llm/blob/4d09fa5f730698d39f1d783e47316744b260a700/server/utils/files/index.js)及 Lance 适配 | 单件失败可分流；指定材料、检索与历史回填分别参与输入，固定材料仍受预算/压缩影响。局部文件名缓存键不证明全局模型失效正确，不直接采用 |
+| Cherry Studio `6b408118141472ff472a1824f300b5a8cbdf968d` | [摄入与恢复](https://github.com/CherryHQ/cherry-studio/blob/6b408118141472ff472a1824f300b5a8cbdf968d/src/main/features/knowledge/ingestion/KnowledgeIngestionService.ts)、[查询](https://github.com/CherryHQ/cherry-studio/blob/6b408118141472ff472a1824f300b5a8cbdf968d/src/main/features/knowledge/query/KnowledgeQueryService.ts)、[分数语义](https://github.com/CherryHQ/cherry-studio/blob/6b408118141472ff472a1824f300b5a8cbdf968d/src/main/features/knowledge/query/search.ts)、[召回测试](https://github.com/CherryHQ/cherry-studio/blob/6b408118141472ff472a1824f300b5a8cbdf968d/src/renderer/pages/knowledge/panels/recallTest/RecallTestProvider.tsx)及结果卡、[重建](https://github.com/CherryHQ/cherry-studio/blob/6b408118141472ff472a1824f300b5a8cbdf968d/src/main/features/knowledge/tasks/reindexSubtreeJobHandler.ts) | 召回测试、历史查询及片段/排名诊断，排名分与相关分分开、任务恢复分类；不复制完整查询/结果日志，重建不得重新抓最新字节覆盖 LexOrder 原件 |
+| RAGFlow `db1cd5929a7885a3074547791f5ecc4d2f891739` / 1.0.0 | [摄入/停止](https://github.com/infiniflow/ragflow/blob/db1cd5929a7885a3074547791f5ecc4d2f891739/internal/service/document/document_ingest.go)、[管线版本](https://github.com/infiniflow/ragflow/blob/db1cd5929a7885a3074547791f5ecc4d2f891739/internal/service/document/document_dataset_update.go)、[同版备份恢复](https://github.com/infiniflow/ragflow/blob/db1cd5929a7885a3074547791f5ecc4d2f891739/docs/administrator/upgrade_and_migration/backup_and_restore_v1.md)及 1.0 HTTP 文档 | 解析/检索平台和 STOPPING/STOPPED、内置解析/自定义 pipeline version、同版恢复边界；不承担 LexOrder 的法律效力判断、业务权限或批准 |
+| Frappe CRM `3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952` | [活动聚合](https://github.com/frappe/crm/blob/3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952/crm/api/activities.py)、[转换与锁](https://github.com/frappe/crm/blob/3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952/crm/fcrm/doctype/crm_lead/crm_lead.py)、[业务事件](https://github.com/frappe/crm/blob/3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952/crm/automation/events.py)及 Activities.vue | 按原对象资格继承活动、明确重复转换语义、事件只携必要标识；未审整个 Frappe outbox，不宣称端到端可靠投递已证实 |
+| Twenty `26fa97ebc8a5773e842ba0d2f01e0b24bed6e7d0` | [运行/重试](https://github.com/twentyhq/twenty/blob/26fa97ebc8a5773e842ba0d2f01e0b24bed6e7d0/packages/twenty-server/src/modules/workflow/workflow-runner/workflow-run/workflow-run.workspace-service.ts)、[等待/恢复](https://github.com/twentyhq/twenty/blob/26fa97ebc8a5773e842ba0d2f01e0b24bed6e7d0/packages/twenty-server/src/modules/workflow/workflow-runner/workspace-services/workflow-waiting-step.workspace-service.ts)、[等待创建/取消](https://github.com/twentyhq/twenty/blob/26fa97ebc8a5773e842ba0d2f01e0b24bed6e7d0/packages/twenty-server/src/modules/workflow/workflow-wait/services/workflow-step-wait.workspace-service.ts) | 运行版本快照、等待单次领取、取消和恢复失败出口；只取少量固定状态，不能引入绕过案件资格的系统执行身份 |
+| docassemble `36d7bd4d27324a3cde2ea92ebd5afe074cdcfe2d` | [依赖引擎相关函数](https://github.com/jhpyle/docassemble/blob/36d7bd4d27324a3cde2ea92ebd5afe074cdcfe2d/docassemble_base/docassemble/base/parse.py)、[依赖变更示例](https://github.com/jhpyle/docassemble/blob/36d7bd4d27324a3cde2ea92ebd5afe074cdcfe2d/docassemble_base/docassemble/base/data/questions/examples/depends-on.yml)、[条件复核](https://github.com/jhpyle/docassemble/blob/36d7bd4d27324a3cde2ea92ebd5afe074cdcfe2d/docassemble_base/docassemble/base/data/questions/examples/review-conditional.yml)、[DOCX 访谈](https://github.com/jhpyle/docassemble/blob/36d7bd4d27324a3cde2ea92ebd5afe074cdcfe2d/docassemble_base/docassemble/base/data/questions/examples/docx-template.yml) | 根据缺失变量追问、上游改变使依赖待重答、保留旧值供复核；不迁入任意 Python/YAML 运行器 |
+| j-lawyer `f523d141327e5c74269dd9c71b54ae1c05a415a3` | [无后续安排查询](https://github.com/jlawyerorg/j-lawyer-org/blob/f523d141327e5c74269dd9c71b54ae1c05a415a3/j-lawyer-server/j-lawyer-server-ejb/src/main/java/com/jdimension/jlawyer/services/ArchiveFileService.java)及客户端调用、[专项表单实体](https://github.com/jlawyerorg/j-lawyer-org/blob/f523d141327e5c74269dd9c71b54ae1c05a415a3/j-lawyer-server-entities/src/main/java/com/jdimension/jlawyer/persistence/ArchiveFileFormsBean.java)、[表单说明](https://jlawyerorg.github.io/j-lawyer-documentation/benutzerhandbuch/aktenverwaltung/falldaten.html) | 无未结日历项的活跃事项巡检、事项内专项字段包；表单版本迁移和完整模板服务未深审，不推断可以直接复用 |
+| AppFlowy `8fcee27d9bd93aad4ee0191d5d8d915d6a9a4e93` | [模块组装](https://github.com/AppFlowy-IO/AppFlowy/blob/8fcee27d9bd93aad4ee0191d5d8d915d6a9a4e93/frontend/rust-lib/flowy-core/src/lib.rs)、[请求/结果边界](https://github.com/AppFlowy-IO/AppFlowy/blob/8fcee27d9bd93aad4ee0191d5d8d915d6a9a4e93/frontend/appflowy_flutter/packages/appflowy_backend/lib/dispatch/dispatch.dart)及 CodeMap | 仅补工程边界证据；本次未深入其 CRDT/同步/权限，不新增 Rust、FFI 或同步迁移任务 |
+
+LawLink 与 appleoppa 仍按 §1—2 的固定业务基线复用，不重复移植。LanceDB/PGlite 的组件合同和局部兼容证据继续沿用架构第 2、10 节，本次没有再做组件运行验证。
+
+**大型平台产品对照（官方页面，2026-11-16）：**[Clio Operate](https://www.clio.com/enterprise/operate/)说明按事项类型组织阶段、分派与审批；[Vincent](https://www.clio.com/enterprise/vincent/)说明带可打开依据的研究、反向论证、跨法域比较、跨文档问题表与起草衔接；[企业安全](https://www.clio.com/enterprise/security/)列出 SSO、审计及 ethical walls。它们说明值得研究的产品问题，未验证内部实现、效果或采购适用性。LexOrder 将“问题表逐格来源”和“事项作业包”作为后续设计判断；不会因此宣称拥有全球法库、案件隔离墙或大型律所部署能力。
+
+#### 3.5.2 十二项专业能力的实现对照
+
+本表将职业证据与软件工具连接；“缺口”指本次未发现足以承诺完整能力的实现证据，不是对第三方全仓的否定。
+
+| 能力及职业来源 | 参考中可确认的体现 | LexOrder 应交付的工具/产物与真实增量 | 阶段 / 工作项 |
+| --- | --- | --- | --- |
+| SK01 客户目标与商业情境；H03/H06/H10/H11、A01 | Frappe 活动连续、Counsel 有界事项上下文；未证明完整客户授权/范围变更流程 | 在既有客户摘要上补目标、范围/排除项、时间/预算假设、决策人和版本化指示；形成 MatterBrief，不能从沟通自动推断授权 | M2 W07.1/W07.2，M3 W10.1 |
+| SK02 事实、证据、时间线；H01/H04/H12/H13/H14 | Kosmos 多来源高亮，ANQI 候选与来源生命周期，诉讼可视化日期精度 | 五类要点、正反证与缺口；同一候选不反复处理，新矛盾仍复核；保留精确/区间/未知时间及原始表述 | M2 W05/W06/W08 |
+| SK03 可复查法律研究；H01/H02/H05/H07/H09 | LawLink/二开已有法库适配；RAGFlow/Cherry 支撑检索，Counsel 保留供给范围；Clio 只有产品层研究对照 | ResearchMemo：问题/法域/相关日期/查询/法源版本/例外/不利依据/未覆盖；检索命中不能替代有效性与适用性核查，真实法库权益继续单独联调 | M3 W09.1/W09.2 |
+| SK04 批判性分析与反向论证；H02/H04/H09/H12/H16 | 诉讼可视化双方回应、材料范围及金额检查；Kosmos 仅提供事实连接基础 | IssueMatrix：要件、支持/反向证据、关键假设、待补材料与下一步；未收到答辩与答辩未回应分开，机械算术与法律判断分开 | M3 W09.1，W10.2 复核 |
+| SK05 商业判断与客户决定；H02/H06/H08/H10 | Frappe 有历史和状态、Counsel 有上下文；没有证明完整的法律方案比较与真实客户决定闭环 | 方案比较、成本/时间假设、范围变化影响和 DecisionDraft；律师建议与客户指示分别确认、留旧版本，不凭模型编概率/预算 | M3 W10.1，依赖 W07 |
+| SK06 结构化起草；H01/H02/H06/H07/H08/H09/H14 | docassemble 缺项依赖与条件复核，j-lawyer 事项字段/模板，LawLink 既有生成快照 | 有界补问、必要模板、段落引用和缺项表；只读准备/渲染值/主数据回写分开，上游改变后重核受影响输入 | M3 W10.2；专业字段包 M5/M6 W15 |
+| SK07 版本化审阅；H02/H03/H04/H05/H09 | Counsel 精确引用与显式影响链、Word 往返比较；诉讼可视化机械核对 | 定位问题—作者回应—实际处理—针对新版本复核；M3 补直接来源影响提示，保留历史批准；Word 谈判归因与批量问题表后续深化 | M3 W10.2；M5 W14 |
+| SK08 法律项目推进；H03/H05/H06/H07/H11/H14/H16 | ANQI 可解释期限，Twenty 等待/重试，j-lawyer 无未结日历项巡检 | 责任/前置/等待/检查日、期限计算依据和新旧差异；外部律师或客户等待仍有内部负责人。技术运行等待不冒充业务等待 | M3 W11.1；M5 W14 |
+| SK09 面向客户的沟通与交付；H03/H05/H06/H11/H13/H16、A01 | Frappe 沟通连续；LawLink 已有文书、审批、归档基础；未证明完整真实交付闭环 | 进展/风险/待决定/下一步简报、确切版本交付清单、实际发送证据与独立客户确认；自动生成不自动对外发送 | M3 W12.1 |
+| SK10 交接与监督；H03/H06/H07/H10/H11/H13/H14、A02 | j-lawyer 巡检、Frappe 按来源资格显示历史、Twenty 可恢复运行；不能据此宣称合伙人监督已完整实现 | 复用责任交接，形成接收检查表、关键期限/未决问题/授权材料包和反馈；Server 真实接收人确认；资料整理与本人事项巡检两版共用 | M5 W14；M3 保留既有责任守卫 |
+| SK11 双语/跨法域；H01/H07/H08/H09/H12 | 本次开源阅读未证实“条款对齐—法律效果差异—当地复核”完整链；多语界面/模型不构成证明，Clio 仅产品对照 | 原/译文固定版本、术语/数字/否定/例外对齐表；按法域分栏研究、来源时点和当地律师待核实项；逐法域与样本验证 | M2 W07.1 预留；M5/M6 W15 |
+| SK12 反馈、知识与方法复用；H03/H05/H10/H11/H15、A02 | Counsel 版本化知识及来源影响、docassemble/j-lawyer 模板化方法；一般知识库不能证明脱敏/专业审核 | 首发手工选入/脱敏/审核；后续从复核反馈形成版本化作业包、条款立场与例外、复审任务及失效影响 | M3 W09.3；M5 W14/W15 |
+
+#### 3.5.3 采用决定与不直接搬入的行为
+
+1. **材料操作与法律来源分开。**采用 Paperless/AnythingLLM 的逐件摄入和失败补救；同一次操作重试幂等，同内容的不同来件/举证方/收件时间保留业务来源。LexOrder 的短信附件已按 `(smsId, sha256)` 区分重复操作和重复送达；通用摄入沿用此语义。不得用全局 hash 命中向无权用户透露其他事项。
+2. **候选、来源、人工裁决分开。**采用 ANQI 的跨材料人工处理记忆；只有严格相同身份且无实质变化的候选沿用处理结果。新矛盾、身份修正或新版本实质变化须复核；语义相似仅提合并建议。人工拒绝不是法律真值，也不能让新反证永久消失；费用候选匹配不等于到账确认。
+3. **输入覆盖和检索诊断支持专业判断。**把 LexOrder 既有分段/截断/skipped/errors 扩成 AiRun 通用记录，分别保存接收、解析、召回、实际供给模型及引用范围；供给不证明模型理解。参考 Cherry 的召回测试/片段/排序展示，LexOrder 另补材料、索引和配置快照以复现查询；不把排名/相关分称作事实置信度或胜诉概率；不将原文和完整查询写普通日志。
+4. **检索与完整审查分别设计。**采用 AnythingLLM/Counsel 的输入组织经验，定向问答按问题召回，指定材料审查按材料/页段清单推进；被预算或压缩排除的部分可见。法律研究额外核对来源身份/时点/效力角色及反向依据。多文档问题表是后续产品设计，每格保留来源和未知原因，不以表格填满代表尽调完成。
+5. **文书准备和复核保留副作用边界。**借 docassemble 的依赖复核增强现有模板；当前 `template-engine.ts` 的 `applyOverrides` 会写 Client/Party，AI 补问或预览不得隐式走该回写。首发已有 SK07 的作者回应和处理记录必须落地；Counsel 的 Word 谈判轮次比较留 M5，缺少原始基线时不能归因所有改动，更不能把文字保留当成法律同意。
+6. **变更影响沿显式关系计算。**采用 Counsel 的不可变引用依赖；M3 先覆盖直接来源变化，未连边/截断明确范围有限。M5 再处理经验和旧成果间接影响；不引入图数据库，不重绑历史引用、批准或交付。
+7. **协作复用现有责任与对象。**Frappe 的历史继承须逐来源鉴权；LexOrder 已有客户关联事项和最近动态（`clients/insights.ts`），增量是连续分页、沟通/跟进/指示/决定/交付链接，不能写成没有客户全景。Twenty 仅用于固定步骤、等待与恢复，技术任务不取代 WorkResponsibility；j-lawyer 的“无下一动作”只提示补安排，不自动造法定期限。
+8. **原件及恢复独立于可重建索引。**采用 Paperless 清单/完整性检查和 RAGFlow 同版恢复边界；索引重建读取固定原件，外部内容改变须新版本。派生复用按完整内容/解析/嵌入指纹且复核权限，不按文件名；主动取消的外发不因重启自动续做。现有队列/可靠投递继续增强，不另搭平台。
+
+本次不采用通用工作流画布、平行 CRM、完整 Docassemble/Frappe 服务、AppFlowy 语言/同步迁移或额外 RAG 后端。SSO、显式跨团队隔离墙、数据区域及企业审计导出属于 Server 后续专项候选：已有角色、受限事项和审计不是这些能力的完整证明，先明确目标部署和验收再立项；不改变 Personal 无认证。后续顺序与可验收条件见[实施计划 §3.9—3.10](WORKBENCH_PLAN.md#39-参考研究进入-m2m4-的具体增量)。
+
 ### 当前项目状态对计划的影响
 
 - 前批初始评估为 `97867e2`，随后对齐 main `2997b54754565081271ca4b66139949d310e2fe0`；当前 M1 从 `b313adf8` 接续。appleoppa 的通用功能、迁移、权限与调度适配已合入；本轮保留其源码及来源记录。新增抽取/OCR 原型仍未接完整业务管线，局部传票解析和 15 分钟启动补扫不等于通用 OCR、完整休眠或数据恢复已完成。
@@ -149,7 +209,7 @@
 | 来源 | 核实到的项目许可 | 本分支规则 |
 | --- | --- | --- |
 | LawLink | MIT | 保留版权和许可，作为实际源代码基线 |
-| RAGFlow | Apache-2.0 | 按 Server 已定路线作为独立服务接入，实际集成待实施；分发或修改按许可保留必要信息 |
+| RAGFlow | Apache-2.0 | 按 Server 已定路线作为独立服务接入，已有原型适配，真实联调/业务集成待完成；分发或修改按许可保留必要信息 |
 | Counsel OS、Docassemble | MIT | 可以评估代码复用，仍检查具体文件和依赖 |
 | ANQI、Kosmos、Frappe CRM | AGPLv3 项目基础 | 默认独立实现所需业务行为；直接采用源码时按许可处理 |
 | Paperless-ngx | GPLv3 项目基础 | 默认参考处理流程；实际分发、修改或集成另核边界 |
