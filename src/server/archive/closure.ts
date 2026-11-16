@@ -12,6 +12,8 @@ import {commissionPositions} from '@/server/finance/ledger-corrections';
 import {readLedger} from '@/server/finance/ledger-storage';
 import {auditTx} from '@/server/audit';
 import { ActionError } from "@/lib/action-error";
+import { resolvePersonalActor } from "@/server/runtime/personal";
+import { hasPersonalCapability, personalAuditMetadata } from "@/lib/runtime/capabilities";
 export async function closureReady(db:Prisma.TransactionClient){const [r]=await db.$queryRaw<{ready:boolean}[]>`SELECT to_regclass('public."ArchiveClosurePlan"') IS NOT NULL AS ready`;return r?.ready===true;}
 export async function closureFacts(db:Prisma.TransactionClient,matterId:string){
  const procedures=await db.matterProcedure.findMany({where:{matterId,engagement:'ENGAGED',status:{not:'CONCLUDED'}},orderBy:{id:'asc'},select:{id:true,type:true,customLabel:true,status:true,leadLawyerId:true}});
@@ -35,9 +37,11 @@ export async function closureFacts(db:Prisma.TransactionClient,matterId:string){
  return {snapshot,fingerprint:fingerprint(snapshot),financeSnapshot:finance,blockers,financeOpen:[finance.outstanding,finance.unallocated,finance.commissionBalance,finance.invoiceOutstanding,finance.clientFundsReceived].some(n=>!new Prisma.Decimal(n).eq(0))};
 }
 export async function assertTailAuthority(db:Prisma.TransactionClient,userId:string,matterId:string){
+ const personal=await resolvePersonalActor(db,userId);
  const u=await db.user.findUnique({where:{id:userId},select:{active:true,role:true}});if(!u?.active)throw new ActionError('收尾负责人账号无效');
  // 内置财务岗的 finance.tail 在代码目录（scopeFor 仅解析 CUSTOM，见 tailOwnerQualified 注释）
- if(u.role!=='FINANCE'){const role=await resolveRoleUser(userId,u.role,db);if(!role.enabled||scopeFor(role,'finance.tail')!=='ALL')throw new ActionError('归档后财务处理须独立的财务收尾权限');}
+ if(personal){if(!hasPersonalCapability(personal,'finance.tail')||!await db.matter.count({where:{id:matterId,deletedAt:null,...matterAssociationFilter(userId)}}))throw new ActionError('仅本案本机操作者可处理财务收尾');}
+ else if(u.role!=='FINANCE'){const role=await resolveRoleUser(userId,u.role,db);if(!role.enabled||scopeFor(role,'finance.tail')!=='ALL')throw new ActionError('归档后财务处理须独立的财务收尾权限');}
  if(!await closureReady(db))throw new ActionError('归档收尾尚未启用');
  const [plan]=await db.$queryRaw<{financeOwnerId:string|null}[]>`SELECT "financeOwnerId" FROM "ArchiveClosurePlan" WHERE "matterId"=${matterId}`;
  if(plan?.financeOwnerId!==userId)throw new ActionError('只有本案指定的财务收尾负责人可以追加财务业务');
@@ -48,6 +52,8 @@ export const closureInput=z.object({matterId:z.string().cuid(),revision:z.number
  *  scopeFor 只解析 CUSTOM 角色的 RolePermission 表，对内置角色恒为 undefined——此前
  *  按它判定会把内置财务静默判无，2026-09-21 全流程验收发现）。两类角色在此统一判定。 */
 async function tailOwnerQualified(db:Prisma.TransactionClient,userId:string,matterId:string):Promise<string|null>{
+ const personal=await resolvePersonalActor(db,userId);
+ if(personal)return hasPersonalCapability(personal,'finance.tail')&&await db.matter.count({where:{id:matterId,deletedAt:null,...matterAssociationFilter(userId)}})?null:'收尾负责人须为本案本机操作者';
  const owner=await db.user.findUnique({where:{id:userId},select:{active:true,role:true}});
  if(!owner?.active)return '收尾负责人账号不存在或已停用';
  const r=await resolveRoleUser(userId,owner.role,db);
@@ -64,6 +70,8 @@ async function tailOwnerQualified(db:Prisma.TransactionClient,userId:string,matt
 }
 export async function saveClosureTx(db:Prisma.TransactionClient,userId:string,input:z.input<typeof closureInput>){
  const d=closureInput.parse(input);await db.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(72606101)`;
+ const personal=await resolvePersonalActor(db,userId);
+ if(personal&&d.financeOwnerId&&d.financeOwnerId!==personal.id)throw new ActionError('个人工作区只能指定本人承担财务收尾');
  const u=await db.user.findUniqueOrThrow({where:{id:userId},select:{role:true,active:true}}),role=await resolveRoleUser(userId,u.role,db);
  if(!u.active||!role.enabled||(u.role==='CUSTOM'&&!scopeFor(role,'archive.submit')))throw new ActionError('无提交归档权限');
  if(!await db.matter.count({where:{id:d.matterId,deletedAt:null,...matterAssociationFilter(userId)}}))throw new ActionError('仅本案经办可安排收尾');
@@ -85,7 +93,7 @@ export async function saveClosureTx(db:Prisma.TransactionClient,userId:string,in
   const newOwnerIssue=await tailOwnerQualified(db,d.financeOwnerId,d.matterId);
   if(newOwnerIssue)throw new ActionError(newOwnerIssue);
   await db.$executeRaw`UPDATE "ArchiveClosurePlan" SET "financeOwnerId"=${d.financeOwnerId},reason=${d.reason},revision=revision+1,"updatedAt"=NOW() WHERE "matterId"=${d.matterId}`;
-  await auditTx(db,{userId,action:'ARCHIVE_CLOSURE_HANDOVER',targetType:'Matter',targetId:d.matterId,detail:{previousFinanceOwnerId:plan.financeOwnerId,newFinanceOwnerId:d.financeOwnerId,reason:d.reason}});
+  await auditTx(db,{userId,action:'ARCHIVE_CLOSURE_HANDOVER',targetType:'Matter',targetId:d.matterId,detail:{previousFinanceOwnerId:plan.financeOwnerId,newFinanceOwnerId:d.financeOwnerId,reason:d.reason,...personalAuditMetadata(personal,'CHANGE')}});
   if(d.financeOwnerId!==userId)await db.notification.create({data:{userId:d.financeOwnerId,type:'SYSTEM',priority:'HIGH',title:'案件财务收尾责任已交接',content:d.reason,href:`/finance/reconciliation?matterId=${d.matterId}`,refType:'ArchiveClosurePlan',refId:d.matterId}});
   return {ok:true,handedOver:true};
  }
@@ -95,7 +103,7 @@ export async function saveClosureTx(db:Prisma.TransactionClient,userId:string,in
  if((plan?.revision??null)!==d.revision)throw new ActionError('收尾安排已变化，请刷新');
  if(plan)await db.$executeRaw`UPDATE "ArchiveClosurePlan" SET "financeOwnerId"=${d.financeOwnerId},"serviceCompletedAt"=${d.serviceCompletedAt},reason=${d.reason},snapshot=${JSON.stringify(facts.snapshot)}::jsonb,fingerprint=${facts.fingerprint},revision=revision+1,"updatedAt"=NOW() WHERE "matterId"=${d.matterId}`;
  else await db.$executeRaw`INSERT INTO "ArchiveClosurePlan" (id,"matterId","financeOwnerId","serviceCompletedAt",reason,snapshot,fingerprint,"updatedAt") VALUES (${randomUUID()},${d.matterId},${d.financeOwnerId},${d.serviceCompletedAt},${d.reason},${JSON.stringify(facts.snapshot)}::jsonb,${facts.fingerprint},NOW())`;
- await auditTx(db,{userId,action:'ARCHIVE_CLOSURE_PLAN',targetType:'Matter',targetId:d.matterId,detail:{financeOwnerId:d.financeOwnerId,reason:d.reason,previousRevision:d.revision,fingerprint:facts.fingerprint}});
+ await auditTx(db,{userId,action:'ARCHIVE_CLOSURE_PLAN',targetType:'Matter',targetId:d.matterId,detail:{financeOwnerId:d.financeOwnerId,reason:d.reason,previousRevision:d.revision,fingerprint:facts.fingerprint,...personalAuditMetadata(personal,'CHANGE')}});
  if(d.financeOwnerId&&d.financeOwnerId!==userId)await db.notification.create({data:{userId:d.financeOwnerId,type:'SYSTEM',priority:'HIGH',title:'案件财务收尾责任已指定',content:d.reason,href:`/finance/reconciliation?matterId=${d.matterId}`,refType:'ArchiveClosurePlan',refId:d.matterId}});
  return {ok:true};
 }

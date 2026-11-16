@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/options";
+import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { storage } from "@/lib/storage";
 import { ensureExt } from "@/lib/storage/mime-ext";
@@ -14,7 +13,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session?.user) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });
   }

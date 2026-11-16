@@ -2,6 +2,7 @@ import { scopeFor, type RoleGrant, type PermissionKey } from "@/lib/roles/catalo
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ActionError } from "@/lib/action-error";
+import { hasPersonalCapability } from "@/lib/runtime/capabilities";
 
 /**
  * 业务管理判定：合伙人岗位，或获按人授予的业务管理权（User.managerAuthorized，
@@ -23,7 +24,8 @@ export function hasAllScope(grants: RoleGrant[] | undefined, key: PermissionKey)
  * 自己收的案件；只有具备「确认实收到账」（finance.confirm）的财务管理人员才能确认或退回。
  * 内置角色里仅「财务」自带该权限，其余人员由管理后台的自定义角色授予，人选与范围在后台配置。
  */
-export function canConfirmReceipt(user: { role: string; rolePermissions?: RoleGrant[] | null }): boolean {
+export function canConfirmReceipt(user: { role: string; rolePermissions?: RoleGrant[] | null; runtimeMode?: "PERSONAL" | "SERVER" }): boolean {
+  if (user.runtimeMode === "PERSONAL") return hasPersonalCapability(user, "finance.confirm");
   if (user.role === "CUSTOM") return scopeFor({ role: user.role, rolePermissions: user.rolePermissions ?? undefined }, "finance.confirm") === "ALL";
   return user.role === "FINANCE";
 }

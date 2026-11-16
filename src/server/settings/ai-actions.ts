@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { requireSystemAdmin } from "@/lib/auth/session";
+import { requireWorkspaceConfiguration } from "@/lib/auth/session";
 import { audit } from "@/server/audit";
 import {
   saveAiSettings as saveSettings,
@@ -19,12 +19,12 @@ const saveSchema = z.object({
 const clearSchema = z.object({ confirm: z.literal(true) });
 
 export async function getAiSettingsPublic() {
-  await requireSystemAdmin();
+  await requireWorkspaceConfiguration();
   return readPublicAiSettings();
 }
 
 export async function saveAiSettingsAction(input: z.infer<typeof saveSchema>) {
-  const session = await requireSystemAdmin();
+  const session = await requireWorkspaceConfiguration();
   const data = saveSchema.parse(input);
 
   await saveSettings({
@@ -50,7 +50,7 @@ export async function saveAiSettingsAction(input: z.infer<typeof saveSchema>) {
 }
 
 export async function clearAiKeyAction(input: z.infer<typeof clearSchema>) {
-  const session = await requireSystemAdmin();
+  const session = await requireWorkspaceConfiguration();
   clearSchema.parse(input);
 
   await saveSettings({ clearKey: true });
@@ -67,7 +67,7 @@ export async function clearAiKeyAction(input: z.infer<typeof clearSchema>) {
 
 /** 测试连接：发一个 ping，验证 base_url + key + text_model 可用 */
 export async function testAiConnection() {
-  const session = await requireSystemAdmin();
+  const session = await requireWorkspaceConfiguration();
   try {
     const res = await aiChat({
       userId: session.user.id,

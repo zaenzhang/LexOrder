@@ -42,4 +42,24 @@ describe("个人资料表单", () => {
     await waitFor(() => expect(signOut).toHaveBeenCalledWith({ callbackUrl: "/login" }));
     expect(save.mock.calls[0][0].currentPassword).toBe("fixture-password");
   });
+  it("Personal 的姓名与联系邮箱可留空，不展示账号或密码字段", async () => {
+    render(<ProfileBasicsForm profile={{ ...profile, name: "", email: "" }} runtimeMode="PERSONAL" />);
+    expect(screen.getByLabelText("姓名（选填）")).toHaveValue("");
+    expect(screen.getByLabelText("邮箱（选填）")).toHaveValue("");
+    expect(screen.queryByLabelText("当前密码")).not.toBeInTheDocument();
+    expect(screen.queryByText("邮箱（登录账号）")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "保存基本资料" }));
+    await waitFor(() => expect(save).toHaveBeenCalled());
+    expect(save.mock.calls[0][0]).toMatchObject({ name: "", email: "" });
+    expect(signOut).not.toHaveBeenCalled();
+  });
+  it("Personal 修改联系方式后留在资料页，不触发 NextAuth 退出", async () => {
+    save.mockResolvedValue({ emailChanged: true });
+    render(<ProfileBasicsForm profile={profile} runtimeMode="PERSONAL" />);
+    fireEvent.change(screen.getByLabelText("邮箱（选填）"), { target: { value: "contact@example.invalid" } });
+    expect(screen.queryByLabelText("当前密码")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "保存基本资料" }));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(signOut).not.toHaveBeenCalled();
+  });
 });

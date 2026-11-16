@@ -3,10 +3,10 @@
  * 近 30 天各服务调用量 / 失败率 / 平均耗时 + 最近 10 条失败记录。
  */
 import { prisma } from "@/lib/prisma";
-import { requireSystemAdmin } from "@/lib/auth/session";
+import { requireWorkspaceConfiguration } from "@/lib/auth/session";
 
 export async function getExternalCallStats() {
-  await requireSystemAdmin();
+  await requireWorkspaceConfiguration();
   const since = new Date(Date.now() - 30 * 86_400_000);
 
   const [byServiceRaw, failures, totalCalls] = await Promise.all([

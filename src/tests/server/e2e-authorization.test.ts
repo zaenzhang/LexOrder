@@ -23,7 +23,7 @@ const { db, session, canRead } = vi.hoisted(() => {
   };
   return {
     db,
-    session: { expires: new Date(Date.now() + 86_400_000).toISOString(), user: { id: "clawyer0000000000000000001", role: "CUSTOM", systemRole: "NONE", avatar: null, rolePermissions: [] as import("@/lib/roles/catalog").RoleGrant[] } },
+    session: { expires: new Date(Date.now() + 86_400_000).toISOString(), user: { runtimeMode: "SERVER" as const, id: "clawyer0000000000000000001", role: "CUSTOM", systemRole: "NONE", avatar: null, rolePermissions: [] as import("@/lib/roles/catalog").RoleGrant[] } },
     canRead: vi.fn(async () => true)
   };
 });

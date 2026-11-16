@@ -3,12 +3,15 @@ import { ActionError } from "@/lib/action-error";
 import { intakeVisibilityFilter, matterAssociationFilter } from "@/lib/permissions";
 import { scopeFor, type RoleUser } from "@/lib/roles/catalog";
 import { checkRoleMutation, resolveRoleUser } from "@/lib/roles/service";
+import { resolvePersonalActor } from "@/server/runtime/personal";
+import { hasPersonalCapability } from "@/lib/runtime/capabilities";
 
 export type RelationshipUser = RoleUser & { id: string };
 
 /** 沟通正文不继承财务岗位对客户主档的全所读取豁免。 */
 export function clientRelationshipFilter(user: RelationshipUser, mode: "read" | "write"): Prisma.ClientWhereInput {
   const permission = mode === "read" ? "clients.read" : "clients.write";
+  if (user.runtimeMode === "PERSONAL") return hasPersonalCapability(user, permission) ? { ownerUserId: user.id } : { id: { in: [] } };
   if (user.role === "CUSTOM") {
     const scope = scopeFor(user, permission);
     if (!scope) return { id: { in: [] } };
@@ -33,6 +36,8 @@ export function canCloseClientFollowUp(user: RelationshipUser, assigneeId: strin
 export async function liveRelationshipWriter(tx: Prisma.TransactionClient, user: RelationshipUser): Promise<RelationshipUser> {
   // 与账号停用、改岗和角色授权变更使用同一事务锁，内置角色也不能凭旧页面写入。
   await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(72606101)`;
+  const personal = await resolvePersonalActor(tx, user.id);
+  if (personal) return personal;
   await checkRoleMutation(tx, user, "clients.write");
   const live = await tx.user.findUnique({ where: { id: user.id }, select: { active: true, role: true } });
   if (!live?.active || live.role !== user.role) throw new ActionError("账号或岗位已变化，请重新登录");

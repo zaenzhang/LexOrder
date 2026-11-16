@@ -7,6 +7,7 @@ import { resolveRoleUser } from "@/lib/roles/service";
 import { audit } from "@/server/audit";
 import { verifyLoginSecondFactor } from "@/server/auth/totp-login";
 import { recordLoginFailure } from "@/lib/auth/login-lockout";
+import { isPersonalMode } from "@/lib/runtime/mode";
 
 // v1.x P0-3: 登录失败锁定参数（连续 5 次失败锁 15 分钟；成功登录清零）
 const LOGIN_LOCKOUT_THRESHOLD = 5;
@@ -31,6 +32,7 @@ export const authOptions: NextAuthOptions = {
         password: { label: "密码", type: "password" }
       },
       async authorize(credentials) {
+        if (isPersonalMode()) return null;
         const parsed = credentialsSchema.safeParse(credentials);
         if (!parsed.success) return null;
 

@@ -6,7 +6,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useSession, signOut } from "next-auth/react";
+import { signOut } from "next-auth/react";
+import { useWorkspaceActor } from "@/components/workspace-actor-provider";
 import { Search, ChevronDown, Plus, LogOut, Settings as SettingsIcon, Menu, ShieldCheck, ScanSearch } from "lucide-react";
 import { roleDisplayName } from "@/lib/roles/catalog";
 import { canEnterAdminWorkspace } from "@/lib/auth/system-role";
@@ -25,13 +26,13 @@ import { useTopbarActionValue } from "./topbar-action";
 import { hasCustomPermission } from "@/lib/roles/catalog";
 
 export function Topbar({ onMobileMenuToggle, userAvatar }: { onMobileMenuToggle?: () => void; userAvatar?: string | null }) {
-  const { data: session } = useSession();
+  const user = useWorkspaceActor();
   const router = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
   const pageAction = useTopbarActionValue();
-  const user = session?.user;
-  const displayName = user?.name ?? "";
-  const roleLabel = user?.role ? roleDisplayName(user) : "";
+  const personal = user?.runtimeMode === "PERSONAL";
+  const displayName = user?.name || (personal ? "本机操作者" : "");
+  const roleLabel = personal ? "个人工作区" : user?.role ? roleDisplayName(user) : "";
 
   const canCreateIntake = user ? hasCustomPermission(user as Parameters<typeof hasCustomPermission>[0], "intakes.create") : false;
   const canReadMatters = user ? hasCustomPermission(user as Parameters<typeof hasCustomPermission>[0], "matters.write") : false;
@@ -98,19 +99,21 @@ export function Topbar({ onMobileMenuToggle, userAvatar }: { onMobileMenuToggle?
                 个人设置
               </Link>
             </DropdownMenuItem>
-          {canEnterAdminWorkspace(user) ? (
+          {personal || canEnterAdminWorkspace(user ?? undefined) ? (
             <DropdownMenuItem asChild>
               <a href="/admin" target="_blank" rel="noopener" className="cursor-pointer">
                 <ShieldCheck />
-                管理后台
+                {personal ? "工作区设置" : "管理后台"}
               </a>
             </DropdownMenuItem>
           ) : null}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => signOut({ callbackUrl: "/login" })} className="cursor-pointer text-[var(--red)] focus:text-[var(--red)]">
-            <LogOut />
-            退出登录
-          </DropdownMenuItem>
+          {!personal && <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => signOut({ callbackUrl: "/login" })} className="cursor-pointer text-[var(--red)] focus:text-[var(--red)]">
+              <LogOut />
+              退出登录
+            </DropdownMenuItem>
+          </>}
         </DropdownMenuContent>
       </DropdownMenu>
 

@@ -13,10 +13,12 @@ import { V1_TEMPLATES } from "../../src/lib/template-builder-v1";
 import { writeFile } from "../../src/lib/storage/local";
 import { encryptBuffer, sha256 } from "../../src/lib/storage/crypto";
 
-export async function seedV08Templates(prisma: PrismaClient) {
-  // 找一个系统超级管理员作为 uploadedBy
+export async function seedV08Templates(prisma: PrismaClient, personalActorId?: string) {
+  // Personal initialization supplies its verified operator; Server retains its administrator seed.
   const admin = await prisma.user.findFirst({
-    where: { systemRole: "SUPER_ADMIN", active: true },
+    where: personalActorId
+      ? { id: personalActorId, active: true, role: "INDEPENDENT_LAWYER", systemRole: "NONE", managerAuthorized: false, passwordHash: "!personal-no-login" }
+      : { systemRole: "SUPER_ADMIN", active: true },
     select: { id: true }
   });
   if (!admin) {

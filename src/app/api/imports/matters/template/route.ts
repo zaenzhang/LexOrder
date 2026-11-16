@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { isManager } from "@/lib/permissions";
-import { getServerSession } from "next-auth";
+import { getSession } from "@/lib/auth/session";
 
-import { authOptions } from "@/lib/auth/options";
 import { isSystemAdmin } from "@/lib/auth/system-role";
 import { buildMatterImportTemplate } from "@/server/imports/template";
 
@@ -10,11 +9,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session?.user) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });
   }
-  if (!isSystemAdmin(session.user) && !isManager(session.user)) {
+  if (session.user.runtimeMode !== "PERSONAL" && !isSystemAdmin(session.user) && !isManager(session.user)) {
     return NextResponse.json({ error: "无权访问" }, { status: 403 });
   }
 

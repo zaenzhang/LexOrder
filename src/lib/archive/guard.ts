@@ -12,6 +12,8 @@
  */
 import { scopeFor } from "@/lib/roles/catalog";
 import { requireSession } from "@/lib/auth/session";
+import { resolvePersonalActor } from "@/server/runtime/personal";
+import { hasPersonalCapability } from "@/lib/runtime/capabilities";
 import { financeRoleAssociatesAnyMatter, matterAssociationFilter } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { ActionError } from "@/lib/action-error";
@@ -87,7 +89,7 @@ export async function assertDocumentWritable(
   if (matter.status !== "ARCHIVED") return;
 
   const session = opts?.actor ? { user: opts.actor } : await requireSession("personal");
-  if(scopeFor(session.user,"archive.supplement")!=="OWN")throw new ActionError("归档后追加材料须单独授予补充归档权限");
+  if(!hasPersonalCapability(await resolvePersonalActor(prisma,session.user.id),"archive.supplement")&&scopeFor(session.user,"archive.supplement")!=="OWN")throw new ActionError("归档后追加材料须单独授予补充归档权限");
   if (opts.kind === "modify") {
     throw new ActionError("案件已归档，材料不可修改或删除");
   }

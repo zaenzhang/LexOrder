@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireSession, requireSystemAdmin } from "@/lib/auth/session";
+import { requireSession, requireWorkspaceConfiguration } from "@/lib/auth/session";
+import { isPersonalMode } from "@/lib/runtime/mode";
+import { resolvePersonalActor } from "@/server/runtime/personal";
 import { audit, auditTx } from "@/server/audit";
 import { shDayKey } from "@/lib/ui/sh-time";
 import { storage } from "@/lib/storage";
@@ -65,7 +67,7 @@ export async function getTemplate(id: string) {
 }
 
 export async function toggleTemplate(input: z.infer<typeof templateToggleSchema>) {
-  const session = await requireSystemAdmin();
+  const session = await requireWorkspaceConfiguration();
   const data = templateToggleSchema.parse(input);
 
   await prisma.documentTemplate.update({
@@ -222,7 +224,7 @@ const MAX_TEMPLATE_SIZE = 10 * 1024 * 1024;
  * 变量清单自动提取（页眉页脚一并扫描），手工补充变量兜底拆分 run 漏检。
  */
 export async function uploadDocumentTemplate(formData: FormData) {
-  const session = await requireSystemAdmin();
+  const session = await requireWorkspaceConfiguration();
   const data = uploadTemplateSchema.parse({
     name: formData.get("name"),
     category: formData.get("category"),
@@ -243,6 +245,7 @@ export async function uploadDocumentTemplate(formData: FormData) {
 
   const enc = encryptBuffer(buffer);
   const created = await prisma.$transaction(async tx => {
+    if (isPersonalMode()) await resolvePersonalActor(tx, session.user.id);
     const path = await storage.writeFile("templates", enc.ciphertext);
     const tmpl = await tx.documentTemplate.create({
       data: {
@@ -291,7 +294,7 @@ export async function uploadDocumentTemplate(formData: FormData) {
 
 /** 管理后台列表（含停用；带创建人与文件信息） */
 export async function listTemplatesForAdmin() {
-  await requireSystemAdmin();
+  await requireWorkspaceConfiguration();
   return prisma.documentTemplate.findMany({
     orderBy: [{ isBuiltIn: "asc" }, { category: "asc" }, { updatedAt: "desc" }],
     select: {

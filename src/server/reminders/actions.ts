@@ -10,15 +10,17 @@ import { scanDueReminders, type DueReminderScanResult } from "@/server/cron/jobs
 import { deliverPendingReminders } from "@/server/reminders/delivery";
 import { isManager } from "@/lib/permissions";
 import { processDueJobs } from "@/server/cron/worker";
-import { requireSession } from "@/lib/auth/session";
+import { requireSession, requireWorkspaceConfiguration } from "@/lib/auth/session";
+import { isPersonalMode } from "@/lib/runtime/mode";
 import { isSystemAdmin } from "@/lib/auth/system-role";
 import { revalidatePath } from "next/cache";
 import { ActionError } from "@/lib/action-error";
 
 /** admin / 主任律师可立即扫一遍（灰度验证 + 紧急补推 + 本地 dev 验证） */
 export async function triggerDueReminderScan(): Promise<DueReminderScanResult> {
-  const session = await requireSession();
-  if (!isSystemAdmin(session.user) && !isManager(session.user)) {
+  const personal = isPersonalMode();
+  const session = await (personal ? requireWorkspaceConfiguration() : requireSession());
+  if (!personal && !isSystemAdmin(session.user) && !isManager(session.user)) {
     throw new ActionError("仅系统超级管理员 / 主任律师可手动触发到期提醒扫描");
   }
   const result = await scanDueReminders();

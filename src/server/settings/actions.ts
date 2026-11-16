@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ProcedureType, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireSystemAdmin } from "@/lib/auth/session";
+import { requireWorkspaceConfiguration } from "@/lib/auth/session";
 import { audit } from "@/server/audit";
 
 const stepSchema = z.object({
@@ -23,14 +23,14 @@ export type StepInput = z.infer<typeof stepSchema>;
 export type TemplateUpdateInput = z.infer<typeof templateUpdateSchema>;
 
 export async function listStageTemplates() {
-  await requireSystemAdmin();
+  await requireWorkspaceConfiguration();
   return prisma.stageTemplate.findMany({
     orderBy: { procedureType: "asc" }
   });
 }
 
 export async function upsertStageTemplate(input: TemplateUpdateInput) {
-  const session = await requireSystemAdmin();
+  const session = await requireWorkspaceConfiguration();
   const data = templateUpdateSchema.parse(input);
   const id = `default-${data.procedureType}`;
 
@@ -72,7 +72,7 @@ const auditQuerySchema = z.object({
 export type AuditQuery = z.infer<typeof auditQuerySchema>;
 
 export async function listAuditLogs(input: Partial<AuditQuery> = {}) {
-  await requireSystemAdmin();
+  await requireWorkspaceConfiguration();
   const query = auditQuerySchema.parse(input);
   const since = new Date(Date.now() - query.days * 24 * 60 * 60 * 1000);
 

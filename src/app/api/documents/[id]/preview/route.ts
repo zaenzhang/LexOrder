@@ -1,7 +1,6 @@
 import { canReadDocument } from "@/lib/approvals/documents";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/options";
+import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/server/audit";
 import { storage } from "@/lib/storage";
@@ -45,7 +44,7 @@ function escapeHtml(s: string): string {
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session?.user) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });
   }
@@ -131,6 +130,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   return new NextResponse(html, {
     status: 200,
-    headers: { "Content-Type": "text/html; charset=utf-8" }
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      // Office content is untrusted. The preview must not inherit the application's origin
+      // or execute scripts, including javascript: links preserved by the converter.
+      "Content-Security-Policy": "sandbox; default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
+      "Cache-Control": "no-store, private",
+      "X-Content-Type-Options": "nosniff"
+    }
   });
 }

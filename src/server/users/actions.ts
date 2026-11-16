@@ -9,6 +9,7 @@ import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireSession, requireSystemAdmin } from "@/lib/auth/session";
+import { isPersonalMode } from "@/lib/runtime/mode";
 import { approvalTransaction, approvalAudit } from "@/lib/approvals/service";
 import { audit } from "@/server/audit";
 import { identityDocumentInputSchema } from "@/lib/identity-documents";
@@ -349,6 +350,7 @@ export async function resetUserPassword(input: ResetPasswordInput) {
  * 当前用户改自己的密码（任何角色可用）。
  */
 export async function changeMyPassword(input: ChangeMyPasswordInput) {
+  if (isPersonalMode()) throw new ActionError("个人工作区不提供登录密码");
   const session = await requireSession("personal");
   const data = changeMyPasswordSchema.parse(input);
 

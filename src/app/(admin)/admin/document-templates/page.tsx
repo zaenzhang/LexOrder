@@ -1,9 +1,9 @@
-import { requireSystemAdmin } from "@/lib/auth/session";
+import { requireWorkspaceConfiguration } from "@/lib/auth/session";
 import { listTemplatesForAdmin } from "@/server/document-templates/actions";
 import { DocumentTemplatesView } from "./_components/document-templates-view";
 
 export default async function DocumentTemplatesPage() {
-  await requireSystemAdmin();
+  await requireWorkspaceConfiguration();
   const templates = await listTemplatesForAdmin();
   return (
     <DocumentTemplatesView

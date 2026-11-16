@@ -1,6 +1,7 @@
 "use server";
 import {adjustInvoiceTx,invoiceAdjustmentInput,invoiceAdjustmentReady} from "@/server/invoices/adjustments";
 import { scopeFor } from "@/lib/roles/catalog";
+import { hasPersonalCapability } from "@/lib/runtime/capabilities";
 import { z } from "zod";
 import { actionErrorMessage } from "@/lib/action-error";
 import { bindContractScopeTx,draftAmendmentTx,activateAmendmentTx,cancelAmendmentTx } from "./ledger-contracts";
@@ -47,7 +48,7 @@ export async function getFinanceLedger(matterId?: string) {
     // status!=='ARCHIVED' 一刀切禁用，收尾流程走不通（2026-09-19 审计）。
     const tailMatterIds=new Set<string>();
     const archivedIds=matters.filter(m=>m.status==="ARCHIVED").map(m=>m.id);
-    if(data.ready&&archivedIds.length&&await closureReady(db)&&scopeFor(session.user,"finance.tail")==="ALL"){
+    if(data.ready&&archivedIds.length&&await closureReady(db)&&(hasPersonalCapability(session.user,"finance.tail")||scopeFor(session.user,"finance.tail")==="ALL")){
       const plans=await db.$queryRaw<{matterId:string;financeOwnerId:string|null}[]>(Prisma.sql`SELECT "matterId","financeOwnerId" FROM "ArchiveClosurePlan" WHERE "matterId" IN (${Prisma.join(archivedIds)})`);
       for(const p of plans)if(p.financeOwnerId===session.user.id)tailMatterIds.add(p.matterId);
     }

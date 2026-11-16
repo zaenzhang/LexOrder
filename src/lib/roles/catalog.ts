@@ -1,3 +1,5 @@
+import { hasPersonalCapability } from "@/lib/runtime/capabilities";
+
 /** 固定功能目录；普通角色不能获得账号、角色、授权和系统密钥管理权。 */
 export const PERMISSIONS = [
   { key: "finance.tail", label: "归档后财务收尾", group: "财务", scopes: ["ALL"] },
@@ -34,7 +36,7 @@ export const PERMISSIONS = [
 export type PermissionKey = typeof PERMISSIONS[number]["key"];
 export type RoleScope = "OWN" | "TEAM" | "ALL";
 export type RoleGrant = { permissionKey: PermissionKey; scope: RoleScope };
-export type RoleUser = { role: string; rolePermissions?: RoleGrant[]; roleName?: string; managerAuthorized?: boolean };
+export type RoleUser = { role: string; rolePermissions?: RoleGrant[]; roleName?: string; managerAuthorized?: boolean; runtimeMode?: "PERSONAL" | "SERVER" };
 export const SCOPE_LABELS: Record<RoleScope, string> = { OWN: "本人经办 / 本人记录", TEAM: "本人及已有团队查看授权", ALL: "全所" };
 export const ADMINISTRATIVE_ROLE_ID = "cmrolesadministrative00001";
 export const BUILTIN_ROLES = [
@@ -80,9 +82,11 @@ export function scopeFor(user: RoleUser, key: PermissionKey): RoleScope | undefi
 }
 /** 内置角色仍由既有业务规则进一步限制；此函数的放行不能替代旧业务断言。 */
 export function hasCustomPermission(user: RoleUser, key: PermissionKey): boolean {
+  if (user.runtimeMode === "PERSONAL") return hasPersonalCapability(user, key);
   return user.role !== "CUSTOM" || Boolean(scopeFor(user, key));
 }
 export function customOrLegacy(user: RoleUser, key: PermissionKey, legacy: boolean): boolean {
+  if (user.runtimeMode === "PERSONAL") return hasPersonalCapability(user, key);
   return user.role === "CUSTOM" ? Boolean(scopeFor(user, key)) : legacy;
 }
 export function roleDisplayName(user: RoleUser): string {
@@ -127,5 +131,6 @@ export const normalizeRoleName = (name: string) => name.normalize("NFKC").trim()
 
 /** 独立财务执行资格；系统身份及管理权不参与授权。 */
 export function canExecuteFinance(user: RoleUser, key: "finance.correct" | "finance.settle") {
+  if (user.runtimeMode === "PERSONAL") return hasPersonalCapability(user, key);
   return user.role === "FINANCE" || (user.role === "CUSTOM" && scopeFor(user, key) === "ALL");
 }

@@ -6,6 +6,8 @@ import { basicProfileSchema } from "./profile-schema";
 import { identityDocumentTypeLabel } from "@/lib/identity-documents";
 import type { z } from "zod";
 import { ActionError } from "@/lib/action-error";
+import { isPersonalMode } from "@/lib/runtime/mode";
+import { resolvePersonalActor } from "@/server/runtime/personal";
 
 type Db = Prisma.TransactionClient;
 export class ProfileInputError extends Error {}
@@ -26,10 +28,16 @@ export async function profileTransaction<T>(work: (db: Db) => Promise<T>) {
       throw new ActionError("资料未能保存，请稍后重试");
     }
     if (error instanceof ProfileInputError) throw error;
+    if (isPersonalMode()) throw new ActionError("资料暂不可用，请重新打开工作区后重试");
     throw new ActionError("资料暂不可用，请稍后重试；如持续失败，请联系管理员");
   }
 }
 export async function assertProfileActor(db: Db, actorId: string, targetId: string, adminOnly = false) {
+  if (isPersonalMode()) {
+    if (adminOnly || actorId !== targetId) throw new ProfileInputError("个人工作区只能维护本机操作者的资料");
+    if (!await resolvePersonalActor(db, actorId)) throw new ProfileInputError("本机操作者不可用，请重新打开工作区");
+    return;
+  }
   const actor = await db.user.findUnique({ where: { id: actorId }, select: { active: true, systemRole: true } });
   if (!actor?.active) throw new ProfileInputError("账号已停用，请重新登录");
   if ((adminOnly || actorId !== targetId) && actor.systemRole !== "SUPER_ADMIN") throw new ProfileInputError("仅系统超级管理员可执行此操作");
@@ -43,18 +51,20 @@ export async function verifyProfilePassword(db: Db, id: string, password?: strin
   if (!password || !await bcrypt.compare(password, user.passwordHash)) throw new ProfileInputError("当前密码不正确");
 }
 export async function saveBasicProfile(actorId: string, targetId: string, data: z.infer<typeof basicProfileSchema>, options: { admin: boolean; password?: string }) {
+  const personal = isPersonalMode();
   return profileTransaction(async db => {
     await assertProfileActor(db, actorId, targetId, options.admin);
     await assertProfileVersion(db, targetId, data.expectedUpdatedAt);
     const current = await db.user.findUniqueOrThrow({ where: { id: targetId }, select: { name: true, email: true, phone: true } });
-    const emailChanged = data.email !== current.email;
-    if (emailChanged && (!options.admin || actorId === targetId)) await verifyProfilePassword(db, targetId, options.password);
+    const email = personal && !data.email ? `${targetId}@personal.invalid` : data.email;
+    const emailChanged = email !== current.email;
+    if (!personal && emailChanged && (!options.admin || actorId === targetId)) await verifyProfilePassword(db, targetId, options.password);
     const fields = [current.name !== data.name ? "name" : null, emailChanged ? "email" : null,
       data.phone !== undefined && (data.phone || null) !== current.phone ? "phone" : null].filter((field): field is string => field !== null);
     if (!fields.length) return { emailChanged: false };
     await db.user.update({ where: { id: targetId, updatedAt: new Date(data.expectedUpdatedAt) }, data: {
-      name: data.name, email: data.email, ...(data.phone !== undefined ? { phone: data.phone || null } : {}),
-      ...(emailChanged ? { sessionVersion: { increment: 1 } } : {})
+      name: data.name, email, ...(data.phone !== undefined ? { phone: data.phone || null } : {}),
+      ...(!personal && emailChanged ? { sessionVersion: { increment: 1 } } : {})
     }, select: { id: true } });
     await approvalAudit(db, actorId, options.admin ? "USER_PROFILE_UPDATE" : "USER_PROFILE_UPDATE_SELF", targetId, { fields });
     return { emailChanged };

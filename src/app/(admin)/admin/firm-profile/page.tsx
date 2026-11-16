@@ -1,5 +1,5 @@
 import type { MatterCategory } from "@prisma/client";
-import { requireSystemAdmin } from "@/lib/auth/session";
+import { requireWorkspaceConfiguration } from "@/lib/auth/session";
 import { matterCategoryLabel } from "@/lib/enums";
 import { getFirmProfile, CATEGORY_ABBR, CATEGORY_WORD_DEFAULTS } from "@/server/settings/firm-profile";
 import { getWorkflowToggles } from "@/server/settings/workflow-toggles";
@@ -8,7 +8,7 @@ import { WorkflowTogglesCard } from "./_components/workflow-toggles-card";
 import { AdminPageHeader } from "@/components/layout/admin-page-header";
 
 export default async function FirmProfilePage() {
-  await requireSystemAdmin();
+  await requireWorkspaceConfiguration();
   const [profile, toggles] = await Promise.all([getFirmProfile(), getWorkflowToggles()]);
   const categories = (Object.keys(CATEGORY_WORD_DEFAULTS) as MatterCategory[]).map((key) => ({
     key,

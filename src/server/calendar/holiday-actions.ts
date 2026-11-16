@@ -1,12 +1,14 @@
 "use server";
 /**
- * 法定放假安排管理（F-5）：仅超级管理员；每年按国务院通知录入一批，
+ * 法定放假安排管理（F-5）：Server 仅系统管理员，Personal 由本机操作者配置；每年按国务院通知录入一批，
  * 期限引擎据此顺延届满日（src/lib/calendar/holidays.ts）。
  */
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireSession } from "@/lib/auth/session";
+import { requireSession, requireWorkspaceConfiguration } from "@/lib/auth/session";
 import { isSystemAdmin } from "@/lib/auth/system-role";
+import { isPersonalMode } from "@/lib/runtime/mode";
+import { resolvePersonalActor } from "@/server/runtime/personal";
 import { audit } from "@/server/audit";
 import { civilFromKey, shParts } from "@/lib/ui/sh-time";
 import { ActionError } from "@/lib/action-error";
@@ -20,6 +22,7 @@ const batchSchema = z.object({
 });
 
 async function requireAdmin() {
+  if (isPersonalMode()) return requireWorkspaceConfiguration();
   const session = await requireSession();
   if (!isSystemAdmin(session.user)) throw new ActionError("仅系统超级管理员可维护放假安排");
   return session;
@@ -46,6 +49,7 @@ export async function saveHolidayBatch(input: z.input<typeof batchSchema>) {
   const data = batchSchema.parse(input);
   let upserted = 0;
   await prisma.$transaction(async (tx) => {
+    if (isPersonalMode()) await resolvePersonalActor(tx, session.user.id);
     for (const e of data.entries) {
       await tx.holiday.upsert({
         where: { date: civilFromKey(e.date) },

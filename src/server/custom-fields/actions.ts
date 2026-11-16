@@ -2,7 +2,7 @@
 
 /**
  * v0.28: 自定义字段（JSON 列方案）
- * - 字段定义存 CustomFieldDef 表，管理限系统超级管理员
+ * - 字段定义存 CustomFieldDef 表，管理走工作区配置资格
  * - 字段值存于实体的 customValues JSON（本期落地 MATTER）
  */
 import { randomUUID } from "crypto";
@@ -10,7 +10,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { CustomFieldEntity } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireSession, requireSystemAdmin } from "@/lib/auth/session";
+import { requireSession, requireWorkspaceConfiguration } from "@/lib/auth/session";
 import { audit } from "@/server/audit";
 import { assertMatterWritable } from "@/lib/archive/guard";
 import { assertCanLeadMatter } from "@/lib/permissions";
@@ -51,7 +51,7 @@ export async function listCustomFieldDefs(
 }
 
 export async function createCustomFieldDef(input: z.input<typeof defCreateSchema>) {
-  const session = await requireSystemAdmin();
+  const session = await requireWorkspaceConfiguration();
   const data = defCreateSchema.parse(input);
   if (data.fieldType === "SELECT" && data.options.length === 0) {
     throw new ActionError("下拉类型至少需要一个选项值");
@@ -84,7 +84,7 @@ export async function createCustomFieldDef(input: z.input<typeof defCreateSchema
 }
 
 export async function updateCustomFieldDef(input: z.input<typeof defUpdateSchema>) {
-  await requireSystemAdmin();
+  const session = await requireWorkspaceConfiguration();
   const { id, ...rest } = defUpdateSchema.parse(input);
   if (rest.fieldType === "SELECT" && rest.options && rest.options.length === 0) {
     throw new ActionError("下拉类型至少需要一个选项值");
@@ -98,24 +98,25 @@ export async function updateCustomFieldDef(input: z.input<typeof defUpdateSchema
       ...(rest.required !== undefined ? { required: rest.required } : {})
     }
   });
-  await audit({ action: "CUSTOM_FIELD_UPDATE", targetType: "CustomFieldDef", targetId: id });
+  await audit({ userId: session.user.id, action: "CUSTOM_FIELD_UPDATE", targetType: "CustomFieldDef", targetId: id });
   revalidatePath("/admin/custom-fields");
   revalidatePath("/admin/custom-fields");
   return { ok: true as const };
 }
 
 export async function toggleCustomFieldDef(id: string, enabled: boolean) {
-  await requireSystemAdmin();
+  const session = await requireWorkspaceConfiguration();
   await prisma.customFieldDef.update({ where: { id }, data: { enabled } });
+  await audit({ userId: session.user.id, action: "CUSTOM_FIELD_TOGGLE", targetType: "CustomFieldDef", targetId: id, detail: { enabled } });
   revalidatePath("/admin/custom-fields");
   revalidatePath("/admin/custom-fields");
   return { ok: true as const };
 }
 
 export async function deleteCustomFieldDef(id: string) {
-  await requireSystemAdmin();
+  const session = await requireWorkspaceConfiguration();
   await prisma.customFieldDef.delete({ where: { id } });
-  await audit({ action: "CUSTOM_FIELD_DELETE", targetType: "CustomFieldDef", targetId: id });
+  await audit({ userId: session.user.id, action: "CUSTOM_FIELD_DELETE", targetType: "CustomFieldDef", targetId: id });
   revalidatePath("/admin/custom-fields");
   revalidatePath("/admin/custom-fields");
   return { ok: true as const };

@@ -15,7 +15,9 @@ import { requireSession } from "@/lib/auth/session";
 import { audit } from "@/server/audit";
 import { createNotification } from "@/server/notifications/create";
 import { canApproveContext } from "@/lib/approvals/service";
-import { matterReadVisibilityFilter } from "@/lib/permissions";
+import { matterReadVisibilityFilter, matterAssociationFilter } from "@/lib/permissions";
+import { resolvePersonalActor } from "@/server/runtime/personal";
+import { personalAuditMetadata } from "@/lib/runtime/capabilities";
 import { registerReminderDelivery, voidPendingDeliveries } from "@/server/reminders/ledger";
 import { shDayKey } from "@/lib/ui/sh-time";
 import type { MatterCategory } from "@prisma/client";
@@ -92,6 +94,7 @@ export async function listArchiveBorrows(): Promise<{
   currentUserId: string;
 }> {
   const session = await requireSession();
+  const personal = await resolvePersonalActor(prisma, session.user.id);
   const expiredNow = await expireOverdue();
   const [mine, pending] = await Promise.all([
     prisma.archiveBorrowRequest.findMany({
@@ -115,7 +118,7 @@ export async function listArchiveBorrows(): Promise<{
           action: "ARCHIVE_APPROVE",
           category: row.archiveRecord.matter.category,
           requesterId: row.applicant.id
-        })
+        }) && (!personal || Boolean(await prisma.matter.count({where:{id:row.archiveRecord.matter.id,deletedAt:null,...matterAssociationFilter(personal.id)}})))
   })));
   return {
     expiredNow,
@@ -178,6 +181,7 @@ export async function createArchiveBorrow(input: z.input<typeof createSchema>) {
 
 export async function decideArchiveBorrow(input: z.input<typeof decideSchema>) {
   const session = await requireSession();
+  const personal = await resolvePersonalActor(prisma, session.user.id);
   const data = decideSchema.parse(input);
   const row = await prisma.archiveBorrowRequest.findUnique({
     where: { id: data.id },
@@ -200,7 +204,10 @@ export async function decideArchiveBorrow(input: z.input<typeof decideSchema>) {
   const now = new Date();
   const days = data.days ?? 30;
   const updated = await prisma.archiveBorrowRequest.updateMany({
-    where: { id: row.id, status: "PENDING", revision: data.revision },
+    where: { id: row.id, status: "PENDING", revision: data.revision, ...(personal ? {
+      applicantId: personal.id,
+      archiveRecord: { status: "APPROVED", matter: { deletedAt: null, ...matterAssociationFilter(personal.id) } },
+    } : {}) },
     data: data.decision === "APPROVED"
       ? { status: "APPROVED", approverId: session.user.id, decidedAt: now, accessUntil: new Date(now.getTime() + days * 86_400_000), revision: data.revision + 1 }
       : { status: "REJECTED", approverId: session.user.id, decidedAt: now, rejectReason: data.rejectReason ?? null, revision: data.revision + 1 }
@@ -212,7 +219,7 @@ export async function decideArchiveBorrow(input: z.input<typeof decideSchema>) {
     action: data.decision === "APPROVED" ? "ARCHIVE_BORROW_APPROVE" : "ARCHIVE_BORROW_REJECT",
     targetType: "ArchiveBorrowRequest",
     targetId: row.id,
-    detail: { days: data.decision === "APPROVED" ? days : undefined, rejectReason: data.rejectReason }
+    detail: { days: data.decision === "APPROVED" ? days : undefined, rejectReason: data.rejectReason, ...personalAuditMetadata(personal,data.decision === "APPROVED" ? "CONFIRMATION" : "REJECTION") }
   });
   await createNotification({
     userId: row.applicantId,

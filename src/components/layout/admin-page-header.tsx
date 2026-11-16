@@ -6,13 +6,16 @@
  */
 import { adminNavigation } from "@/components/layout/admin-shell";
 import { PageHeader } from "@/components/patterns/moan";
+import { useWorkspaceActor } from "@/components/workspace-actor-provider";
 
 export function AdminPageHeader({ title, sub, actions }: { title: string; sub?: React.ReactNode; actions?: React.ReactNode }) {
   const group = adminNavigation.find((g) => g.label !== "概览" && g.items.some((i) => i.label === title));
+  const personal = useWorkspaceActor()?.runtimeMode === "PERSONAL";
+  const groupLabel = personal && group?.label === "组织与人员" ? "执业资料" : group?.label;
   return (
     <PageHeader
       className="!mb-0"
-      breadcrumb={<>设置{group ? <> › {group.label}</> : null} › <b>{title}</b></>}
+      breadcrumb={<>设置{groupLabel ? <> › {groupLabel}</> : null} › <b>{title}</b></>}
       title={title}
       sub={sub}
       actions={actions}

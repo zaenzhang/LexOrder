@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { isManager } from "@/lib/permissions";
 import { z } from "zod";
-import { requireSession } from "@/lib/auth/session";
+import { requireSession, requireWorkspaceConfiguration } from "@/lib/auth/session";
+import { isPersonalMode } from "@/lib/runtime/mode";
 import { isSystemAdmin } from "@/lib/auth/system-role";
 import { audit } from "@/server/audit";
 import {
@@ -23,6 +24,7 @@ const saveSchema = z.object({
 });
 
 async function requireManager() {
+  if (isPersonalMode()) return requireWorkspaceConfiguration();
   const session = await requireSession();
   if (!isSystemAdmin(session.user) && !isManager(session.user)) {
     throw new ActionError("仅系统超级管理员 / 主任律师可配置提醒推送");

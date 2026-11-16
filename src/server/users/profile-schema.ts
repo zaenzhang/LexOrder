@@ -10,6 +10,11 @@ export const basicProfileSchema = z.object({
   expectedUpdatedAt: z.string().datetime({ message: "资料版本无效，请刷新页面" })
 });
 export const myProfileSchema = basicProfileSchema.extend({ currentPassword: z.string().max(128).optional() });
+/** Personal contact details do not establish or change an account identity. */
+export const personalProfileSchema = myProfileSchema.extend({
+  name: z.string().trim().max(40, "姓名不能超过40字"),
+  email: z.string().trim().max(254, "邮箱过长").refine(value => !value || z.email().safeParse(value).success, "邮箱格式不正确")
+});
 export const adminProfileSchema = basicProfileSchema.extend({ id: z.string().cuid(), currentPassword: z.string().max(128).optional() });
 export const bindIdentitySchema = identityDocumentInputSchema.and(z.object({
   currentPassword: z.string().min(1, "请输入当前密码").max(128),

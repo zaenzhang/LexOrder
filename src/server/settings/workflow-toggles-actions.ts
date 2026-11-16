@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireSystemAdmin } from "@/lib/auth/session";
+import { requireWorkspaceConfiguration } from "@/lib/auth/session";
 import { audit } from "@/server/audit";
 import { getWorkflowToggles, saveWorkflowToggles } from "./workflow-toggles";
 
@@ -11,7 +11,7 @@ const saveSchema = z.object({
 });
 
 export async function saveWorkflowTogglesAction(input: z.infer<typeof saveSchema>) {
-  const session = await requireSystemAdmin();
+  const session = await requireWorkspaceConfiguration();
   const data = saveSchema.parse(input);
   await saveWorkflowToggles(data);
   await audit({
@@ -27,6 +27,6 @@ export async function saveWorkflowTogglesAction(input: z.infer<typeof saveSchema
 }
 
 export async function getWorkflowTogglesAction() {
-  await requireSystemAdmin();
+  await requireWorkspaceConfiguration();
   return getWorkflowToggles();
 }

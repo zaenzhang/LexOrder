@@ -15,6 +15,8 @@ if (!['serve', 'test', 'verify'].includes(mode)) throw new Error('Usage: node to
 const envFile = resolve(root, '.env');
 if (!existsSync(envFile)) throw new Error('Create a private .env from .env.example before starting. See docs/REFACTOR_DESKTOP_TEAM_RAG.md section 11.2.');
 const env = { ...parseEnv(readFileSync(envFile, 'utf8')), ...process.env, DISABLE_CRON: '1', BACKUP_CRON_ENABLED: 'false', NEXT_TELEMETRY_DISABLED: '1' };
+if (env.LEXORDER_RUNTIME_MODE && env.LEXORDER_RUNTIME_MODE !== 'SERVER') throw new Error('The cloud development runner only starts Server mode.');
+env.LEXORDER_RUNTIME_MODE = 'SERVER';
 const appPort = Number(env.PORT || 3000);
 if (!Number.isInteger(appPort) || appPort < 1 || appPort > 65535) throw new Error('PORT must be an integer from 1 to 65535.');
 const appHost = env.LEXORDER_HOST || '127.0.0.1';
@@ -91,7 +93,8 @@ try {
   if (mode !== 'serve') {
     await command('npx', ['prisma', 'migrate', 'deploy'], testEnv).done;
     await command('npx', ['prisma', 'migrate', 'diff', '--from-schema-datasource', 'prisma/schema.prisma', '--to-schema-datamodel', 'prisma/schema.prisma', '--exit-code'], testEnv).done;
-    await command('npm', ['run', 'test:run'], testEnv).done;
+    const testFiles = (env.WORKBENCH_TEST_FILES || '').split(',').map(file => file.trim()).filter(Boolean);
+    await command('npm', ['run', 'test:run', ...(testFiles.length ? ['--', ...testFiles] : [])], testEnv).done;
   }
   if (mode !== 'test') {
     const appEnv = mode === 'verify' ? testEnv : env;

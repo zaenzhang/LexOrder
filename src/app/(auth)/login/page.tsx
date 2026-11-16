@@ -4,6 +4,8 @@ import { Loader2 } from "lucide-react";
 import { getFirmProfile } from "@/server/settings/firm-profile";
 import { PRODUCT_NAME, PRODUCT_ENGLISH_NAME } from "@/lib/product";
 import { LoginForm } from "./login-form";
+import { isPersonalMode } from "@/lib/runtime/mode";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: `登录 — ${PRODUCT_NAME}`
@@ -11,6 +13,7 @@ export const metadata: Metadata = {
 
 /** 墨案 01 效果图：左侧深墨品牌面板 + 右侧表单面板，全屏分栏 */
 export default async function LoginPage() {
+  if (isPersonalMode()) redirect("/");
   const profile = await getFirmProfile().catch(() => null);
   const firmName = profile?.firmName && profile.firmName !== PRODUCT_NAME && profile.firmName !== "LawLink" ? profile.firmName : null;
 

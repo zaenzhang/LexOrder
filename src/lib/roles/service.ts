@@ -3,7 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { builtinRoleName } from "./presentation";
 import { MANAGER_GRANTS, validGrants, scopeFor, type PermissionKey, type RoleUser } from "./catalog";
 import { ActionError } from "@/lib/action-error";
+import { resolvePersonalActor } from "@/server/runtime/personal";
 export async function resolveRoleUser(userId: string, role: string, db: Prisma.TransactionClient = prisma): Promise<RoleUser & { enabled: boolean; managerAuthorized?: boolean }> {
+  const personal = await resolvePersonalActor(db, userId);
+  if (personal) return { ...personal, enabled: true };
   if (role !== "CUSTOM") {
     // 业务管理权按人授予，与岗位无关；每次会话解析实时读取
     const row = await db.user.findUnique({ where: { id: userId }, select: { managerAuthorized: true } });

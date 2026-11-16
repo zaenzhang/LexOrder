@@ -8,6 +8,8 @@ import { getFinanceFacts, periodReceipts, periodReceiptSummary, sumAmounts, shMo
 import { shParts } from "@/lib/ui/sh-time";
 import { roleMutation, checkRoleMutation } from "@/lib/roles/service";
 import { scopeFor } from "@/lib/roles/catalog";
+import { hasPersonalCapability, personalAuditMetadata } from "@/lib/runtime/capabilities";
+import { resolvePersonalActor } from "@/server/runtime/personal";
 import { canReadDocument } from "@/lib/approvals/documents";
 import { requireApprovalRoute } from "@/lib/approvals/service";
 
@@ -228,24 +230,27 @@ async function usersWhoCanConfirmReceipt(excludeUserId?: string): Promise<string
  */
 export async function confirmFeeEntry(id: string) {
   const session = await requireSession("finance.confirm");
+  const personal = await resolvePersonalActor(prisma, session.user.id);
   if (!canConfirmReceipt(session.user)) throw new ActionError("仅具备「确认实收到账」权限的财务管理人员可确认实收");
   if(await financeLedgerReady(prisma)) {
     const result=await prisma.$transaction(tx=>confirmReceiptTx(tx,session.user.id,id),{isolationLevel:"Serializable",timeout:20000});
     await revalidateMatter(result.matterId);revalidatePath("/finance");revalidatePath("/finance/reconciliation");return {ok:true};
   }
-  const entry = await prisma.feeEntry.findUnique({ where: { id }, select: { id: true, matterId: true, type: true, amount: true, occurredAt: true, billingId: true, confirmState: true } });
+  const entry = await prisma.feeEntry.findUnique({ where: { id }, select: { id: true, matterId: true, type: true, amount: true, occurredAt: true, billingId: true, confirmState: true, recordedById: true } });
   if (!entry) throw new ActionError("记录不存在");
   if (entry.type !== "RECEIVED") throw new ActionError("只有实收需要确认");
   if (entry.confirmState === "CONFIRMED") throw new ActionError("此笔已确认");
+  if (personal && entry.recordedById !== personal.id) throw new ActionError("仅可本人确认本机操作者登记的实收，请先核对历史操作者映射");
   await assertCanAccessMatterFinance(session.user.id, session.user.role, entry.matterId, session.user.rolePermissions);
   await assertMatterWritable(entry.matterId, { allowFinanceRole: true });
 
   await prisma.$transaction(async (tx) => {
     // 与 setCommissionPlan / ledger 路径共用同一事务级咨询锁：读取分成方案与整体替换互斥，防止按旧方案派生分成
     await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(72606101)`;
+    await resolvePersonalActor(tx,session.user.id);
     await checkRoleMutation(tx, session.user, "finance.confirm");
     const updated = await tx.feeEntry.updateMany({
-      where: { id, confirmState: "PENDING" },
+      where: { id, confirmState: "PENDING", ...(personal ? { recordedById: personal.id } : {}) },
       data: { confirmState: "CONFIRMED", confirmedById: session.user.id, confirmedAt: new Date() }
     });
     if (updated.count === 0) throw new ActionError("此笔已被处理，请刷新后重试");
@@ -283,9 +288,10 @@ export async function confirmFeeEntry(id: string) {
       title: `实收 ¥${Number(entry.amount).toLocaleString("zh-CN")}`,
       occurredAt: entry.occurredAt
     });
+    if (personal) await auditTx(tx,{userId:session.user.id,action:"FEE_ENTRY_CONFIRM",targetType:"FeeEntry",targetId:id,detail:{matterId:entry.matterId,amount:Number(entry.amount),...personalAuditMetadata(personal,"CONFIRMATION")}});
   });
 
-  await audit({ userId: session.user.id, action: "FEE_ENTRY_CONFIRM", targetType: "FeeEntry", targetId: id, detail: { matterId: entry.matterId, amount: Number(entry.amount) } });
+  if (!personal) await audit({ userId: session.user.id, action: "FEE_ENTRY_CONFIRM", targetType: "FeeEntry", targetId: id, detail: { matterId: entry.matterId, amount: Number(entry.amount) } });
   await revalidateMatter(entry.matterId);
   revalidatePath("/finance");
   return { ok: true };
@@ -294,6 +300,7 @@ export async function confirmFeeEntry(id: string) {
 /** 退回待确认实收：删除该条并留审计与通知，登记人按实际到账重新登记 */
 export async function rejectFeeEntry(id: string, reason: string) {
   const session = await requireSession("finance.confirm");
+  const personal = await resolvePersonalActor(prisma, session.user.id);
   if (!canConfirmReceipt(session.user)) throw new ActionError("仅具备「确认实收到账」权限的财务管理人员可退回实收");
   if(await financeLedgerReady(prisma)) {
     const result=await prisma.$transaction(tx=>rejectReceiptTx(tx,session.user.id,id,reason),{isolationLevel:"Serializable",timeout:20000});
@@ -304,16 +311,19 @@ export async function rejectFeeEntry(id: string, reason: string) {
   const entry = await prisma.feeEntry.findUnique({ where: { id }, select: { id: true, matterId: true, type: true, amount: true, confirmState: true, recordedById: true, matter: { select: { internalCode: true, title: true } } } });
   if (!entry) throw new ActionError("记录不存在");
   if (entry.type !== "RECEIVED" || entry.confirmState !== "PENDING") throw new ActionError("只有待确认的实收可以退回");
+  if (personal && entry.recordedById !== personal.id) throw new ActionError("仅可本人退回本机操作者登记的实收，请先核对历史操作者映射");
   await assertCanAccessMatterFinance(session.user.id, session.user.role, entry.matterId, session.user.rolePermissions);
   await assertMatterWritable(entry.matterId, { allowFinanceRole: true });
 
   await prisma.$transaction(async (tx) => {
+    await resolvePersonalActor(tx,session.user.id);
     await checkRoleMutation(tx, session.user, "finance.confirm");
-    const removed = await tx.feeEntry.deleteMany({ where: { id, confirmState: "PENDING" } });
+    const removed = await tx.feeEntry.deleteMany({ where: { id, confirmState: "PENDING", ...(personal ? { recordedById: personal.id } : {}) } });
     if (removed.count === 0) throw new ActionError("此笔已被处理，请刷新后重试");
+    if (personal) await auditTx(tx,{userId:session.user.id,action:"FEE_ENTRY_REJECT",targetType:"FeeEntry",targetId:id,detail:{matterId:entry.matterId,amount:Number(entry.amount),reason:note,...personalAuditMetadata(personal,"REJECTION")}});
   });
 
-  await audit({ userId: session.user.id, action: "FEE_ENTRY_REJECT", targetType: "FeeEntry", targetId: id, detail: { matterId: entry.matterId, amount: Number(entry.amount), reason: note } });
+  if (!personal) await audit({ userId: session.user.id, action: "FEE_ENTRY_REJECT", targetType: "FeeEntry", targetId: id, detail: { matterId: entry.matterId, amount: Number(entry.amount), reason: note } });
   // 条目已删除：通知属于事后副作用，失败不能把已成功的退回报成失败（重试只会得到「记录不存在」）
   try {
     await createNotification({
@@ -342,16 +352,18 @@ export async function rejectFeeEntry(id: string, reason: string) {
 
 export async function deleteFeeEntry(id: string) {
   const session = await requireSession("finance.write");
+  const personal = await resolvePersonalActor(prisma, session.user.id);
   if(await financeLedgerReady(prisma))throw new ActionError("待确认实收请填写原因退回；已入账收付请通过财务更正处理");
-  if (session.user.role !== "CUSTOM" && !isManager(session.user.role) && session.user.role !== "FINANCE") {
+  if (!hasPersonalCapability(session.user,"finance.write") && session.user.role !== "CUSTOM" && !isManager(session.user.role) && session.user.role !== "FINANCE") {
     // 2026-09-20 文案对齐实际校验（合伙人岗位/管理权、财务、自定义角色；后续仍有本案经办复核）
     throw new ActionError("仅合伙人、财务或经授权的自定义角色可删除收付记录");
   }
   const entry = await prisma.feeEntry.findUnique({
     where: { id },
-    select: { matterId: true, type: true, confirmState: true, parentFeeEntryId: true, invoiceNo: true, billing: { select: { signedAt: true } } }
+    select: { matterId: true, type: true, confirmState: true, parentFeeEntryId: true, invoiceNo: true, recordedById: true, billing: { select: { signedAt: true } } }
   });
   if (!entry) return { ok: false };
+  if (personal && entry.recordedById !== personal.id) throw new ActionError("仅可处理本机操作者登记的记录，请先核对历史操作者映射");
 
   // P0-6：已确认的收付记录不得物理删除——
   // 属于已签署合同的条目、或已登记发票号的收款，均属已对外/已确认口径，
@@ -382,18 +394,21 @@ export async function deleteFeeEntry(id: string) {
   // 条件删除：读取与删除之间，发票号、合同签署都可能被改动，
   // 因此把判定一并放进 where，按受影响行数决定成败（0 行即说明期间已对外开票/签合同）。
   await prisma.$transaction(async (tx) => {
+    await resolvePersonalActor(tx,session.user.id);
     await checkRoleMutation(tx, session.user, "finance.write");
     const removed = await tx.feeEntry.deleteMany({
       where: {
         id,
+        ...(personal ? { recordedById: personal.id, type: entry.type, confirmState: entry.confirmState, parentFeeEntryId: entry.parentFeeEntryId } : {}),
         invoiceNo: null,
         OR: [{ billingId: null }, { billing: { is: { signedAt: null } } }]
       }
     });
     if (removed.count === 0) throw new ActionError("该记录在此期间已对外开票或关联已签署合同，不可删除；如需更正请登记退款 / 冲正");
+    if(personal)await auditTx(tx,{userId:session.user.id,action:"FEE_ENTRY_DELETE",targetType:"FeeEntry",targetId:id,detail:{matterId:entry.matterId,type:entry.type,...personalAuditMetadata(personal,"CHANGE")}});
   });
 
-  await audit({
+  if(!personal)await audit({
     userId: session.user.id,
     action: "FEE_ENTRY_DELETE",
     targetType: "FeeEntry",
@@ -648,7 +663,7 @@ export async function createInvoiceRequest(input: {
     await assertMatterWritable(input.matterId);
   } else {
     // 无关联案件开票仅财务 / 管理员 / 主任可发起，且必须说明原因
-    if (!isManager(session.user.role) && session.user.role !== "FINANCE" && !(session.user.role === "CUSTOM" && scopeFor(session.user, "finance.write") === "ALL")) {
+    if (!hasPersonalCapability(await resolvePersonalActor(prisma,session.user.id),"invoices.process") && !isManager(session.user.role) && session.user.role !== "FINANCE" && !(session.user.role === "CUSTOM" && scopeFor(session.user, "finance.write") === "ALL")) {
       throw new ActionError("无关联案件开票仅财务 / 管理员 / 主任律师可发起");
     }
     if (!input.noMatterReason?.trim()) {

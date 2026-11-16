@@ -1,4 +1,6 @@
 'use server';
+import { resolvePersonalActor } from '@/server/runtime/personal';
+import { hasPersonalCapability } from '@/lib/runtime/capabilities';
 import {z} from 'zod';import {prisma} from '@/lib/prisma';import {requireSession} from '@/lib/auth/session';import {scopeFor,hasCustomPermission} from '@/lib/roles/catalog';import {matterAssociationFilter} from '@/lib/permissions';import {approvalTransaction} from '@/lib/approvals/service';import {revalidatePath} from 'next/cache';import {closureReady,closureFacts,closureInput,saveClosureTx} from './closure';
 export async function getClosureBoard(matterId:string){
  const session=await requireSession('archive.read');
@@ -9,8 +11,9 @@ export async function getClosureBoard(matterId:string){
  // 收尾人候选与执行端口径一致（scopeFor('finance.tail')==='ALL'）：内置财务岗在代码目录携带该权限、
  // 自定义角色查 RolePermission 表——2026-09-21 全流程验收发现此前只查 CUSTOM，仅配内置财务岗的所
  // 指不了收尾人，有未结财务时归档无法推进。
- const people=await prisma.user.findMany({where:{active:true,OR:[{role:'FINANCE'},{role:'CUSTOM',roleDefinition:{active:true,permissions:{some:{permissionKey:'finance.tail',scope:'ALL'}}}}]},select:{id:true,name:true}});
+ const personal=await resolvePersonalActor(prisma,session.user.id);
+ const people=await prisma.user.findMany({where:{active:true,...(personal?{id:personal.id}:{OR:[{role:'FINANCE' as const},{role:'CUSTOM' as const,roleDefinition:{active:true,permissions:{some:{permissionKey:'finance.tail',scope:'ALL' as const}}}}]})},select:{id:true,name:true}});
  const archives=await prisma.archiveRecord.findMany({where:{matterId},orderBy:{archivedAt:'asc'},select:{id:true,archiveNo:true,status:true,summary:true}});
- return {status:matter.status,blockers:facts.blockers,financeOpen:facts.financeOpen,finance:hasCustomPermission(session.user,'finance.read')?facts.financeSnapshot:null,plan:plan?{financeOwnerId:plan.financeOwnerId,name:plan.name,serviceCompletedAt:plan.serviceCompletedAt,reason:plan.reason,revision:plan.revision,current:plan.fingerprint===facts.fingerprint}:null,people,archives,canSave:hasCustomPermission(session.user,'archive.submit'),canSupplement:scopeFor(session.user,'archive.supplement')==='OWN'&&hasCustomPermission(session.user,'archive.submit')};
+ return {status:matter.status,blockers:facts.blockers,financeOpen:facts.financeOpen,finance:hasCustomPermission(session.user,'finance.read')?facts.financeSnapshot:null,plan:plan?{financeOwnerId:plan.financeOwnerId,name:plan.name,serviceCompletedAt:plan.serviceCompletedAt,reason:plan.reason,revision:plan.revision,current:plan.fingerprint===facts.fingerprint}:null,people,archives,canSave:hasCustomPermission(session.user,'archive.submit'),canSupplement:(hasPersonalCapability(personal,'archive.supplement')||scopeFor(session.user,'archive.supplement')==='OWN')&&hasCustomPermission(session.user,'archive.submit')};
 }
 export async function saveClosure(input:z.input<typeof closureInput>){const session=await requireSession('archive.submit');const result=await approvalTransaction(db=>saveClosureTx(db,session.user.id,input));revalidatePath('/matters/[id]','page');revalidatePath('/approvals');return result;}

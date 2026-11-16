@@ -25,6 +25,8 @@ import {
 
 import { BrandMark } from "@/components/layout/sidebar";
 import { cn } from "@/lib/utils";
+import type { RuntimeMode } from "@/lib/runtime/mode";
+import { isPersonalWorkspaceConfigurationPath } from "@/lib/runtime/workspace-navigation";
 
 type AdminNavItem = {
   href: string;
@@ -80,16 +82,23 @@ export function AdminShell({
   children,
   firmName,
   user,
-  isSystemAdmin
+  isSystemAdmin,
+  runtimeMode = "SERVER"
 }: {
   children: React.ReactNode;
   firmName: string;
   user: { name: string; roleName: string; avatar?: string | null };
   isSystemAdmin: boolean;
+  runtimeMode?: RuntimeMode;
 }) {
   const pathname = usePathname();
+  const personal = runtimeMode === "PERSONAL";
   const visibleNavigation = adminNavigation
-    .map((group) => ({ ...group, items: group.items.filter((item) => isSystemAdmin || !item.adminOnly) }))
+    .map((group) => ({
+      ...group,
+      label: personal && group.label === "组织与人员" ? "执业资料" : group.label,
+      items: group.items.filter((item) => personal ? isPersonalWorkspaceConfigurationPath(item.href) : isSystemAdmin || !item.adminOnly)
+    }))
     .filter((group) => group.items.length > 0);
   const initial = user.name.charAt(0) || "?";
 
@@ -101,8 +110,8 @@ export function AdminShell({
           <Link href="/admin" className="brand no-underline hover:bg-[var(--bg-hover)]">
             <BrandMark name={firmName} />
             <div className="min-w-0">
-              <div className="brand-name truncate text-[var(--t-primary)]">律序管理后台</div>
-              <div className="brand-sub truncate">{firmName} · 组织 · 规则 · 接入 · 安全</div>
+              <div className="brand-name truncate text-[var(--t-primary)]">{personal ? "工作区设置" : "律序管理后台"}</div>
+              <div className="brand-sub truncate">{personal ? firmName : `${firmName} · 组织 · 规则 · 接入 · 安全`}</div>
             </div>
           </Link>
           <nav className="nav overflow-y-auto">
@@ -114,7 +123,7 @@ export function AdminShell({
                   return (
                     <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={cn("nav-item no-underline", active && "active")}>
                       <item.icon className="ic" strokeWidth={1.8} />
-                      <span className="truncate">{item.label}</span>
+                      <span className="truncate">{personal && item.href === "/admin" ? "设置概览" : item.label}</span>
                     </Link>
                   );
                 })}
@@ -131,11 +140,11 @@ export function AdminShell({
               )}
               <div className="user-meta">
                 <div className="user-name truncate">{user.name}</div>
-                <div className="user-role truncate">{isSystemAdmin ? "超级管理员" : user.roleName} · 系统管理模式</div>
+                <div className="user-role truncate">{personal ? "个人工作区" : `${isSystemAdmin ? "超级管理员" : user.roleName} · 系统管理模式`}</div>
               </div>
-              <button type="button" onClick={() => signOut({ callbackUrl: "/login" })} className="btn btn-ghost btn-icon btn-sm" aria-label="退出登录" title="退出登录">
+              {!personal && <button type="button" onClick={() => signOut({ callbackUrl: "/login" })} className="btn btn-ghost btn-icon btn-sm" aria-label="退出登录" title="退出登录">
                 <LogOut />
-              </button>
+              </button>}
             </div>
           </div>
         </div>
@@ -144,8 +153,8 @@ export function AdminShell({
       <div className="md:pl-[228px]">
         <div className="admin-strip sticky top-0 z-20">
           <ShieldCheck className="h-4 w-4 shrink-0" strokeWidth={1.8} />
-          <span className="badge">系统管理模式</span>
-          <span className="hidden truncate sm:inline" style={{ color: "rgba(255,255,255,0.55)" }}>当前修改影响全所规则，保存将记录审计</span>
+          <span className="badge">{personal ? "工作区设置" : "系统管理模式"}</span>
+          {!personal && <span className="hidden truncate sm:inline" style={{ color: "rgba(255,255,255,0.55)" }}>当前修改影响全所规则，保存将记录审计</span>}
           <Link href="/" className="back no-underline">
             返回业务系统
             <ChevronRight className="h-3.5 w-3.5" />
@@ -158,7 +167,7 @@ export function AdminShell({
             return (
               <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={cn("nav-item h-8 shrink-0 no-underline", active && "active")}>
                 <item.icon className="ic" />
-                {item.label}
+                {personal && item.href === "/admin" ? "设置概览" : item.label}
               </Link>
             );
           })}

@@ -1,0 +1,24 @@
+{
+  "name": "lexorder-workbench-m1",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node preview-personal.mjs",
+    "verify": "node --import tsx verify.ts",
+    "verify:services": "node --import tsx verify-services.ts",
+    "build:personal": "node build-personal.mjs",
+    "start:personal": "node personal-runtime.mjs",
+    "verify:personal": "node verify-personal.mjs",
+    "verify:channel": "node verify-channel.mjs"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.16",
+    "@lancedb/lancedb": "0.41.0",
+    "pdfjs-dist": "5.6.205",
+    "yaml": "2.8.2"
+  }
+}

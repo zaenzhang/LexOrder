@@ -6,7 +6,7 @@ const { db, requireAdmin } = vi.hoisted(() => ({
   requireAdmin: vi.fn()
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
-vi.mock("@/lib/auth/session", () => ({ requireSession: vi.fn(), requireSystemAdmin: requireAdmin }));
+vi.mock("@/lib/auth/session", () => ({ requireSession: vi.fn(), requireWorkspaceConfiguration: requireAdmin }));
 vi.mock("@/server/audit", () => ({ audit: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/server/matters/route", () => ({ revalidateMatter: vi.fn() }));

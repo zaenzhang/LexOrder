@@ -3,7 +3,7 @@
  * 满足「律师离所/换系统时数据带得走」（PRD 设计原则 6）。同结构：manifest.json（当次固定清单）
  * + 材料（解密后按类别归目录）+ README。与归档包的区别：这是**当次快照**（非冻结批准件），
  * manifest 记录导出时间与导出人，不含归档号/结案小结；后续变化不影响已导出的包。
- * 权限：与案件列表 xlsx 导出同口径（matters.export 断言在 API 路由层）+ 本案读取。
+ * 权限：完整包独立权限、实际经办范围与逐件材料读取资格均需通过。
  */
 import PizZip from "pizzip";
 import { prisma } from "@/lib/prisma";
@@ -11,6 +11,8 @@ import { storage } from "@/lib/storage";
 import { decryptBuffer, sha256 } from "@/lib/storage/crypto";
 import { readArchiveDocument } from "@/server/archive/verification";
 import { ActionError } from "@/lib/action-error";
+import type { WorkspaceActor } from "@/lib/runtime/actor";
+import { assertMatterExportAccess, assertExportDocumentAccess, exportDocumentAccessSelect } from "./export-access";
 
 const CATEGORY_DIR: Record<string, string> = {
   EVIDENCE: "证据",
@@ -25,19 +27,22 @@ function safeName(s: string): string {
   return s.replace(/[\\/:*?"<>|]/g, "_").trim();
 }
 
-export async function buildMatterBundle(matterId: string, userId: string): Promise<{ buffer: Buffer; fileName: string; checksum: string; size: number }> {
+export async function buildMatterBundle(matterId: string, actor: WorkspaceActor): Promise<{ buffer: Buffer; fileName: string; checksum: string; size: number }> {
+  await assertMatterExportAccess(actor, matterId);
   const matter = await prisma.matter.findUnique({
     where: { id: matterId, deletedAt: null },
     select: { internalCode: true, title: true, status: true, createdAt: true, notes: true }
   });
   if (!matter) throw new ActionError("案件不存在");
 
-  const [documents, notes, tasks, finance] = await Promise.all([
-    prisma.document.findMany({
-      where: { matterId, deletedAt: null, isLatest: true },
-      orderBy: [{ category: "asc" }, { createdAt: "asc" }],
-      select: { id: true, name: true, category: true, mimeType: true, size: true, sha256: true, path: true, encrypted: true, iv: true, authTag: true, createdAt: true }
-    }),
+  const documents = await prisma.document.findMany({
+    where: { matterId, deletedAt: null, isLatest: true },
+    orderBy: [{ category: "asc" }, { createdAt: "asc" }],
+    select: { ...exportDocumentAccessSelect, name: true, category: true, mimeType: true, size: true, sha256: true, path: true, encrypted: true, iv: true, authTag: true, createdAt: true }
+  });
+  await assertExportDocumentAccess(actor.id, documents);
+
+  const [notes, tasks, finance] = await Promise.all([
     prisma.note.findMany({ where: { matterId, deletedAt: null }, orderBy: { occurredAt: "asc" }, select: { occurredAt: true, channel: true, withWhom: true, content: true, author: { select: { name: true } } } }),
     prisma.task.findMany({ where: { matterId }, orderBy: { createdAt: "asc" }, select: { title: true, dueAt: true, completed: true, priority: true } }),
     prisma.$queryRaw<{ contractTotal: string | null; received: string | null; outstanding: string | null }[]>`
@@ -53,7 +58,7 @@ export async function buildMatterBundle(matterId: string, userId: string): Promi
   const manifest = {
     kind: "matter-live-bundle",
     exportedAt: new Date().toISOString(),
-    exportedBy: userId,
+    exportedBy: actor.id,
     matter: { internalCode: matter.internalCode, title: matter.title, status: matter.status, createdAt: matter.createdAt, notes: matter.notes },
     finance: finance[0] ? { contractTotal: Number(finance[0].contractTotal ?? 0), received: Number(finance[0].received ?? 0), receivableOutstanding: Number(finance[0].outstanding ?? 0) } : null,
     documents: documents.map(d => ({ name: d.name, category: d.category, mimeType: d.mimeType, size: d.size, sha256: d.sha256, createdAt: d.createdAt })),

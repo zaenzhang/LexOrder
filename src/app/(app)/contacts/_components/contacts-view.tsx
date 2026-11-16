@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { PageHeader, Segmented } from "@/components/patterns/moan";
 import { confirmDialog, promptDialog } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
+import type { RuntimeMode } from "@/lib/runtime/mode";
 
 type ColleagueItem = {
   id: string;
@@ -65,7 +66,8 @@ export function ContactsView({
   currentUserId,
   currentUserRole,
   rolePermissions,
-  managerAuthorized
+  managerAuthorized,
+  runtimeMode = "SERVER"
 }: {
   colleagues: ColleagueItem[];
   externalContacts: ExternalContactItem[];
@@ -73,14 +75,16 @@ export function ContactsView({
   currentUserRole: string;
   rolePermissions?: RoleGrant[];
   managerAuthorized?: boolean;
+  runtimeMode?: RuntimeMode;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ExternalContactItem | null>(null);
   const [filter, setFilter] = useState<ExternalContactCategory | "ALL">("ALL");
   const [search, setSearch] = useState("");
   const router = useRouter();
-  const roleUser = { role: currentUserRole, rolePermissions, managerAuthorized };
-  const canReviewContacts = customOrLegacy(roleUser, "contacts.review", currentUserRole === "PRINCIPAL_LAWYER" || managerAuthorized === true);
+  const personal = runtimeMode === "PERSONAL";
+  const roleUser = { role: currentUserRole, rolePermissions, managerAuthorized, runtimeMode };
+  const canReviewContacts = personal || customOrLegacy(roleUser, "contacts.review", currentUserRole === "PRINCIPAL_LAWYER" || managerAuthorized === true);
   const pendingCount = externalContacts.filter((c) => c.status === "PENDING_REVIEW").length;
 
   const filteredExternal = externalContacts.filter((c) => {
@@ -108,10 +112,10 @@ export function ContactsView({
   }
 
   async function handleApprove(c: ExternalContactItem) {
-    if (!(await confirmDialog({ title: `通过联系人「${c.name}」？`, description: "通过后将对全所展示。", confirmText: "通过" }))) return;
+    if (!(await confirmDialog({ title: personal ? `确认联系人「${c.name}」？` : `通过联系人「${c.name}」？`, description: personal ? undefined : "通过后将对全所展示。", confirmText: personal ? "本人确认" : "通过" }))) return;
     try {
       await approveExternalContact({ id: c.id });
-      toast.success("已通过");
+      toast.success(personal ? "本人已确认" : "已通过");
       router.refresh();
     } catch (err) {
       toast.error("审核失败", { description: actionErrorMessage(err) });
@@ -132,10 +136,10 @@ export function ContactsView({
 
   return (
     <div className="space-y-6">
-      <PageHeader className="!mb-0" title="通讯录" sub="本所同事与外部联系人（法院、仲裁机构、公证处、他所律师等）；外部联系人由行政审核后对全所展示。" />
+      <PageHeader className="!mb-0" title="通讯录" sub={personal ? undefined : "本所同事与外部联系人（法院、仲裁机构、公证处、他所律师等）；外部联系人由行政审核后对全所展示。"} />
 
       {/* 同事 */}
-      <div className="space-y-3">
+      {!personal && <div className="space-y-3">
         <header className="flex items-center justify-between">
           <h2 className="text-sm font-medium">本所同事 ({colleagues.length})</h2>
         </header>
@@ -161,7 +165,7 @@ export function ContactsView({
             </div>
           ))}
         </div>
-      </div>
+      </div>}
 
       {/* 外部联系人 */}
       <div className="space-y-3">
@@ -170,7 +174,7 @@ export function ContactsView({
             外部联系人 ({externalContacts.length})
             {canReviewContacts && pendingCount > 0 && (
               <span className="rounded-full border border-[var(--amber-line)] bg-[var(--amber-bg)] px-2 py-0.5 text-[10px] font-medium text-[var(--amber)]">
-                待审核 {pendingCount}
+                {personal ? "待确认" : "待审核"} {pendingCount}
               </span>
             )}
           </h2>
@@ -225,7 +229,7 @@ export function ContactsView({
                       </span>
                       {c.status === "PENDING_REVIEW" && (
                         <span className="rounded-full border border-[var(--amber-line)] bg-[var(--amber-bg)] px-2 py-0.5 text-[10px] font-medium text-[var(--amber)]">
-                          待审核
+                          {personal ? "待确认" : "待审核"}
                         </span>
                       )}
                       {c.title && (
@@ -264,7 +268,7 @@ export function ContactsView({
                             className="h-7 gap-1 px-2 text-[11px] text-[var(--green)] hover:text-[var(--green)]"
                           >
                             <Check className="h-3 w-3" />
-                            通过
+                            {personal ? "本人确认" : "通过"}
                           </Button>
                           <Button
                             type="button"
@@ -312,7 +316,7 @@ export function ContactsView({
         )}
       </div>
 
-      <ExternalContactDialog open={dialogOpen} onOpenChange={setDialogOpen} editing={editing} />
+      <ExternalContactDialog open={dialogOpen} onOpenChange={setDialogOpen} editing={editing} runtimeMode={runtimeMode} />
     </div>
   );
 }

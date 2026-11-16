@@ -11,10 +11,11 @@ import { ContactsView } from "./_components/contacts-view";
 export default async function ContactsPage() {
   const session = await getSession();
   if (!session?.user) redirect("/login");
+  const personal = session.user.runtimeMode === "PERSONAL";
 
   const [externalContacts, colleagues] = await Promise.all([
     listExternalContacts(),
-    prisma.user.findMany({
+    personal ? Promise.resolve([]) : prisma.user.findMany({
       where: { active: true },
       select: { id: true, name: true, email: true, phone: true, role: true, avatar: true },
       orderBy: { name: "asc" }
@@ -29,6 +30,7 @@ export default async function ContactsPage() {
       currentUserRole={session.user.role}
       rolePermissions={session.user.rolePermissions}
       managerAuthorized={session.user.managerAuthorized === true}
+      runtimeMode={session.user.runtimeMode}
     />
   );
 }

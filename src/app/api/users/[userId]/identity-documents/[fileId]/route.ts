@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/options";
+import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { storage } from "@/lib/storage";
 import { decryptBuffer } from "@/lib/storage/crypto";
@@ -10,7 +9,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ userId: string; fileId: string }> }) {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session?.user) return NextResponse.json({ error: "未登录" }, { status: 401 });
   const actor = await prisma.user.findUnique({ where: { id: session.user.id }, select: { active: true, systemRole: true } });
   if (!actor?.active) return NextResponse.json({ error: "账号不可用" }, { status: 401 });

@@ -10,6 +10,7 @@ declare module "next-auth" {
       roleName?: string;
       rolePermissions?: import("@/lib/roles/catalog").RoleGrant[];
       managerAuthorized?: boolean;
+      runtimeMode?: "PERSONAL" | "SERVER";
       avatar: string | null;
     } & DefaultSession["user"];
   }

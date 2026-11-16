@@ -1,13 +1,13 @@
 import { hasCustomPermission } from "@/lib/roles/catalog";
-import { isManager } from "@/lib/permissions";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/options";
+import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/server/audit";
 import { buildArchiveZip } from "@/server/archive/export";
 import { storage } from "@/lib/storage";
-import { actionErrorMessage } from "@/lib/action-error";
+import { ActionError, actionErrorMessage } from "@/lib/action-error";
+import { parseArchiveSnapshot } from "@/lib/archive/snapshot";
+import { assertMatterExportAccess, assertExportDocumentAccess, exportDocumentAccessSelect, MatterExportAccessError } from "@/server/matters/export-access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,14 +17,21 @@ export async function GET(
   { params }: { params: Promise<{ matterId: string }> }
 ) {
   const { matterId } = await params;
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session?.user) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });
   }
   if (!hasCustomPermission(session.user, "matters.export")) return NextResponse.json({ error: "无导出权限" }, { status: 403 });
   if (!hasCustomPermission(session.user, "matters.read") || !hasCustomPermission(session.user, "archive.read") || !hasCustomPermission(session.user, "documents.download")) return NextResponse.json({ error: "导出归档材料需要案件查看、归档查看和材料下载权限" }, { status: 403 });
 
-  // 权限：主任律师或案件成员
+  try {
+    await assertMatterExportAccess(session.user, matterId);
+  } catch (error) {
+    if (error instanceof MatterExportAccessError) return NextResponse.json({ error: actionErrorMessage(error) }, { status: 403 });
+    throw error;
+  }
+
+  // 完整归档包仍需当前经办关联，概况可见或业务管理权不能替代。
   const matter = await prisma.matter.findUnique({
     where: { id: matterId },
     select: { id: true, status: true, internalCode: true }
@@ -42,23 +49,21 @@ export async function GET(
       ...(requestedArchiveId ? { id: requestedArchiveId } : {})
     },
     orderBy: { reviewedAt: "desc" },
-    select: { id: true, archiveNo: true }
+    select: { id: true, archiveNo: true, checklistJson: true }
   });
   if (!archive) return NextResponse.json({ error: "指定归档记录不存在或尚未批准" }, { status: 404 });
 
-  if (!isManager(session.user)) {
-    const member = await prisma.matterMember.findUnique({
-      where: { matterId_userId: { matterId: matter.id, userId: session.user.id } }
-    });
-    if (!member) {
-      return NextResponse.json({ error: "无权访问" }, { status: 403 });
-    }
-  }
-
   let result;
   try {
+    const snapshot = parseArchiveSnapshot(archive.checklistJson);
+    if (!snapshot) throw new ActionError("该历史归档记录未固定批准材料，不能生成可核验归档包");
+    const ids = [...new Set(snapshot.documents.map(document => document.id))];
+    const documents = await prisma.document.findMany({ where: { id: { in: ids }, deletedAt: null }, select: exportDocumentAccessSelect });
+    if (documents.length !== ids.length) throw new MatterExportAccessError("部分归档材料已不可读取，无法导出完整案卷");
+    await assertExportDocumentAccess(session.user.id, documents);
     result = await buildArchiveZip(archive.id);
   } catch (err) {
+    if (err instanceof MatterExportAccessError) return NextResponse.json({ error: actionErrorMessage(err) }, { status: 403 });
     console.error("[archive export] 构建失败：", err);
     return NextResponse.json(
       { error: err instanceof Error ? actionErrorMessage(err) : "导出失败" },

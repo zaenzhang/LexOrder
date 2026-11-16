@@ -6,7 +6,7 @@
  * 重复（盲索引撞唯一索引）的行跳过并计数——留待人工合并（P0-1 流程）。
  */
 import { prisma } from "@/lib/prisma";
-import { requireSystemAdmin } from "@/lib/auth/session";
+import { requireWorkspaceConfiguration } from "@/lib/auth/session";
 import { audit } from "@/server/audit";
 import { sealIdNumber, isEncryptedIdNumber } from "@/lib/clients/id-number-crypto";
 import { normalizeIdNumber } from "@/lib/clients/identity";
@@ -16,7 +16,7 @@ const BATCH = 50;
 export async function backfillClientIdEncryption(): Promise<{
   scanned: number; sealed: number; skippedDuplicate: number; remaining: number;
 }> {
-  const session = await requireSystemAdmin();
+  const session = await requireWorkspaceConfiguration();
 
   const rows = await prisma.client.findMany({
     where: { idNumberBlind: null, idNumber: { not: null } },
@@ -65,7 +65,7 @@ export async function backfillClientIdEncryption(): Promise<{
 }
 
 export async function getClientIdCryptoStats() {
-  await requireSystemAdmin();
+  await requireWorkspaceConfiguration();
   const [pending, sealed, total] = await Promise.all([
     prisma.client.count({ where: { idNumberBlind: null, idNumber: { not: null } } }),
     prisma.client.count({ where: { idNumberBlind: { not: null } } }),

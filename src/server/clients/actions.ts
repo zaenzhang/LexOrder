@@ -5,6 +5,9 @@ import { roleMutation, checkRoleMutation } from "@/lib/roles/service";
 import { revalidatePath } from "next/cache";
 import { Prisma, type ClientIdType } from "@prisma/client";
 import { scopeFor, type RoleUser } from "@/lib/roles/catalog";
+import { hasPersonalCapability, personalAuditMetadata } from "@/lib/runtime/capabilities";
+import { resolvePersonalActor } from "@/server/runtime/personal";
+import { isPersonalMode } from "@/lib/runtime/mode";
 import { matterFinanceVisibilityFilter } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/session";
@@ -257,7 +260,7 @@ export async function createClient(input: ClientCreateInput) {
 
 export async function updateClient(input: ClientUpdateInput) {
   const session = await requireSession("clients.write");
-  if (session.user.role !== "CUSTOM" && !isManager(session.user.role)) {
+  if (!hasPersonalCapability(session.user,"clients.write") && session.user.role !== "CUSTOM" && !isManager(session.user.role)) {
     throw new ActionError("仅管理员或主办律师可编辑客户信息");
   }
   const data = clientUpdateSchema.parse(input);
@@ -279,6 +282,8 @@ export async function updateClient(input: ClientUpdateInput) {
 
   // 简单策略：删除所有联系人 + 重新创建。后续可优化为 diff
   await prisma.$transaction(async db => {
+    if(isPersonalMode())await db.$queryRaw`SELECT id FROM "Client" WHERE id=${id} FOR UPDATE`;
+    await assertCustomClientWrite(session.user, id, db);
     await checkRoleMutation(db, session.user, "clients.write");
     await db.contact.deleteMany({ where: { clientId: id } });
     await db.client.update({
@@ -310,7 +315,8 @@ export async function updateClient(input: ClientUpdateInput) {
     userId: session.user.id,
     action: "CLIENT_UPDATE",
     targetType: "Client",
-    targetId: id
+    targetId: id,
+    detail: personalAuditMetadata(session.user,"CHANGE")
   });
 
   revalidatePath("/clients");
@@ -320,12 +326,12 @@ export async function updateClient(input: ClientUpdateInput) {
 
 export async function softDeleteClient(id: string) {
   const session = await requireSession("clients.write");
-  if (session.user.role !== "CUSTOM" && !isManager(session.user.role)) {
+  if (!hasPersonalCapability(session.user,"clients.write") && session.user.role !== "CUSTOM" && !isManager(session.user.role)) {
     throw new ActionError("只有合伙人或获授权岗位可以删除客户");
   }
 
   await assertCustomClientWrite(session.user, id);
-  await roleMutation(session.user, "clients.write", async roleDb => roleDb.client.update({
+  await clientMutation(session.user, id, async roleDb => roleDb.client.update({
     where: { id },
     data: { deletedAt: new Date() }
   }));
@@ -334,7 +340,8 @@ export async function softDeleteClient(id: string) {
     userId: session.user.id,
     action: "CLIENT_DELETE",
     targetType: "Client",
-    targetId: id
+    targetId: id,
+    detail: personalAuditMetadata(session.user,"CHANGE")
   });
 
   revalidatePath("/clients");
@@ -344,12 +351,12 @@ export async function softDeleteClient(id: string) {
 // 单独的 contact 操作（用于详情页快速编辑联系人，不通过整 client 重写）
 export async function addContact(clientId: string, input: ContactInput) {
   const session = await requireSession("clients.write");
-  if (session.user.role !== "CUSTOM" && !isManager(session.user.role)) {
+  if (!hasPersonalCapability(session.user,"clients.write") && session.user.role !== "CUSTOM" && !isManager(session.user.role)) {
     throw new ActionError("仅管理员或主办律师可编辑联系人");
   }
   await assertCustomClientWrite(session.user, clientId);
   const data = contactInputSchema.parse(input);
-  const created = await roleMutation(session.user, "clients.write", async roleDb => roleDb.contact.create({
+  const created = await clientMutation(session.user, clientId, async roleDb => roleDb.contact.create({
     data: { clientId, ...emptyToNull(data) }
   }));
   await audit({
@@ -357,7 +364,7 @@ export async function addContact(clientId: string, input: ContactInput) {
     action: "CONTACT_CREATE",
     targetType: "Contact",
     targetId: created.id,
-    detail: { clientId }
+    detail: { clientId, ...personalAuditMetadata(session.user,"CHANGE") }
   });
   revalidatePath(`/clients/${clientId}`);
   return { ok: true, id: created.id };
@@ -365,27 +372,41 @@ export async function addContact(clientId: string, input: ContactInput) {
 
 export async function deleteContact(id: string) {
   const session = await requireSession("clients.write");
-  if (session.user.role !== "CUSTOM" && !isManager(session.user.role)) {
+  if (!hasPersonalCapability(session.user,"clients.write") && session.user.role !== "CUSTOM" && !isManager(session.user.role)) {
     throw new ActionError("仅管理员或主办律师可删除联系人");
   }
   const contact = await prisma.contact.findUnique({ where: { id } });
   if (!contact) return { ok: false };
   await assertCustomClientWrite(session.user, contact.clientId);
-  await roleMutation(session.user, "clients.write", async roleDb => roleDb.contact.delete({ where: { id } }));
+  await clientMutation(session.user, contact.clientId, async roleDb => roleDb.contact.delete({ where: { id, clientId: contact.clientId } }));
   await audit({
     userId: session.user.id,
     action: "CONTACT_DELETE",
     targetType: "Contact",
     targetId: id,
-    detail: { clientId: contact.clientId }
+    detail: { clientId: contact.clientId, ...personalAuditMetadata(session.user,"CHANGE") }
   });
   revalidatePath(`/clients/${contact.clientId}`);
   return { ok: true };
 }
 
-async function assertCustomClientWrite(user: RoleUser & { id: string }, id: string) {
+async function assertCustomClientWrite(user: RoleUser & { id: string }, id: string, db: Prisma.TransactionClient = prisma) {
+  const personal = await resolvePersonalActor(db,user.id);
+  if(personal){
+    if(!hasPersonalCapability(personal,"clients.write")||!await db.client.count({where:{id,deletedAt:null,ownerUserId:personal.id}}))throw new ActionError("客户不存在或不属于本机操作者");
+    return;
+  }
   if (user.role !== "CUSTOM") return;
   const scope = scopeFor(user, "clients.write");
   const grants = scope ? [{ permissionKey: "clients.read" as const, scope }] : [];
-  if (!scope || !await prisma.client.count({ where: { id, deletedAt: null, ...clientVisibilityFilter(user.id, user.role, grants) } })) throw new ActionError("客户不存在或无权维护");
+  if (!scope || !await db.client.count({ where: { id, deletedAt: null, ...clientVisibilityFilter(user.id, user.role, grants) } })) throw new ActionError("客户不存在或无权维护");
+}
+
+async function clientMutation<T>(user:RoleUser&{id:string},id:string,write:(db:Prisma.TransactionClient)=>Promise<T>){
+  if(!isPersonalMode())return roleMutation(user,"clients.write",write);
+  return prisma.$transaction(async db=>{
+    await db.$queryRaw`SELECT id FROM "Client" WHERE id=${id} FOR UPDATE`;
+    await assertCustomClientWrite(user,id,db);
+    return write(db);
+  });
 }

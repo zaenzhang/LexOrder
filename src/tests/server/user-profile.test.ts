@@ -1,13 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Prisma } from "@prisma/client";
-const { db, session, compare } = vi.hoisted(() => ({
+const { db, session, compare, personalActor } = vi.hoisted(() => ({
   db: { user: { findUnique: vi.fn(), findUniqueOrThrow: vi.fn(), update: vi.fn() }, auditLog: { create: vi.fn() }, $queryRaw: vi.fn(), $transaction: vi.fn() },
-  session: { user: { id: "cprofile000000000000000001", role: "LAWYER" } }, compare: vi.fn()
+  session: { user: { id: "cprofile000000000000000001", role: "LAWYER" } }, compare: vi.fn(), personalActor: vi.fn()
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 vi.mock("@/lib/auth/session", () => ({ requireSession: async () => session }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("bcryptjs", () => ({ default: { compare } }));
+vi.mock("@/server/runtime/personal", () => ({ resolvePersonalActor: personalActor }));
 import { updateMyProfile, bindMyIdentity, correctUserIdentity, getProfileIdentity } from "@/server/users/profile-actions";
 import { saveBasicProfile } from "@/server/users/profile-service";
 import { idNumberSchema, basicProfileSchema, correctIdentitySchema } from "@/server/users/profile-schema";
@@ -20,12 +21,14 @@ const own = { id: session.user.id, active: true, role: "LAWYER", updatedAt: date
 const residentIdentity = { identityDocumentType: "PRC_RESIDENT_ID" as const, identityDocumentName: "", identityDocumentNumber: specimen };
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.stubEnv("LEXORDER_RUNTIME_MODE", "SERVER");
   db.$transaction.mockImplementation(async callback => callback(db));
   db.user.findUnique.mockResolvedValue({ ...own });
   db.user.findUniqueOrThrow.mockResolvedValue({ ...own });
   db.user.update.mockResolvedValue({ id: own.id });
   compare.mockResolvedValue(true);
 });
+afterEach(() => vi.unstubAllEnvs());
 
 describe("本人身份号码校验", () => {
   it("规范化首尾空白和小写 x", () => expect(idNumberSchema.parse(` ${specimen.toLowerCase()} `)).toBe(specimen));
@@ -132,5 +135,48 @@ describe("个人基本资料与身份操作边界", () => {
     db.auditLog.create.mockRejectedValue(new Error("audit failed"));
     await expect(updateMyProfile({ ...base, name: "新姓名" })).rejects.toThrow("资料暂不可用");
     expect(db.$transaction.mock.calls[0][1].isolationLevel).toBe("Serializable");
+  });
+});
+
+describe("Personal 本机执业资料", () => {
+  beforeEach(() => {
+    vi.stubEnv("LEXORDER_RUNTIME_MODE", "PERSONAL");
+    personalActor.mockResolvedValue({ ...session.user, runtimeMode: "PERSONAL" });
+  });
+
+  it("可选姓名与联系方式不创建登录凭据，事务内复核同一本机 actor", async () => {
+    await updateMyProfile({ ...base, name: "", email: "contact@example.invalid" });
+    expect(personalActor).toHaveBeenCalledWith(db, own.id);
+    expect(db.user.update.mock.calls[0][0].data).toMatchObject({ name: "", email: "contact@example.invalid" });
+    expect(db.user.update.mock.calls[0][0].data).not.toHaveProperty("sessionVersion");
+    expect(db.user.update.mock.calls[0][0].data).not.toHaveProperty("passwordHash");
+    expect(compare).not.toHaveBeenCalled();
+    expect(db.auditLog.create.mock.calls[0][0].data.userId).toBe(own.id);
+  });
+
+  it("清空邮箱只保留稳定技术占位，不要求密码", async () => {
+    await updateMyProfile({ ...base, email: "" });
+    expect(db.user.update.mock.calls[0][0].data.email).toBe(`${own.id}@personal.invalid`);
+    expect(compare).not.toHaveBeenCalled();
+  });
+
+  it("本机 actor 核对失败与过期版本均不写入", async () => {
+    personalActor.mockResolvedValue(null);
+    await expect(updateMyProfile({ ...base, name: "新姓名" })).rejects.toThrow("本机操作者");
+    personalActor.mockResolvedValue({ ...session.user, runtimeMode: "PERSONAL" });
+    await expect(updateMyProfile({ ...base, expectedUpdatedAt: "2026-09-05T00:00:00.000Z" })).rejects.toThrow("刷新");
+    expect(db.user.update).not.toHaveBeenCalled();
+  });
+
+  it("不能改其他人或通过管理员入口修改自己", async () => {
+    await expect(saveBasicProfile(own.id, "cprofile000000000000000002", base, { admin: false })).rejects.toThrow("本机操作者");
+    await expect(saveBasicProfile(own.id, own.id, base, { admin: true })).rejects.toThrow("本机操作者");
+    expect(db.user.update).not.toHaveBeenCalled();
+  });
+
+  it("人员身份绑定入口不在 Personal 创建密码认证流程", async () => {
+    await expect(bindMyIdentity({ ...residentIdentity, currentPassword: "fixture", expectedUpdatedAt: version })).rejects.toThrow("不提供人员身份认证");
+    expect(db.$transaction).not.toHaveBeenCalled();
+    expect(compare).not.toHaveBeenCalled();
   });
 });

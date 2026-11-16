@@ -5,6 +5,7 @@ import { ArrowRight, BellRing, BookOpenCheck, Bot, Building2, FileUp, KeyRound, 
 import { getSession } from "@/lib/auth/session";
 import { isSystemAdmin } from "@/lib/auth/system-role";
 import { PageHeader } from "@/components/patterns/moan";
+import { isPersonalWorkspaceConfigurationPath } from "@/lib/runtime/workspace-navigation";
 
 const adminGroups = [
   {
@@ -48,12 +49,18 @@ export default async function AdminHomePage() {
   const session = await getSession();
   if (!session?.user) redirect("/login");
   const systemAdmin = isSystemAdmin(session.user);
+  const personal = session.user.runtimeMode === "PERSONAL";
+  const visibleGroups = adminGroups.map(group => ({
+    ...group,
+    title: personal && group.title === "组织与人员" ? "执业资料" : group.title,
+    items: group.items.filter(item => !personal || isPersonalWorkspaceConfigurationPath(item.href))
+  })).filter(group => group.items.length > 0);
   const { TextBackfillCard } = await import("./_components/text-backfill-card");
   const { ClientIdCryptoCard } = await import("./_components/client-id-crypto-card");
   const { getClientIdCryptoStats } = await import("@/server/clients/backfill-crypto");
   const { getTextLayerStats } = await import("@/server/documents/admin-text-backfill");
 
-  if (!systemAdmin) {
+  if (!personal && !systemAdmin) {
     return (
       <div className="space-y-5">
         <PageHeader className="!mb-0" breadcrumb={<>设置 › <b>日常维护</b></>} title="日常维护" sub="你保留原有的期限规则库与批量导入权限，系统级配置仍仅向超级管理员开放。" />
@@ -67,13 +74,13 @@ export default async function AdminHomePage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader className="!mb-0" breadcrumb={<>设置 › <b>管理概览</b></>} title="管理后台" sub="在这里维护全所组织、业务规则、外部接入和安全记录。案件办理、客户沟通与审批处理仍在业务系统完成。" />
+      <PageHeader className="!mb-0" breadcrumb={<>设置 › <b>{personal ? "设置概览" : "管理概览"}</b></>} title={personal ? "工作区设置" : "管理后台"} sub={personal ? undefined : "在这里维护全所组织、业务规则、外部接入和安全记录。案件办理、客户沟通与审批处理仍在业务系统完成。"} />
 
       <div className="grid gap-5 xl:grid-cols-2">
-        {adminGroups.map((group) => (
+        {visibleGroups.map((group) => (
           <section key={group.title} className="card p-4">
             <h2 className="text-[15px] font-semibold">{group.title}</h2>
-            <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{group.description}</p>
+            {!personal && <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{group.description}</p>}
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               {group.items.map((item) => (
                 <ManagementCard key={item.href} {...item} />

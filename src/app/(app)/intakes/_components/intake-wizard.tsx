@@ -14,7 +14,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useForm, useFieldArray, FormProvider, useWatch, type FieldErrors, type FieldPath } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { useWorkspaceActor } from "@/components/workspace-actor-provider";
 import { toast } from "sonner";
 import { AlertTriangle, ChevronDown, ChevronRight, FileText, Loader2, Paperclip, Plus, ScanLine, Sparkles, X } from "lucide-react";
 import type { MatterCategory, ProcedureType, LitigationStanding, FeeType, PartyRole, BarFilingType, ClientType } from "@prisma/client";
@@ -161,7 +161,7 @@ export function IntakeWizard({
   editing?: {id:string;revision:number;values:Partial<IntakeCreateInput>};
 }) {
   const router = useRouter();
-  const { data: session } = useSession();
+  const actor = useWorkspaceActor();
   const [step, setStep] = useState(0);
   const [isPending, startTransition] = useTransition();
   const [contracts, setContracts] = useState<File[]>([]);
@@ -180,7 +180,7 @@ export function IntakeWizard({
 
   const methods = useForm<z.input<typeof intakeCreateSchema>, unknown, IntakeCreateInput>({
     resolver: zodResolver(intakeCreateSchema),
-    defaultValues: { ...freshDefaults(), ownerUserId: session?.user?.id ?? "", ...editing?.values }
+    defaultValues: { ...freshDefaults(), ownerUserId: actor?.id ?? "", ...editing?.values }
   });
   const { register, control, handleSubmit, getValues, setValue, reset, trigger, formState: { errors } } = methods;
   const { fields: parties, append: appendParty, remove: removeParty } = useFieldArray({ control, name: "parties" });
@@ -206,7 +206,7 @@ export function IntakeWizard({
   // 打开（非编辑）即重置：向导常驻挂载，defaultValues 只在首次渲染求值，跨天打开须取「现在」
   useEffect(() => {
     if (!open || editing) return;
-    reset({ ...freshDefaults(), ownerUserId: session?.user?.id ?? "" });
+    reset({ ...freshDefaults(), ownerUserId: actor?.id ?? "" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -295,8 +295,8 @@ export function IntakeWizard({
   }, [kind]);
 
   useEffect(() => {
-    if (!ownerUserId && session?.user?.id) setValue("ownerUserId", session.user.id);
-  }, [ownerUserId, session, setValue]);
+    if (!ownerUserId && actor?.id) setValue("ownerUserId", actor.id);
+  }, [ownerUserId, actor, setValue]);
 
   useEffect(() => {
     bodyRef.current?.scrollTo({ top: 0 });
@@ -329,7 +329,7 @@ export function IntakeWizard({
   }
 
   function resetAll() {
-    reset({ ...freshDefaults(), ownerUserId: session?.user?.id ?? "", ...editing?.values });
+    reset({ ...freshDefaults(), ownerUserId: actor?.id ?? "", ...editing?.values });
     setTitleTouched(false);
     setCauseName("");
     setContracts([]);

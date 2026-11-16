@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { requireSystemAdmin } from "@/lib/auth/session";
+import { requireWorkspaceConfiguration } from "@/lib/auth/session";
 import { audit } from "@/server/audit";
 import {
   saveYuandianSettings as saveSettings,
@@ -22,12 +22,12 @@ const saveSchema = z.object({
 const clearSchema = z.object({ confirm: z.literal(true) });
 
 export async function getYuandianSettingsPublic() {
-  await requireSystemAdmin();
+  await requireWorkspaceConfiguration();
   return readPublicYuandianSettings();
 }
 
 export async function saveYuandianSettingsAction(input: z.infer<typeof saveSchema>) {
-  const session = await requireSystemAdmin();
+  const session = await requireWorkspaceConfiguration();
   const data = saveSchema.parse(input);
 
   await saveSettings({
@@ -47,7 +47,7 @@ export async function saveYuandianSettingsAction(input: z.infer<typeof saveSchem
 }
 
 export async function clearYuandianKeyAction(input: z.infer<typeof clearSchema>) {
-  const session = await requireSystemAdmin();
+  const session = await requireWorkspaceConfiguration();
   clearSchema.parse(input);
   await saveSettings({ clearKey: true });
   await audit({
@@ -67,7 +67,7 @@ export async function testYuandianConnection(): Promise<{
   ok: boolean;
   message?: string;
 }> {
-  await requireSystemAdmin();
+  await requireWorkspaceConfiguration();
   try {
     const r = await searchPtalCases({ ay: ["民间借贷纠纷"], top_k: 1 });
     return { ok: true, message: `连接成功，命中 ${r.total} 条（已扣 10 POINT 试调用）` };

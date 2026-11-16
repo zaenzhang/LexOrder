@@ -11,6 +11,6 @@ export const prisma =
     log: ["warn"]
   });
 
-if (process.env.NODE_ENV !== "production") {
+if (process.env.NODE_ENV !== "production" || process.env.LEXORDER_RUNTIME_MODE === "PERSONAL") {
   globalForPrisma.prisma = prisma;
 }

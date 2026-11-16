@@ -6,6 +6,7 @@ import { shParts } from "@/lib/ui/sh-time";
 import { shMonthStart } from "@/server/finance/facts";
 import { approvalTransaction, approvalAudit, assertApprovalItem, approvalContextFor, requireApprovalRoute, canApproveItem, approvalRecipients } from "@/lib/approvals/service";
 import { selfConfirmEligible } from "@/lib/approvals/self-confirm";
+import { isPersonalMode } from "@/lib/runtime/mode";
 import { canReadDocument } from "@/lib/approvals/documents";
 
 import { revalidatePath } from "next/cache";
@@ -174,7 +175,7 @@ export async function createSealRequest(formData: FormData) {
   if (!purposeConfig) throw new ActionError("请选择管理员配置的用章事项");
   // v1.x 4.3：主章命中自确认清单时跳过审批路由（法人章硬排除，永不自确认）；
   // 附带的法定代表人子请求仍走完整审批。
-  const mainSealSelfConfirm = !alsoLegalRep && (await selfConfirmEligible(
+  const mainSealSelfConfirm = !isPersonalMode() && !alsoLegalRep && (await selfConfirmEligible(
     { action: "SEAL_APPROVE", category, requesterId: session.user.id, sealType: data.sealType, purposeId: purposeConfig?.id ?? null },
     prisma
   ));

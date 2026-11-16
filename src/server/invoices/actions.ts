@@ -12,6 +12,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { shMonthStart } from "@/server/finance/facts";
 import { requireSession } from "@/lib/auth/session";
+import { resolvePersonalActor } from "@/server/runtime/personal";
 import { assertMatterWritable } from "@/lib/archive/guard";
 import {
   assertCanAccessMatterFinance,
@@ -154,6 +155,7 @@ export async function listInvoiceRequestsByMatter(matterId: string) {
  */
 export async function approveInvoiceRequest(formData: FormData) {
   const session = await requireSession("approval");
+  const personal = await resolvePersonalActor(prisma, session.user.id);
 
   const requestId = formData.get("requestId");
   if (typeof requestId !== "string" || !requestId) throw new ActionError("requestId 缺失");
@@ -178,7 +180,7 @@ export async function approveInvoiceRequest(formData: FormData) {
   // v0.14: 真实发票号（财务批准/开具时回填）
   const invoiceNo = formData.get("invoiceNo");
   const invoiceNoStr = typeof invoiceNo === "string" ? invoiceNo.trim() : "";
-  if (session.user.role === "CUSTOM" && existing.status === "PENDING" && invoiceFile instanceof File && invoiceFile.size > 0) throw new ActionError("请先完成审批，再由具备开票执行权限的人员上传发票");
+  if ((personal || session.user.role === "CUSTOM") && existing.status === "PENDING" && invoiceFile instanceof File && invoiceFile.size > 0) throw new ActionError(personal ? "请先完成本人确认，再上传实际开具的发票" : "请先完成审批，再由具备开票执行权限的人员上传发票");
   if (invoiceFile instanceof File && invoiceFile.size > 0 && !invoiceNoStr) {
     throw new ActionError("上传电子发票时必须填写发票号码");
   }

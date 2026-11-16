@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireSession, requireSystemAdmin } from "@/lib/auth/session";
+import { requireSession, requireWorkspaceConfiguration } from "@/lib/auth/session";
 import { audit } from "@/server/audit";
 import { assertMatterWritable } from "@/lib/archive/guard";
 import { assertCanAssociateMatter, matterAssociationFilter } from "@/lib/permissions";
@@ -228,12 +228,12 @@ export async function deleteExpress(input: z.infer<typeof expressIdSchema>) {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 export async function getExpressSettingsPublic() {
-  await requireSystemAdmin();
+  await requireWorkspaceConfiguration();
   return readPublicExpressSettings();
 }
 
 export async function saveExpressSettingsAction(input: z.infer<typeof expressSettingsSaveSchema>) {
-  const session = await requireSystemAdmin();
+  const session = await requireWorkspaceConfiguration();
   const data = expressSettingsSaveSchema.parse(input);
 
   await saveSettings({

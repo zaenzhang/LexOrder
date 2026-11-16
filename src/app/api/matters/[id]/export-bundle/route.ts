@@ -5,18 +5,17 @@
  */
 import { hasCustomPermission } from "@/lib/roles/catalog";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/options";
+import { getSession } from "@/lib/auth/session";
 import { audit } from "@/server/audit";
-import { assertCanReadMatter } from "@/lib/permissions";
 import { buildMatterBundle } from "@/server/matters/export-bundle";
+import { MatterExportAccessError } from "@/server/matters/export-access";
 import { actionErrorMessage } from "@/lib/action-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session?.user) return NextResponse.json({ error: "未登录" }, { status: 401 });
   if (!hasCustomPermission(session.user, "matters.export")) return NextResponse.json({ error: "无导出权限" }, { status: 403 });
   if (session.user.role === "FINANCE") return NextResponse.json({ error: "财务账号请使用财务流水导出，案件卷宗含当事人证件信息" }, { status: 403 });
@@ -25,8 +24,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   }
   const { id } = await params;
   try {
-    await assertCanReadMatter(session.user.id, session.user.role, id, session.user.rolePermissions);
-    const bundle = await buildMatterBundle(id, session.user.id);
+    const bundle = await buildMatterBundle(id, session.user);
     await audit({
       userId: session.user.id,
       action: "MATTER_BUNDLE_EXPORT",
@@ -43,6 +41,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       }
     });
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? actionErrorMessage(err) : "生成失败" }, { status: 400 });
+    return NextResponse.json({ error: err instanceof Error ? actionErrorMessage(err) : "生成失败" }, { status: err instanceof MatterExportAccessError ? 403 : 400 });
   }
 }

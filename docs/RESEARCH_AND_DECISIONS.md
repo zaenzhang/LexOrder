@@ -6,13 +6,15 @@
 
 | 证据类别 | 已完成的工作 | 形成的决定 | 不能据此宣称 |
 | --- | --- | --- | --- |
-| 用户需求 | 整理事项工作流及本轮持续补充 | 双版本：Personal 内置 RAG、Server RAGFlow；均接独立模型 API、个人无认证、克制界面；性能不设门禁 | 用户已接受未展示的其他限制 |
+| 用户需求 | 整理事项工作流及本轮持续补充 | 双版本共用 LawLink 业务页面；Personal 内置 RAG、Server RAGFlow，均接独立模型 API；当前仅验证 Server，Personal 由用户后测，UI 改版后置 | 个人版已可运行、用户已验收，或未展示的限制已被接受 |
 | 既有项目 | 固定 LawLink/二开提交，核对数据与服务，保留实际移植记录 | 复用 TS、事项与财务/审批链，逐步补材料和交付 | 所有参考项目的能力都已移入 |
-| 桌面/存储 | 官方技术资料、源码耦合盘点、固定版本隔离运行 | 精简 Next/Node；PGlite 为个人库优先实现候选，SQLite 暂不并行迁移 | 性能优劣、全量 PG 兼容或 Windows 发行已验证 |
-| RAG 后端 | 核查 RAGFlow 1.0.0 正式发布、HTTP API、部署与共享权限资料 | 按用户决定：Personal 内置适配以 LanceDB 为首个目标，Server 通过 HTTP 接入 RAGFlow；共用业务/技能/引用 | 两个适配已实现、RAGFlow 全部功能已开放、检索质量或性能比较已完成 |
+| 桌面/存储 | 官方资料、固定版本隔离试验、共享根 App 与本机操作者接线、私有 PG 通道反例 | 精简 Next/Node + PGlite；保留历史局部证据，Personal 运行与 Windows 产物待用户验收 | 后续变更后的应用可运行、全量 PG 兼容或 Windows 发行已验证 |
+| RAG 后端 | LanceDB 0.41.0 SDK 原型、抽取/OCR 边界测试、RAGFlow 1.0.0 HTTP 适配与固定部署准备脚本 | 两个适配已有代码；Lance/OCR 新增 26 项通过；RAGFlow 为 `PREPARED_NOT_DEPLOYED`，真实服务/模型联调待配置 | 适配已接通完整业务、真实语义/OCR 质量已验证，或 RAGFlow 已部署 |
 | 专业能力 | 16 个主要官方来源，13 个国家/地区及补充材料 | SK01—SK12 的输入、步骤、成果、人工复核与评测 | 全球排名、每国穷尽调查、名所背书或 AI 执业资格 |
 
 研究采用“观察到的行为 → 输入输出与规则 → LexOrder 设计 → 场景验证”。来源事实、产品推论和已运行结果分别标明。动态页面不自动等于固定版本能力；新增依赖固定版本和完整性，实际采用源码时登记文件与许可。招聘页面状态按核查当日记录，后续实现时复核需要更新的来源。
+
+当前运行证据集中于[实施计划 §8.3](WORKBENCH_PLAN.md#83-m1-当前验证与交接2026-11-16)：Personal 共享根应用曾构建通过，后续新工作区初始化报 `M1_INITIALIZATION_COMMAND_FAILED` 后依用户指令停止验证；没有 Windows 产物。Server-only 服务脚本实跑两项 `NOT_CONFIGURED`、退出码 2，未调用 Personal；无真实模型凭据或 RAGFlow 实例时不记联调通过。
 
 ## 1. 实际业务基线
 
@@ -87,13 +89,35 @@
 
 参考中不适用的处理也单独审查：Kosmos 的[材料任务](https://github.com/Kosmos-Law/kosmos/blob/c6454fd5488c0d231e2b4756846f690c679586ca/apps/case/documents/tasks.py) 包含 OCR 替换原文件、按总字符量判断已有文本及限量索引/摘要。LexOrder 保留原件，并分开记录解析覆盖、召回片段与模型实际输入，不能由处理成功推断全卷已读。本批独立实现共用契约，不复制以上项目代码。
 
+### 3.2 M1 模块研究与实施决定（2026-11-16）
+
+| 模块 / 用户任务 | 已读取的参考 UI 与业务 | LexOrder 的决定与验收 |
+| --- | --- | --- |
+| 个人工作区 / 打开并继续工作 | AnythingLLM 固定 `4d09fa5f730698d39f1d783e47316744b260a700` 的 `frontend/src/pages/OnboardingFlow/Steps/{Home,LLMPreference,UserSetup}/index.jsx`、`frontend/src/components/PrivateRoute/index.jsx`、`server/utils/boot/markOnboarded.js`；[Desktop 官方说明](https://docs.anythingllm.com/installation-desktop/overview) | 采用工作区持久化、按所选服务展开配置；不采用营销欢迎流程、个人密码或运行时切换团队模式。M1 改为根应用的 Next standalone，复用原 LawLink 页面、真实 Prisma 模型和迁移；稳定本机操作者取代 Personal 登录，Server 认证不变。独立技术页已退出产品入口。创建、关闭、重开与不完整工作区的实际验收留给用户后续执行。 |
+| 个人材料 / 查到可核对原文 | 延用 §3.1 实际查看的 Paperless 编辑/上传状态与 Kosmos 原文/事实、逐文件 OCR 状态；LanceDB 固定 [v0.41.0 源码](https://github.com/lancedb/lancedb/tree/3936a8b3bcce8f8e073f3ec6a47e4ca4d3381b92/nodejs/lancedb) 的 `indices.ts`、`query.ts`、`table.ts`、`merge.ts`、`connection.ts` | 用真实 SDK 持久化、ICU 中文词法、带前置过滤的向量检索及 RRF 合并；保留原始文字、PDF 页、不可变抽取文本偏移与表格单元格位置；DOCX 尚未映射回原文件段落。原生依赖隔离于 M1 工具包，Node 要求 >=22。确定性向量只检验索引工程，不冒充真实语义质量。 |
+| Server 材料 / 上传、等待、重试和撤回 | RAGFlow 固定 [v1.0.0 / db1cd5929a7885a3074547791f5ecc4d2f891739](https://github.com/infiniflow/ragflow/tree/db1cd5929a7885a3074547791f5ecc4d2f891739) 的 HTTP 文档、Go document handler/service 与资料列表/解析状态实现 | 实际状态使用 `ingestion_status`，不照搬旧文档的 `run`；取消先进入 STOPPING，删除须核对数量和列表。上传每次一份原件，唯一操作名与原件 SHA-256 用于丢回执核对，无法证明成功时待核对而非盲重传。检索显式关闭知识汇总与图谱扩展。 |
+
+用户合理性审查：材料行显示其状态与恢复动作；引用紧邻结果并保留原文上下文；未处理页与不支持单元可见。保留原工作台与样式，不新增独立材料入口或常驻说明卡片。用户纠正后，将共享页面、actor 与必要的本人确认接线前置到 M1；RAG 管线进入现有事项材料区及完整长流程仍由 M2 接续。HTTP/SDK 和组件测试不作为实际页面点击证明。
+
+### 3.3 全局交互主参考与本批边界（2026-11-16）
+
+用户要求从候选中选择较少装饰和解释、适合专业日常工作的项目，并在选择前说明理由。已说明后选定 **Frappe CRM** 为后续全局交互主参考；用户随后明确“业务先行、UI 调整后置、保持 LawLink 界面样式”。因此本批只落实业务与模式适配，以下是后续设计依据，不是已实施改版或用户已验收新界面的声明。
+
+| 候选与固定来源 | 实际阅读及判断 | 采用边界 |
+| --- | --- | --- |
+| Frappe CRM `3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952`：[导航](https://github.com/frappe/crm/blob/3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952/frontend/src/components/Layouts/AppSidebar.vue)、[列表](https://github.com/frappe/crm/blob/3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952/frontend/src/pages/Leads.vue)、[详情](https://github.com/frappe/crm/blob/3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952/frontend/src/pages/Lead.vue)、[视图控制](https://github.com/frappe/crm/blob/3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952/frontend/src/components/ViewControls.vue)、[活动](https://github.com/frappe/crm/blob/3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952/frontend/src/components/Activities/Activities.vue)、[转换业务](https://github.com/frappe/crm/blob/3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952/crm/fcrm/doctype/crm_lead/crm_lead.py) | 对象导航、列表工具栏、详情分区与活动记录容易对应现有客户/事项；状态与动作贴近对象。适合作为跨模块交互依据，是本项目的适配判断，不是候选产品的客观排名 | 后续主参考。保留 LawLink 业务身份、页面与 Next/shadcn/Radix 技术栈，独立实现行为；不复制 Vue/Frappe 源码（该快照 LICENSE 为 AGPL-3.0），不搬销售阶段、入门清单、样例数据或直接改状态的业务规则 |
+| Twenty `26fa97ebc8a5773e842ba0d2f01e0b24bed6e7d0`：[列表](https://github.com/twentyhq/twenty/blob/26fa97ebc8a5773e842ba0d2f01e0b24bed6e7d0/packages/twenty-front/src/modules/object-record/record-index/components/RecordIndexContainer.tsx)、[详情容器](https://github.com/twentyhq/twenty/blob/26fa97ebc8a5773e842ba0d2f01e0b24bed6e7d0/packages/twenty-front/src/pages/object-record/RecordShowPageShell.tsx) | 同样克制，偏元数据驱动对象、可定制布局与多种详情载体；不能因有 AI 模块就认定界面不专业 | 保留关联记录/筛选的参考价值，不为本期引入通用布局编辑器或第二套全局风格 |
+| Paperless-ngx / Kosmos：沿用 §3.1 固定提交，补读文档列表、案件导航与事实行 | Paperless 的文档列表、逐件处理和原文核对适合材料；Kosmos 的事实/日期/来源关系适合案件分析 | 仅作为材料与事实专项依据，视觉语言仍从同一套共享组件演进；不把整个工作台固定成三栏 |
+
+后续用户合理性标准：页面先呈现业务对象和下一动作；AI 通过“整理事实”“核对引用”“生成草稿”等明确操作进入对应业务区。常驻标题、主操作和事实不重复；字段标签、错误原因、影响范围、未处理内容及补救动作保留。财务、审批、盖章和归档仍通过既有显式确认与事务服务，不采用 CRM 的即时状态编辑。此次仅阅读源码及官方指南，未运行第三方应用；未使用截图作为交付。
+
 ### 当前项目状态对计划的影响
 
-- 本轮初始评估为 `97867e2`，提交前已对齐 main `2997b54754565081271ca4b66139949d310e2fe0`。appleoppa 的通用功能、迁移、权限与调度适配已合入；本轮保留其源码及来源记录，进一步区分局部传票解析、15 分钟启动补扫与尚待建设的通用 OCR、完整休眠/数据恢复能力。
+- 前批初始评估为 `97867e2`，随后对齐 main `2997b54754565081271ca4b66139949d310e2fe0`；当前 M1 从 `b313adf8` 接续。appleoppa 的通用功能、迁移、权限与调度适配已合入；本轮保留其源码及来源记录。新增抽取/OCR 原型仍未接完整业务管线，局部传票解析和 15 分钟启动补扫不等于通用 OCR、完整休眠或数据恢复已完成。
 - Kosmos 默认源码分支为 `dev`。其[当前 AI 开发文档](https://kosmos.law/docs/dev/subsystems/ai/context/)说明，原生案件聊天引擎于 2026-10-29 退役，界面于次日退役，改由远程 MCP 对外提供案件访问。旧 README 或历史设计不能作为“完整聊天可直接迁入”的证明。
 - Kosmos 的事实与高亮关系仍可参考。其某些材料处理路径会替换存储文件，本项目的设计要求保留原件，不能直接采用该行为。
 - Counsel OS 官方仓库明确说明扫描 PDF OCR、全面原始法律研究等尚未完成；源代码运行路线仍需开发和测试验证。引用与文书模块只能作为审查候选，不能承诺复制即用。
-- 用户随后明确采用 **Personal 内置、Server RAGFlow**，覆盖此前“两版内置、RAGFlow 可选”的研究建议。理由是按交付形态分工：个人保持独立，部署版采用现成解析/检索平台；这是产品与工程决定，不是已经运行出的质量或性能比较结论。RAGFlow 1.0.0 为本次固定联调目标，未安装、未联调。
+- 用户随后明确采用 **Personal 内置、Server RAGFlow**，覆盖此前“两版内置、RAGFlow 可选”的研究建议。理由是按交付形态分工：个人保持独立，部署版采用现成解析/检索平台；这是产品与工程决定，不是质量或性能比较结论。RAGFlow 1.0.0 HTTP 适配和固定来源/镜像的准备脚本已有代码，但状态仍为 `PREPARED_NOT_DEPLOYED`；当前无 Docker/Podman、真实服务与模型凭据，未完成实际部署或联调。后续开发侧仅验证 Server，Personal 留给用户后测。
 - RAGFlow 1.0 检索的知识汇总默认开启；文档筛选不证明数据集汇总的全部来源获准。因此 Server 首发**明确设置** `include_knowledge_compilation: false`，由 LexOrder 先确定授权材料、再核对返回片段。官方普通 retrieval API 的 `use_kg: true` 不代表启用多跳图检索；共享 Team 规则也不能替代案件权限。实现边界及验收见[架构第 3 节](REFACTOR_DESKTOP_TEAM_RAG.md#3-rag-架构personal-内置server-使用-ragflow)。
 - Server 首发提供固定开源版本的配套部署配置，也允许管理员接入已验证兼容的独立实例；不以购买 Cloud 为前置。[官方 FAQ](https://ragflow.io/docs/v1.0.0/faq)说明 Cloud 功能和 REST API 可用性受服务方案影响，不把托管演示、DEV/main 或旧版功能混作该固定版本的交付承诺。个人独立版不依赖这些远程服务。
 - AnythingLLM 的默认内置检索、Cherry 的本地模型证明可以把组件交给应用管理，不证明 LexOrder 已完成集成或达到相同效果。中文法律材料仍需独立验收。

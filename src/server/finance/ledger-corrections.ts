@@ -8,6 +8,7 @@ import { assertLedgerWrite } from "./ledger-access";
 import { requireFinanceLedger } from "./ledger-storage";
 import { assertPaymentSource, assertAllocationTotals } from "./ledger-mutations";
 import { auditTx } from "@/server/audit";
+import { personalAuditMetadata } from "@/lib/runtime/capabilities";
 import { ActionError } from "@/lib/action-error";
 
 const civilDay = (d: Date) => Math.floor((d.getTime() + 8 * 3600000) / 86400000);
@@ -104,12 +105,12 @@ export async function submitCorrectionTx(db: Prisma.TransactionClient, userId: s
   const data = correctionInput.parse(input); await requireFinanceLedger(db);
   const target = data.targetKind === "EXPENSE" ? await db.feeEntry.findUnique({where:{id:data.targetId},select:{matterId:true}}) : data.type === "DISCOUNT" ? await db.receivable.findUnique({ where: { id: data.targetId }, select: { matterId: true } }) : await db.payment.findUnique({ where: { id: data.targetId }, select: { matterId: true } });
   if (!target) throw new ActionError("原账务对象不存在");
-  await assertLedgerWrite(db, userId, target.matterId, "finance.write");
+  const personal = await assertLedgerWrite(db, userId, target.matterId, "finance.write");
   const plan = await correctionPlan(db, target.matterId, data), id = randomUUID();
   const ar = data.type === "DISCOUNT", expense = data.targetKind === "EXPENSE";
   await db.$executeRaw`INSERT INTO "FinanceCorrection" (id,"matterId","targetType","targetId",type,amount,reason,"relatedDocNo","createdById","paymentId","receivableId","feeEntryId","requestPayload","occurredAt") VALUES
     (${id},${target.matterId},${expense ? "FeeEntry" : ar ? "Receivable" : "Payment"},${data.targetId},${data.type}::"FinanceCorrectionType",${D(data.amount)},${data.reason},${data.voucherReference},${userId},${ar || expense ? null : data.targetId},${ar ? data.targetId : null},${expense ? data.targetId : null},${JSON.stringify({ input: data, snapshot: plan.snapshot })}::jsonb,${data.occurredAt})`;
-  await auditTx(db, { userId, action: "FINANCE_CORRECTION_SUBMIT", targetType: "FinanceCorrection", targetId: id, detail: { matterId: target.matterId, ...JSON.parse(JSON.stringify(data)) } });
+  await auditTx(db, { userId, action: "FINANCE_CORRECTION_SUBMIT", targetType: "FinanceCorrection", targetId: id, detail: { matterId: target.matterId, ...JSON.parse(JSON.stringify(data)), ...personalAuditMetadata(personal,"SUBMISSION") } });
   return { id, matterId: target.matterId };
 }
 
@@ -117,9 +118,10 @@ export async function decideCorrectionTx(db: Prisma.TransactionClient, userId: s
   const data = correctionDecision.parse(input); await requireFinanceLedger(db);
   const [target] = await db.$queryRaw<{ matterId: string }[]>`SELECT "matterId" FROM "FinanceCorrection" WHERE id=${data.id}`;
   if (!target) throw new ActionError("更正申请不存在");
-  await assertLedgerWrite(db, userId, target.matterId, data.decision === "CANCELLED" ? "finance.write" : "finance.correct");
+  const personal = await assertLedgerWrite(db, userId, target.matterId, data.decision === "CANCELLED" ? "finance.write" : "finance.correct");
   const [row] = await db.$queryRaw<{ id: string; matterId: string; revision: number; status: string; createdById: string; requestPayload: { input: CorrectionInput; snapshot: string } }[]>`SELECT * FROM "FinanceCorrection" WHERE id=${data.id} FOR UPDATE`;
   if (row.status !== "PENDING" || row.revision !== data.revision) throw new ActionError("更正申请已处理或发生变化");
+  if (personal && row.createdById !== personal.id) throw new ActionError("仅可本人处理本机操作者提交的更正，请先核对历史操作者映射");
   if (data.decision === "CANCELLED" && row.createdById !== userId) throw new ActionError("只有申请人可以撤销更正");
   if (data.decision === "CONFIRMED") {
     const request = correctionInput.parse(row.requestPayload.input), plan = await correctionPlan(db, row.matterId, request);
@@ -127,7 +129,7 @@ export async function decideCorrectionTx(db: Prisma.TransactionClient, userId: s
     await applyCorrectionPlan(db,row.id,plan,request.type!=="DISCOUNT" && request.targetKind!=="EXPENSE" ? {id:request.targetId,amount:D(request.amount)} : undefined);
   }
   await db.$executeRaw`UPDATE "FinanceCorrection" SET status=${data.decision}::"FinanceCorrectionStatus",revision=revision+1,"resolutionNote"=${data.note},"confirmedById"=${data.decision === "CONFIRMED" ? userId : null},"confirmedAt"=${data.decision === "CONFIRMED" ? new Date() : null} WHERE id=${row.id}`;
-  await auditTx(db, { userId, action: `FINANCE_CORRECTION_${data.decision}`, targetType: "FinanceCorrection", targetId: row.id, detail: { matterId: row.matterId, previousRevision: data.revision, note: data.note } });
+  await auditTx(db, { userId, action: `FINANCE_CORRECTION_${data.decision}`, targetType: "FinanceCorrection", targetId: row.id, detail: { matterId: row.matterId, previousRevision: data.revision, note: data.note, ...personalAuditMetadata(personal,data.decision === "CONFIRMED" ? "CONFIRMATION" : "REJECTION") } });
   return { matterId: row.matterId };
 }
 
@@ -163,7 +165,7 @@ export async function settleCommissionTx(db: Prisma.TransactionClient, userId: s
   const data = settlementInput.parse(input); await requireFinanceLedger(db);
   const target = await db.feeEntry.findUnique({ where: { id: data.commissionEntryId }, select: { matterId: true } });
   if (!target) throw new ActionError("分成计提不存在");
-  await assertLedgerWrite(db, userId, target.matterId, "finance.settle");
+  const personal = await assertLedgerWrite(db, userId, target.matterId, "finance.settle");
   await db.$queryRaw`SELECT id FROM "FeeEntry" WHERE id=${data.commissionEntryId} FOR UPDATE`;
   const position = (await commissionPositions(db, [target.matterId])).find(p => p.id === data.commissionEntryId);
   if (!position || position.revision !== data.revision) throw new ActionError("分成账务已变化，请刷新");
@@ -179,6 +181,6 @@ export async function settleCommissionTx(db: Prisma.TransactionClient, userId: s
   const id = randomUUID();
   await db.$executeRaw`INSERT INTO "CommissionSettlement" (id,"commissionEntryId",kind,amount,"occurredAt","recordedById","voucherReference",note) VALUES (${id},${position.id},${data.kind}::"CommissionSettlementKind",${amount},${data.occurredAt},${userId},${data.voucherReference},${data.note})`;
   await db.$executeRaw`UPDATE "FeeEntry" SET revision=revision+1,"updatedAt"=NOW() WHERE id=${position.id}`;
-  await auditTx(db, { userId, action: `COMMISSION_${data.kind}`, targetType: "CommissionSettlement", targetId: id, detail: { matterId: position.matterId, commissionEntryId: position.id, previousRevision: data.revision, amount: data.amount, voucherReference: data.voucherReference } });
+  await auditTx(db, { userId, action: `COMMISSION_${data.kind}`, targetType: "CommissionSettlement", targetId: id, detail: { matterId: position.matterId, commissionEntryId: position.id, previousRevision: data.revision, amount: data.amount, voucherReference: data.voucherReference, ...personalAuditMetadata(personal,"EXECUTION") } });
   return { id, matterId: position.matterId };
 }

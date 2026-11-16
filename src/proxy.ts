@@ -1,26 +1,35 @@
-import { withAuth } from "next-auth/middleware";
+import { withAuth, type NextRequestWithAuth } from "next-auth/middleware";
+import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
+import { isPersonalMode } from "@/lib/runtime/mode";
+import { personalChannelAllowed, personalRuntime } from "@/lib/runtime/personal-channel";
+import { isPersonalWorkspaceConfigurationPath } from "@/lib/runtime/workspace-navigation";
 
-/**
- * 全站默认要求登录。
- * `matcher` 显式排除 /login、/api/auth/*、静态资源等公开路径。
- */
-export default withAuth({
-  pages: {
-    signIn: "/login"
+const serverAuth = withAuth({ pages: { signIn: "/login" } });
+const staticPath = (pathname: string) => pathname.startsWith("/_next/") || pathname === "/favicon.ico"
+  || /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/.test(pathname);
+
+export default function proxy(request: NextRequest, event: NextFetchEvent) {
+  const path = request.nextUrl.pathname;
+  if (!isPersonalMode()) {
+    if (path === "/login" || path.startsWith("/api/auth/") || path === "/api/auth"
+      || path === "/api/health" || path.startsWith("/api/calendar/") || staticPath(path)) return NextResponse.next();
+    return serverAuth(request as NextRequestWithAuth, event);
   }
-});
 
-export const config = {
-  matcher: [
-    /*
-     * 匹配所有路径，但排除：
-     *   /login            登录页本身
-     *   /api/auth         NextAuth 路由
-     *   /api/health       健康检查
-     *   /api/calendar     v0.50 ICS 日历订阅（token 即凭证，日历客户端无 cookie）
-     *   /_next/*          Next 内部资源（含 HMR websocket）
-     *   静态文件（.png .ico .svg 等）
-     */
-    "/((?!login|api/auth|api/health|api/calendar|_next|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico)).*)"
-  ]
-};
+  // Host/origin boundaries also apply to bootstrap and independently tokenized routes.
+  const bootstrap = path === "/api/personal/open";
+  const tokenRoute = request.method === "GET" && (path.startsWith("/api/calendar/") || path === "/api/desktop/file");
+  if (!personalChannelAllowed(request.headers, {
+    method: request.method,
+    requireCookie: !(bootstrap || tokenRoute || staticPath(path)),
+    bootstrap,
+  })) return new NextResponse("请通过本机工作区入口打开应用", { status: 403, headers: { "Cache-Control": "no-store" } });
+  if (path === "/api/auth" || path.startsWith("/api/auth/")
+    || ((path === "/admin" || path.startsWith("/admin/")) && !isPersonalWorkspaceConfigurationPath(path))) {
+    return new NextResponse("Not found", { status: 404 });
+  }
+  if (path === "/login") return NextResponse.redirect(new URL("/", personalRuntime().origin));
+  return NextResponse.next();
+}
+
+export const config = { matcher: ["/:path*"] };

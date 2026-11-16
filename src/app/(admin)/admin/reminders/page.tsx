@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth/session";
+import { getSession, requireWorkspaceConfiguration } from "@/lib/auth/session";
 import { canEnterAdminWorkspace, isSystemAdmin } from "@/lib/auth/system-role";
 import { prisma } from "@/lib/prisma";
 import { getWebhookSettings } from "@/server/settings/webhook";
@@ -21,7 +21,9 @@ import { listHolidays } from "@/server/calendar/holiday-actions";
 export default async function RemindersSettingsPage() {
   const session = await getSession();
   if (!session?.user) redirect("/login");
-  if (!canEnterAdminWorkspace(session.user)) redirect("/settings/profile");
+  const personal = session.user.runtimeMode === "PERSONAL";
+  if (personal) await requireWorkspaceConfiguration();
+  else if (!canEnterAdminWorkspace(session.user)) redirect("/settings/profile");
   const since = new Date(Date.now() - 30 * 86_400_000);
   // 台账近 7 天（含今日，上海日界）
   const ledgerSince = shDayKey(new Date(Date.now() - 6 * 86_400_000));
@@ -70,7 +72,7 @@ export default async function RemindersSettingsPage() {
         pendingBacklog={ledgerPending}
         failures={ledgerFailures}
       />
-      <HolidayCard year={holiday.year} rows={holiday.rows} canEdit={isSystemAdmin(session.user)} />
+      <HolidayCard year={holiday.year} rows={holiday.rows} canEdit={personal || isSystemAdmin(session.user)} />
     </div>
   );
 }

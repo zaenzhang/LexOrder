@@ -1,14 +1,15 @@
 "use client";
 
-import { SessionProvider } from "next-auth/react";
+import { WorkspaceActorProvider } from "@/components/workspace-actor-provider";
+import type { WorkspaceActor } from "@/lib/runtime/actor";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppMotionProvider } from "@/components/patterns/app-motion-provider";
 import { ConfirmHost } from "@/components/patterns/confirm-dialog";
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({ children, personalActor }: { children: React.ReactNode; personalActor?: WorkspaceActor | null }) {
   return (
-    <SessionProvider>
+    <WorkspaceActorProvider personalActor={personalActor}>
       <AppMotionProvider>
         {/*
           delayDuration：首次悬停延迟，防止扫过工具栏时误触发。
@@ -21,6 +22,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <Toaster />
         <ConfirmHost />
       </AppMotionProvider>
-    </SessionProvider>
+    </WorkspaceActorProvider>
   );
 }

@@ -12,6 +12,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/session";
 import { isManager } from "@/lib/permissions";
+import { hasPersonalCapability, personalAuditMetadata } from "@/lib/runtime/capabilities";
 import { auditTx } from "@/server/audit";
 import {
   normalizeIdNumber,
@@ -88,7 +89,7 @@ export async function mergeClientsByCode(input: {
 
 export async function mergeClients(input: z.infer<typeof mergeSchema>) {
   const session = await requireSession("clients.write");
-  if (session.user.role !== "CUSTOM" && !isManager(session.user.role)) {
+  if (!hasPersonalCapability(session.user,"clients.write") && session.user.role !== "CUSTOM" && !isManager(session.user.role)) {
     throw new ActionError("仅管理员可合并客户档案");
   }
   const data = mergeSchema.parse(input);
@@ -152,7 +153,8 @@ export async function mergeClients(input: z.infer<typeof mergeSchema>) {
         keptId: keep.id,
         mergedId: merge.id,
         mergedInternalCode: merge.internalCode,
-        basis: data.basis
+        basis: data.basis,
+        ...personalAuditMetadata(liveUser,"CHANGE")
       }
     });
 

@@ -8,7 +8,7 @@
  * 计入 failed 数并保留 FAILED 状态（失败页不可隐去）。
  */
 import { prisma } from "@/lib/prisma";
-import { requireSystemAdmin } from "@/lib/auth/session";
+import { requireWorkspaceConfiguration } from "@/lib/auth/session";
 import { audit } from "@/server/audit";
 import { storage } from "@/lib/storage";
 import { decryptBuffer } from "@/lib/storage/crypto";
@@ -25,7 +25,7 @@ export interface TextBackfillResult {
 }
 
 export async function backfillDocumentTextLayers(): Promise<TextBackfillResult> {
-  const session = await requireSystemAdmin();
+  const session = await requireWorkspaceConfiguration();
 
   const docs = await prisma.document.findMany({
     where: {
@@ -104,7 +104,7 @@ export async function backfillDocumentTextLayers(): Promise<TextBackfillResult> 
 
 /** 文本层状态概览（供维护卡片展示） */
 export async function getTextLayerStats() {
-  await requireSystemAdmin();
+  await requireWorkspaceConfiguration();
   const [pending, ready, failed, skip, total] = await Promise.all([
     prisma.document.count({ where: { deletedAt: null, ocrStatus: "PENDING" } }),
     prisma.document.count({ where: { deletedAt: null, ocrStatus: "READY" } }),

@@ -2,6 +2,8 @@
 import {assertClosureReady,closureReady} from "./closure";
 import {buildArchiveManifest} from "./export";
 import {scopeFor} from "@/lib/roles/catalog";
+import { hasPersonalCapability } from "@/lib/runtime/capabilities";
+import { resolvePersonalActor } from "@/server/runtime/personal";
 import { roleMutation, checkRoleMutation, resolveRoleUser } from "@/lib/roles/service";
 
 import { approvalTransaction, approvalAudit, assertApprovalItem, requireApprovalRoute } from "@/lib/approvals/service";
@@ -51,7 +53,7 @@ export async function archiveMatter(input: ArchiveSubmitInput) {
 
   const initial=await prisma.matter.findUniqueOrThrow({where:{id:data.matterId},select:{status:true}});
   const supplement=initial.status==='ARCHIVED';
-  if(supplement){if(scopeFor(session.user,'archive.supplement')!=='OWN')throw new ActionError('补充归档须独立授权');}
+  if(supplement){if(!hasPersonalCapability(await resolvePersonalActor(prisma,session.user.id),'archive.supplement')&&scopeFor(session.user,'archive.supplement')!=='OWN')throw new ActionError('补充归档须独立授权');}
   else await assertMatterWritable(data.matterId);
   await assertCanLeadMatter(session.user.id, data.matterId, "仅案件主办/协办可以提交归档申请");
 
@@ -240,7 +242,7 @@ export async function archiveMatter(input: ArchiveSubmitInput) {
   try {
     submitted = await prisma.$transaction(async (tx) => {
     await checkRoleMutation(tx, session.user, "archive.submit");
-    if(supplement){const actor=await tx.user.findUniqueOrThrow({where:{id:session.user.id},select:{role:true}});if(scopeFor(await resolveRoleUser(session.user.id,actor.role,tx),'archive.supplement')!=='OWN')throw new ActionError('补充归档须独立授权');}
+    if(supplement){const personal=await resolvePersonalActor(tx,session.user.id);const actor=await tx.user.findUniqueOrThrow({where:{id:session.user.id},select:{role:true}});if(!hasPersonalCapability(personal,'archive.supplement')&&scopeFor(await resolveRoleUser(session.user.id,actor.role,tx),'archive.supplement')!=='OWN')throw new ActionError('补充归档须独立授权');}
       const workflow=await assertClosureReady(tx,matter.id,undefined,{supplement});
       const alreadyPending = await tx.archiveRecord.findFirst({
         where: { matterId: matter.id, status: "PENDING_REVIEW" },

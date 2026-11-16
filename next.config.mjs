@@ -2,6 +2,7 @@
 const nextConfig = {
   // dev 与 build 分开输出，避免生产构建覆盖正在运行的开发缓存导致页面不渲染
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
+  output: process.env.LEXORDER_STANDALONE === "1" ? "standalone" : undefined,
   // typedRoutes 等 Stage 2 路由稳定后再开启
   typedRoutes: false,
   allowedDevOrigins: [...new Set(["127.0.0.1", ...(process.env.ALLOWED_DEV_ORIGINS ?? "").split(",").map(value => value.trim()).filter(Boolean)])],

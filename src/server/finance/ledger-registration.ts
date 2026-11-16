@@ -7,6 +7,7 @@ import type { MoneyKind } from "@/lib/finance/ledger-labels";
 import { requireFinanceLedger } from "./ledger-storage";
 import { assertLedgerWrite } from "./ledger-access";
 import { auditTx } from "@/server/audit";
+import { personalAuditMetadata } from "@/lib/runtime/capabilities";
 import { assertMatterReviewCurrent } from "@/server/conflicts/matter-review";
 import { recordTimelineEvent } from "@/server/timeline/record";
 import { allocateCommissions } from "./commissions";
@@ -50,7 +51,7 @@ export async function signBillingTx(db:Prisma.TransactionClient,userId:string,in
 export async function registerReceiptTx(db:Prisma.TransactionClient,userId:string,input:ReceiptRegistration) {
   const data=receiptRegistrationInput.parse(input);
   await requireFinanceLedger(db);
-  await assertLedgerWrite(db,userId,data.matterId,"finance.write");
+  const personal = await assertLedgerWrite(db,userId,data.matterId,"finance.write");
   if(data.billingId) {
     const [billing]=await db.$queryRaw<{matterId:string;moneyKind:string}[]>`SELECT "matterId","moneyKind"::text FROM "Billing" WHERE id=${data.billingId} FOR SHARE`;
     if(!billing || billing.matterId!==data.matterId || billing.moneyKind!==data.moneyKind)throw new ActionError("来源合同须属于本案且款项性质相同");
@@ -58,8 +59,8 @@ export async function registerReceiptTx(db:Prisma.TransactionClient,userId:strin
   const id=randomUUID();
   await db.$executeRaw`INSERT INTO "FeeEntry" (id,"matterId","billingId",type,amount,"moneyKind","occurredAt","payerOrPayee",note,"recordedById","confirmState","updatedAt") VALUES
     (${id},${data.matterId},${data.billingId??null},'RECEIVED',${new Prisma.Decimal(data.amount)},${data.moneyKind}::"MoneyKind",${data.occurredAt},${data.payerOrPayee??null},${data.note??null},${userId},'PENDING',NOW())`;
-  await auditTx(db,{userId,action:"FEE_ENTRY_SUBMIT",targetType:"FeeEntry",targetId:id,detail:{matterId:data.matterId,amount:String(data.amount),moneyKind:data.moneyKind,pendingConfirm:true}});
-  const receivers=await db.user.findMany({where:{active:true,OR:[{role:"FINANCE"},{role:"CUSTOM",roleDefinition:{active:true,permissions:{some:{permissionKey:"finance.confirm",scope:"ALL"}}}}]},select:{id:true}});
+  await auditTx(db,{userId,action:"FEE_ENTRY_SUBMIT",targetType:"FeeEntry",targetId:id,detail:{matterId:data.matterId,amount:String(data.amount),moneyKind:data.moneyKind,pendingConfirm:true,...personalAuditMetadata(personal,"SUBMISSION")}});
+  const receivers=personal?[{id:personal.id}]:await db.user.findMany({where:{active:true,OR:[{role:"FINANCE"},{role:"CUSTOM",roleDefinition:{active:true,permissions:{some:{permissionKey:"finance.confirm",scope:"ALL"}}}}]},select:{id:true}});
   if(receivers.length)await db.notification.createMany({data:receivers.map(r=>({userId:r.id,type:"SYSTEM" as const,title:"有实收待确认",content:`新登记实收 ¥${data.amount}，请核对到账后确认`,href:`/finance/reconciliation?matterId=${data.matterId}`,refType:"FeeEntry",refId:id}))});
   return {id,matterId:data.matterId};
 }
@@ -67,10 +68,11 @@ async function receiptForUpdate(db:Prisma.TransactionClient,userId:string,id:str
   await requireFinanceLedger(db);
   const target=await db.feeEntry.findUnique({where:{id},select:{matterId:true}});
   if(!target)throw new ActionError("记录不存在");
-  await assertLedgerWrite(db,userId,target.matterId,"finance.confirm");
+  const personal = await assertLedgerWrite(db,userId,target.matterId,"finance.confirm");
   const [entry]=await db.$queryRaw<{id:string;matterId:string;billingId:string|null;type:string;confirmState:string;amount:Prisma.Decimal;moneyKind:MoneyKind;occurredAt:Date;recordedById:string}[]>`SELECT * FROM "FeeEntry" WHERE id=${id} FOR UPDATE`;
   if(entry.type!=="RECEIVED" || entry.confirmState!=="PENDING")throw new ActionError("此笔已被处理，只有待确认实收可以处理");
-  return entry;
+  if(personal && entry.recordedById!==personal.id)throw new ActionError("仅可本人确认本机操作者登记的实收，请先核对历史操作者映射");
+  return {...entry,personal};
 }
 export async function confirmReceiptTx(db:Prisma.TransactionClient,userId:string,id:string) {
   const entry=await receiptForUpdate(db,userId,id);
@@ -90,7 +92,7 @@ export async function confirmReceiptTx(db:Prisma.TransactionClient,userId:string
     }
   }
   await recordTimelineEvent(db,{matterId:entry.matterId,eventType:"FEE_RECEIVED",title:`实收 ¥${entry.amount.toFixed(2)}`,occurredAt:entry.occurredAt,refType:"FeeEntry",refId:id});
-  await auditTx(db,{userId,action:"FEE_ENTRY_CONFIRM",targetType:"FeeEntry",targetId:id,detail:{matterId:entry.matterId,amount:entry.amount.toFixed(2),moneyKind:entry.moneyKind}});
+  await auditTx(db,{userId,action:"FEE_ENTRY_CONFIRM",targetType:"FeeEntry",targetId:id,detail:{matterId:entry.matterId,amount:entry.amount.toFixed(2),moneyKind:entry.moneyKind,...personalAuditMetadata(entry.personal,"CONFIRMATION")}});
   return {id,matterId:entry.matterId};
 }
 export async function rejectReceiptTx(db:Prisma.TransactionClient,userId:string,id:string,reason:string) {
@@ -98,7 +100,7 @@ export async function rejectReceiptTx(db:Prisma.TransactionClient,userId:string,
   const entry=await receiptForUpdate(db,userId,id);
   const removed=await db.feeEntry.deleteMany({where:{id,confirmState:"PENDING"}});
   if(removed.count!==1)throw new ActionError("此笔已被处理，请刷新");
-  await auditTx(db,{userId,action:"FEE_ENTRY_REJECT",targetType:"FeeEntry",targetId:id,detail:{matterId:entry.matterId,amount:entry.amount.toFixed(2),reason:note}});
+  await auditTx(db,{userId,action:"FEE_ENTRY_REJECT",targetType:"FeeEntry",targetId:id,detail:{matterId:entry.matterId,amount:entry.amount.toFixed(2),reason:note,...personalAuditMetadata(entry.personal,"REJECTION")}});
   // 站内通知与退回同事务，既不遗漏也不发送外部消息。
   await db.notification.create({data:{userId:entry.recordedById,type:"SYSTEM",title:"实收登记被退回",content:`实收 ¥${entry.amount.toFixed(2)} 被退回：${note}`,href:`/finance/reconciliation?matterId=${entry.matterId}`,refType:"FeeEntry",refId:id}});
   return {id,matterId:entry.matterId};

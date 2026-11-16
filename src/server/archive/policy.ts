@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireSession, requireSystemAdmin } from "@/lib/auth/session";
+import { requireSession, requireWorkspaceConfiguration } from "@/lib/auth/session";
+import { isPersonalMode } from "@/lib/runtime/mode";
+import { resolvePersonalActor } from "@/server/runtime/personal";
 import {
   ARCHIVE_POLICY_SETTING_KEY,
   UNCONFIGURED_ARCHIVE_POLICY,
@@ -53,7 +55,7 @@ export async function getArchivePolicy(): Promise<ArchivePolicyView> {
 }
 
 export async function getArchivePolicySettings() {
-  await requireSystemAdmin();
+  await requireWorkspaceConfiguration();
   const [policy, files] = await Promise.all([
     getArchivePolicy(),
     prisma.firmFile.findMany({
@@ -66,7 +68,7 @@ export async function getArchivePolicySettings() {
 }
 
 export async function saveArchivePolicy(input: z.input<typeof saveArchivePolicySchema>) {
-  const session = await requireSystemAdmin();
+  const session = await requireWorkspaceConfiguration();
   const data = saveArchivePolicySchema.parse(input);
   const source = await prisma.firmFile.findFirst({
     where: { id: data.sourceFileId, category: "POLICY", archivedAt: null },
@@ -82,6 +84,7 @@ export async function saveArchivePolicy(input: z.input<typeof saveArchivePolicyS
     confirmedById: session.user.id
   };
   await prisma.$transaction(async (tx) => {
+    if (isPersonalMode()) await resolvePersonalActor(tx, session.user.id);
     await tx.systemSetting.upsert({
       where: { key: ARCHIVE_POLICY_SETTING_KEY },
       create: { key: ARCHIVE_POLICY_SETTING_KEY, value },

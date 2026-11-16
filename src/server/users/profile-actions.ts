@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSession } from "@/lib/auth/session";
 import { approvalAudit } from "@/lib/approvals/service";
-import { myProfileSchema, bindIdentitySchema, correctIdentitySchema } from "./profile-schema";
+import { myProfileSchema, personalProfileSchema, bindIdentitySchema, correctIdentitySchema } from "./profile-schema";
+import { isPersonalMode } from "@/lib/runtime/mode";
+import { ActionError } from "@/lib/action-error";
 import { ProfileInputError, assertProfileActor, assertProfileVersion, identitySummary, profileTransaction, saveBasicProfile, verifyProfilePassword } from "./profile-service";
 
 function refreshProfiles() {
@@ -12,7 +14,7 @@ function refreshProfiles() {
 }
 export async function updateMyProfile(input: z.infer<typeof myProfileSchema>) {
   const session = await requireSession("personal");
-  const parsed = myProfileSchema.safeParse(input);
+  const parsed = (isPersonalMode() ? personalProfileSchema : myProfileSchema).safeParse(input);
   if (!parsed.success) throw new Error(parsed.error.issues[0].message);
   const result = await saveBasicProfile(session.user.id, session.user.id, parsed.data, { admin: false, password: parsed.data.currentPassword });
   refreshProfiles();
@@ -30,6 +32,7 @@ export async function getProfileIdentity(targetId?: string) {
   });
 }
 export async function bindMyIdentity(input: z.infer<typeof bindIdentitySchema>) {
+  if (isPersonalMode()) throw new ActionError("个人工作区不提供人员身份认证");
   const session = await requireSession("personal");
   const parsed = bindIdentitySchema.safeParse(input);
   if (!parsed.success) throw new Error(parsed.error.issues[0].message);

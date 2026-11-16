@@ -1,7 +1,6 @@
 import { canReadDocument } from "@/lib/approvals/documents";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/options";
+import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/server/audit";
 import { storage } from "@/lib/storage";
@@ -15,7 +14,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   // ?inline=1 时以 inline 方式返回，浏览器新标签内预览（PDF/图片/文本），否则下载
   const inline = new URL(req.url).searchParams.get("inline") === "1";
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session?.user) {
     return NextResponse.json({ error: "未登录" }, { status: 401 });
   }

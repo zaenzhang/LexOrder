@@ -8,7 +8,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useSession, signOut } from "next-auth/react";
+import { signOut } from "next-auth/react";
+import { useWorkspaceActor } from "@/components/workspace-actor-provider";
 import { ChevronsUpDown, LogOut, ShieldCheck, Settings as SettingsIcon, LayoutGrid } from "lucide-react";
 import { customOrLegacy, hasCustomPermission, roleDisplayName, type PermissionKey } from "@/lib/roles/catalog";
 import { canEnterAdminWorkspace } from "@/lib/auth/system-role";
@@ -69,8 +70,8 @@ export function BrandMark({ logoDataUrl, name, size = 30 }: { logoDataUrl?: stri
 /** 导航内容 — 桌面侧边栏和移动 Sheet 共用 */
 export function NavContent({ firm, onOpenTools }: { firm: FirmBrand; onOpenTools?: () => void }) {
   const pathname = usePathname();
-  const { data: session } = useSession();
-  const user = session?.user;
+  const user = useWorkspaceActor();
+  const personal = user?.runtimeMode === "PERSONAL";
   const [counts, setCounts] = useState<NavCounts | null>(null);
 
   useEffect(() => {
@@ -88,7 +89,7 @@ export function NavContent({ firm, onOpenTools }: { firm: FirmBrand; onOpenTools
     if (!PERMISSION_BY_HREF[item.href]) return true;
     if (!user) return false;
     // 报表页按页面同口径判定（内置岗位仅主任律师可进入），避免入口可见但点进去被重定向回工作台
-    if (item.href === "/reports") return customOrLegacy(user, "reports.read", user.role === "PRINCIPAL_LAWYER" || user.managerAuthorized === true);
+    if (item.href === "/reports") return personal || customOrLegacy(user, "reports.read", user.role === "PRINCIPAL_LAWYER" || user.managerAuthorized === true);
     return hasCustomPermission(user, PERMISSION_BY_HREF[item.href]);
   };
   const countOf = (item: NavItem): { n: number; alert?: boolean } | null => {
@@ -98,9 +99,9 @@ export function NavContent({ firm, onOpenTools }: { firm: FirmBrand; onOpenTools
     return { n, alert: item.countKey === "approvals" };
   };
 
-  const displayName = user?.name ?? "";
-  const roleLabel = user?.role ? roleDisplayName(user) : "";
-  const systemLabel = user?.systemRole === "SUPER_ADMIN" ? "超级管理员" : "";
+  const displayName = user?.name || (personal ? "本机操作者" : "");
+  const roleLabel = personal ? "个人工作区" : user?.role ? roleDisplayName(user) : "";
+  const systemLabel = !personal && user?.systemRole === "SUPER_ADMIN" ? "超级管理员" : "";
 
   const navList = primaryNav.filter(visible);
 
@@ -183,19 +184,21 @@ export function NavContent({ firm, onOpenTools }: { firm: FirmBrand; onOpenTools
                 个人设置
               </Link>
             </DropdownMenuItem>
-            {canEnterAdminWorkspace(user) ? (
+            {personal || canEnterAdminWorkspace(user ?? undefined) ? (
               <DropdownMenuItem asChild>
                 <a href="/admin" target="_blank" rel="noopener" className="cursor-pointer">
                   <ShieldCheck />
-                  管理后台
+                  {personal ? "工作区设置" : "管理后台"}
                 </a>
               </DropdownMenuItem>
             ) : null}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => signOut({ callbackUrl: "/login" })} className="cursor-pointer text-[var(--red)] focus:text-[var(--red)]">
-              <LogOut />
-              退出登录
-            </DropdownMenuItem>
+            {!personal && <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => signOut({ callbackUrl: "/login" })} className="cursor-pointer text-[var(--red)] focus:text-[var(--red)]">
+                <LogOut />
+                退出登录
+              </DropdownMenuItem>
+            </>}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

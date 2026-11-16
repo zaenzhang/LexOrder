@@ -16,9 +16,15 @@ import {
   generateRecoveryCodes, matchRecoveryCode
 } from "@/lib/auth/totp";
 import { ActionError } from "@/lib/action-error";
+import { isPersonalMode } from "@/lib/runtime/mode";
+
+function requireServerAuthentication() {
+  if (isPersonalMode()) throw new ActionError("个人工作区不提供登录或双步验证");
+}
 
 /** 登录页预检：该账号是否已开启双步验证（仅返回布尔，防枚举只暴露 TOTP 开关） */
 export async function checkLoginRequiresTotp(email: string): Promise<boolean> {
+  requireServerAuthentication();
   const user = await prisma.user.findUnique({
     where: { email: email.trim().toLowerCase() },
     select: { totpEnabled: true }
@@ -32,6 +38,7 @@ export async function checkLoginRequiresTotp(email: string): Promise<boolean> {
  * 仅返回布尔，不暴露其他账号信息。
  */
 export async function checkLoginTotpEnforcement(email: string): Promise<boolean> {
+  requireServerAuthentication();
   const user = await prisma.user.findUnique({
     where: { email: email.trim().toLowerCase() },
     select: { totpEnforced: true, totpEnabled: true }
@@ -45,6 +52,7 @@ export async function checkLoginTotpEnforcement(email: string): Promise<boolean>
  * 把 totpEnabled 置 false（2FA 静默降级，2026-09-19 审计修复）。
  */
 export async function enrollStartTotp(input?: { code?: string }): Promise<{ secret: string; uri: string }> {
+  requireServerAuthentication();
   const session = await requireSession("personal");
 
   {
@@ -93,6 +101,7 @@ export async function enrollStartTotp(input?: { code?: string }): Promise<{ secr
 
 /** 确认绑定：首验通过即启用并一次性发放 8 枚恢复码 */
 export async function enrollConfirmTotp(input: { code: string }): Promise<{ ok: true; recoveryCodes: string[] } | { ok: false; message: string }> {
+  requireServerAuthentication();
   const session = await requireSession("personal");
   const { code } = z.object({ code: z.string().regex(/^\d{6}$/, "请输入 6 位动态码") }).parse(input);
 
@@ -122,6 +131,7 @@ export async function enrollConfirmTotp(input: { code: string }): Promise<{ ok: 
 
 /** 关闭双步验证：需当前动态码或一枚恢复码；被管理员强制开启的不可自行关闭 */
 export async function disableTotp(input: { code: string }): Promise<{ ok: boolean; message?: string }> {
+  requireServerAuthentication();
   const session = await requireSession("personal");
   const { code } = z.object({ code: z.string().min(6).max(16) }).parse(input);
 

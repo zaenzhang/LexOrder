@@ -29,6 +29,7 @@ import {
   updateExternalContact
 } from "@/server/external-contacts/actions";
 import { actionErrorMessage } from "@/lib/action-error";
+import type { RuntimeMode } from "@/lib/runtime/mode";
 
 const CATEGORY_OPTIONS: { value: ExternalContactCategory; label: string }[] = [
   { value: "COURT", label: "法院" },
@@ -58,11 +59,13 @@ type Editing = {
 export function ExternalContactDialog({
   open,
   onOpenChange,
-  editing
+  editing,
+  runtimeMode = "SERVER"
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   editing: Editing;
+  runtimeMode?: RuntimeMode;
 }) {
   const router = useRouter();
   const [form, setForm] = useState({
@@ -123,7 +126,7 @@ export function ExternalContactDialog({
           const created = await createExternalContact(payload);
           toast.success(
             created.status === "PENDING_REVIEW"
-              ? "已提交审核，管理员通过后展示"
+              ? runtimeMode === "PERSONAL" ? "已保存，待本人确认" : "已提交审核，管理员通过后展示"
               : "已添加"
           );
         }

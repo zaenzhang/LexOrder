@@ -7,7 +7,9 @@ import ExcelJS from "exceljs";
 
 import { prisma } from "@/lib/prisma";
 import { shDayKey } from "@/lib/ui/sh-time";
-import { requireSession } from "@/lib/auth/session";
+import { requireSession, requireWorkspaceConfiguration } from "@/lib/auth/session";
+import { isPersonalMode } from "@/lib/runtime/mode";
+import { resolvePersonalActor } from "@/server/runtime/personal";
 import { isSystemAdmin } from "@/lib/auth/system-role";
 import { audit } from "@/server/audit";
 import { seedDefaultFolders } from "@/lib/default-folders";
@@ -28,6 +30,7 @@ import {
 import { ActionError } from "@/lib/action-error";
 
 async function requireManager() {
+  if (isPersonalMode()) return requireWorkspaceConfiguration();
   const session = await requireSession();
   if (!isSystemAdmin(session.user) && !isManager(session.user)) {
     throw new ActionError("仅系统超级管理员 / 主任律师可批量导入案件");
@@ -146,10 +149,10 @@ async function createOneMatter(n: NormalizedRow, currentUserId: string) {
   let ownerId = currentUserId;
   if (n.ownerEmail) {
     const lawyer = await prisma.user.findFirst({
-      where: { email: { equals: n.ownerEmail, mode: "insensitive" } },
+      where: { ...(isPersonalMode() ? { id: currentUserId, active: true } : {}), email: { equals: n.ownerEmail, mode: "insensitive" } },
       select: { id: true }
     });
-    if (!lawyer) throw new ActionError(`主办律师邮箱「${n.ownerEmail}」未匹配到用户`);
+    if (!lawyer) throw new ActionError(isPersonalMode() ? "主办律师邮箱请留空，或填写个人资料中的联系邮箱" : `主办律师邮箱「${n.ownerEmail}」未匹配到用户`);
     ownerId = lawyer.id;
   }
 
@@ -238,6 +241,7 @@ async function createOneMatter(n: NormalizedRow, currentUserId: string) {
   };
 
   const result = await prisma.$transaction(async (tx) => {
+    if (isPersonalMode()) await resolvePersonalActor(tx, currentUserId);
     const clientId =
       existingClient?.id ??
       (

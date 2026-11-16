@@ -6,6 +6,7 @@ import { roleMutation } from "@/lib/roles/service";
 import { notifyRoleApprovers } from "@/server/notifications/approval";
 import { approvalTransaction, approvalAudit, assertApprovalItem, approvalContextFor, requireApprovalRoute } from "@/lib/approvals/service";
 import { selfConfirmEligible } from "@/lib/approvals/self-confirm";
+import { isPersonalMode } from "@/lib/runtime/mode";
 
 
 import { revalidatePath } from "next/cache";
@@ -380,7 +381,7 @@ export async function submitDocumentForReview(id: string) {
     const matterRow = await prisma.matter.findUnique({ where: { id: doc.matterId }, select: { category: true } });
     if (matterRow) docContext.category = matterRow.category;
   }
-  if (await selfConfirmEligible(docContext, prisma)) {
+  if (!isPersonalMode() && await selfConfirmEligible(docContext, prisma)) {
     if (doc.status !== "DRAFT") throw new ActionError("只有草稿状态的材料才能提交审核");
     await approvalTransaction(async db => {
       await db.document.update({

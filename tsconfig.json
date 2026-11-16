@@ -37,7 +37,9 @@
     ".next-dev/types/**/*.ts",
     ".next-build/types/**/*.ts",
     ".next-build/dev/types/**/*.ts",
-    ".next-dev/dev/types/**/*.ts"
+    ".next-dev/dev/types/**/*.ts",
+    ".next-personal/types/**/*.ts",
+    ".next-personal/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
@@ -46,6 +48,7 @@
     ".npm-cache",
     ".next",
     ".next-dev",
-    ".next-build"
+    ".next-build",
+    ".next-personal"
   ]
 }

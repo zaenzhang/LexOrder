@@ -19,7 +19,12 @@ const eslintConfig = defineConfig([
     ".next/**",
     ".next-dev/**",
     ".next-build/**",
+    ".next-personal/**",
     "output/ledger-preview/**", // 独立测试库预览的 Next.js 生成产物
+    "tools/workbench-m1/.runtime/**",
+    "tools/workbench-m1/prototype/.runtime/**",
+    "tools/workbench-m1/prototype/.next/**",
+    "tools/workbench-m1/prototype/next-env.d.ts",
     "node_modules/**",
     "dist/**",
     "coverage/**",

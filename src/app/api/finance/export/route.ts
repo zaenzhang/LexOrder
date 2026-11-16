@@ -2,8 +2,7 @@ import { getFinanceFacts } from "@/server/finance/facts";
 import { moneyKindLabels, type MoneyKind } from "@/lib/finance/ledger-labels";
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/options";
+import { getSession } from "@/lib/auth/session";
 import { hasCustomPermission } from "@/lib/roles/catalog";
 import { matterFinanceVisibilityFilter } from "@/lib/permissions";
 import { shDayKey } from "@/lib/ui/sh-time";
@@ -17,7 +16,7 @@ const TYPE_LABEL: Record<string, string> = { RECEIVABLE: "应收", RECEIVED: "�
 
 /** 墨案 08「导出流水」：按财务可见范围导出收付流水 CSV；需财务查看 + 报表导出权限，写审计 */
 export async function GET(req: Request) {
-  const session = await getServerSession(authOptions);
+  const session = await getSession();
   if (!session?.user) return NextResponse.json({ error: "未登录" }, { status: 401 });
   if (!hasCustomPermission(session.user, "finance.read") || !hasCustomPermission(session.user, "reports.export")) {
     return NextResponse.json({ error: "导出流水需要财务查看与报表导出权限" }, { status: 403 });

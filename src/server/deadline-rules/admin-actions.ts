@@ -3,14 +3,16 @@
 /**
  * 法定期限规则管理（挂账项 v0.50 → P0-8 落地）。
  *
- * 仅系统超级管理员可维护；内置规则（isBuiltIn）只能编辑显示与启停，
+ * Server 仅系统超级管理员维护，Personal 由本机操作者配置；内置规则（isBuiltIn）只能编辑显示与启停，
  * 不能删除——法条依据是内置规则的核心价值；自定义规则可增删改。
  * 规则的 legalBasis/verifiedAt 变更即为"规则版本"变化：已按旧规则生成的
  * 期限不回溯，重算守卫见 @/server/deadlines/confirm。
  */
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireSystemAdmin } from "@/lib/auth/session";
+import { requireWorkspaceConfiguration } from "@/lib/auth/session";
+import { isPersonalMode } from "@/lib/runtime/mode";
+import { resolvePersonalActor } from "@/server/runtime/personal";
 import { auditTx } from "@/server/audit";
 import { revalidatePath } from "next/cache";
 import { ActionError } from "@/lib/action-error";
@@ -31,7 +33,7 @@ const ruleInputSchema = z.object({
 export type DeadlineRuleInput = z.infer<typeof ruleInputSchema>;
 
 export async function listDeadlineRulesAdmin() {
-  await requireSystemAdmin();
+  await requireWorkspaceConfiguration();
   return prisma.deadlineRule.findMany({
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     select: {
@@ -45,11 +47,12 @@ export async function listDeadlineRulesAdmin() {
 }
 
 export async function createDeadlineRule(input: DeadlineRuleInput) {
-  const session = await requireSystemAdmin();
+  const session = await requireWorkspaceConfiguration();
   const data = ruleInputSchema.parse(input);
   const code = `CUSTOM-${Date.now().toString(36).toUpperCase()}`;
 
   const created = await prisma.$transaction(async tx => {
+    if (isPersonalMode()) await resolvePersonalActor(tx, session.user.id);
     const rule = await tx.deadlineRule.create({
       data: {
         code,
@@ -82,7 +85,7 @@ export async function createDeadlineRule(input: DeadlineRuleInput) {
 }
 
 export async function updateDeadlineRule(input: DeadlineRuleInput & { id: string }) {
-  const session = await requireSystemAdmin();
+  const session = await requireWorkspaceConfiguration();
   const { id, ...rest } = input;
   const data = ruleInputSchema.parse(rest);
 
@@ -90,6 +93,7 @@ export async function updateDeadlineRule(input: DeadlineRuleInput & { id: string
   if (!existing) throw new ActionError("规则不存在");
 
   await prisma.$transaction(async tx => {
+    if (isPersonalMode()) await resolvePersonalActor(tx, session.user.id);
     await tx.deadlineRule.update({
       where: { id },
       data: {
@@ -119,13 +123,14 @@ export async function updateDeadlineRule(input: DeadlineRuleInput & { id: string
 }
 
 export async function toggleDeadlineRule(input: { id: string; enabled: boolean }) {
-  const session = await requireSystemAdmin();
+  const session = await requireWorkspaceConfiguration();
   const data = z.object({ id: z.string().cuid(), enabled: z.boolean() }).parse(input);
 
   const existing = await prisma.deadlineRule.findUnique({ where: { id: data.id }, select: { code: true } });
   if (!existing) throw new ActionError("规则不存在");
 
   await prisma.$transaction(async tx => {
+    if (isPersonalMode()) await resolvePersonalActor(tx, session.user.id);
     await tx.deadlineRule.update({ where: { id: data.id }, data: { enabled: data.enabled } });
     await auditTx(tx, {
       userId: session.user.id,
@@ -141,7 +146,7 @@ export async function toggleDeadlineRule(input: { id: string; enabled: boolean }
 }
 
 export async function deleteDeadlineRule(input: { id: string }) {
-  const session = await requireSystemAdmin();
+  const session = await requireWorkspaceConfiguration();
   const { id } = z.object({ id: z.string().cuid() }).parse(input);
 
   const existing = await prisma.deadlineRule.findUnique({ where: { id }, select: { isBuiltIn: true, code: true } });
@@ -149,6 +154,7 @@ export async function deleteDeadlineRule(input: { id: string }) {
   if (existing.isBuiltIn) throw new ActionError("内置规则不可删除，可停用或修正法条依据");
 
   await prisma.$transaction(async tx => {
+    if (isPersonalMode()) await resolvePersonalActor(tx, session.user.id);
     await tx.deadlineRule.delete({ where: { id } });
     await auditTx(tx, {
       userId: session.user.id,

@@ -18,6 +18,8 @@ import bcrypt from "bcryptjs";
 import { civilCauses } from "./seeds/causes-civil";
 import { criminalCauses } from "./seeds/causes-criminal";
 import { administrativeCauses } from "./seeds/causes-administrative";
+import { isPersonalMode } from "../src/lib/runtime/mode";
+import { resolvePersonalActor } from "../src/server/runtime/personal";
 
 const prisma = new PrismaClient();
 
@@ -182,7 +184,8 @@ async function seedSystemSettings() {
 async function main() {
   console.log("开始 seed...\n");
 
-  await seedAdmin();
+  const personal = isPersonalMode() ? await resolvePersonalActor(prisma) : null;
+  if (!personal) await seedAdmin();
   await seedCauses(MatterCategory.CIVIL_COMMERCIAL, civilCauses);
   await seedCauses(MatterCategory.CRIMINAL, criminalCauses);
   await seedCauses(MatterCategory.ADMINISTRATIVE, administrativeCauses);
@@ -192,7 +195,7 @@ async function main() {
   // v0.8: 文档模板 + 用章配置
   const { seedV08Templates, seedV08SealConfigs } = await import("./seeds/v08-templates-and-seals");
   await seedV08SealConfigs(prisma);
-  await seedV08Templates(prisma);
+  await seedV08Templates(prisma, personal?.id);
 
   // v0.49: 法定期限规则库（全部经元典核验）
   const { seedV49DeadlineRules } = await import("./seeds/v49-deadline-rules");

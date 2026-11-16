@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { MatterCategory } from "@prisma/client";
 
-import { requireSystemAdmin } from "@/lib/auth/session";
+import { requireWorkspaceConfiguration } from "@/lib/auth/session";
 import { audit } from "@/server/audit";
 import { saveFirmProfile, CATEGORY_WORD_DEFAULTS } from "./firm-profile";
 import { ActionError } from "@/lib/action-error";
@@ -26,7 +26,7 @@ const saveSchema = z.object({
 });
 
 export async function saveFirmProfileAction(input: z.infer<typeof saveSchema>) {
-  const session = await requireSystemAdmin();
+  const session = await requireWorkspaceConfiguration();
   const data = saveSchema.parse(input);
 
   // Logo 校验：必须是 image/* 的 base64 data URL，且体积受限
