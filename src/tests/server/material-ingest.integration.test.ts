@@ -275,15 +275,15 @@ describe.skipIf(!databaseUrl)("Server 原件摄入：真实 PG 恢复与幂等�
     expect(await db.document.findUniqueOrThrow({ where: { id: revision.id } })).toMatchObject({ isLatest: true, version: 2, status: "DRAFT" });
   });
 
-  it("新版本入口不猜测或补写缺失的版本族，也不预存文件或发布新版", async () => {
+  it("仅为用户明确选择的旧原件建立版本族，不合并其他无族材料", async () => {
     const f = await fixture();
     const original = await db.document.create({ data: { ...f.document, path: `unrelated/${randomUUID()}.txt`, familyId: null } });
     const input = { ...request(f), priorDocumentId: original.id };
-    await expect(ingestMaterial(input)).rejects.toThrow("缺少明确的版本关系");
-    expect(syntheticStorage.write).not.toHaveBeenCalled();
-    expect(await db.materialIngestIntent.findUnique({ where: { id: input.requestKey } })).toBeNull();
-    expect(await db.document.count({ where: { matterId: f.matter.id } })).toBe(1);
-    expect(await db.document.findUniqueOrThrow({ where: { id: original.id } })).toMatchObject({ familyId: null, version: 1, isLatest: true });
+    const unrelated = await db.document.create({ data: { ...f.document, path: `other/${randomUUID()}.txt`, familyId: null } });
+    const created = await ingestMaterial(input);
+    expect(await db.document.findUniqueOrThrow({ where: { id: created.id } })).toMatchObject({ familyId: original.id, version: 2, isLatest: true });
+    expect(await db.document.findUniqueOrThrow({ where: { id: original.id } })).toMatchObject({ familyId: original.id, version: 1, isLatest: false });
+    expect(await db.document.findUniqueOrThrow({ where: { id: unrelated.id } })).toMatchObject({ familyId: null, version: 1, isLatest: true });
   });
 
   it("获准的归档补充初传可建解析任务，普通卷宗上传仍被阻断", async () => {

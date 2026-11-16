@@ -5,6 +5,8 @@ import { listClients } from "@/server/clients/actions";
 import { listActiveColleagues } from "@/server/users/actions";
 import { MattersViewV4 } from "./_components/matters-view-v4";
 import type { MatterCategory } from "@prisma/client";
+import { requireSession } from "@/lib/auth/session";
+import { hasCustomPermission } from "@/lib/roles/catalog";
 
 export type MattersTab = "intake" | "active" | "archived" | "revision" | "all";
 export type MatterSortBy = "hearing" | "intakeDate" | "claimAmount" | "archivedAt";
@@ -92,6 +94,10 @@ type Props = {
 };
 
 export default async function MattersPage({ searchParams }: Props) {
+  const session = await requireSession("matters.read");
+  const canCreateIntake = hasCustomPermission(session.user, "intakes.create");
+  const canExportMatters = session.user.role !== "FINANCE"
+    && ["matters.export", "matters.read", "finance.read", "documents.download"].every(key => hasCustomPermission(session.user, key as import("@/lib/roles/catalog").PermissionKey));
   const params = await searchParams;
   const tab = resolveTab(params.tab);
   const page = resolvePage(params.page);
@@ -100,9 +106,11 @@ export default async function MattersPage({ searchParams }: Props) {
   const dateFrom = resolveDateStart(params.from);
   const dateTo = resolveDateEnd(params.to);
 
-  // 收案抽屉所需：客户下拉 + 同事列表
+  // 客户选项仅供有收案登记及客户读取资格的人使用；案件浏览独立于客户档案权限。
   const [clientsResponse, colleagues, readableTeams] = await Promise.all([
-    listClients({ pageSize: 100 }),
+    canCreateIntake && hasCustomPermission(session.user, "clients.read")
+      ? listClients({ pageSize: 100 })
+      : null,
     listActiveColleagues(),
     listReadableTeams()
   ]);
@@ -131,6 +139,8 @@ export default async function MattersPage({ searchParams }: Props) {
     });
     return (
       <MattersViewV4
+        canCreateIntake={canCreateIntake}
+        canExportMatters={canExportMatters}
         tab={tab}
         intakeData={{
           items: intakes.items.map((i) => ({
@@ -151,7 +161,7 @@ export default async function MattersPage({ searchParams }: Props) {
           page: intakes.page,
           pageSize: intakes.pageSize
         }}
-        clientOptions={clientsResponse.items.map((c) => ({
+        clientOptions={(clientsResponse?.items ?? []).map((c) => ({
           id: c.id,
           name: c.name,
           type: c.type
@@ -209,6 +219,8 @@ export default async function MattersPage({ searchParams }: Props) {
 
   return (
     <MattersViewV4
+      canCreateIntake={canCreateIntake}
+      canExportMatters={canExportMatters}
       tab={tab}
       tabCounts={tabCounts}
       matterData={{
@@ -220,7 +232,7 @@ export default async function MattersPage({ searchParams }: Props) {
         page: matters.page,
         pageSize: matters.pageSize
       }}
-      clientOptions={clientsResponse.items.map((c) => ({
+      clientOptions={(clientsResponse?.items ?? []).map((c) => ({
         id: c.id,
         name: c.name,
         type: c.type

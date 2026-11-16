@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { BookOpenCheck, ExternalLink, Loader2, AlertTriangle, FileCheck2, Sparkles, Upload, FileCheck } from "lucide-react";
@@ -22,6 +22,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue
@@ -88,6 +89,11 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
   const [manualNotes, setManualNotes] = useState<Record<string, string>>({});
   const [availableDocuments, setAvailableDocuments] = useState<AvailableDocument[]>([]);
   const [policy, setPolicy] = useState<Awaited<ReturnType<typeof getArchivePrepData>>["policy"] | null>(null);
+  const [archiveFolder, setArchiveFolder] = useState<Awaited<ReturnType<typeof getArchivePrepData>>["archiveFolder"]>(null);
+  const [supplement, setSupplement] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [uploadErrors, setUploadErrors] = useState<Record<string, { message: string; refreshOnly: boolean }>>({});
   const [closedReason, setClosedReason] = useState<ArchiveClosedReason>("JUDGMENT");
   const [completedAt, setCompletedAt] = useState<string>(shDayKey(new Date()));
   const [judgmentSummary, setJudgmentSummary] = useState("");
@@ -98,27 +104,42 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
   const [isPending, startTransition] = useTransition();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingItemRef = useRef<ArchiveChecklistItem | null>(null);
+  const prepVersion = useRef(0);
 
-  async function refreshPrep(resetAssignments = false) {
+  const refreshPrep = useCallback(async (resetAssignments: boolean, version: number) => {
     const data = await getArchivePrepData(matterId);
+    if (version !== prepVersion.current) return;
     setChecklist(data.checklist);
     setPolicy(data.policy);
+    setArchiveFolder(data.archiveFolder);
+    setSupplement(data.matter.status === "ARCHIVED");
     setAvailableDocuments(data.availableDocuments);
     const preselected = Object.fromEntries(Object.entries(data.docsByItem).map(([itemId, docs]) => [itemId, docs.map((doc) => doc.id)]));
-    setAssignments((current) => resetAssignments ? preselected : Object.fromEntries(Object.keys({ ...current, ...preselected }).map((itemId) => [itemId, [...new Set([...(current[itemId] ?? []), ...(preselected[itemId] ?? [])])]])));
-    if (data.matter.closedAt) {
+    if (resetAssignments) setAssignments(preselected);
+    if (resetAssignments && data.matter.closedAt) {
       // 上海日历日：toISOString 走 UTC，上海 0-8 点会落成前一天
       setCompletedAt(shDayKey(data.matter.closedAt));
     }
-    if (data.existingSummary) {
+    if (resetAssignments && data.existingSummary) {
       setSummary(data.existingSummary);
       setSummaryFromClose(true);
     }
-  }
+  }, [matterId]);
 
   useEffect(() => {
+    const version = ++prepVersion.current;
     if (!open) return;
     setLoading(true);
+    setLoadError(null);
+    setSubmitError(null);
+    setUploadErrors({});
+    setUploadingItemId(null);
+    pendingItemRef.current = null;
+    setArchiveFolder(null);
+    setSupplement(false);
+    setSummary("");
+    setJudgmentSummary("");
+    setCompletedAt(shDayKey(new Date()));
     setSummaryFromClose(false);
     setAssignments({});
     setItemStatuses({});
@@ -126,14 +147,22 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
     setManualChecks({});
     setManualNotes({});
     setForceWithMissing(false);
-    refreshPrep(true)
+    refreshPrep(true, version)
       .catch((err) => {
-        toast.error("加载归档数据失败", { description: actionErrorMessage(err) });
-        onOpenChange(false);
+        if (version === prepVersion.current) setLoadError(actionErrorMessage(err));
       })
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, matterId]);
+      .finally(() => { if (version === prepVersion.current) setLoading(false); });
+    return () => { prepVersion.current = version + 1; };
+  }, [open, refreshPrep]);
+
+  async function retryPrep() {
+    const version = prepVersion.current;
+    setLoading(true);
+    setLoadError(null);
+    try { await refreshPrep(true, version); }
+    catch (error) { if (version === prepVersion.current) setLoadError(actionErrorMessage(error)); }
+    finally { if (version === prepVersion.current) setLoading(false); }
+  }
 
   function triggerUpload(item: ArchiveChecklistItem) {
     pendingItemRef.current = item;
@@ -146,23 +175,44 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
     const item = pendingItemRef.current;
     pendingItemRef.current = null;
     if (!file || !item) return;
+    const version = prepVersion.current;
+    if (supplement && !archiveFolder) {
+      setUploadErrors((current) => ({ ...current, [item.id]: { message: "本案没有可用的结案或归档卷宗，请先核对卷宗设置", refreshOnly: false } }));
+      return;
+    }
 
     setUploadingItemId(item.id);
+    setUploadErrors((current) => { const next = { ...current }; delete next[item.id]; return next; });
     try {
       const fd = new FormData();
       fd.set("matterId", matterId);
       fd.set("name", file.name.replace(/\.[^.]+$/, "") || item.label);
       fd.set("category", inferCategory(item.id));
       fd.set("archiveChecklistItemId", item.id);
+      if (archiveFolder) fd.set("folderId", archiveFolder.id);
       fd.set("encrypted", "false");
       fd.set("file", file);
-      await uploadDocument(fd);
+      const uploaded = await uploadDocument(fd);
+      if (version !== prepVersion.current) return;
+      setAvailableDocuments((current) => [...current, { id: uploaded.id, name: String(fd.get("name")), category: inferCategory(item.id), mimeType: file.type || null, size: file.size, folderName: archiveFolder?.name ?? null }]);
+      setAssignments((current) => ({ ...current, [item.id]: [...new Set([...(current[item.id] ?? []), uploaded.id])] }));
       toast.success(`已上传：${item.label}`, { description: file.name });
-      await refreshPrep();
+      try { await refreshPrep(false, version); }
+      catch (error) { if (version === prepVersion.current) setUploadErrors((current) => ({ ...current, [item.id]: { message: `材料已保存，列表刷新失败：${actionErrorMessage(error)}`, refreshOnly: true } })); }
     } catch (err) {
-      toast.error("上传失败", { description: actionErrorMessage(err) });
+      if (version === prepVersion.current) setUploadErrors((current) => ({ ...current, [item.id]: { message: actionErrorMessage(err), refreshOnly: false } }));
     } finally {
-      setUploadingItemId(null);
+      if (version === prepVersion.current) setUploadingItemId(null);
+    }
+  }
+
+  async function refreshItem(itemId: string) {
+    const version = prepVersion.current;
+    try {
+      await refreshPrep(false, version);
+      if (version === prepVersion.current) setUploadErrors((current) => { const next = { ...current }; delete next[itemId]; return next; });
+    } catch (error) {
+      if (version === prepVersion.current) setUploadErrors((current) => ({ ...current, [itemId]: { message: `材料已保存，列表刷新失败：${actionErrorMessage(error)}`, refreshOnly: true } }));
     }
   }
 
@@ -171,28 +221,28 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
     : [];
 
   function handleSubmit() {
+    setSubmitError(null);
     if (!summary.trim()) {
-      toast.warning("请填写结案小结");
+      setSubmitError("请填写结案小结");
       return;
     }
     if (missingRequired.length > 0 && !forceWithMissing) {
-      toast.warning(`仍有 ${missingRequired.length} 项必交材料没有关联文件`, {
-        description: "确实缺失或不适用时，须逐项说明并申请例外审批。"
-      });
+      setSubmitError(`仍有 ${missingRequired.length} 项必交材料没有关联文件；缺失或不适用时，请逐项说明并申请例外审批`);
       return;
     }
     if (missingRequired.some((item) => !itemNotes[item.id]?.trim())) {
-      toast.warning("请逐项填写必交材料缺项或不适用理由");
+      setSubmitError("请逐项填写必交材料缺项或不适用理由");
       return;
     }
     if (ARCHIVE_MANUAL_CHECKS.some((item) => !manualChecks[item.id])) {
-      toast.warning("请完成全部归档人工核验事项");
+      setSubmitError("请完成全部归档人工核验事项");
       return;
     }
     if (!policy?.configured) {
-      toast.error("律所尚未配置归档制度", { description: "请管理员先在“管理后台—归档制度”关联现行制度原文。" });
+      setSubmitError("请管理员先在归档制度设置中关联现行制度原文");
       return;
     }
+    const version = prepVersion.current;
     startTransition(async () => {
       try {
         const checklistItems = Object.fromEntries((checklist?.items ?? []).filter((item) => !item.autoGenerated).map((item) => {
@@ -213,32 +263,26 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
           manualChecks: Object.fromEntries(ARCHIVE_MANUAL_CHECKS.map((item) => [item.id, { confirmed: !!manualChecks[item.id], note: manualNotes[item.id] ?? "" }])),
           forceWithMissing
         });
-        toast.success(
-          result.status === "APPROVED"
-            ? `案件已归档（${result.archiveNo}）`
-            : `归档申请已提交（${result.archiveNo}），等待管理员审批`,
-          {
-            description: "卷宗封皮 + 目录已自动生成至归档卷宗"
-          }
-        );
+        if (version !== prepVersion.current) return;
+        toast.success(`归档申请已提交（${result.archiveNo}）`);
         onOpenChange(false);
         router.refresh();
       } catch (err) {
-        toast.error("归档失败", { description: actionErrorMessage(err) });
+        if (version === prepVersion.current) setSubmitError(actionErrorMessage(err));
       }
     });
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(value) => { if (!isPending && !uploadingItemId) onOpenChange(value); }}>
       <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileCheck2 className="h-5 w-5 text-primary" />
-            归档案件
+            {supplement ? "补充归档" : "申请归档"}
           </DialogTitle>
-          <DialogDescription>
-            逐项关联实际材料并完成归档核验。提交后材料范围固定，由审批人逐件审阅。
+          <DialogDescription className="sr-only">
+            选择本次送审材料，核对后提交归档申请
           </DialogDescription>
         </DialogHeader>
 
@@ -246,6 +290,8 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
+        ) : loadError ? (
+          <Alert variant="destructive"><AlertTitle>加载归档数据失败</AlertTitle><AlertDescription>{loadError}</AlertDescription><Button type="button" variant="outline" onClick={() => void retryPrep()}>重试加载</Button></Alert>
         ) : (
           <ScrollArea className="max-h-[68vh] pr-4">
             <div className="space-y-5">
@@ -254,26 +300,29 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
                 <h3 className="text-sm font-medium">结案信息</h3>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label className="text-xs">结案方式 *</Label>
+                    <Label htmlFor="archive-closed-reason" className="text-xs">结案方式 *</Label>
                     <Select
                       value={closedReason}
                       onValueChange={(v) => setClosedReason(v as ArchiveClosedReason)}
                     >
-                      <SelectTrigger className="h-9">
+                      <SelectTrigger id="archive-closed-reason" className="h-9">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectGroup>
                         {(Object.keys(CLOSED_REASON_CN) as ArchiveClosedReason[]).map((k) => (
                           <SelectItem key={k} value={k}>
                             {CLOSED_REASON_CN[k]}
                           </SelectItem>
                         ))}
+                        </SelectGroup>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs">结案日期 *</Label>
+                    <Label htmlFor="archive-completed-at" className="text-xs">结案日期 *</Label>
                     <Input
+                      id="archive-completed-at"
                       type="date"
                       value={completedAt}
                       onChange={(e) => setCompletedAt(e.target.value)}
@@ -282,8 +331,9 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">裁判结果摘要</Label>
+                  <Label htmlFor="archive-judgment-summary" className="text-xs">裁判结果摘要</Label>
                   <Textarea
+                    id="archive-judgment-summary"
                     value={judgmentSummary}
                     onChange={(e) => setJudgmentSummary(e.target.value)}
                     placeholder="如：一审判决支持原告诉请，对方未上诉，判决于 2026-04-15 生效"
@@ -292,7 +342,7 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
                 </div>
                 <div className="space-y-1.5">
                   <div className="flex items-baseline justify-between">
-                    <Label className="text-xs">结案小结 *</Label>
+                    <Label htmlFor="archive-summary" className="text-xs">结案小结 *</Label>
                     {summaryFromClose && (
                       <span className="inline-flex items-center gap-1 text-[10px] text-primary">
                         <Sparkles className="h-3 w-3" />
@@ -301,6 +351,7 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
                     )}
                   </div>
                   <Textarea
+                    id="archive-summary"
                     value={summary}
                     onChange={(e) => {
                       setSummary(e.target.value);
@@ -336,6 +387,7 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
                   <input
                     ref={fileInputRef}
                     type="file"
+                    aria-label="补传归档材料"
                     className="hidden"
                     onChange={handleFileSelected}
                   />
@@ -381,7 +433,7 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
                               size="sm"
                               variant="ghost"
                               onClick={() => triggerUpload(item)}
-                              disabled={isUploading || isPending}
+                              disabled={Boolean(uploadingItemId) || isPending || (supplement && !archiveFolder)}
                               className="h-8 shrink-0 px-2 text-xs"
                             >
                               {isUploading ? (
@@ -395,6 +447,7 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
                             </Button>
                           )}
                           </div>
+                          {uploadErrors[item.id] && <Alert variant="destructive"><AlertDescription>{uploadErrors[item.id].message}</AlertDescription>{uploadErrors[item.id].refreshOnly && <Button type="button" variant="outline" size="sm" onClick={() => void refreshItem(item.id)}>刷新材料</Button>}</Alert>}
                           {!item.autoGenerated && <>
                             <div className="text-xs text-muted-foreground"><span>选择本案已有材料</span>
                               <div className="mt-1 max-h-32 space-y-1 overflow-y-auto rounded-md border bg-card p-2" role="group" aria-label={`${item.label}关联材料`}>
@@ -403,7 +456,7 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
                               <span className="mt-1 block">同一文件确有必要时可关联多个清单项。</span>
                             </div>
                             {hasDocs ? <div className="flex flex-wrap gap-2">{docs.map((document) => <a key={document.id} href={`/api/documents/${document.id}/download?inline=1`} target="_blank" rel="noreferrer" className="max-w-full truncate rounded-md bg-muted px-2 py-1 text-xs text-primary underline" title={document.name}>{document.name}</a>)}</div> : <div className="grid gap-2 sm:grid-cols-[180px_1fr]">
-                              <Select value={itemStatuses[item.id] ?? "MISSING"} onValueChange={(value) => setItemStatuses((current) => ({ ...current, [item.id]: value as "MISSING" | "NOT_APPLICABLE" }))}><SelectTrigger aria-label={`${item.label}缺项状态`}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="MISSING">缺失</SelectItem><SelectItem value="NOT_APPLICABLE">不适用</SelectItem></SelectContent></Select>
+                              <Select value={itemStatuses[item.id] ?? "MISSING"} onValueChange={(value) => setItemStatuses((current) => ({ ...current, [item.id]: value as "MISSING" | "NOT_APPLICABLE" }))}><SelectTrigger aria-label={`${item.label}缺项状态`}><SelectValue /></SelectTrigger><SelectContent><SelectGroup><SelectItem value="MISSING">缺失</SelectItem><SelectItem value="NOT_APPLICABLE">不适用</SelectItem></SelectGroup></SelectContent></Select>
                               <Input aria-label={`${item.label}缺项或不适用说明`} value={itemNotes[item.id] ?? ""} onChange={(event) => setItemNotes((current) => ({ ...current, [item.id]: event.target.value }))} placeholder={item.required ? "必交项缺失或不适用时必须说明理由" : "可填写缺失或不适用说明"} maxLength={1000} />
                             </div>}
                           </>}
@@ -443,26 +496,19 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
                 </Alert>
               )}
 
-              {/* v0.16: 审批流提示 */}
-              <Alert className="border-primary/30 bg-primary/5">
-                <AlertTitle className="text-xs font-medium text-primary">
-                  归档审批流程
-                </AlertTitle>
-                <AlertDescription className="mt-0.5 text-[11.5px] text-muted-foreground">
-                  提交后固定本次材料名称、大小、内容校验值和制度版本。审批人逐项核验通过后，案件才转为已归档。
-                </AlertDescription>
-              </Alert>
+              {supplement && !archiveFolder && <Alert variant="destructive"><AlertDescription>本案没有可用的结案或归档卷宗，请先核对卷宗设置后补传材料。</AlertDescription></Alert>}
             </div>
           </ScrollArea>
         )}
 
+        {submitError && <Alert variant="destructive"><AlertTitle>尚未提交</AlertTitle><AlertDescription>{submitError}</AlertDescription></Alert>}
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending || Boolean(uploadingItemId)}>
             取消
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={isPending || loading || !policy?.configured}
+            disabled={isPending || loading || Boolean(loadError) || Boolean(uploadingItemId) || !policy?.configured}
           >
             {isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
             提交归档审批

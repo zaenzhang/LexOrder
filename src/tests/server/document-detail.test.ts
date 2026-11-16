@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mock = vi.hoisted(() => ({
-  db: { document: { findUnique: vi.fn(), findMany: vi.fn() }, user: { findUniqueOrThrow: vi.fn() }, matter: { count: vi.fn() }, $transaction: vi.fn() },
+  db: { document: { findUnique: vi.fn(), findMany: vi.fn() }, user: { findUniqueOrThrow: vi.fn() }, matter: { count: vi.fn() }, archiveRecord: { findMany: vi.fn() }, $transaction: vi.fn() },
   read: vi.fn(), role: vi.fn(),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: mock.db }));
@@ -17,7 +17,7 @@ const oldId = "cm00000000000000000000003", latestId = "cm00000000000000000000004
 function document(changes: Record<string, unknown> = {}) {
   return { id: oldId, name: "合成旧版意见.docx", version: 1, familyId: oldId, isLatest: false,
     mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", status: "APPROVED",
-    createdAt: new Date("2026-11-16T08:00:00Z"), uploadedById: "author", matterId, intakeId: null, deletedAt: null,
+    createdAt: new Date("2026-11-16T08:00:00Z"), updatedAt: new Date("2026-11-16T08:00:00Z"), tags: [], reviewReportFor: null, uploadedById: "author", matterId, intakeId: null, deletedAt: null,
     matter: { status: "ACTIVE", deletedAt: null }, uploadedBy: { name: "合成作者" }, ...changes };
 }
 beforeEach(() => {
@@ -27,6 +27,7 @@ beforeEach(() => {
   mock.db.document.findMany.mockResolvedValue([document({ id: latestId, name: "合成未审新稿.docx", version: 2, status: "DRAFT", isLatest: true }), document()]);
   mock.db.user.findUniqueOrThrow.mockResolvedValue({ role: "LAWYER" });
   mock.db.matter.count.mockResolvedValue(1);
+  mock.db.archiveRecord.findMany.mockResolvedValue([]);
   mock.role.mockResolvedValue({ role: "LAWYER", enabled: true });
   mock.read.mockResolvedValue(true);
 });

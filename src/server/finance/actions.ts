@@ -11,7 +11,7 @@ import { scopeFor } from "@/lib/roles/catalog";
 import { hasPersonalCapability, personalAuditMetadata } from "@/lib/runtime/capabilities";
 import { resolvePersonalActor } from "@/server/runtime/personal";
 import { canReadDocument } from "@/lib/approvals/documents";
-import { requireApprovalRoute } from "@/lib/approvals/service";
+import { createInvoiceRequestForActor, prepareInvoiceEvidenceUpload, type InvoiceRequestInput } from "@/server/invoices/request-service";
 
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
@@ -24,7 +24,6 @@ import { generateReceivableForBilling, generatePaymentForReceivedEntry } from "@
 import { serializeDecimals } from "@/lib/decimal";
 import {
   assertCanAccessMatterFinance,
-  assertCanAssociateMatter,
   assertCanLeadMatter,
   canConfirmReceipt,
   isManager,
@@ -567,6 +566,7 @@ export async function getMatterInvoiceContext(matterId: string) {
     select: {
       id: true,
       title: true,
+      internalCode: true,
       intakeId: true,
       intake: {
         select: {
@@ -618,10 +618,17 @@ export async function getMatterInvoiceContext(matterId: string) {
   const clientOptions = Array.from(clientMap.values()).sort(
     (a, b) => Number(b.isPrimary) - Number(a.isPrimary)
   );
+  const documents = await prisma.document.findMany({
+    where: { matterId, deletedAt: null },
+    select: { id: true, name: true, version: true, matterId: true, intakeId: true, uploadedById: true, deletedAt: true },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  });
+  const readable = await Promise.all(documents.map(document => canReadDocument(session.user.id, document)));
 
   return {
     matterId: m.id,
     matterTitle: m.title,
+    internalCode: m.internalCode,
     intakeId: m.intakeId ?? null,
     intake: m.intake
       ? {
@@ -632,132 +639,39 @@ export async function getMatterInvoiceContext(matterId: string) {
         }
       : null,
     clientOptions,
+    evidenceDocuments: documents.filter((_, index) => readable[index]).map(({ id, name, version }) => ({ id, name, version })),
     defaultBuyerName:
       m.primaryClient?.name ?? m.intake?.client?.name ?? null
   };
 }
 
-/**
- * v0.12: 创建开票申请（带类型/名目/抬头/依据）
- */
-export async function createInvoiceRequest(input: {
-  // v0.43 项5：matterId 可空——无关联案件开票须填 noMatterReason
-  matterId: string | null;
-  noMatterReason?: string | null;
-  amount: number;
-  invoiceType: "PLAIN" | "SPECIAL";
-  invoiceItem: "LAWYER_FEE" | "CONSULTING_FEE" | "AGENCY_FEE" | "OTHER";
-  buyerName: string;
-  buyerTaxNo?: string | null;
-  // v0.42 项4：增值税专用发票购方六要素（专票必填）
-  buyerAddress?: string | null;
-  buyerPhone?: string | null;
-  buyerBank?: string | null;
-  buyerBankAccount?: string | null;
-  evidenceDocIds: string[];
-  requestNote?: string | null;
-}) {
+/** 上传新依据前核对当前申请资格；创建申请仍在事务内完整复核。 */
+export async function prepareInvoiceRequestUpload(input: InvoiceRequestInput) {
   const session = await requireSession("approval");
-  if (input.matterId) {
-    await assertCanAssociateMatter(session.user.id, input.matterId);
-    await assertMatterWritable(input.matterId);
-  } else {
-    // 无关联案件开票仅财务 / 管理员 / 主任可发起，且必须说明原因
-    if (!hasPersonalCapability(await resolvePersonalActor(prisma,session.user.id),"invoices.process") && !isManager(session.user.role) && session.user.role !== "FINANCE" && !(session.user.role === "CUSTOM" && scopeFor(session.user, "finance.write") === "ALL")) {
-      throw new ActionError("无关联案件开票仅财务 / 管理员 / 主任律师可发起");
-    }
-    if (!input.noMatterReason?.trim()) {
-      throw new ActionError("无关联案件时必须填写原因说明");
-    }
-  }
+  await prepareInvoiceEvidenceUpload(session.user, input);
+}
 
-  if (input.amount <= 0) throw new ActionError("金额必须大于 0");
-  if (input.invoiceType !== "PLAIN" && input.invoiceType !== "SPECIAL") {
-    throw new ActionError("请选择开票类型");
+export async function createInvoiceRequest(input: InvoiceRequestInput) {
+  const session = await requireSession("approval");
+  const created = await createInvoiceRequestForActor(session.user, input);
+  if (!created.replayed) {
+    await notifyRoleApprovers({
+      roles: ["PRINCIPAL_LAWYER", "FINANCE"],
+      excludeUserId: session.user.id,
+      title: "新的发票审批待处理",
+      content: `${session.user.name ?? "有用户"} 提交了开票申请：${
+        created.matter ? `${created.matter.internalCode} ${created.matter.title}` : input.noMatterReason!.trim()
+      }，金额 ${Number(input.amount).toLocaleString("zh-CN")} 元`,
+      href: "/finance",
+      refType: "InvoiceRequest",
+      refId: created.id,
+      priority: "HIGH"
+    });
   }
-  if (!input.buyerName.trim()) throw new ActionError("请填写开票抬头");
-  // 专票合规校验（《增值税专用发票使用与管理通知》第一条 + 购方六要素）
-  if (input.invoiceType === "SPECIAL") {
-    if (!input.buyerTaxNo?.trim()) throw new ActionError("增值税专用发票必须填写纳税人识别号");
-    if (!input.buyerAddress?.trim()) throw new ActionError("增值税专用发票必须填写购方地址");
-    if (!input.buyerPhone?.trim()) throw new ActionError("增值税专用发票必须填写购方电话");
-    if (!input.buyerBank?.trim()) throw new ActionError("增值税专用发票必须填写开户银行");
-    if (!input.buyerBankAccount?.trim()) throw new ActionError("增值税专用发票必须填写银行账号");
-  }
-  // 关联案件时必须上传开票依据（委托合同等）；无关联案件以原因说明替代，依据可选
-  if (input.matterId && (input.evidenceDocIds ?? []).length === 0) {
-    throw new ActionError("请上传至少一份开票依据（扫描版委托合同等）");
-  }
-
-  const isSpecial = input.invoiceType === "SPECIAL";
-  const approvalMatter = input.matterId ? await prisma.matter.findUniqueOrThrow({ where: { id: input.matterId }, select: { category: true } }) : null;
-  await requireApprovalRoute({ action: "INVOICE_APPROVE", category: approvalMatter?.category ?? null, requesterId: session.user.id });
-  const evidenceDocIds = input.evidenceDocIds ?? [];
-  if (evidenceDocIds.length) {
-    // 开票依据是本案合规证据链（须为同案有效材料），仅"本人可读"不够——跨案材料可读不等于可作本案依据
-    if (input.matterId) {
-      const docs = await prisma.document.findMany({
-        where: { id: { in: evidenceDocIds }, matterId: input.matterId, deletedAt: null },
-        select: { id: true }
-      });
-      if (docs.length !== new Set(evidenceDocIds).size) throw new ActionError("开票依据必须为本案有效材料");
-    } else {
-      const docs = await prisma.document.findMany({
-        where: { id: { in: evidenceDocIds }, deletedAt: null },
-        select: { id: true }
-      });
-      if (docs.length !== new Set(evidenceDocIds).size) throw new ActionError("开票依据不存在或已删除");
-    }
-    for (const id of evidenceDocIds) {
-      const doc = await prisma.document.findUnique({ where: { id } });
-      if (!doc || !await canReadDocument(session.user.id, doc)) throw new ActionError("开票依据不存在或无权访问");
-    }
-  }
-  const created = await prisma.invoiceRequest.create({
-    data: {
-      matterId: input.matterId,
-      noMatterReason: input.matterId ? null : input.noMatterReason?.trim() || null,
-      amount: input.amount,
-      invoiceType: input.invoiceType,
-      invoiceItem: input.invoiceItem,
-      buyerName: input.buyerName.trim(),
-      buyerTaxNo: input.buyerTaxNo?.trim() || null,
-      buyerAddress: isSpecial ? input.buyerAddress?.trim() || null : null,
-      buyerPhone: isSpecial ? input.buyerPhone?.trim() || null : null,
-      buyerBank: isSpecial ? input.buyerBank?.trim() || null : null,
-      buyerBankAccount: isSpecial ? input.buyerBankAccount?.trim() || null : null,
-      evidenceDocIds: input.evidenceDocIds,
-      title: input.buyerName.trim(),
-      requestNote: input.requestNote?.trim() || null,
-      requestedById: session.user.id
-    },
-    select: { id: true }
-  });
-
-  const matter = input.matterId
-    ? await prisma.matter.findUnique({
-        where: { id: input.matterId },
-        select: { internalCode: true, title: true }
-      })
-    : null;
-
-  await notifyRoleApprovers({
-    roles: ["PRINCIPAL_LAWYER", "FINANCE"],
-    excludeUserId: session.user.id,
-    title: "新的发票审批待处理",
-    content: `${session.user.name ?? "有用户"} 提交了开票申请：${
-      matter ? `${matter.internalCode} ${matter.title}` : input.noMatterReason?.trim() || "无关联案件"
-    }，金额 ${input.amount.toLocaleString("zh-CN")} 元`,
-    href: "/finance",
-    refType: "InvoiceRequest",
-    refId: created.id,
-    priority: "HIGH"
-  });
-
   revalidatePath("/finance");
   revalidatePath("/approvals");
   if (input.matterId) await revalidateMatter(input.matterId);
-  return created;
+  return { id: created.id, status: created.status };
 }
 
 /** v0.43 项5：财务页开票弹窗用——搜索当前用户可关联案件（轻量，返回编号+标题） */

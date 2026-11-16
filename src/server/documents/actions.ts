@@ -16,7 +16,6 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/session";
-import { audit } from "@/server/audit";
 import { assertDocumentWritable } from "@/lib/archive/guard";
 import { matterVisibilityFilter, matterAssociationFilter, assertCanHandleMatter } from "@/lib/permissions";
 import { validateUploadedFile } from "@/lib/storage/file-validator";
@@ -379,23 +378,47 @@ export async function rejectDocument(id: string, reason?: string) {
   return { ok: true };
 }
 
-export async function fileDocument(id: string) {
+export async function fileDocument(input: { documentId: string; expectedUpdatedAt: Date | string }) {
+  const value = z.object({ documentId: z.string().cuid(), expectedUpdatedAt: z.coerce.date() }).parse(input);
   const session = await requireSession("documents.write");
-  const doc = await prisma.document.findUnique({ where: { id, deletedAt: null } });
-  if (!doc) throw new ActionError("材料不存在");
-  if (doc.matterId)
-    // 材料归档属材料操作（P1-1）：合伙人全所口径，其余岗位（含管理权）须经办。
-    await assertCanHandleMatter(session.user, doc.matterId);
-  if (doc.status !== "APPROVED") throw new ActionError("只有已审批的材料才能归档");
-
-  if (doc.matterId) await assertDocumentWritable(doc.matterId, { kind: "modify" });
-  await documentMutation(session.user, doc, async roleDb => {
-    await assertDocumentDerivationAccess(session.user.id, id, { purpose: "SUBMIT", db: roleDb });
-    await roleDb.document.update({ where: { id, status: "APPROVED", updatedAt: doc.updatedAt }, data: { status: "FILED" } });
-    await approvalAudit(roleDb, session.user.id, "DOCUMENT_FILE", id, { matterId: doc.matterId, name: doc.name });
-  });
-
-  if (doc.matterId) await revalidateMatter(doc.matterId);
+  const matterId = await approvalTransaction(async tx => {
+    // All roles use the same transaction and the current account, never the
+    // non-CUSTOM shortcut in roleMutation. Lock parents before the document.
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id=${session.user.id} FOR SHARE`;
+    const user = await tx.user.findUnique({ where: { id: session.user.id }, select: { active: true, role: true } });
+    if (!user?.active) throw new ActionError("当前账号不可用");
+    const actor = await resolveRoleUser(session.user.id, user.role, tx);
+    if (!actor.enabled || !hasCustomPermission(actor, "documents.write")) throw new ActionError("当前无权办理材料入卷");
+    const ref = await tx.document.findUnique({ where: { id: value.documentId }, select: { matterId: true, intakeId: true } });
+    if (!ref) throw new ActionError("材料不存在");
+    if (ref.matterId) await tx.$queryRaw`SELECT id FROM "Matter" WHERE id=${ref.matterId} FOR UPDATE`;
+    if (ref.intakeId) await tx.$queryRaw`SELECT id FROM "Intake" WHERE id=${ref.intakeId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM "Document" WHERE id=${value.documentId} FOR UPDATE`;
+    const doc = await tx.document.findUnique({ where: { id: value.documentId, deletedAt: null } });
+    if (!doc) throw new ActionError("材料不存在或已撤回");
+    if (doc.matterId !== ref.matterId || doc.intakeId !== ref.intakeId) throw new ActionError("材料归属已变化，请重新读取");
+    if (doc.matterId) {
+      const matter = await tx.matter.findFirst({ where: { id: doc.matterId, deletedAt: null,
+        ...matterAssociationFilter(session.user.id) }, select: { status: true } });
+      if (!matter) throw new ActionError("案件不存在或无权处理");
+      if (matter.status === "ARCHIVED") throw new ActionError("案件已归档，不能办理普通材料入卷");
+    }
+    if (doc.intakeId) {
+      if (!doc.matterId) await assertIntakeDocumentChange(tx, session.user.id, doc.intakeId, doc.id);
+      else {
+        const [used] = await tx.$queryRaw<{ count: bigint }[]>`SELECT COUNT(*) AS count FROM "IntakeRevision"
+          WHERE "intakeId"=${doc.intakeId} AND snapshot->'documents' @> ${JSON.stringify([{ id: doc.id }])}::jsonb`;
+        if (Number(used.count)) throw new ActionError("已固定于收案送审轮次的材料须保留，不能改变原件状态");
+      }
+    }
+    await assertDocumentDerivationAccess(session.user.id, doc.id, { purpose: "SUBMIT", db: tx });
+    if (doc.status !== "APPROVED") throw new ActionError("只有已批准的材料才能入卷");
+    if (doc.updatedAt.getTime() !== value.expectedUpdatedAt.getTime()) throw new ActionError("材料已变化，请重新读取后办理入卷");
+    await tx.document.update({ where: { id: doc.id, deletedAt: null, status: "APPROVED", updatedAt: value.expectedUpdatedAt }, data: { status: "FILED" } });
+    await approvalAudit(tx, session.user.id, "DOCUMENT_FILE", doc.id, { matterId: doc.matterId, name: doc.name, version: doc.version });
+    return doc.matterId;
+  }, Prisma.TransactionIsolationLevel.ReadCommitted);
+  if (matterId) await revalidateMatter(matterId);
   revalidatePath("/approvals");
   return { ok: true };
 }
@@ -418,7 +441,7 @@ export async function uploadNewVersion(input: {
   const session = await requireSession("documents.write");
   // 2026-09-19 审计修复：此前新版本不经任何类型/大小校验、落库 MIME 取客户端值。
   const validated = validateUploadedFile(input.file, { purpose: "document", maxBytes: MAX_FILE_SIZE });
-  const prior = await prisma.document.findUnique({ where: { id: input.documentId } });
+  const prior = await prisma.document.findUnique({ where: { id: input.documentId }, include: { reviewReportFor: { select: { id: true } } } });
   if (!prior || prior.deletedAt) throw new ActionError("原材料不存在");
   // The final transaction checks the head. A committed request may be replayed
   // after its response was lost even though its prior version is no longer latest.
@@ -429,6 +452,7 @@ export async function uploadNewVersion(input: {
     await assertCanHandleMatter(session.user, prior.matterId);
     await assertDocumentWritable(prior.matterId, { kind: "modify" });
   }
+  if (prior.reviewReportFor || prior.tags?.includes("AI审查")) throw new ActionError("审查报告为固定记录，请重新审查原材料或独立上传修订文件");
 
   // 受控回传冲突拦截（DESKTOP-CONNECTOR-PLAN §二）：取件后他人已传新版
   // → 拒绝直传，提示基于新版另存；法律文本不自动合并。

@@ -26,6 +26,8 @@ import { FinancePanel } from "./finance-panel";
 import { ImportantItemDialog } from "./procedure-content";
 import { ProcedureWorkflowPanel } from "./procedure-workflow-panel";
 import { updateDossierLocation, type DossierView } from "@/lib/matters/dossier-location";
+import { matterHref } from "@/lib/matters/route";
+import { matterListReturnHref } from "@/lib/matters/list-location";
 import { FactsWorkspace } from "./facts-workspace";
 import { DeliveryPanel } from "@/components/deliveries/delivery-panel";
 import { DocumentDetail } from "@/components/documents/document-detail";
@@ -242,6 +244,7 @@ export function MatterDetailTabs({
 }) {
   const allowed = (key: import("@/lib/roles/catalog").PermissionKey) => hasCustomPermission({ role: currentUserRole ?? "", rolePermissions }, key);
   const searchParams = useSearchParams();
+  const matterReturnTo = matterHref(matter, searchParams.size ? `?${searchParams.toString()}` : "");
   const selectedProcId = searchParams.get("procedure");
   const requestedView = searchParams.get("view");
   const view: DossierView = requestedView === "work" || requestedView === "money" || requestedView === "seal" ? requestedView : "archive";
@@ -257,12 +260,15 @@ export function MatterDetailTabs({
   const [caseSearchOpen, setCaseSearchOpen] = useState(false);
   const [reviewDocId, setReviewDocId] = useState<string | null>(null);
   const exactDocumentId = searchParams.get("document");
+  const exactReviewIssue = searchParams.get("reviewIssue");
   const [displayDocumentId, setDisplayDocumentId] = useState(exactDocumentId);
+  const [displayReviewIssue, setDisplayReviewIssue] = useState(exactReviewIssue);
   const displayDocumentRef = useRef(exactDocumentId);
+  const displayIssueRef = useRef(exactReviewIssue);
   const documentDraftRef = useRef({ dirty: false, busy: false });
   const documentDraft = useCallback((dirty: boolean, busy: boolean) => { documentDraftRef.current = { dirty, busy }; }, []);
   useEffect(() => {
-    if (exactDocumentId === displayDocumentRef.current) return;
+    if (exactDocumentId === displayDocumentRef.current && exactReviewIssue === displayIssueRef.current) return;
     let active = true;
     const requested = exactDocumentId;
     void (async () => {
@@ -271,16 +277,20 @@ export function MatterDetailTabs({
         title: "放弃未保存的文书输入？", confirmText: "放弃并离开", cancelText: "继续编辑", initialFocus: "cancel",
       }));
       if (!active) return;
-      if (!allowed) { updateDossierLocation({ document: displayDocumentRef.current }, "replace"); return; }
+      if (!allowed) { updateDossierLocation({ document: displayDocumentRef.current, reviewIssue: displayIssueRef.current }, "replace"); return; }
       displayDocumentRef.current = requested;
+      displayIssueRef.current = exactReviewIssue;
       setDisplayDocumentId(requested);
+      setDisplayReviewIssue(exactReviewIssue);
     })();
     return () => { active = false; };
-  }, [exactDocumentId]);
+  }, [exactDocumentId, exactReviewIssue]);
   const leaveDocument = useCallback((document: string | null) => {
     documentDraftRef.current = { dirty: false, busy: false };
     displayDocumentRef.current = document;
+    displayIssueRef.current = null;
     setDisplayDocumentId(document);
+    setDisplayReviewIssue(null);
     updateDossierLocation({ document, reviewIssue: null });
   }, []);
   const [deliveryPrepareSignal, setDeliveryPrepareSignal] = useState(0);
@@ -292,14 +302,20 @@ export function MatterDetailTabs({
     window.addEventListener("beforeunload", protect); return () => window.removeEventListener("beforeunload", protect);
   }, []);
   const openDocument = useCallback((document: string) => updateDossierLocation({ document, reviewIssue: null }), []);
-  const selectReviewIssue = useCallback((reviewIssue: string | null) => updateDossierLocation({ reviewIssue }), []);
+  const selectReviewIssue = useCallback((reviewIssue: string | null) => {
+    displayIssueRef.current = reviewIssue;
+    setDisplayReviewIssue(reviewIssue);
+    updateDossierLocation({ reviewIssue });
+  }, []);
   const deliveryLocation = useCallback((delivery: string | null, deliveryEvent?: string | null) => updateDossierLocation({ workPane: "records", recordsView: "delivery", delivery, deliveryEvent: deliveryEvent ?? null, deliveryDocument: null }), []);
   async function prepareDocumentDelivery(document: string) {
     if (workDrafts.current.delivery.busy) return;
     if (workDrafts.current.delivery.dirty && !await confirmDialog({ title: "放弃未保存的交付内容？", confirmText: "放弃并重新准备", cancelText: "继续编辑", initialFocus: "cancel" })) return;
     documentDraftRef.current = { dirty: false, busy: false };
     displayDocumentRef.current = null;
+    displayIssueRef.current = null;
     setDisplayDocumentId(null);
+    setDisplayReviewIssue(null);
     updateDossierLocation({ view: "work", workPane: "records", recordsView: "delivery", document: null, reviewIssue: null, delivery: null, deliveryEvent: null, deliveryDocument: document });
     setDeliveryPrepareSignal(value => value + 1);
   }
@@ -314,11 +330,11 @@ export function MatterDetailTabs({
     }
     return map;
   }, [evidenceItems]);
-  const canAddEvidence = canAssociateThisMatter && matter.status !== "ARCHIVED";
+  const canAddEvidence = canAssociateThisMatter && allowed("matters.write") && matter.status !== "ARCHIVED";
   const docActions = useMemo(
     () => ({
       onOpenDocument: openDocument,
-      ...(capabilities.aiReview && allowed("documents.write") ? { onReview: (id: string) => setReviewDocId(id) } : {}),
+      ...(allowed("documents.read") ? { onReview: (id: string) => setReviewDocId(id) } : {}),
       evidenceByDoc,
       unlinkedEvidence: evidenceItems.filter((it) => !it.sourceDocumentId && !(it.sources ?? []).some(source => source.documentId)),
       ...(canAddEvidence ? { onAddEvidence: (docId: string | null) => setEvidenceDocId(docId) } : {})
@@ -453,7 +469,7 @@ export function MatterDetailTabs({
         <div className="dos-head-top">
           <div className="min-w-0 flex-1">
             <div className="dos-eyebrow">
-              <Link href="/matters" className="ctx-back no-underline">
+              <Link href={matterListReturnHref(searchParams.get("list")) ?? "/matters"} className="ctx-back no-underline">
                 <ChevronLeft className="h-3.5 w-3.5" />
                 案件列表
               </Link>
@@ -681,7 +697,7 @@ export function MatterDetailTabs({
           </div>
         }
         sealNode={
-          <ApprovalsPanel matterId={matter.id} matterTitle={matter.title} sealContracts={sealContracts} canRequest={canAssociateThisMatter && allowed("seals.request")} />
+          <ApprovalsPanel matterId={matter.id} matterTitle={matter.title} sealContracts={sealContracts} canRequest={canAssociateThisMatter && allowed("seals.request")} returnTo={matterReturnTo} />
         }
       />
 
@@ -717,9 +733,12 @@ export function MatterDetailTabs({
           defaultDocumentId={evidenceDocId}
         />
       ) : null}
-      {displayDocumentId && <DocumentDetail key={`${matter.id}:${displayDocumentId}`} matterId={matter.id} documentId={displayDocumentId} issueId={searchParams.get("reviewIssue")}
+      {displayDocumentId && <DocumentDetail key={`${matter.id}:${displayDocumentId}`} matterId={matter.id} documentId={displayDocumentId} issueId={displayReviewIssue}
         onClose={() => leaveDocument(null)} onDocumentChange={leaveDocument} onIssueChange={selectReviewIssue} onPrepareDelivery={id => void prepareDocumentDelivery(id)} onDraftStateChange={documentDraft} />}
-      <DocumentReviewDialog open={Boolean(reviewDocId)} documentId={reviewDocId} matterId={matter.id} onOpenChange={(o) => { if (!o) setReviewDocId(null); }} />
+      <DocumentReviewDialog open={Boolean(reviewDocId)} documentId={reviewDocId} matterId={matter.id}
+        canStartReview={Boolean(capabilities.aiReview && canAssociateThisMatter && !isArchived && allowed("documents.write"))}
+        canSaveReport={Boolean(canAssociateThisMatter && !isArchived && allowed("documents.write"))}
+        onOpenChange={(o) => { if (!o) setReviewDocId(null); }} />
 
       {progress ? (
         <ProgressDialog
@@ -775,6 +794,7 @@ export function MatterDetailTabs({
           }}
           matterId={matter.id}
           matterMeta={{
+            updatedAt: matter.updatedAt,
             intakeDate: matter.intakeDate ?? null,
             category: matter.category,
             title: matter.title,
@@ -788,7 +808,7 @@ export function MatterDetailTabs({
             teamAccessRestricted: restricted
           }}
           currentProcedure={currentProcedure}
-          parties={procedureParties}
+          parties={procedureParties.map(party => ({ ...party, updatedAt: party.id.startsWith("client:") ? null : party.updatedAt }))}
           currentOwnerId={matter.ownerId}
           currentMembers={matter.members.map((m) => ({
             userId: m.userId,

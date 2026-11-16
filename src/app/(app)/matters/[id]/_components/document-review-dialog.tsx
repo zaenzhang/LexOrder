@@ -1,394 +1,242 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  Loader2,
-  Sparkles,
-  AlertTriangle,
-  AlertCircle,
-  Lightbulb,
-  FileWarning,
-  BookmarkPlus,
-  Check,
-  History,
-  ChevronLeft
-} from "lucide-react";
+import { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Loader2, Sparkles, AlertTriangle, AlertCircle, Lightbulb, FileWarning, BookmarkPlus, ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription
-} from "@/components/ui/dialog";
+import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { FormDialogBody, FormDialogContent } from "@/components/patterns/form-dialog";
 import { Button } from "@/components/ui/button";
-import { reviewDocument, type ReviewResult } from "@/server/ai/review-document";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
+import { reviewDocument } from "@/server/ai/review-document";
 import { saveReviewToMatter } from "@/server/ai/save-review";
-import {
-  listReviewHistory,
-  getReviewRecord,
-  type ReviewHistoryEntry
-} from "@/server/ai/review-history";
-import type {
-  ReviewItem,
-  ReviewType,
-  ReviewSeverity
-} from "@/lib/ai/review-parser";
-import { cn, formatDateTime } from "@/lib/utils";
+import { listReviewHistory, getReviewRecord, type ReviewHistoryEntry, type ReviewHistoryDetail } from "@/server/ai/review-history";
+import type { ReviewItem, ReviewType, ReviewSeverity } from "@/lib/ai/review-parser";
+import { summarizeReviewCoverage, type ReviewCoverage } from "@/lib/ai/review-coverage";
+import { formatDateTime } from "@/lib/utils";
 import { actionErrorMessage } from "@/lib/action-error";
 
 type Props = {
   open: boolean;
   documentId: string | null;
   matterId: string;
+  canStartReview: boolean;
+  canSaveReport: boolean;
   onOpenChange: (open: boolean) => void;
 };
 
-const typeMeta: Record<ReviewType, { label: string; Icon: typeof AlertTriangle; color: string }> = {
-  MISSING: { label: "缺失要素", Icon: FileWarning, color: "text-[var(--amber)]" },
-  RISK: { label: "法律风险", Icon: AlertTriangle, color: "text-[var(--red)]" },
-  ISSUE: { label: "条款问题", Icon: AlertCircle, color: "text-[var(--amber)]" },
-  SUGGESTION: { label: "优化建议", Icon: Lightbulb, color: "text-[var(--blue)]" }
+const typeMeta: Record<ReviewType, { label: string; Icon: typeof AlertTriangle }> = {
+  MISSING: { label: "缺失要素", Icon: FileWarning },
+  RISK: { label: "法律风险", Icon: AlertTriangle },
+  ISSUE: { label: "条款问题", Icon: AlertCircle },
+  SUGGESTION: { label: "优化建议", Icon: Lightbulb },
 };
-
-const sevStyle: Record<ReviewSeverity, { label: string; cls: string }> = {
-  HIGH: { label: "高", cls: "bg-[var(--red-bg)] text-[var(--red)] border-[var(--red-line)]" },
-  MEDIUM: { label: "中", cls: "bg-[var(--amber-bg)] text-[var(--amber)] border-[var(--amber-line)]" },
-  LOW: { label: "低", cls: "bg-[var(--bg-hover)] text-[var(--t-muted)] border-[var(--bd-subtle)]" }
+const severityMeta: Record<ReviewSeverity, { label: string; variant: BadgeProps["variant"] }> = {
+  HIGH: { label: "高", variant: "destructive" },
+  MEDIUM: { label: "中", variant: "amber" },
+  LOW: { label: "低", variant: "secondary" },
 };
-
 const TYPE_ORDER: ReviewType[] = ["MISSING", "RISK", "ISSUE", "SUGGESTION"];
+type View = { kind: "list" } | { kind: "detail"; result: ReviewHistoryDetail };
 
-type View =
-  | { kind: "list" } // 历史 + 新审查入口
-  | { kind: "result"; result: ReviewResult; isNew: boolean }
-  | { kind: "history-detail"; entry: ReviewHistoryEntry; items: ReviewItem[]; documentName: string };
+export function DocumentReviewDialog({ open, documentId, ...props }: Props) {
+  // A reopened dialog is a new session even when it targets the same document.
+  if (!open || !documentId) return null;
+  return <ReviewSession key={`${props.matterId}:${documentId}`} {...props} documentId={documentId} />;
+}
 
-export function DocumentReviewDialog({
-  open,
-  documentId,
-  matterId,
-  onOpenChange
-}: Props) {
+function ReviewSession({ documentId, matterId, canStartReview, canSaveReport, onOpenChange }: Omit<Props, "open" | "documentId"> & { documentId: string }) {
   const [view, setView] = useState<View>({ kind: "list" });
   const [history, setHistory] = useState<ReviewHistoryEntry[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(false);
-  const [reviewing, setReviewing] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+  const [opening, setOpening] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const lifecycle = useRef({ active: true, viewRequest: 0, historyRequest: 0 });
 
-  // 打开/换 doc 时重置 + 拉历史
-  useEffect(() => {
-    if (!open || !documentId) return;
-    let cancelled = false;
-    setView({ kind: "list" });
-    setHistory([]);
-    setError(null);
-    setSaved(false);
-    setLoadingHistory(true);
-    listReviewHistory({ documentId })
-      .then((h) => {
-        if (!cancelled) setHistory(h);
-      })
-      .catch(() => {
-        // 历史查询失败不阻塞新审查
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingHistory(false);
-      });
+  useLayoutEffect(() => {
+    const session = lifecycle.current;
+    session.active = true;
     return () => {
-      cancelled = true;
+      session.active = false;
+      session.viewRequest++;
+      session.historyRequest++;
     };
-  }, [open, documentId]);
+  }, []);
 
-  async function runNewReview() {
-    if (!documentId) return;
+  const refreshHistory = useCallback(() => {
+    const request = ++lifecycle.current.historyRequest;
+    setLoadingHistory(true);
+    setHistoryError(null);
+    startTransition(async () => {
+      try {
+        const entries = await listReviewHistory({ matterId, documentId });
+        if (lifecycle.current.active && request === lifecycle.current.historyRequest) setHistory(entries);
+      } catch (err) {
+        if (lifecycle.current.active && request === lifecycle.current.historyRequest) setHistoryError(actionErrorMessage(err));
+      } finally {
+        if (lifecycle.current.active && request === lifecycle.current.historyRequest) setLoadingHistory(false);
+      }
+    });
+  }, [documentId, matterId]);
+
+  useEffect(() => { refreshHistory(); }, [refreshHistory]);
+
+  function runNewReview() {
+    if (!canStartReview || reviewing || opening || saving) return;
+    const request = ++lifecycle.current.viewRequest;
     setReviewing(true);
     setError(null);
-    try {
-      const r = await reviewDocument({ documentId });
-      setView({ kind: "result", result: r, isNew: true });
-      setSaved(false);
-      // 重新拉历史（新审查已落库）
-      listReviewHistory({ documentId }).then(setHistory).catch(() => {});
-    } catch (err) {
-      setError(err instanceof Error ? actionErrorMessage(err) : "AI 审查失败");
-    } finally {
-      setReviewing(false);
-    }
-  }
-
-  async function openHistoryDetail(entry: ReviewHistoryEntry) {
-    try {
-      const rec = await getReviewRecord({ recordId: entry.id });
-      if (!rec) {
-        toast.error("记录不存在或已删除");
-        return;
+    startTransition(async () => {
+      try {
+        const result = await reviewDocument({ matterId, documentId });
+        if (!lifecycle.current.active || request !== lifecycle.current.viewRequest) return;
+        setView({ kind: "detail", result });
+        refreshHistory();
+      } catch (err) {
+        if (lifecycle.current.active && request === lifecycle.current.viewRequest) setError(actionErrorMessage(err));
+      } finally {
+        if (lifecycle.current.active && request === lifecycle.current.viewRequest) setReviewing(false);
       }
-      setView({
-        kind: "history-detail",
-        entry,
-        items: rec.items,
-        documentName: rec.documentName
-      });
-      setSaved(false);
-    } catch (err) {
-      toast.error("加载历史详情失败", {
-        description: actionErrorMessage(err)
-      });
-    }
+    });
   }
 
-  async function handleSave() {
-    if (view.kind !== "result") return;
+  function openHistoryDetail(entry: ReviewHistoryEntry) {
+    if (reviewing || opening || saving) return;
+    const request = ++lifecycle.current.viewRequest;
+    setOpening(true);
+    setError(null);
+    startTransition(async () => {
+      try {
+        const result = await getReviewRecord({ recordId: entry.id, matterId, documentId });
+        if (lifecycle.current.active && request === lifecycle.current.viewRequest) setView({ kind: "detail", result });
+      } catch (err) {
+        if (lifecycle.current.active && request === lifecycle.current.viewRequest) setError(actionErrorMessage(err));
+      } finally {
+        if (lifecycle.current.active && request === lifecycle.current.viewRequest) setOpening(false);
+      }
+    });
+  }
+
+  function handleSave() {
+    if (view.kind !== "detail" || !canSaveReport || !view.result.reportReady || saving) return;
+    const source = view.result;
+    const request = ++lifecycle.current.viewRequest;
     setSaving(true);
-    try {
-      const res = await saveReviewToMatter({
-        matterId,
-        reviewedDocId: documentId!,
-        reviewedDocName: view.result.documentName,
-        items: view.result.items
-      });
-      setSaved(true);
-      toast.success("已保存审查结果到本案", { description: res.documentName });
-    } catch (err) {
-      toast.error("保存失败", {
-        description: actionErrorMessage(err)
-      });
-    } finally {
-      setSaving(false);
-    }
+    setError(null);
+    startTransition(async () => {
+      try {
+        const report = await saveReviewToMatter({ recordId: source.recordId, matterId: source.matterId, documentId: source.documentId });
+        if (!lifecycle.current.active || request !== lifecycle.current.viewRequest) return;
+        setView({ kind: "detail", result: { ...source, reportDocumentId: report.documentId } });
+        toast.success("报告已保存到本案", { description: report.documentName });
+        refreshHistory();
+      } catch (err) {
+        if (lifecycle.current.active && request === lifecycle.current.viewRequest) setError(actionErrorMessage(err));
+      } finally {
+        if (lifecycle.current.active && request === lifecycle.current.viewRequest) setSaving(false);
+      }
+    });
   }
 
-  // 当前要展示的 items（list view 无内容）
-  const currentItems: ReviewItem[] | null =
-    view.kind === "result" ? view.result.items : view.kind === "history-detail" ? view.items : null;
-  const currentDocName =
-    view.kind === "result"
-      ? view.result.documentName
-      : view.kind === "history-detail"
-        ? view.documentName
-        : "";
+  function close() {
+    if (saving) return;
+    lifecycle.current.active = false;
+    lifecycle.current.viewRequest++;
+    lifecycle.current.historyRequest++;
+    onOpenChange(false);
+  }
 
-  const grouped =
-    currentItems !== null
-      ? TYPE_ORDER.map((t) => ({
-          type: t,
-          items: currentItems.filter((i) => i.type === t)
-        })).filter((g) => g.items.length > 0)
-      : [];
+  const result = view.kind === "detail" ? view.result : null;
+  const grouped = result ? TYPE_ORDER.map(type => ({ type, items: result.items.filter(item => item.type === type) })).filter(group => group.items.length) : [];
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] max-w-2xl gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b border-border px-5 py-3">
-          <DialogTitle className="flex items-center gap-2 text-base">
-            {view.kind !== "list" && (
-              <button
-                type="button"
-                onClick={() => setView({ kind: "list" })}
-                className="text-muted-foreground hover:text-foreground"
-                title="返回列表"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-            )}
-            <Sparkles className="h-4 w-4 text-[var(--violet)]" />
-            AI 文书审查
-          </DialogTitle>
-          <DialogDescription className="text-xs">
-            {view.kind === "list" && "查看历史或发起新审查"}
-            {view.kind === "result" &&
-              `${view.result.documentName}${view.result.truncated ? "（已截断前 6000 字）" : ""}`}
-            {view.kind === "history-detail" &&
-              `${currentDocName} · 历史 ${formatDateTime(view.entry.reviewedAt)}`}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="max-h-[60vh] overflow-y-auto px-5 py-4">
-          {/* ====== List view ====== */}
-          {view.kind === "list" && (
-            <div className="space-y-4">
-              <Button
-                type="button"
-                onClick={runNewReview}
-                disabled={reviewing}
-                className="w-full gap-1.5"
-              >
-                {reviewing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Sparkles className="h-4 w-4" />
-                )}
-                {history.length === 0 ? "开始 AI 审查" : "重新 AI 审查"}
-              </Button>
-
-              {error && (
-                <div className="rounded border border-[var(--red-line)] bg-[var(--red-bg)] p-3 text-xs text-[var(--red)]">
-                  {error}
-                </div>
-              )}
-
-              <div>
-                <h4 className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <History className="h-3.5 w-3.5" />
-                  审查历史
-                  <span className="font-mono text-[10px]">
-                    {loadingHistory ? "…" : history.length}
+  return <Dialog open onOpenChange={nextOpen => { if (!nextOpen) close(); }}>
+    <FormDialogContent className="max-w-2xl">
+      <DialogHeader className="px-5 pt-4">
+        <DialogTitle className="flex items-center gap-2">
+          {result && <Button type="button" variant="ghost" size="icon" disabled={saving} aria-label="返回审查历史" onClick={() => { lifecycle.current.viewRequest++; setError(null); setView({ kind: "list" }); }}><ChevronLeft className="h-4 w-4" /></Button>}
+          AI 文书审查
+        </DialogTitle>
+        <DialogDescription className={result ? "break-words" : "sr-only"}>
+          {result ? `${result.documentName} · 版本 ${result.documentVersion} · ${formatDateTime(result.reviewedAt)}` : "审查历史与新审查"}
+        </DialogDescription>
+      </DialogHeader>
+      <FormDialogBody className="space-y-4 px-5 py-4">
+        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+        {!result && <>
+          <Button type="button" onClick={runNewReview} disabled={!canStartReview || reviewing || opening}>
+            {reviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {reviewing ? "正在审查" : "发起新审查"}
+          </Button>
+          {!canStartReview && <p className="text-xs text-muted-foreground">当前无法发起新审查，仍可查看获准的历史记录。</p>}
+          {reviewing && <p role="status" className="text-xs text-muted-foreground">关闭后服务端可能继续处理，可稍后在历史中核对结果。</p>}
+          <section className="space-y-2" aria-label="审查历史">
+            <h3 className="text-sm font-medium">审查历史</h3>
+            {loadingHistory ? <p role="status" className="text-sm text-muted-foreground">正在读取历史…</p> : historyError ? <div className="space-y-2">
+              <p role="alert" className="text-sm text-destructive">历史读取失败：{historyError}</p>
+              <Button type="button" size="sm" variant="outline" onClick={refreshHistory}>重试读取历史</Button>
+            </div> : !history.length ? <p className="text-sm text-muted-foreground">暂无审查记录</p> : <ul className="space-y-2">
+              {history.map(entry => <li key={entry.id}>
+                <Button type="button" variant="outline" className="h-auto w-full justify-between gap-3 whitespace-normal py-3 text-left" disabled={reviewing || opening} onClick={() => openHistoryDetail(entry)}>
+                  <span className="space-y-1">
+                    <span className="block">{formatDateTime(entry.reviewedAt)}</span>
+                    <span className="block text-xs text-muted-foreground">{entry.reviewedBy.name} · {entry.itemCount} 条 · {coverageLabel(entry.coverage)}</span>
                   </span>
-                </h4>
-                {loadingHistory ? (
-                  <p className="py-6 text-center text-xs text-muted-foreground">加载中…</p>
-                ) : history.length === 0 ? (
-                  <p className="py-6 text-center text-xs text-muted-foreground">
-                    还没有 AI 审查记录
-                  </p>
-                ) : (
-                  <ul className="space-y-1.5">
-                    {history.map((h) => (
-                      <li key={h.id}>
-                        <button
-                          type="button"
-                          onClick={() => openHistoryDetail(h)}
-                          className="flex w-full items-center justify-between gap-2 rounded-sm border border-border bg-background px-3 py-2 text-left text-xs transition-colors hover:border-input hover:bg-muted hover:text-foreground"
-                        >
-                          <div className="flex flex-col">
-                            <span className="font-mono text-foreground">
-                              {formatDateTime(h.reviewedAt)}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground">
-                              {h.reviewedBy.name} · {h.itemCount} 条
-                              {h.truncated ? " · 已截断" : ""}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            {h.severityCounts.HIGH > 0 && (
-                              <SevCount sev="HIGH" n={h.severityCounts.HIGH} />
-                            )}
-                            {h.severityCounts.MEDIUM > 0 && (
-                              <SevCount sev="MEDIUM" n={h.severityCounts.MEDIUM} />
-                            )}
-                            {h.severityCounts.LOW > 0 && (
-                              <SevCount sev="LOW" n={h.severityCounts.LOW} />
-                            )}
-                          </div>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ====== Result / history detail view ====== */}
-          {currentItems !== null &&
-            (currentItems.length === 0 ? (
-              <div className="py-10 text-center text-sm text-muted-foreground">
-                {view.kind === "result" && view.isNew
-                  ? "AI 未发现明显问题（不代表无瑕疵，请律师人工复核）"
-                  : "本次审查无条目"}
-              </div>
-            ) : (
-              <div className="space-y-5">
-                {grouped.map((g) => {
-                  const meta = typeMeta[g.type];
-                  const Icon = meta.Icon;
-                  return (
-                    <section key={g.type}>
-                      <h4
-                        className={cn(
-                          "mb-2 flex items-center gap-1.5 text-xs font-medium",
-                          meta.color
-                        )}
-                      >
-                        <Icon className="h-3.5 w-3.5" />
-                        {meta.label}
-                        <span className="font-mono text-[10px] text-muted-foreground">
-                          {g.items.length}
-                        </span>
-                      </h4>
-                      <ul className="space-y-2">
-                        {g.items.map((item, idx) => (
-                          <ReviewItemRow key={idx} item={item} />
-                        ))}
-                      </ul>
-                    </section>
-                  );
-                })}
-              </div>
-            ))}
-        </div>
-
-        <div className="flex items-center justify-between border-t border-border px-5 py-2.5">
-          <span className="text-[11px] text-muted-foreground">
-            {view.kind === "result"
-              ? `分析字符数：${view.result.textPreviewChars}`
-              : view.kind === "history-detail"
-                ? `分析字符数：${view.entry.textPreviewChars}`
-                : ""}
-          </span>
-          <div className="flex items-center gap-2">
-            {view.kind === "result" && view.result.items.length > 0 && (
-              saved ? (
-                <span className="inline-flex items-center gap-1 rounded-md border border-[var(--green-line)] bg-[var(--green-bg)] px-2 py-1 text-[11px] text-[var(--green)]">
-                  <Check className="h-3 w-3" />
-                  已存到本案
-                </span>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="gap-1"
-                >
-                  {saving ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <BookmarkPlus className="h-3 w-3" />
-                  )}
-                  存到本案
+                  <span className="flex flex-wrap justify-end gap-1">
+                    {(["HIGH", "MEDIUM", "LOW"] as const).filter(severity => entry.severityCounts[severity] > 0).map(severity => <Badge key={severity} variant={severityMeta[severity].variant}>{severityMeta[severity].label} {entry.severityCounts[severity]}</Badge>)}
+                  </span>
                 </Button>
-              )
-            )}
-            <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-              关闭
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
+              </li>)}
+            </ul>}
+            {opening && <p role="status" className="text-sm text-muted-foreground">正在读取审查记录…</p>}
+          </section>
+        </>}
+        {result && <>
+          <CoverageSummary coverage={result.coverage} />
+          {!result.items.length && <p className="text-sm text-muted-foreground">{result.coverage && !summarizeReviewCoverage(result.coverage).completedSegments ? "本次未取得有效审查回复，不能判断材料是否存在问题。" : "本次记录未列出审查条目，仍需结合原件人工复核。"}</p>}
+          {grouped.map(group => {
+            const { label, Icon } = typeMeta[group.type];
+            return <section key={group.type} className="space-y-2">
+              <h3 className="flex items-center gap-2 text-sm font-medium"><Icon className="h-4 w-4" />{label} <span className="text-xs text-muted-foreground">{group.items.length}</span></h3>
+              <ul className="space-y-2">{group.items.map((item, index) => <ReviewItemRow key={index} item={item} />)}</ul>
+            </section>;
+          })}
+          {!result.reportReady && <p className="text-xs text-muted-foreground">该记录缺少可信来源、覆盖记录或有效回复，不能生成报告。</p>}
+        </>}
+      </FormDialogBody>
+      <DialogFooter className="px-5 pb-4">
+        {result?.reportDocumentId ? <Button asChild variant="outline"><a href={`/api/documents/${encodeURIComponent(result.reportDocumentId)}/download`}>下载报告</a></Button> : result?.reportReady && canSaveReport ? <Button type="button" variant="outline" onClick={handleSave} disabled={saving}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <BookmarkPlus className="h-4 w-4" />}{saving ? "正在保存" : "保存报告到本案"}
+        </Button> : null}
+        <Button type="button" variant="ghost" disabled={saving} onClick={close}>关闭</Button>
+      </DialogFooter>
+    </FormDialogContent>
+  </Dialog>;
+}
+
+function coverageLabel(coverage: ReviewCoverage | null) {
+  if (!coverage) return "覆盖范围未知";
+  const counts = summarizeReviewCoverage(coverage);
+  return counts.status === "COMPLETE" ? "提取文本已审查" : counts.status === "PARTIAL" ? "部分审查" : "审查未完成";
+}
+
+function CoverageSummary({ coverage }: { coverage: ReviewCoverage | null }) {
+  if (!coverage) return <p className="text-sm text-muted-foreground">该历史未记录实际覆盖范围，不能将原文本长度视为已完成审查的字数。</p>;
+  const counts = summarizeReviewCoverage(coverage);
+  return <section className="space-y-2" aria-label="审查覆盖范围">
+    <div className="flex flex-wrap items-center gap-2"><Badge variant={counts.status === "COMPLETE" ? "secondary" : "amber"}>{coverageLabel(coverage)}</Badge><span className="text-xs text-muted-foreground">提取文本 {counts.totalChars} 字符 / {counts.totalSegments} 段</span></div>
+    <dl className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+      {[["已请求", counts.sentChars, counts.sentSegments], ["有效回复", counts.completedChars, counts.completedSegments], ["失败", counts.failedChars, counts.failedSegments], ["未请求", counts.notSentChars, counts.notSentSegments]].map(([label, chars, segments]) => <div key={label}><dt className="text-muted-foreground">{label}</dt><dd>{chars} 字符 / {segments} 段</dd></div>)}
+    </dl>
+    {counts.status !== "COMPLETE" && <p className="text-sm text-destructive">本次审查未完成，不能作为整份材料的审查结论。{coverage.stopReason === "MODEL_UNAVAILABLE" ? "模型当前不可用，剩余文本未请求。" : ""}</p>}
+  </section>;
 }
 
 function ReviewItemRow({ item }: { item: ReviewItem }) {
-  const sev = sevStyle[item.severity];
-  return (
-    <li className="rounded border border-border bg-background px-3 py-2">
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-medium">{item.title}</span>
-        <span
-          className={cn(
-            "shrink-0 rounded border px-1.5 py-0.5 text-[10px] leading-none",
-            sev.cls
-          )}
-        >
-          {sev.label}
-        </span>
-      </div>
-      <p className="mt-1 text-xs leading-relaxed text-foreground/75">{item.detail}</p>
-    </li>
-  );
-}
-
-function SevCount({ sev, n }: { sev: ReviewSeverity; n: number }) {
-  return (
-    <span className={cn("rounded border px-1 py-0.5 text-[10px] leading-none", sevStyle[sev].cls)}>
-      {sevStyle[sev].label}
-      <span className="ml-0.5 font-mono">{n}</span>
-    </span>
-  );
+  const severity = severityMeta[item.severity];
+  return <li className="space-y-1 rounded-md border p-3">
+    <div className="flex flex-wrap items-center gap-2"><span className="text-sm font-medium break-words">{item.title}</span><Badge variant={severity.variant}>{severity.label}</Badge></div>
+    <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">{item.detail}</p>
+  </li>;
 }

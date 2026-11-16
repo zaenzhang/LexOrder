@@ -17,7 +17,7 @@ import { CustomFieldsPanel } from "./custom-fields-panel";
 import type { MatterPayload } from "./matter-detail-tabs";
 
 type Procedure = MatterPayload["procedures"][number];
-type PartyRow = MatterPayload["parties"][number];
+type PartyRow = Omit<MatterPayload["parties"][number], "updatedAt"> & { updatedAt: Date | null };
 
 const ROLE_LABEL: Record<string, string> = {
   CLIENT_PARTY: "委托方",

@@ -53,6 +53,8 @@ export function MattersViewV4({
   tabCounts,
   readableTeams = [],
   initialFilters,
+  canCreateIntake = false,
+  canExportMatters = false,
   autoOpenIntake,
   initialClientId
 }: {
@@ -76,15 +78,17 @@ export function MattersViewV4({
     sortDir?: "asc" | "desc";
   };
   autoOpenIntake?: boolean;
+  canCreateIntake?: boolean;
+  canExportMatters?: boolean;
   initialClientId?: string;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
-  const [wizardOpen, setWizardOpen] = useState(Boolean(autoOpenIntake));
+  const [wizardOpen, setWizardOpen] = useState(canCreateIntake && Boolean(autoOpenIntake));
   const [searchInput, setSearchInput] = useState(initialFilters.search);
   const [dateFilterOpen, setDateFilterOpen] = useState(false);
   const [dateDraft, setDateDraft] = useState({ from: initialFilters.from ?? "", to: initialFilters.to ?? "" });
-  useTopbarAction({ label: "新建收案", onClick: () => setWizardOpen(true) }, []);
+  useTopbarAction(canCreateIntake ? { label: "新建收案", onClick: () => setWizardOpen(true) } : null, [canCreateIntake]);
 
   const f = initialFilters;
   const data = tab === "intake" || tab === "revision" ? intakeData : matterData;
@@ -133,14 +137,10 @@ export function MattersViewV4({
     }
   }
 
+  const appliedListQuery = new URL(buildUrl({ search: f.search, page }), "https://lexorder.invalid").searchParams;
   const exportUrl = (() => {
-    const p = new URLSearchParams();
-    if (tab !== "active") p.set("tab", tab);
-    if ((f.scope ?? "all") !== "all") p.set("scope", f.scope!);
-    if (f.teamId) p.set("teamId", f.teamId);
-    if (f.ownerId) p.set("ownerId", f.ownerId);
-    if (f.search) p.set("search", f.search);
-    if (f.category && f.category !== "ALL") p.set("category", f.category);
+    const p = new URLSearchParams(appliedListQuery);
+    p.delete("page");
     return `/api/matters/export?${p.toString()}`;
   })();
 
@@ -183,7 +183,7 @@ export function MattersViewV4({
                 归档台账
               </Link>
             ) : null}
-            {!isIntakeTab ? (
+            {!isIntakeTab && canExportMatters ? (
               <a href={exportUrl} title="仅导出本人经办或原有管理权限范围内的案件；团队查看权不含导出" className="btn btn-secondary btn-sm">
                 <Download />
                 导出
@@ -286,7 +286,7 @@ export function MattersViewV4({
         {isIntakeTab ? (
           <IntakesTable items={intakeData?.items ?? []} kind={tab === "revision" ? "revision" : "intake"} />
         ) : (
-          <MockupMattersTable items={matterData?.items ?? []} columns={columns} />
+          <MockupMattersTable items={matterData?.items ?? []} columns={columns} listQuery={appliedListQuery.toString()} />
         )}
         {total > 0 ? (
           <div className="border-t border-[var(--bd-hair)]">
@@ -295,7 +295,7 @@ export function MattersViewV4({
         ) : null}
       </div>
 
-      <IntakeWizard open={wizardOpen} onOpenChange={closeWizard} clientOptions={clientOptions} colleagues={colleagues} initialClientId={autoOpenIntake ? initialClientId : undefined} />
+      {canCreateIntake && <IntakeWizard open={wizardOpen} onOpenChange={closeWizard} clientOptions={clientOptions} colleagues={colleagues} initialClientId={autoOpenIntake ? initialClientId : undefined} />}
     </div>
   );
 }

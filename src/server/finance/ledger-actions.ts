@@ -67,14 +67,14 @@ export async function getFinanceLedger(matterId?: string) {
     };
   }, { isolationLevel: "RepeatableRead" });
 }
-async function mutate(work: (db: Prisma.TransactionClient, userId: string) => Promise<{ matterId: string }>, permission: "personal" | "finance.write" | "finance.confirm" | "finance.correct" | "finance.settle") {
+async function mutate<T extends { matterId: string }>(work: (db: Prisma.TransactionClient, userId: string) => Promise<T>, permission: "personal" | "finance.write" | "finance.confirm" | "finance.correct" | "finance.settle") {
   const session = await requireSession(permission);
   try {
     const result = await prisma.$transaction(db => work(db, session.user.id), { isolationLevel: "Serializable", timeout: 20000 });
     revalidatePath("/finance");
     revalidatePath("/finance/reconciliation");
     revalidatePath(`/matters/${result.matterId}`);
-    return { ok: true as const };
+    return { ok: true as const, ...result };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) return {ok:false as const,message:["P2034","P2002","P2025"].includes(error.code) || (error.code==="P2010" && ["40001","40P01","23505"].includes(String(error.meta?.code))) ? "账务或授权已变化，请刷新后重试" : "账务保存失败，未完成本次操作"};
     if(error instanceof z.ZodError) return {ok:false as const,message:error.issues[0]?.message ?? "请检查填写内容"};

@@ -1,108 +1,58 @@
 "use server";
 
-/**
- * v0.21: 文书 AI 审查历史查询
- */
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/session";
-import { assertCanReadMatter } from "@/lib/permissions";
-import { assertCanReviewDocument } from "@/server/ai/document-access";
-import type {
-  ReviewItem,
-  ReviewSeverity
-} from "@/lib/ai/review-parser";
+import type { ReviewItem, ReviewSeverity } from "@/lib/ai/review-parser";
+import type { ReviewCoverage } from "@/lib/ai/review-coverage";
+import { readableReviewSource, readReviewRecord, storedReviewContent, reviewSourceInputSchema, reviewRecordInputSchema, type ReviewSourceInput, type ReviewRecordInput } from "./review-record-service";
 
 export type ReviewHistoryEntry = {
   id: string;
   reviewedAt: Date;
   reviewedBy: { id: string; name: string };
   itemCount: number;
-  truncated: boolean;
-  textPreviewChars: number;
-  /** 按 severity 统计：{ HIGH: 2, MEDIUM: 3, LOW: 0 } */
+  coverage: ReviewCoverage | null;
+  reportDocumentId: string | null;
+  reportReady: boolean;
   severityCounts: Record<ReviewSeverity, number>;
 };
-
-export async function listReviewHistory(input: {
+export type ReviewHistoryDetail = {
+  recordId: string;
+  matterId: string;
   documentId: string;
-}): Promise<ReviewHistoryEntry[]> {
+  documentName: string;
+  documentVersion: number;
+  reviewedAt: Date;
+  items: ReviewItem[];
+  coverage: ReviewCoverage | null;
+  reportDocumentId: string | null;
+  reportReady: boolean;
+};
+
+export async function listReviewHistory(input: ReviewSourceInput): Promise<ReviewHistoryEntry[]> {
   const session = await requireSession("documents.read");
-
-  const doc = await prisma.document.findFirst({
-    where: { id: input.documentId, deletedAt: null },
-    select: { id: true, matterId: true, intakeId: true }
+  const data = reviewSourceInputSchema.parse(input);
+  const source = await readableReviewSource(session.user.id, data);
+  const records = await prisma.reviewRecord.findMany({
+    where: { documentId: source.id, matterId: data.matterId },
+    orderBy: [{ reviewedAt: "desc" }, { id: "desc" }],
+    select: { id: true, reviewedAt: true, itemsJson: true, coverageJson: true, sourceSha256: true, reportDocumentId: true,
+      reviewedBy: { select: { id: true, name: true } } },
   });
-  if (!doc) return [];
-  // 与发起审查同口径的归属断言（防御性：当前审查记录仅案件材料会产生）
-  await assertCanReviewDocument(session, doc);
-
-  const list = await prisma.reviewRecord.findMany({
-    where: { documentId: doc.id },
-    orderBy: { reviewedAt: "desc" },
-    select: {
-      id: true,
-      reviewedAt: true,
-      itemCount: true,
-      truncated: true,
-      textPreviewChars: true,
-      itemsJson: true,
-      reviewedBy: { select: { id: true, name: true } }
-    }
-  });
-
-  return list.map((r) => {
-    const items = (Array.isArray(r.itemsJson) ? r.itemsJson : []) as ReviewItem[];
-    const sev: Record<ReviewSeverity, number> = { HIGH: 0, MEDIUM: 0, LOW: 0 };
-    for (const it of items) {
-      if (it.severity in sev) sev[it.severity]++;
-    }
-    return {
-      id: r.id,
-      reviewedAt: r.reviewedAt,
-      reviewedBy: r.reviewedBy,
-      itemCount: r.itemCount,
-      truncated: r.truncated,
-      textPreviewChars: r.textPreviewChars,
-      severityCounts: sev
-    };
+  return records.map(record => {
+    const { items, coverage, reportReady } = storedReviewContent(record, source.sha256);
+    const severityCounts: Record<ReviewSeverity, number> = { HIGH: 0, MEDIUM: 0, LOW: 0 };
+    for (const item of items) severityCounts[item.severity]++;
+    return { id: record.id, reviewedAt: record.reviewedAt, reviewedBy: record.reviewedBy, itemCount: items.length,
+      coverage, reportDocumentId: record.reportDocumentId, reportReady, severityCounts };
   });
 }
 
-export async function getReviewRecord(input: {
-  recordId: string;
-}): Promise<{
-  id: string;
-  reviewedAt: Date;
-  reviewedBy: { id: string; name: string };
-  documentName: string;
-  textPreviewChars: number;
-  truncated: boolean;
-  items: ReviewItem[];
-} | null> {
+export async function getReviewRecord(input: ReviewRecordInput): Promise<ReviewHistoryDetail> {
   const session = await requireSession("documents.read");
-  const rec = await prisma.reviewRecord.findUnique({
-    where: { id: input.recordId },
-    select: {
-      id: true,
-      reviewedAt: true,
-      itemsJson: true,
-      textPreviewChars: true,
-      truncated: true,
-      matterId: true,
-      reviewedBy: { select: { id: true, name: true } },
-      document: { select: { name: true } }
-    }
-  });
-  if (!rec) return null;
-  // 审查记录读取走站内窄口径（P2-8 同源）：财务岗不再经旧过滤器放大到全所。
-  await assertCanReadMatter(session.user.id, session.user.role, rec.matterId, session.user.rolePermissions);
-  return {
-    id: rec.id,
-    reviewedAt: rec.reviewedAt,
-    reviewedBy: rec.reviewedBy,
-    documentName: rec.document.name,
-    textPreviewChars: rec.textPreviewChars,
-    truncated: rec.truncated,
-    items: (Array.isArray(rec.itemsJson) ? rec.itemsJson : []) as ReviewItem[]
-  };
+  const data = reviewRecordInputSchema.parse(input);
+  const { record, document, items, coverage, reportReady } = await readReviewRecord(session.user.id, data);
+  return { recordId: record.id, matterId: record.matterId, documentId: record.documentId,
+    documentName: document.name, documentVersion: document.version, reviewedAt: record.reviewedAt,
+    items, coverage, reportDocumentId: record.reportDocumentId, reportReady };
 }

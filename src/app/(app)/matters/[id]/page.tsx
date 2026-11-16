@@ -32,9 +32,10 @@ import { actionErrorMessage } from "@/lib/action-error";
 
 type PageProps = {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default async function MatterDetailPage({ params }: PageProps) {
+export default async function MatterDetailPage({ params, searchParams }: PageProps) {
   const { id: param } = await params;
 
   // 路由键是 internalCode（`LL-2026-CC-0001`），但历史书签、通知与审计日志里
@@ -48,7 +49,13 @@ export default async function MatterDetailPage({ params }: PageProps) {
   ]);
   if (!matterRaw) notFound();
 
-  if (param !== route.internalCode) redirect(matterHref(route));
+  if (param !== route.internalCode) {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(await searchParams ?? {})) {
+      for (const item of Array.isArray(value) ? value : value === undefined ? [] : [value]) query.append(key, item);
+    }
+    redirect(matterHref(route, query.size ? `?${query}` : ""));
+  }
 
   if (session?.user && !await hasMatterBusinessAccess(session.user.id, session.user.role, matterRaw.id, session.user.rolePermissions)) {
     return <TeamMatterOverview matter={matterRaw} />;

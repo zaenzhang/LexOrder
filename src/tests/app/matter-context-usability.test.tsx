@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ContextRecordView, MatterContextView } from "@/lib/matters/context";
 
 const mocks = vi.hoisted(() => ({ options: vi.fn(), history: vi.fn(), source: vi.fn(), save: vi.fn(), confirm: vi.fn(), ask: vi.fn(), refresh: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }), useSearchParams: () => new URLSearchParams() }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: mocks.ask }));
 vi.mock("@/server/matters/context-actions", () => ({
@@ -23,8 +23,8 @@ beforeEach(() => {
     occurredAt: "2026-11-16T08:00:00Z", createdAt: "2026-11-16T08:00:00Z", authorName: "合成记录人",
     confirmationStatus: "PENDING", confirmedByName: null, confirmedAt: null, canRevise: true, canConfirm: true,
   };
-  view = { canWrite: true, canReadFinance: false, canConfirm: true, hasMore: false, records: [record] };
-  mocks.options.mockResolvedValue({ choices: [], truncated: false });
+  view = { canWrite: true, canReadFinance: false, canConfirm: true, hasMore: false, nextCursor: null, records: [record] };
+  mocks.options.mockResolvedValue({ choices: [], nextCursors: { DOCUMENT: null, NOTE: null, CLIENT_ACTIVITY: null } });
   mocks.history.mockResolvedValue({ records: [{ ...record, id: "old-record", version: 1, content: "历史合成目标" }], nextBeforeVersion: null });
   mocks.source.mockResolvedValue({ type: "CLIENT_ACTIVITY", label: "客户沟通记录", content: "合成来源正文", href: null });
   mocks.ask.mockResolvedValue(false);

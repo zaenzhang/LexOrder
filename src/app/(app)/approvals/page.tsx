@@ -6,5 +6,6 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Pr
   const data = await listApprovalWorkspace(params);
   const action = typeof params.type === "string" && Object.values(ApprovalAction).includes(params.type as ApprovalAction) ? params.type as ApprovalAction : undefined;
   const initialSelection = action && typeof params.id === "string" ? { action, id: params.id } : undefined;
-  return <ApprovalInbox data={data} initialSelection={initialSelection} />;
+  const returnTo = typeof params.returnTo === "string" ? params.returnTo : params.returnTo === undefined ? undefined : "";
+  return <ApprovalInbox data={data} initialSelection={initialSelection} returnTo={returnTo} />;
 }

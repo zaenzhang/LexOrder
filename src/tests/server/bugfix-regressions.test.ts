@@ -53,7 +53,7 @@ const taskId = "ctask0000000000000000001";
 const stageId = "cstage000000000000000001";
 const user1 = "cuser00000000000000000001";
 const user2 = "cuser00000000000000000002";
-const invoiceInput = { matterId: mine, amount: 100, invoiceType: "PLAIN" as const, invoiceItem: "LAWYER_FEE" as const, buyerName: "测试客户", evidenceDocIds: ["evidence-example"] };
+const invoiceInput = { requestKey: "b6a29510-855f-45f9-8429-6c9d94dbebd3", matterId: mine, amount: 100, invoiceType: "PLAIN" as const, invoiceItem: "LAWYER_FEE" as const, buyerName: "测试客户", evidenceDocIds: ["cdocument00000000000000001"] };
 beforeEach(() => {
   vi.resetAllMocks(); session.user.role = "LAWYER";
   db.matter.findFirst.mockImplementation(async ({ where }: { where: { id: string } }) => where.id === mine ? { id: mine, status: "ACTIVE" } : null);
@@ -302,6 +302,11 @@ describe("分成比例及派生金额", () => {
 });
 
 describe("开票状态及归档门禁", () => {
+  beforeEach(() => {
+    db.user.findUnique.mockImplementation(async () => ({ id: session.user.id, active: true, role: session.user.role, managerAuthorized: false }));
+    db.invoiceRequest.findUnique.mockImplementation(async ({ where }: { where: { requestedById_requestKey?: unknown } }) =>
+      where.requestedById_requestKey ? null : { id: "invoice-example", status: "PENDING", matterId: null, updatedAt: new Date(), evidenceDocIds: [], contractScanId: null, invoiceFileId: null });
+  });
   function form(number?: string, upload = true) {
     const fd = new FormData(); fd.set("requestId", "invoice-example");
     if (number !== undefined) fd.set("invoiceNo", number);

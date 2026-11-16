@@ -150,6 +150,10 @@ async function commitStoredIngest(intentId: string, userId: string, lease?: JobL
       await tx.$queryRaw`SELECT id FROM "Document" WHERE id=${priorDocumentId} FOR UPDATE`;
       const prior = await tx.document.findUnique({ where: { id: priorDocumentId } });
       if (!prior || prior.deletedAt || !prior.isLatest || prior.matterId !== data.matterId || prior.intakeId !== data.intakeId) throw new ActionError("原材料版本已变化，请刷新后重传");
+      if (prior.tags.includes("AI审查") || await tx.reviewRecord.count({ where: { reportDocumentId: prior.id } })) {
+        throw new ActionError("审查报告为固定记录，请重新审查原材料或独立上传修订文件");
+      }
+      await assertNotIntakeSnapshot(tx, prior.intakeId, prior.id);
       if (prior.procedureId !== data.procedureId || prior.stageId !== data.stageId || prior.folderId !== data.folderId) {
         throw new ActionError("原材料归属已变化，请刷新后核对并重传");
       }
@@ -265,7 +269,7 @@ export async function assertDocumentCanBePurged(tx: Prisma.TransactionClient, do
     tx.evidenceSourceLink.count({ where: { documentId } }),
     tx.matterContextRecord.count({ where: { sourceDocumentId: documentId } }),
     tx.document.count({ where: { familyId: doc.familyId ?? doc.id } }),
-    tx.reviewRecord.count({ where: { documentId } }),
+    tx.reviewRecord.count({ where: { OR: [{ documentId }, { reportDocumentId: documentId }] } }),
     tx.invoiceRequest.count({ where: { OR: [{ contractScanId: documentId }, { invoiceFileId: documentId }, { evidenceDocIds: { has: documentId } }] } }),
     tx.sealRequest.count({ where: { OR: [{ draftDocId: documentId }, { stampedDocId: documentId }] } }),
     tx.billingAttachment.count({ where: { documentId } }),
@@ -280,7 +284,7 @@ export async function assertDocumentCanBePurged(tx: Prisma.TransactionClient, do
   ]);
   const archives = doc.matterId ? await tx.archiveRecord.findMany({ where: { matterId: doc.matterId }, select: { checklistJson: true, coverDocId: true, catalogDocId: true } }) : [];
   if (legacy || links || contexts || family > 1 || reviews || invoices || seals || billings || adjustments || templates ||
-    researchSources || researchOutputs || manualIssues || manualRevisions || deliveryItems || deliveryProofs || doc.version > 1 || doc.status !== "DRAFT" ||
+    researchSources || researchOutputs || manualIssues || manualRevisions || deliveryItems || deliveryProofs || doc.tags.includes("AI审查") || doc.version > 1 || doc.status !== "DRAFT" ||
     archives.some(a => a.coverDocId === documentId || a.catalogDocId === documentId || archiveSnapshotDocumentIds(a.checklistJson).includes(documentId))) {
     throw new ActionError("材料已进入来源、版本或审批历史，须保留原件，仅可撤回");
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Check, Paperclip } from "lucide-react";
 import { APPROVAL_STATUS_LABELS } from "@/lib/approvals/workspace";
 import type { getApprovalDetail } from "@/server/approval-permissions/inbox";
@@ -25,14 +25,17 @@ type Props = {
   pending: boolean;
   onDecision: (decision: "approve" | "reject" | "revision") => void;
   onResubmit: () => void;
+  returnControl?: ReactNode;
+  onDirtyChange?: (dirty: boolean) => void;
 };
 const dateText = (date: Date | string | null) => date ? formatDateTime(date) : "未记录";
 
 /** 墨案 07：收案审批宽幅审阅 */
-export function IntakeApprovalDialog({ detail, intakeDetail, note, onNoteChange, pending, onDecision, onResubmit }: Props) {
+export function IntakeApprovalDialog({ detail, intakeDetail, note, onNoteChange, pending, onDecision, onResubmit, returnControl, onDirtyChange }: Props) {
   const [tab, setTab] = useState("overview");
   const [checkedMaterials, setCheckedMaterials] = useState(false);
   const [checkedConvert, setCheckedConvert] = useState(false);
+  useEffect(() => { onDirtyChange?.(checkedMaterials || checkedConvert); return () => onDirtyChange?.(false); }, [checkedMaterials, checkedConvert, onDirtyChange]);
   const fields = intakeDetail.sections.flatMap(section => section.fields);
   const value = (label: string) => fields.find(field => field.label === label)?.value ?? "未填写";
   const latest = intakeDetail.checks[0];
@@ -48,7 +51,7 @@ export function IntakeApprovalDialog({ detail, intakeDetail, note, onNoteChange,
       title={detail.title}
       eyebrow="收案审批"
       status={<span className={`badge ${detail.task ? "b-amber" : detail.status === "REJECTED" ? "b-outline-red" : "b-green"}`}><span className="bdot" />{APPROVAL_STATUS_LABELS[detail.status] ?? "状态待核实"}</span>}
-      description={<><span>申请人 {detail.requester}</span><span>· 提交于 {dateText(detail.submittedAt)}</span>{detail.task ? <span>· 已等待 {waited} 天</span> : null}</>}
+      description={<><span>申请人 {detail.requester}</span><span>· 提交于 {dateText(detail.submittedAt)}</span>{detail.task ? <span>· 已等待 {waited} 天</span> : null}{returnControl}</>}
       summary={<>
         <ReviewSummaryItem k="案件类别" v={[value("案件类别"), value("首个程序 / 审级")].filter(v => v !== "未填写").join(" · ") || "未填写"} />
         <ReviewSummaryItem k="委托方" v={value("委托方") !== "未填写" ? value("委托方") : value("姓名 / 名称")} />

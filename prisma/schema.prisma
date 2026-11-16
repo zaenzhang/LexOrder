@@ -1495,12 +1495,14 @@ model Document {
 
   // v0.21: 反向 - AI 审查历史
   reviewRecords ReviewRecord[]
+  reviewReportFor ReviewRecord? @relation("ReviewReportDocument")
   smsInboundFiles    SmsInboundFile[]
 
   @@index([matterId, category])
   @@index([intakeId])
   @@index([procedureId])
   @@index([familyId])
+  @@unique([familyId, version])
   @@index([folderId])
   @@index([templateId])
   @@index([matterId, archiveChecklistItemId])
@@ -1547,6 +1549,8 @@ model InvoiceRequest {
   requestedById String
   requestedBy   User     @relation("InvoiceRequester", fields: [requestedById], references: [id])
   requestedAt   DateTime @default(now())
+  requestKey    String?
+  requestHash   String?
 
   processedById String?
   processedBy   User?     @relation("InvoiceProcessor", fields: [processedById], references: [id])
@@ -1565,6 +1569,7 @@ model InvoiceRequest {
   @@index([matterId, status])
   @@index([status, requestedAt])
   @@index([requestedById])
+  @@unique([requestedById, requestKey])
 }
 
 // ============================================================
@@ -2683,6 +2688,10 @@ model ReviewRecord {
   itemsJson        Json // ReviewItem[]
   textPreviewChars Int
   truncated        Boolean @default(false)
+  sourceSha256     String?
+  coverageJson     Json?
+  reportDocumentId String? @unique
+  reportDocument   Document? @relation("ReviewReportDocument", fields: [reportDocumentId], references: [id], onDelete: Restrict)
 
   @@index([documentId, reviewedAt])
   @@index([matterId, reviewedAt])

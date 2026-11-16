@@ -29,7 +29,6 @@ const { db, notify, auditMock, escalate } = vi.hoisted(() => {
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 vi.mock("@/server/audit", () => ({ audit: auditMock }));
 vi.mock("@/server/notifications/create", () => ({ createNotification: notify }));
-vi.mock("@/lib/matters/route", () => ({ matterHref: (m: { id: string }) => `/matters/${m.id}` }));
 vi.mock("@/server/reminders/responsibility", () => ({ responsibilityReady: async () => false, readWorkRows: async () => [] }));
 vi.mock("@/server/reminders/escalation", () => ({
   escalateOverduePreservationToTeamLeaders: escalate,

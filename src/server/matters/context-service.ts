@@ -8,10 +8,11 @@ import { resolveRoleUser } from "@/lib/roles/service";
 import { clientRelationshipFilter } from "@/server/clients/relationship-access";
 import { auditTx } from "@/server/audit";
 import { buildContextSourceChoices } from "@/lib/matters/context-source-labels";
+import { contextPageBoundary, decodeContextCursor, encodeContextCursor } from "./context-cursor";
 import {
-  contextRecordSchema, contextConfirmSchema, contextKindLabels,
+  contextRecordSchema, contextConfirmSchema, contextKindLabels, contextCursorSchema, contextSourcePageSchema,
   type ContextRecordInput, type ContextConfirmInput, type ContextRecordView, type MatterContextView,
-  type ContextSourceView, type ContextSourceContent, type ContextSourceOptions, type ContextHistoryView
+  type ContextSourceView, type ContextSourceContent, type ContextSourceOptions, type ContextSourcePageInput, type ContextHistoryView
 } from "@/lib/matters/context";
 
 export type ContextActor = RoleUser & { id: string };
@@ -104,11 +105,14 @@ async function present(tx: Prisma.TransactionClient, access: ContextAccess, row:
   };
 }
 
-export async function contextViewInTransaction(tx: Prisma.TransactionClient, access: ContextAccess): Promise<MatterContextView> {
-  const rows = await tx.matterContextRecord.findMany({ where: { ...recordWhere(access), supersededBy: { is: null } },
+export async function contextViewInTransaction(tx: Prisma.TransactionClient, access: ContextAccess, cursor?: string): Promise<MatterContextView> {
+  const point = decodeContextCursor(cursor, access.matter.id, access.user.id, "records");
+  const rows = await tx.matterContextRecord.findMany({ where: { ...recordWhere(access), supersededBy: { is: null }, ...contextPageBoundary("createdAt", point) },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 101, include: recordInclude });
+  const shown = rows.slice(0, 100), last = shown.at(-1), hasMore = rows.length > 100;
   return { canWrite: access.canWrite, canReadFinance: access.canReadFinance, canConfirm: access.canConfirm,
-    records: await Promise.all(rows.slice(0, 100).map(row => present(tx, access, row))), hasMore: rows.length > 100 };
+    records: await Promise.all(shown.map(row => present(tx, access, row))), hasMore,
+    nextCursor: hasMore && last ? encodeContextCursor(access.matter.id, access.user.id, "records", { at: last.createdAt.toISOString(), id: last.id }) : null };
 }
 
 /** Internal read projection for client history; callers obtain current contextAccess first. */
@@ -128,8 +132,9 @@ export async function readContextRecordsForHistory(
   return views.filter(row => row.readable);
 }
 
-export async function readMatterContext(db: PrismaClient, actor: ContextActor, matterId: string): Promise<MatterContextView> {
-  return db.$transaction(async tx => contextViewInTransaction(tx, await contextAccess(tx, actor, matterId)), { timeout: 20_000 });
+export async function readMatterContext(db: PrismaClient, actor: ContextActor, matterId: string, cursor?: string): Promise<MatterContextView> {
+  const position = contextCursorSchema.optional().parse(cursor);
+  return db.$transaction(async tx => contextViewInTransaction(tx, await contextAccess(tx, actor, matterId), position), { timeout: 20_000 });
 }
 
 export async function saveMatterContext(db: PrismaClient, actor: ContextActor, input: ContextRecordInput) {
@@ -224,16 +229,24 @@ export async function readContextSource(db: PrismaClient, actor: ContextActor, m
   }, { timeout: 20_000 });
 }
 
-export async function readContextSourceOptions(db: PrismaClient, actor: ContextActor, matterId: string): Promise<ContextSourceOptions> {
+export async function readContextSourceOptions(db: PrismaClient, actor: ContextActor, matterId: string, page?: ContextSourcePageInput): Promise<ContextSourceOptions> {
+  const request = contextSourcePageSchema.optional().parse(page);
   return db.$transaction(async tx => {
     const access = await contextAccess(tx, actor, matterId);
     if (!access.canWrite) throw new ActionError("无权维护事项上下文");
+    const canRead = {
+      DOCUMENT: hasCustomPermission(access.user, "documents.read"),
+      NOTE: access.canReadSchedule,
+      CLIENT_ACTIVITY: hasCustomPermission(access.user, "clients.read"),
+    };
+    if (request && !canRead[request.type]) throw new ActionError("已无权读取此类来源，请重新读取来源");
+    const point = request ? decodeContextCursor(request.cursor, matterId, access.user.id, request.type) : null;
     const [documents, notes, activities] = await Promise.all([
-      hasCustomPermission(access.user, "documents.read") ? tx.document.findMany({ where: { matterId, deletedAt: null }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 101,
-        select: { id: true, name: true, version: true, uploadedById: true, matterId: true, intakeId: true, deletedAt: true } }) : [],
-      access.canReadSchedule ? tx.note.findMany({ where: { matterId, deletedAt: null }, orderBy: [{ occurredAt: "desc" }, { id: "desc" }], take: 51,
+      canRead.DOCUMENT && (!request || request.type === "DOCUMENT") ? tx.document.findMany({ where: { matterId, deletedAt: null, ...contextPageBoundary("createdAt", point) }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 101,
+        select: { id: true, name: true, version: true, createdAt: true, uploadedById: true, matterId: true, intakeId: true, deletedAt: true } }) : [],
+      canRead.NOTE && (!request || request.type === "NOTE") ? tx.note.findMany({ where: { matterId, deletedAt: null, ...contextPageBoundary("occurredAt", point) }, orderBy: [{ occurredAt: "desc" }, { id: "desc" }], take: 51,
         select: { id: true, occurredAt: true, withWhom: true } }) : [],
-      hasCustomPermission(access.user, "clients.read") ? tx.clientActivity.findMany({ where: { client: contextClientFilter(access) },
+      canRead.CLIENT_ACTIVITY && (!request || request.type === "CLIENT_ACTIVITY") ? tx.clientActivity.findMany({ where: { client: contextClientFilter(access), ...contextPageBoundary("occurredAt", point) },
         orderBy: [{ occurredAt: "desc" }, { id: "desc" }], take: 51, select: { id: true, occurredAt: true, content: true, client: { select: { name: true } } } }) : []
     ]);
     const readable = await Promise.all(documents.slice(0, 100).map(async doc => await canReadDocument(access.user.id, doc, tx) ? doc : null));
@@ -241,7 +254,13 @@ export async function readContextSourceOptions(db: PrismaClient, actor: ContextA
       choices: buildContextSourceChoices({
         documents: readable.filter((doc): doc is NonNullable<typeof doc> => Boolean(doc)),
         notes: notes.slice(0, 50), activities: activities.slice(0, 50),
-      }), truncated: documents.length > 100 || notes.length > 50 || activities.length > 50
+      }),
+      // The document cursor advances across unreadable rows without exposing their IDs or dates.
+      nextCursors: {
+        DOCUMENT: documents.length > 100 ? encodeContextCursor(matterId, access.user.id, "DOCUMENT", { at: documents[99].createdAt.toISOString(), id: documents[99].id }) : null,
+        NOTE: notes.length > 50 ? encodeContextCursor(matterId, access.user.id, "NOTE", { at: notes[49].occurredAt.toISOString(), id: notes[49].id }) : null,
+        CLIENT_ACTIVITY: activities.length > 50 ? encodeContextCursor(matterId, access.user.id, "CLIENT_ACTIVITY", { at: activities[49].occurredAt.toISOString(), id: activities[49].id }) : null,
+      },
     };
   }, { timeout: 20_000 });
 }

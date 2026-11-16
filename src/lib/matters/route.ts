@@ -14,14 +14,12 @@
  * `internalCode` 有意设为必填属性（值可空）：漏传时 TypeScript 直接报错，
  * 逼调用方把字段从查询里接出来；否则会静默退回 cuid，地址悄悄变回随机串。
  */
-type MatterRouteKey = {
-  id: string;
-  internalCode: string | null;
-};
+type MatterRouteKey = { id: string; internalCode: string | null } | { id?: never; internalCode: string };
 
 /** 案件详情页地址。没有 internalCode 时回退到 id，保证链接始终可用。 */
 export function matterHref(matter: MatterRouteKey, suffix = ""): string {
   const key = matter.internalCode?.trim() || matter.id;
+  if (!key) throw new Error("案件编号与标识不可同时为空");
   return `/matters/${encodeURIComponent(key)}${suffix}`;
 }
 

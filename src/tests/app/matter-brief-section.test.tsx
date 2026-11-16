@@ -24,7 +24,7 @@ function record(overrides: Partial<ContextRecordView> = {}): ContextRecordView {
 function brief(id = matterId): MatterBrief {
   return {
     matterId: id, serviceScope: "合成合同审查服务", deliverables: "合成审查意见",
-    context: { canWrite: false, canReadFinance: false, canConfirm: false, records: [record()], hasMore: false },
+    context: { canWrite: false, canReadFinance: false, canConfirm: false, records: [record()], hasMore: false, nextCursor: null },
     nextActions: [{ id: "task-1", title: "合成核对材料", dueAt: when, assigneeName: "合成律师", accepted: false }],
     deadlines: [{ id: "deadline-1", title: "合成提交期限", dueAt: when, confirmationStatus: "ADJUSTED", assigneeName: null }],
     clientFollowUps: [{ id: "follow-up-1", clientId: "client-1", clientName: "合成客户", title: "合成联系客户", dueAt: when, assigneeName: "合成律师" }],

@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/session";
-import type { ContextRecordInput, ContextConfirmInput } from "@/lib/matters/context";
+import { contextCursorSchema, type ContextRecordInput, type ContextConfirmInput, type ContextSourcePageInput } from "@/lib/matters/context";
 import { revalidateMatter } from "./route";
 import {
   saveMatterContext, confirmMatterContext, readMatterContext, readContextHistory, readContextSource, readContextSourceOptions
@@ -12,9 +12,9 @@ import { readMatterBrief } from "./brief";
 
 const id = z.string().cuid("记录或事项标识无效");
 
-export async function getMatterContext(matterId: string) {
+export async function getMatterContext(matterId: string, cursor?: string) {
   const { user } = await requireSession("matters.read");
-  return readMatterContext(prisma, user, id.parse(matterId));
+  return readMatterContext(prisma, user, id.parse(matterId), contextCursorSchema.optional().parse(cursor));
 }
 export async function getMatterBrief(matterId: string) {
   const { user } = await requireSession("matters.read");
@@ -40,7 +40,7 @@ export async function getMatterContextSource(matterId: string, recordId: string)
   const { user } = await requireSession("matters.read");
   return readContextSource(prisma, user, id.parse(matterId), id.parse(recordId));
 }
-export async function getMatterContextSourceOptions(matterId: string) {
+export async function getMatterContextSourceOptions(matterId: string, page?: ContextSourcePageInput) {
   const { user } = await requireSession("matters.write");
-  return readContextSourceOptions(prisma, user, id.parse(matterId));
+  return readContextSourceOptions(prisma, user, id.parse(matterId), page);
 }

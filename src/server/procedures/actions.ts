@@ -1,5 +1,5 @@
 "use server";
-import { Prisma, type ProcedureStatus } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import {assertMatterReviewCurrent} from "@/server/conflicts/matter-review";
 import {assertProcedureCovered} from "@/server/finance/ledger-contracts";
 import { approvalTransaction } from "@/lib/approvals/service";
@@ -101,48 +101,37 @@ export async function updateProcedure(input: ProcedureUpdateInput) {
 
   const existing = await prisma.matterProcedure.findUnique({
     where: { id },
-    select: { matterId: true, type: true, jurisdiction: true, handlingAgency: true,status:true }
+    select: { matterId: true }
   });
   if (!existing) throw new ActionError("程序不存在");
-  await assertCanHandleMatter(session.user, existing.matterId);
-  await assertMatterWritable(existing.matterId);
-  assertAgencyAllowedForProcedure(rest.handlingAgency ?? existing.handlingAgency, rest.type ?? existing.type);
-
-  const normalizedRest = {
-    ...rest
-  };
-  if (rest.jurisdiction !== undefined || rest.handlingAgency !== undefined) {
-    normalizedRest.jurisdiction = normalizeJurisdictionForAgency(
-      rest.handlingAgency ?? existing.handlingAgency,
-      rest.jurisdiction ?? existing.jurisdiction
-    ) ?? "";
-  }
 
   // 状态转换门禁先于写入且整体原子（2026-09-20 A 批 P1-3）：事务内 FOR UPDATE 复读当前状态，
   // 首次进入办理时先核合同覆盖与动态冲突复核，条件更新带原状态；门禁失败零写入，
   // 重试不会因状态已落库而跳过首次启动判断。内置岗位与自定义角色走同一事务语义。
   const updated = await prisma.$transaction(async db => {
-    await checkRoleMutation(db, session.user, "schedule.write");
-    const locked = await db.$queryRaw<{ status: ProcedureStatus; engagement: string; matterId: string }[]>`
-      SELECT status::text, engagement::text, "matterId" FROM "MatterProcedure" WHERE id = ${id} FOR UPDATE`;
-    const current = locked[0];
+    await lockWritableMatters(db, session.user, "schedule.write", [existing.matterId]);
+    await db.$queryRaw`SELECT id FROM "MatterProcedure" WHERE id = ${id} FOR UPDATE`;
+    const current = await db.matterProcedure.findUnique({ where: { id }, select: {
+      matterId: true, status: true, engagement: true, type: true, jurisdiction: true, handlingAgency: true
+    } });
     if (!current) throw new ActionError("程序不存在");
     if (current.matterId !== existing.matterId) throw new ActionError("程序归属已变化，请刷新");
+    assertAgencyAllowedForProcedure(rest.handlingAgency ?? current.handlingAgency, rest.type ?? current.type);
+    const normalizedRest = { ...rest };
+    if (rest.jurisdiction !== undefined || rest.handlingAgency !== undefined) {
+      normalizedRest.jurisdiction = normalizeJurisdictionForAgency(
+        rest.handlingAgency ?? current.handlingAgency, rest.jurisdiction ?? current.jurisdiction
+      ) ?? "";
+    }
     if (rest.status === "IN_PROGRESS" && current.status !== "IN_PROGRESS" && current.engagement === "ENGAGED" && await responsibilityReady(db)) {
       await assertProcedureCovered(db, id);
       await assertMatterReviewCurrent(db, current.matterId);
     }
     const result = await db.matterProcedure.updateMany({ where: { id, status: current.status }, data: emptyToNull(normalizedRest) });
     if (result.count === 0) throw new ActionError("程序状态已变化，请刷新后重试");
+    await auditTx(db, { userId: session.user.id, action: "PROCEDURE_UPDATE", targetType: "MatterProcedure", targetId: id });
     return { matterId: current.matterId };
-  }, { isolationLevel: "Serializable", timeout: 20000 });
-
-  await audit({
-    userId: session.user.id,
-    action: "PROCEDURE_UPDATE",
-    targetType: "MatterProcedure",
-    targetId: id
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 20000 });
 
   await revalidateMatter(updated.matterId);
   return { ok: true };
@@ -642,16 +631,15 @@ export async function addProcedureMemo(input: {
     select: { matterId: true }
   });
   if (!proc) throw new ActionError("程序不存在");
-  await assertCanHandleMatter(session.user, proc.matterId);
-  await assertMatterWritable(proc.matterId);
-
-  const created = await roleMutation(session.user, "schedule.write", async roleDb => roleDb.procedureMemo.create({
-    data: {
-      procedureId: input.procedureId,
-      content,
-      createdById: session.user.id
-    }
-  }));
+  const created = await approvalTransaction(async tx => {
+    await lockWritableMatters(tx, session.user, "schedule.write", [proc.matterId]);
+    await tx.$queryRaw`SELECT id FROM "MatterProcedure" WHERE id=${input.procedureId} FOR UPDATE`;
+    if (!await tx.matterProcedure.findFirst({ where: { id: input.procedureId, matterId: proc.matterId }, select: { id: true } })) throw new ActionError("程序不存在或已变化");
+    const memo = await tx.procedureMemo.create({ data: { procedureId: input.procedureId, content, createdById: session.user.id } });
+    await auditTx(tx, { userId: session.user.id, action: "PROCEDURE_MEMO_CREATE", targetType: "ProcedureMemo", targetId: memo.id,
+      detail: { matterId: proc.matterId, procedureId: input.procedureId } });
+    return memo;
+  }, Prisma.TransactionIsolationLevel.ReadCommitted);
   await revalidateMatter(proc.matterId);
   return { ok: true, id: created.id };
 }
@@ -663,14 +651,17 @@ export async function toggleProcedureMemo(id: string) {
     include: { procedure: { select: { matterId: true } } }
   });
   if (!current) return { ok: false };
-  await assertCanHandleMatter(session.user, current.procedure.matterId);
-  await assertMatterWritable(current.procedure.matterId);
-
-  const next = !current.done;
-  await roleMutation(session.user, "schedule.write", async roleDb => roleDb.procedureMemo.update({
-    where: { id },
-    data: { done: next, doneAt: next ? new Date() : null }
-  }));
+  await approvalTransaction(async tx => {
+    await lockWritableMatters(tx, session.user, "schedule.write", [current.procedure.matterId]);
+    await tx.$queryRaw`SELECT id FROM "MatterProcedure" WHERE id=${current.procedureId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM "ProcedureMemo" WHERE id=${id} FOR UPDATE`;
+    const memo = await tx.procedureMemo.findFirst({ where: { id, procedureId: current.procedureId, procedure: { matterId: current.procedure.matterId } }, select: { done: true } });
+    if (!memo) throw new ActionError("备忘不存在或已变化");
+    const next = !memo.done;
+    await tx.procedureMemo.update({ where: { id }, data: { done: next, doneAt: next ? new Date() : null } });
+    await auditTx(tx, { userId: session.user.id, action: next ? "PROCEDURE_MEMO_COMPLETE" : "PROCEDURE_MEMO_REOPEN", targetType: "ProcedureMemo", targetId: id,
+      detail: { matterId: current.procedure.matterId, procedureId: current.procedureId } });
+  }, Prisma.TransactionIsolationLevel.ReadCommitted);
   await revalidateMatter(current.procedure.matterId);
   return { ok: true };
 }
@@ -682,10 +673,15 @@ export async function deleteProcedureMemo(id: string) {
     include: { procedure: { select: { matterId: true } } }
   });
   if (!current) return { ok: false };
-  await assertCanHandleMatter(session.user, current.procedure.matterId);
-  await assertMatterWritable(current.procedure.matterId);
-
-  await roleMutation(session.user, "schedule.write", async roleDb => roleDb.procedureMemo.delete({ where: { id } }));
+  await approvalTransaction(async tx => {
+    await lockWritableMatters(tx, session.user, "schedule.write", [current.procedure.matterId]);
+    await tx.$queryRaw`SELECT id FROM "MatterProcedure" WHERE id=${current.procedureId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM "ProcedureMemo" WHERE id=${id} FOR UPDATE`;
+    if (!await tx.procedureMemo.findFirst({ where: { id, procedureId: current.procedureId, procedure: { matterId: current.procedure.matterId } }, select: { id: true } })) throw new ActionError("备忘不存在或已变化");
+    await tx.procedureMemo.delete({ where: { id } });
+    await auditTx(tx, { userId: session.user.id, action: "PROCEDURE_MEMO_DELETE", targetType: "ProcedureMemo", targetId: id,
+      detail: { matterId: current.procedure.matterId, procedureId: current.procedureId } });
+  }, Prisma.TransactionIsolationLevel.ReadCommitted);
   await revalidateMatter(current.procedure.matterId);
   return { ok: true };
 }

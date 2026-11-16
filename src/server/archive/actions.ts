@@ -25,7 +25,7 @@ import {
   type ArchiveReviewSnapshot
 } from "@/lib/archive/snapshot";
 import { nextArchiveNo } from "@/lib/archive/archive-no";
-import { assertMatterWritable } from "@/lib/archive/guard";
+import { assertMatterWritable, isArchiveFolderName } from "@/lib/archive/guard";
 import { assertCanLeadMatter, matterReadVisibilityFilter } from "@/lib/permissions";
 import { renderArchiveCover, renderArchiveCatalog } from "./render";
 import { archiveApproveSchema, archiveSubmitSchema, type ArchiveApproveInput, type ArchiveSubmitInput, CLOSED_REASON_CN } from "./schemas";
@@ -346,7 +346,7 @@ export async function approveArchiveRecord(input: ArchiveApproveInput) {
     let supplementOfId:string|null=null;
     if(await closureReady(tx)){
       const [saved]=await tx.$queryRaw<{workflowSnapshot:{fingerprint:string}|null;supplementOfId:string|null}[]>`SELECT "workflowSnapshot","supplementOfId" FROM "ArchiveRecord" WHERE id=${record.id}`;
-      if(!saved?.workflowSnapshot)throw new ActionError('缺少归档核对快照，请退回重新送审');
+      if(!saved?.workflowSnapshot || typeof saved.workflowSnapshot.fingerprint !== 'string' || !saved.workflowSnapshot.fingerprint)throw new ActionError('缺少归档核对快照，请退回重新送审');
       await assertClosureReady(tx,record.matterId,saved.workflowSnapshot.fingerprint,{supplement:Boolean(saved.supplementOfId)});supplementOfId=saved.supplementOfId;
     }
     await approvalAudit(tx, session.user.id, "ARCHIVE_APPROVE", data.archiveId, {
@@ -527,7 +527,7 @@ export async function getArchivePrepData(matterId: string) {
     select: { content: true }
   });
 
-  const [availableDocuments, policy] = await Promise.all([
+  const [availableDocuments, policy, folders] = await Promise.all([
     prisma.document.findMany({
       where: {
         matterId,
@@ -546,7 +546,8 @@ export async function getArchivePrepData(matterId: string) {
       },
       orderBy: [{ folder: { orderIndex: "asc" } }, { createdAt: "asc" }]
     }),
-    getArchivePolicy()
+    getArchivePolicy(),
+    prisma.documentFolder.findMany({ where: { matterId }, select: { id: true, name: true }, orderBy: { orderIndex: "asc" } })
   ]);
 
   // 兼容已有一对一关联，作为新材料选择器的预选值；正式送审仍以本次快照为准。
@@ -563,6 +564,7 @@ export async function getArchivePrepData(matterId: string) {
     matter,
     checklist,
     policy,
+    archiveFolder: folders.find(folder => isArchiveFolderName(folder.name)) ?? null,
     existingSummary: lastCloseEvent?.content ?? null,
     docsByItem,
     availableDocuments: availableDocuments.map((doc) => ({

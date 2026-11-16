@@ -18,7 +18,8 @@ import type {
   PartyType,
   BarFilingType,
   ConflictConclusion,
-  DeadlineCategory
+  DeadlineCategory,
+  DocumentCategory
 } from "@prisma/client";
 
 export const conflictConclusionLabel: Record<ConflictConclusion, string> = {
@@ -353,3 +354,7 @@ export function procedureToStandingOptions(
       return Object.keys(litigationStandingLabel) as LitigationStanding[];
   }
 }
+
+export const documentCategoryLabel: Record<DocumentCategory, string> = {
+  EVIDENCE: "证据", PLEADING: "诉辩文件", PROCEDURE: "程序文件", JUDGMENT: "裁决", CONTRACT: "合同", OTHER: "其他"
+};

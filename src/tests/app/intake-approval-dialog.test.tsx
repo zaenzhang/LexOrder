@@ -14,7 +14,7 @@ const intakeDetail: NonNullable<Detail["intakeDetail"]> = {
 const base = {
   title: "测试申请", requester: "测试申请人", submittedAt: new Date("2026-09-06T10:00:00Z"), status: "PENDING", task: "approve",
   intakeDetail, fields: [], history: [], attachments: [{ id: "readable", name: "可读材料.pdf", readable: true }, { id: "private", name: "不可读材料.pdf", readable: false }],
-  canResubmit: false, canCancel: false, sealType: null, archiveReview: null,
+  canResubmit: false, canCancel: false, sealType: null, archiveReview: null, returnTarget: null,
 } satisfies Detail;
 function Harness({ detail = base, onDecision = vi.fn() }: { detail?: Detail; onDecision?: (decision: "approve" | "reject" | "revision") => void }) {
   const [note, setNote] = useState("");

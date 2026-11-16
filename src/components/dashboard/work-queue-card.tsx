@@ -74,7 +74,7 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
             <div className="empty mo-empty-compact"><div className="mo-empty-title">暂无指派给你的未完成任务</div></div>
           ) : (
             queue.tasks.map((t) => (
-              <Link key={t.id} href={matterHref({ id: t.matterId, internalCode: t.matterCode })} className="todo-item">
+              <Link key={t.id} href={matterHref({ internalCode: t.matterCode })} className="todo-item">
                 <span className={cn("type-ic", t.overdue ? "t-red" : "t-teal")} aria-hidden>
                   <ListChecks strokeWidth={2} />
                 </span>

@@ -17,20 +17,21 @@ vi.mock("@/server/conflicts/matter-review", () => ({ assertMatterReviewCurrent: 
 vi.mock("@/server/finance/ledger-contracts", () => ({ assertProcedureCovered: gate.covered }));
 vi.mock("@/server/reminders/responsibility", () => ({ responsibilityReady: gate.ready, readWorkRows: vi.fn(async () => []), changeWorkTx: vi.fn() }));
 vi.mock("@/server/matters/route", () => ({ revalidateMatter: vi.fn() }));
-vi.mock("@/server/audit", () => ({ audit: vi.fn() }));
+vi.mock("@/server/matters/write-access", () => ({ lockWritableMatters: vi.fn(async () => []) }));
+vi.mock("@/server/audit", () => ({ audit: vi.fn(), auditTx: vi.fn() }));
 vi.mock("@/server/timeline/record", () => ({ recordTimelineEvent: vi.fn() }));
 vi.mock("@/lib/permissions", () => ({ assertCanModifyMatter: vi.fn(), assertCanAssociateMatter: vi.fn(), assertCanLeadMatter: vi.fn(), assertCanHandleMatter: vi.fn() }));
 vi.mock("@/lib/archive/guard", () => ({ assertMatterWritable: vi.fn() }));
 import { updateProcedure } from "@/server/procedures/actions";
 
 const CUID = "ckx1a2b3c4d5e6f7g8h9j0k1";
-const existingRow = { matterId: "m1", type: "FIRST_INSTANCE", status: "NOT_STARTED" };
+const existingRow = { matterId: "m1", type: "FIRST_INSTANCE", status: "PENDING", engagement: "ENGAGED", jurisdiction: null, handlingAgency: null };
 
 beforeEach(() => {
   vi.resetAllMocks();
   db.matterProcedure.findUnique.mockResolvedValue(existingRow);
   db.$transaction.mockImplementation(async (fn: (tx: typeof db) => Promise<unknown>) => fn(db));
-  db.$queryRaw.mockResolvedValue([{ status: "NOT_STARTED", engagement: "ENGAGED", matterId: "m1" }]);
+  db.$queryRaw.mockResolvedValue([]);
   db.matterProcedure.updateMany.mockResolvedValue({ count: 1 });
   gate.ready.mockResolvedValue(true);
   gate.covered.mockResolvedValue(undefined);
@@ -54,21 +55,20 @@ describe("程序启动门禁事务（P1-3）", () => {
     // 场景：第一次请求在旧实现里先把状态写成 IN_PROGRESS 后门禁才失败；重试时
     // 事务外快照（NOT_STARTED）会与行内真实值（IN_PROGRESS）不一致——
     // 新实现以 FOR UPDATE 行内值为准，门禁条件不成立、直接条件更新。
-    db.$queryRaw.mockResolvedValue([{ status: "IN_PROGRESS", engagement: "ENGAGED", matterId: "m1" }]);
+    db.matterProcedure.findUnique.mockResolvedValueOnce(existingRow).mockResolvedValueOnce({ ...existingRow, status: "IN_PROGRESS" });
     await expect(updateProcedure({ id: CUID, status: "IN_PROGRESS" })).resolves.toEqual({ ok: true });
     expect(gate.review).not.toHaveBeenCalled();
     expect(db.matterProcedure.updateMany).toHaveBeenCalledOnce();
   });
 
   it("非首次启动转换不做启动门禁，但条件更新带原状态", async () => {
-    db.$queryRaw.mockResolvedValue([{ status: "NOT_STARTED", engagement: "ENGAGED", matterId: "m1" }]);
     await expect(updateProcedure({ id: CUID, caseNumber: "（2026）沪01民初1号" })).resolves.toEqual({ ok: true });
     expect(gate.review).not.toHaveBeenCalled();
-    expect(db.matterProcedure.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: CUID, status: "NOT_STARTED" } }));
+    expect(db.matterProcedure.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: CUID, status: "PENDING" } }));
   });
 
   it("行内状态在事务内被并发改变时拒绝而非静默跳过", async () => {
-    db.$queryRaw.mockResolvedValue([{ status: "IN_PROGRESS", engagement: "ENGAGED", matterId: "m1" }]);
+    db.matterProcedure.findUnique.mockResolvedValueOnce(existingRow).mockResolvedValueOnce({ ...existingRow, status: "IN_PROGRESS" });
     db.matterProcedure.updateMany.mockResolvedValue({ count: 0 });
     await expect(updateProcedure({ id: CUID, status: "CONCLUDED" })).rejects.toThrow("状态已变化");
   });

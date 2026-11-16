@@ -35,7 +35,7 @@ export type ScheduleItem = {
   matter: string;
   clientName: string | null;
   matterId: string | null;
-  matterCode: string | null; // internalCode，详情页路由键
+  matterCode: string; // internalCode，详情页路由键
   procedure?: string;
   daysUntil: number; // 距今天数（0=今天）
 };

@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { DocumentReviewPanel } from "@/components/document-reviews/document-review-panel";
 import { getDocumentDetail } from "@/server/documents/detail-actions";
-import { fileDocument, submitDocumentForReview, uploadNewVersion } from "@/server/documents/actions";
+import { deleteDocument, fileDocument, submitDocumentForReview, uploadNewVersion } from "@/server/documents/actions";
 import { actionErrorMessage } from "@/lib/action-error";
 import { shDayKey, shTime } from "@/lib/ui/sh-time";
 import { canPreview, officePreviewKind } from "@/lib/storage/mime-ext";
@@ -33,7 +33,7 @@ export function DocumentDetail({ matterId, documentId, issueId, onClose, onDocum
   const reviewState = useRef({ dirty: false, busy: false });
   const ownState = useRef({ dirty: false, busy: false });
   const draftCallback = useRef(onDraftStateChange);
-  draftCallback.current = onDraftStateChange;
+  useEffect(() => { draftCallback.current = onDraftStateChange; }, [onDraftStateChange]);
   const requestKey = useRef(crypto.randomUUID()), sequence = useRef(0);
   const reload = useCallback(async () => {
     const token = ++sequence.current; setError(""); setDetail(null);
@@ -71,6 +71,16 @@ export function DocumentDetail({ matterId, documentId, issueId, onClose, onDocum
       catch (cause) { setError(actionErrorMessage(cause)); }
     });
   }
+  async function withdraw() {
+    if (!await canLeave()) return;
+    if (!await confirmDialog({ title: `撤回第 ${detail?.version} 版材料？`,
+      description: "撤回后此版本不再可用，已有来源和审批历史继续保留。", confirmText: "撤回此版本",
+      cancelText: "保留材料", initialFocus: "cancel", danger: true })) return;
+    startTransition(async () => {
+      try { await deleteDocument(documentId); toast.success("材料已撤回"); onClose(); router.refresh(); }
+      catch (cause) { setError(actionErrorMessage(cause)); }
+    });
+  }
   const office = officePreviewKind(detail?.mimeType, detail?.name);
   const previewable = canPreview(detail?.mimeType, detail?.name);
   const preview = office ? `/api/documents/${documentId}/preview` : `/api/documents/${documentId}/download?inline=1`;
@@ -85,9 +95,13 @@ export function DocumentDetail({ matterId, documentId, issueId, onClose, onDocum
           <Button asChild variant="outline" size="sm"><a href={`/api/documents/${documentId}/download`} target="_blank" rel="noreferrer">下载此版本</a></Button>
           <Button asChild variant="outline" size="sm"><a href={`/approvals?type=DOCUMENT_APPROVE&id=${documentId}`} target="_blank" rel="noopener noreferrer">审批记录</a></Button>
           {detail.canSubmit && <Button size="sm" disabled={pending} onClick={() => mutate(() => submitDocumentForReview(documentId), "已提交文书审核")}>送审</Button>}
-          {detail.canFile && <Button size="sm" variant="outline" disabled={pending} onClick={() => mutate(() => fileDocument(documentId), "此版本已入卷")}>入卷</Button>}
+          {detail.canFile && <Button size="sm" variant="outline" disabled={pending} onClick={() => mutate(() => fileDocument({ documentId, expectedUpdatedAt: detail.updatedAt }), "此版本已入卷")}>入卷</Button>}
           {detail.canPrepareDelivery && <Button size="sm" variant="outline" disabled={pending} onClick={() => void canLeave().then(allowed => { if (allowed) onPrepareDelivery(documentId); })}>准备交付</Button>}
+          {detail.reviewSourceId && <Button size="sm" variant="outline" disabled={pending} onClick={() => void canLeave().then(allowed => { if (allowed) onDocumentChange(detail.reviewSourceId!); })}>查看审查原件</Button>}
+          {detail.canWithdraw && <Button size="sm" variant="outline" disabled={pending} onClick={() => void withdraw()}>撤回此版本</Button>}
         </div>
+        {detail.folderName && <p className="text-sm text-muted-foreground">卷宗：{detail.folderName}</p>}
+        {detail.withdrawBlockedReason && <p className="text-sm text-muted-foreground">{detail.withdrawBlockedReason}</p>}
         <Tabs value={activeTab} onValueChange={value => { setActiveTab(value); if (value === "review") setVisitedReview(true); }}>
           <TabsList aria-label="文书详情分区"><TabsTrigger value="document">正文</TabsTrigger><TabsTrigger value="review">人工复核</TabsTrigger><TabsTrigger value="versions">版本</TabsTrigger></TabsList>
           <TabsContent value="document" className="space-y-3">{previewable ? <><iframe title="具体文书版本正文" src={preview} className="h-[60vh] w-full rounded-lg border bg-white" /><Button asChild variant="link"><a href={preview} target="_blank" rel="noreferrer">另页查看此版本</a></Button></> : <p className="py-6 text-sm text-muted-foreground">此格式请下载原件查看。</p>}</TabsContent>

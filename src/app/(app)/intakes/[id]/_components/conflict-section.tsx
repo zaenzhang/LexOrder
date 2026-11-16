@@ -419,7 +419,7 @@ function HitCard({ hit }: { hit: Hit }) {
       {m ? (
         m.canViewMatter ? (
           <Link
-            href={matterHref({ id: m.id, internalCode: m.code })}
+            href={matterHref({ internalCode: m.code })}
             className="group mt-2 block rounded border border-border bg-background p-2.5 hover:border-primary/40"
           >
             {matterContent}

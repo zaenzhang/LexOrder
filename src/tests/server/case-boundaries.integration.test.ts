@@ -26,9 +26,9 @@ import { requireSession } from "@/lib/auth/session";
 import { createIntake } from "@/server/intakes/actions";
 import { saveIntakeRevision } from "@/server/intakes/revision-actions";
 import { checkClientDuplicate } from "@/server/clients/dedup";
-import { addMatterLink, removeMatterLink, searchMattersForLink } from "@/server/matters/actions";
+import { addMatterLink, removeMatterLink, searchMattersForLink, updateMatterBasicInfo, updateMatterTeam, updateProcedureInfo } from "@/server/matters/actions";
 import { reopenMatter } from "@/server/matters/lifecycle";
-import { addProcedure } from "@/server/procedures/actions";
+import { addProcedure, updateProcedure } from "@/server/procedures/actions";
 
 const users: string[] = [], matters: string[] = [], clients: string[] = [], roles: string[] = [];
 function session(user: Pick<User, "id" | "role">, rolePermissions?: RoleGrant[]) {
@@ -211,4 +211,39 @@ describe.skipIf(!databaseUrl)("收案与案件事务边界：隔离 PG", () => {
     expect((await db.matter.findUniqueOrThrow({ where: { id: matter.id } })).status).toBe("ARCHIVED");
     expect(await db.timelineEvent.count({ where: { matterId: matter.id, eventType: "MATTER_REOPENED" } })).toBe(0);
   });
+
+  it("归档先提交后，等待中的案件、团队及程序编辑均不得覆盖归档", async () => {
+    const user = await makeUser(), matter = await makeMatter(user.id);
+    const proc = await db.matterProcedure.create({ data: { matterId: matter.id, type: "FIRST_INSTANCE", order: 1 } });
+    session(user);
+    let release!: () => void, acquired!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const locked = new Promise<void>(resolve => { acquired = resolve; });
+    const archiving = db.$transaction(async tx => {
+      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(72606101)`;
+      await tx.matter.update({ where: { id: matter.id }, data: { status: "ARCHIVED", archivedAt: new Date() } });
+      acquired(); await gate;
+    }, { timeout: 20000 });
+    await locked;
+    const attempts = [
+      updateMatterBasicInfo({ id: matter.id, title: "不应保存", expectedUpdatedAt: matter.updatedAt }),
+      updateMatterTeam({ matterId: matter.id, expectedOwnerId: user.id, expectedMembers: [], coLeadIds: [], assistantIds: [] }),
+      updateProcedureInfo({ procedureId: proc.id, expectedUpdatedAt: proc.updatedAt, caseNumber: "不应保存" }),
+      updateProcedure({ id: proc.id, caseNumber: "不应保存" }),
+    ].map(promise => promise.then(() => null, error => error));
+    try {
+      let waiting = 0;
+      for (let i = 0; i < 200 && waiting < attempts.length; i++) {
+        const [row] = await db.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM pg_locks WHERE locktype='advisory' AND objid=72606101 AND NOT granted`;
+        waiting = row.count;
+        if (waiting < attempts.length) await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(waiting).toBeGreaterThanOrEqual(attempts.length);
+    } finally { release(); }
+    await archiving;
+    for (const outcome of await Promise.all(attempts)) expect(outcome?.message).toContain("已归档");
+    expect(await db.matter.findUniqueOrThrow({ where: { id: matter.id } })).toMatchObject({ title: matter.title, status: "ARCHIVED" });
+    expect(await db.matterProcedure.findUniqueOrThrow({ where: { id: proc.id } })).toMatchObject({ caseNumber: null });
+    expect(await db.auditLog.count({ where: { userId: user.id, action: { in: ["MATTER_BASIC_UPDATE", "MATTER_TEAM_UPDATE", "PROCEDURE_INFO_UPDATE", "PROCEDURE_UPDATE"] } } })).toBe(0);
+  }, 30000);
 });

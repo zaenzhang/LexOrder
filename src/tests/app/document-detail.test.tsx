@@ -4,9 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mock = vi.hoisted(() => ({
   detail: vi.fn(), approval: vi.fn(), upload: vi.fn(), submit: vi.fn(), file: vi.fn(), approve: vi.fn(), reject: vi.fn(),
-  confirm: vi.fn(), refresh: vi.fn(), push: vi.fn(), toast: vi.fn(),
+  confirm: vi.fn(), refresh: vi.fn(), push: vi.fn(), replace: vi.fn(), toast: vi.fn(),
 }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mock.refresh, push: mock.push }), useSearchParams: () => new URLSearchParams(window.location.search) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mock.refresh, push: mock.push, replace: mock.replace }), useSearchParams: () => new URLSearchParams(window.location.search) }));
 vi.mock("sonner", () => ({ toast: { success: mock.toast, error: mock.toast } }));
 vi.mock("@/server/documents/detail-actions", () => ({ getDocumentDetail: mock.detail }));
 vi.mock("@/server/documents/actions", () => ({ uploadNewVersion: mock.upload, submitDocumentForReview: mock.submit, fileDocument: mock.file, approveDocument: mock.approve, rejectDocument: mock.reject }));
@@ -46,12 +46,12 @@ const matterId = "cm00000000000000000000001", oldId = "cm00000000000000000000002
 const close = vi.fn(), change = vi.fn(), issue = vi.fn(), prepare = vi.fn();
 function detail(changes: Partial<Awaited<ReturnType<typeof getDocumentDetail>>> = {}): Awaited<ReturnType<typeof getDocumentDetail>> {
   return { id: oldId, name: "合成旧版意见.docx", version: 1, isLatest: false, status: "APPROVED", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    createdAt: "2026-11-16T08:00:00.000Z", uploadedByName: "合成作者", hasVersionFamily: true, canUploadVersion: false, canSubmit: false, canFile: true, canPrepareDelivery: true,
+    createdAt: "2026-11-16T08:00:00.000Z", updatedAt: new Date("2026-11-16T08:00:00.000Z"), uploadedByName: "合成作者", folderName: null, reviewSourceId: null, canWithdraw: false, withdrawBlockedReason: null, hasVersionFamily: true, canUploadVersion: false, canSubmit: false, canFile: true, canPrepareDelivery: true,
     versions: [{ id: oldId, version: 1, name: "合成旧版意见.docx", isLatest: false, status: "APPROVED" }, { id: latestId, version: 2, name: "合成新稿.docx", isLatest: true, status: "DRAFT" }], ...changes };
 }
 function approval(changes: Partial<Awaited<ReturnType<typeof getApprovalDetail>>> = {}): Awaited<ReturnType<typeof getApprovalDetail>> {
   return { title: "合成旧版审批", requester: "合成作者", submittedAt: new Date("2026-11-16T08:00:00Z"), status: "DRAFT", task: null,
-    canResubmit: true, canCancel: false, fields: [], attachments: [], history: [], intakeDetail: null, archiveReview: null, sealType: null, ...changes };
+    canResubmit: true, canCancel: false, fields: [], attachments: [], history: [], intakeDetail: null, archiveReview: null, sealType: null, returnTarget: null, ...changes };
 }
 const approvalData: Awaited<ReturnType<typeof listApprovalWorkspace>> = {
   rows: [], counts: { pending: 0, processed: 0, mine: 1, all: 0 }, canViewAll: false, total: 0, page: 1, pageSize: 20,
@@ -168,8 +168,7 @@ describe("审批内具体文书复核入口", () => {
     await waitFor(() => expect(screen.queryByText("合成旧版审批")).not.toBeInTheDocument());
     expect(screen.queryByRole("button", { name: "重新提交审批" })).not.toBeInTheDocument();
     mock.approval.mockResolvedValueOnce(approval({ title: "合成重试后可读审批" }));
-    window.history.replaceState(null, "", `/approvals?type=DOCUMENT_APPROVE&id=${latestId}`);
-    await act(async () => { rendered.rerender(<ApprovalInbox data={approvalData} initialSelection={{ id: latestId, action: "DOCUMENT_APPROVE" }} />); });
+    fireEvent.click(await screen.findByRole("button", { name: "重新读取" }));
     expect(await screen.findByText("合成重试后可读审批")).toBeInTheDocument();
   });
 

@@ -44,6 +44,7 @@ const DOCID = "cdocum0000000000000000000001";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  canRead.mockResolvedValue(true);
   db.document.findMany.mockResolvedValue([]);
   db.document.count.mockResolvedValue(0);
   db.matter.count.mockResolvedValue(0);
@@ -125,6 +126,26 @@ describe("② AI 审查：全文外发资格按材料归属逐件判断（P1-2�
     await expect(assertCanReviewDocument(session, matterDoc)).rejects.toThrow("无权审查该材料");
     db.matter.count.mockResolvedValue(1);
     await expect(assertCanReviewDocument(session, matterDoc)).resolves.toBeUndefined();
+  });
+
+  it("即使是合伙人，当前原材料读取资格失败也不能外发", async () => {
+    db.user.findUnique.mockResolvedValue({ role: "PRINCIPAL_LAWYER", active: true });
+    canRead.mockResolvedValue(false);
+    await expect(assertCanReviewDocument(session, doc)).rejects.toThrow("无权审查该材料");
+  });
+
+  it("当前自定义角色已撤销 documents.write 时，旧会话不能继续外发", async () => {
+    db.user.findUnique.mockResolvedValue({ active: true, role: "CUSTOM", roleDefinition: {
+      active: true, name: "合成只读角色", permissions: [{ permissionKey: "documents.read", scope: "OWN" }],
+    } });
+    await expect(assertCanReviewDocument(session, doc)).rejects.toThrow("无权审查该材料");
+    expect(canRead).not.toHaveBeenCalled();
+  });
+
+  it("具体版本 hash 改变在外发前拒绝", async () => {
+    db.document.findUnique.mockResolvedValue({ ...doc, uploadedById: ME, deletedAt: null, sha256: "changed" });
+    await expect(assertCanReviewDocument(session, { ...doc, sha256: "reviewed" })).rejects.toThrow("原材料版本已变化");
+    expect(canRead).not.toHaveBeenCalled();
   });
 
   it("无归属材料仅上传者本人可审查", async () => {

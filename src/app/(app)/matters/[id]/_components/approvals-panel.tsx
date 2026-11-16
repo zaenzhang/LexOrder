@@ -29,12 +29,14 @@ export function ApprovalsPanel({
   matterId,
   matterTitle,
   sealContracts,
-  canRequest
+  canRequest,
+  returnTo
 }: {
   matterId: string;
   matterTitle: string;
   sealContracts: SealContractItem[];
   canRequest: boolean;
+  returnTo: string;
 }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -129,7 +131,7 @@ export function ApprovalsPanel({
               <span className="min-w-0 flex-1 truncate">{s.documentTitle}</span>
               <SealStatusBadge status={s.status} />
               <Link
-                href={`/approvals/seals?id=${s.id}`}
+                href={`/approvals?${new URLSearchParams({ type: "SEAL_APPROVE", id: s.id, returnTo })}`}
                 className="text-[11px] text-primary hover:text-primary/80"
               >
                 详情
