@@ -99,7 +99,7 @@ export function YuandianSettingsForm({
 
       <p className="mb-4 text-[12px] text-muted-foreground">
         元典开放平台（chineselaw.com）法律案例检索 API，配置后启用：
-        <span className="text-foreground/85"> 案件详情 → 类案页签 类案检索</span>。
+        <span className="text-foreground/85"> 案件详情 → 办案与材料 → 类案检索</span>。
         与上方 MCP 配置相互独立；实际计费和数据权益以平台账号为准。
       </p>
       {initial.configurationError && <p role="alert" className="mb-3 text-sm text-destructive">{initial.configurationError}</p>}

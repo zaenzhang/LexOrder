@@ -11,7 +11,7 @@ import { ActionError } from "@/lib/action-error";
 
 export class YuandianNotConfiguredError extends Error {
   constructor() {
-    super("元典 API 未配置，请先到 管理后台 → AI 与元典 填写元典 API key");
+    super("元典 API 未配置，请先到 管理后台 → AI 与外部服务 填写元典 API key");
     this.name = "YuandianNotConfiguredError";
   }
 }

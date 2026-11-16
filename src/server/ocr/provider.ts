@@ -71,7 +71,7 @@ export async function readPublicOcrSettings() {
 
 export class OcrNotConfiguredError extends Error {
   constructor(reason: string) {
-    super(`OCR 不可用：${reason}。可在管理后台「AI 与元典」配置视觉模型，或在系统设置配置 OCR 服务`);
+    super(`OCR 不可用：${reason}。可在管理后台「AI 与外部服务」配置视觉模型，或在系统设置配置 OCR 服务`);
     this.name = "OcrNotConfiguredError";
   }
 }

@@ -13,7 +13,7 @@ const { db, ai, ocr } = vi.hoisted(() => ({
   ocr: { recognizeText: vi.fn() }
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
-vi.mock("@/lib/ai/client", () => ({ aiChat: ai.aiChat, AiNotConfiguredError: class extends Error { constructor() { super("AI 未配置，请先到 管理后台 → AI 与元典 填写 API key"); this.name = "AiNotConfiguredError"; } } }));
+vi.mock("@/lib/ai/client", () => ({ aiChat: ai.aiChat, AiNotConfiguredError: class extends Error { constructor() { super("AI 未配置，请先到 管理后台 → AI 与外部服务 填写 API key"); this.name = "AiNotConfiguredError"; } } }));
 vi.mock("@/server/ocr/provider", () => ({ recognizeText: ocr.recognizeText, OcrNotConfiguredError: class extends Error { constructor(m: string) { super(m); this.name = "OcrNotConfiguredError"; } } }));
 vi.mock("@/lib/storage", () => ({ storage: { readFile: vi.fn(async () => Buffer.from("第1页内容\f第2页内容")), writeFile: vi.fn(async () => "k") } }));
 vi.mock("@/lib/documents/text-extraction", () => ({

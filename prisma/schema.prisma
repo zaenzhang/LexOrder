@@ -1695,6 +1695,9 @@ enum EvidenceDatePrecision {
 }
 
 model EvidenceItem {
+  // Null only for legacy rows; a new manual creation keeps one stable submission identity.
+  requestKey       String?
+  requestHash      String?
   revision Int @default(1)
   updatedAt DateTime @default(now()) @updatedAt
   confirmedById String?
@@ -1720,6 +1723,7 @@ model EvidenceItem {
 
   @@index([matterId, kind])
   @@index([sourceDocumentId])
+  @@unique([createdById, requestKey])
 }
 
 model Billing {

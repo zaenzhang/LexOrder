@@ -107,7 +107,7 @@ export function SmsPasteDialog({
               <span>
                 用 AI 增强解析 <Sparkles className="inline h-3 w-3 text-primary" /> ——
                 补 <span className="text-foreground/80">摘要 / 律师动作 / 紧急程度</span>
-                （需先到 管理后台 → AI 与元典 配置）
+                （需先到 管理后台 → AI 与外部服务 配置）
               </span>
             </label>
             <label className="flex items-center gap-2 text-[12px] text-muted-foreground">

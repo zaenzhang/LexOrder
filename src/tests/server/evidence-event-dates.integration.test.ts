@@ -47,7 +47,7 @@ describe.skipIf(!databaseUrl)("事实日期增量：真实 PG", () => {
   it("只改日期保存旧确认快照，旧调用保留日期，显式未知可确认且历史新列不可覆盖", async () => {
     const f = await fixture();
     const text = { title: "合成合同洽谈", content: "当事人称曾洽谈合同", kind: "CLAIM" as const };
-    const created = await createEvidenceItem({ matterId: f.matter.id, ...text });
+    const created = await createEvidenceItem({ requestKey: randomUUID(), matterId: f.matter.id, ...text });
     expect((await getEvidenceItem(created.id)).item.eventDate).toEqual(emptyEvidenceEventDate());
     await confirmEvidenceItem({ evidenceItemId: created.id, expectedRevision: 1, confirm: true });
     const range: EvidenceEventDate = { precision: "RANGE", start: "2024-06-01", end: "2024-08-31", text: "用户依据来件人工确定的夏季范围" };
@@ -71,7 +71,7 @@ describe.skipIf(!databaseUrl)("事实日期增量：真实 PG", () => {
 
   it("数据库同时约束当前项和历史的日期组合、公历范围及原文长度", async () => {
     const f = await fixture();
-    const item = await createEvidenceItem({ matterId: f.matter.id, title: "合成无日期记录", content: "合成记载", kind: "FACT" });
+    const item = await createEvidenceItem({ requestKey: randomUUID(), matterId: f.matter.id, title: "合成无日期记录", content: "合成记载", kind: "FACT" });
     await expect(db.evidenceItem.update({ where: { id: item.id }, data: { eventDatePrecision: "EXACT" } })).rejects.toThrow();
     await expect(db.evidenceItem.update({ where: { id: item.id }, data: { eventDateStart: new Date("2024-01-01T00:00:00Z") } })).rejects.toThrow();
     await expect(db.evidenceItem.update({ where: { id: item.id }, data: {
@@ -100,7 +100,7 @@ describe.skipIf(!databaseUrl)("事实日期增量：真实 PG", () => {
     documentIds.push(doc.id);
     const date: EvidenceEventDate = { precision: "EXACT", start: "2024-02-29", end: null, text: "合成受限日期原文" };
     const text = { title: "合成来源日期", content: "来件记录", kind: "FACT" as const };
-    const item = await createEvidenceItem({ matterId: f.matter.id, ...text, sourceDocumentId: doc.id, eventDate: date });
+    const item = await createEvidenceItem({ requestKey: randomUUID(), matterId: f.matter.id, ...text, sourceDocumentId: doc.id, eventDate: date });
     await updateEvidenceItem({ evidenceItemId: item.id, expectedRevision: 1, ...text, title: "合成日期修订" });
     expect((await getEvidenceItem(item.id)).item.eventDate).toEqual(date);
     await db.rolePermission.delete({ where: { roleId_permissionKey: { roleId: role.id, permissionKey: "documents.download" } } });
