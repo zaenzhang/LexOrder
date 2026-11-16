@@ -2,12 +2,15 @@
 
 import { useState, useTransition, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Search, X } from "lucide-react";
 import type { Client, ClientType, Contact } from "@prisma/client";
 import { PageHeader, Pager, Segmented } from "@/components/patterns/moan";
 import { ClientSheet } from "./client-sheet";
 import { ClientsTable } from "./clients-table";
 import { useTopbarAction } from "@/components/layout/topbar-action";
+import { getClientForEdit } from "@/server/clients/actions";
+import { actionErrorMessage } from "@/lib/action-error";
 
 const TYPE_TABS: { key: ClientType | "ALL"; label: string }[] = [
   { key: "ALL", label: "全部客户" },
@@ -22,6 +25,8 @@ type ClientRow = Client & {
 };
 
 type Props = {
+  canCreate: boolean;
+  editableClientIds: string[];
   initialData: {
     items: ClientRow[];
     total: number;
@@ -34,15 +39,16 @@ type Props = {
   };
 };
 
-export function ClientsView({ initialData, initialFilters }: Props) {
+export function ClientsView({ initialData, initialFilters, canCreate, editableClientIds }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [search, setSearch] = useState(initialFilters.search);
   const [type, setType] = useState<ClientType | "ALL">(initialFilters.type);
 
   const [sheetOpen, setSheetOpen] = useState(false);
-  useTopbarAction({ label: "新建客户", onClick: () => handleNew() }, []);
-  const [editingClient, setEditingClient] = useState<ClientRow | null>(null);
+  const [loadingClientId, setLoadingClientId] = useState<string | null>(null);
+  useTopbarAction(canCreate ? { label: "新建客户", onClick: () => handleNew(), disabled: !!loadingClientId } : "none", [canCreate, loadingClientId]);
+  const [editingClient, setEditingClient] = useState<(Client & { contacts: Contact[] }) | null>(null);
 
   const updateUrl = useCallback(
     (next: { search?: string; type?: string }) => {
@@ -70,13 +76,25 @@ export function ClientsView({ initialData, initialFilters }: Props) {
   }
 
   function handleNew() {
+    if (!canCreate || loadingClientId) return;
     setEditingClient(null);
     setSheetOpen(true);
   }
 
   function handleEdit(client: ClientRow) {
-    setEditingClient(client);
-    setSheetOpen(true);
+    if (!editableClientIds.includes(client.id) || loadingClientId) return;
+    setLoadingClientId(client.id);
+    startTransition(async () => {
+      try {
+        const fullClient = await getClientForEdit(client.id);
+        setEditingClient(fullClient);
+        setSheetOpen(true);
+      } catch (err) {
+        toast.error("无法打开客户编辑", { description: actionErrorMessage(err) });
+      } finally {
+        setLoadingClientId(null);
+      }
+    });
   }
 
   const totalPages = Math.max(1, Math.ceil(initialData.total / initialData.pageSize));
@@ -121,7 +139,7 @@ export function ClientsView({ initialData, initialFilters }: Props) {
       </div>
 
       <div className="card" style={{ overflow: "hidden" }}>
-        <ClientsTable items={initialData.items} onEdit={handleEdit} />
+        <ClientsTable items={initialData.items} onEdit={handleEdit} canCreate={canCreate} editableClientIds={editableClientIds} loadingClientId={loadingClientId} />
         {initialData.total > 0 ? (
           <div className="border-t border-[var(--bd-hair)]">
             <Pager page={initialData.page} totalPages={totalPages} hrefFor={hrefFor} summary={<>第 {from}–{to} 条，共 {initialData.total} 条</>} />

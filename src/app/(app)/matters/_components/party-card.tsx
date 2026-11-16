@@ -8,7 +8,7 @@
  * 校验落在 zod superRefine（partyInputSchema）；本组件只负责 UI + 字段联动。
  */
 import { useRef, useState, useTransition, type ReactNode } from "react";
-import { useFormContext, type FieldErrors } from "react-hook-form";
+import { useController, useFormContext, type FieldErrors } from "react-hook-form";
 import { Loader2, Search, X } from "lucide-react";
 import type { PartyType } from "@prisma/client";
 import { toast } from "sonner";
@@ -58,13 +58,17 @@ export function PartyCard({
   defaultExpanded,
   logoTone = "navy"
 }: Props) {
-  const { register, watch, setValue } = useFormContext();
+  const { register, control, watch, setValue, trigger } = useFormContext();
   const p = `${fieldPrefix}.${index}`;
+  // Field events keep useFieldArray row identities stable; setValue on a nested
+  // array field can regenerate every row key and replace the focused input.
+  const { field: idNumberField } = useController({ control, name: `${p}.idNumber`, defaultValue: "" });
+  const { field: idTypeField } = useController({ control, name: `${p}.idType`, defaultValue: "ID_CARD" });
   const partyType = (watch(`${p}.partyType`) as PartyType) ?? "NATURAL_PERSON";
   const isOrg = partyType !== "NATURAL_PERSON";
   const name = (watch(`${p}.name`) as string) ?? "";
-  const idValue = ((isOrg ? watch(`${p}.enterpriseSocialCode`) : watch(`${p}.idNumber`)) as string) ?? "";
-  const idType = ((watch(`${p}.idType`) as string) || "ID_CARD") as PersonIdType;
+  const idValue = ((isOrg ? watch(`${p}.enterpriseSocialCode`) : idNumberField.value) as string) ?? "";
+  const idType = ((idTypeField.value as string) || "ID_CARD") as PersonIdType;
   // 即时校验（与服务端 zod 同一规则）：身份证只允许数字与末位 X、必须 18 位
   const liveIdError = !isOrg && idValue ? personIdError(idType, idValue) : null;
   const legalRep = (watch(`${p}.legalRep`) as string) ?? "";
@@ -161,7 +165,7 @@ export function PartyCard({
       </div>
 
       {open ? (
-        <div className="mt-3 border-t border-[var(--bd-hair)] pt-3">
+        <div className="mt-3 border-t border-[var(--bd-hair)] pt-3" onFocusCapture={() => setExpanded(true)}>
           <div className="frow">
             <div className="fitem">
               <label className="flabel">主体类型</label>
@@ -227,7 +231,11 @@ export function PartyCard({
             {!isOrg ? (
               <div className="fitem" style={{ maxWidth: 210 }}>
                 <label className="flabel">证件类型</label>
-                <Select value={idType} onValueChange={(v) => { setValue(`${p}.idType`, v, { shouldDirty: true }); setValue(`${p}.idNumber`, sanitizePersonIdInput(v, idValue), { shouldDirty: true, shouldValidate: Boolean(idErr) }); }}>
+                <Select value={idType} onValueChange={(v) => {
+                  idTypeField.onChange(v);
+                  idNumberField.onChange(sanitizePersonIdInput(v, idValue));
+                  if (idErr) void trigger(idNumberField.name);
+                }}>
                   <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {PERSON_ID_TYPES.map((t) => <SelectItem key={t} value={t}>{clientIdTypeLabel[t]}</SelectItem>)}
@@ -244,12 +252,16 @@ export function PartyCard({
                 <input className={cn("finput font-mono", idErr && "!border-[var(--red)]")} placeholder="18 位信用代码" {...register(`${p}.enterpriseSocialCode`)} />
               ) : (
                 <input
+                  {...idNumberField}
                   className={cn("finput font-mono", (idErr || liveIdError) && "!border-[var(--red)]")}
                   placeholder={idType === "ID_CARD" ? "18 位，仅数字或末位 X" : "证件号码"}
                   inputMode={idType === "ID_CARD" ? "text" : undefined}
                   maxLength={idType === "ID_CARD" ? 18 : 30}
                   value={idValue}
-                  onChange={(e) => setValue(`${p}.idNumber`, sanitizePersonIdInput(idType, e.target.value), { shouldDirty: true, shouldValidate: Boolean(idErr) })}
+                  onChange={(e) => {
+                    idNumberField.onChange(sanitizePersonIdInput(idType, e.target.value));
+                    if (idErr) void trigger(idNumberField.name);
+                  }}
                 />
               )}
               {idErr?.message ? (

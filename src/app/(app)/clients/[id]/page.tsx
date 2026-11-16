@@ -7,8 +7,8 @@ import { ChevronLeft, Folder, Users, CreditCard, UserRound } from "lucide-react"
 import { getClientById, getClientFinanceSummary } from "@/server/clients/actions";
 import { getClientInsights } from "@/server/clients/insights";
 import { getClientRelationship } from "@/server/clients/relationship-actions";
+import { editableClientIds } from "@/server/clients/master-access";
 import { ClientRelationshipPanel } from "./_components/client-relationship-panel";
-import { isManager } from "@/lib/permissions";
 import { decryptIdNumber } from "@/lib/clients/id-number-crypto";
 import { clientTypeLabel, cooperationStatusLabel, genderLabel, matterCategoryLabel, matterStatusLabel } from "@/lib/enums";
 import { matterHref } from "@/lib/matters/route";
@@ -32,8 +32,8 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   if (!client) notFound();
   const session = await requireSession("clients.read");
   const canReadFinance = hasCustomPermission(session.user, "finance.read");
-  const canWrite = hasCustomPermission(session.user, "clients.write");
-  const canMerge = canWrite && (isManager(session.user) || session.user.role === "CUSTOM");
+  const canWrite = (await editableClientIds(session.user, [id])).includes(id);
+  const canMerge = canWrite;
   const [finance, insights, relationship] = await Promise.all([
     canReadFinance ? getClientFinanceSummary(id) : Promise.resolve(null),
     getClientInsights(id),
@@ -144,7 +144,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                 <Users className="ic" strokeWidth={1.8} />
                 联系人 <span className="badge b-white" style={{ marginLeft: 2 }}>{client.contacts.length}</span>
               </div>
-              {canWrite && (isManager(session.user) || session.user.role === "CUSTOM") ? <AddContactButton clientId={client.id} /> : null}
+              {canWrite ? <AddContactButton clientId={client.id} /> : null}
             </div>
             {client.contacts.length === 0 ? (
               <div className="empty mo-empty-compact"><div className="mo-empty-title">暂无联系人</div></div>
@@ -225,7 +225,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
                 <div className="t-xs t-mute" style={{ marginTop: 6 }}>所内同渠道客户占比 {Math.round((insights.source.sameSourceClients / Math.max(1, insights.source.totalClients)) * 100)}%</div>
               </div>
             ) : (
-              <div className="panel-body t-xs t-mute">建档时未登记客户来源，可在「编辑资料」补充。</div>
+              <div className="panel-body t-xs t-mute">{canWrite ? "建档时未登记客户来源，可在「编辑资料」补充。" : "未登记客户来源"}</div>
             )}
           </div>
 

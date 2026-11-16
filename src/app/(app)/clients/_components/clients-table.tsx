@@ -40,16 +40,23 @@ function TypeBadge({ type }: { type: ClientType }) {
 
 export function ClientsTable({
   items,
-  onEdit
+  onEdit,
+  canCreate,
+  editableClientIds,
+  loadingClientId
 }: {
   items: ClientRow[];
   onEdit: (c: ClientRow) => void;
+  canCreate: boolean;
+  editableClientIds: string[];
+  loadingClientId: string | null;
 }) {
+  const canEditAny = editableClientIds.length > 0;
   if (items.length === 0) {
     return (
       <div className="empty">
         <div className="mo-empty-title">没有符合条件的客户</div>
-        <div className="mo-empty-desc">调整筛选条件，或点击右上角「新建客户」建档；收案时关联的委托方也会自动出现在这里。</div>
+        <div className="mo-empty-desc">{canCreate ? "调整筛选条件，或点击右上角「新建客户」建档；收案时关联的委托方也会自动出现在这里。" : "调整筛选条件。"}</div>
       </div>
     );
   }
@@ -66,7 +73,7 @@ export function ClientsTable({
               <th>联系方式</th>
               <th>主要联系人</th>
               <th className="num">案件 / 收案</th>
-              <th style={{ width: 56 }} />
+              {canEditAny ? <th style={{ width: 56 }} /> : null}
             </tr>
           </thead>
           <tbody>
@@ -106,11 +113,11 @@ export function ClientsTable({
                     <span className="font-mono font-semibold" style={{ fontSize: 14 }}>{c._count.matters}</span>
                     <span className="font-mono text-[11px] text-[var(--t-muted)]"> / {c._count.intakes}</span>
                   </td>
-                  <td className="text-right">
-                    <button type="button" className="btn btn-ghost btn-sm btn-icon opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100" onClick={() => onEdit(c)} aria-label={`编辑 ${c.name}`}>
+                  {canEditAny ? <td className="text-right">
+                    {editableClientIds.includes(c.id) ? <button type="button" className="btn btn-ghost btn-sm btn-icon opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100" onClick={() => onEdit(c)} aria-label={`编辑 ${c.name}`} disabled={!!loadingClientId} aria-busy={loadingClientId === c.id}>
                       <Pencil />
-                    </button>
-                  </td>
+                    </button> : null}
+                  </td> : null}
                 </tr>
               );
             })}
@@ -142,9 +149,9 @@ export function ClientsTable({
                     </div>
                   )}
                 </Link>
-                <button type="button" className="btn btn-ghost btn-sm btn-icon shrink-0" onClick={() => onEdit(c)} aria-label={`编辑 ${c.name}`}>
+                {editableClientIds.includes(c.id) ? <button type="button" className="btn btn-ghost btn-sm btn-icon shrink-0" onClick={() => onEdit(c)} aria-label={`编辑 ${c.name}`} disabled={!!loadingClientId} aria-busy={loadingClientId === c.id}>
                   <Pencil />
-                </button>
+                </button> : null}
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                 <CoopBadge status={c.cooperationStatus} />
