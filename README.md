@@ -88,6 +88,8 @@ npm run test:run
 npm run build
 ```
 
+`tools/workbench-m1` 是独立的历史原型工具；需要检查其 TypeScript 时，先执行 `npm ci --prefix tools/workbench-m1`，再执行 `npm run typecheck --prefix tools/workbench-m1`。Server 的构建不需要安装该工具的依赖。
+
 数据库与浏览器流程分别验证；未配置真实验收库时，部分集成套件会跳过。文档修改核对引用、当前事实和变更范围，不把历史测试数量作为新能力已通过的证明。
 
 生产源码可用 `npm run start:with-cron` 联合启动 Web 与一个调度 worker；已有进程管理也可分别启动。数据库迁移不由该命令代办，同一实例只能有一个调度所有者。当前 Compose 尚未包含规划中的 RAGFlow 配套部署。
