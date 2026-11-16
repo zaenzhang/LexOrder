@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { uniqueIndex } from "@/lib/prisma-errors";
 import type { requireSession } from "@/lib/auth/session";
 import { ActionError } from "@/lib/action-error";
 import { isManager, matterAssociationFilter } from "@/lib/permissions";
@@ -103,11 +104,7 @@ export async function prepareInvoiceEvidenceUpload(actor: Actor, input: InvoiceR
 }
 
 function isRequestConflict(error: { code: unknown; meta?: unknown }) {
-  if (error.code !== "P2002" || !error.meta || typeof error.meta !== "object") return false;
-  const meta = error.meta as { modelName?: unknown; target?: unknown };
-  if (meta.modelName !== undefined && meta.modelName !== "InvoiceRequest") return false;
-  return meta.target === "InvoiceRequest_requestedById_requestKey_key" ||
-    (Array.isArray(meta.target) && meta.target.length === 2 && meta.target.includes("requestedById") && meta.target.includes("requestKey"));
+  return uniqueIndex(error, "InvoiceRequest") === "InvoiceRequest_requestedById_requestKey_key";
 }
 
 export async function createInvoiceRequestForActor(actor: Actor, input: InvoiceRequestInput) {

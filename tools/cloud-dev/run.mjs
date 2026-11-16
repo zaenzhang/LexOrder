@@ -92,7 +92,7 @@ try {
 
   if (mode !== 'serve') {
     await command('npx', ['prisma', 'migrate', 'deploy'], testEnv).done;
-    await command('npx', ['prisma', 'migrate', 'diff', '--from-schema-datasource', 'prisma/schema.prisma', '--to-schema-datamodel', 'prisma/schema.prisma', '--exit-code'], testEnv).done;
+    await command('npx', ['prisma', 'migrate', 'diff', '--from-config-datasource', '--to-schema', 'prisma/schema.prisma', '--exit-code'], testEnv).done;
     const testFiles = (env.WORKBENCH_TEST_FILES || '').split(',').map(file => file.trim()).filter(Boolean);
     await command('npm', ['run', 'test:run', ...(testFiles.length ? ['--', ...testFiles] : [])], testEnv).done;
   }
@@ -112,7 +112,7 @@ try {
     if (!ready) throw new Error('Application did not become ready.');
     console.log(`LexOrder ready at ${healthBase} in this execution session (${mode === 'verify' ? 'isolated test' : 'development'} database).`);
     if (mode === 'verify') await command(process.execPath, ['--import', 'tsx', 'tools/cloud-dev/smoke.mjs'], appEnv).done;
-    if (mode === 'verify' && env.WORKBENCH_QA_SCRIPT) await command(process.execPath, [resolve(env.WORKBENCH_QA_SCRIPT)], appEnv).done;
+    if (mode === 'verify' && env.WORKBENCH_QA_SCRIPT) await command(process.execPath, ['--import', 'tsx', resolve(env.WORKBENCH_QA_SCRIPT)], appEnv).done;
     if (mode === 'serve') await app.done;
     else { app.child.kill('SIGTERM'); await app.done.catch(() => {}); }
   }

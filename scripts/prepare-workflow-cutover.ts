@@ -1,3 +1,4 @@
+import { createPrismaClient } from "../src/lib/prisma-client";
 /** 只读生成本地切换方案；--trial 仅在新建合成库执行，绝不写入来源库。 */
 import assert from 'node:assert/strict';
 import {createHash, randomBytes} from 'node:crypto';
@@ -21,7 +22,7 @@ const ident=(value:string)=>`"${value.replaceAll('"','""')}"`;
 const literal=(value:string)=>`'${value.replaceAll("'","''")}'`;
 const table=(name:string)=>ident(models.find(m=>m.name===name)!.dbName??name);
 const digest=(path:string)=>createHash('sha256').update(readFileSync(path)).digest('hex');
-const source=new PrismaClient({log:[]});
+const source=createPrismaClient(process.env.DATABASE_URL);
 let trial:PrismaClient|undefined;
 function cli(args:string[],url:string){const r=spawnSync(process.execPath,['node_modules/prisma/build/index.js',...args],{env:{...process.env,DATABASE_URL:url},encoding:'utf8',timeout:120000});if(r.status!==0)throw new Error('独立库 SQL 执行失败，原始连接信息不回显');return r.stdout;}
 function body(database:string){
@@ -44,6 +45,9 @@ function body(database:string){
   return {sql:sql+`\n-- 同一事务安装新模型，失败回滚清理。\n${migrationBody}\nCOMMIT;\n`,predicates};
 }
 async function main(){
+  if (models.some(model => model.fields.some(field => field.kind === 'object' && field.relationFromFields === undefined))) {
+    throw new Error("历史切换脚本依赖旧版客户端元数据，Prisma 7 下不可执行");
+  }
   assert(process.env.DATABASE_URL,'缺少连接配置');const url=new URL(process.env.DATABASE_URL);
   assert(['localhost','127.0.0.1','[::1]'].includes(url.hostname),'本脚本仅支持本机数据库');
   const [current]=await source.$queryRaw<{ready:boolean}[]>`SELECT to_regclass('public."WorkResponsibility"') IS NOT NULL AS ready`;
@@ -62,7 +66,7 @@ async function main(){
   const database=`lawlink_workflow_trial_${new Date().toISOString().slice(0,10).replaceAll('-','')}_${randomBytes(4).toString('hex')}`;
   await source.$executeRawUnsafe(`CREATE DATABASE ${ident(database)} TEMPLATE template0`);url.pathname=`/${database}`;url.searchParams.set('schema','public');
   const baseline=join(tmpdir(),`${database}-baseline.sql`);writeFileSync(baseline,cli(['migrate','diff','--from-empty','--to-schema-datamodel',schema,'--script'],url.toString()));cli(['db','execute','--schema',schema,'--file',baseline],url.toString());
-  trial=new PrismaClient({datasources:{db:{url:url.toString()}},log:[]});
+  trial=createPrismaClient(url.toString());
   const user=await trial.user.create({data:{name:'重建保留验证',email:`${database}@example.invalid`,passwordHash:'NO-LOGIN',active:true,role:'LAWYER'}});
   const doc=await trial.document.create({data:{name:'合成模板原文件',path:'no-file-test-only',uploadedById:user.id,tags:[]}});
   await trial.documentTemplate.create({data:{name:'保留模板',category:'BLANK',docxBlobId:doc.id,variables:[]}});

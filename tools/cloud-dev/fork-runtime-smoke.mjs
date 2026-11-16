@@ -4,10 +4,10 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../src/lib/prisma-client.ts';
 
 assert(new URL(process.env.DATABASE_URL).pathname.endsWith('_test'), 'Runtime smoke requires an isolated test database');
-const db = new PrismaClient();
+const db = createPrismaClient(process.env.DATABASE_URL);
 const children = new Set();
 const checks = [];
 function launch(args, extraEnv = {}) {

@@ -1,3 +1,4 @@
+import { createPrismaClient } from "../src/lib/prisma-client";
 /** 新财务登记到确认、分配的独立库验收；不修改当前业务库，不发送外部通知。 */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -10,7 +11,7 @@ import { readFinanceFacts,financeTrend } from "../src/server/finance/facts";
 import { agingFromFacts } from "../src/server/finance/facts-aging";
 import { allocateLedgerTx } from "../src/server/finance/ledger-mutations";
 import { readLedger,financeLedgerReady } from "../src/server/finance/ledger-storage";
-const config=new PrismaClient({log:[]});
+const config=createPrismaClient(process.env.DATABASE_URL);
 const database=process.env.WORKFLOW_TRIAL_DATABASE??'lawlink_workflow_trial_20260919_ef1a255e';
 const prefix=`registration-${randomUUID().slice(0,8)}`;
 const results:string[]=[];
@@ -22,7 +23,7 @@ const part=(amount:string,title="分期")=>({title,amount,dueState:"UNKNOWN" as 
 async function main() {
   assert.match(database,/^lawlink_workflow_trial_\d{8}_[a-f0-9]{8}$/);
   const url=new URL(process.env.DATABASE_URL!);assert.notEqual(url.pathname,`/${database}`);url.pathname=`/${database}`;
-  db=new PrismaClient({datasources:{db:{url:url.toString()}},log:[]});
+  db=createPrismaClient(url.toString());
   const [identity]=await db.$queryRaw<{name:string}[]>`SELECT current_database() AS name`;assert.equal(identity.name,database);assert(await financeLedgerReady(db));
   const owner=`${prefix}-owner`, finance=`${prefix}-finance`, admin=`${prefix}-admin`, matter=`${prefix}-matter`, other=`${prefix}-other`;
   for(const [id,role] of [[owner,"LAWYER"],[finance,"FINANCE"],[admin,"ASSISTANT"]] as const)await db.user.create({data:{id,role,name:"新流程验收人员",email:`${id}@example.invalid`,passwordHash:"NO-LOGIN",systemRole:id===admin?"SUPER_ADMIN":"NONE"}});

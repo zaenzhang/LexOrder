@@ -123,7 +123,7 @@ describe("个人基本资料与身份操作边界", () => {
     expect(db.auditLog.create.mock.calls[0][0].data.detail.reason).toBe("核对原件更正");
   });
   it.each([["identityDocumentNumber", "证件号码"], ["email", "邮箱"]])("%s 唯一冲突给出脱敏中文反馈", async (field, message) => {
-    db.user.update.mockRejectedValue(new Prisma.PrismaClientKnownRequestError("sensitive raw database error", { code: "P2002", clientVersion: "5", meta: { target: [field] } }));
+    db.user.update.mockRejectedValue(new Prisma.PrismaClientKnownRequestError("sensitive raw database error", { code: "P2002", clientVersion: "5", meta: { modelName: "User", driverAdapterError: { name: "DriverAdapterError", cause: { kind: "UniqueConstraintViolation", originalCode: "23505", constraint: { index: field === "email" ? "User_email_key" : "User_identityDocumentType_identityDocumentNumber_key" } } } } }));
     await expect(updateMyProfile({ ...base, name: "新姓名" })).rejects.toThrow(message);
     expect(db.auditLog.create).not.toHaveBeenCalled();
   });

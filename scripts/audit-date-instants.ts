@@ -1,3 +1,4 @@
+import { createPrismaClient } from "../src/lib/prisma-client";
 /**
  * 2026-09-20 A 批 P1-6 存量日期瞬间分布审计（只读，不修改任何数据）。
  *
@@ -9,9 +10,7 @@
  *   - 异常瞬间行（小时既非 0 也非 16 的行数，如存在需人工抽查来源）。
  * 运行：npx tsx scripts/audit-date-instants.ts
  */
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+const prisma = createPrismaClient(process.env.DATABASE_URL);
 
 type Row = { at: Date };
 

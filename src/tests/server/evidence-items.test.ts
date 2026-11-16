@@ -180,8 +180,8 @@ describe("人工创建幂等", () => {
   });
 
   it.each([
-    { modelName: "EvidenceItem", target: ["createdById", "requestKey"] },
-    { target: "EvidenceItem_createdById_requestKey_key" },
+    { modelName: "EvidenceItem", driverAdapterError: { name: "DriverAdapterError", cause: { kind: "UniqueConstraintViolation", originalCode: "23505", constraint: { index: "EvidenceItem_createdById_requestKey_key" } } } },
+    { modelName: "EvidenceItem", driverAdapterError: { name: "DriverAdapterError", cause: { kind: "UniqueConstraintViolation", originalCode: "23505", constraint: { index: "EvidenceItem_createdById_requestKey_key" } } } },
   ])("精确P2002在新事务读取胜者并重新鉴权：%j", async meta => {
     const original = input();
     await createEvidenceItem(original);
@@ -196,15 +196,15 @@ describe("人工创建幂等", () => {
   });
 
   it("其他唯一冲突不重试，精确冲突却无胜者时也不能另建", async () => {
-    for (const meta of [undefined, { modelName: "EvidenceItem", target: ["id"] },
-      { modelName: "OtherModel", target: ["createdById", "requestKey"] },
-      { modelName: "EvidenceItem", target: ["createdById", "requestKey", "matterId"] }]) {
+    for (const meta of [undefined, { modelName: "EvidenceItem", driverAdapterError: { name: "DriverAdapterError", cause: { kind: "UniqueConstraintViolation", originalCode: "23505", constraint: { index: "EvidenceItem_pkey" } } } },
+      { modelName: "OtherModel", driverAdapterError: { name: "DriverAdapterError", cause: { kind: "UniqueConstraintViolation", originalCode: "23505", constraint: { index: "EvidenceItem_createdById_requestKey_key" } } } },
+      { modelName: "EvidenceItem", driverAdapterError: { name: "DriverAdapterError", cause: { kind: "UniqueConstraintViolation", originalCode: "23505", constraint: { index: "EvidenceItem_other_key" } } } }]) {
       mocks.db.$transaction.mockClear();
       mocks.db.$transaction.mockRejectedValueOnce({ code: "P2002", meta });
       await expect(createEvidenceItem(input())).rejects.toThrow("并发操作");
       expect(mocks.db.$transaction).toHaveBeenCalledTimes(1);
     }
-    mocks.db.$transaction.mockRejectedValueOnce({ code: "P2002", meta: { modelName: "EvidenceItem", target: ["createdById", "requestKey"] } });
+    mocks.db.$transaction.mockRejectedValueOnce({ code: "P2002", meta: { modelName: "EvidenceItem", driverAdapterError: { name: "DriverAdapterError", cause: { kind: "UniqueConstraintViolation", originalCode: "23505", constraint: { index: "EvidenceItem_createdById_requestKey_key" } } } } });
     await expect(createEvidenceItem(input())).rejects.toThrow("保存结果已变化");
     expect(mocks.db.evidenceItem.create).not.toHaveBeenCalled();
     expect(mocks.audit).not.toHaveBeenCalled();
@@ -213,7 +213,7 @@ describe("人工创建幂等", () => {
   it("P2002后的新事务再次校验资格，撤权不会回放成功", async () => {
     const original = input();
     await createEvidenceItem(original);
-    mocks.db.$transaction.mockRejectedValueOnce({ code: "P2002", meta: { modelName: "EvidenceItem", target: ["createdById", "requestKey"] } });
+    mocks.db.$transaction.mockRejectedValueOnce({ code: "P2002", meta: { modelName: "EvidenceItem", driverAdapterError: { name: "DriverAdapterError", cause: { kind: "UniqueConstraintViolation", originalCode: "23505", constraint: { index: "EvidenceItem_createdById_requestKey_key" } } } } });
     mocks.currentRole.mockRejectedValueOnce(new Error("资格已撤回"));
     await expect(createEvidenceItem(original)).rejects.toThrow("资格已撤回");
     expect(mocks.db.evidenceItem.create).toHaveBeenCalledTimes(1);

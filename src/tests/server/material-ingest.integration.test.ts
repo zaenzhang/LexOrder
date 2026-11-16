@@ -11,9 +11,9 @@ const syntheticStorage = vi.hoisted(() => ({
 const databaseUrl = process.env.WORKBENCH_TEST_DATABASE_URL;
 if (databaseUrl && !new URL(databaseUrl).pathname.endsWith("_test")) throw new Error("摄入集成测试仅允许独立的 _test 数据库");
 vi.mock("@/lib/prisma", async () => {
-  const { PrismaClient } = await import("@prisma/client");
+  const { createPrismaClient } = await import("@/lib/prisma-client");
   const url = process.env.WORKBENCH_TEST_DATABASE_URL;
-  return { prisma: url ? new PrismaClient({ datasources: { db: { url } } }) : undefined };
+  return { prisma: url ? createPrismaClient(url) : undefined };
 });
 vi.mock("@/lib/auth/session", () => ({ requireSession: vi.fn(), getSession: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));

@@ -6,9 +6,8 @@
 // or an invented REST endpoint. This is not browser interaction verification.
 import assert, { AssertionError } from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { spawn } from 'node:child_process';
 import { resolve, sep } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 
 const root = process.cwd();
 assert.equal((process.env.LEXORDER_RUNTIME_MODE || 'SERVER').trim().toUpperCase(), 'SERVER', 'Server smoke refuses another runtime mode');
@@ -19,31 +18,16 @@ assert.equal(process.env.STORAGE_PROVIDER || 'local', 'local', 'Server smoke use
 const storageRoot = resolve(process.env.APP_STORAGE_DIR || 'missing');
 assert(storageRoot.startsWith(`${resolve(root, '.runtime')}${sep}`) && storageRoot.endsWith(`${sep}acceptance-storage`), 'Use the runner acceptance storage directory');
 
-// WORKBENCH_QA_SCRIPT is launched with plain Node. Keep the parent runner intact.
-if (process.env.LEXORDER_SERVER_SMOKE_CHILD !== '1') {
-  const child = spawn(process.execPath, ['--import', 'tsx', fileURLToPath(import.meta.url)], {
-    cwd: root, env: { ...process.env, LEXORDER_SERVER_SMOKE_CHILD: '1' }, stdio: 'inherit',
-  });
-  const forward = () => child.kill('SIGTERM');
-  process.once('SIGTERM', forward);
-  process.once('SIGINT', forward);
-  const code = await new Promise((done, reject) => {
-    child.once('error', reject);
-    child.once('exit', (status) => done(status ?? 1));
-  });
-  process.exit(code);
-}
-
 // Resolve sources from the running application, so the QA script may stay in a
 // separate worktree while the runner validates its own build and services.
 const source = file => import(pathToFileURL(resolve(root, file)).href);
-const [{ PrismaClient }, { default: bcrypt }, { default: ExcelJS }, { default: PizZip },
+const [{ createPrismaClient }, { rawSqlState }, { default: bcrypt }, { default: ExcelJS }, { default: PizZip },
   { registerReceiptTx, confirmReceiptTx }, { encryptBuffer, sha256 }, { storage }, { prisma: appDb }] = await Promise.all([
-  import('@prisma/client'), import('bcryptjs'), import('exceljs'), import('pizzip'),
+  source('src/lib/prisma-client.ts'), source('src/lib/prisma-errors.ts'), import('bcryptjs'), import('exceljs'), import('pizzip'),
   source('src/server/finance/ledger-registration.ts'), source('src/lib/storage/crypto.ts'),
   source('src/lib/storage/index.ts'), source('src/lib/prisma.ts'),
 ]);
-const db = new PrismaClient();
+const db = createPrismaClient(process.env.DATABASE_URL);
 const port = Number(process.env.PORT || 3000);
 assert(Number.isInteger(port) && port > 0 && port <= 65535, 'Invalid runner port');
 const base = `http://127.0.0.1:${port}`;
@@ -282,7 +266,7 @@ async function run() {
   assert.equal(attempts.filter(attempt => attempt.status === 'fulfilled').length, 1, 'Concurrent confirmations must commit exactly once');
   const rejected = attempts.find(attempt => attempt.status === 'rejected');
   assert(rejected && (rejected.reason?.code === 'P2034'
-    || (rejected.reason?.code === 'P2010' && rejected.reason?.meta?.code === '40001')
+    || rawSqlState(rejected.reason) === '40001'
     || /已被处理/.test(rejected.reason?.message || '')), 'The losing confirmation must fail on state or serialization protection');
   const confirmed = await db.feeEntry.findUniqueOrThrow({ where: { id: receipt.id } });
   assert.equal(confirmed.confirmState, 'CONFIRMED');

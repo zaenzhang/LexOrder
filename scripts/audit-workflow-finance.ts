@@ -1,7 +1,8 @@
+import { createPrismaClient } from "../src/lib/prisma-client";
 /** 只读核对：只输出数量和金额，不输出案件、客户、号码或凭据，不修改数据。 */
-import { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
-const db = new PrismaClient({ log: [] });
+const db = createPrismaClient(process.env.DATABASE_URL);
 async function main() {
   const result = await db.$transaction(async (tx) => {
     await tx.$executeRaw`SET TRANSACTION READ ONLY`;

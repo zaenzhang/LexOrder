@@ -89,8 +89,7 @@ jobs:
         run: |
           npx prisma migrate diff \
             --from-migrations prisma/migrations \
-            --to-schema-datamodel prisma/schema.prisma \
-            --shadow-database-url "$SHADOW_DATABASE_URL" \
+            --to-schema prisma/schema.prisma \
             --exit-code \
           && echo "无漂移：迁移历史与 schema.prisma 一致" \
           || (echo "::error::schema.prisma 与迁移历史不一致。请用 prisma migrate dev 生成迁移，不要用 db push 改库。" && exit 1)
@@ -108,8 +107,9 @@ jobs:
         run: |
           node -e "
           const { PrismaClient } = require('@prisma/client');
+          const { PrismaPg } = require('@prisma/adapter-pg');
           const bcrypt = require('bcryptjs');
-          const prisma = new PrismaClient();
+          const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }, { schema: 'public' }) });
           (async () => {
             const email = process.env.SEED_ADMIN_EMAIL;
             const password = process.env.SEED_ADMIN_PASSWORD;

@@ -10,9 +10,9 @@ import { buildIntakeConflictQueries } from "@/lib/approvals/intake-detail";
 const databaseUrl = process.env.WORKBENCH_TEST_DATABASE_URL;
 if (databaseUrl && !new URL(databaseUrl).pathname.endsWith("_test")) throw new Error("仅允许独立测试数据库");
 vi.mock("@/lib/prisma", async () => {
-  const { PrismaClient } = await import("@prisma/client");
+  const { createPrismaClient } = await import("@/lib/prisma-client");
   const url = process.env.WORKBENCH_TEST_DATABASE_URL;
-  return { prisma: url ? new PrismaClient({ datasources: { db: { url } } }) : undefined };
+  return { prisma: url ? createPrismaClient(url) : undefined };
 });
 vi.mock("@/lib/auth/session", () => ({ requireSession: vi.fn(), getSession: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));

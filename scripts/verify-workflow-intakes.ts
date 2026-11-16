@@ -1,3 +1,4 @@
+import { createPrismaClient } from "../src/lib/prisma-client";
 /** 独立合成库：补正轮次、资料冻结、冲突时效与权限，不访问业务库。 */
 import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';import {writeFileSync} from 'node:fs';import {join} from 'node:path';import {tmpdir} from 'node:os';
 import {Prisma,PrismaClient} from '@prisma/client';
@@ -5,10 +6,10 @@ import {intakeState,submitIntakeTx,withdrawIntakeTx,assertIntakeConvertible,asse
 import {runMatterReviewTx,decideMatterReviewTx,readMatterReview} from '../src/server/conflicts/matter-review';
 import {runConflictCheck} from '../src/server/conflicts/algorithm';
 import {readIntakeRounds} from '../src/server/intakes/revision-history';
-const init=new PrismaClient({log:[]}),database=process.env.WORKFLOW_TRIAL_DATABASE??'lawlink_workflow_trial_20260919_ef1a255e',prefix=`intakes-${randomUUID().slice(0,8)}`;let db:PrismaClient;let stage='connect';const results:string[]=[];let users:string[]=[];
+const init=createPrismaClient(process.env.DATABASE_URL),database=process.env.WORKFLOW_TRIAL_DATABASE??'lawlink_workflow_trial_20260919_ef1a255e',prefix=`intakes-${randomUUID().slice(0,8)}`;let db:PrismaClient;let stage='connect';const results:string[]=[];let users:string[]=[];
 const tx=<T>(f:(t:Prisma.TransactionClient)=>Promise<T>)=>db.$transaction(f,{isolationLevel:'Serializable',timeout:20000});
 const bad=async(name:string,fn:()=>Promise<unknown>,pattern:RegExp)=>{await assert.rejects(fn,pattern);results.push(name);};
-async function main(){assert.match(database,/^lawlink_workflow_trial_\d{8}_[a-f0-9]{8}$/);const url=new URL(process.env.DATABASE_URL!);assert.notEqual(url.pathname,`/${database}`);url.pathname=`/${database}`;db=new PrismaClient({datasources:{db:{url:url.toString()}},log:[]});assert.equal((await db.$queryRaw<{name:string}[]>`SELECT current_database() AS name`)[0].name,database);
+async function main(){assert.match(database,/^lawlink_workflow_trial_\d{8}_[a-f0-9]{8}$/);const url=new URL(process.env.DATABASE_URL!);assert.notEqual(url.pathname,`/${database}`);url.pathname=`/${database}`;db=createPrismaClient(url.toString());assert.equal((await db.$queryRaw<{name:string}[]>`SELECT current_database() AS name`)[0].name,database);
  const people=await Promise.all(['owner','approver','stranger'].map(role=>db.user.create({data:{name:prefix+role,email:`${prefix}-${role}@example.invalid`,passwordHash:'NO-LOGIN',role:'LAWYER'}})));users=people.map(u=>u.id);const [owner,approver,stranger]=users;
  await db.approvalPermissionGroup.create({data:{name:prefix,members:{create:{userId:approver}},rules:{create:{action:'INTAKE_APPROVE',caseScope:'ALL_CASES',categories:[],sealTypes:[]}}}});
  const intake=await db.intake.create({data:{title:prefix,category:'NON_LITIGATION',createdById:owner,ownerUserId:owner,parties:{create:{role:'CLIENT_PARTY',name:prefix+'委托方',partyType:'COMPANY',enterpriseSocialCode:'SYNTHETIC-'+prefix}}}});

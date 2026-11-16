@@ -1,8 +1,9 @@
+import { createPrismaClient } from "../src/lib/prisma-client";
 /** 只读 SQL 验证：从真实领取语句提取筛选条件，以 CTE 样本验证，不写 JobQueue。 */
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
-import { Prisma, PrismaClient } from "@prisma/client";
-const db = new PrismaClient({ log: [] });
+import { Prisma } from "@prisma/client";
+const db = createPrismaClient(process.env.DATABASE_URL);
 async function main() {
   const source = readFileSync("src/server/cron/queue.ts", "utf8");
   const condition = source.match(/SELECT "id" FROM "JobQueue"\s+WHERE ([\s\S]*?)\s+ORDER BY/)?.[1];

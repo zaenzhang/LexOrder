@@ -1,6 +1,6 @@
+import { createPrismaClient } from "../src/lib/prisma-client";
 /** 只读巡检：本机各功能状态的演示数据覆盖情况，便于发现「哪种状态没有样本」。 */
-import { PrismaClient } from '@prisma/client';
-const db = new PrismaClient({ log: [] });
+const db = createPrismaClient(process.env.DATABASE_URL);
 const section = (name: string, rows: (string | number)[][]) => {
   console.log(`\n== ${name} ==`);
   if (!rows.length) console.log('（无记录）');

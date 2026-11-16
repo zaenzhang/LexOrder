@@ -4,6 +4,7 @@ import { scopeFor } from "@/lib/roles/catalog";
 import { hasPersonalCapability } from "@/lib/runtime/capabilities";
 import { z } from "zod";
 import { actionErrorMessage } from "@/lib/action-error";
+import { rawSqlState } from "@/lib/prisma-errors";
 import { bindContractScopeTx,draftAmendmentTx,activateAmendmentTx,cancelAmendmentTx } from "./ledger-contracts";
 import type { ContractTermsInput } from "@/lib/finance/contracts";
 import { commissionPositions, submitCorrectionTx, decideCorrectionTx, settleCommissionTx } from "./ledger-corrections";
@@ -76,7 +77,7 @@ async function mutate<T extends { matterId: string }>(work: (db: Prisma.Transact
     revalidatePath(`/matters/${result.matterId}`);
     return { ok: true as const, ...result };
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError) return {ok:false as const,message:["P2034","P2002","P2025"].includes(error.code) || (error.code==="P2010" && ["40001","40P01","23505"].includes(String(error.meta?.code))) ? "账务或授权已变化，请刷新后重试" : "账务保存失败，未完成本次操作"};
+    if (error instanceof Prisma.PrismaClientKnownRequestError) return {ok:false as const,message:["P2034","P2002","P2025"].includes(error.code) || ["40001","40P01","23505"].includes(rawSqlState(error) ?? "") ? "账务或授权已变化，请刷新后重试" : "账务保存失败，未完成本次操作"};
     if(error instanceof z.ZodError) return {ok:false as const,message:error.issues[0]?.message ?? "请检查填写内容"};
     return {ok:false as const,message:error instanceof Error ? actionErrorMessage(error) :"操作失败，请重试"};
   }

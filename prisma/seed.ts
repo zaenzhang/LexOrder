@@ -1,3 +1,4 @@
+import { createPrismaClient } from "../src/lib/prisma-client";
 /**
  * LawLink 初始 seed
  *
@@ -13,7 +14,7 @@
  * 幂等：所有 upsert 操作，可重复运行不会报错或重复插入。
  */
 
-import { MatterCategory, PrismaClient, SystemRole, UserRole } from "@prisma/client";
+import { MatterCategory, SystemRole, UserRole } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { civilCauses } from "./seeds/causes-civil";
 import { criminalCauses } from "./seeds/causes-criminal";
@@ -21,7 +22,7 @@ import { administrativeCauses } from "./seeds/causes-administrative";
 import { isPersonalMode } from "../src/lib/runtime/mode";
 import { resolvePersonalActor } from "../src/server/runtime/personal";
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient(process.env.DATABASE_URL);
 
 type CauseSeed = {
   code: string;

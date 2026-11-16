@@ -1,3 +1,4 @@
+import { createPrismaClient } from "../src/lib/prisma-client";
 /** 独立测试库中的更正及分成全流程；不修改主库，不发送外部消息。 */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -11,7 +12,7 @@ import { submitCorrectionTx,decideCorrectionTx,settleCommissionTx,commissionPosi
 import { type CorrectionInput } from "../src/lib/finance/corrections";
 import { readFinanceFacts,periodReceipts,sumAmounts } from "../src/server/finance/facts";
 import { readLedger } from "../src/server/finance/ledger-storage";
-const config=new PrismaClient({log:[]}), database=process.env.WORKFLOW_TRIAL_DATABASE??'lawlink_workflow_trial_20260919_ef1a255e', prefix=`correction-${randomUUID().slice(0,8)}`;
+const config=createPrismaClient(process.env.DATABASE_URL), database=process.env.WORKFLOW_TRIAL_DATABASE??'lawlink_workflow_trial_20260919_ef1a255e', prefix=`correction-${randomUUID().slice(0,8)}`;
 let db:PrismaClient;let stage="connect";const results:string[]=[];
 const owner=`${prefix}-owner`,finance=`${prefix}-finance`,admin=`${prefix}-admin`,confirmer=`${prefix}-confirm`,corrector=`${prefix}-correct`,stranger=`${prefix}-stranger`;
 const now=new Date(), old=new Date("2026-08-01T00:00:00+08:00");
@@ -20,7 +21,7 @@ const tx=<T>(f:(t:Prisma.TransactionClient)=>Promise<T>)=>db.$transaction(f,opti
 async function reject(name:string,fn:()=>Promise<unknown>,pattern:RegExp){await assert.rejects(fn,pattern);results.push(name);}
 const auditFailure=(client:Prisma.TransactionClient)=>new Proxy(client,{get(target,p){if(p==="auditLog")return{create:async()=>{throw new Error("SYNTHETIC_AUDIT_FAILURE");}};return Reflect.get(target,p);}});
 async function main(){assert.match(database,/^lawlink_workflow_trial_\d{8}_[a-f0-9]{8}$/);
- const url=new URL(process.env.DATABASE_URL!);assert.notEqual(url.pathname,`/${database}`);url.pathname=`/${database}`;db=new PrismaClient({datasources:{db:{url:url.toString()}},log:[]});
+ const url=new URL(process.env.DATABASE_URL!);assert.notEqual(url.pathname,`/${database}`);url.pathname=`/${database}`;db=createPrismaClient(url.toString());
  const [identity]=await db.$queryRaw<{name:string}[]>`SELECT current_database() AS name`;assert.equal(identity.name,database);
  for(const [id,role] of [[owner,"LAWYER"],[finance,"FINANCE"],[admin,"ASSISTANT"],[stranger,"LAWYER"]] as const)await db.user.create({data:{id,role,name:"更正验收人员",email:`${id}@example.invalid`,passwordHash:"NO-LOGIN",systemRole:id===admin?"SUPER_ADMIN":"NONE",managerAuthorized:id===admin}});
  for(const [id,key] of [[confirmer,"finance.confirm"],[corrector,"finance.correct"]]){const role=await db.roleDefinition.create({data:{name:id,normalizedName:id,permissions:{create:[{permissionKey:key,scope:"ALL"}]}}});await db.user.create({data:{id,role:"CUSTOM",roleDefinitionId:role.id,name:"独立权限验收",email:`${id}@example.invalid`,passwordHash:"NO-LOGIN"}});}

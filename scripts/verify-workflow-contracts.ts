@@ -1,3 +1,4 @@
+import { createPrismaClient } from "../src/lib/prisma-client";
 /** 仅独立合成测试库：合同版本、应收同步和支出冲销。 */
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -11,12 +12,12 @@ import {submitCorrectionTx,decideCorrectionTx} from '../src/server/finance/ledge
 import {readFinanceFacts,sumAmounts} from '../src/server/finance/facts';
 import {readLedger} from '../src/server/finance/ledger-storage';
 import type {ContractTermsInput} from '../src/lib/finance/contracts';
-const init=new PrismaClient({log:[]}),database=process.env.WORKFLOW_TRIAL_DATABASE??'lawlink_workflow_trial_20260919_ef1a255e',prefix=`contracts-${randomUUID().slice(0,8)}`,owner=`${prefix}-owner`,finance=`${prefix}-finance`,stranger=`${prefix}-stranger`;
+const init=createPrismaClient(process.env.DATABASE_URL),database=process.env.WORKFLOW_TRIAL_DATABASE??'lawlink_workflow_trial_20260919_ef1a255e',prefix=`contracts-${randomUUID().slice(0,8)}`,owner=`${prefix}-owner`,finance=`${prefix}-finance`,stranger=`${prefix}-stranger`;
 let db:PrismaClient;let stage='connect';const results:string[]=[];const date=new Date('2026-09-01T00:00:00+08:00');
 const tx=<T>(f:(t:Prisma.TransactionClient)=>Promise<T>)=>db.$transaction(f,{isolationLevel:'Serializable',timeout:20000});
 const bad=async(name:string,fn:()=>Promise<unknown>,pattern:RegExp)=>{await assert.rejects(fn,pattern);results.push(name);};
 async function main(){assert.match(database,/^lawlink_workflow_trial_\d{8}_[a-f0-9]{8}$/);
- const url=new URL(process.env.DATABASE_URL!);assert.notEqual(url.pathname,`/${database}`);url.pathname=`/${database}`;db=new PrismaClient({datasources:{db:{url:url.toString()}},log:[]});assert.equal((await db.$queryRaw<{name:string}[]>`SELECT current_database() AS name`)[0].name,database);
+ const url=new URL(process.env.DATABASE_URL!);assert.notEqual(url.pathname,`/${database}`);url.pathname=`/${database}`;db=createPrismaClient(url.toString());assert.equal((await db.$queryRaw<{name:string}[]>`SELECT current_database() AS name`)[0].name,database);
  for(const [id,role] of [[owner,'LAWYER'],[finance,'FINANCE'],[stranger,'LAWYER']] as const)await db.user.create({data:{id,name:prefix,role,email:`${id}@example.invalid`,passwordHash:'NO-LOGIN'}});
  const matter=await db.matter.create({data:{title:prefix,internalCode:prefix,ownerId:owner}}),other=await db.matter.create({data:{title:prefix,internalCode:prefix+'other',ownerId:owner}});
  const doc=await db.document.create({data:{matterId:matter.id,name:'合成补充协议',path:'synthetic-no-file',uploadedById:owner}}),otherDoc=await db.document.create({data:{matterId:other.id,name:'跨案材料',path:'synthetic-no-file',uploadedById:owner}});

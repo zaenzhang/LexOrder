@@ -1,16 +1,21 @@
-import { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
+import { createPrismaClient } from "./prisma-client";
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
-};
-
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    // Prisma 的自动错误日志可能包含完整写入参数；业务错误由调用方脱敏处理。
-    log: ["warn"]
-  });
-
-if (process.env.NODE_ENV !== "production" || process.env.LEXORDER_RUNTIME_MODE === "PERSONAL") {
-  globalForPrisma.prisma = prisma;
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
+let localClient: PrismaClient | undefined;
+function getClient(): PrismaClient {
+  if (!localClient) {
+    localClient = globalForPrisma.prisma ?? createPrismaClient(process.env.DATABASE_URL, ["warn"]);
+    if (process.env.NODE_ENV !== "production" || process.env.LEXORDER_RUNTIME_MODE === "PERSONAL") globalForPrisma.prisma = localClient;
+  }
+  return localClient;
 }
+
+// Next can import server modules at build time without a database connection.
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_target, key) {
+    const client = getClient();
+    const value = Reflect.get(client, key, client);
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});

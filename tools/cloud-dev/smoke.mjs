@@ -1,7 +1,7 @@
 // Real HTTP authentication + server-rendered workflow check, not browser visual QA.
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../src/lib/prisma-client.ts';
 import bcrypt from 'bcryptjs';
 import { saveClientActivity } from '../../src/server/clients/relationship-service.ts';
 import { readFile } from '../../src/lib/storage/local.ts';
@@ -9,7 +9,7 @@ import { decryptBuffer, sha256 } from '../../src/lib/storage/crypto.ts';
 import { runWeeklyReportPush } from '../../src/server/reports/weekly-push-core.ts';
 import { prisma as appDb } from '../../src/lib/prisma.ts';
 
-const db = new PrismaClient();
+const db = createPrismaClient(process.env.DATABASE_URL);
 const base = `http://127.0.0.1:${process.env.PORT || 3000}`;
 const checks = [];
 let clientId, otherId;

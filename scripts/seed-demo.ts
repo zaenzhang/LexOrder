@@ -1,7 +1,7 @@
+import { createPrismaClient } from "../src/lib/prisma-client";
 /** 全新业务演示数据。清理另走已审阅的本地切换 SQL；此脚本不删除任何数据。 */
-import { PrismaClient } from '@prisma/client';
 import { seedWorkflowDemo } from './seed-workflow-demo';
-const db = new PrismaClient({log:[]});
+const db = createPrismaClient(process.env.DATABASE_URL);
 async function main() {
   const url = new URL(process.env.DATABASE_URL ?? '');
   if (!['localhost','127.0.0.1','[::1]'].includes(url.hostname)) throw new Error('只允许在本机数据库生成演示数据');

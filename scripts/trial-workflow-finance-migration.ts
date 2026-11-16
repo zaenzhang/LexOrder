@@ -1,3 +1,4 @@
+import { createPrismaClient } from "../src/lib/prisma-client";
 /** 独立试迁移：只新建库，不复用/重置/删除库，不读取业务数据。需用户明确授权后运行。 */
 import { fixtureBilling, fixtureReceivable, fixtureReceipt } from "./workflow-finance-fixtures";
 import assert from "node:assert/strict";
@@ -13,7 +14,7 @@ const candidate = "prisma/workflow-finance-proposal.prisma";
 const migration = "prisma/migrations-archive-20260921/20260919000002_business_workflow_repair/migration.sql";
 const sql = readFileSync(migration, "utf8");
 const hash = (file: string) => createHash("sha256").update(readFileSync(file)).digest("hex");
-const source = new PrismaClient({ log: [] });
+const source = createPrismaClient(process.env.DATABASE_URL);
 let test: PrismaClient | undefined;
 let stage = "verify-files";
 const results: string[] = [];
@@ -32,7 +33,7 @@ async function main() {
   assert(sql.includes(`候选 schema SHA256: ${hash(candidate)}`), "候选模型已变化，停止");
   assert(!/^\s*(DROP|DELETE|TRUNCATE|UPDATE|INSERT)\b/im.test(sql.replace(/\$\$[\s\S]*?\$\$/g,"")), "SQL 超出纯增量范围");
   const baseline = join(tmpdir(), `${database}-baseline.sql`);
-  writeFileSync(baseline, cli(["migrate", "diff", "--from-empty", "--to-schema-datamodel", schema, "--script"]));
+  writeFileSync(baseline, cli(["migrate", "diff", "--from-empty", "--to-schema", schema, "--script"]));
   stage = "create-isolated-database";
   const originalUrl = process.env.DATABASE_URL;
   assert(originalUrl, "缺少数据库连接配置");
@@ -47,7 +48,7 @@ async function main() {
   url.pathname = `/${database}`;
   url.searchParams.set("schema", "public");
   const testUrl = url.toString();
-  test = new PrismaClient({ datasources: { db: { url: testUrl } }, log: [] });
+  test = createPrismaClient(testUrl);
   const [destination] = await test.$queryRaw<{ name: string }[]>`SELECT current_database() AS name`;
   assert.equal(destination.name, database);
   assert.notEqual(destination.name, identity.name);
@@ -88,7 +89,7 @@ async function main() {
   }
   results.push(`${tables.length} 张新表及 ${expectedChecks.length} 条 CHECK 已存在且生效`);
   stage = "compare-candidate-model";
-  cli(["migrate", "diff", "--from-schema-datasource", schema, "--to-schema-datamodel", candidate, "--exit-code"], testUrl);
+  cli(["migrate", "diff", "--from-config-datasource", "--to-schema", candidate, "--exit-code"], testUrl);
   results.push("Prisma 可表达的完整结构与候选模型无差异（CHECK 另行实测）");
   stage = "constraint-cases";
   let accepted = 0;

@@ -10,6 +10,7 @@ WORKDIR /app
 RUN apk add --no-cache libc6-compat openssl
 COPY package*.json ./
 COPY prisma ./prisma
+COPY prisma.config.ts ./prisma.config.ts
 RUN npm ci
 
 FROM node:22-alpine AS builder
@@ -45,6 +46,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 # 与全站安全响应头——即便能启动，缺配置同样是错的。见 AGENTS.md「数据库与运行环境」。
 COPY --from=builder --chown=nextjs:nodejs /app/next.config.mjs ./next.config.mjs
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
 # 备份脚本必须进镜像：cron job 通过 process.cwd()/scripts/backup.sh 调用
 COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
 # 独立调度/备份入口通过 tsx 加载服务层及路径别名。

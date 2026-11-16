@@ -1,3 +1,4 @@
+import { createPrismaClient } from "../src/lib/prisma-client";
 /**
  * 2026-09-20 A 批 P1-8：迁移 20260920000001_audit_fix_hardening（触发器修订版）独立演练。
  *
@@ -7,7 +8,6 @@
  * 不触碰主库 lawlink；演练库保留供复核（清理另行确认）。
  * 运行：npx tsx scripts/trial-audit-fix-hardening.ts
  */
-import { PrismaClient } from "@prisma/client";
 import { execSync } from "node:child_process";
 
 const TRIAL_DB = "lawlink_hardening_trial_20260920";
@@ -15,7 +15,7 @@ const url = (process.env.DATABASE_URL ?? "").replace(/\/[^/?]+(\?|$)/, `/${TRIAL
 if (!process.env.DATABASE_URL) throw new Error("需要 DATABASE_URL");
 
 async function main() {
-  const admin = new PrismaClient();
+  const admin = createPrismaClient(process.env.DATABASE_URL);
   await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS ${TRIAL_DB}`);
   await admin.$executeRawUnsafe(`CREATE DATABASE ${TRIAL_DB}`);
   await admin.$disconnect();
@@ -28,7 +28,7 @@ async function main() {
   });
   console.log("② 结构同步完成（当前 schema，含 RESTRICT/PENDING 目标态）");
 
-  const trial = new PrismaClient({ datasources: { db: { url } } });
+  const trial = createPrismaClient(url);
   const sql = (await import("node:fs")).readFileSync("prisma/migrations/20260920000001_audit_fix_hardening/migration.sql", "utf8");
   // 按分号切分但跳过 $$...$$ 函数体内的分号；注释行剥离
   const split = (text: string) => {

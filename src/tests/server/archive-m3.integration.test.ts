@@ -13,8 +13,8 @@ const config = vi.hoisted(() => {
     onRead: null as ((path: string) => Promise<void>) | null };
 });
 vi.mock("@/lib/prisma", async () => {
-  const { PrismaClient } = await import("@prisma/client");
-  return { prisma: new PrismaClient({ datasources: { db: { url: config.url ?? "postgresql://unused:unused@127.0.0.1:1/archive_test" } } }) };
+  const { createPrismaClient } = await import("@/lib/prisma-client");
+  return { prisma: createPrismaClient(config.url ?? "postgresql://unused:unused@127.0.0.1:1/archive_test") };
 });
 vi.mock("@/lib/auth/session", () => ({ requireSession: vi.fn(async () => ({ user: config.actor })) }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));

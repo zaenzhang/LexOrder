@@ -7,9 +7,9 @@ import type { Prisma } from "@prisma/client";
 const databaseUrl = process.env.WORKBENCH_TEST_DATABASE_URL;
 if (databaseUrl && !new URL(databaseUrl).pathname.endsWith("_test")) throw new Error("文书复核测试仅允许独立的 _test 数据库");
 vi.mock("@/lib/prisma", async () => {
-  const { PrismaClient } = await import("@prisma/client");
+  const { createPrismaClient } = await import("@/lib/prisma-client");
   const url = process.env.WORKBENCH_TEST_DATABASE_URL;
-  return { prisma: url ? new PrismaClient({ datasources: { db: { url } } }) : undefined };
+  return { prisma: url ? createPrismaClient(url) : undefined };
 });
 
 import { prisma as db } from "@/lib/prisma";

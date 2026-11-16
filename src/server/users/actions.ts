@@ -8,6 +8,7 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { uniqueIndex } from "@/lib/prisma-errors";
 import { requireSession, requireSystemAdmin } from "@/lib/auth/session";
 import { isPersonalMode } from "@/lib/runtime/mode";
 import { approvalTransaction, approvalAudit } from "@/lib/approvals/service";
@@ -192,8 +193,8 @@ export async function createUser(formData: FormData) {
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      const target = String(error.meta?.target ?? "");
-      throw new Error(target.includes("identityDocument") ? "该类型的证件号码已登记" : "邮箱已被使用");
+      const index = uniqueIndex(error, "User");
+      throw new Error(index === "User_identityDocumentType_identityDocumentNumber_key" ? "该类型的证件号码已登记" : index === "User_email_key" ? "邮箱已被使用" : "用户资料已存在或发生冲突，请核对后重试");
     }
     throw error;
   }

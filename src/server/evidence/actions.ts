@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { uniqueIndex } from "@/lib/prisma-errors";
 import { requireSession } from "@/lib/auth/session";
 import { auditTx, auditStrict } from "@/server/audit";
 import { assertCanReadMatter, assertCanHandleMatter, matterAssociationFilter } from "@/lib/permissions";
@@ -50,12 +51,7 @@ function creationRequestHash(data: z.output<typeof createSchema>) {
 }
 
 function isCreationRequestConflict(error: { code: unknown; meta?: unknown }) {
-  if (error.code !== "P2002" || !error.meta || typeof error.meta !== "object") return false;
-  const meta = error.meta as { modelName?: unknown; target?: unknown };
-  if (meta.modelName !== undefined && meta.modelName !== "EvidenceItem") return false;
-  return meta.target === "EvidenceItem_createdById_requestKey_key" ||
-    (Array.isArray(meta.target) && meta.target.length === 2 &&
-      meta.target.includes("createdById") && meta.target.includes("requestKey"));
+  return uniqueIndex(error, "EvidenceItem") === "EvidenceItem_createdById_requestKey_key";
 }
 
 /** Only creation retries; a unique-key loser must read the winner in a fresh transaction. */

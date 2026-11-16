@@ -1,3 +1,4 @@
+import { createPrismaClient } from "../src/lib/prisma-client";
 import { fixtureBilling, fixtureReceivable, fixtureReceipt } from "./workflow-finance-fixtures";
 /** 仅连接已授权的独立试迁移库；合成样本保留，不修改业务库/Schema、不发通知。 */
 import assert from "node:assert/strict";
@@ -11,7 +12,7 @@ import { readLedger, financeLedgerReady } from "../src/server/finance/ledger-sto
 import { type AllocateLedgerInput } from "../src/lib/finance/ledger";
 
 // Prisma 初始化只加载配置，目标客户端始终显式指定测试库。
-const config = new PrismaClient({log:[]});
+const config = createPrismaClient(process.env.DATABASE_URL);
 const database = process.env.WORKFLOW_TRIAL_DATABASE??'lawlink_workflow_trial_20260919_ef1a255e';
 const runId = `ledger-${randomUUID().slice(0,8)}`;
 const results: string[] = [];
@@ -23,7 +24,7 @@ async function main() {
   const url = new URL(process.env.DATABASE_URL!);
   assert.notEqual(decodeURIComponent(url.pathname.slice(1)),database);
   url.pathname=`/${database}`;url.searchParams.set("schema","public");
-  db = new PrismaClient({datasources:{db:{url:url.toString()}},log:[]});
+  db = createPrismaClient(url.toString());
   const [identity] = await db.$queryRaw<{name:string}[]>`SELECT current_database() AS name`;
   assert.equal(identity.name,database);
   assert(await financeLedgerReady(db));

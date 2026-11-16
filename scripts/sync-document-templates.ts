@@ -3,10 +3,10 @@ import { loadEnvConfig } from "@next/env";
 
 async function main() {
   loadEnvConfig(process.cwd(), false);
-  const [{ PrismaClient }, { seedV08Templates }] = await Promise.all([
-    import("@prisma/client"), import("../prisma/seeds/v08-templates-and-seals")
+  const [{ createPrismaClient }, { seedV08Templates }] = await Promise.all([
+    import("../src/lib/prisma-client"), import("../prisma/seeds/v08-templates-and-seals")
   ]);
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient(process.env.DATABASE_URL);
   try {
     if (!await prisma.user.findFirst({ where: { systemRole: "SUPER_ADMIN", active: true }, select: { id: true } })) {
       throw new Error("请先完成首次初始化，建立有效的系统管理员");

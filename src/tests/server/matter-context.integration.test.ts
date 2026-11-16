@@ -11,8 +11,8 @@ const config = vi.hoisted(() => {
 });
 // All existing authorization helpers use the same explicit isolated database.
 vi.mock("@/lib/prisma", async () => {
-  const { PrismaClient } = await import("@prisma/client");
-  return { prisma: new PrismaClient({ datasources: { db: { url: config.url ?? "postgresql://unused:unused@127.0.0.1:1/context_test" } } }) };
+  const { createPrismaClient } = await import("@/lib/prisma-client");
+  return { prisma: createPrismaClient(config.url ?? "postgresql://unused:unused@127.0.0.1:1/context_test") };
 });
 import { prisma as db } from "@/lib/prisma";
 import { saveMatterContext, confirmMatterContext, readMatterContext, readContextHistory, readContextSource, readContextSourceOptions } from "@/server/matters/context-service";

@@ -1,14 +1,14 @@
+import { createPrismaClient } from "../src/lib/prisma-client";
 /**
  * 一次性修复（2026-09-20）：早期演示种子为交接行写入过占位快照 {"note":"演示"}，
  * 日程页「事项责任与交接」面板按 work/procedures/urgent 数组渲染导致 500。
  * 本脚本为缺字段的行重算真实快照与指纹；快照完好的行不动，可重复执行。
  */
-import { PrismaClient } from '@prisma/client';
 import { handoverSnapshot } from '../src/server/matters/handover';
 import { intakeHandoverSnapshot } from '../src/server/intakes/handover';
 import { fingerprint } from '../src/server/intakes/workflow';
 
-const db = new PrismaClient();
+const db = createPrismaClient(process.env.DATABASE_URL);
 
 async function main() {
   const matters = await db.$queryRaw<{ id: string; matterId: string; status: string }[]>`

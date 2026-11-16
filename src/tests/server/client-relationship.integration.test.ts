@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { randomUUID } from "node:crypto";
-import { PrismaClient, type UserRole } from "@prisma/client";
+import type { UserRole } from "@prisma/client";
+import { createPrismaClient } from "@/lib/prisma-client";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { saveClientActivity } from "@/server/clients/relationship-service";
 import { clientRelationshipFilter, type RelationshipUser } from "@/server/clients/relationship-access";
@@ -15,7 +16,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 // 此套件只接受显式提供、名称以 _test 结尾的独立 PostgreSQL 数据库。
 const url = process.env.WORKBENCH_TEST_DATABASE_URL;
 if (url && !new URL(url).pathname.endsWith("_test")) throw new Error("CRM 集成测试仅允许独立的 _test 数据库");
-const db = new PrismaClient(url ? { datasources: { db: { url } } } : undefined);
+const db = createPrismaClient(url ?? "postgresql://unused:unused@127.0.0.1:1/crm_test");
 const userIds: string[] = [];
 const clientIds: string[] = [];
 const roleIds: string[] = [];

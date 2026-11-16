@@ -7,9 +7,9 @@ import type { User } from "@prisma/client";
 const databaseUrl = process.env.WORKBENCH_TEST_DATABASE_URL;
 if (databaseUrl && !new URL(databaseUrl).pathname.endsWith("_test")) throw new Error("开票幂等集成测试仅允许独立的 _test 数据库");
 vi.mock("@/lib/prisma", async () => {
-  const { PrismaClient } = await import("@prisma/client");
+  const { createPrismaClient } = await import("@/lib/prisma-client");
   const url = process.env.WORKBENCH_TEST_DATABASE_URL;
-  return { prisma: url ? new PrismaClient({ datasources: { db: { url } } }) : undefined };
+  return { prisma: url ? createPrismaClient(url) : undefined };
 });
 vi.mock("@/lib/auth/session", () => ({ requireSession: vi.fn(), getSession: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -17,6 +17,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import { prisma as db } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/session";
 import { createInvoiceRequest } from "@/server/finance/actions";
+import { uniqueIndex } from "@/lib/prisma-errors";
 
 const userIds: string[] = [], matterIds: string[] = [], documentIds: string[] = [], groupIds: string[] = [];
 function sessionFor(user: User) {
@@ -82,7 +83,8 @@ describe.skipIf(!databaseUrl)("开票申请幂等：真实 PG", () => {
     const saved = await db.invoiceRequest.findUniqueOrThrow({ where: { id: created.id } });
     expect(saved.requestKey).toBe(input.requestKey); expect(saved.requestHash).toMatch(/^[0-9a-f]{64}$/);
     const raw = { matterId: f.matter.id, requestedById: f.user.id, amount: 120, requestKey: input.requestKey, requestHash: saved.requestHash };
-    await expect(db.invoiceRequest.create({ data: raw })).rejects.toThrow();
+    const duplicate = await db.invoiceRequest.create({ data: raw }).then(() => null, error => error);
+    expect(uniqueIndex(duplicate, "InvoiceRequest")).toBe("InvoiceRequest_requestedById_requestKey_key");
     await expect(db.invoiceRequest.create({ data: { ...raw, requestKey: randomUUID(), requestHash: null } })).rejects.toThrow();
     await expect(db.invoiceRequest.create({ data: { ...raw, requestKey: "invalid-key" } })).rejects.toThrow();
     for (const data of [{ requestKey: null, requestHash: null }, { requestHash: "b".repeat(64) }, { requestedById: f.approver.id }]) {

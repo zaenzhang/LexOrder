@@ -10,8 +10,8 @@ const config = vi.hoisted(() => {
   return { url, written: new Map<string, Buffer>(), failStorage: false };
 });
 vi.mock("@/lib/prisma", async () => {
-  const { PrismaClient } = await import("@prisma/client");
-  return { prisma: new PrismaClient({ datasources: { db: { url: config.url ?? "postgresql://unused:unused@127.0.0.1:1/research_test" } } }) };
+  const { createPrismaClient } = await import("@/lib/prisma-client");
+  return { prisma: createPrismaClient(config.url ?? "postgresql://unused:unused@127.0.0.1:1/research_test") };
 });
 vi.mock("@/lib/storage", () => ({ storage: {
   writeFileAt: vi.fn(async (path: string, bytes: Buffer) => { if (config.failStorage) throw new Error("simulated storage failure"); config.written.set(path, bytes); }),

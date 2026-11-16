@@ -65,7 +65,7 @@ describe("开票申请提交身份", () => {
   it("真实请求唯一冲突后只读取胜出申请；指纹在整次请求仅计算一次", async () => {
     db.invoiceRequest.create.mockImplementationOnce(async ({ data }: { data: { requestHash: string } }) => {
       saved = { id: "cwinner000000000000000001", status: "APPROVED", requestHash: data.requestHash };
-      throw { code: "P2002", meta: { modelName: "InvoiceRequest", target: ["requestedById", "requestKey"] } };
+      throw { code: "P2002", meta: { modelName: "InvoiceRequest", driverAdapterError: { name: "DriverAdapterError", cause: { kind: "UniqueConstraintViolation", originalCode: "23505", constraint: { index: "InvoiceRequest_requestedById_requestKey_key" } } } } };
     });
     expect(await createInvoiceRequestForActor(actor, input)).toMatchObject({ id: "cwinner000000000000000001", status: "APPROVED", replayed: true });
     expect(hash).toHaveBeenCalledOnce(); expect(db.$transaction).toHaveBeenCalledTimes(2); expect(audit).not.toHaveBeenCalled();

@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { uniqueIndex } from "@/lib/prisma-errors";
 import { approvalAudit } from "@/lib/approvals/service";
 import { basicProfileSchema } from "./profile-schema";
 import { identityDocumentTypeLabel } from "@/lib/identity-documents";
@@ -21,8 +22,8 @@ export async function profileTransaction<T>(work: (db: Db) => Promise<T>) {
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === "P2002") {
-        const target = String(error.meta?.target ?? "");
-        throw new Error(target.includes("identityDocument") ? "该类型的证件号码已登记，无法重复绑定" : "邮箱已被使用，请使用其他邮箱");
+        const index = uniqueIndex(error, "User");
+        throw new Error(index === "User_identityDocumentType_identityDocumentNumber_key" ? "该类型的证件号码已登记，无法重复绑定" : index === "User_email_key" ? "邮箱已被使用，请使用其他邮箱" : "资料已存在或发生冲突，请核对后重试");
       }
       if (["P2034", "P2025"].includes(error.code)) throw new ActionError("资料或账号状态已变化，请刷新后重试");
       throw new ActionError("资料未能保存，请稍后重试");

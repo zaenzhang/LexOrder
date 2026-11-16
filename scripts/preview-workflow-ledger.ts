@@ -1,3 +1,4 @@
+import { createPrismaClient } from "../src/lib/prisma-client";
 import {PERMISSIONS} from "../src/lib/roles/catalog";
 import { registerReceiptTx,confirmReceiptTx } from "../src/server/finance/ledger-registration";
 import { allocateLedgerTx } from "../src/server/finance/ledger-mutations";
@@ -6,7 +7,7 @@ import { fixtureReceivable } from "./workflow-finance-fixtures";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
-const source = new PrismaClient({log:[]});
+const source = createPrismaClient(process.env.DATABASE_URL);
 let db: PrismaClient;
 let previewUserId: string | undefined;
 let colleagueId: string | undefined;
@@ -21,7 +22,7 @@ async function main() {
   if(people.length!==1)throw new Error("不能唯一确定当前验收会话，请停止");
   previewUserId=people[0].id;
   url.pathname=`/${database}`;url.searchParams.set("schema","public");
-  db=new PrismaClient({datasources:{db:{url:url.toString()}},log:[]});
+  db=createPrismaClient(url.toString());
   const [identity]=await db.$queryRaw<{name:string}[]>`SELECT current_database() AS name`;
   if(identity.name!==database)throw new Error("测试库隔离校验失败");
   const existing=await db.user.findUnique({where:{id:previewUserId},select:{active:true,name:true,email:true}});
