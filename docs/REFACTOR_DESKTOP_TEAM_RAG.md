@@ -4,7 +4,7 @@
 
 **决策：共用 TypeScript 业务能力；Personal 优先精简 Next/Node + PGlite，直接打开工作区，不设用户认证体系，使用内置 RAG；Server 保留 Next.js / Prisma / PostgreSQL 与团队认证，使用 RAGFlow。正式 release 同时提供两种可选产物，两版都可连接独立模型 API。性能暂不作为门禁，界面按内容优先原则收敛。Rust 不作全面迁移目标。**
 
-前批已完成项目/官方资料研究、源码耦合核查、固定版本隔离存储试验及四份主文档归并。两版 RAG 分工已由远端提交 `6902322` 固定；本轮以该提交为基线，审查并细化第一阶段依赖、恢复和发布证据；应用运行代码仍是 `2997b54754565081271ca4b66139949d310e2fe0`。尚未实现 Personal 无认证应用、桌面安装包、两版 RAG 集成、技能执行器及新增业务模型。试验结论与剩余验证范围见第 2 节，不能用文档或数据库原型替代完整产品验收。
+前批已完成项目/官方资料研究、源码耦合核查、固定版本隔离存储试验、四份主文档归并、两版 RAG 分工及第一阶段计划细化。本次基于远端提交 `1e1a6467c43667a36c6c23da82589a3329e6091b` 清理旧文档，保留最新任务依赖与验收要求，将开发、部署与恢复说明统一归入第 11 节；应用业务能力仍沿用 `2997b54754565081271ca4b66139949d310e2fe0`。尚未实现 Personal 无认证应用、桌面安装包、两版 RAG 集成、技能执行器及新增业务模型。试验结论与剩余验证范围见第 2 节，不能用文档或数据库原型替代完整产品验收。
 
 用户最新要求覆盖此前“两版共用内置引擎、RAGFlow 仅为备选”的路线，两个必要适配都进入首发。此前提出的 500 MiB、1/2 GiB、5 秒和 CPU 阈值已全部撤下，不再用于选型、阶段退出或发布判定；个人登录也不是前置。更多历史决策保留于 Git，不继续维护并列的现行方案。
 
@@ -410,7 +410,7 @@ M1 选定个人路线后，由 W17 在 M2/M3 实现必要的本地入口、存�
 - **性能观察（非门禁）**：可以记录基础、材料和可选模型各档全进程资源、启动与处理时间，但无阈值、无阻断，未测也不推迟发布；不据此虚构最低配置。
 - **审查节奏**：每批聚焦变更及既有回归；新发现分类进 backlog，阻断项先修，不扩成无限全仓重审。
 
-前批执行源码/官方资料核查、隔离存储试验与 RAGFlow 资料研究；本轮只审查计划并补依赖、范围和验收口径。历史全仓测试数量不用于证明上述新增能力，未运行完整应用或个人 UI。后续代码变更沿用仓库 lint、typecheck、Prisma、生产构建及受影响行为验证；有界面改动时执行完整点击流程。
+前批执行源码/官方资料核查、隔离存储试验、RAGFlow 资料研究与三轮第一阶段计划审查。本次清理只检查文档、引用与必要脚本路径维护；历史全仓测试数量不用于证明新增能力，未运行完整应用或个人 UI。后续代码变更沿用仓库 lint、typecheck、Prisma、生产构建及受影响行为验证；有界面改动时执行完整点击流程。
 
 ## 9. 已定、待证与延期
 
@@ -433,7 +433,7 @@ M1 选定个人路线后，由 W17 在 M2/M3 实现必要的本地入口、存�
 | B5 | [队列](../src/server/cron/queue.ts)、[worker](../src/server/cron/worker.ts) | 去重、领取、租约与完成条件 |
 | B6 | [开发运行器](../tools/cloud-dev/run.mjs)、[Next 配置](../next.config.mjs) | 托管 PG 原型基础与动态/原生依赖 |
 | B7 | [文书服务](../src/server/documents/actions.ts)、[PG 守卫](../prisma/migrations/20260921000005_restore_db_guards/migration.sql) | 复用审批和数据库约束 |
-| B8 | [二开吸收与验证](FORK_INTEGRATION_20261116.md)、[传票首页解析](../src/server/ai/parse-summons-local.ts)、[独立调度](../src/server/cron/standalone.ts) | 已合入能力及局部解析、单实例、补扫/备份限制 |
+| B8 | [二开吸收与验证](https://github.com/zaenzhang/LexOrder/blob/690232270b46e1f1b105df11bdff167fe7afb80d/docs/FORK_INTEGRATION_20261116.md)、[传票首页解析](../src/server/ai/parse-summons-local.ts)、[独立调度](../src/server/cron/standalone.ts) | 已合入能力及局部解析、单实例、补扫/备份限制 |
 | B9 | [session](../src/lib/auth/session.ts)、[proxy](../src/proxy.ts)、[providers](../src/components/providers.tsx)、[事项详情](../src/app/(app)/matters/[id]/page.tsx)、[模板引擎](../src/lib/template-engine.ts)、[instrumentation](../src/instrumentation.ts) | 页面与认证耦合、本机操作者切口、模板副作用及调度入口 |
 | N1 | [Next 静态导出](https://nextjs.org/docs/app/guides/static-exports) | 动态能力限制 |
 | N2 | [Next standalone](https://nextjs.org/docs/app/api-reference/config/next-config-js/output) | server.js、静态资源与 Windows 打包边界 |
@@ -463,3 +463,103 @@ M1 选定个人路线后，由 W17 在 M2/M3 实现必要的本地入口、存�
 | O1 | [Ollama FAQ](https://docs.ollama.com/faq) | 可选本地模型的加载/上下文/并发参考；非首发前置，未在本轮实测 |
 | F1 | [appleoppa 固定 README](https://github.com/appleoppa/LawLink/blob/535a3531aa79edea1c1c6524fd6748d630170718/README.md) | 二开增强与未接线说明 |
 
+
+## 11. 当前源码的开发、部署与恢复
+
+本节归并原安装、云开发、二开接续及运维说明，适用于当前已有的 Server 源码。Personal 安装包与含 RAGFlow 的完整 Server 发行配置仍按 W13/W17 实施；本节命令不能替代双产物验收。当前脚本与配置以 [package.json](../package.json)、[环境模板](../.env.example)、[Dockerfile](../Dockerfile)、[Compose](../docker-compose.yml) 为准。
+
+### 11.1 环境、初始化与凭据
+
+使用与当前 CI/容器一致的 Node.js 22、npm、PostgreSQL 16；源码命令适用于 Linux、macOS 或 WSL。首次在独立开发环境安装依赖，并且仅在尚无私有 `.env` 时由模板创建；已有实例保留其连接、密钥和存储目录。
+
+| 配置 | 要求 |
+| --- | --- |
+| `DATABASE_URL` | 指向本次明确使用的库。Compose 的宿主访问 URL 与 `POSTGRES_DB/USER/PASSWORD/PORT` 对应；容器内部使用 `db:5432` |
+| `NEXTAUTH_URL` / `NEXTAUTH_SECRET` | URL 对应实际 Server 入口；secret 独立随机生成，生产经 HTTPS 入口使用 |
+| `STORAGE_ENCRYPTION_KEY` | 独立随机的 32 字节 base64 密钥；已有数据必须沿用原值，不能随部署重新生成 |
+| `APP_STORAGE_DIR` | 应用、备份和恢复使用同一实际持久目录；不要只持久化数据库 |
+| `SEED_ADMIN_EMAIL/NAME/PASSWORD` | 仅用于 Server 首次管理员初始化；自行设置强密码，不能使用模板或 seed 中的演示默认值 |
+
+两个密钥分别生成，例如各运行一次 `openssl rand -base64 32`，存入私有配置并独立保管。云开发运行器要求数据库密码与首次管理员密码至少 16 个字符。
+
+全新独立 PostgreSQL 环境的顺序见[根 README 源码运行](../README.md#源码运行)：`npm ci` → `npm run prisma:generate` → `npx prisma migrate deploy` → `npx prisma db seed` → `npm run dev`。数据库容器需先启动并就绪。首次 seed 只建立管理员、字典、规则、配置和内置模板；不写入演示案件。已有管理员不会因重跑 seed 自动改密码，已有实例更新用第 11.4 节。
+
+上述账号初始化只属于现有 Server；Personal 的首次打开只建立/选择工作区、稳定本机操作者及空业务数据，不沿用 Server 账号/岗位初始化。
+
+### 11.2 无 Docker 的云开发与隔离验收
+
+[开发运行器](../tools/cloud-dev/run.mjs) 在 `.runtime/cloud/pgdata` 管理独立 PostgreSQL，依赖单独锁定于 `tools/cloud-dev`。它使用私有 `.env` 中的 loopback 数据库地址，要求显式端口、库名和强密码；只新建不存在的开发/验收库，已有目录继续复用。
+
+```bash
+npm ci
+npm ci --prefix tools/cloud-dev
+npm run prisma:generate
+npm run build
+node tools/cloud-dev/run.mjs serve
+```
+
+`serve` 执行开发库迁移与基础 seed，再启动 `.next-build` 生产构建；停止时在拥有该进程的会话使用正常终止信号。出现 `postmaster.pid` 时先确认并正常停止原进程，不删除锁文件强行复用数据目录。不同执行会话不一定共享 loopback 网络，应用与其数据库应由同一运行器管理。
+
+| 模式 | 用途与隔离范围 |
+| --- | --- |
+| `serve` | 启动当前源码开发页面，仍使用 Server 登录；不会形成个人安装包 |
+| `test` | 对 `<开发库名>_acceptance_test` 执行迁移、结构核对及测试，不在开发库执行测试清理 |
+| `verify` | 在同一独立验收库执行测试、seed、生产服务及 HTTP 核查；可用 `WORKBENCH_QA_SCRIPT` 指向受审阅的绝对脚本路径 |
+
+验收另用运行目录内的 `acceptance-storage` 和独立 `acceptance-storage.key`，与开发原件、密钥分离。运行器默认关闭 cron 和自动备份，内置 PG 包不自带 `pg_dump`；开发就绪不表示备份、独立 worker 或完整浏览器流程已通过。
+
+托管预览仅在环境明确提供 `sites-preview` 与 `SITES_MANAGED_LINUX_CONTAINER=1` 时使用 [preview-server.mjs](../tools/cloud-dev/preview-server.mjs)，由预览管理器传入端口与入口地址，并使用独立的 `.runtime/managed-preview`。旧会话地址不是永久发布地址；预览停止使用管理器的生命周期，临时运行环境不承担生产数据保管。
+
+### 11.3 部署、调度与可选服务
+
+当前 Compose 的 `full` profile 提供已有 Web 应用与 PostgreSQL；没有规划中的 RAGFlow 配套服务。镜像已包含脚本所需源码、`tsx`、Bash、PostgreSQL 客户端和 Next 配置，不再沿用旧指南临时挂载源码才能 seed 的假设。
+
+容器首次安装依次完成：构建 app 镜像、启动并等待数据库就绪、在一次性 app 容器运行 `npx prisma migrate deploy`、明确传入私有 `SEED_ADMIN_*` 后运行 `npx prisma db seed`、再启动正式 app。当前 Compose 没有转发 `SEED_ADMIN_*`，仅修改宿主 `.env` 不会自动注入；使用明确的私有 Compose override 或等效注入配置，不把初始密码写入仓库。已有实例不重复初始化管理员。
+
+部署时核对实际转发的环境变量、持久卷及网络入口；默认端口映射不自动提供 HTTPS 或网络隔离。`dev` profile 的 Mailpit 仅为开发收件箱。不得把 Compose 中的历史容器名或包版本号当成新的 LexOrder 正式 release。
+
+| 运行方式 | 调度约定 |
+| --- | --- |
+| `npm run start:with-cron` | 监督器启动 Web 与一个独立 worker；Web 设置 `DISABLE_CRON=1`，worker 单独启用调度，任一子进程退出时终止另一进程 |
+| 分别管理 Web 与 `npm run cron:worker` | Web 显式关闭进程内 cron，worker 只运行一个实例；由进程管理器负责重启和退出 |
+| 单独 `npm start` | 沿用已有进程内调度；不能同时再启动独立 worker |
+
+监督器默认监听 `127.0.0.1:3000`，按部署设置 `LEXORDER_HOST/PORT`。数据库迁移由安装/更新流程执行，启动命令不代办。已有启动补扫覆盖最近 15 分钟漏跑的部分任务，周报按用户/周去重；不等于完整休眠恢复、跨实例去重或备份补跑。worker 关闭等待与监督器终止期限也不保证长备份必然完成。具体入口见 [run-with-cron.mjs](../scripts/run-with-cron.mjs)、[standalone.ts](../src/server/cron/standalone.ts)。
+
+| 可选能力 | 配置与当前边界 |
+| --- | --- |
+| cncases 外部案例服务 | `CNCASES_BASE_URL` 为服务根地址，不含路径前缀、用户信息、查询或 fragment；浏览器跳转可另配 `CNCASES_PUBLIC_URL`，未配置时不泄漏内部地址。默认拒绝私网端点，仅受信本机/内网服务显式启用 `CNCASES_ALLOW_PRIVATE=true` |
+| 元典法规检索 | 复用系统管理中的供应商配置及已有接口适配；需要真实账号权益和接口联调，不能把摘要当完整法规或无服务当零结果 |
+| 传票首页解析 | PDF 先提取第一页文本；图片/扫描可选 Tesseract 的 `chi_sim+eng`，扫描 PDF 另需 `pdftoppm`。可配 `SUMMONS_TESSERACT_BIN` / `SUMMONS_PDFTOPPM_BIN`；当前默认镜像未安装这些 OCR 工具 |
+
+cncases 保留服务端授权、超时、2 MiB 响应上限、禁重定向与同源链接检查，不内置裁判文书语料。传票识别仍仅处理首页；后备视觉 API 接收首页图像，缺时间不补造默认开庭时刻，也不把出具日期当开庭日期。外部服务失败、未配置和无结果分别呈现。这些已有模块不替代规划中的通用 OCR 或两版 RAG。
+
+### 11.4 更新与旧版本边界
+
+已有、迁移链明确的 LexOrder 实例先保留可恢复副本，停止对应写入和 worker，在目标代码版本执行：
+
+```bash
+npm ci
+npm run prisma:generate
+npx prisma migrate deploy
+npm run templates:sync
+npm run build
+```
+
+然后按既有进程管理方式启动，检查健康、实际登录和受影响业务。`templates:sync` 同步已有基础/执行模板；不是迁移数据的替代步骤。容器采用相应的新镜像和一次性迁移/模板同步任务；不得为了追赶 schema 使用 `db push`、reset 或删除现有迁移记录。
+
+历史 LawLink 1.3.x 的基线转换有特定起始状态、增量 SQL 和 migration resolve 顺序，仅按[固定历史升级指南](https://github.com/zaenzhang/LexOrder/blob/690232270b46e1f1b105df11bdff167fe7afb80d/docs/RELEASE-GUIDE-v1.3.md)与 [prisma/upgrade](../prisma/upgrade/v1_3_x_to_v1_4_0.sql)识别适用范围，在副本演练；它不是任意旧版本到当前 LexOrder 的通用升级命令，也不代表本轮已验证升级。PostgreSQL 大版本升级另遵循第 10 节 [P1]。
+
+旧财务试迁移与切换准备脚本属于历史演练工具，不进入安装/升级步骤。原 `docs/` SQL 与[归档迁移](../prisma/migrations-archive-20260921/20260919000002_business_workflow_repair/migration.sql)内容完全相同，两个脚本复用归档文件；模型 hash 与目标库预检保持原样。切换准备产物写入忽略提交的 `.runtime/workflow-cutover-20260919`；不将归档 SQL 放回当前迁移链，也不通过修改历史 schema 绕过预检。
+
+### 11.5 备份、恢复与密钥
+
+[备份任务](../src/server/cron/jobs/backup-database.ts)和 `npm run backup:now` 调用 [scripts/backup.sh](../scripts/backup.sh)，生成 PostgreSQL custom dump、存在的本地原件目录归档和 manifest。运行需要 Bash、与服务端兼容的 `pg_dump`、可写持久目录；`BACKUP_DIR` 和 `BACKUP_KEEP` 管理输出和保留数量。手动命令是显式备份请求，不受 `BACKUP_CRON_ENABLED=false` 的自动任务开关限制。
+
+`BACKUP_PASSPHRASE` 可加密备份产物，未配置时产生未整体加密的备份；它与文件主密钥用途不同。脚本不自动打包 `STORAGE_ENCRYPTION_KEY`、完整私有配置或 S3 对象，需独立保存原密钥、必要配置和实际对象存储副本。Compose 的 `backups` 命名卷仍与主机同在，不能当作异地副本；原件目录缺失时脚本会跳过，不能仅凭退出成功判定备份完整。
+
+恢复时以隔离实例核对版本、目标库、备份 manifest、原件路径及密钥，先验证数据/权限，再开放业务和检索。数据库和文件需要同一一致性时点，备份期间应停止相关写入或使用已验证的一致性方案。已有新写入后的回退另行处理数据，不能直接覆盖旧备份抹去新增事实。
+
+当前 [restore.sh](../scripts/restore.sh) 仍使用旧 `STORAGE_PATH` 变量、只直接读取未加密的 dump/tar 文件，并会跳过缺失文件；使用前须核对实际 `APP_STORAGE_DIR` 与归档结构、处理解密，并在隔离目标验证。它尚不能作为完整的一键恢复保证。本轮只保留并核对说明，成功备份/恢复、对象存储恢复及将来的 RAGFlow 状态恢复仍需 W13 验收，不能用备份失败路径测试代替。
+
+`STORAGE_ENCRYPTION_KEY` 同时关系到附件、证件号密文与盲索引；只换环境变量或派生域会破坏现有数据读取/检索。当前没有已完成的自动密钥轮换工具，轮换需要明确的旧数据解密/重加密、盲索引重建、恢复副本与一致性验证方案。未来两版 RAG 的恢复还须核对文档版本、解析/嵌入指纹、索引代次和服务端绑定；先恢复当前授权，索引按固定配置重建。

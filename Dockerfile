@@ -6,7 +6,7 @@ WORKDIR /app
 # openssl 必须显式安装（2026-09-21 Docker 部署验证暴露）：node:22-alpine 只带
 # libssl3，不带 openssl 命令行；Prisma 在安装/生成时用它探测 OpenSSL 版本，探测
 # 失败会回退选择 openssl-1.1.x 的引擎二进制，而运行环境只有 libssl3 —— 引擎加载
-# 失败，容器内 migrate/seed 与应用查询全部不可用。见 AGENTS §五 6.2。
+# 失败，容器内 migrate/seed 与应用查询全部不可用。见 AGENTS.md「数据库与运行环境」。
 RUN apk add --no-cache libc6-compat openssl
 COPY package*.json ./
 COPY prisma ./prisma
@@ -42,7 +42,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 # NEXT_DIST_DIR（构建产物在 .next-build 而非默认 .next），缺了它 next start 会去
 # 找 .next 并报 "Could not find a production build"，容器无限重启。该文件还带着
 # serverExternalPackages（缺则 /matters 等路由 500）、serverActions 25MB 上传上限
-# 与全站安全响应头——即便能启动，缺配置同样是错的。见 AGENTS §五 6.3。
+# 与全站安全响应头——即便能启动，缺配置同样是错的。见 AGENTS.md「数据库与运行环境」。
 COPY --from=builder --chown=nextjs:nodejs /app/next.config.mjs ./next.config.mjs
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 # 备份脚本必须进镜像：cron job 通过 process.cwd()/scripts/backup.sh 调用

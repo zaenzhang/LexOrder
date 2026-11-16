@@ -10,7 +10,7 @@ import { Prisma, PrismaClient } from "@prisma/client";
 
 const schema = "prisma/workflow-baseline-20260919.prisma";
 const candidate = "prisma/workflow-finance-proposal.prisma";
-const migration = "docs/BUSINESS-WORKFLOW-FINANCE-MIGRATION-20260919.sql";
+const migration = "prisma/migrations-archive-20260921/20260919000002_business_workflow_repair/migration.sql";
 const sql = readFileSync(migration, "utf8");
 const hash = (file: string) => createHash("sha256").update(readFileSync(file)).digest("hex");
 const source = new PrismaClient({ log: [] });

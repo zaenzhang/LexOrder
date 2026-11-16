@@ -1,148 +1,82 @@
 # 律序 · LexOrder
 
-面向个人律师和小团队、以法律事项为中心的工作台。产品目标是让上下文可恢复、重要依据可核查、责任与交付可追踪。
+面向个人律师和小团队、以法律事项为中心的工作台。让上下文可恢复、重要依据可核查、责任与交付可追踪。
 
-项目仓库：[zaenzhang/LexOrder](https://github.com/zaenzhang/LexOrder)。
+**事有经纬，案有始终。**
 
-以 [LawLink v2.0.1](https://github.com/lawflow-boop/LawLink/tree/v2.0.1) 为基线，逐步融合个人计划、客户维护、材料检索、AI 引用和法律数据库能力。固定上游提交：`4736aa100515bb15f47443cdb6b0ae65745e5fff`。保留原项目的 MIT 许可和版权。此仓库以当前源码快照建立，原始发布历史见上游；验证文档中的本地来源提交用于追溯，不等同于本仓库提交。
+项目仓库：[zaenzhang/LexOrder](https://github.com/zaenzhang/LexOrder)。代码基于 LawLink v2.0.1，保留原项目 MIT 许可及版权。
 
-## 本分支的首批增量
+## 当前状态
 
-- **未成案客户归属**：新建、收案自动建档、补正和导入四个入口记录负责人，普通律师可继续查看自己尚未关联案件的客户。
-- **沟通与跟进**：在客户详情记录电话、微信、邮件或面谈；安排下一次跟进，录入结果或取消原因，继续生成下一项。
-- **一致性与权限**：结果、任务状态、下一项和审计同事务提交；重复请求幂等；完成使用状态条件更新；读取和写入均按服务端实际权限判断。
-- **客户合并**：沟通与跟进随档案迁移；两个客户的授权在事务内复核；暂不支持跨负责人合并。
-- **云开发运行器**：没有 Docker 时仍使用原生 PostgreSQL 16；数据库、迁移、测试和应用可在一个受限云执行会话内运行。
+现有源码包含客户与收案、案件与程序、材料与证据、期限与任务、财务、审批及归档业务。LexOrder 已增加客户沟通与跟进、客户合并，以及法规/案例服务适配、执行文书模板、传票首页解析和独立调度入口。实际采用与验证范围见[实施计划](docs/WORKBENCH_PLAN.md#8-交接完成范围证据与未覆盖项)。
 
-客户归属不会自动扩大案件正文、材料或财务访问权。系统管理员身份与业务管理权限继续分开。当前跟进支持到期／逾期显示，自动提醒送达仍待接入。
+**重构方向已经确定，个人安装包、两版 RAG 集成与新技能执行器仍待实现。** 当前源码运行方式对应已有部署系统，不能当作已发布的 Personal 或完整 Server RAG 发行包。
 
-## 已吸收的 LawLink 二开增量（2026-11-16）
+首条工作流程：目标与客户指示 → 材料 → 事实与争点 → 带来源草稿 → 律师确认 → 行动与客户跟进 → 实际交付与归档。
 
-按 [appleoppa/LawLink](https://github.com/appleoppa/LawLink/tree/535a3531aa79edea1c1c6524fd6748d630170718) 的固定提交移植通用功能，并适配 LexOrder 已有的权限、CRM、Zod 4 和部署方式：
+## 两种发行形态
 
-- **法规与自建文书检索**：案件检索增加元典法规筛选、摘要及原文链接，以及可独立配置的 cncases 服务入口。没有附带裁判文书语料或供应商账号。
-- **三份执行模板**：强制执行申请书、执行异议申请书、追加被执行人申请书。执行依据、案号及法院可在生成前补填；这些临时字段只进入本次文书快照。
-- **传票解析**：文本 PDF 首页优先本地提取，图片／扫描 PDF 可选本地 OCR，无法提取时使用已配置的视觉模型；结果仍由律师确认，缺失时间不自动补成 09:00。
-- **独立运行入口**：支持独立调度 worker、Web 与 worker 联合启动、手动备份；启动时检查部分作业在计划时刻后 15 分钟内的漏跑情况，周报并发推送按人和周去重。该补扫不包含备份，也不等于完整休眠恢复。
+| 项目 | Personal：本地个人版 | Server：部署版 |
+| --- | --- | --- |
+| 使用 | 安装后直接打开本地工作区 | 管理员部署，成员通过浏览器使用 |
+| 用户认证 | 无注册、登录、账号或用户管理 | 保留团队认证、人员与业务权限 |
+| 业务与存储 | 精简 Next/Node，共用 TS 业务；PGlite 为个人库优先方向 | Next.js / TypeScript / Prisma / PostgreSQL |
+| RAG | 内置 RAG，LanceDB 为首个实现目标 | RAGFlow，纳入正式部署交付 |
+| 模型 | 可连接独立模型 API，不默认捆绑生成大模型 | 同样可连接独立模型 API |
+| 交付 | 个人安装包 | 应用镜像、配套 RAGFlow 与依赖配置、升级恢复说明 |
 
-已有实例升级时，先完成备份，再执行 `npx prisma migrate deploy` 和 `npm run templates:sync`，随后重新构建、重启。模板同步只增补缺失的内置模板，不重跑其他初始化设置。部署参数、运行命令和实际验证范围见[二开吸收记录](docs/FORK_INTEGRATION_20261116.md)。
+两版共用案件、材料版本、技能、引用与确认流程。每个正式 release 同时提供两种可用产物；个人独立与完全离线分别验收。**性能暂不作为门禁。** 界面以正文、材料、依据和下一步为主，减少装饰。
 
-## 当前文档
+## 项目文档
 
-方案归并为四份主文档，分类入口及既有设计、运维、历史验证见 [文档导航](docs/README.md)。
+`docs/` 只维护四份主文档与一个[导航页](docs/README.md)。开发、部署和恢复说明并入架构文档，历史结果并入实施计划；旧报告、旧图稿和过程版本从 Git 历史查阅。
 
-| 主文档 | 唯一负责的内容 |
+| 主文档 | 内容 |
 | --- | --- |
-| [产品需求、技能与界面](docs/PRODUCT_REQUIREMENTS_ACCEPTANCE.md) | RQ01—RQ20、SK01—SK12、内容优先界面与完整场景验收 |
-| [架构、发布与审查](docs/REFACTOR_DESKTOP_TEAM_RAG.md) | 两种产物、无认证个人版、独立模型 API、PGlite 试验、技术与发布边界 |
-| [实施计划与交接](docs/WORKBENCH_PLAN.md) | M0—M6 / W01—W17、依赖、当前证据、未完成项与下一步 |
-| [研究与决策依据](docs/RESEARCH_AND_DECISIONS.md) | 项目来源/固定版本/许可、全球律所官方职业能力来源及采用判断 |
+| [产品需求、技能与界面](docs/PRODUCT_REQUIREMENTS_ACCEPTANCE.md) | RQ01—RQ20、SK01—SK12、界面和场景验收 |
+| [架构、发布与审查](docs/REFACTOR_DESKTOP_TEAM_RAG.md) | Personal/Server、RAG、模型 API、存储试验、开发部署与恢复 |
+| [实施计划与交接](docs/WORKBENCH_PLAN.md) | 第一阶段 M0—M4、W01—W17 及子任务、16 组验收场景、当前证据与下一步 |
+| [研究与决策依据](docs/RESEARCH_AND_DECISIONS.md) | 项目来源、固定版本、采用边界及全球律所职业能力资料 |
 
-运行与已执行验证：[云环境搭建](docs/CLOUD_SETUP.md)、[首次验证](docs/WORKBENCH_VALIDATION.md)、[依赖维护](docs/DEPENDENCY_AUDIT_20261115.md)、[二开吸收](docs/FORK_INTEGRATION_20261116.md)。这些记录有各自日期与范围，不作为尚未实现的新能力证明。
+协作入口：[AGENTS.md](AGENTS.md)、[贡献说明](CONTRIBUTING.md)、[变更记录](CHANGELOG.md)、[安全说明](SECURITY.md)、[社区准则](CODE_OF_CONDUCT.md)。
 
-快速启动（克隆后先按搭建文档准备私有 `.env`）：
+## 源码运行
+
+以下用于全新、独立的开发或验收环境；当前页面仍使用 Server 登录。推荐与仓库 CI/容器一致的 Node.js 22、npm 和 PostgreSQL 16。命令适用于 Linux、macOS 或 WSL。
 
 ```bash
 git clone https://github.com/zaenzhang/LexOrder.git
 cd LexOrder
 npm ci
-npm ci --prefix tools/cloud-dev
-npm run prisma:generate
-npm run build
-node tools/cloud-dev/run.mjs serve
 ```
 
-这是云内开发／验收运行方式，`127.0.0.1` 不是公网交付地址。长期部署使用持久服务器和正式数据库，具体见搭建文档。默认初始化不添加客户、案件或财务演示数据。
+仅在没有私有 `.env` 时从 `.env.example` 创建。设置自己的数据库连接、初始管理员及强密码；分别生成 `NEXTAUTH_SECRET` 和 `STORAGE_ENCRYPTION_KEY`。已有环境沿用原密钥。配置与准确操作边界见[架构第 11 节](docs/REFACTOR_DESKTOP_TEAM_RAG.md#11-当前源码的开发部署与恢复)。
 
-**后续工作主线**：目标与客户指示 → 材料入库 → 事实与争点 → 带来源草稿 → 律师确认 → 行动与客户跟进 → 实际交付与归档。参考项目的处理规则和官方律所能力资料分别进入业务设计与技能规格，来源见上方文档。
-
-**2026-11-16 当前决策**：每个正式 release 同时提供 **Personal 最小化个人版**与 **Server 部署版**。Personal 无用户认证，直接打开本地工作区，优先精简 Next/Node + PGlite，使用内置 RAG（首个实现目标 LanceDB）；Server 保留 Next.js / Prisma / PostgreSQL 与团队认证，使用 RAGFlow 并配套交付服务配置。两版共用业务、技能和引用契约，都可连接独立模型 API，不默认捆绑大模型。界面以案件内容、材料、依据和下一步为主，减少装饰；**性能暂不作为门禁**。全面 Rust 重写延期。
-
-此前已完成研究、文档归并及 PGlite/Prisma 隔离兼容检查：原有五迁移、抽样守卫与同版停写恢复通过；SQLite 直接换 provider 被拒绝。具体版本、复现命令和未覆盖范围见[架构第 2 节](docs/REFACTOR_DESKTOP_TEAM_RAG.md#2-推荐的交付方式)。本次按用户决定修订两版 RAG 分工；**个人无认证应用、两种发行产物、两版 RAG 集成与技能执行器仍未实现**，当前源码/下方上游运行说明仍主要对应已有部署系统。
-
----
-
-## 上游说明（保留原始版本背景）
-
-以下来自固定版本的上游 README，历史发布与审计结果仍以各自日期为准；本分支结果请查看上方验证文档。下方的克隆命令属于上游版本，本分支使用上方步骤和当前仓库地址。
-
-**事有经纬，案有始终。**
-
-LawLink 是面向独立律师、小团队和中小律所的开源、自部署案件 / 项目管理系统。一家律所或团队部署一套实例，使用自己的数据库和文件存储。
-
-`收案登记 → 冲突检索 → 转正式案件 → 持续跟进 → 财务记录 → 结案归档 → 数据导出`
-
-> 当前正式版：**[v2.0.1](https://github.com/lawflow-boop/LawLink/releases/tag/v2.0.1)**（修补容器镜像缺少 `openssl` 导致 Docker 部署不可用；业务逻辑与数据库结构同 v2.0.0，源码方式部署的实例不受影响）。v2.0.0，以 `597404b` 为基线并补充提醒测试时钟修复，包含升级路径、数据库守卫及完整业务主流程验收修复。旧文档及升级脚本中的 1.4.0 为内部名称，对外版本为 2.0.0。见[正式发布说明](./docs/RELEASE-NOTES-v2.0.0.md)。
-
-> **依赖安全维护（最近核对 2026-09-21）**：2026-09-21 复审时 `nodemailer` 出现 2 项 high 级公告（≤9.1.0），已升级至 10.x 并加 `overrides` 固定，复审后全量与生产依赖审计均为 0 个已知漏洞。审计结果按核对日期计，**不随时间自动成立**——部署与升级前请自行重跑 `npm audit`。该结果不等于系统安全认证，正式部署仍须完成权限与备份恢复验收。详见[安全状态](./SECURITY.md#依赖审计状态)。
-
-> **验证范围**：已补齐升级路径和数据库守卫，仍未覆盖多用户并发、OCR 可信度、全部短信平台兼容性及借阅到期真实时间验证。详见[验证记录](./docs/RELEASE-VALIDATION-v2.0.0.md)。
-
-## 本版提供什么
-
-| 能力 | 说明 |
-|---|---|
-| 墨案与案卷工作台 | 全新界面；案件档案、办案进程、委托与财务、审批用印按程序和环节组织 |
-| 法院来件 | 短信保存、附件提取、可选 OCR/AI 阅读、整理建议与律师确认；失败可人工接续 |
-| 财务与对账 | 实收登记后确认、应收核销、发票关联、补充协议及财务更正 |
-| 期限与提醒 | 送达台账、保全补扫、邮件通道状态及放假安排核对提示 |
-| 独立管理后台 | `/admin` 集中管理律所、人员、岗位角色、律师团队、审批权限、归档制度和外部接入 |
-| 岗位与团队 | 内置及自定义岗位；常设律师团队与案件承办人员分开管理 |
-| 统一审批 | `/approvals` 集中处理收案、文书、归档、开票及用章，保留处理记录并区分批准与后续执行 |
-| 归档与借阅 | 本所制度、送审快照、归档收尾、补充归档及限时只读借阅 |
-| 个人资料 | 本人资料及登录安全；人员证件资料、照片加密存储与访问审计 |
-| 可选接入 | AI、元典、日历订阅、群机器人提醒等；外部服务须另行配置并自行承担服务费用 |
-
-**配置前须理解的边界：**
-
-- 系统管理员、业务岗位、事项审批是三种不同资格。超级管理员不会自动取得全所案件、财务或审批权限。
-- 团队只读权限不等于案件编辑、财务查看、附件下载或导出权限；审批权只开放对应申请所需资料。
-- 默认禁止审批本人申请。单人执业须显式设置本人审批例外，仍须匹配事项授权及印章规则。
-- 未配置本所归档制度时不能提交正式归档；电子文件存在、申请人勾选、审批人确认不能混为一谈。
-- 证件识别只作录入辅助，不是实名认证或真伪鉴定。期限计算、冲突命中和 AI 输出都需要人工核对。
-
-## 安装与升级
-
-- **云服务器安装**：按[安装指南](./docs/CLOUD-SERVER-INSTALLATION-GUIDE.md)配置端口、HTTPS、初始化和备份。基础 Compose 文件是开发起点，不是完成生产配置的一键部署。
-- **已有 1.3.x 部署**：按[升级指南](./docs/RELEASE-GUIDE-v1.3.md)执行增量 SQL → 标记 `0_init` → 标记 `20260921000004_archive_borrow` → `migrate deploy`。先备份、停止写入、在副本演练；不要沿用 RC1 前的两步说明。
-- **首次登录**：先设置独立账号、岗位、团队、审批权限和归档制度。完整步骤见[首次配置清单](./docs/RELEASE-GUIDE-v2.md#首次登录后的配置顺序)。
-- **版本选择**：部署固定版本标签。`main` 可能继续演进，不能以今天的分支内容推断旧标签包含的功能。
-
-## 本地开发与试用
-
-准备 Node.js 22（与仓库 CI 和容器版本一致）及 PostgreSQL 16。下列命令用于全新的本地试用环境；已有数据库先阅读升级说明。
+已有独立 PostgreSQL 时：
 
 ```bash
-git clone --branch v2.0.0 --depth 1 https://github.com/lawflow-boop/LawLink.git
-cd LawLink
-cp .env.example .env
-```
-
-编辑 `.env`，使数据库连接与 Compose 数据库账号一致，设置 `SEED_ADMIN_EMAIL` 和强密码，并分别生成 `NEXTAUTH_SECRET`、`STORAGE_ENCRYPTION_KEY`：
-
-```bash
-openssl rand -base64 32
-openssl rand -base64 32
-```
-
-保管好这两个独立值，然后执行：
-
-```bash
-docker compose up -d db
-npm ci
 npm run prisma:generate
 npx prisma migrate deploy
 npx prisma db seed
 npm run dev
 ```
 
-打开 [本地登录页](http://localhost:3000/login)，用首次 seed 时设置的账号登录。模板中的 `admin@lawlink.local` / `ChangeMe!2026` 仅供本地试用；公开部署前须更换。已有账号不会因修改 `.env` 或重跑 seed 而改密码；不要用清空数据库的方式处理忘记密码。
+若使用仓库的开发数据库容器，先将 `.env` 中 `DATABASE_URL` 与 `POSTGRES_*` 配置对应，再执行 `docker compose up -d db`。首次 seed 只建立管理员、字典、规则、配置及内置模板；已有实例更新使用迁移与 `npm run templates:sync`，不把重跑 seed 当作改密码或升级权限的办法。
 
-个人资料与登录安全位于 `/settings/profile`。开发使用 `.next-dev`，生产构建使用 `.next-build`。
+没有 Docker 时，可使用隔离的云开发运行器：
 
-> **备份（容器部署必读）**：`docker compose --profile full up` 的 app 容器每天 02:30 自动备份数据库与文件存储到 `/app/backups`（部署方可通过容器环境设置 `BACKUP_DIR` 或 `BACKUP_CRON_ENABLED=false`；仅在宿主机 `.env` 填写但未传入容器不会生效）。compose 已挂载 `backups` 命名卷，但命名卷仍在 Docker 管理区——**生产部署应把该卷改为绑定宿主机目录或异地路径**，否则备份与数据同生共死。备份含凭据哈希与加密材料，建议设置 `BACKUP_PASSPHRASE` 自动加密后再外传（见 `scripts/backup.sh` 头部说明）。
+```bash
+npm ci --prefix tools/cloud-dev
+npm run prisma:generate
+npm run build
+node tools/cloud-dev/run.mjs serve
+```
 
-## 验证
+该运行器管理开发数据库并执行迁移/初始化，要求专用 loopback 数据库地址、显式端口及强密码；默认关闭调度和自动备份。它是开发工具，详细配置及隔离验收见[架构第 11.2 节](docs/REFACTOR_DESKTOP_TEAM_RAG.md#112-无-docker-的云开发与隔离验收)。
+
+## 验证与运行维护
+
+业务代码变更按影响范围执行：
 
 ```bash
 npm run lint
@@ -152,32 +86,40 @@ npm run test:run
 npm run build
 ```
 
-CI 另用独立影子数据库检查迁移与模型一致性，并在另一个空数据库验证完整迁移、初始化和基础查询。测试通过不等于本所生产部署或安全审计已经完成。
+数据库与浏览器流程分别验证；未配置真实验收库时，部分集成套件会跳过。文档修改核对引用、当前事实和变更范围，不把历史测试数量作为新能力已通过的证明。
 
-## 技术栈
+生产源码可用 `npm run start:with-cron` 联合启动 Web 与一个调度 worker；已有进程管理也可分别启动。数据库迁移不由该命令代办，同一实例只能有一个调度所有者。当前 Compose 尚未包含规划中的 RAGFlow 配套部署。
 
-Next.js 16 / React 19 / TypeScript；shadcn/ui、Tailwind CSS、Framer Motion；PostgreSQL 16 / Prisma 5；NextAuth.js；TanStack Table、Recharts。界面采用高密度浅色工作台。
+### 备份
 
-## 文档索引
+备份必须同时覆盖业务数据库、原件、必要配置和独立保管的文件密钥，并在隔离环境恢复验证。`npm run backup:now` 依赖可用的 `pg_dump`；当前容器的 `backups` 命名卷不等于异地副本。升级、定时任务、外部检索/OCR 配置与备份恢复统一见[架构第 11 节](docs/REFACTOR_DESKTOP_TEAM_RAG.md#11-当前源码的开发部署与恢复)。
 
-| 文档 | 用途 |
-|---|---|
-| [本版使用与升级说明](./docs/RELEASE-GUIDE-v2.md) | 当前功能边界、首次配置、旧版迁移注意事项 |
-| [云服务器安装指南](./docs/CLOUD-SERVER-INSTALLATION-GUIDE.md) | 固定版本、HTTPS、初始化、备份与更新 |
-| [2.0 发布说明](./docs/RELEASE-NOTES-v2.0.0.md) | 相对 1.0 的累计变化与已知限制 |
-| [本次发布验证](./docs/RELEASE-VALIDATION-v2.0.0.md) | 独立发布副本的检查结果与未覆盖范围 |
-| [变更记录](./CHANGELOG.md) | 各版本变更与验证范围 |
-| [路线图](./docs/ROADMAP.md) | 已实现能力与后续方向，非排期承诺 |
-| [安全说明](./SECURITY.md) | 部署方职责及私密漏洞报告方式 |
-| [工作区规则](./AGENTS.md) / [贡献说明](./CONTRIBUTING.md) | 协作规范 |
-| [PRD](./docs/PRD.md) / [数据模型](./docs/DATA-MODEL.md) / [UI 规范](./docs/UI-DESIGN.md) | 当前设计入口与历史演进记录；旧章节不作为当前授权依据 |
-| [公开发布检查清单](./docs/PUBLIC_RELEASE_CHECKLIST.md) | 敏感资料与交付检查 |
-| [早期发布体检记录](./docs/PUBLISH_READINESS_REPORT.md) | 历史检查结果，不代表当前安全状态 |
+## 许可与数据
 
-## 协议与使用边界
+项目使用 [MIT LICENSE](LICENSE)，保留 LawLink 原作者版权和实际二开来源。参考项目的许可与采用方式见[研究依据](docs/RESEARCH_AND_DECISIONS.md#5-许可采用规则)。
 
-[MIT](./LICENSE) — 可使用、修改和商用。LawLink 是通用案件管理软件，不提供法律意见，不替代律师的专业判断。部署方应结合自己的数据与使用场景评估保密、个人信息保护及档案管理要求。
+公开仓库不携带真实案件、客户资料、业务数据库、附件、密钥或备份。模型生成形成待核对候选，专业判断、正式确认和实际交付由律师负责。系统管理、业务读取、材料处理、财务、审批与导出分别授权。
 
-### 公开版的数据范围
+## 参考项目清单
 
-公开发行不包含开发者本地的模拟测试案件、客户、财务记录、附件或数据库备份。全新安装只初始化管理员账号及案由、模板、期限规则等系统基础配置，业务列表为空。源码测试中的虚构样例用于自动验证，不会导入业务数据库；界面设计稿中的示例也不是安装数据。升级保留业务数据，必须按支持的起始版本和升级指南执行；不得以清库重装代替升级。
+以下列出代码来源、拟采用组件及设计参考；采用状态按本仓库实际实现记录，不将参考对象的全部功能视为已集成。
+
+| 项目 | 参考或采用方向 | 当前关系 |
+| --- | --- | --- |
+| [LawLink](https://github.com/lawflow-boop/LawLink/tree/4736aa100515bb15f47443cdb6b0ae65745e5fff) | 客户、事项、材料、财务、审批与归档 | 实际代码基线：v2.0.1，固定提交 `4736aa1` |
+| [appleoppa/LawLink](https://github.com/appleoppa/LawLink/tree/535a3531aa79edea1c1c6524fd6748d630170718) | 法规/案例适配、传票、执行模板与独立调度 | 通用二开已吸收，来源固定提交 `535a353` |
+| [RAGFlow](https://github.com/infiniflow/ragflow/releases/tag/v1.0.0) | Server 解析、索引、检索与重排 | 已定后端，接入与验收待实施 |
+| [LanceDB](https://lancedb.github.io/lancedb/js/) | Personal 内置检索组件 | 首个实现目标，待接入与验证 |
+| [PGlite](https://pglite.dev/docs/about) | Personal 嵌入式业务库 | 优先方向；有界兼容试验通过，应用适配待完成 |
+| [AnythingLLM](https://docs.anythingllm.com/installation-desktop/overview) / [Cherry Studio](https://github.com/CherryHQ/cherry-studio) | 双交付、组件托管、模型配置与召回检查 | 行为与工程参考 |
+| [案齐 ANQI](https://github.com/zj-ai-lab/anqi) | 今日计划、程序事件、期限解释与人工保护 | 行为参考 |
+| [Kosmos](https://github.com/Kosmos-Law/kosmos) / [诉讼可视化](https://github.com/MiaoQichuan/new-litigation-visualization) | 原文高亮、多来源事实、矛盾和时间线 | 行为与数据关系参考 |
+| [Counsel OS](https://github.com/eigenlegal/counsel-os) | 案件上下文、来源锚点、覆盖与文书版本 | 行为与工程参考 |
+| [Frappe CRM](https://github.com/frappe/crm) / [Twenty](https://github.com/twentyhq/twenty) | 客户活动、跟进和关联记录 | 行为参考 |
+| [Paperless-ngx](https://github.com/paperless-ngx/paperless-ngx) | 原件、派生处理、索引归档与失败恢复 | 行为与工程参考 |
+| [j-lawyer](https://www.j-lawyer.org/?page_id=22) / [Docassemble](https://github.com/jhpyle/docassemble) | 案件表单、模板变量、条件访谈与文书装配 | 行为与工程参考 |
+| [AppFlowy](https://github.com/AppFlowy-IO/AppFlowy) | 界面、业务与持久层边界 | 工程参考 |
+| [Clio](https://www.clio.com/features/case-management/) | 客户获取、案件办理与服务交付 | 商业产品，行为参考 |
+| [元典](https://open.chineselaw.com/) / [北大法宝](https://mcp.pkulaw.com/) / [威科](https://mcp.wkinfo.com.cn/docs) | 获授权法律数据库与检索接口 | 商业数据服务；元典已有适配代码，真实权益/接口待联调，其余为接入候选 |
+
+详细来源、固定版本、许可和采用边界见[研究与决策依据](docs/RESEARCH_AND_DECISIONS.md)。

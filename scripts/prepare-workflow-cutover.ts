@@ -1,7 +1,7 @@
 /** 只读生成本地切换方案；--trial 仅在新建合成库执行，绝不写入来源库。 */
 import assert from 'node:assert/strict';
 import {createHash, randomBytes} from 'node:crypto';
-import {readFileSync, writeFileSync} from 'node:fs';
+import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -10,8 +10,9 @@ import {insertFinanceRowTx} from '../src/server/finance/allocation-internals';
 import {seedWorkflowDemo} from './seed-workflow-demo';
 
 const schema='prisma/schema.prisma';
-const migration='docs/BUSINESS-WORKFLOW-FINANCE-MIGRATION-20260919.sql';
-const output='docs/BUSINESS-WORKFLOW-LOCAL-CUTOVER-20260919.sql';
+const migration='prisma/migrations-archive-20260921/20260919000002_business_workflow_repair/migration.sql';
+const outputDir='.runtime/workflow-cutover-20260919';
+const output=join(outputDir,'BUSINESS-WORKFLOW-LOCAL-CUTOVER-20260919.sql');
 const preserved=new Set(['User','UserIdentityDocument','RoleDefinition','RolePermission','Team','TeamMember','CauseOfAction','CustomFieldDef','DeadlineRule','StageTemplate','SystemSetting','DocumentTemplate','SealTypeConfig','SealPurposeConfig','ApprovalPermissionGroup','ApprovalPermissionMember','ApprovalPermissionRule','AuditLog','ExternalCallLog','FirmFile','Announcement','ExternalContact']);
 const special=new Set(['Document','Notification','JobQueue']);
 const business=new Set(['Client','Contact','Intake','Matter','MatterMember','MatterClient','MatterProcedure','MatterStage','Task','Hearing','Deadline','ProcedureMemo','Party','ProcedureParty','RelatedEntity','MatterLink','ConflictCheck','ConflictHit','Note','InvoiceRequest','Receivable','Payment','Allocation','FinanceCorrection','Engagement','EngagementMatter','EvidenceItem','Billing','FeeEntry','CommissionPlan','TimelineEvent','ArchiveRecord','DocumentFolder','SealRequest','SmsMessage','PreservationCase','PreservationTarget','PreservationProperty','PreservationPropertyRenewal','ExpressTracking','ReviewRecord']);
@@ -50,12 +51,12 @@ async function main(){
   assert(readFileSync(migration,'utf8').includes(`基线 schema SHA256: ${digest(schema)}`),'迁移与当前模型不一致');
   const [{name}]=await source.$queryRaw<{name:string}[]>`SELECT current_database() AS name`;
   assert(!/^lawlink_workflow_trial_/.test(name),'来源必须是本机业务库，不能误用测试库');
-  const plan=body(name);writeFileSync(output,plan.sql);
+  const plan=body(name);mkdirSync(outputDir,{recursive:true});writeFileSync(output,plan.sql);
   const impact=[];
   for(const [model,predicate] of plan.predicates){const [r]=await source.$queryRawUnsafe<{n:bigint}[]>(`SELECT count(*) AS n FROM ${table(model)} WHERE ${predicate}`);impact.push({model,deleteCount:Number(r.n)});}
   const keep=[];for(const model of [...preserved].sort()){const [r]=await source.$queryRawUnsafe<{n:bigint}[]>(`SELECT count(*) AS n FROM ${table(model)}`);keep.push({model,count:Number(r.n)});}
   const report={database:name,sqlSha256:digest(output),impact,preserved:keep};
-  writeFileSync('docs/BUSINESS-WORKFLOW-LOCAL-CUTOVER-IMPACT-20260919.json',JSON.stringify(report,null,2)+'\n');
+  writeFileSync(join(outputDir,'BUSINESS-WORKFLOW-LOCAL-CUTOVER-IMPACT-20260919.json'),JSON.stringify(report,null,2)+'\n');
   console.log(`Read-only plan generated: ${impact.find(x=>x.model==='Matter')?.deleteCount} matters, ${impact.find(x=>x.model==='Intake')?.deleteCount} intakes; ${keep.find(x=>x.model==='User')?.count} users preserved.`);
   if(!process.argv.includes('--trial'))return;
   const database=`lawlink_workflow_trial_${new Date().toISOString().slice(0,10).replaceAll('-','')}_${randomBytes(4).toString('hex')}`;
@@ -92,7 +93,7 @@ async function main(){
   assert.equal(await trial.user.count(),1);
   await assert.rejects(()=>trial!.$transaction(tx=>insertFinanceRowTx(tx,'Billing',{matterId:fresh.id,title:'拒绝旧入口',contractAmount:new Prisma.Decimal(1),status:'DRAFT'})),/新财务/);
   await trial.user.update({where:{id:user.id},data:{active:false}});
-  writeFileSync('docs/BUSINESS-WORKFLOW-LOCAL-CUTOVER-TRIAL-20260919.json',JSON.stringify({database,sqlSha256:report.sqlSha256,passed:['模拟业务清空','账号与配置逐行摘要保持','模板与原文件保持','账号通知保持、业务通知清理','同一事务完成新模型安装','全新已完成事项状态正确','全新待办生成承接提醒','切换前基线写入正确、新模型拒绝旧入口','全新演示数据经正式登记服务生成，收款待确认','重复生成拒绝且无残留，不改变账号或配置'],sourceDatabaseUnchanged:true},null,2)+'\n');
+  writeFileSync(join(outputDir,'BUSINESS-WORKFLOW-LOCAL-CUTOVER-TRIAL-20260919.json'),JSON.stringify({database,sqlSha256:report.sqlSha256,passed:['模拟业务清空','账号与配置逐行摘要保持','模板与原文件保持','账号通知保持、业务通知清理','同一事务完成新模型安装','全新已完成事项状态正确','全新待办生成承接提醒','切换前基线写入正确、新模型拒绝旧入口','全新演示数据经正式登记服务生成，收款待确认','重复生成拒绝且无残留，不改变账号或配置'],sourceDatabaseUnchanged:true},null,2)+'\n');
   console.log(`PASS: local cutover rehearsal in ${database}; source database unchanged.`);
 }
 main().catch(e=>{console.error(e instanceof Prisma.PrismaClientKnownRequestError?`数据库校验失败 ${e.code}: ${String(e.meta?.message??'').replace(/postgres(?:ql)?:\/\/\S+/g,'[redacted]')}`:e.message);process.exitCode=1;}).finally(async()=>{await trial?.$disconnect();await source.$disconnect();});

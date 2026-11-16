@@ -1,70 +1,25 @@
-# Contributing to LawLink
+# 参与 LexOrder
 
-感谢关注 LawLink。这个项目优先服务独立律师、小团队和小型律所的自部署案件管理场景。
+LexOrder 面向个人律师与小团队。开始前阅读 [AGENTS.md](AGENTS.md) 和[四份主文档](docs/README.md)，按需求与工作项提出范围清楚的变更。
 
-## 先读规则
+## 开发与实施
 
-开始前请先阅读：
+- 现有源码使用 Server 认证；Personal 无认证与两版 RAG 尚在实施计划中，不能把规划写成已交付功能。
+- 运行方式统一见 [README](README.md#源码运行) 与[架构第 11 节](docs/REFACTOR_DESKTOP_TEAM_RAG.md#11-当前源码的开发部署与恢复)，不在贡献说明里复制另一份安装步骤。
+- 新功能先说明需求与数据影响，再实现模型、服务、权限和界面；复用现有业务对象与约束。
+- 财务、审批、材料版本、当前权限和审计语义按现行要求保留；schema、迁移与真实数据操作分别按授权范围执行。
+- 同一工作区保持单写者，其余协作者只读审查；不得覆盖他人的在途改动。
 
-- [AGENTS.md](./AGENTS.md)：工作区规则和工程纪律。
-- [docs/RELEASE-GUIDE-v1.3.md](./docs/RELEASE-GUIDE-v1.3.md)：当前公开功能、权限和升级边界。
-- [docs/PRD.md](./docs/PRD.md)：产品设计与历史演进。
-- [docs/DATA-MODEL.md](./docs/DATA-MODEL.md)：数据模型。
-- [docs/UI-DESIGN.md](./docs/UI-DESIGN.md)：界面规范。
+## 验证与提交
 
-## 适合提交的内容
+业务代码改动运行相关测试、lint、类型、Prisma 校验与生产构建；界面改动在实际页面完成对应流程。数据库约束、事务与并发问题使用隔离真实数据库验证，不以 mock 代替。
 
-- 修复可复现的 bug。
-- 改进自部署、备份、权限、安全、导入导出等基础能力。
-- 围绕主线工作流的小而清晰的功能增强。
-- 文档、示例、安装说明和错误排查改进。
+文档改动核对当前事实、相对链接、章节锚点和范围；运行工具的路径调整验证语法、文件存在与目标目录，不为文档清理执行旧迁移或重建业务库。未执行的检查如实记录。
 
-## 暂不建议的内容
+一个提交或 PR 说明具体问题、改动后行为、验证与未覆盖范围。引用相应 RQ/SK/W 编号；提交信息不夹带真实资料。默认使用中文说明，代码标识保持英文。
 
-- 共享 SaaS 多租户改造。
-- 引入 Ant Design 或替换既定 UI 技术栈。
-- 没有产品文档支撑的大范围重构。
-- 绕过权限、校验、审计日志或数据安全边界的实现。
+## 问题报告
 
-## 本地开发
+提供复现步骤、期望与实际行为、操作系统、Node/PostgreSQL/浏览器版本及提交 SHA。日志与截图先移除真实案件、联系方式、证件资料、密钥和附件内容。
 
-```bash
-cp .env.example .env
-npm ci
-docker compose up -d db
-npm run prisma:generate
-npx prisma migrate deploy
-npx prisma db seed
-npm run dev
-```
-
-首次运行前按 README 设置独立密钥和账号。上述命令用于安装已有迁移；只有获批修改模型时才生成新迁移，生成和执行分别按 AGENTS.md 确认。
-
-## 提交前验证
-
-```bash
-npm run lint
-npm run typecheck
-npm run prisma:validate
-npm run test:run
-npm run build
-```
-
-涉及 UI 的改动还应在浏览器里走一遍对应业务流程。
-
-## Pull Request 要求
-
-- 一个 PR 只解决一个主题。
-- 说明改了什么、为什么改、如何验证。
-- 不提交 `.env`、数据库 dump、`storage/` 附件、真实案件数据或任何密钥。
-- 数据库 schema 变更必须说明迁移影响；不要把临时迁移直接塞进 PR。
-- 新增业务规则时，优先放到 `src/lib/` 或 `src/server/`，不要散落在 React 组件里。
-
-## Issue 要求
-
-报告 bug 时请尽量提供：
-
-- 复现步骤。
-- 期望结果和实际结果。
-- 浏览器、Node.js、PostgreSQL、操作系统版本。
-- 相关日志或截图。截图中请先遮盖真实客户、案件、手机号、身份证号、统一社会信用代码等信息。
+漏洞使用 [SECURITY.md](SECURITY.md) 中的报告渠道。社区讨论遵循[行为准则](CODE_OF_CONDUCT.md)。

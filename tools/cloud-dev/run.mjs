@@ -13,7 +13,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const mode = process.argv[2] || 'serve';
 if (!['serve', 'test', 'verify'].includes(mode)) throw new Error('Usage: node tools/cloud-dev/run.mjs [serve|test|verify]');
 const envFile = resolve(root, '.env');
-if (!existsSync(envFile)) throw new Error('Create a private .env from .env.example before starting. See docs/CLOUD_SETUP.md.');
+if (!existsSync(envFile)) throw new Error('Create a private .env from .env.example before starting. See docs/REFACTOR_DESKTOP_TEAM_RAG.md section 11.2.');
 const env = { ...parseEnv(readFileSync(envFile, 'utf8')), ...process.env, DISABLE_CRON: '1', BACKUP_CRON_ENABLED: 'false', NEXT_TELEMETRY_DISABLED: '1' };
 const appPort = Number(env.PORT || 3000);
 if (!Number.isInteger(appPort) || appPort < 1 || appPort > 65535) throw new Error('PORT must be an integer from 1 to 65535.');

@@ -36,7 +36,7 @@
 
 实际采用模块包括 `src/lib/cncases`、元典法规检索、`template-builder.ts` 的执行模板、`parse-summons-local.ts`、独立 cron／备份入口、调度恢复与周报去重。LexOrder 补充了服务端及案件权限、严格检索审计、安全出站请求、部署配置、DOCX 嵌套字段替换、临时字段隔离、日期校验、并发去重和运行依赖。使用既有 PDF／DOCX 依赖，`tsx` 调整为生产依赖，未接入新的语料包。
 
-作者 PGG 专用导入／同步脚本、旧库迁移补偿、未接线的保全组件、作者机器路径及无效测试未作为运行代码移植。逐项范围、适配理由和当前验证见[二开吸收记录](FORK_INTEGRATION_20261116.md)。元典法规检索协议核对 [rh_fg_search 官方文档](https://open.chineselaw.com/api-docs/rh_fg_search.html)；响应片段只作为摘要展示。cncases 是外部服务协议适配，未将其服务器源码或裁判文书数据加入本仓库。
+作者 PGG 专用导入／同步脚本、旧库迁移补偿、未接线的保全组件、作者机器路径及无效测试未作为运行代码移植。逐项范围、适配理由和当前验证见[二开吸收记录](https://github.com/zaenzhang/LexOrder/blob/690232270b46e1f1b105df11bdff167fe7afb80d/docs/FORK_INTEGRATION_20261116.md)。元典法规检索协议核对 [rh_fg_search 官方文档](https://open.chineselaw.com/api-docs/rh_fg_search.html)；响应片段只作为摘要展示。cncases 是外部服务协议适配，未将其服务器源码或裁判文书数据加入本仓库。
 
 ## 2. 已检查的 LawLink 源码事实
 
