@@ -14,7 +14,7 @@
 
 研究采用“观察到的行为 → 输入输出与规则 → LexOrder 设计 → 场景验证”。来源事实、产品推论和已运行结果分别标明。动态页面不自动等于固定版本能力；新增依赖固定版本和完整性，实际采用源码时登记文件与许可。招聘页面状态按核查当日记录，后续实现时复核需要更新的来源。
 
-Server M2 初批实现与验证见[实施计划 §8.4](WORKBENCH_PLAN.md#84-server-m2-本轮执行2026-11-16)，客户连续记录/人工事实日期的续做证据见[§8.6](WORKBENCH_PLAN.md#86-m2-连续记录与事实日期执行结果2026-11-16)。[§8.3](WORKBENCH_PLAN.md#83-m1-当前验证与交接2026-11-16) 保留 M1 历史证据：Personal 共享根应用曾构建通过，后续新工作区初始化报 `M1_INITIALIZATION_COMMAND_FAILED` 后依用户指令停止验证；没有 Windows 产物。Server-only 服务脚本实跑两项 `NOT_CONFIGURED`、退出码 2，未调用 Personal；无真实模型凭据或 RAGFlow 实例时不记联调通过。
+Server M2 业务预览已完成，最终实现与实际业务证据见[实施计划 §8.9](WORKBENCH_PLAN.md#89-m2-最终收口账本2026-11-16)；初批材料/上下文、客户连续记录/人工日期分别保留于 §8.4、§8.6。[§8.3](WORKBENCH_PLAN.md#83-m1-当前验证与交接2026-11-16) 保留 M1 历史证据：Personal 共享根应用曾构建通过，后续新工作区初始化报 `M1_INITIALIZATION_COMMAND_FAILED` 后依用户指令停止验证；没有 Windows 产物。Server-only 服务脚本实跑两项 `NOT_CONFIGURED`、退出码 2，未调用 Personal；无真实模型凭据或 RAGFlow 实例时不记联调通过。
 
 ## 1. 实际业务基线
 
@@ -204,10 +204,77 @@ LawLink 与 appleoppa 仍按 §1—2 的固定业务基线复用，不重复移�
 
 用户合理性审查：入口留在客户详情、事项材料区域；分页操作与其列表就近，事实编辑沿用原弹窗，不增加全局菜单。未知、空白、加载失败可继续人工处理；不把数据查询成功等同于 UI 交互已通过。日期、授权呈现与文件所有权见架构 §6.4.2 和计划 §7.4。
 
-实施状态：上述两项已在 `da2701b` 汇合，沿用 LawLink 页面独立实现，没有移入 Frappe/Kosmos/诉讼可视化源码或增加第三方运行依赖。新增 7 个真实 PG 场景、两组开发模式真实会话 HTTP 和生产构建通过；真实浏览器因缺 originating context 仍阻塞。固定来源与采用边界以 §3.5.1 和本表为准，本轮没有重复运行或重新验证参考产品；完成账本见计划 §8.6。自动候选处理记忆和 AiRun 诊断仍为后续工作。
+实施状态：上述两项已在 `da2701b` 汇合，沿用 LawLink 页面独立实现，没有移入 Frappe/Kosmos/诉讼可视化源码或增加第三方运行依赖。新增 7 个真实 PG 场景、两组开发模式真实会话 HTTP 和生产构建通过；当时真实浏览器因缺 originating context 阻塞。固定来源与采用边界以 §3.5.1 和本表为准，本轮没有重复运行或重新验证参考产品；完成账本见计划 §8.6。后续浏览器证据与离线输入诊断见 §3.8/§3.9 及计划 §8.7/§8.8，自动候选处理记忆和持久 AiRun 仍分项推进。
+
+### 3.8 用户页面反馈后的入口修正（2026-11-16）
+
+本轮重新读取 LexOrder 当前 MatterDetailPage、MatterDetailTabs、ProcedureWorkflowPanel、MatterArchive、EvidenceTimeline、TeamMatterOverview 及管理导航，直接复现已登录事项链接 404；未新增第三方源码或重复运行参考产品。沿用 §3.6 / §3.7 已记录的 Frappe CRM 对象内活动、Kosmos 事实/来源关系和 LawLink 原布局，仅修补本项目遗漏。
+
+以下是当时采用及验证记录；其中旧 ID/大小写后备策略已被用户后续“不保留兼容/fallback”约束取代，现行决定见 §3.10 与架构 C02，不作为继续保留旧分支的依据。
+
+| 用户任务 | 当前事实与本项目决定 | 审查及验收边界 |
+| --- | --- | --- |
+| 从客户或案件列表打开事项 | 数据库编号含小写，旧解析仅按大写查询；改为原编号/旧 ID 精确优先，再解码精确查询，最后只接受唯一完整编号的大小写后备匹配 | 原鉴权保留；软删除、精确或后备歧义不跳另一事项。复验用户的原链接，不改编号伪造成功 |
+| 重开事项了解下一步 | MatterBrief 原来只有服务、未接 UI；「档案与摘要」首部补授权摘要，原目标与指示保留在同页 | 读取失败有重试；刷新和切换对象丢弃旧结果；受限来源不展示正文。摘要非 AI 生成，不据此宣称自动分析完成 |
+| 找到材料和可选服务 | 「办案与材料」明确原材料区域，事实时间线沿用该区域；后台名称统一「AI 与外部服务」 | 不堆叠全局菜单，不移动业务身份或改变外部服务可选性；实际点击和可见结果单独记账 |
+
+### 3.9 离线材料读取检查与按钮可理解性（2026-11-16）
+
+| 用户任务 / 来源 | 实际阅读与采用 | 不采用及验收边界 |
+| --- | --- | --- |
+| 检查本次材料究竟能读到哪里：Counsel OS | 本批 root 与服务 owner 实际读取固定 `c4f40f1ffd40146531bcaa7f43e6877a733f92ca` 的 [context-preparation.ts](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/src/workspace/context-preparation.ts)，核对显式范围、`read.execute`、部分读取/字符预算、省略链接和新旧版本提示。借鉴有界读取与未覆盖部分可见，沿用 LexOrder 已有 Document/解析快照/权限独立实现 | 未导入源码或运行完整 Counsel OS；不采用自动扩大召回、跨事项上下文或其模型策略。已解析、可准备与实际发送分别记录，此批发送恒为 0 |
+| 看懂按钮并继续原任务：LexOrder 实际运行页 | 独立 agent 在 M2C 合成事项和 `LL-2026-CC-9001` 点击目标指示、来源、历史、当事人/团队、事实和空材料，root 另做独立验证。问题包括对象不明、错误表单、同名来源、丢焦点、固定头遮挡和事实状态歧义；采用明确动词+对象、分区定位和返回位置 | 这是本项目真实观察及设计判断，不借第三方名义证明整体设计优良。沿用 §3.5.1 Frappe 对象内操作和 Kosmos 来源关系的已读依据，不重复导入/运行它们；本批保留 LawLink 样式 |
+
+实施前合理性审查：新输入检查留在现有「办案与材料」，先勾选再检查；用户能看到具体版本、检查范围、未处理内容与补救提示。按钮修复保留原业务权限和确认状态机，不引入新的全局模块。模型未配置照常完成本地检查。实现复核与真实页面复验分别记账，组件测试不替代浏览器点击。较大信息密度问题保留为后续整理项，本轮不能以文案修复宣称全站设计完成。
+
+M2 收口时，首次创建要点的请求身份缺口来自 **LexOrder 当前代码路径**。稳定请求键、归一化载荷指纹、有界竞争重放及不可变身份是本项目沿用现有领域守卫补齐的实现，不宣称从 Counsel OS、Frappe 或其他参考项目移植。模型/SQL、领域服务与表单在独立 worktree 分工，二轮定点审查及真实 PG/原页面结果见计划 §8.9；本批没有新增第三方源码或运行依赖。
+
+本地框架约束也在编码前核对：root 阅读已安装 Next 16.4.6 的 `01-app/02-guides/server-actions.md`、`server-and-client-boundary.md` 及相关 Server/Client Components 指南；表单 owner 阅读 `01-app/03-api-reference/01-directives/use-server.md`，并定点阅读 Server Actions 的客户端派发、返回/重验证和授权段落。采用结论：客户端 pending 或顺序派发不提供服务端幂等；Server Action 每次请求仍需当前鉴权，客户端只传请求键和草稿，以表单生命周期隔离迟到响应。不据此声称完整框架文档都已审查，也不升级框架或绕开边界。
+
+### 3.10 案件修复的组件与流程决定（2026-11-16）
+
+用户要求先形成修复计划，多轮按事实检查逻辑；样式复用项目框架，业务合理分区切换，用布局表达逻辑并减少冗余文字。随后追加单一现行实现、不保留兼容/fallback、减少抽象/防御/投影/重复 hash、成熟库优先及核心端到端先行。本轮以 `4fe7479` 及专项冲突增量 `d3b5cb0` 为源码事实，不重复执行前轮浏览器审查；前轮证据、当前源码复核和未来实施验收分别登记。
+
+| 用户任务与实际阅读 | 本项目采用的决定 | 不采用及验收边界 |
+| --- | --- | --- |
+| 在页面和弹窗读清事实：[components.json](../components.json)、公共 [Dialog](../src/components/ui/dialog.tsx)、[Badge](../src/components/ui/badge.tsx)、[Button](../src/components/ui/button.tsx)、[form-dialog](../src/components/patterns/form-dialog.tsx)、[moan patterns](../src/components/patterns/moan.tsx)；再次读取官方 [shadcn Radix Dialog](https://ui.shadcn.com/docs/components/radix/dialog)、[Badge](https://ui.shadcn.com/docs/components/radix/badge)与 [Radix Portal](https://www.radix-ui.com/primitives/docs/components/dialog#portal) | 已安装组件保留项目主题，用标准变体与自包含布局组合事实列表；沿用已有遮罩、焦点、键盘和滚动行为 | 不复制页面 CSS，不另造 Timeline/基础控件，不覆盖公共组件去追官网最新外观；页面与 Portal 的长文、来源、错误及窄屏各有实际验收 |
+| 在复杂案件里找到当前任务：本地 matter-detail-tabs/procedure-workflow-panel 的真实结构、现有 Tabs/Segmented；复用 §3.3 已读 Frappe CRM `3509bd4` 的对象导航和列表/详情连续性结论 | 保留四个案件主页面，办案页内材料/事实与来源/待办/记录合理切换；范围控件贴近相关列表，详情顺序往返，当前区只显示当前业务 | Frappe 仅复用此前行为研究，本轮未重新运行其产品或宣称重新抓取全部源码；不搬 Vue/销售阶段、不添加新工作台、不用说明卡代替分区。此分区是本项目设计判断 |
+| 编辑失败后知道哪些变了：[team-editor-dialog](../src/app/(app)/matters/[id]/_components/team-editor-dialog.tsx)、[matters/actions](../src/server/matters/actions.ts)、现有 work-responsibility-panel | 按基本资料、程序与当事人、成员独立保存；主办走现有交接。程序接口省略字段会清空，先保持完整合同；事务内核前置值 | 不把三个 Server Action 在客户端同时调用伪装成原子事务，不增加“部分保存成功”常驻说明来维持巨表单；故意失败和陈旧版本必须验证对象未被串改 |
+| 从材料完成版本、人工审批与入卷：[documents/actions](../src/server/documents/actions.ts)、[material-ingest](../src/server/documents/material-ingest.ts)、[卷宗服务](../src/server/document-folders/actions.ts)、模板与审批记录服务 | 一个材料详情复用既有版本、撤回、送审及批准后入卷；补入卷事务内守卫，再接入口；状态绑定具体版本 | 不把有服务名等同可直接开放按钮，不把旧版混列可读误报成不可见，不把 AI 审查当人工审批；修订不挪用旧审批 |
+| 开票、合同、结案与归档失败可继续：invoice-request-sheet、finance/actions、ledger-workspace、archive-wizard、archive/closure 和 export-access | 文件/申请各有稳定请求身份；已有材料可选；合同和审批使用原专用工作台并带受控返回；结案与归档分用真实阻断，补充归档绑定合法卷宗 | 不以预检替代提交复核，不给开票追加收款门禁，不给结案套全部归档阻断；不复制财务长表到案件页、不放开批准快照或普通归档后写入 |
+| 查看 AI 历史和真实输入范围：document-review-dialog、review-document、save-review、input-coverage-service | 同一请求绑定对象；按服务端 ReviewRecord 保存；真实送审统计来自实际 segments，历史缺数据如实保留 | 离线诊断与旧审查文本来源不同，不能用相同预算伪装同一供给合同；不重做已经交付的离线诊断，不扩成完整 AiRun |
+| 统一当前入口：[路由生成](../src/lib/matters/route.ts)、[路由解析](../src/server/matters/route.ts)、finance-forms 与 finance/actions | 路由仅用现有实际 internalCode，现行调用方一起更新；合同只走原财务工作台登记/变更，删除已替代旧表单 | 旧 ID、大小写后备、缺编号退 ID、按 ledgerReady 回旧表单均与新约束冲突；不迁移旧书签/配置，不以相似编号猜测目标 |
+| 以真实版本读材料：[schema](../prisma/schema.prisma)、material-ingest、[模板创建](../src/server/document-templates/actions.ts)与 save-review | 首链直接使用具体 Document ID；后续统一模板/报告/上传的版本族写入，再按实际存量决定必要数据库迁移 | familyId 可空且当前模板/报告仍不填，不能断言只是旧数据；不做空值→临时族的读侧投影，不猜测库存量 |
+| 按批准事实导出：[closure](../src/server/archive/closure.ts)、[export](../src/server/archive/export.ts)、[verification](../src/server/archive/verification.ts)与既有结案/归档服务 | 删除缺表跳过、旧指纹试算及当前 manifest fallback；现行指纹算一次，复用已验证原件 Buffer 打包，保留必要完整性与资格检查 | 不从当前数据补造历史批准，不把省 hash 理解为取消归档校验，不另建通用检查/快照平台 |
+
+工程决定：先做“案件→具体材料→要点/来源→返回”，接口只服务当前链，组件按对象/责任组合；随后逐条扩展编辑、文书、财务、归档。草案中整批冻结公共合同、通用能力/读模型倾向、团队 hash 快照和旧报告恢复工作台均已取消。来源缺可信绑定明确不可用，必要历史数据处理只走已核实的数据库迁移，不保留第二套运行路径。
+
+实际 [package.json](../package.json) 已有 Zod、Prisma、PizZip，项目已有存储 sha256 helper 和 Node crypto；UI 已有 Dialog/Sheet/Tabs/Button/Badge/FormDialog 及确认模式。本计划无需为上述缺口新增 UI、hash、状态或通用幂等库。先复用现有能力，真正不足时才评估成熟维护库，不把简单修复扩成选型工程。
+
+项目约束见 [AGENTS §5.3/§5.4](../AGENTS.md#54-单一现行实现与适度工程2026-11-16-用户追加)，产品落点见[需求 §9.3](PRODUCT_REQUIREMENTS_ACCEPTANCE.md#93-案件操作的分区与交互修复规格)，具体边界见[架构 §6.4.6](REFACTOR_DESKTOP_TEAM_RAG.md#646-案件操作修复合同待实施)。详细业务规则用于实施/验收，不原样铺到产品页；用户看到对象、分区、状态、动作和必要就近反馈。多轮审查纠正及未验证范围见[计划 §7.10](WORKBENCH_PLAN.md#710-案件界面与操作流程修复计划2026-11-16)。
+
+### 3.11 M3 计划细化的事实与采用决定（2026-11-16）
+
+本轮用户要求“详细化 M3，结合新的约束，审查几轮直到没问题”。工作仅为计划与定点静态核对；没有新增业务实现、运行第三方应用、调用真实模型/法库或执行 M3 浏览器验收。远端 main 已核 `559ca14`，本地 M2 源码/收口为 `01577ea`/`111371c`；新工程约束及 UI 专项合同以 `a2a705b`/`7387819` 为准，现有 UI 另核 `c582e5e`。本地未合入状态和远端状态分别记录。
+
+| 用户任务 | 本轮实际核对的本项目事实 | 采用、复用与不采用 |
+| --- | --- | --- |
+| 保存可回查研究 | [来源契约](../src/lib/workbench/contracts.ts)、[schema](../prisma/schema.prisma)、既有材料/上下文服务、元典/cncases 和 [MCP 管理](../src/server/legal/mcp-actions.ts) | 契约已有三类资料，但没有完整持久研究链；使用授权资料即可先交付。补法源身份/时点和实际阅读记录，不把配置预览当真实研究接通 |
+| 比较方案与记录决定 | [上下文服务](../src/server/matters/context-service.ts)和 MatterContextRecord 的 OPTION/DECISION/不可变更正 | 扩原对象的比较字段与关系；不另建客户决定身份，不把律师核对当客户同意 |
+| 起草和逐条复核 | [模板引擎](../src/lib/template-engine.ts)、[模板动作](../src/server/document-templates/actions.ts)、[文书动作](../src/server/documents/actions.ts)、ReviewRecord | 确认 buildContext→applyOverrides 会写 Client/Party，准备边界先改；沿 Document 固定稿件和原审批，新增人工问题/回应/修订/处理，不重写 RP05/C09 基础修复 |
+| 等待与期限解释 | [任务动作](../src/server/tasks/actions.ts)、[责任动作](../src/server/reminders/responsibility.ts)、[期限确认](../src/server/deadlines/confirm.ts)、[重算保护](../src/server/deadlines/recalc-guard.ts)、Task/Deadline/WorkResponsibility | Task 可无 stage，但现页新增依赖程序；补事项级入口。RESCHEDULE 会真改期限，独立执行计划字段不可偷用该动作；计算历史按真实输入固定，不仅存可变规则 ID |
+| 交付与经验复用 | ClientActivity/FollowUp、Document、归档服务与 [FirmFile 动作](../src/server/firm-files/actions.ts) | 补交付发生事实和固定版本；FirmFile 当前有效用户可读，候选必须先在原事项私有保存，审核后才发布脱敏内容，不能靠隐藏按钮保护 |
+| 找得到操作并回到原处 | matter-detail-tabs、procedure-workflow-panel、matter-context-section、document-review-dialog、现有 patterns/ui、C02/C05/C06/C09/C10 合同 | 四个主页面不增加一级模块墙；M3 消费下一现行 workPane 合同，按实际交接文件推进，不保留旧 work 参数。已保存重开与未保存草稿恢复分清，窄屏本轮不纳入 |
+
+参考项目沿 §3.5.1 的固定代码及既有阅读结论使用：研究/引用采用 Counsel 的可复查输入和直接影响关系，事实关系采用 Kosmos，期限解释采用 ANQI，模板依赖采用 docassemble，操作连续性采用 Frappe CRM。**本轮没有重新运行或重新读取这些项目全部源码，不扩大已有证据边界。** 每个实施切片按 AGENTS §5.1 再读取其真正触及的相关实现/UI 小范围并记录，不重复遍历全参考清单。人工复核、真实客户决定、交付及脱敏发布的具体组合是 LexOrder 的设计判断，不能宣称某个参考项目已提供完整同等闭环。
+
+新约束采用决定：不重做已有主对象，不增加通用工作流/Agent/能力注册/投影框架，不为短期细节留下兼容和 fallback；先交付研究保存的垂直切片，再接稿件复核、等待和实际交付，随后补足期限/知识与两类验收。必要固定的文书/交付/计算历史保留，日常读取不重复算原件 hash。现有 Next/React/Prisma/Zod、shadcn/Radix、React Hook Form、docxtemplater/PizZip/docx 与现有日期/队列足以开展本计划；不因“优先成熟库”先加新依赖。
+
+三名独立 agent 已分别完成事实首审、执行稿交叉审查和修订后定点复核，第二轮8项问题均已关闭；具体发现与关闭状态统一记[计划 §7.11.9](WORKBENCH_PLAN.md#7119-七条-m3-关闭标准与审查账本)。计划通过只说明当前范围不存在未解决的设计阻塞，不表示实现/浏览器/专业结论已通过。
 
 ### 当前项目状态对计划的影响
 
+- 当前 Server M2 已按原七条条件收口，详见计划 §8.9；W08 是本地 `NOT_SENT` 读取范围检查。完整 AiRun、候选记忆、M3 专业交付及 M4 固定发行/恢复仍是后续工作；界面专项继续由用户委派的 agent 负责。
 - 前批初始评估为 `97867e2`，随后对齐 main `2997b54754565081271ca4b66139949d310e2fe0`；M1 当时从 `b313adf8` 接续，本轮 Server M2 从 `f973b87` 开始。appleoppa 的通用功能、迁移、权限与调度适配已合入；本轮保留其源码及来源记录。本轮已将内置解析、覆盖与恢复接入事项上传管线，具体证据见计划 §8.4；局部传票解析和启动补扫仍不等于通用 OCR、完整休眠或整套数据恢复已完成。
 - Kosmos 默认源码分支为 `dev`。其[当前 AI 开发文档](https://kosmos.law/docs/dev/subsystems/ai/context/)说明，原生案件聊天引擎于 2026-10-29 退役，界面于次日退役，改由远程 MCP 对外提供案件访问。旧 README 或历史设计不能作为“完整聊天可直接迁入”的证明。
 - Kosmos 的事实与高亮关系仍可参考。其某些材料处理路径会替换存储文件，本项目的设计要求保留原件，不能直接采用该行为。
