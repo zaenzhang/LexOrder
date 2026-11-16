@@ -377,7 +377,8 @@ export async function approveArchiveRecord(input: ArchiveApproveInput) {
         content: data.note?.trim() ? `审批意见：${data.note.trim()}` : "审批人已逐项核验并通过",
         occurredAt: now
       });
-    if(await closureReady(tx)){const frozen=await buildArchiveManifest(tx,record.id);await tx.$executeRaw`UPDATE "ArchiveRecord" SET "frozenManifest"=${JSON.stringify(frozen)}::jsonb WHERE id=${record.id}`;}
+    const frozen = await buildArchiveManifest(tx, record.id);
+    await tx.archiveRecord.update({ where: { id: record.id }, data: { frozenManifest: frozen as Prisma.InputJsonValue } });
   });
 
   // v0.18: 通知申请人

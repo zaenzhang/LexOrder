@@ -2,8 +2,10 @@ import { hasCustomPermission } from "@/lib/roles/catalog";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { audit } from "@/server/audit";
-import { buildArchiveZip } from "@/server/archive/export";
+import { auditTx } from "@/server/audit";
+import { approvalTransaction } from "@/lib/approvals/service";
+import { Prisma } from "@prisma/client";
+import { buildArchiveZip, assertArchiveExportAccess } from "@/server/archive/export";
 import { storage } from "@/lib/storage";
 import { ActionError, actionErrorMessage } from "@/lib/action-error";
 import { parseArchiveSnapshot } from "@/lib/archive/snapshot";
@@ -25,7 +27,7 @@ export async function GET(
   if (!hasCustomPermission(session.user, "matters.read") || !hasCustomPermission(session.user, "archive.read") || !hasCustomPermission(session.user, "documents.download")) return NextResponse.json({ error: "导出归档材料需要案件查看、归档查看和材料下载权限" }, { status: 403 });
 
   try {
-    await assertMatterExportAccess(session.user, matterId);
+    await assertMatterExportAccess(session.user, matterId, "ARCHIVE");
   } catch (error) {
     if (error instanceof MatterExportAccessError) return NextResponse.json({ error: actionErrorMessage(error) }, { status: 403 });
     throw error;
@@ -61,7 +63,7 @@ export async function GET(
     const documents = await prisma.document.findMany({ where: { id: { in: ids }, deletedAt: null }, select: exportDocumentAccessSelect });
     if (documents.length !== ids.length) throw new MatterExportAccessError("部分归档材料已不可读取，无法导出完整案卷");
     await assertExportDocumentAccess(session.user.id, documents);
-    result = await buildArchiveZip(archive.id);
+    result = await buildArchiveZip(archive.id, session.user);
   } catch (err) {
     if (err instanceof MatterExportAccessError) return NextResponse.json({ error: actionErrorMessage(err) }, { status: 403 });
     console.error("[archive export] 构建失败：", err);
@@ -71,24 +73,30 @@ export async function GET(
     );
   }
 
-  // 持久化路径 + checksum 回填到最新 ArchiveRecord
+  let storagePath: string | undefined;
   try {
-    const storagePath = await storage.writeFile(`archive_${matter.id}`, result.buffer);
-    await prisma.archiveRecord.update({
-      where: { id: archive.id },
-      data: { exportPath: storagePath, checksum: result.checksum }
-    });
+    storagePath = await storage.writeFile(`archive_${matter.id}`, result.buffer);
   } catch (err) {
     console.error("[archive export] 落盘失败（不阻断下载）：", err);
   }
 
-  await audit({
-    userId: session.user.id,
-    action: "ARCHIVE_EXPORT",
-    targetType: "ArchiveRecord",
-    targetId: archive.id,
-    detail: { matterId: matter.id, archiveNo: archive.archiveNo, size: result.size, checksum: result.checksum }
-  });
+  let updateStarted = false;
+  try {
+    await approvalTransaction(async db => {
+      await assertArchiveExportAccess(archive.id, session.user, db);
+      if (storagePath) {
+        updateStarted = true;
+        await db.archiveRecord.update({ where: { id: archive.id }, data: { exportPath: storagePath, checksum: result.checksum } });
+      }
+      await auditTx(db, { userId: session.user.id, action: "ARCHIVE_EXPORT", targetType: "ArchiveRecord", targetId: archive.id,
+        detail: { matterId: matter.id, archiveNo: archive.archiveNo, size: result.size, checksum: result.checksum } });
+    }, Prisma.TransactionIsolationLevel.ReadCommitted);
+  }
+  catch (error) {
+    // Once a write starts, commit outcome may be unknown: retain the original for recovery.
+    if (storagePath && !updateStarted) await storage.deleteFile(storagePath).catch(() => undefined);
+    return NextResponse.json({ error: actionErrorMessage(error) }, { status: error instanceof MatterExportAccessError ? 403 : 400 });
+  }
 
   const ab = result.buffer.buffer.slice(
     result.buffer.byteOffset,

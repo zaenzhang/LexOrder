@@ -13,6 +13,7 @@ const targetLabels: Record<string, string> = {
   Team: "律师团队", User: "用户", BuiltinRole: "内置角色", RoleDefinition: "自定义角色",
   Engagement: "委托", EvidenceItem: "证据项", MaterialIngestIntent: "材料上传请求",
   MatterContextRecord: "案件上下文记录",
+  ResearchRevision: "法律研究修订", DocumentReviewIssue: "人工复核问题", DeliveryRecord: "客户交付清单",
   // 第七轮体检：补齐缺失对象标签（缺失时审计页显示「其他对象」）
   ArchiveBorrowRequest: "案卷借阅申请", CommissionSettlement: "分成结算", DeadlineRule: "期限规则",
   FeeEntryList: "收付记录列表", FinanceCorrection: "财务更正", Holiday: "放假安排",
@@ -70,7 +71,11 @@ const words: Record<string, string> = {
   PURGE: "清理", PURGED: "已清理", ABANDON: "放弃", EDIT: "编辑", SOURCE: "来源",
   OPEN: "打开", LEGAL: "法律", MCP: "MCP", CONFIG: "配置", OPERATION: "操作",
   RESULT: "结果", CONTEXT: "上下文",
-  DEPENDENCIES: "前置任务", CHANGE: "变更", WAITING: "外部等待", START: "开始", FINISH: "结束", RESCHEDULE: "改期"
+  DEPENDENCIES: "前置任务", CHANGE: "变更", WAITING: "外部等待", START: "开始", FINISH: "结束", RESCHEDULE: "改期",
+  RESEARCH: "法律研究", REVISE: "修订", ISSUE: "问题", RESPOND: "回应",
+  DELIVERY: "客户交付", PREPARE: "准备", EXPORTED: "已导出", SENT: "发送登记", RECEIVED: "收悉登记",
+  REPLIED: "客户回复", CONTENT: "内容", SEND: "发送", WAIT: "外部等待", END: "结束",
+  DATE: "日期", DEPENDENCY: "前置依赖"
 };
 export function auditActionLabel(code: string): string {
   const parts = code.split("_");

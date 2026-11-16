@@ -2,7 +2,7 @@
 
 import { FormDialogContent as DialogContent, FormDialogBody } from "@/components/patterns/form-dialog";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Clock } from "lucide-react";
@@ -49,9 +49,11 @@ export function AddTaskDialog({
   const [priority, setPriority] = useState<0 | 1 | 2>(0);
   const [allDay, setAllDay] = useState(false);
   const [time, setTime] = useState("09:00");
+  const requestKey = useRef(crypto.randomUUID());
 
   useEffect(() => {
     if (!open) return;
+    requestKey.current = crypto.randomUUID();
     setMatterId("");
     setTitle("");
     setDescription("");
@@ -84,6 +86,7 @@ export function AddTaskDialog({
     startTransition(async () => {
       try {
         await createTask({
+          requestKey: requestKey.current,
           matterId,
           title: title.trim(),
           description,

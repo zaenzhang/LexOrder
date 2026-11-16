@@ -33,6 +33,16 @@ describe("客户历史游标的保密与作用域", () => {
       { dueAt: { gt: new Date(point.at) } }, { dueAt: new Date(point.at), id: { gt: point.id } }
     ] });
   });
+  it("交付事件的位置沿同一加密游标推进，不能当成其他列表的位置", () => {
+    const delivery = { ...point, source: "DELIVERY" as const };
+    const token = encodeClientCursor(clientId, userId, "history", delivery);
+    expect(decodeClientCursor(token, clientId, userId, "history")).toEqual(delivery);
+    expect(Buffer.from(token, "base64url").toString("utf8")).not.toContain(delivery.id);
+    expect(pageBoundary("occurredAt", delivery, "CONTEXT")).toEqual({ OR: [
+      { occurredAt: { lt: new Date(point.at) } }, { occurredAt: new Date(point.at) }
+    ] });
+    expect(() => decodeClientCursor(token, clientId, userId, "communications")).toThrow("分页位置");
+  });
   it("外部输入不能注入过滤条件或超长位置", () => {
     expect(() => clientPageInputSchema.parse({ clientId, where: {} })).toThrow();
     expect(() => clientPageInputSchema.parse({ clientId, cursor: "x".repeat(1201) })).toThrow();

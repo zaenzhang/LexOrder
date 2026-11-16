@@ -13,7 +13,6 @@
  *         {N}_{原文件名}
  */
 import {Prisma} from "@prisma/client";
-import {closureReady} from "./closure";
 import PizZip from "pizzip";
 import { prisma } from "@/lib/prisma";
 import { decryptIdNumber } from "@/lib/clients/id-number-crypto";
@@ -22,6 +21,9 @@ import { shDayKey } from "@/lib/ui/sh-time";
 import { parseArchiveSnapshot } from "@/lib/archive/snapshot";
 import { verifyArchivePolicySource, verifyArchiveSnapshotDocuments } from "./verification";
 import { ActionError } from "@/lib/action-error";
+import type { WorkspaceActor } from "@/lib/runtime/actor";
+import { buildArchiveProfessionalHistory, assertArchiveProfessionalHistoryAccess } from "./professional-history";
+import { assertMatterExportAccess, assertExportDocumentAccess, exportDocumentAccessSelect, MatterExportAccessError } from "@/server/matters/export-access";
 
 interface ZipResult {
   buffer: Buffer;
@@ -180,6 +182,7 @@ export async function buildArchiveManifest(db:Prisma.TransactionClient,archiveId
       method: f.method,
       note: f.note
     })),
+    professionalHistory: await buildArchiveProfessionalHistory(db, matter.id, docs.map(document => document.id)),
     documents: docs.map((d) => ({
       id: d.id,
       name: d.name,
@@ -197,19 +200,42 @@ export async function buildArchiveManifest(db:Prisma.TransactionClient,archiveId
   return manifest;
 }
 
-export async function buildArchiveZip(archiveId: string): Promise<ZipResult> {
+/** Rechecked after file I/O and again just before the route releases the fixed package. */
+export async function assertArchiveExportAccess(archiveId: string, actor: WorkspaceActor, db: Prisma.TransactionClient = prisma): Promise<void> {
+  const archive = await db.archiveRecord.findUnique({ where: { id: archiveId }, select: { status: true, matterId: true, checklistJson: true, frozenManifest: true } });
+  if (!archive || archive.status !== "APPROVED") throw new MatterExportAccessError("归档记录不存在或尚未批准");
+  const snapshot = parseArchiveSnapshot(archive.checklistJson);
+  if (!snapshot || !archive.frozenManifest || typeof archive.frozenManifest !== "object" || Array.isArray(archive.frozenManifest)) throw new ActionError("批准时未固定卷宗数据，不可生成归档包");
+  const manifest = archive.frozenManifest as unknown as Awaited<ReturnType<typeof buildArchiveManifest>>;
+  if (manifest.matter?.id !== archive.matterId) throw new ActionError("归档案件快照不完整，请核对原归档记录");
+  await assertMatterExportAccess(actor, archive.matterId, "ARCHIVE", db);
+  const ids = [...new Set(snapshot.documentIds)];
+  const documents = await db.document.findMany({ where: { id: { in: ids }, matterId: archive.matterId, deletedAt: null }, select: exportDocumentAccessSelect });
+  if (documents.length !== ids.length) throw new MatterExportAccessError("部分归档材料已不可读取，无法导出完整案卷");
+  await assertExportDocumentAccess(actor.id, documents, db);
+  // Older approved snapshots remain exact: never add current professional history to them.
+  if (manifest.professionalHistory) {
+    if (manifest.professionalHistory.matterId !== archive.matterId) throw new ActionError("归档专业历史与原事项不一致");
+    try { await assertArchiveProfessionalHistoryAccess(db, actor.id, manifest.professionalHistory); }
+    catch (error) {
+      if (!(error instanceof ActionError)) throw error;
+      throw new MatterExportAccessError(error.message);
+    }
+  }
+}
+
+export async function buildArchiveZip(archiveId: string, actor: WorkspaceActor): Promise<ZipResult> {
   const archive = await prisma.archiveRecord.findUnique({ where: { id: archiveId } });
   if (!archive || archive.status !== "APPROVED") throw new ActionError("归档记录不存在或尚未批准");
   const snapshot = parseArchiveSnapshot(archive.checklistJson);
   if (!snapshot) throw new ActionError("该历史归档记录未固定批准材料，不能生成可核验归档包");
-  let manifest:Awaited<ReturnType<typeof buildArchiveManifest>>;
-  if(await closureReady(prisma)){
-    const [fixed]=await prisma.$queryRaw<{frozenManifest:Awaited<ReturnType<typeof buildArchiveManifest>>|null}[]>`SELECT "frozenManifest" FROM "ArchiveRecord" WHERE id=${archiveId}`;
-    if(!fixed?.frozenManifest)throw new ActionError("批准时未固定卷宗数据，不可生成归档包");
-    manifest=fixed.frozenManifest;
-  }else manifest=await buildArchiveManifest(prisma,archiveId);
+  if (!archive.frozenManifest || typeof archive.frozenManifest !== "object" || Array.isArray(archive.frozenManifest)) {
+    throw new ActionError("批准时未固定卷宗数据，不可生成归档包");
+  }
+  const manifest = archive.frozenManifest as unknown as Awaited<ReturnType<typeof buildArchiveManifest>>;
   const matter=manifest.matter;
-  if (!matter) throw new ActionError("案件不存在");
+  if (!matter || matter.id !== archive.matterId) throw new ActionError("归档案件快照不完整，请核对原归档记录");
+  await assertArchiveExportAccess(archiveId, actor);
   await verifyArchivePolicySource(snapshot);
   const verified = await verifyArchiveSnapshotDocuments(snapshot, matter.id);
   const docs = [...snapshot.documents].sort((a, b) => a.order - b.order);
@@ -285,6 +311,7 @@ export async function buildArchiveZip(archiveId: string): Promise<ZipResult> {
 
   Object.values(zip.files).forEach(file=>{file.date=new Date(archive.archivedAt);});
   const buffer = zip.generate({ type: "nodebuffer" }) as Buffer;
+  await assertArchiveExportAccess(archiveId, actor);
   return {
     buffer,
     fileName: `${root}.zip`,

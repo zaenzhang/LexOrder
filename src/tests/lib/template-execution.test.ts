@@ -12,7 +12,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   db.systemSetting.findMany.mockResolvedValue([]);
   db.user.findUnique.mockResolvedValue({ name: "合成律师", phone: "" });
-  db.matter.findUnique.mockResolvedValue({ internalCode: "TEST-EXECUTION", title: "合成执行案", category: "CIVIL_COMMERCIAL", cause: null, primaryClient: null, parties: [], procedures: [], intakeDate: null });
+  db.matter.findUnique.mockResolvedValue({ internalCode: "TEST-EXECUTION", title: "合成执行案", category: "CIVIL_COMMERCIAL", cause: null, primaryClient: null, clientLinks: [], parties: [], procedures: [], intakeDate: null });
 });
 describe("执行文书实际渲染", () => {
   it.each(BUILTIN_TEMPLATES.filter(template => template.category === "EXECUTION"))("renders $name with actual nested values", async template => {
@@ -49,10 +49,24 @@ describe("执行文书实际渲染", () => {
     const rendered = renderDocxBuffer(zip.generate({ type: "nodebuffer" }), context as RenderContext);
     expect(new PizZip(rendered).file("word/document.xml")!.asText()).not.toMatch(/undefined|function Object/);
   });
-  it("ignores stale execution overrides when another template category is selected", async () => {
-    db.matter.findUnique.mockResolvedValueOnce({ internalCode: "TEST-CIVIL", title: "合成诉讼案", category: "CIVIL_COMMERCIAL", cause: null, primaryClient: null, parties: [], procedures: [{ type: "FIRST_INSTANCE", caseNumber: "诉讼案号", handlingAgency: "诉讼法院" }], intakeDate: null });
-    const result = await buildContext({ matterId: "fixture", userId: "fixture", templateCategory: "LITIGATION", overrides: { "execution.basis": "之前的执行依据", "proceeding.caseNo": "之前的执行案号", "proceeding.court": "之前的执行法院" } });
-    expect(result.proceeding).toMatchObject({ caseNo: "诉讼案号", court: "诉讼法院" });
-    expect(result.execution.basis).toBe("");
+  it("rejects values outside the current template instead of retaining a previous template's fields", async () => {
+    await expect(buildContext({ matterId: "fixture", userId: "fixture", templateCategory: "LITIGATION", variables: ["client.phone"], overrides: { "execution.basis": "之前的执行依据" } })).rejects.toThrow("补填字段不属于当前模板");
+  });
+  it("uses the selected second opposing party and procedure without changing either master record", async () => {
+    const party = (id: string, name: string, phone: string) => ({ id, name, phone, role: "OPPOSING_PARTY", idNumber: null, address: null, legalRep: null });
+    db.matter.findUnique.mockResolvedValue({ internalCode: "TEST-CIVIL", title: "合成诉讼案", category: "CIVIL_COMMERCIAL", cause: null,
+      primaryClient: { id: "client1", name: "原委托人", idNumber: null, address: null, phone: "原电话" }, clientLinks: [],
+      parties: [party("opp1", "对方一", "电话一"), party("opp2", "对方二", "电话二")],
+      procedures: [{ id: "proc1", type: "FIRST_INSTANCE", caseNumber: "一审", handlingAgency: "法院一" }, { id: "proc2", type: "SECOND_INSTANCE", caseNumber: "二审", handlingAgency: "法院二" }], intakeDate: null });
+    const result = await buildContext({ matterId: "fixture", userId: "fixture", templateCategory: "LITIGATION",
+      selection: { clientId: "client1", opposingPartyId: "opp2", thirdPartyId: null, procedureId: "proc2" },
+      variables: ["client.phone", "opposing.phone"], overrides: { "client.phone": "仅本稿委托人电话", "opposing.phone": "仅本稿对方电话" } });
+    expect(result.opposing).toMatchObject({ name: "对方二", phone: "仅本稿对方电话" });
+    expect(result.client.phone).toBe("仅本稿委托人电话");
+    expect(result.proceeding).toMatchObject({ caseNo: "二审", court: "法院二" });
+    expect(db.client.update).not.toHaveBeenCalled(); expect(db.party.update).not.toHaveBeenCalled();
+  });
+  it("rejects a chosen party no longer belonging to the matter", async () => {
+    await expect(buildContext({ matterId: "fixture", userId: "fixture", selection: { clientId: null, opposingPartyId: "other-matter", thirdPartyId: null, procedureId: null } })).rejects.toThrow("对方当事人已不属于当前案件");
   });
 });

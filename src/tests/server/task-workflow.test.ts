@@ -108,7 +108,7 @@ describe("任务前置的服务规则", () => {
 describe("外部等待记录", () => {
   it("登记等待保留内部责任，不改任务安排或法定日期", async () => {
     await startTaskWaitingTx(tx, userId, { ...startInput, waitingFor: ` ${startInput.waitingFor} ` });
-    expect(db.taskWaiting.create).toHaveBeenCalledWith({ data: { id: waitingId, taskId, waitingFor: startInput.waitingFor, expectedResult: startInput.expectedResult, initialCheckAt: checkDate, nextCheckAt: checkDate, createdById: userId } });
+    expect(db.taskWaiting.create).toHaveBeenCalledWith({ data: { id: waitingId, taskId, waitingFor: startInput.waitingFor, expectedResult: startInput.expectedResult, reason: null, initialCheckAt: checkDate, nextCheckAt: checkDate, createdById: userId } });
     expect(db.workResponsibility.update).toHaveBeenCalledWith({ where: { id: "work_task" }, data: { revision: { increment: 1 } } });
     expect(db.task.update).not.toHaveBeenCalled();
     expect(db.deadline.update).not.toHaveBeenCalled();

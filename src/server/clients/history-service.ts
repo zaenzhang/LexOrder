@@ -11,6 +11,9 @@ import { matterHref } from "@/lib/matters/route";
 import { shDayKey, shParts } from "@/lib/ui/sh-time";
 import { readFinanceFacts } from "@/server/finance/facts";
 import { contextAccess, readContextRecordsForHistory } from "@/server/matters/context-service";
+import { assertDeliveryAuthority, assertDeliveryDocuments, deliveryDocumentSelect } from "@/server/deliveries/service";
+import { deliveryEventLabels } from "@/server/deliveries/contracts";
+import { assertDocumentDerivationAccess } from "@/server/documents/derivation-access";
 import { clientRelationshipFilter, canCloseClientFollowUp } from "./relationship-access";
 import { compareHistoryPositions, decodeClientCursor, encodeClientCursor, pageBoundary, type HistoryPosition } from "./history-cursor";
 
@@ -151,7 +154,7 @@ export async function readClientFollowUpPage(db: PrismaClient, actor: ClientHist
   }, { timeout: 20_000 });
 }
 
-type Candidate = HistoryPosition & { item?: ClientHistoryItem; matterId?: string; matterTitle?: string; href?: string };
+type Candidate = HistoryPosition & { item?: ClientHistoryItem; matterId?: string; matterTitle?: string; href?: string; deliveryId?: string };
 const SCAN_CHUNK = 40, SCAN_BUDGET = 200;
 const matterSelect = { id: true, internalCode: true, title: true } as const;
 function event(source: HistorySource, id: string, at: Date, recordedAt: Date, title: string, meta: string, content: string | null, href: string, linkLabel: string): Candidate {
@@ -179,6 +182,12 @@ async function candidates(tx: Prisma.TransactionClient, access: Access, canRelat
       take, orderBy: [{ occurredAt: "desc" }, { id: "desc" }], select: { id: true, matterId: true, occurredAt: true, matter: { select: matterSelect } } })
       .then(rows => rows.map(row => ({ source: "CONTEXT" as const, id: row.id, at: row.occurredAt.toISOString(), matterId: row.matterId,
         matterTitle: row.matter.title, href: matterHref(row.matter) }))) : [],
+    canMatters && hasCustomPermission(user, "documents.download") ? tx.deliveryEvent.findMany({ where: {
+      delivery: { recipientClientId: client.id, matter: { deletedAt: null,
+        AND: [matterReadVisibilityFilter(user.id, user.role, user.rolePermissions)] } },
+      ...pageBoundary("occurredAt", point, "DELIVERY") }, take,
+      orderBy: [{ occurredAt: "desc" }, { id: "desc" }], select: { id: true, deliveryId: true, occurredAt: true } })
+      .then(rows => rows.map(row => ({ source: "DELIVERY" as const, id: row.id, at: row.occurredAt.toISOString(), deliveryId: row.deliveryId }))) : [],
     hasCustomPermission(user, "finance.read") ? tx.feeEntry.findMany({ where: { type: "RECEIVED", confirmState: "CONFIRMED", matter: financeMatters(access),
       ...pageBoundary("occurredAt", point, "FEE") }, take, orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
       select: { id: true, amount: true, occurredAt: true, createdAt: true, recordedBy: { select: { name: true } }, matter: { select: matterSelect } } })
@@ -206,6 +215,53 @@ async function candidates(tx: Prisma.TransactionClient, access: Access, canRelat
   return (sources.flat() as Candidate[]).sort(compareHistoryPositions);
 }
 
+/** Read event bodies only after the concrete frozen material list passes current disclosure access. */
+async function deliveryHistoryItems(tx: Prisma.TransactionClient, access: Access, rows: Candidate[]) {
+  const result = new Map<string, ClientHistoryItem>();
+  if (!rows.length) return result;
+  const records = await tx.deliveryRecord.findMany({ where: {
+    id: { in: [...new Set(rows.map(row => row.deliveryId!))] }, recipientClientId: access.client.id,
+  }, select: { id: true, matterId: true, items: { include: { document: { select: deliveryDocumentSelect } } } } });
+  const allowed: string[] = [];
+  for (const record of records) {
+    try {
+      await assertDeliveryAuthority(tx, access.user.id, record.matterId, false);
+      await assertDeliveryDocuments(tx, access.user.id, record, false);
+      allowed.push(record.id);
+    } catch (error) { if (!(error instanceof ActionError)) throw error; }
+  }
+  if (!allowed.length) return result;
+  const eventReferences = await tx.deliveryEvent.findMany({ where: { id: { in: rows.map(row => row.id) }, deliveryId: { in: allowed } },
+    select: { id: true, deliveryId: true, proofDocumentId: true } });
+  const proofs = await tx.document.findMany({ where: { id: { in: eventReferences.flatMap(row => row.proofDocumentId ? [row.proofDocumentId] : []) } },
+    select: { id: true, matterId: true, deletedAt: true } });
+  const proofById = new Map(proofs.map(proof => [proof.id, proof]));
+  const allowedEvents: string[] = [];
+  for (const row of eventReferences) {
+    if (row.proofDocumentId) {
+      const proof = proofById.get(row.proofDocumentId), matterId = records.find(record => record.id === row.deliveryId)?.matterId;
+      if (!proof || proof.deletedAt || proof.matterId !== matterId) continue;
+      try { await assertDocumentDerivationAccess(access.user.id, proof.id, { purpose: "EXPORT", db: tx }); }
+      catch (error) { if (error instanceof ActionError) continue; throw error; }
+    }
+    allowedEvents.push(row.id);
+  }
+  if (!allowedEvents.length) return result;
+  const events = await tx.deliveryEvent.findMany({ where: { id: { in: allowedEvents } },
+    select: { id: true, deliveryId: true, kind: true, occurredAt: true, recordedAt: true, channel: true, note: true,
+      proofDocumentId: true, actor: { select: { name: true } },
+      delivery: { select: { purpose: true, matter: { select: matterSelect } } } } });
+  for (const row of events) {
+    const href = matterHref(row.delivery.matter,
+      `?view=work&workPane=records&delivery=${row.deliveryId}&deliveryEvent=${row.id}`);
+    const meta = [row.delivery.matter.title, row.actor.name, row.channel,
+      row.kind !== "EXPORTED" && !row.proofDocumentId ? "仅人工登记，未附凭据" : null].filter(Boolean).join(" · ");
+    result.set(row.id, event("DELIVERY", row.id, row.occurredAt, row.recordedAt,
+      `${deliveryEventLabels[row.kind]}：${row.delivery.purpose}`, meta, row.note, href, "打开交付记录").item!);
+  }
+  return result;
+}
+
 async function historyInTransaction(tx: Prisma.TransactionClient, access: Access, cursor?: string): Promise<ClientHistoryPage> {
   const { client, user } = access;
   let point = decodeClientCursor(cursor, client.id, user.id, "history");
@@ -228,17 +284,18 @@ async function historyInTransaction(tx: Prisma.TransactionClient, access: Access
           content: record.content, href: row.href!, linkLabel: "打开事项上下文" });
       }
     }
+    const deliveryItems = await deliveryHistoryItems(tx, access, batch.filter(row => row.source === "DELIVERY"));
     for (let index = 0; index < batch.length; index++) {
       const row = batch[index];
       point = { at: row.at, source: row.source, id: row.id };
-      const item = row.source === "CONTEXT" ? contextItems.get(row.id) : row.item;
+      const item = row.source === "CONTEXT" ? contextItems.get(row.id) : row.source === "DELIVERY" ? deliveryItems.get(row.id) : row.item;
       if (item) items.push(item);
       if (items.length === CLIENT_HISTORY_PAGE_SIZE) return { items,
         nextCursor: more || index < batch.length - 1 ? encodeClientCursor(client.id, user.id, "history", point) : null };
     }
     if (!more) return { items, nextCursor: null };
   }
-  // The cursor is encrypted: hidden context timestamps/IDs never leave as readable JSON.
+  // The cursor is encrypted: hidden source timestamps/IDs never leave as readable JSON.
   // Even an empty scan page advances, so a long unavailable run cannot hide older records.
   return { items, nextCursor: point ? encodeClientCursor(client.id, user.id, "history", point) : null };
 }

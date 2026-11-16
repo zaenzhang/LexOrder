@@ -8,6 +8,7 @@ import { createContext, useContext } from "react";
 import type { EvidenceItemRow } from "./evidence-panel";
 
 export type DocActions = {
+  onOpenDocument?: (documentId: string) => void;
   onReview?: (documentId: string) => void;
   /** 材料行上的证据要点（按来源材料 id 分组） */
   evidenceByDoc?: Map<string, EvidenceItemRow[]>;

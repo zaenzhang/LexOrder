@@ -1,6 +1,7 @@
 "use server";
 
 import { Prisma } from "@prisma/client";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { approvalTransaction } from "@/lib/approvals/service";
@@ -21,7 +22,8 @@ const taskCreateSchema = z.object({
   assigneeId: z.string().cuid().optional().or(z.literal("")),
   dueAt: z.coerce.date().optional(),
   priority: z.coerce.number().int().min(0).max(2).default(0),
-  stageId: z.string().cuid().optional().or(z.literal(""))
+  stageId: z.string().cuid().optional().or(z.literal("")),
+  requestKey: z.string().uuid().optional()
 });
 const taskUpdateSchema = taskCreateSchema.extend({ id: z.string().cuid(), revision: z.number().int().nonnegative() });
 
@@ -46,6 +48,18 @@ export async function createTask(input: TaskCreateInput) {
   const data = taskCreateSchema.parse(input);
   const created = await approvalTransaction(async db => {
     const { matter } = await assertTaskMatterAccess(db, session.user.id, data.matterId, "write");
+    const requestHash = data.requestKey ? createHash("sha256").update(JSON.stringify({
+      actorId: session.user.id, matterId: data.matterId, title: data.title, description: data.description || null,
+      assigneeId: data.assigneeId || null, dueAt: data.dueAt?.toISOString() ?? null,
+      priority: data.priority, stageId: data.stageId || null
+    })).digest("hex") : null;
+    if (data.requestKey) {
+      const previous = await db.task.findUnique({ where: { createRequestKey: data.requestKey } });
+      if (previous) {
+        if (previous.matterId !== matter.id || previous.createRequestHash !== requestHash) throw new ActionError("此提交标识已用于不同内容，请重新打开创建表单");
+        return previous;
+      }
+    }
     await assertTaskStage(db, matter.id, data.stageId);
     const assigneeId = data.assigneeId || matter.ownerId;
     if (![matter.ownerId, ...matter.members.map(member => member.userId)].includes(assigneeId)) {
@@ -55,7 +69,8 @@ export async function createTask(input: TaskCreateInput) {
     const task = await db.task.create({
       data: {
         matterId: matter.id, title: data.title, description: data.description || null,
-        assigneeId, dueAt: data.dueAt, priority: data.priority, stageId: data.stageId || null
+        assigneeId, dueAt: data.dueAt, priority: data.priority, stageId: data.stageId || null,
+        createRequestKey: data.requestKey ?? null, createRequestHash: requestHash
       }
     });
     await auditTx(db, {
@@ -123,7 +138,7 @@ async function completeTaskTx(db: Prisma.TransactionClient, userId: string, id: 
 export async function toggleTaskCompleted(id: string) {
   const session = await requireSession("schedule.write");
   const taskId = z.string().cuid().parse(id);
-  const matterId = await approvalTransaction(db => completeTaskTx(db, session.user.id, taskId, "经办通过完成操作确认已办结"));
+  const matterId = await approvalTransaction(db => completeTaskTx(db, session.user.id, taskId, "经办通过完成操作确认已办结"), Prisma.TransactionIsolationLevel.ReadCommitted);
   await refreshTasks(matterId);
   return { ok: true };
 }
@@ -140,7 +155,7 @@ export async function completeTasksBatch(input: { ids: string[]; reason: string 
   for (const id of data.ids) {
     try {
       const taskId = z.string().cuid("任务标识无效").parse(id);
-      const matterId = await approvalTransaction(db => completeTaskTx(db, session.user.id, taskId, data.reason));
+      const matterId = await approvalTransaction(db => completeTaskTx(db, session.user.id, taskId, data.reason), Prisma.TransactionIsolationLevel.ReadCommitted);
       changedMatters.add(matterId);
       results.push({ id, ok: true });
     } catch (error) {

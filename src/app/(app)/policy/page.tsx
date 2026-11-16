@@ -12,18 +12,19 @@ import { FirmFilesView } from "@/app/(app)/firm-resources/_components/firm-files
 export default async function PolicyPage({
   searchParams
 }: {
-  searchParams: { q?: string; includeOld?: string };
+  searchParams: Promise<{ q?: string; includeOld?: string }>;
 }) {
   const session = await getSession();
   if (!session?.user) redirect("/login");
+  const filters = await searchParams;
 
   const isManager =
     customOrLegacy(session.user, "firm-files.manage", canManage(session.user));
 
   const files = await listFirmFiles({
     category: "POLICY",
-    search: searchParams.q?.trim(),
-    includeSuperseded: searchParams.includeOld === "1"
+    search: filters.q?.trim(),
+    includeSuperseded: filters.includeOld === "1"
   });
 
   return (
@@ -31,8 +32,8 @@ export default async function PolicyPage({
       files={files}
       canUpload={isManager}
       currentCategory="POLICY"
-      currentSearch={searchParams.q ?? ""}
-      includeSuperseded={searchParams.includeOld === "1"}
+      currentSearch={filters.q ?? ""}
+      includeSuperseded={filters.includeOld === "1"}
       basePath="/policy"
       hideCategoryNav
       headerTitle="制度规范"

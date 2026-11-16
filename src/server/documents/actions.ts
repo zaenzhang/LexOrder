@@ -1,7 +1,8 @@
 "use server";
 import {assertIntakeDocumentChange,intakeWorkflowReady} from "@/server/intakes/workflow";
 import type {RoleUser} from "@/lib/roles/catalog";
-import { roleMutation } from "@/lib/roles/service";
+import { resolveRoleUser } from "@/lib/roles/service";
+import { hasCustomPermission } from "@/lib/roles/catalog";
 
 import { notifyRoleApprovers } from "@/server/notifications/approval";
 import { approvalTransaction, approvalAudit, assertApprovalItem, approvalContextFor, requireApprovalRoute } from "@/lib/approvals/service";
@@ -24,6 +25,8 @@ import { extractDocumentTextLayer, ocrStatusFor } from "@/lib/documents/text-ext
 import { revalidateMatter } from "@/server/matters/route";
 import { ingestMaterial, withdrawMaterial } from "./material-ingest";
 import { ActionError } from "@/lib/action-error";
+import { assertDocumentDerivationAccess } from "./derivation-access";
+import { canReadDocument } from "@/lib/approvals/documents";
 
 const documentCategorySchema = z.enum([
   "EVIDENCE",
@@ -41,12 +44,23 @@ const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
  * 加密分支：encrypted=true 时把文件用 AES-256-GCM 加密后写盘。
  */
 async function documentMutation<T>(user:RoleUser&{id:string},subject:{intakeId:string|null;matterId:string|null;id?:string},write:(db:Prisma.TransactionClient)=>Promise<T>){
- if(subject.intakeId&&await intakeWorkflowReady(prisma))return approvalTransaction(async db=>{
+ return approvalTransaction(async db=>{
+   const identity = await db.user.findUnique({ where: { id: user.id }, select: { active: true, role: true } });
+   if (!identity?.active) throw new ActionError("当前账号不可用");
+   const role = await resolveRoleUser(user.id, identity.role, db);
+   if (!role.enabled || !hasCustomPermission(role, "documents.write")) throw new ActionError("当前岗位无权修改文书");
+   if (subject.matterId) {
+     const matter = await db.matter.findFirst({ where: { id: subject.matterId, deletedAt: null,
+       ...(role.role === "PRINCIPAL_LAWYER" ? {} : matterAssociationFilter(user.id)) }, select: { status: true } });
+     if (!matter) throw new ActionError("案件不存在或无权办理");
+     if (matter.status === "ARCHIVED") throw new ActionError("案件已归档，文书不可修改");
+   }
+   if(subject.intakeId){
    if(!subject.matterId)await assertIntakeDocumentChange(db,user.id,subject.intakeId!,subject.id);
    else if(subject.id){const [used]=await db.$queryRaw<{count:bigint}[]>`SELECT COUNT(*) AS count FROM "IntakeRevision" WHERE "intakeId"=${subject.intakeId} AND snapshot->'documents' @> ${JSON.stringify([{id:subject.id}])}::jsonb`;if(Number(used.count))throw new ActionError('已送审材料原件须保留，请另传补充材料');}
+   }
    return write(db);
  });
- return roleMutation(user,'documents.write',write);
 }
 
 export async function uploadDocument(formData: FormData) {
@@ -237,7 +251,7 @@ export async function listAllDocuments(input: Partial<z.infer<typeof docListQuer
       : {})
   };
 
-  return prisma.document.findMany({
+  const rows = await prisma.document.findMany({
     where,
     orderBy: { createdAt: "desc" },
     take: query.limit,
@@ -246,6 +260,8 @@ export async function listAllDocuments(input: Partial<z.infer<typeof docListQuer
       uploadedBy: { select: { id: true, name: true } }
     }
   });
+  const readable = await Promise.all(rows.map(row => canReadDocument(session.user.id, row)));
+  return rows.filter((_, index) => readable[index]);
 }
 
 // ============ v0.10: 文书审批流程 ============
@@ -269,7 +285,8 @@ export async function submitDocumentForReview(id: string) {
   }
   if (!isPersonalMode() && await selfConfirmEligible(docContext, prisma)) {
     if (doc.status !== "DRAFT") throw new ActionError("只有草稿状态的材料才能提交审核");
-    await approvalTransaction(async db => {
+    await documentMutation(session.user, doc, async db => {
+      await assertDocumentDerivationAccess(session.user.id, id, { purpose: "SUBMIT", db });
       await db.document.update({
         where: { id, status: "DRAFT", updatedAt: doc.updatedAt },
         data: {
@@ -294,17 +311,15 @@ export async function submitDocumentForReview(id: string) {
   await requireApprovalRoute(docContext);
   if (doc.status !== "DRAFT") throw new ActionError("只有草稿状态的材料才能提交审核");
 
-  await documentMutation(session.user,doc, async roleDb => roleDb.document.update({
-    where: { id, status: "DRAFT", updatedAt: doc.updatedAt },
-    data: { status: "PENDING_REVIEW" },
-  }));
-
-  await audit({
-    userId: session.user.id,
-    action: "DOCUMENT_SUBMIT_REVIEW",
-    targetType: "Document",
-    targetId: id,
-    detail: { matterId: doc.matterId, name: doc.name },
+  await documentMutation(session.user, doc, async db => {
+    await assertDocumentDerivationAccess(session.user.id, id, { purpose: "SUBMIT", db });
+    await db.document.update({
+      where: { id, status: "DRAFT", updatedAt: doc.updatedAt },
+      data: { status: "PENDING_REVIEW" },
+    });
+    await approvalAudit(db, session.user.id, "DOCUMENT_SUBMIT_REVIEW", id, {
+      matterId: doc.matterId, name: doc.name, attachmentIds: [id],
+    });
   });
 
   await notifyRoleApprovers({ roles: ["PRINCIPAL_LAWYER"], excludeUserId: session.user.id, title: "新的文书待审批", content: doc.name, href: "/approvals", refType: "Document", refId: id });
@@ -321,6 +336,7 @@ export async function approveDocument(id: string, note?: string) {
 
   await approvalTransaction(async tx => {
     await assertApprovalItem(session.user.id, "DOCUMENT_APPROVE", id, tx);
+    await assertDocumentDerivationAccess(session.user.id, id, { purpose: "READ", db: tx });
   await tx.document.update({
     where: { id, status: "PENDING_REVIEW", updatedAt: doc.updatedAt },
     data: {
@@ -372,17 +388,11 @@ export async function fileDocument(id: string) {
     await assertCanHandleMatter(session.user, doc.matterId);
   if (doc.status !== "APPROVED") throw new ActionError("只有已审批的材料才能归档");
 
-  await documentMutation(session.user,doc, async roleDb => roleDb.document.update({
-    where: { id },
-    data: { status: "FILED" },
-  }));
-
-  await audit({
-    userId: session.user.id,
-    action: "DOCUMENT_FILE",
-    targetType: "Document",
-    targetId: id,
-    detail: { matterId: doc.matterId, name: doc.name },
+  if (doc.matterId) await assertDocumentWritable(doc.matterId, { kind: "modify" });
+  await documentMutation(session.user, doc, async roleDb => {
+    await assertDocumentDerivationAccess(session.user.id, id, { purpose: "SUBMIT", db: roleDb });
+    await roleDb.document.update({ where: { id, status: "APPROVED", updatedAt: doc.updatedAt }, data: { status: "FILED" } });
+    await approvalAudit(roleDb, session.user.id, "DOCUMENT_FILE", id, { matterId: doc.matterId, name: doc.name });
   });
 
   if (doc.matterId) await revalidateMatter(doc.matterId);

@@ -27,8 +27,10 @@ import { removeProcedureStage } from "@/server/procedures/actions";
 import { completeJob } from "@/server/cron/queue";
 import { intakeState } from "@/server/intakes/workflow";
 import { ingestMaterial, resumeMaterialIngest, withdrawMaterial, type MaterialDocumentInput } from "@/server/documents/material-ingest";
+import { canReadDocument } from "@/lib/approvals/documents";
+import { assertDocumentDerivationAccess } from "@/server/documents/derivation-access";
 
-const userIds: string[] = [], matterIds: string[] = [], roleIds: string[] = [], intentIds: string[] = [];
+const userIds: string[] = [], matterIds: string[] = [], roleIds: string[] = [], intentIds: string[] = [], templateIds: string[] = [];
 async function fixture(role: UserRole = "LAWYER") {
   const user = await db.user.create({ data: { name: "合成摄入经办人", email: `${randomUUID()}@example.invalid`, passwordHash: "disabled-test-only", role } });
   userIds.push(user.id);
@@ -82,6 +84,7 @@ describe.skipIf(!databaseUrl)("Server 原件摄入：真实 PG 恢复与幂等�
       ...intentIds.map(id => `document.ingest:${id}`), ...runs.map(run => `document.parse:${run.id}`),
     ] }, status: { not: "SUCCESS" } }, data: { status: "DEAD", leaseToken: null, leaseUntil: null, lastError: "合成摄入场景已结束" } });
     // Retain immutable history/audit fixtures; retire only objects owned by this file.
+    await db.documentTemplate.updateMany({ where: { id: { in: templateIds } }, data: { enabled: false } });
     await db.document.updateMany({ where: { id: { in: ids } }, data: { deletedAt: new Date(), textContent: null } });
     await db.matter.updateMany({ where: { id: { in: matterIds } }, data: { deletedAt: new Date() } });
     await db.user.updateMany({ where: { id: { in: userIds } }, data: { active: false } });
@@ -229,6 +232,58 @@ describe.skipIf(!databaseUrl)("Server 原件摄入：真实 PG 恢复与幂等�
     const recovered = await resumeMaterialIngest(input.requestKey, f.user.id, currentLease);
     expect(await db.document.count({ where: { id: recovered.id } })).toBe(1);
     expect(await completeJob(currentLease)).toBe(true);
+  });
+
+  it("派生文书上传新版本继承固定研究和模板依据，旧批准不继承，来源撤回即阻止后续读取/送审/修订", async () => {
+    const f = await fixture();
+    const source = await ingestMaterial(request(f, { ...f.document, name: "合成固定研究来源.txt" }));
+    const original = await ingestMaterial(request(f, { ...f.document, name: "合成研究初稿.txt" }));
+    const research = await db.researchRevision.create({ data: {
+      matterId: f.matter.id, seriesId: randomUUID(), version: 1, question: "合成金额规则争点", purpose: "合成审校验收", jurisdiction: "中国大陆",
+      researchedAt: new Date(), scope: "仅此合成来源", queryLog: [], rule: "合成规则", exceptions: "合成例外", supportingAnalysis: "合成正向说明",
+      opposingAnalysis: "合成反向说明", conclusion: "合成结论", unresolved: "仍待人工核对", nextSteps: "核对原文", authorId: f.user.id,
+      requestKey: randomUUID(), requestHash: "a".repeat(64), sources: { create: { documentId: source.id, documentSha256: f.document.sha256,
+        relation: "SUPPORTS", location: { kind: "TEXT", start: 0, end: 8 }, locationKey: "TEXT:0:8", lawMetadata: {} } },
+    } });
+    const blob = await db.document.create({ data: { name: "合成模板原件.docx", path: `ingest-template/${randomUUID()}.docx`,
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", uploadedById: f.user.id, tags: [] } });
+    const template = await db.documentTemplate.create({ data: { name: "合成修订模板", category: "LITIGATION", applicableCategories: [], variables: [], docxBlobId: blob.id } });
+    templateIds.push(template.id);
+    const snapshot = { context: { matter: { title: f.matter.title } }, templateSource: { documentId: blob.id, sha256: null }, reviewedById: f.user.id };
+    const approver = await db.user.create({ data: { name: "合成历史审批人", email: `${randomUUID()}@example.invalid`, passwordHash: "disabled-test-only", role: "LAWYER" } });
+    userIds.push(approver.id);
+    await db.document.update({ where: { id: original.id }, data: { status: "APPROVED", approvedById: approver.id, approvedAt: new Date(),
+      reviewedById: approver.id, reviewedAt: new Date(), templateId: template.id, templateContextSnapshot: snapshot } });
+    await db.documentResearchSource.create({ data: { documentId: original.id, researchRevisionId: research.id } });
+    const revisionBytes = Buffer.from("合成修订稿：按明细更正本金，保留原研究版本。", "utf8");
+    const revisionInput = { ...request(f, { ...f.document, name: "合成研究修订稿.txt", size: revisionBytes.length,
+      sha256: createHash("sha256").update(revisionBytes).digest("hex") }), bytes: revisionBytes, priorDocumentId: original.id };
+    const revision = await ingestMaterial(revisionInput);
+    const saved = await db.document.findUniqueOrThrow({ where: { id: revision.id } });
+    expect(saved).toMatchObject({ familyId: original.id, version: 2, isLatest: true, status: "DRAFT", approvedById: null, approvedAt: null,
+      reviewedById: null, reviewedAt: null, templateId: template.id, templateContextSnapshot: snapshot, generationRequestKey: null });
+    expect(await db.documentResearchSource.findMany({ where: { documentId: revision.id }, select: { researchRevisionId: true } })).toEqual([{ researchRevisionId: research.id }]);
+    expect(await db.document.findUniqueOrThrow({ where: { id: original.id } })).toMatchObject({ status: "APPROVED", approvedById: approver.id, version: 1, isLatest: false });
+    await withdrawMaterial(f.user.id, source.id, false);
+    expect(await canReadDocument(f.user.id, saved)).toBe(false);
+    for (const purpose of ["READ", "EXPORT", "SUBMIT"] as const) {
+      await expect(assertDocumentDerivationAccess(f.user.id, saved.id, { purpose })).rejects.toThrow("来源已撤回、变更或无权读取");
+    }
+    const nextInput = { ...request(f, revisionInput.document), bytes: revisionBytes, priorDocumentId: revision.id };
+    await expect(ingestMaterial(nextInput)).rejects.toThrow("来源已撤回、变更或无权读取");
+    expect(await db.document.count({ where: { familyId: original.id } })).toBe(2);
+    expect(await db.document.findUniqueOrThrow({ where: { id: revision.id } })).toMatchObject({ isLatest: true, version: 2, status: "DRAFT" });
+  });
+
+  it("新版本入口不猜测或补写缺失的版本族，也不预存文件或发布新版", async () => {
+    const f = await fixture();
+    const original = await db.document.create({ data: { ...f.document, path: `unrelated/${randomUUID()}.txt`, familyId: null } });
+    const input = { ...request(f), priorDocumentId: original.id };
+    await expect(ingestMaterial(input)).rejects.toThrow("缺少明确的版本关系");
+    expect(syntheticStorage.write).not.toHaveBeenCalled();
+    expect(await db.materialIngestIntent.findUnique({ where: { id: input.requestKey } })).toBeNull();
+    expect(await db.document.count({ where: { matterId: f.matter.id } })).toBe(1);
+    expect(await db.document.findUniqueOrThrow({ where: { id: original.id } })).toMatchObject({ familyId: null, version: 1, isLatest: true });
   });
 
   it("获准的归档补充初传可建解析任务，普通卷宗上传仍被阻断", async () => {

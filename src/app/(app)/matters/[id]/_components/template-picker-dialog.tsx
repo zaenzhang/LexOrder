@@ -1,273 +1,135 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
-import { Sparkles, FileText, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { useMemo, useRef, useState, useTransition } from "react";
+import { FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
-import { cn } from "@/lib/utils";
-import { renderTemplate } from "@/server/document-templates/actions";
-import {
-  type TemplateSummary,
-  type FolderPayload,
-  TEMPLATE_CATEGORY_CN,
-  VARIABLE_LABEL_CN
-} from "./folder-types";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { confirmDialog } from "@/components/patterns/confirm-dialog";
+import { prepareTemplate, renderTemplate } from "@/server/document-templates/actions";
+import { type TemplateSummary, type FolderPayload, TEMPLATE_CATEGORY_CN, VARIABLE_LABEL_CN } from "./folder-types";
 import { actionErrorMessage } from "@/lib/action-error";
-import { RENDER_ONLY_TEMPLATE_FIELDS } from "@/lib/template-render-fields";
+import { missingTemplateTargets, type TemplatePreparation, type TemplateSelection } from "@/lib/template-render-fields";
 
-function describeMissing(paths: string[]): string {
-  if (paths.length === 0) return "";
-  const labels = paths.slice(0, 4).map((p) => VARIABLE_LABEL_CN[p] ?? p);
-  const more = paths.length > 4 ? ` 等 ${paths.length} 项` : "";
-  return labels.join("、") + more;
-}
-
-// 哪些变量允许行内补全（即写即存源表）—— 与 template-engine.ts applyOverrides 对齐
-const EDITABLE_OVERRIDES = new Set([
-  "client.idNumber",
-  "client.address",
-  "client.phone",
-  "opposing.idNumber",
-  "opposing.address",
-  "opposing.phone"
-]);
-
-export function TemplatePickerDialog({
-  open,
-  onOpenChange,
-  matterId,
-  matterCategory,
-  folders,
-  templates
-}: {
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  matterId: string;
-  matterCategory: string;
-  folders: FolderPayload[];
-  templates: TemplateSummary[];
+export function TemplatePickerDialog({ open, onOpenChange, matterId, matterCategory, folders, templates }: {
+  open: boolean; onOpenChange: (open: boolean) => void; matterId: string; matterCategory: string;
+  folders: FolderPayload[]; templates: TemplateSummary[];
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [targetFolderId, setTargetFolderId] = useState<string>("auto");
+  const [preparation, setPreparation] = useState<TemplatePreparation | null>(null);
+  const [targetFolderId, setTargetFolderId] = useState("auto");
   const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [reviewed, setReviewed] = useState(false);
+  const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [pending, startTransition] = useTransition();
+  const loadSequence = useRef(0);
+  const applicable = useMemo(() => templates.filter(template => !template.applicableCategories.length || template.applicableCategories.includes(matterCategory)), [templates, matterCategory]);
+  const selected = applicable.find(template => template.id === selectedId);
+  const dirty = Object.keys(overrides).length > 0;
+  const missing = preparation?.fields.filter(field => field.editable ? !(overrides[field.path] ?? field.value).trim() : field.missing) ?? [];
+  const unselected = preparation ? missingTemplateTargets(preparation.fields.map(field => field.path), preparation.selection, preparation.choices) : [];
 
-  // 适用本案件类别的模板（含未限定类别的）
-  const applicable = useMemo(
-    () =>
-      templates.filter(
-        (t) =>
-          t.applicableCategories.length === 0 ||
-          t.applicableCategories.includes(matterCategory)
-      ),
-    [templates, matterCategory]
-  );
-
-  const grouped = useMemo(() => {
-    const m = new Map<TemplateSummary["category"], TemplateSummary[]>();
-    for (const t of applicable) {
-      if (!m.has(t.category)) m.set(t.category, []);
-      m.get(t.category)!.push(t);
+  async function canDiscard() {
+    return !dirty || await confirmDialog({ title: "放弃本次补填？", description: "补填内容尚未生成文书。", confirmText: "放弃补填", cancelText: "继续编辑", initialFocus: "cancel" });
+  }
+  function clear() {
+    loadSequence.current += 1;
+    setSelectedId(null); setPreparation(null); setTargetFolderId("auto"); setOverrides({}); setReviewed(false); setError(null); setLoading(false); setRequestKey(crypto.randomUUID());
+  }
+  async function close() {
+    if (pending || !await canDiscard()) return;
+    clear(); onOpenChange(false);
+  }
+  async function load(templateId: string, selection?: TemplateSelection) {
+    if (pending || !await canDiscard()) return;
+    const sequence = ++loadSequence.current;
+    setSelectedId(templateId); setPreparation(null); setOverrides({}); setReviewed(false); setError(null); setLoading(true); setRequestKey(crypto.randomUUID());
+    try {
+      const result = await prepareTemplate({ matterId, templateId, ...(selection ? { selection } : {}) });
+      if (sequence === loadSequence.current) setPreparation(result);
+    } catch (cause) {
+      if (sequence === loadSequence.current) setError(actionErrorMessage(cause));
+    } finally {
+      if (sequence === loadSequence.current) setLoading(false);
     }
-    return Array.from(m.entries());
-  }, [applicable]);
-
-  const selected = applicable.find((t) => t.id === selectedId) ?? null;
-
-  // 列出该模板的可编辑变量（白名单内的）
-  const editableVars = selected
-    ? selected.variables.filter((v) => EDITABLE_OVERRIDES.has(v) || (selected.category === "EXECUTION" && RENDER_ONLY_TEMPLATE_FIELDS.has(v)))
-    : [];
-
-  const reset = () => {
-    setSelectedId(null);
-    setTargetFolderId("auto");
-    setOverrides({});
-  };
-
-  const submit = () => {
-    if (!selected) return;
+  }
+  function changeValue(path: string, value: string) {
+    setOverrides(previous => ({ ...previous, [path]: value })); setReviewed(false); setRequestKey(crypto.randomUUID());
+  }
+  function submit() {
+    if (!preparation || !reviewed || missing.length || unselected.length) return;
     startTransition(async () => {
       try {
-        const res = await renderTemplate({
-          matterId,
-          templateId: selected.id,
-          folderId: targetFolderId === "auto" ? null : targetFolderId,
-          overrides
-        });
-        if (res.missing.length > 0) {
-          toast.warning(`已生成「${res.fileName}」，但以下字段为空需手动补：${describeMissing(res.missing)}`);
-        } else {
-          toast.success(`已生成「${res.fileName}」并保存到案件材料`);
-        }
-        // 触发下载
-        window.open(`/api/documents/${res.documentId}/download`, "_blank");
-        reset();
-        onOpenChange(false);
-      } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "生成失败");
-      }
+        const result = await renderTemplate({ matterId, templateId: preparation.templateId, templateUpdatedAt: preparation.templateUpdatedAt,
+          selection: preparation.selection, requestKey, folderId: targetFolderId === "auto" ? null : targetFolderId,
+          expectedValues: Object.fromEntries(preparation.fields.map(field => [field.path, field.value])), overrides, reviewed: true });
+        toast.success(`已保存「${result.fileName}」草稿`);
+        window.open(`/api/documents/${result.documentId}/download`, "_blank", "noopener,noreferrer");
+        clear(); onOpenChange(false);
+      } catch (cause) { setError(actionErrorMessage(cause)); }
     });
-  };
+  }
+  const targetFields = [
+    { key: "clientId", choices: "clients", label: "委托人" },
+    { key: "opposingPartyId", choices: "opposing", label: "对方当事人" },
+    { key: "thirdPartyId", choices: "thirds", label: "第三人" },
+    { key: "procedureId", choices: "procedures", label: "程序" },
+  ] as const;
 
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        if (pending) return;
-        if (!o) reset();
-        onOpenChange(o);
-      }}
-    >
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
-            从模板新建文书
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          {/* Step 1: 选模板 */}
-          <div>
-            <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
-              1 · 选模板
-            </Label>
-            <div className="mt-2 max-h-[280px] overflow-y-auto rounded border border-border">
-              {grouped.length === 0 ? (
-                <p className="p-4 text-center text-sm text-muted-foreground">
-                  该案件类型暂无可用模板
-                </p>
-              ) : (
-                grouped.map(([cat, items]) => (
-                  <div key={cat}>
-                    <div className="sticky top-0 bg-muted/40 px-3 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-                      {TEMPLATE_CATEGORY_CN[cat]}
-                    </div>
-                    {items.map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        disabled={pending}
-                        onClick={() => {
-                          if (selectedId !== t.id) {
-                            setOverrides(previous => Object.fromEntries(Object.entries(previous).filter(([path]) => !RENDER_ONLY_TEMPLATE_FIELDS.has(path))));
-                            setSelectedId(t.id);
-                          }
-                        }}
-                        className={cn(
-                          "flex w-full items-start gap-3 border-t border-border px-3 py-2 text-left transition-colors",
-                          selectedId === t.id
-                            ? "bg-primary/10"
-                            : "hover:bg-muted/40"
-                        )}
-                      >
-                        <FileText
-                          className={cn(
-                            "mt-0.5 h-4 w-4 shrink-0",
-                            selectedId === t.id ? "text-primary" : "text-muted-foreground"
-                          )}
-                        />
-                        <div className="flex-1">
-                          <p className="text-[13px] font-medium">{t.name}</p>
-                          {t.description && (
-                            <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
-                              {t.description}
-                            </p>
-                          )}
-                        </div>
-                        {selectedId === t.id && (
-                          <CheckCircle2 className="h-4 w-4 text-primary" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                ))
-              )}
+  return <Dialog open={open} onOpenChange={value => { if (!value) void close(); }}>
+    <DialogContent className="max-w-4xl" onEscapeKeyDown={event => { if (pending) event.preventDefault(); }} onPointerDownOutside={event => { if (pending) event.preventDefault(); }}>
+      <DialogHeader><DialogTitle>从模板起草</DialogTitle></DialogHeader>
+      <div className="grid min-h-0 grid-cols-[220px_minmax(0,1fr)] gap-6">
+        <div className="flex max-h-[60vh] flex-col gap-2 overflow-y-auto" aria-label="文书模板">
+          {applicable.length === 0 && <p className="text-muted-foreground">暂无适用模板</p>}
+          {applicable.map(template => <Button key={template.id} aria-label={template.name} type="button" variant={selectedId === template.id ? "secondary" : "ghost"} disabled={pending} className="h-auto justify-start whitespace-normal text-left" onClick={() => { if (selectedId !== template.id) void load(template.id); }}>
+            <FileText data-icon="inline-start" />
+            <span className="flex min-w-0 flex-col gap-1"><span>{template.name}</span><span className="text-xs text-muted-foreground">{TEMPLATE_CATEGORY_CN[template.category]}</span></span>
+          </Button>)}
+        </div>
+        <div className="flex min-w-0 flex-col gap-4">
+          {loading && <p role="status">正在读取模板字段…</p>}
+          {error && <Alert variant="destructive"><AlertDescription className="flex flex-col gap-2"><span>{error}</span>{selectedId && <Button variant="outline" size="sm" disabled={pending || loading} onClick={() => void load(selectedId, preparation?.selection)}>重新核对字段</Button>}</AlertDescription></Alert>}
+          {!selectedId && <p className="text-muted-foreground">请选择模板</p>}
+          {selected && preparation && <>
+            <div className="grid grid-cols-2 gap-3">
+              {targetFields.filter(target => preparation.choices[target.choices].length > 0).map(target => <div key={target.key} className="flex flex-col gap-1.5">
+                <Label htmlFor={`template-${target.key}`}>{target.label}</Label>
+                <Select value={preparation.selection[target.key] ?? "none"} disabled={pending} onValueChange={id => void load(selected.id, { ...preparation.selection, [target.key]: id === "none" ? null : id })}>
+                  <SelectTrigger id={`template-${target.key}`}><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectGroup><SelectItem value="none">未选择</SelectItem>{preparation.choices[target.choices].map(choice => <SelectItem key={choice.id} value={choice.id}>{choice.label}</SelectItem>)}</SelectGroup></SelectContent>
+                </Select>
+              </div>)}
             </div>
-          </div>
-
-          {/* Step 2: 行内补全 */}
-          {selected && editableVars.length > 0 && (
-            <div>
-              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                2 · 补全可能缺失的字段
-              </Label>
-              <p className="mt-1 flex items-start gap-1.5 text-[11px] text-muted-foreground">
-                <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
-                委托人和对方资料会在生成时保存，留空沿用现有资料。执行依据、案号及法院的补填仅用于本次文书。
-              </p>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                {editableVars.map((path) => (
-                  <div key={path}>
-                    <Label htmlFor={`template-field-${path}`} className="text-[11px]">{VARIABLE_LABEL_CN[path] ?? path}{RENDER_ONLY_TEMPLATE_FIELDS.has(path) ? "（本次文书）" : ""}</Label>
-                    <Input
-                      id={`template-field-${path}`}
-                      value={overrides[path] ?? ""}
-                      onChange={(e) =>
-                        setOverrides((prev) => ({ ...prev, [path]: e.target.value }))
-                      }
-                      placeholder={RENDER_ONLY_TEMPLATE_FIELDS.has(path) ? "请核对本次文书内容" : "留空沿用已保存资料"}
-                      className="h-8 text-[12px]"
-                    />
-                  </div>
-                ))}
-              </div>
+            {unselected.length > 0 && <p className="text-sm text-destructive">请选择{unselected.join("、")}</p>}
+            <div className="flex items-center justify-between gap-2"><h3 className="font-medium">本次文书字段</h3>{missing.length > 0 && <Badge variant="secondary">{missing.length} 项待补全</Badge>}</div>
+            <div className="flex max-h-[38vh] flex-col gap-3 overflow-y-auto pr-2">
+              {preparation.fields.length === 0 && <p className="text-muted-foreground">此模板没有待填字段</p>}
+              {preparation.fields.map(field => <div key={field.path} className="flex flex-col gap-1.5">
+                <Label htmlFor={`template-field-${field.path}`}>{VARIABLE_LABEL_CN[field.path] ?? field.path}</Label>
+                {field.editable ? <Input id={`template-field-${field.path}`} disabled={pending} value={overrides[field.path] ?? field.value} maxLength={2000}
+                  aria-invalid={!(overrides[field.path] ?? field.value).trim()} onChange={event => changeValue(field.path, event.target.value)} />
+                  : <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">{field.missing ? "尚无对应当事人，请先完善案件主体" : field.value}</p>}
+              </div>)}
             </div>
-          )}
-
-          {/* Step 3: 选卷宗 */}
-          {selected && (
-            <div>
-              <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                {editableVars.length > 0 ? "3" : "2"} · 保存到哪个卷宗
-              </Label>
-              <Select value={targetFolderId} onValueChange={setTargetFolderId}>
-                <SelectTrigger className="mt-2">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="auto">自动（按模板大类推荐）</SelectItem>
-                  {folders.map((f) => (
-                    <SelectItem key={f.id} value={f.id}>
-                      {f.name}
-                      {f.isDefault && (
-                        <span className="ml-1 text-[10px] text-muted-foreground">· 默认</span>
-                      )}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
+            <div className="flex flex-col gap-1.5"><Label htmlFor="template-folder">保存卷宗</Label>
+              <Select value={targetFolderId} disabled={pending} onValueChange={id => { setTargetFolderId(id); setRequestKey(crypto.randomUUID()); }}>
+                <SelectTrigger id="template-folder"><SelectValue /></SelectTrigger><SelectContent><SelectGroup><SelectItem value="auto">按模板类别推荐</SelectItem>{folders.map(folder => <SelectItem key={folder.id} value={folder.id}>{folder.name}</SelectItem>)}</SelectGroup></SelectContent>
               </Select>
             </div>
-          )}
+            <div className="flex items-center gap-2"><Checkbox id="template-reviewed" disabled={pending || missing.length > 0 || unselected.length > 0} checked={reviewed} onCheckedChange={value => setReviewed(value === true)} /><Label htmlFor="template-reviewed">已核对主体、程序及字段，仅用于本次文书</Label></div>
+          </>}
         </div>
-
-        <DialogFooter>
-          <Button variant="outline" disabled={pending} onClick={() => { reset(); onOpenChange(false); }}>
-            取消
-          </Button>
-          <Button onClick={submit} disabled={!selected || pending}>
-            {pending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
-            生成并下载
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+      </div>
+      <DialogFooter><Button variant="outline" disabled={pending} onClick={() => void close()}>取消</Button><Button disabled={!preparation || loading || pending || !reviewed || missing.length > 0 || unselected.length > 0} onClick={submit}>{pending && <Loader2 data-icon="inline-start" className="animate-spin" />}生成草稿并下载</Button></DialogFooter>
+    </DialogContent>
+  </Dialog>;
 }

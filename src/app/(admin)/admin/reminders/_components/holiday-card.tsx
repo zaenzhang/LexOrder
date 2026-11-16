@@ -63,7 +63,7 @@ export function HolidayCard({ year, rows, canEdit }: { year: number; rows: Holid
       <div className="panel-body" style={{ paddingTop: 8 }}>
         {rows.length === 0 ? (
           <p className="t-xs t-mute" style={{ lineHeight: 1.7, marginBottom: 8 }}>
-            尚未录入 {year} 年安排。未录入时期限届满日保持「请人工核对顺延」提示；每年国务院通知发布后录入一次（几分钟），系统将自动把落在休假日的届满日顺延到下一工作日并在依据栏标注。
+            尚未录入 {year} 年安排。未录入时期限届满日保持「请人工核对顺延」提示；每年国务院通知发布后录入一次（几分钟），系统会给出顺延建议并在依据栏标注；已填写或确认的期限由经办明确调整。
           </p>
         ) : (
           <div className="t-xs" style={{ marginBottom: 8, display: "flex", flexWrap: "wrap", gap: 4 }}>

@@ -8,6 +8,15 @@ type DossierUpdate = Partial<{
   stage: string | null;
   task: string | null;
   recordsExpanded: string | null;
+  factsView: "facts" | "research";
+  recordsView: "activity" | "delivery";
+  research: string | null;
+  issue: string | null;
+  document: string | null;
+  reviewIssue: string | null;
+  delivery: string | null;
+  deliveryEvent: string | null;
+  deliveryDocument: string | null;
 }>;
 
 /** Native history is integrated with Next useSearchParams. */

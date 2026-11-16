@@ -8,7 +8,7 @@ export type HistoryPosition = { at: string; source: HistorySource; id: string };
 const envelope = z.object({
   v: z.literal(1), clientId: z.string().cuid(), userId: z.string().cuid(),
   kind: z.enum(["matters", "communications", "followUps", "history"]),
-  at: z.string().datetime(), source: z.enum(["CLIENT_ACTIVITY", "CONTACT", "CONTEXT", "FEE", "FOLLOW_UP", "INTAKE", "MATTER", "NOTE"]),
+  at: z.string().datetime(), source: z.enum(["CLIENT_ACTIVITY", "CONTACT", "CONTEXT", "DELIVERY", "FEE", "FOLLOW_UP", "INTAKE", "MATTER", "NOTE"]),
   id: z.string().cuid()
 }).strict();
 const domain = Buffer.from("LexOrder.client-history.cursor.v1");

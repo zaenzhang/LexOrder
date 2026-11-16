@@ -19,9 +19,10 @@ export const workChangeInput=z.object({id:z.string().min(1),revision:z.number().
 export async function changeWorkTx(db:Prisma.TransactionClient,userId:string,input:z.input<typeof workChangeInput>){
  const d=workChangeInput.parse(input);await currentActor(db,userId,'schedule.write');
  if(!await responsibilityReady(db))throw new ActionError('事项责任功能尚未启用');
+ const beforeLock=(await readWorkRows(db)).find(r=>r.id===d.id);if(!beforeLock)throw new ActionError('事项不存在');
+ const table=beforeLock.kind==='Urgent'?'IntakeUrgentItem':'WorkResponsibility';
+ await db.$queryRaw(Prisma.sql`SELECT id FROM ${Prisma.raw(`"${table}"`)} WHERE id=${beforeLock.id} FOR UPDATE`);
  const row=(await readWorkRows(db)).find(r=>r.id===d.id);if(!row)throw new ActionError('事项不存在');
- const table=row.kind==='Urgent'?'IntakeUrgentItem':'WorkResponsibility';
- await db.$queryRaw(Prisma.sql`SELECT id FROM ${Prisma.raw(`"${table}"`)} WHERE id=${row.id} FOR UPDATE`);
  if(row.revision!==d.revision)throw new ActionError('事项已变化，请刷新');
  // 归档案件：正常变更通道关闭，但保留 CANCEL 兜底——否则混合迁移状态下遗留的
  // OPEN 事项既不能办结也不能作废，提醒永不停（2026-09-19 审计）。

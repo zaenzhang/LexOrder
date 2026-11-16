@@ -7,8 +7,7 @@
  */
 import PizZip from "pizzip";
 import { prisma } from "@/lib/prisma";
-import { storage } from "@/lib/storage";
-import { decryptBuffer, sha256 } from "@/lib/storage/crypto";
+import { sha256 } from "@/lib/storage/crypto";
 import { readArchiveDocument } from "@/server/archive/verification";
 import { ActionError } from "@/lib/action-error";
 import type { WorkspaceActor } from "@/lib/runtime/actor";
@@ -83,14 +82,16 @@ export async function buildMatterBundle(matterId: string, actor: WorkspaceActor)
     seqByCategory[dir] = n;
     try {
       const buf = await readArchiveDocument(d as unknown as Parameters<typeof readArchiveDocument>[0]);
+      if (!d.sha256 || sha256(buf) !== d.sha256 || buf.length !== d.size) throw new ActionError(`材料“${d.name}”与已保存原件标识不符，不能生成完整案卷`);
       zip.file(`${root}/材料/${dir}/${String(n).padStart(3, "0")}_${safeName(d.name)}`, buf);
-    } catch {
-      // 单份材料读取失败不阻断整包（如磁盘文件缺失）；manifest 中保留清单可对账
-      zip.file(`${root}/材料/${dir}/${String(n).padStart(3, "0")}_${safeName(d.name)}.读取失败.txt`, `材料文件读取失败，请到系统中核对（id=${d.id}，sha256=${d.sha256}）。`);
+    } catch (error) {
+      if (error instanceof ActionError) throw error;
+      throw new ActionError(`材料“${d.name}”读取失败，不能生成完整案卷，请回材料区核对`);
     }
   }
 
   const buffer = zip.generate({ type: "nodebuffer" }) as Buffer;
-  void storage; void decryptBuffer; void sha256;
+  await assertMatterExportAccess(actor, matterId);
+  await assertExportDocumentAccess(actor.id, documents);
   return { buffer, fileName: `${root}-在办卷宗.zip`, checksum: sha256(buffer), size: buffer.length };
 }

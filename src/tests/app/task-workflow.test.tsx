@@ -47,7 +47,7 @@ function workspace(tasks = [task()]): TaskWorkflowWorkspace {
 }
 
 function activeWaiting() {
-  return { id: waitingId, waitingFor: "客户财务", expectedResult: "银行付款回单", nextCheckAt: new Date("2026-11-18T01:00:00.000Z"), startedAt: stamp, endedAt: null, result: null, createdById: userId, endedById: null };
+  return { id: waitingId, waitingFor: "客户财务", expectedResult: "银行付款回单", reason: null, nextCheckAt: new Date("2026-11-18T01:00:00.000Z"), startedAt: stamp, endedAt: null, result: null, createdById: userId, endedById: null };
 }
 
 function tab(name: string | RegExp) {
@@ -63,6 +63,23 @@ beforeEach(() => {
 });
 
 describe("任务弹窗的键盘返回", () => {
+  it("选中环节只显示该环节任务并预填新任务归属", async () => {
+    const stageId = "cstage0000000000000000001";
+    actions.getTaskWorkspace.mockResolvedValue(workspace([
+      task({ stageId, stageName: "举证", title: "核对证据" }),
+      task({ id: otherTaskId, stageId: null, title: "全案任务" })
+    ]));
+    actions.createTask.mockResolvedValue({ ok: true, id: otherTaskId });
+    render(<TaskWorkPanel matterId={matterId} scopeStageIds={[stageId]} defaultStage={{ id: stageId, name: "举证" }} />);
+    expect(await screen.findByRole("button", { name: "核对证据" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "全案任务" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "新建任务" }));
+    expect(await screen.findByText("关联环节：举证")).toBeVisible();
+    fireEvent.change(screen.getByLabelText("任务名称"), { target: { value: "提交证据" } });
+    fireEvent.click(screen.getByRole("button", { name: "创建任务" }));
+    await waitFor(() => expect(actions.createTask).toHaveBeenCalledWith(expect.objectContaining({ stageId, title: "提交证据" })));
+  });
+
   it("从真实环节新建任务时提交该环节 ID", async () => {
     actions.createTask.mockResolvedValue({ ok: true, id: otherTaskId });
     render(<TaskWorkPanel matterId={matterId} createRequest={1} createStage={{ id: "cstage0000000000000000001", name: "举证" }} />);
@@ -148,7 +165,7 @@ describe("任务弹窗的键盘返回", () => {
     const value = task();
     const data: NonNullable<Parameters<typeof WorkResponsibilityPanel>[0]["data"]> = {
       currentUserId: userId, emergency: false, canWrite: true, canTransfer: false, people: detail().people,
-      items: [{ ...value.responsibility, kind: "Task", targetId: taskId, matterId, intakeId: null, title: value.title, dueAt: value.dueAt }],
+      items: [{ ...value.responsibility, kind: "Task", targetId: taskId, matterId, intakeId: null, title: value.title, dueAt: value.dueAt, taskHref: null }],
       matters: [], intakes: [], handovers: [], intakeHandovers: []
     };
     const view = render(<WorkResponsibilityPanel data={data} matterId={matterId} />);
@@ -186,7 +203,8 @@ describe("事项任务的同一对象与保稿", () => {
     expect(screen.getByLabelText("办理说明")).toHaveValue("现场核对后登记结果");
     fireEvent.click(screen.getByRole("button", { name: "创建任务" }));
     expect(await screen.findByRole("heading", { name: "核对客户原件" })).toBeVisible();
-    expect(actions.createTask).toHaveBeenLastCalledWith({ matterId, title: "核对客户原件", description: "现场核对后登记结果", assigneeId: userId, priority: 0, dueAt: undefined });
+    expect(actions.createTask).toHaveBeenLastCalledWith({ matterId, title: "核对客户原件", description: "现场核对后登记结果", assigneeId: userId, priority: 0, dueAt: undefined, requestKey: expect.any(String) });
+    expect(actions.createTask.mock.calls[0][0].requestKey).toBe(actions.createTask.mock.calls[1][0].requestKey);
     expect(onCreated).toHaveBeenCalledWith(createdId);
     expect(actions.getTaskWorkflow).toHaveBeenLastCalledWith(createdId, matterId);
   });

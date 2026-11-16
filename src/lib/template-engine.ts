@@ -13,7 +13,10 @@ import Docxtemplater from "docxtemplater";
 import { shParts, shDayKey } from "@/lib/ui/sh-time";
 import { prisma } from "./prisma";
 import { ActionError } from "@/lib/action-error";
-import type { TemplateCategory } from "@prisma/client";
+import type { Prisma, TemplateCategory } from "@prisma/client";
+import { type TemplateSelection } from "./template-render-fields";
+import { procedureTypeLabel } from "./enums";
+import { decryptIdNumber } from "./clients/id-number-crypto";
 
 const FIRM_NAME_KEY = "firmName";
 const FIRM_ADDRESS_KEY = "firmAddress";
@@ -42,8 +45,8 @@ export interface RenderContext {
     ourStanding: string;
   };
   client: PartySnapshot;
-  opposing: PartySnapshot; // 第一个对方
-  third: PartySnapshot; // 第一个第三人
+  opposing: PartySnapshot; // 本次明确选中的对方
+  third: PartySnapshot; // 本次明确选中的第三人
   proceeding: { type: string; caseNo: string; court: string };
   execution: { basis: string; basisNo: string; basisDate: string };
   // 数组循环用
@@ -127,8 +130,8 @@ function partyToSnapshot(p: {
   };
 }
 
-async function getFirmInfo(): Promise<{ name: string; address: string; phone: string }> {
-  const rows = await prisma.systemSetting.findMany({
+async function getFirmInfo(db: Prisma.TransactionClient): Promise<{ name: string; address: string; phone: string }> {
+  const rows = await db.systemSetting.findMany({
     where: { key: { in: [FIRM_NAME_KEY, FIRM_ADDRESS_KEY, FIRM_PHONE_KEY] } }
   });
   const dict = new Map(rows.map((r) => [r.key, (r.value as { value?: string })?.value ?? ""]));
@@ -139,168 +142,120 @@ async function getFirmInfo(): Promise<{ name: string; address: string; phone: st
   };
 }
 
-/**
- * 应用 overrides（来自 UI 的行内补全），路径键如 "client.idNumber" 写回源表。
- * 注意：只回写 v0.8 高频缺失字段（client.idNumber / client.address / opposing.idNumber 等）。
- * 其他字段一律忽略，避免误操作。
- */
-async function applyOverrides(matterId: string | undefined, overrides: Record<string, string>) {
-  if (!matterId) return;
-  if (!["client.idNumber", "client.address", "client.phone", "opposing.idNumber", "opposing.address", "opposing.phone"].some(key => overrides[key])) return;
-  const matter = await prisma.matter.findUnique({
-    where: { id: matterId },
-    select: { primaryClientId: true }
-  });
-  if (!matter) return;
-
-  // client.* → Client 表
-  if (matter.primaryClientId) {
-    const clientPatch: Record<string, string> = {};
-    if (overrides["client.idNumber"]) clientPatch.idNumber = overrides["client.idNumber"];
-    if (overrides["client.address"]) clientPatch.address = overrides["client.address"];
-    if (overrides["client.phone"]) clientPatch.phone = overrides["client.phone"];
-    if (Object.keys(clientPatch).length > 0) {
-      await prisma.client.update({
-        where: { id: matter.primaryClientId },
-        data: clientPatch
-      });
-    }
-  }
-
-  // opposing.* → 第一个 OPPOSING_PARTY
-  const opposingPatch: Record<string, string> = {};
-  if (overrides["opposing.idNumber"]) opposingPatch.idNumber = overrides["opposing.idNumber"];
-  if (overrides["opposing.address"]) opposingPatch.address = overrides["opposing.address"];
-  if (overrides["opposing.phone"]) opposingPatch.phone = overrides["opposing.phone"];
-  if (Object.keys(opposingPatch).length > 0) {
-    const opp = await prisma.party.findFirst({
-      where: { matterId, role: "OPPOSING_PARTY" },
-      orderBy: { ordinal: "asc" },
-      select: { id: true }
-    });
-    if (opp) {
-      await prisma.party.update({ where: { id: opp.id }, data: opposingPatch });
-    }
-  }
-}
-
-export async function buildContext(opts: {
-  matterId?: string;
-  userId: string;
-  overrides?: Record<string, string>;
-  templateCategory?: TemplateCategory;
-}): Promise<RenderContext> {
-  if (opts.matterId && opts.overrides && Object.keys(opts.overrides).length > 0) {
-    await applyOverrides(opts.matterId, opts.overrides);
-  }
-
-  const today = new Date();
-  const renderOverrides = opts.templateCategory === "EXECUTION" ? opts.overrides : undefined;
-  const execution = {
-    basis: renderOverrides?.["execution.basis"]?.trim() ?? "",
-    basisNo: renderOverrides?.["execution.basisNo"]?.trim() ?? "",
-    basisDate: renderOverrides?.["execution.basisDate"]?.trim() ?? ""
-  };
-  const firm = await getFirmInfo();
-  const user = await prisma.user.findUnique({
-    where: { id: opts.userId },
-    select: { name: true, phone: true }
-  });
-
-  if (!opts.matterId) {
-    return {
-      firm,
-      today: shDayKey(today),
-      todayCN: toCNDate(today),
-      lawyer: { name: user?.name ?? "", phone: user?.phone ?? "" },
-      matter: {
-        code: "",
-        title: "",
-        category: "",
-        causeText: "",
-        intakeDate: "",
-        claimAmount: "—",
-        ourStanding: ""
-      },
-      client: EMPTY_PARTY,
-      opposing: EMPTY_PARTY,
-      third: EMPTY_PARTY,
-      proceeding: { type: "", caseNo: "", court: "" },
-      execution,
-      plaintiffs: [],
-      defendants: [],
-      thirds: []
-    };
-  }
-
-  const matter = await prisma.matter.findUnique({
-    where: { id: opts.matterId },
+/** Reads the exact parties and procedures offered by the current matter. */
+export async function templateMatterInputs(matterId: string, templateCategory?: TemplateCategory, db: Prisma.TransactionClient = prisma) {
+  const matter = await db.matter.findUnique({
+    where: { id: matterId, deletedAt: null },
     include: {
       cause: { select: { name: true } },
       primaryClient: true,
+      clientLinks: { include: { client: true }, orderBy: { addedAt: "asc" } },
       parties: { orderBy: [{ role: "asc" }, { ordinal: "asc" }] },
       procedures: { orderBy: { order: "asc" }, where: {
         engagement: "ENGAGED",
-        ...(opts.templateCategory === "EXECUTION" ? { type: { in: ["ENFORCEMENT", "ENFORCEMENT_OBJECTION"] as ("ENFORCEMENT" | "ENFORCEMENT_OBJECTION")[] } } : {})
-      }, take: 1 }
-    }
+        ...(templateCategory === "EXECUTION" ? { type: { in: ["ENFORCEMENT", "ENFORCEMENT_OBJECTION"] as ("ENFORCEMENT" | "ENFORCEMENT_OBJECTION")[] } } : {}),
+      } },
+    },
   });
   if (!matter) throw new ActionError("案件不存在");
+  const clients = [...new Map([
+    ...(matter.primaryClient ? [[matter.primaryClient.id, matter.primaryClient] as const] : []),
+    ...matter.clientLinks.map(link => [link.client.id, link.client] as const),
+  ]).values()].filter(client => !client.deletedAt);
+  const opposing = matter.parties.filter(party => party.role === "OPPOSING_PARTY");
+  const thirds = matter.parties.filter(party => party.role === "THIRD_PARTY");
+  const choices = {
+    clients: clients.map(client => ({ id: client.id, label: client.name })),
+    opposing: opposing.map(party => ({ id: party.id, label: party.name })),
+    thirds: thirds.map(party => ({ id: party.id, label: party.name })),
+    procedures: matter.procedures.map(procedure => ({ id: procedure.id, label: [procedure.customLabel || procedureTypeLabel[procedure.type], procedure.caseNumber].filter(Boolean).join(" · ") })),
+  };
+  // A unique choice can be presented as the initial selection. Ambiguous targets stay unselected.
+  const selection: TemplateSelection = {
+    clientId: clients.find(client => client.id === matter.primaryClient?.id)?.id ?? (clients.length === 1 ? clients[0].id : null),
+    opposingPartyId: opposing.length === 1 ? opposing[0].id : null,
+    thirdPartyId: thirds.length === 1 ? thirds[0].id : null,
+    procedureId: matter.procedures.length === 1 ? matter.procedures[0].id : null,
+  };
+  return { matter, clients, opposing, thirds, choices, selection };
+}
 
-  const causeText = matter.cause?.name ?? matter.causeFreeText ?? "";
-  const clientParty = matter.primaryClient
-    ? {
-        name: matter.primaryClient.name,
-        idNumber: matter.primaryClient.idNumber ?? "",
-        phone: matter.primaryClient.phone ?? "",
-        address: matter.primaryClient.address ?? "",
-        legalRep: ""
-      }
-    : EMPTY_PARTY;
-
-  const opposingParties = matter.parties
-    .filter((p) => p.role === "OPPOSING_PARTY")
-    .map(partyToSnapshot);
-  const thirdParties = matter.parties
-    .filter((p) => p.role === "THIRD_PARTY")
-    .map(partyToSnapshot);
-  const clientPartiesFromParty = matter.parties
-    .filter((p) => p.role === "CLIENT_PARTY")
-    .map(partyToSnapshot);
-
-  // 根据 standing 区分 plaintiff / defendant（兜底按 role）
-  const plaintiffs = clientPartiesFromParty.length > 0 ? clientPartiesFromParty : [clientParty];
-  const defendants = opposingParties;
-
-  const firstProc = matter.procedures[0];
-
-  return {
-    firm,
-    today: shDayKey(today),
-    todayCN: toCNDate(today),
+/** Only assembles this document's values; preparation and rendering never edit master data. */
+export async function buildContext(opts: {
+  matterId?: string;
+  userId: string;
+  selection?: TemplateSelection;
+  overrides?: Record<string, string>;
+  variables?: string[];
+  templateCategory?: TemplateCategory;
+  db?: Prisma.TransactionClient;
+  matterInputs?: Awaited<ReturnType<typeof templateMatterInputs>>;
+}): Promise<RenderContext> {
+  const db = opts.db ?? prisma;
+  const today = new Date();
+  const firm = await getFirmInfo(db);
+  const user = await db.user.findUnique({ where: { id: opts.userId }, select: { name: true, phone: true } });
+  const context: RenderContext = {
+    firm, today: shDayKey(today), todayCN: toCNDate(today),
     lawyer: { name: user?.name ?? "", phone: user?.phone ?? "" },
-    matter: {
-      code: matter.internalCode,
-      title: matter.title,
+    matter: { code: "", title: "", category: "", causeText: "", intakeDate: "", claimAmount: "—", ourStanding: "" },
+    client: { ...EMPTY_PARTY }, opposing: { ...EMPTY_PARTY }, third: { ...EMPTY_PARTY },
+    proceeding: { type: "", caseNo: "", court: "" }, execution: { basis: "", basisNo: "", basisDate: "" },
+    plaintiffs: [], defendants: [], thirds: [],
+  };
+  if (opts.matterId) {
+    const inputs = opts.matterInputs ?? await templateMatterInputs(opts.matterId, opts.templateCategory, db);
+    const { matter, clients, opposing, thirds } = inputs;
+    const selection = opts.selection ?? inputs.selection;
+    function selected<T extends { id: string }>(list: T[], id: string | null, label: string): T | undefined {
+      if (!id) return undefined;
+      const item = list.find(value => value.id === id);
+      if (!item) throw new ActionError(`${label}已不属于当前案件或不适用于此模板，请重新选择`);
+      return item;
+    }
+    const client = selected(clients, selection.clientId, "委托人");
+    const opponent = selected(opposing, selection.opposingPartyId, "对方当事人");
+    const third = selected(thirds, selection.thirdPartyId, "第三人");
+    const procedure = selected(matter.procedures, selection.procedureId, "程序");
+    context.matter = {
+      code: matter.internalCode, title: matter.title,
       category: CATEGORY_CN[matter.category] ?? matter.category,
-      causeText,
+      causeText: matter.cause?.name ?? matter.causeFreeText ?? "",
       intakeDate: matter.intakeDate ? shDayKey(matter.intakeDate) : "",
       claimAmount: matter.claimAmount ? `${matter.claimAmount} 元` : "—",
-      ourStanding: matter.ourStanding ? STANDING_CN[matter.ourStanding] ?? matter.ourStanding : ""
-    },
-    client: clientParty,
-    opposing: opposingParties[0] ?? EMPTY_PARTY,
-    third: thirdParties[0] ?? EMPTY_PARTY,
-    proceeding: {
-      type: firstProc?.type ?? "",
-      caseNo: renderOverrides?.["proceeding.caseNo"]?.trim() || firstProc?.caseNumber || "",
-      court: renderOverrides?.["proceeding.court"]?.trim() || firstProc?.handlingAgency || ""
-    },
-    execution,
-    plaintiffs,
-    defendants,
-    thirds: thirdParties
-  };
+      ourStanding: matter.ourStanding ? STANDING_CN[matter.ourStanding] ?? matter.ourStanding : "",
+    };
+    if (client) context.client = partyToSnapshot({ ...client, idNumber: decryptIdNumber(client.idNumber) });
+    if (opponent) context.opposing = partyToSnapshot(opponent);
+    if (third) context.third = partyToSnapshot(third);
+    context.proceeding = { type: procedure?.type ?? "", caseNo: procedure?.caseNumber ?? "", court: procedure?.handlingAgency ?? "" };
+    context.plaintiffs = matter.parties.filter(party => party.role === "CLIENT_PARTY").map(partyToSnapshot);
+    if (!context.plaintiffs.length && client) context.plaintiffs = [{ ...context.client }];
+    context.defendants = opposing.map(partyToSnapshot);
+    context.thirds = thirds.map(partyToSnapshot);
+  }
+  return applyTemplateValues(context, opts.overrides ?? {}, opts.variables, opts.templateCategory);
+}
+
+/** Apply the actual scalar template fields to this in-memory context. */
+export function applyTemplateValues(context: RenderContext, overrides: Record<string, string>, variables?: string[], templateCategory?: TemplateCategory): RenderContext {
+  for (const [path, value] of Object.entries(overrides)) {
+    if (variables && !variables.includes(path)) throw new ActionError("补填字段不属于当前模板，请重新核对");
+    if (path.startsWith("execution.") && templateCategory !== "EXECUTION") throw new ActionError("当前模板不接受执行依据字段");
+    const parts = path.split(".");
+    if (parts.some(part => !/^[A-Za-z_$][\w$]*$/.test(part) || ["__proto__", "constructor", "prototype"].includes(part))) throw new ActionError("模板字段路径无效");
+    const existing = readTemplatePath(context, path);
+    if (existing !== null && typeof existing === "object") throw new ActionError("当事人列表须从实际案件主体选择，不能作为文本替换");
+    let target: Record<string, unknown> = context;
+    for (const part of parts.slice(0, -1)) {
+      const node = target[part];
+      if (node === undefined) target[part] = {};
+      else if (!node || typeof node !== "object" || Array.isArray(node)) throw new ActionError("模板字段路径与现值不匹配");
+      target = target[part] as Record<string, unknown>;
+    }
+    target[parts.at(-1)!] = value.trim();
+  }
+  return context;
 }
 
 /**
@@ -360,7 +315,7 @@ export function renderDocxBuffer(
     linebreaks: true,
     delimiters: { start: "{{", end: "}}" },
     // 仅读取普通路径，不启用表达式求值或原型链访问。
-    parser: tag => ({ get: scope => readPath(scope, tag.trim()) }),
+    parser: tag => ({ get: scope => readTemplatePath(scope, tag.trim()) }),
     nullGetter: () => ""
   });
 
@@ -380,7 +335,7 @@ export function renderDocxBuffer(
 export function detectMissing(required: string[], context: RenderContext): string[] {
   const missing: string[] = [];
   for (const path of required) {
-    const val = readPath(context, path);
+    const val = readTemplatePath(context, path);
     if (val === undefined || val === null || String(val).trim() === "") {
       missing.push(path);
     }
@@ -388,7 +343,7 @@ export function detectMissing(required: string[], context: RenderContext): strin
   return missing;
 }
 
-function readPath(obj: unknown, path: string): unknown {
+export function readTemplatePath(obj: unknown, path: string): unknown {
   if (path === ".") return obj;
   const parts = path.split(".");
   if (parts.some(p => !p || ["__proto__", "constructor", "prototype"].includes(p))) return undefined;

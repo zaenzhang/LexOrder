@@ -28,7 +28,7 @@ const workLabels = { PROPOSE: "交接责任", RESCHEDULE: "调整任务截止", 
 type WorkAction = keyof typeof workLabels;
 type BasicsDraft = { revision: number; title: string; description: string; priority: string };
 type WorkDraft = { revision: number; action: WorkAction; reason: string; assigneeId: string; dueAt: string };
-type WaitingDraft = { revision: number; waitingId: string; waitingFor: string; expectedResult: string; nextCheckAt: string };
+type WaitingDraft = { revision: number; waitingId: string; waitingFor: string; expectedResult: string; reason: string; nextCheckAt: string };
 type WaitingEdit = { revision: number; waitingId: string; mode: "finish" | "reschedule"; result: string; nextCheckAt: string; reason: string };
 type TaskDetailDialogProps = { taskId: string | null; expectedMatterId?: string; open: boolean; onOpenChange: (open: boolean) => void; onTaskChangeRejected?: (taskId: string) => void; onChanged?: () => void; onReturnFocus?: (taskId: string) => void };
 type OpenTask = { id: string; expectedMatterId?: string };
@@ -113,7 +113,7 @@ const TaskDetail = forwardRef<TaskDetailHandle, { taskId: string; expectedMatter
   const dependenciesChanged = selectedIds.length !== savedDependencyIds.length || selectedIds.some(id => !savedDependencyIds.includes(id));
   const basicsDirty = Boolean(basics && (basics.title !== task?.title || basics.description !== (task?.description ?? "") || basics.priority !== String(task?.priority)));
   const workDirty = Boolean(work && (work.reason || work.assigneeId || work.action === "RESCHEDULE" && work.dueAt !== dateInput(task?.dueAt ?? null)));
-  const waitingDirty = Boolean(waiting && (waiting.waitingFor || waiting.expectedResult || waiting.nextCheckAt));
+  const waitingDirty = Boolean(waiting && (waiting.waitingFor || waiting.expectedResult || waiting.reason || waiting.nextCheckAt));
   const waitingEditDirty = Boolean(waitingEdit && (waitingEdit.result || waitingEdit.reason || waitingEdit.nextCheckAt !== dateInput(activeWaiting?.nextCheckAt ?? null)));
   const dirty = basicsDirty || workDirty || waitingDirty || waitingEditDirty || dependenciesChanged || Boolean(dependencyReason);
 
@@ -220,7 +220,7 @@ const TaskDetail = forwardRef<TaskDetailHandle, { taskId: string; expectedMatter
     event.preventDefault();
     if (!task || !waiting) return;
     if (!waiting.waitingFor.trim() || !waiting.expectedResult.trim() || !waiting.nextCheckAt) { setSaveError("请填写等待对象、待收成果和检查时间"); return; }
-    await save(revision => startTaskWaiting({ taskId, revision, waitingId: waiting.waitingId, waitingFor: waiting.waitingFor.trim(), expectedResult: waiting.expectedResult.trim(), nextCheckAt: asShanghaiDate(waiting.nextCheckAt) }), () => setWaiting(null), "已登记等待", waiting.revision);
+    await save(revision => startTaskWaiting({ taskId, revision, waitingId: waiting.waitingId, waitingFor: waiting.waitingFor.trim(), expectedResult: waiting.expectedResult.trim(), reason: waiting.reason.trim(), nextCheckAt: asShanghaiDate(waiting.nextCheckAt) }), () => setWaiting(null), "已登记等待", waiting.revision);
   }
 
   async function saveWaitingEdit(event: FormEvent) {
@@ -314,6 +314,7 @@ const TaskDetail = forwardRef<TaskDetailHandle, { taskId: string; expectedMatter
                   <div><dt className="text-muted-foreground">等待对象</dt><dd className="mt-1 break-words">{activeWaiting.waitingFor}</dd></div>
                   <div><dt className="text-muted-foreground">内部责任人</dt><dd className="mt-1">{task.responsibility.name}</dd></div>
                   <div className="col-span-2"><dt className="text-muted-foreground">待收成果</dt><dd className="mt-1 whitespace-pre-wrap break-words">{activeWaiting.expectedResult}</dd></div>
+                  {activeWaiting.reason && <div className="col-span-2"><dt className="text-muted-foreground">等待原因</dt><dd className="mt-1 whitespace-pre-wrap break-words">{activeWaiting.reason}</dd></div>}
                   <div><dt className="text-muted-foreground">开始等待</dt><dd className="mt-1">{formatDateTime(activeWaiting.startedAt)}</dd></div>
                   <div><dt className="text-muted-foreground">下次检查</dt><dd className="mt-1">{formatDateTime(activeWaiting.nextCheckAt)}</dd></div>
                 </dl>
@@ -330,9 +331,10 @@ const TaskDetail = forwardRef<TaskDetailHandle, { taskId: string; expectedMatter
                 <p className="text-sm">内部责任人：{task.responsibility.name}</p>
                 <div className="space-y-2"><Label htmlFor={`${fieldId}-waiting-for`}>等待对象</Label><Input id={`${fieldId}-waiting-for`} required maxLength={200} value={waiting.waitingFor} onChange={event => setWaiting({ ...waiting, waitingFor: event.target.value })} disabled={disabled} /></div>
                 <div className="space-y-2"><Label htmlFor={`${fieldId}-waiting-expected`}>待收成果</Label><Textarea id={`${fieldId}-waiting-expected`} required maxLength={2000} rows={4} value={waiting.expectedResult} onChange={event => setWaiting({ ...waiting, expectedResult: event.target.value })} disabled={disabled} /></div>
+                <div className="space-y-2"><Label htmlFor={`${fieldId}-waiting-reason`}>等待原因（选填）</Label><Textarea id={`${fieldId}-waiting-reason`} maxLength={1000} value={waiting.reason} onChange={event => setWaiting({ ...waiting, reason: event.target.value })} disabled={disabled} /></div>
                 <div className="space-y-2"><Label htmlFor={`${fieldId}-waiting-check`}>下次检查（北京时间）</Label><Input id={`${fieldId}-waiting-check`} required type="datetime-local" value={waiting.nextCheckAt} onChange={event => setWaiting({ ...waiting, nextCheckAt: event.target.value })} disabled={disabled} /></div>
                 <div className="flex gap-2"><Button type="submit" disabled={disabled}>保存等待</Button><Button type="button" variant="outline" disabled={disabled} onClick={async () => { if (await discard(waitingDirty)) setWaiting(null); }}>取消登记</Button></div>
-              </form> : <div className="space-y-3"><p className="text-sm text-muted-foreground">当前没有外部等待。</p>{editable && <Button size="sm" onClick={() => { setWaiting({ revision: task.responsibility.revision, waitingId: crypto.randomUUID(), waitingFor: "", expectedResult: "", nextCheckAt: "" }); setSaveError(""); }}>登记等待</Button>}</div>}
+              </form> : <div className="space-y-3"><p className="text-sm text-muted-foreground">当前没有外部等待。</p>{editable && <Button size="sm" onClick={() => { setWaiting({ revision: task.responsibility.revision, waitingId: crypto.randomUUID(), waitingFor: "", expectedResult: "", reason: "", nextCheckAt: "" }); setSaveError(""); }}>登记等待</Button>}</div>}
             </TabsContent>
             <TabsContent value="dependencies" className="space-y-4">
               {editingDependencies && editable ? <form onSubmit={saveDependencies} className="space-y-4">
@@ -353,6 +355,7 @@ const TaskDetail = forwardRef<TaskDetailHandle, { taskId: string; expectedMatter
               {history.length ? <ul className="divide-y">{history.map(item => <li key={item.id} className="space-y-2 py-4 first:pt-0 text-sm">
                 <div className="flex items-start justify-between gap-3"><h3 className="font-medium break-words">{item.waitingFor}</h3><Badge variant="secondary">已结束</Badge></div>
                 <p className="whitespace-pre-wrap break-words text-muted-foreground">待收成果：{item.expectedResult}</p>
+                {item.reason && <p className="whitespace-pre-wrap break-words text-muted-foreground">等待原因：{item.reason}</p>}
                 <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs text-muted-foreground"><div><dt className="inline">开始：</dt><dd className="inline">{formatDateTime(item.startedAt)}</dd></div><div><dt className="inline">结束：</dt><dd className="inline">{formatDateTime(item.endedAt!)}</dd></div></dl>
                 <p className="whitespace-pre-wrap break-words">{item.result}</p>
               </li>)}</ul> : <p className="text-sm text-muted-foreground">没有已结束的等待记录。</p>}

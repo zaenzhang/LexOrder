@@ -6,6 +6,7 @@ export type TaskWaitingItem = {
   id: string;
   waitingFor: string;
   expectedResult: string;
+  reason: string | null;
   nextCheckAt: Date;
   startedAt: Date;
   endedAt: Date | null;
@@ -52,7 +53,7 @@ type TaskWorkflowAccess = {
 export type TaskWorkflowWorkspace = TaskWorkflowAccess & {
   tasks: TaskWorkflowItem[];
   /** Existing tasks without a responsibility record cannot use the workflow yet. */
-  untrackedTasks: { id: string; title: string; stageName: string | null; procedureTitle: string | null; dueAt: Date | null; completed: boolean; assigneeName: string | null }[];
+  untrackedTasks: { id: string; title: string; stageId?: string | null; stageName: string | null; procedureTitle: string | null; dueAt: Date | null; completed: boolean; assigneeName: string | null }[];
 };
 export type TaskWorkflowDetail = TaskWorkflowAccess & { task: TaskWorkflowItem };
 
@@ -80,6 +81,7 @@ export const taskWaitingStartInput = z.object({
   waitingId,
   waitingFor: z.string().trim().min(1, "请填写等待对象").max(200),
   expectedResult: z.string().trim().min(1, "请填写待收成果").max(2000),
+  reason: z.string().trim().max(1000).optional(),
   nextCheckAt: dateInput
 });
 

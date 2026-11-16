@@ -91,6 +91,25 @@ describe.skipIf(!databaseUrl)("W11 任务推进：真实 PostgreSQL 事务、授
     vi.unstubAllEnvs();
   });
 
+  it("同一创建请求并发或重试只生成一个任务和审计，变更内容不能复用标识", async () => {
+    const f = await fixture();
+    const input = { matterId: f.matter.id, title: "合成幂等任务", priority: 0, requestKey: randomUUID() };
+    const [first, second] = await Promise.all([createTask(input), createTask(input)]);
+    expect(first.id).toBe(second.id);
+    expect(await db.task.count({ where: { createRequestKey: input.requestKey } })).toBe(1);
+    expect(await audits(first.id, "TASK_CREATE")).toBe(1);
+    await expect(createTask({ ...input, title: "不同内容" })).rejects.toThrow("已用于不同内容");
+  }, 30_000);
+
+  it("等待原因随登记保留，同一标识不得重放为不同原因", async () => {
+    const f = await fixture(), t = await task(f), input = { ...await waitingInput(t.id), reason: "等待客户核对原件" };
+    await startTaskWaiting(input);
+    await startTaskWaiting(input);
+    expect(await db.taskWaiting.findUniqueOrThrow({ where: { id: input.waitingId } })).toMatchObject({ reason: input.reason });
+    await expect(startTaskWaiting({ ...input, reason: "另一原因" })).rejects.toThrow("已用于不同内容");
+    expect(await audits(t.id, "TASK_WAITING_START")).toBe(1);
+  }, 30_000);
+
   it("并发启用同一程序环节只生成一套，并原子写入时间线与审计", async () => {
     const f = await fixture();
     const procedure = await db.matterProcedure.create({ data: { matterId: f.matter.id, type: "FIRST_INSTANCE", order: 0 } });
@@ -234,7 +253,7 @@ describe.skipIf(!databaseUrl)("W11 任务推进：真实 PostgreSQL 事务、授
     expect(await audits(t.id, "TASK_WAITING_START")).toBe(1);
   }, 30_000);
 
-  it("两个并发登记经过真实 Serializable 事务后，只有一条有效等待和一条登记审计", async () => {
+  it("两个并发登记经过授权锁后，只有一条有效等待和一条登记审计", async () => {
     const f = await fixture(), t = await task(f), input = await waitingInput(t.id);
     const outcomes = await Promise.allSettled([
       startTaskWaiting(input),

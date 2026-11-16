@@ -16,7 +16,7 @@ export type ClientMatterItem = {
 };
 export type ClientMatterPage = ClientPage<ClientMatterItem> & { total: number; activeCount: number };
 export const historySourceLabels = {
-  CLIENT_ACTIVITY: "客户沟通", CONTACT: "联系人", CONTEXT: "事项上下文", FEE: "确认到账",
+  CLIENT_ACTIVITY: "客户沟通", CONTACT: "联系人", CONTEXT: "事项上下文", DELIVERY: "简报与交付", FEE: "确认到账",
   FOLLOW_UP: "安排跟进", INTAKE: "收案", MATTER: "事项", NOTE: "事项沟通"
 } as const;
 export type HistorySource = keyof typeof historySourceLabels;

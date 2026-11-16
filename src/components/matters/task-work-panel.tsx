@@ -26,6 +26,8 @@ type TaskWorkPanelProps = {
   canWrite?: boolean;
   createRequest?: number;
   createStage?: { id: string; name: string } | null;
+  defaultStage?: { id: string; name: string } | null;
+  scopeStageIds?: string[] | null;
   refreshRequest?: number;
   selectedTaskId?: string | null;
   onTaskSelect?: (taskId: string | null, mode?: "push" | "replace") => void;
@@ -33,7 +35,7 @@ type TaskWorkPanelProps = {
 };
 
 /** 全案待办的 Task 入口；不从程序环节投影任务，也不生成平行任务状态。 */
-export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, createStage = null, refreshRequest = 0, selectedTaskId, onTaskSelect, onTaskCreated }: TaskWorkPanelProps) {
+export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, createStage = null, defaultStage = null, scopeStageIds = null, refreshRequest = 0, selectedTaskId, onTaskSelect, onTaskCreated }: TaskWorkPanelProps) {
   const router = useRouter();
   const [data, setData] = useState<TaskWorkflowWorkspace | null>(null);
   const [error, setError] = useState("");
@@ -48,6 +50,8 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, cr
   const taskButtons = useRef(new Map<string, HTMLButtonElement>());
   const openedTaskId = useRef<string | null>(null);
   const taskId = selectedTaskId === undefined ? localTaskId : selectedTaskId;
+  const scopedTasks = data?.tasks.filter(task => scopeStageIds === null || Boolean(task.stageId && scopeStageIds.includes(task.stageId))) ?? [];
+  const scopedUntracked = data?.untrackedTasks.filter(task => scopeStageIds === null || Boolean(task.stageId && scopeStageIds.includes(task.stageId))) ?? [];
 
   useEffect(() => {
     let cancelled = false;
@@ -104,12 +108,12 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, cr
           <Checkbox checked={includeClosed} onCheckedChange={value => setIncludeClosed(value === true)} />
           显示已办结和已取消
         </label>
-        {canWrite && data?.canWrite && <Button ref={createButton} size="sm" onClick={() => { setCreatingStage(null); setCreating(true); }}><Plus />新建任务</Button>}
+        {canWrite && data?.canWrite && <Button ref={createButton} size="sm" onClick={() => { setCreatingStage(defaultStage); setCreating(true); }}><Plus />新建任务</Button>}
       </div>
     </div>
     {error ? <div role="alert" className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm">
       <span>{error}</span><Button variant="outline" size="sm" onClick={() => setReload(value => value + 1)}>重试</Button>
-    </div> : !data ? <p role="status" className="py-4 text-sm text-muted-foreground">正在读取任务…</p> : data.tasks.length === 0 ? <p className="py-4 text-sm text-muted-foreground">{data.untrackedTasks.length ? "没有责任记录完整的任务。" : includeClosed ? "还没有任务。" : "没有办理中的任务。"}</p> : <div className="overflow-x-auto rounded-lg border">
+    </div> : !data ? <p role="status" className="py-4 text-sm text-muted-foreground">正在读取任务…</p> : scopedTasks.length === 0 ? <p className="py-4 text-sm text-muted-foreground">{scopedUntracked.length ? "没有责任记录完整的任务。" : includeClosed ? "当前范围还没有任务。" : "当前范围没有办理中的任务。"}</p> : <div className="overflow-x-auto rounded-lg border">
       <table className="w-full text-left text-sm">
         <thead className="border-b bg-muted/40 text-muted-foreground"><tr>
           <th className="px-3 py-2 font-medium">任务</th>
@@ -117,7 +121,7 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, cr
           <th className="px-3 py-2 font-medium">任务截止</th>
           <th className="px-3 py-2 font-medium">外部等待</th>
         </tr></thead>
-        <tbody className="divide-y">{data.tasks.map(task => <tr key={task.id}>
+        <tbody className="divide-y">{scopedTasks.map(task => <tr key={task.id}>
           <td className="max-w-md px-3 py-3 align-top">
             <div className="flex items-start gap-2">
               <Button ref={node => { if (node) taskButtons.current.set(task.id, node); else taskButtons.current.delete(task.id); }} variant="link" className="h-auto min-w-0 whitespace-normal py-0 text-left" onClick={() => { openedTaskId.current = task.id; selectTask(task.id); }}>{task.title}</Button>
@@ -132,9 +136,9 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, cr
         </tr>)}</tbody>
       </table>
     </div>}
-    {data && data.untrackedTasks.length > 0 && <div role="alert" className="rounded-lg border p-3 text-sm">
+    {data && scopedUntracked.length > 0 && <div role="alert" className="rounded-lg border p-3 text-sm">
       <p>以下既有任务缺少责任记录，暂不能在任务工作区办理；请联系管理员核实责任、截止日期和提醒。原任务字段仅供核对：</p>
-      <ul className="mt-2 list-disc pl-5">{data.untrackedTasks.map(task => <li key={task.id}>{task.title} · {task.completed ? "原记录已标完成" : "原记录未标完成"} · 截止：{task.dueAt ? formatDateTime(task.dueAt) : "未安排"} · 原负责人：{task.assigneeName ?? "未记录或不可用"}{task.procedureTitle ? ` · ${task.procedureTitle}` : ""}{task.stageName ? ` · ${task.stageName}` : ""}</li>)}</ul>
+      <ul className="mt-2 list-disc pl-5">{scopedUntracked.map(task => <li key={task.id}>{task.title} · {task.completed ? "原记录已标完成" : "原记录未标完成"} · 截止：{task.dueAt ? formatDateTime(task.dueAt) : "未安排"} · 原负责人：{task.assigneeName ?? "未记录或不可用"}{task.procedureTitle ? ` · ${task.procedureTitle}` : ""}{task.stageName ? ` · ${task.stageName}` : ""}</li>)}</ul>
     </div>}
     {creating && data && <CreateTaskDialog matterId={matterId} data={data} stage={creatingStage} onClose={() => setCreating(false)} onCreated={taskCreated} onReturnFocus={returnCreateFocus} />}
     <TaskDetailDialog taskId={taskId} expectedMatterId={matterId} open={Boolean(taskId)} onOpenChange={open => { if (!open) selectTask(null); }} onTaskChangeRejected={id => selectTask(id, "replace")} onChanged={() => setReload(value => value + 1)} onReturnFocus={returnTaskFocus} />
@@ -151,6 +155,7 @@ function CreateTaskDialog({ matterId, data, stage, onClose, onCreated, onReturnF
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const created = useRef(false);
+  const requestKey = useRef(crypto.randomUUID());
   const dirty = Boolean(title || description || dueAt || priority !== "0" || assigneeId !== initialPerson);
 
   async function close() {
@@ -166,7 +171,7 @@ function CreateTaskDialog({ matterId, data, stage, onClose, onCreated, onReturnF
     setBusy(true);
     setError("");
     try {
-      const result = await createTask({ matterId, title: title.trim(), description: description.trim(), assigneeId, priority: Number(priority), dueAt: dueAt ? new Date(`${dueAt}:00+08:00`) : undefined, ...(stage ? { stageId: stage.id } : {}) });
+      const result = await createTask({ matterId, requestKey: requestKey.current, title: title.trim(), description: description.trim(), assigneeId, priority: Number(priority), dueAt: dueAt ? new Date(`${dueAt}:00+08:00`) : undefined, ...(stage ? { stageId: stage.id } : {}) });
       created.current = true;
       toast.success("任务已创建");
       onCreated(result.id);

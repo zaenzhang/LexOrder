@@ -92,7 +92,7 @@ const taskWorkflowSelect = {
   waitings: {
     orderBy: [{ startedAt: "desc" }, { id: "asc" }],
     select: {
-      id: true, waitingFor: true, expectedResult: true, nextCheckAt: true, startedAt: true,
+      id: true, waitingFor: true, expectedResult: true, reason: true, nextCheckAt: true, startedAt: true,
       endedAt: true, result: true, createdById: true, endedById: true
     }
   },
@@ -167,7 +167,7 @@ export async function readTaskWorkspaceTx(
     tasks: tasks.filter(task => task.responsibility !== null).map(taskWorkflowItem),
     untrackedTasks: missingResponsibility.map(task => {
       const validStage = task.stage?.procedure.matterId === task.matterId;
-      return { id: task.id, title: task.title, stageName: validStage ? task.stage?.name ?? null : task.stage ? "环节归属待核实" : null,
+      return { id: task.id, title: task.title, stageId: validStage ? task.stageId : null, stageName: validStage ? task.stage?.name ?? null : task.stage ? "环节归属待核实" : null,
         procedureTitle: validStage && task.stage ? task.stage.procedure.customLabel ?? procedureTypeLabel[task.stage.procedure.type] : null,
         dueAt: task.dueAt, completed: task.completed, assigneeName: task.assigneeId ? assigneeNames.get(task.assigneeId) ?? null : null };
     }),
@@ -230,7 +230,7 @@ export async function startTaskWaitingTx(db: Prisma.TransactionClient, userId: s
   const existing = await db.taskWaiting.findUnique({ where: { id: data.waitingId } });
   if (existing) {
     if (existing.taskId !== task.id || existing.createdById !== userId || existing.waitingFor !== data.waitingFor ||
-      existing.expectedResult !== data.expectedResult || existing.initialCheckAt.getTime() !== data.nextCheckAt.getTime()) {
+      existing.expectedResult !== data.expectedResult || (existing.reason ?? null) !== (data.reason || null) || existing.initialCheckAt.getTime() !== data.nextCheckAt.getTime()) {
       throw new ActionError("该等待登记标识已用于不同内容，请刷新并重新登记");
     }
     // A retry returns the original registration, including after rescheduling, closing or task completion.
@@ -242,14 +242,14 @@ export async function startTaskWaitingTx(db: Prisma.TransactionClient, userId: s
   }
   await db.taskWaiting.create({
     data: {
-      id: data.waitingId, taskId: task.id, waitingFor: data.waitingFor, expectedResult: data.expectedResult,
+      id: data.waitingId, taskId: task.id, waitingFor: data.waitingFor, expectedResult: data.expectedResult, reason: data.reason || null,
       initialCheckAt: data.nextCheckAt, nextCheckAt: data.nextCheckAt, createdById: userId
     }
   });
   await db.workResponsibility.update({ where: { id: task.responsibility.id }, data: { revision: { increment: 1 } } });
   await auditTx(db, {
     userId, action: "TASK_WAITING_START", targetType: "Task", targetId: task.id,
-    detail: { waitingId: data.waitingId, waitingFor: data.waitingFor, expectedResult: data.expectedResult, nextCheckAt: data.nextCheckAt.toISOString(), previousRevision: data.revision }
+    detail: { waitingId: data.waitingId, waitingFor: data.waitingFor, expectedResult: data.expectedResult, reason: data.reason || null, nextCheckAt: data.nextCheckAt.toISOString(), previousRevision: data.revision }
   });
   return { matterId: task.matterId };
 }
