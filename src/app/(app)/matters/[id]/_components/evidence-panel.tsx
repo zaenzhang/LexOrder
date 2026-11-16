@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Unlink } from "lucide-react";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,12 +40,12 @@ export type EvidenceItemRow = {
   sources?: EvidenceSourceView[]; restricted?: boolean; canEdit?: boolean;
   eventDate?: EvidenceEventDate | null;
 };
-export const EVIDENCE_KIND_STYLE: Record<EvidenceKind, string> = {
-  FACT: "border-[#B7D8D6] bg-[#E4F1F0] text-[#005054]",
-  CLAIM: "border-[#1E56C8]/30 bg-[#1E56C8]/8 text-[#1E56C8]",
-  ANALYSIS: "border-[var(--violet-line)] bg-[var(--violet-bg)] text-[var(--violet)]",
-  ISSUE: "border-[#B42318]/30 bg-[#B42318]/8 text-[#B42318]",
-  TODO_VERIFY: "border-[#96650B]/35 bg-[#96650B]/10 text-[#7A5205]",
+const EVIDENCE_KIND_VARIANT: Record<EvidenceKind, BadgeProps["variant"]> = {
+  FACT: "teal",
+  CLAIM: "blue",
+  ANALYSIS: "violet",
+  ISSUE: "red",
+  TODO_VERIFY: "amber",
 };
 const KIND_KEYS = Object.keys(evidenceKindLabel) as EvidenceKind[];
 const RELATIONS = Object.keys(sourceRelationLabel) as Relation[];
@@ -86,7 +87,7 @@ function EventDateFields({ value, onChange, id, disabled }: {
 
 function EventDateDetails({ value }: { value?: EvidenceEventDate | null }) {
   if (!value) return null;
-  return <div className="space-y-1 text-xs text-muted-foreground">
+  return <div className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">
     <p>发生日期：<span className="font-mono">{formatEvidenceEventDate(value)}</span></p>
     {value.text ? <p className="whitespace-pre-wrap break-words">原始表述：{value.text}</p> : null}
   </div>;
@@ -95,6 +96,7 @@ function EventDateDetails({ value }: { value?: EvidenceEventDate | null }) {
 function SourceButton({ itemId, revision, source }: { itemId: string; revision?: number; source: EvidenceSourceView }) {
   const [pending, startTransition] = useTransition();
   const [preview, setPreview] = useState<Extract<EvidenceSourceResult, { status: "AVAILABLE" }> | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
   if (source.status === "UNAVAILABLE") return <span className="inline-flex items-center gap-1 text-muted-foreground"><Unlink className="h-3 w-3" />来源不可用</span>;
   function open() {
     startTransition(async () => {
@@ -106,13 +108,19 @@ function SourceButton({ itemId, revision, source }: { itemId: string; revision?:
     });
   }
   return <>
-    <button type="button" onClick={open} disabled={pending} className="min-w-0 max-w-full break-words text-left text-primary underline-offset-2 hover:underline disabled:opacity-50">
-      {pending ? <Loader2 className="mr-1 inline h-3 w-3 animate-spin" /> : null}
-      {source.relation ? sourceRelationLabel[source.relation] + " · " : "历史来源 · "}
-      {source.documentName} · 第 {source.documentVersion} 版 · {source.locationLabel}
-    </button>
+    <Button ref={triggerRef} type="button" onClick={open} disabled={pending} variant="link" size="sm"
+      className="h-auto min-w-0 max-w-full justify-start whitespace-normal px-0 py-0 text-left">
+      {pending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : null}
+      <span className="min-w-0 break-words">
+        {source.relation ? sourceRelationLabel[source.relation] + " · " : "历史来源 · "}
+        {source.documentName} · 第 {source.documentVersion} 版 · {source.locationLabel}
+      </span>
+    </Button>
     <Dialog open={preview !== null} onOpenChange={open => { if (!open) setPreview(null); }}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+      <DialogContent className="max-w-4xl" onCloseAutoFocus={event => {
+        event.preventDefault();
+        triggerRef.current?.focus({ preventScroll: true });
+      }}>
         <DialogHeader><DialogTitle className="break-words">{preview?.documentName}</DialogTitle>
           <DialogDescription>第 {preview?.documentVersion} 版 · {preview?.locationLabel}</DialogDescription></DialogHeader>
         {preview?.legacy ? <p className="text-sm text-muted-foreground">历史引用未固定原件校验值，请核对原文。</p> : null}
@@ -128,7 +136,7 @@ function SourceButton({ itemId, revision, source }: { itemId: string; revision?:
   </>;
 }
 
-/** Existing material-row presentation; the editor stays in the same work area. */
+/** Self-contained presentation shared by material rows and portalled timelines. */
 export function EvidencePoints({ items, showSource = false }: { items: EvidenceItemRow[]; showSource?: boolean }) {
   const [pending, startTransition] = useTransition();
   const [detail, setDetail] = useState<EditorData | null>(null);
@@ -141,24 +149,24 @@ export function EvidencePoints({ items, showSource = false }: { items: EvidenceI
     });
   }
   return <>
-    <ul ref={listRef} tabIndex={-1} aria-label="证据要点列表" className="dos-ev-list">{items.map(item => <li key={item.id} className="dos-ev">
-      <div className="dos-ev-top">
-        <span className={`rounded-full border px-1.5 py-px text-[10px] ${EVIDENCE_KIND_STYLE[item.kind]}`}>{evidenceKindLabel[item.kind]}</span>
-        <span className="dos-ev-title min-w-0 break-words text-left">{item.title}</span>
-        {item.revision ? <span className="dos-ev-page">第 {item.revision} 版 · {item.confirmedAt ? "记录已核对" : "记录待核对"}</span> : item.sourcePage ? <span className="dos-ev-page">第 {item.sourcePage} 页</span> : null}
+    <ul ref={listRef} tabIndex={-1} aria-label="证据要点列表" className="m-0 flex min-w-0 list-none flex-col gap-3 p-0">{items.map(item => <li key={item.id} className="flex min-w-0 flex-col gap-2 border-b border-border pb-3 last:border-b-0 last:pb-0">
+      <div className="flex min-w-0 flex-wrap items-start gap-x-2 gap-y-1">
+        <Badge variant={EVIDENCE_KIND_VARIANT[item.kind]}>{evidenceKindLabel[item.kind]}</Badge>
+        <span className="min-w-0 flex-1 break-words text-left text-sm font-semibold">{item.title}</span>
+        {item.revision ? <span className="text-xs text-muted-foreground">第 {item.revision} 版 · {item.confirmedAt ? "记录已核对" : "记录待核对"}</span> : item.sourcePage ? <span className="text-xs text-muted-foreground">第 {item.sourcePage} 页</span> : null}
       </div>
-      <p className="dos-ev-text break-words">{item.restricted ? "部分来源当前不可用，内容暂不展示。" : item.content}</p>
       {!item.restricted ? <EventDateDetails value={item.eventDate} /> : null}
-      {item.sources?.length ? <ul className="space-y-1 text-xs">{item.sources.map(source => <li key={source.id}><SourceButton itemId={item.id} revision={item.revision} source={source} /></li>)}</ul> : null}
-      <div className="dos-ev-meta">
+      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">{item.restricted ? "部分来源当前不可用，内容暂不展示。" : item.content}</p>
+      {item.sources?.length ? <ul className="flex min-w-0 list-none flex-col gap-1">{item.sources.map(source => <li key={source.id} className="min-w-0"><SourceButton itemId={item.id} revision={item.revision} source={source} /></li>)}</ul> : null}
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
         {showSource && !item.sources?.length ? <span>{item.sourceDocumentId ? item.sourceDocumentName ?? "来源不可用（引用保留）" : "未挂来源材料"}</span> : null}
-        {item.createdByName ? <span>记录人 {item.createdByName}</span> : null}
+        {item.createdByName ? <span className="min-w-0 break-words">记录人 {item.createdByName}</span> : null}
         <span className="font-mono">记录时间 {formatDate(new Date(item.createdAt))}</span>
-        {!item.restricted ? <button type="button" className="btn btn-ghost btn-sm" disabled={pending}
+        {!item.restricted ? <Button type="button" variant="ghost" size="sm" className="sm:ml-auto" disabled={pending}
           aria-label={`${item.canEdit ? "查看与编辑要点" : "查看要点"}：${item.title}`}
           onClick={event => { detailTrigger.current = event.currentTarget; openItem(item.id); }}>
           {item.canEdit ? "查看与编辑要点" : "查看要点"}
-        </button> : null}
+        </Button> : null}
       </div>
     </li>)}</ul>
     {detail && items.some(item => item.id === detail.item.id && !item.restricted) ? <EvidenceDetailDialog key={detail.item.id} initial={detail} onClose={() => setDetail(null)} onReturnFocus={() => (detailTrigger.current?.isConnected ? detailTrigger.current : listRef.current)?.focus({ preventScroll: true })} /> : null}

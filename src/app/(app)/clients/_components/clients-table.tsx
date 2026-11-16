@@ -43,15 +43,18 @@ export function ClientsTable({
   onEdit,
   canCreate,
   editableClientIds,
-  loadingClientId
+  loadingClientId,
+  returnTo = "/clients"
 }: {
   items: ClientRow[];
   onEdit: (c: ClientRow) => void;
   canCreate: boolean;
   editableClientIds: string[];
   loadingClientId: string | null;
+  returnTo?: string;
 }) {
   const canEditAny = editableClientIds.length > 0;
+  const detailHref = (id: string) => `/clients/${id}${returnTo === "/clients" ? "" : `?${new URLSearchParams({ returnTo }).toString()}`}`;
   if (items.length === 0) {
     return (
       <div className="empty">
@@ -82,7 +85,7 @@ export function ClientsTable({
               return (
                 <tr key={c.id} data-spine={COOP_META[c.cooperationStatus].spine} className="group">
                   <td style={{ paddingLeft: 20 }}>
-                    <Link href={`/clients/${c.id}`} className="block min-w-0">
+                    <Link href={detailHref(c.id)} data-client-detail-link className="block min-w-0">
                       <div className="truncate font-semibold group-hover:text-[var(--teal-deep)]" style={{ fontSize: 13 }}>{c.name}</div>
                       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-[var(--t-muted)]">
                         {c.idNumber ? <span className="font-mono">{c.idNumber}</span> : null}
@@ -133,7 +136,7 @@ export function ClientsTable({
           return (
             <div key={c.id} className="mo-spine border-b border-[var(--bd-hair)] p-3 pl-4 last:border-b-0" data-spine={spine}>
               <div className="flex items-start justify-between gap-2">
-                <Link href={`/clients/${c.id}`} className="min-w-0 flex-1">
+                <Link href={detailHref(c.id)} data-client-detail-link className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="text-[13px] font-semibold">{c.name}</span>
                     <TypeBadge type={c.type} />

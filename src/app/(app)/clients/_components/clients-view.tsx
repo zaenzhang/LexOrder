@@ -11,6 +11,7 @@ import { ClientsTable } from "./clients-table";
 import { useTopbarAction } from "@/components/layout/topbar-action";
 import { getClientForEdit } from "@/server/clients/actions";
 import { actionErrorMessage } from "@/lib/action-error";
+import { clientListHref } from "@/lib/clients/navigation";
 
 const TYPE_TABS: { key: ClientType | "ALL"; label: string }[] = [
   { key: "ALL", label: "全部客户" },
@@ -69,6 +70,13 @@ export function ClientsView({ initialData, initialFilters, canCreate, editableCl
     updateUrl({ search });
   }
 
+  function handleSearchBlur(event: React.FocusEvent<HTMLInputElement>) {
+    if (search === initialFilters.search && type === initialFilters.type) return;
+    // The detail link already carries this input; do not race its navigation with a list refresh.
+    if (event.relatedTarget instanceof Element && event.relatedTarget.closest("a[data-client-detail-link]")) return;
+    updateUrl({ search });
+  }
+
   function clearFilters() {
     setSearch("");
     setType("ALL");
@@ -98,13 +106,10 @@ export function ClientsView({ initialData, initialFilters, canCreate, editableCl
   }
 
   const totalPages = Math.max(1, Math.ceil(initialData.total / initialData.pageSize));
-  const hrefFor = (page: number) => {
-    const params = new URLSearchParams();
-    if (initialFilters.search) params.set("search", initialFilters.search);
-    if (initialFilters.type !== "ALL") params.set("type", initialFilters.type);
-    if (page > 1) params.set("page", String(page));
-    return `/clients${params.toString() ? `?${params.toString()}` : ""}`;
-  };
+  const hrefFor = (page: number) => clientListHref({ ...initialFilters, page });
+  const filtersChanged = search !== initialFilters.search || type !== initialFilters.type;
+  // Displayed rows/pagination still belong to initialFilters. A changed return query starts at page 1.
+  const returnTo = clientListHref({ search, type, page: filtersChanged ? 1 : initialData.page });
   const from = initialData.total === 0 ? 0 : (initialData.page - 1) * initialData.pageSize + 1;
   const to = Math.min(initialData.total, initialData.page * initialData.pageSize);
 
@@ -128,7 +133,7 @@ export function ClientsView({ initialData, initialFilters, canCreate, editableCl
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <form className="mo-toolbar-input" onSubmit={handleSearchSubmit}>
           <Search aria-hidden />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} onBlur={() => updateUrl({ search })} placeholder="搜索客户名称 / 证件号 / 电话 / 邮箱" aria-label="搜索客户" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} onBlur={handleSearchBlur} placeholder="搜索客户名称 / 证件号 / 电话 / 邮箱" aria-label="搜索客户" />
         </form>
         {search || type !== "ALL" ? (
           <button type="button" className="btn btn-ghost btn-sm" onClick={clearFilters}>
@@ -139,7 +144,7 @@ export function ClientsView({ initialData, initialFilters, canCreate, editableCl
       </div>
 
       <div className="card" style={{ overflow: "hidden" }}>
-        <ClientsTable items={initialData.items} onEdit={handleEdit} canCreate={canCreate} editableClientIds={editableClientIds} loadingClientId={loadingClientId} />
+        <ClientsTable items={initialData.items} onEdit={handleEdit} canCreate={canCreate} editableClientIds={editableClientIds} loadingClientId={loadingClientId} returnTo={returnTo} />
         {initialData.total > 0 ? (
           <div className="border-t border-[var(--bd-hair)]">
             <Pager page={initialData.page} totalPages={totalPages} hrefFor={hrefFor} summary={<>第 {from}–{to} 条，共 {initialData.total} 条</>} />

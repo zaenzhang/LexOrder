@@ -13,7 +13,7 @@ import { formatDateTime } from "@/lib/utils";
 import { getMatterInputCoverage } from "@/server/ai/input-coverage-actions";
 
 type DocumentChoice = { id: string; name: string; version?: number | null };
-type Props = { matterId: string; documents: DocumentChoice[]; refreshKey?: string | number };
+type Props = { matterId: string; documents: DocumentChoice[]; refreshKey?: string | number; showHeading?: boolean };
 type ReadState = { status: "idle" | "loading" } | { status: "ready"; data: MatterInputCoverageView } | { status: "error"; message: string };
 
 const unitLabels = { PAGE: "页", PARAGRAPH: "段", SEGMENT: "处理单元" } as const;
@@ -21,12 +21,12 @@ const unitStatusLabels = { READY: "可读取", PENDING: "尚未识别", FAILED: 
 const count = (value: number) => value.toLocaleString("zh-CN");
 
 /** Selection is explicit and local to this material list, never an implicit whole-matter query. */
-export function InputCoverageSection({ matterId, documents, refreshKey }: Props) {
+export function InputCoverageSection({ matterId, documents, refreshKey, showHeading = true }: Props) {
   const scope = JSON.stringify([matterId, refreshKey ?? null, documents.map(document => [document.id, document.name, document.version ?? null])]);
-  return <CoverageSection key={scope} matterId={matterId} documents={documents} />;
+  return <CoverageSection key={scope} matterId={matterId} documents={documents} showHeading={showHeading} />;
 }
 
-function CoverageSection({ matterId, documents }: Omit<Props, "refreshKey">) {
+function CoverageSection({ matterId, documents, showHeading }: Omit<Props, "refreshKey">) {
   const titleId = useId();
   const active = useRef(false);
   const request = useRef(0);
@@ -83,11 +83,11 @@ function CoverageSection({ matterId, documents }: Omit<Props, "refreshKey">) {
   }
 
   return (
-    <section className="space-y-3 text-sm" aria-labelledby={titleId} aria-busy={state.status === "loading"}>
-      <h3 className="font-medium" id={titleId}>材料读取检查</h3>
+    <section className="space-y-3 text-sm" aria-labelledby={showHeading ? titleId : undefined} aria-label={showHeading ? undefined : "材料读取检查"} aria-busy={state.status === "loading"}>
+      {showHeading ? <h3 className="font-medium" id={titleId}>材料读取检查</h3> : null}
       {documents.length === 0 ? <p className="text-xs text-muted-foreground">暂无可选择的材料。</p> : <>
         <fieldset>
-          <legend className="mb-2 text-xs text-muted-foreground">从下列材料中选择版本（不限当前环节，最多 {INPUT_COVERAGE_MAX_DOCUMENTS} 份）</legend>
+          <legend className="mb-2 text-xs text-muted-foreground">选择材料（最多 {INPUT_COVERAGE_MAX_DOCUMENTS} 份）</legend>
           <div className="grid max-h-52 gap-x-4 gap-y-2 overflow-y-auto p-1 sm:grid-cols-2">
             {documents.map((document, index) => {
               const checked = selected.includes(document.id);
@@ -102,8 +102,9 @@ function CoverageSection({ matterId, documents }: Omit<Props, "refreshKey">) {
           </div>
         </fieldset>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-muted-foreground">{selected.length ? `已勾选 ${selected.length} 份，按列表顺序检查。` : "请先勾选要检查的材料。"}仅作本地检查，不调用 AI。</p>
-          <div className="flex gap-2">
+          <p className="text-xs text-muted-foreground">本地检查 · 未调用 AI</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">已选 {selected.length} 份</span>
             <button type="button" className="btn btn-ghost btn-sm" onClick={clearSelection} disabled={!selected.length}>取消全部勾选</button>
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => { void check(); }} disabled={!selected.length || state.status === "loading"}>
               {state.status === "loading" ? "正在检查材料…" : state.status === "error" ? "重试材料检查" : state.status === "ready" ? "重新检查所选材料" : "检查所选材料"}
@@ -119,22 +120,31 @@ function CoverageSection({ matterId, documents }: Omit<Props, "refreshKey">) {
 }
 
 function CoverageResult({ view }: { view: MatterInputCoverageView }) {
-  return <div className="space-y-3 border-t border-[var(--bd-hair)] pt-3">
-    <div className="text-xs leading-relaxed">
-      <p className="font-medium">本次未调用 AI</p>
-      <p className="text-muted-foreground">以下是本地可读取的内容范围，不表示 AI 已读或已完成审查。</p>
-      <p className="mt-1 text-muted-foreground">
-        所选 {view.summary.selectedDocuments} 份，当前可查看 {view.summary.availableDocuments} 份
-        {view.summary.unavailableDocuments ? `，不可用 ${view.summary.unavailableDocuments} 份` : ""}；
-        可读取内容共 {count(view.summary.availableChars)} 字符，本次可用于审查 {count(view.summary.preparedChars)} 字符。
-      </p>
-      <p className="text-muted-foreground">本次可用于审查的文字上限 {count(view.budget.maxChars)} 字符，按所选材料在列表中的顺序分配。检查于 {formatDateTime(view.checkedAt)}。</p>
-      {view.summary.omittedRangeCount > 0 || view.summary.omittedUnitCount > 0 ? <p className="mt-1 text-muted-foreground">
+  return <section aria-label="读取检查结果" className="flex flex-col gap-3 border-t border-[var(--bd-hair)] pt-3">
+    <dl className="flex flex-wrap gap-x-8 gap-y-3">
+      <div>
+        <dt className="text-xs text-muted-foreground">可查看材料</dt>
+        <dd className="mt-1 text-base font-medium tabular-nums">{view.summary.availableDocuments}<span className="text-xs font-normal text-muted-foreground"> / {view.summary.selectedDocuments} 份</span></dd>
+        {view.summary.unavailableDocuments ? <dd className="mt-1 text-xs text-muted-foreground">不可用 {view.summary.unavailableDocuments} 份</dd> : null}
+      </div>
+      <div>
+        <dt className="text-xs text-muted-foreground">{view.summary.preparedChars === view.summary.availableChars ? "可用文本" : "可读取"}</dt>
+        <dd className="mt-1 text-base font-medium tabular-nums">{count(view.summary.availableChars)}<span className="text-xs font-normal text-muted-foreground"> 字符</span></dd>
+      </div>
+      {view.summary.preparedChars !== view.summary.availableChars ? <div>
+        <dt className="text-xs text-muted-foreground">本次可用</dt>
+        <dd className="mt-1 text-base font-medium tabular-nums">{count(view.summary.preparedChars)}<span className="text-xs font-normal text-muted-foreground"> 字符</span></dd>
+      </div> : null}
+    </dl>
+    <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground">
+      <span>文字上限 {count(view.budget.maxChars)} 字符 · 按列表顺序分配</span>
+      <span>检查于 {formatDateTime(view.checkedAt)}</span>
+    </div>
+    {view.summary.omittedRangeCount > 0 || view.summary.omittedUnitCount > 0 ? <p className="text-xs leading-relaxed text-muted-foreground">
         明细展示有上限：{view.summary.omittedRangeCount > 0 ? `${count(view.summary.omittedRangeCount)} 条文本范围未展开` : ""}
         {view.summary.omittedRangeCount > 0 && view.summary.omittedUnitCount > 0 ? "；" : ""}
         {view.summary.omittedUnitCount > 0 ? `${count(view.summary.omittedUnitCount)} 个处理单元的明细未展开` : ""}。统计仍包含已知范围。
-      </p> : null}
-    </div>
+    </p> : null}
     <ul className="divide-y divide-[var(--bd-hair)]">
       {view.items.map((item, index) => <li key={item.documentId} className="space-y-2 py-3 first:pt-0 last:pb-0">
         {item.status === "UNAVAILABLE" ? <>
@@ -143,7 +153,7 @@ function CoverageResult({ view }: { view: MatterInputCoverageView }) {
         </> : <AvailableCoverage item={item} />}
       </li>)}
     </ul>
-  </div>;
+  </section>;
 }
 
 function AvailableCoverage({ item }: { item: AvailableInputCoverageItem }) {
@@ -169,8 +179,10 @@ function AvailableCoverage({ item }: { item: AvailableInputCoverageItem }) {
           ].filter(Boolean).join("；")}。
         </p> : null}
       </> : <p>尚无可核实的文本范围。</p>}
-      <p>可读取内容 {count(item.preparation.availableChars)} 字符；本次可用于审查 {count(item.preparation.preparedChars)} 字符
-        {item.preparation.unpreparedChars > 0 ? `，本次未包含 ${count(item.preparation.unpreparedChars)} 字符` : ""}。</p>
+      <p>{item.preparation.preparedChars === item.preparation.availableChars
+        ? `可用文本 ${count(item.preparation.availableChars)} 字符`
+        : `可读取 ${count(item.preparation.availableChars)} 字符 · 本次可用 ${count(item.preparation.preparedChars)} 字符`}
+        {item.preparation.unpreparedChars > 0 ? ` · 本次未包含 ${count(item.preparation.unpreparedChars)} 字符` : ""}</p>
       {!item.preparation.canPrepare ? <p>当前无权把此材料用于 AI 审查；仍可查看本地处理状态。</p> : null}
     </div>
     {item.issues.length > 0 ? <ul className="space-y-1 text-xs leading-relaxed">
@@ -200,7 +212,7 @@ function AvailableCoverage({ item }: { item: AvailableInputCoverageItem }) {
 function RangeRow({ range }: { range: InputCoverageRange }) {
   const partial = range.start !== 0 || range.end !== range.totalChars;
   return <li className="break-words">
-    {range.locationLabel} · 本次可用 {count(range.end - range.start)} / 片段共 {count(range.totalChars)} 字符
+    {range.locationLabel} · 本次可用 {count(range.end - range.start)}{partial ? ` / 片段共 ${count(range.totalChars)}` : ""} 字符
     {partial ? `（仅此片段的第 ${count(range.start + 1)}—${count(range.end)} 个字符）` : ""}
     {partial ? <span>；其余文本本次未包含。</span> : null}
   </li>;

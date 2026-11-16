@@ -1,5 +1,5 @@
 import React from "react";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AvailableInputCoverageItem, MatterInputCoverageItem, MatterInputCoverageView } from "@/lib/ai/input-coverage";
 import { ActionError } from "@/lib/action-error";
@@ -60,18 +60,23 @@ afterEach(cleanup);
 describe("离线输入范围检查（组件环境）", () => {
   it("初始空选择不请求；显式选择后仅按当前列表顺序检查所选版本", async () => {
     mock.check.mockResolvedValue(view([available(), available("document-2")]));
-    render(<InputCoverageSection matterId={matterId} documents={choices} />);
+    render(<InputCoverageSection matterId={matterId} documents={choices} showHeading={false} />);
+    expect(screen.queryByRole("heading", { name: "材料读取检查" })).not.toBeInTheDocument();
     expect(mock.check).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "检查所选材料" })).toBeDisabled();
     select("合成补充材料 · 第 2 版");
     select();
     expect(mock.check).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "检查所选材料" }));
-    await screen.findByText("本次未调用 AI");
+    const result = await screen.findByRole("region", { name: "读取检查结果" });
     expect(mock.check).toHaveBeenCalledExactlyOnceWith({ matterId, documents: [{ documentId: "document-1" }, { documentId: "document-2" }] });
     expect(screen.getByText("当前授权主材料")).toBeVisible();
     expect(screen.getByText("当前授权补充材料")).toBeVisible();
-    expect(screen.getByText(/不表示 AI 已读或已完成审查/)).toBeVisible();
+    expect(screen.getAllByText("本地检查 · 未调用 AI")).toHaveLength(1);
+    expect(within(result).getByText("可用文本")).toBeVisible();
+    const totals = within(result).getAllByRole("definition");
+    expect(totals).toHaveLength(2);
+    expect(totals[1]).toHaveTextContent("200 字符");
     expect(screen.queryByRole("button", { name: /AI|生成|审查/ })).not.toBeInTheDocument();
   });
 
@@ -90,6 +95,10 @@ describe("离线输入范围检查（组件环境）", () => {
     select("合成补充材料 · 第 2 版");
     fireEvent.click(screen.getByRole("button", { name: "检查所选材料" }));
     await screen.findByText("合成受限准备材料");
+    const totals = within(screen.getByRole("region", { name: "读取检查结果" })).getAllByRole("definition");
+    expect(totals).toHaveLength(3);
+    expect(totals[1]).toHaveTextContent("220 字符");
+    expect(totals[2]).toHaveTextContent("60 字符");
     expect(screen.getByText(/以前提取的文本/)).toBeVisible();
     expect(screen.getByText(/总范围未知/)).toHaveTextContent("不能判断是否完整");
     expect(screen.getByText(/本次未包含 60 字符/)).toBeVisible();
@@ -133,7 +142,7 @@ describe("离线输入范围检查（组件环境）", () => {
     expect(screen.getByRole("status")).toBeVisible();
     await act(async () => { again.reject(new ActionError("当前没有材料读取资格")); });
     expect(screen.getByRole("alert")).toHaveTextContent("当前没有材料读取资格");
-    expect(screen.queryByText("本次未调用 AI")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "读取检查结果" })).not.toBeInTheDocument();
     mock.check.mockResolvedValueOnce(view([{ status: "UNAVAILABLE", documentId: "document-1" }]));
     fireEvent.click(screen.getByRole("button", { name: "重试材料检查" }));
     await screen.findByText("所选材料 1 当前不可用");
@@ -144,7 +153,7 @@ describe("离线输入范围检查（组件环境）", () => {
   it("内部错误只显示可重试提示，不显示原始服务细节", async () => {
     mock.check.mockRejectedValue(new Error("Synthetic internal database details"));
     render(<InputCoverageSection matterId={matterId} documents={choices} />);
-    expect(screen.getByText("从下列材料中选择版本（不限当前环节，最多 50 份）")).toBeVisible();
+    expect(screen.getByText("选择材料（最多 50 份）")).toBeVisible();
     select();
     fireEvent.click(screen.getByRole("button", { name: "检查所选材料" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("暂时无法检查，请稍后重试");
@@ -180,7 +189,7 @@ describe("离线输入范围检查（组件环境）", () => {
     expect(screen.getByRole("button", { name: "检查所选材料" })).toBeDisabled();
     await act(async () => { earlier.resolve(view()); });
     expect(screen.queryByText("当前授权主材料")).not.toBeInTheDocument();
-    expect(screen.queryByText("本次未调用 AI")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "读取检查结果" })).not.toBeInTheDocument();
     expect(mock.check).toHaveBeenCalledTimes(1);
   });
 

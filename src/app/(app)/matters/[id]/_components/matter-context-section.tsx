@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState, useTransition, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Check, FileText, History, Loader2, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -45,12 +45,15 @@ function ContextSection({ matterId, view }: Props) {
   const sectionTitle = useRef<HTMLHeadingElement>(null);
   const addTrigger = useRef<HTMLButtonElement>(null);
   const editorTrigger = useRef<HTMLButtonElement | null>(null);
+  const editorContent = useRef<HTMLDivElement>(null);
+  const editorClosePending = useRef(false);
   const historyTrigger = useRef<HTMLButtonElement | null>(null);
   const sourceTrigger = useRef<HTMLButtonElement | null>(null);
   const historyTitle = useRef<HTMLHeadingElement>(null);
   const sourceFromHistory = useRef(false);
   const [pending, start] = useTransition();
   const [editorBusy, setEditorBusy] = useState(false);
+  const [editorDirty, setEditorDirty] = useState(false);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [history, setHistory] = useState<{ id: string; kind: ContextKind; data: ContextHistoryView | null; error: string } | null>(null);
   const [source, setSource] = useState<{ id: string; recordLabel: string; data: ContextSourceContent | null; error: string } | null>(null);
@@ -58,6 +61,7 @@ function ContextSection({ matterId, view }: Props) {
   function begin(record: ContextRecordView | null, trigger: HTMLButtonElement) {
     editorTrigger.current = trigger;
     const key = crypto.randomUUID();
+    setEditorDirty(false);
     setEditor({ key, record, options: null, error: "" });
     start(async () => {
       try {
@@ -67,6 +71,27 @@ function ContextSection({ matterId, view }: Props) {
         setEditor(previous => previous?.key === key ? { ...previous, options: { choices: [], truncated: false }, error: actionErrorMessage(error) } : previous);
       }
     });
+  }
+
+  async function closeEditor() {
+    if (!editor || editorBusy || editorClosePending.current) return;
+    const key = editor.key;
+    const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    editorClosePending.current = true;
+    try {
+      if (editorDirty && !await confirmDialog({
+        title: "放弃未保存的记录？",
+        confirmText: "放弃记录",
+        cancelText: "继续编辑",
+        initialFocus: "cancel",
+      })) {
+        requestAnimationFrame(() => restoreFocus(returnFocus, editorContent.current));
+        return;
+      }
+      setEditor(current => current?.key === key ? null : current);
+    } finally {
+      editorClosePending.current = false;
+    }
   }
 
   function showHistory(record: Pick<ContextRecordView, "id" | "kind">, beforeVersion?: number, trigger?: HTMLButtonElement) {
@@ -133,10 +158,10 @@ function ContextSection({ matterId, view }: Props) {
         {view.hasMore ? <p className="mt-3 t-xs t-mute">当前显示最近 100 条记录。</p> : null}
       </div>
 
-      <Sheet open={editor !== null} onOpenChange={open => { if (!open && !editorBusy) setEditor(null); }}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-xl" onCloseAutoFocus={event => { event.preventDefault(); restoreFocus(editorTrigger.current, addTrigger.current, sectionTitle.current); }}>
+      <Sheet open={editor !== null} onOpenChange={open => { if (!open) void closeEditor(); }}>
+        <SheetContent ref={editorContent} className="w-full overflow-y-auto sm:max-w-xl" onCloseAutoFocus={event => { event.preventDefault(); restoreFocus(editorTrigger.current, addTrigger.current, sectionTitle.current); }}>
           <SheetHeader><SheetTitle>{editor?.record ? `更正${contextKindLabels[editor.record.kind]}记录（当前第 ${editor.record.version} 版）` : "记录目标或指示"}</SheetTitle><SheetDescription>{editor?.record ? `保存为第 ${editor.record.version + 1} 版，保留第 ${editor.record.version} 版；新版需重新核对确认。` : "保存后待主办或协办核对确认。"}</SheetDescription></SheetHeader>
-          {editor ? <ContextEditor key={editor.key} matterId={matterId} state={editor} canReadFinance={view.canReadFinance} onSaving={setEditorBusy}
+          {editor ? <ContextEditor key={editor.key} matterId={matterId} state={editor} canReadFinance={view.canReadFinance} onSaving={setEditorBusy} onDirtyChange={setEditorDirty}
             onSaved={() => { setEditor(null); router.refresh(); }} /> : null}
         </SheetContent>
       </Sheet>
@@ -191,7 +216,7 @@ function RecordContent({ record, onSource }: { record: ContextRecordView; onSour
   </>;
 }
 
-function ContextEditor({ matterId, state, canReadFinance, onSaved, onSaving }: { matterId: string; state: EditorState; canReadFinance: boolean; onSaved: () => void; onSaving: (value: boolean) => void }) {
+function ContextEditor({ matterId, state, canReadFinance, onSaved, onSaving, onDirtyChange }: { matterId: string; state: EditorState; canReadFinance: boolean; onSaved: () => void; onSaving: (value: boolean) => void; onDirtyChange: (value: boolean) => void }) {
   const prefix = useId();
   const record = state.record;
   const [kind, setKind] = useState<ContextKind>(record?.kind ?? "GOAL");
@@ -200,11 +225,19 @@ function ContextEditor({ matterId, state, canReadFinance, onSaved, onSaving }: {
   const [reason, setReason] = useState(record?.reason ?? "");
   const [sourceDescription, setSourceDescription] = useState(record?.sourceDescription ?? "");
   const [sourceKey, setSourceKey] = useState(record?.source?.id ? `${record.source.type}:${record.source.id}` : "");
-  const [occurredAt, setOccurredAt] = useState(() => toShanghaiInput(new Date()));
+  const [initialOccurredAt] = useState(() => toShanghaiInput(new Date()));
+  const [occurredAt, setOccurredAt] = useState(initialOccurredAt);
   const [error, setError] = useState("");
   const [pending, start] = useTransition();
   const choices = state.options?.choices ?? [];
   const previousSource = record?.source?.id && !choices.some(choice => `${choice.type}:${choice.id}` === `${record.source!.type}:${record.source!.id}`) ? record.source : null;
+  const dirty = kind !== (record?.kind ?? "GOAL") || visibility !== (record?.visibility ?? "MATTER")
+    || content !== (record?.content ?? "") || reason !== (record?.reason ?? "")
+    || sourceDescription !== (record?.sourceDescription ?? "")
+    || sourceKey !== (record?.source?.id ? `${record.source.type}:${record.source.id}` : "")
+    || occurredAt !== initialOccurredAt;
+
+  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError("");
