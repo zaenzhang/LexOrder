@@ -6,6 +6,10 @@ import { matterStatusLabel, matterCategoryLabel, matterCategoryKind, procedureTy
 import { avatarTone, matterStatusTone } from "@/lib/ui/moan-tones";
 import { InitialAvatar, ProcedureChain, type ChainNode } from "@/components/patterns/moan";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
+import { ActionError } from "@/lib/action-error";
+import { requireSession } from "@/lib/auth/session";
+import { matterHref } from "@/lib/matters/route";
+import { hasCustomPermission } from "@/lib/roles/catalog";
 
 type Matter = NonNullable<Awaited<ReturnType<typeof getMatterById>>>;
 const date = (value: Date | null) => (value ? formatDate(new Date(value)) : "—");
@@ -17,7 +21,14 @@ const PROC_STATUS_LABEL: Record<string, string> = { NOT_STARTED: "未开始", IN
  * 只换外观，可见内容与权限不变：不加载财务与私有附件，业务操作按案件经办权限开放。
  */
 export async function TeamMatterOverview({ matter }: { matter: Matter }) {
-  const notes = await listNotes(matter.id);
+  const { user } = await requireSession("matters.read");
+  const canReadNotes = hasCustomPermission(user, "schedule.read");
+  const notesResult = canReadNotes
+    ? await listNotes(matter.id).then(notes => ({ notes, error: "" })).catch(error => ({
+      notes: null,
+      error: error instanceof ActionError ? error.message : "记录暂不可读取，请稍后重试"
+    }))
+    : null;
   const roleText = (role: string) => (role === "LEAD" ? "主办" : role === "CO_LEAD" ? "协办" : "助理");
   const kind = matterCategoryKind(matter.category);
   const ours = matter.parties.filter((p) => p.role === "CLIENT_PARTY");
@@ -141,19 +152,24 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
             );
           })}
 
-          <section className="card">
+          {notesResult ? <section className="card" aria-label="记录">
             <div className="panel-head">
               <div className="panel-title">
                 <BookOpen className="ic" strokeWidth={1.8} />
                 记录
-                <span className="badge b-white" style={{ marginLeft: 2 }}>{notes.length}</span>
+                {notesResult.notes ? <span className="badge b-white" style={{ marginLeft: 2 }}>{notesResult.notes.length}</span> : null}
               </div>
             </div>
-            {notes.length === 0 ? (
+            {notesResult.notes === null ? (
+              <div className="panel-body">
+                <p className="t-xs text-destructive" role="alert">记录读取失败：{notesResult.error}</p>
+                <a href={matterHref(matter)} className="mt-2 inline-block t-xs underline underline-offset-2">重新加载</a>
+              </div>
+            ) : notesResult.notes.length === 0 ? (
               <div className="panel-body t-xs t-mute">暂无记录</div>
             ) : (
               <div className="panel-body space-y-3">
-                {notes.map((note) => (
+                {notesResult.notes.map((note) => (
                   <div key={note.id} className="border-b border-[var(--bd-hair)] pb-3 last:border-0 last:pb-0">
                     <div className="t-xs t-mute">
                       {note.author.name} · {formatDateTime(note.occurredAt)}
@@ -163,7 +179,7 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
                 ))}
               </div>
             )}
-          </section>
+          </section> : null}
 
           <section className="card">
             <div className="panel-head">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Unlink } from "lucide-react";
@@ -132,6 +132,8 @@ function SourceButton({ itemId, revision, source }: { itemId: string; revision?:
 export function EvidencePoints({ items, showSource = false }: { items: EvidenceItemRow[]; showSource?: boolean }) {
   const [pending, startTransition] = useTransition();
   const [detail, setDetail] = useState<EditorData | null>(null);
+  const detailTrigger = useRef<HTMLButtonElement | null>(null);
+  const listRef = useRef<HTMLUListElement | null>(null);
   function openItem(id: string) {
     startTransition(async () => {
       try { setDetail(await getEvidenceItem(id)); }
@@ -139,11 +141,11 @@ export function EvidencePoints({ items, showSource = false }: { items: EvidenceI
     });
   }
   return <>
-    <ul className="dos-ev-list">{items.map(item => <li key={item.id} className="dos-ev">
+    <ul ref={listRef} tabIndex={-1} aria-label="证据要点列表" className="dos-ev-list">{items.map(item => <li key={item.id} className="dos-ev">
       <div className="dos-ev-top">
         <span className={`rounded-full border px-1.5 py-px text-[10px] ${EVIDENCE_KIND_STYLE[item.kind]}`}>{evidenceKindLabel[item.kind]}</span>
-        <button type="button" className="dos-ev-title min-w-0 break-words text-left hover:underline" disabled={pending} onClick={() => openItem(item.id)}>{item.title}</button>
-        {item.revision ? <span className="dos-ev-page">第 {item.revision} 版 · {item.confirmedAt ? "已确认" : "待确认"}</span> : item.sourcePage ? <span className="dos-ev-page">第 {item.sourcePage} 页</span> : null}
+        <span className="dos-ev-title min-w-0 break-words text-left">{item.title}</span>
+        {item.revision ? <span className="dos-ev-page">第 {item.revision} 版 · {item.confirmedAt ? "记录已核对" : "记录待核对"}</span> : item.sourcePage ? <span className="dos-ev-page">第 {item.sourcePage} 页</span> : null}
       </div>
       <p className="dos-ev-text break-words">{item.restricted ? "部分来源当前不可用，内容暂不展示。" : item.content}</p>
       {!item.restricted ? <EventDateDetails value={item.eventDate} /> : null}
@@ -152,13 +154,18 @@ export function EvidencePoints({ items, showSource = false }: { items: EvidenceI
         {showSource && !item.sources?.length ? <span>{item.sourceDocumentId ? item.sourceDocumentName ?? "来源不可用（引用保留）" : "未挂来源材料"}</span> : null}
         {item.createdByName ? <span>记录人 {item.createdByName}</span> : null}
         <span className="font-mono">记录时间 {formatDate(new Date(item.createdAt))}</span>
+        {!item.restricted ? <button type="button" className="btn btn-ghost btn-sm" disabled={pending}
+          aria-label={`${item.canEdit ? "查看与编辑要点" : "查看要点"}：${item.title}`}
+          onClick={event => { detailTrigger.current = event.currentTarget; openItem(item.id); }}>
+          {item.canEdit ? "查看与编辑要点" : "查看要点"}
+        </button> : null}
       </div>
     </li>)}</ul>
-    {detail && items.some(item => item.id === detail.item.id && !item.restricted) ? <EvidenceDetailDialog key={detail.item.id} initial={detail} onClose={() => setDetail(null)} /> : null}
+    {detail && items.some(item => item.id === detail.item.id && !item.restricted) ? <EvidenceDetailDialog key={detail.item.id} initial={detail} onClose={() => setDetail(null)} onReturnFocus={() => (detailTrigger.current?.isConnected ? detailTrigger.current : listRef.current)?.focus({ preventScroll: true })} /> : null}
   </>;
 }
 
-function EvidenceDetailDialog({ initial, onClose }: { initial: EditorData; onClose: () => void }) {
+function EvidenceDetailDialog({ initial, onClose, onReturnFocus }: { initial: EditorData; onClose: () => void; onReturnFocus: () => void }) {
   const router = useRouter();
   const id = useId();
   const [data, setData] = useState(initial);
@@ -192,12 +199,12 @@ function EvidenceDetailDialog({ initial, onClose }: { initial: EditorData; onClo
     onClose();
   }
   async function confirm() {
-    if (!await confirmDialog({ title: `确认第 ${item.revision} 版？`, description: "请核对内容、性质、发生时间及支持和反驳来源。确认保留当前性质，后续修改将形成新修订并重新确认。", confirmText: "确认此版本" })) return;
-    change(() => confirmEvidenceItem({ evidenceItemId: item.id, expectedRevision: item.revision, confirm: true }), "此版本已确认");
+    if (!await confirmDialog({ title: `核对第 ${item.revision} 版记录？`, description: `${item.title}\n性质：${evidenceKindLabel[item.kind]}\n\n核对本条记录、发生时间及支持和反驳来源，不等于认定事实。核对后保留当前性质；后续修改需重新核对。`, confirmText: "标记本版已核对", initialFocus: "cancel" })) return;
+    change(() => confirmEvidenceItem({ evidenceItemId: item.id, expectedRevision: item.revision, confirm: true }), "此版记录已核对");
   }
   async function remove(source: EvidenceSourceView) {
-    if (!await confirmDialog({ title: "撤销这条来源？", description: "撤销会形成新修订并清除当前确认，历史引用仍保留。", confirmText: "撤销来源" })) return;
-    change(() => removeEvidenceSource({ evidenceItemId: item.id, expectedRevision: item.revision, sourceId: source.id }), "来源已撤销");
+    if (!await confirmDialog({ title: "移除此来源关联？", description: "移除关联会形成新修订，需重新核对记录。原件和历史引用仍保留。", confirmText: "移除来源关联" })) return;
+    change(() => removeEvidenceSource({ evidenceItemId: item.id, expectedRevision: item.revision, sourceId: source.id }), "来源关联已移除");
   }
   function loadHistory(more = false) {
     setError("");
@@ -211,12 +218,12 @@ function EvidenceDetailDialog({ initial, onClose }: { initial: EditorData; onClo
   function save() {
     const date = evidenceEventDateSchema.safeParse(eventDate);
     if (!date.success) { setError(date.error.issues[0].message); return; }
-    change(() => updateEvidenceItem({ evidenceItemId: item.id, expectedRevision: item.revision, title, content, kind, eventDate: date.data }), "修改已保存，待确认");
+    change(() => updateEvidenceItem({ evidenceItemId: item.id, expectedRevision: item.revision, title, content, kind, eventDate: date.data }), "要点修改已保存，记录待核对");
   }
   return <Dialog open onOpenChange={open => { if (!open) void close(); }}>
-    <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+    <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto" onCloseAutoFocus={event => { event.preventDefault(); onReturnFocus(); }}>
       <DialogHeader><DialogTitle>证据要点</DialogTitle><DialogDescription>
-        第 {item.revision} 版 · {item.confirmedAt ? `已由 ${item.confirmedByName ?? "记录的确认人"} 确认 · ${formatDate(new Date(item.confirmedAt))}` : "待确认"}
+        第 {item.revision} 版 · {item.confirmedAt ? `记录已由 ${item.confirmedByName ?? "记录的核对人"} 核对 · ${formatDate(new Date(item.confirmedAt))}` : "记录待核对"}
       </DialogDescription></DialogHeader>
       {item.restricted ? <p role="status" className="text-sm text-muted-foreground">部分来源已不可读或身份发生变化，内容和修改暂不可用。请核对材料权限和原件状态。</p> : <>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
@@ -230,17 +237,17 @@ function EvidenceDetailDialog({ initial, onClose }: { initial: EditorData; onClo
         <h3 className="text-sm font-medium">来源</h3>
         {item.sources.length ? <ul className="space-y-2 text-sm">{item.sources.map(source => <li key={source.id} className="flex items-start justify-between gap-3">
           <SourceButton itemId={item.id} revision={item.revision} source={source} />
-          {item.canEdit && !source.legacy ? <Button size="sm" variant="ghost" className="shrink-0" disabled={pending || sourceBusy || dirty} onClick={() => void remove(source)}>撤销</Button> : null}
+          {item.canEdit && !source.legacy ? <Button size="sm" variant="ghost" className="shrink-0" disabled={pending || sourceBusy || dirty} onClick={() => void remove(source)}>移除关联</Button> : null}
         </li>)}</ul> : <p className="text-sm text-muted-foreground">未挂来源材料</p>}
         {item.canEdit ? <SourceAdder key={item.revision} item={item} documents={data.documents} disabled={pending || dirty} onAdded={reload} onBusyChange={setSourceBusy} /> : null}
       </section>
-      {dirty ? <p className="text-sm text-muted-foreground">先保存修改，再调整来源或确认。{item.confirmedAt ? "保存后需重新确认。" : ""}</p> : null}
+      {dirty ? <p className="text-sm text-muted-foreground">先保存要点修改，再调整来源或核对记录。{item.confirmedAt ? "保存后需重新核对。" : ""}</p> : null}
       {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
       <section className="space-y-2">
         {history === null ? <Button variant="ghost" size="sm" disabled={pending} onClick={() => loadHistory()}>查看历史修订</Button> : <>
           <h3 className="text-sm font-medium">历史修订</h3>
           {history.length ? <ol className="space-y-3">{history.map(entry => <li key={entry.revision} className="space-y-1 border-t pt-2 text-sm">
-            <div className="text-xs text-muted-foreground">第 {entry.revision} 版 · {entry.confirmedAt ? `当时已由 ${entry.confirmedByName ?? "记录的确认人"} 确认` : "当时未确认"} · {formatDate(new Date(entry.createdAt))}</div>
+            <div className="text-xs text-muted-foreground">第 {entry.revision} 版 · {entry.confirmedAt ? `当时已由 ${entry.confirmedByName ?? "记录的核对人"} 核对记录` : "当时记录未核对"} · {formatDate(new Date(entry.createdAt))}</div>
             <p className="break-words font-medium">{entry.title}</p>
             <p className="whitespace-pre-wrap break-words">{entry.restricted ? "当前无权读取部分历史来源，内容暂不展示。" : entry.content}</p>
             {!entry.restricted ? <EventDateDetails value={entry.eventDate} /> : null}
@@ -250,11 +257,11 @@ function EvidenceDetailDialog({ initial, onClose }: { initial: EditorData; onClo
         </>}
       </section>
       <DialogFooter>
-        <Button variant="outline" disabled={pending || sourceBusy} onClick={() => void close()}>关闭</Button>
+        <Button variant="outline" disabled={pending || sourceBusy} onClick={() => void close()}>返回要点列表</Button>
         {item.canEdit ? <>
-          <Button variant="outline" disabled={pending || sourceBusy || dirty || Boolean(item.confirmedAt)} onClick={() => void confirm()}>确认此版本</Button>
+          <Button variant="outline" disabled={pending || sourceBusy || dirty || Boolean(item.confirmedAt)} onClick={() => void confirm()}>核对本版记录</Button>
           <Button disabled={pending || sourceBusy || !dirty || !title.trim() || !content.trim()} onClick={save}>
-            {pending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}保存修改
+            {pending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}保存要点修改
           </Button>
         </> : null}
       </DialogFooter>
@@ -291,7 +298,7 @@ function SourceAdder({ item, documents, disabled, onAdded, onBusyChange }: { ite
       try {
         await addEvidenceSource({ evidenceItemId: item.id, expectedRevision: item.revision, documentId, relation,
           ...(selected ? { parseRunId: selected.runId, anchorId: selected.anchorId } : { page: page ? Number(page) : null }) });
-        await onAdded(); toast.success("来源已添加，待确认");
+        await onAdded(); toast.success("来源已添加，记录待核对");
       } catch (failure) { setError(actionErrorMessage(failure)); }
       finally { onBusyChange(false); }
     });
@@ -328,13 +335,13 @@ function SourceAdder({ item, documents, disabled, onAdded, onBusyChange }: { ite
   </div>;
 }
 
-/** Mounting the form only while open resets a cancelled draft and its source. */
+/** A new opening or matter starts a new creation intent; retries keep it. */
 export function EvidenceItemDialog({ open, onOpenChange, matterId, documents, defaultDocumentId }: {
   open: boolean; onOpenChange: (open: boolean) => void; matterId: string;
   documents: { id: string; name: string }[]; defaultDocumentId: string | null;
 }) {
   const [saving, setSaving] = useState(false);
-  return <Dialog open={open} onOpenChange={next => { if (!saving) onOpenChange(next); }}>{open ? <EvidenceCreateForm matterId={matterId} documents={documents} defaultDocumentId={defaultDocumentId} onClose={() => onOpenChange(false)} onBusyChange={setSaving} /> : null}</Dialog>;
+  return <Dialog open={open} onOpenChange={next => { if (!saving) onOpenChange(next); }}>{open ? <EvidenceCreateForm key={matterId} matterId={matterId} documents={documents} defaultDocumentId={defaultDocumentId} onClose={() => onOpenChange(false)} onBusyChange={setSaving} /> : null}</Dialog>;
 }
 
 function EvidenceCreateForm({ matterId, documents, defaultDocumentId, onClose, onBusyChange }: {
@@ -343,6 +350,8 @@ function EvidenceCreateForm({ matterId, documents, defaultDocumentId, onClose, o
   const id = useId();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [requestKey] = useState(() => crypto.randomUUID());
+  const active = useRef(true);
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<EvidenceKind>("FACT");
   const [content, setContent] = useState("");
@@ -351,6 +360,10 @@ function EvidenceCreateForm({ matterId, documents, defaultDocumentId, onClose, o
   const [sourcePage, setSourcePage] = useState("");
   const [relation, setRelation] = useState<Relation>("CONTEXT");
   const [error, setError] = useState("");
+  useEffect(() => {
+    active.current = true;
+    return () => { active.current = false; onBusyChange(false); };
+  }, [onBusyChange]);
   function submit() {
     const page = sourcePage ? Number(sourcePage) : null;
     if (!title.trim() || !content.trim()) { setError("请填写标题与内容"); return; }
@@ -361,15 +374,16 @@ function EvidenceCreateForm({ matterId, documents, defaultDocumentId, onClose, o
     onBusyChange(true);
     startTransition(async () => {
       try {
-        await createEvidenceItem({ matterId, title: title.trim(), content: content.trim(), kind,
+        await createEvidenceItem({ requestKey, matterId, title: title.trim(), content: content.trim(), kind,
           sourceDocumentId: sourceDocumentId === "none" ? null : sourceDocumentId, sourcePage: page, sourceRelation: relation, eventDate: date.data });
-        toast.success("证据要点已保存，待确认"); onClose(); router.refresh();
-      } catch (failure) { setError(actionErrorMessage(failure)); }
-      finally { onBusyChange(false); }
+        if (!active.current) return;
+        toast.success("证据要点已保存，记录待核对"); onClose(); router.refresh();
+      } catch (failure) { if (active.current) setError(actionErrorMessage(failure)); }
+      finally { if (active.current) onBusyChange(false); }
     });
   }
   return <DialogContent onEscapeKeyDown={event => { if (pending) event.preventDefault(); }} onInteractOutside={event => { if (pending) event.preventDefault(); }}>
-    <DialogHeader><DialogTitle>添加证据要点</DialogTitle><DialogDescription>保存后可继续编辑、关联来源并确认。</DialogDescription></DialogHeader>
+    <DialogHeader><DialogTitle>添加证据要点</DialogTitle><DialogDescription>保存后可继续编辑、关联来源并核对记录。</DialogDescription></DialogHeader>
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
       <div className="space-y-1.5"><Label htmlFor={id + "-title"}>标题</Label><Input id={id + "-title"} value={title} onChange={event => setTitle(event.target.value)} maxLength={200} disabled={pending} /></div>
       <div className="space-y-1.5"><Label htmlFor={id + "-kind"}>性质</Label><KindSelect id={id + "-kind"} value={kind} onChange={setKind} disabled={pending} /></div>

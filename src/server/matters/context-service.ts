@@ -7,7 +7,7 @@ import { hasCustomPermission, type RoleUser } from "@/lib/roles/catalog";
 import { resolveRoleUser } from "@/lib/roles/service";
 import { clientRelationshipFilter } from "@/server/clients/relationship-access";
 import { auditTx } from "@/server/audit";
-import { shDayKey } from "@/lib/ui/sh-time";
+import { buildContextSourceChoices } from "@/lib/matters/context-source-labels";
 import {
   contextRecordSchema, contextConfirmSchema, contextKindLabels,
   type ContextRecordInput, type ContextConfirmInput, type ContextRecordView, type MatterContextView,
@@ -230,19 +230,18 @@ export async function readContextSourceOptions(db: PrismaClient, actor: ContextA
     if (!access.canWrite) throw new ActionError("无权维护事项上下文");
     const [documents, notes, activities] = await Promise.all([
       hasCustomPermission(access.user, "documents.read") ? tx.document.findMany({ where: { matterId, deletedAt: null }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 101,
-        select: { id: true, name: true, uploadedById: true, matterId: true, intakeId: true, deletedAt: true } }) : [],
+        select: { id: true, name: true, version: true, uploadedById: true, matterId: true, intakeId: true, deletedAt: true } }) : [],
       access.canReadSchedule ? tx.note.findMany({ where: { matterId, deletedAt: null }, orderBy: [{ occurredAt: "desc" }, { id: "desc" }], take: 51,
         select: { id: true, occurredAt: true, withWhom: true } }) : [],
       hasCustomPermission(access.user, "clients.read") ? tx.clientActivity.findMany({ where: { client: contextClientFilter(access) },
-        orderBy: [{ occurredAt: "desc" }, { id: "desc" }], take: 51, select: { id: true, occurredAt: true, client: { select: { name: true } } } }) : []
+        orderBy: [{ occurredAt: "desc" }, { id: "desc" }], take: 51, select: { id: true, occurredAt: true, content: true, client: { select: { name: true } } } }) : []
     ]);
     const readable = await Promise.all(documents.slice(0, 100).map(async doc => await canReadDocument(access.user.id, doc) ? doc : null));
     return {
-      choices: [
-        ...readable.filter((doc): doc is NonNullable<typeof doc> => Boolean(doc)).map(doc => ({ type: "DOCUMENT" as const, id: doc.id, label: doc.name })),
-        ...notes.slice(0, 50).map(note => ({ type: "NOTE" as const, id: note.id, label: `事项沟通 · ${shDayKey(note.occurredAt)}${note.withWhom ? ` · ${note.withWhom}` : ""}` })),
-        ...activities.slice(0, 50).map(activity => ({ type: "CLIENT_ACTIVITY" as const, id: activity.id, label: `客户沟通 · ${activity.client.name} · ${shDayKey(activity.occurredAt)}` }))
-      ], truncated: documents.length > 100 || notes.length > 50 || activities.length > 50
+      choices: buildContextSourceChoices({
+        documents: readable.filter((doc): doc is NonNullable<typeof doc> => Boolean(doc)),
+        notes: notes.slice(0, 50), activities: activities.slice(0, 50),
+      }), truncated: documents.length > 100 || notes.length > 50 || activities.length > 50
     };
   }, { timeout: 20_000 });
 }

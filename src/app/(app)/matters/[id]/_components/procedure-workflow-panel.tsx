@@ -763,6 +763,10 @@ export function ProcedureWorkflowPanel({
   const [stageCreateOpen, setStageCreateOpen] = useState(false);
   const [deadlineOpen, setDeadlineOpen] = useState(false);
   const [uploadSignal, setUploadSignal] = useState(0);
+  const [glanceSection, setGlanceSection] = useState<"actions" | "records" | null>(null);
+  const pendingWorkFocus = useRef<"actions" | "records" | null>(null);
+  const actionSectionRef = useRef<HTMLElement>(null);
+  const recordSectionRef = useRef<HTMLElement>(null);
   const [, startStageRemovalTransition] = useTransition();
 
   const stages = useMemo(
@@ -786,7 +790,18 @@ export function ProcedureWorkflowPanel({
   // 切换程序后回到该程序的当前环节
   useEffect(() => {
     setSelectedKey(null);
-  }, [procedure?.id]);
+    setGlanceSection(null);
+    pendingWorkFocus.current = null;
+  }, [matter.id, procedure?.id]);
+
+  useEffect(() => {
+    if (view !== "work" || !pendingWorkFocus.current) return;
+    const section = pendingWorkFocus.current === "actions" ? actionSectionRef.current : recordSectionRef.current;
+    if (!section) return;
+    pendingWorkFocus.current = null;
+    section.focus({ preventScroll: true });
+    section.scrollIntoView({ block: "start", behavior: "auto" });
+  }, [view, glanceSection]);
 
   useEffect(() => {
     if (!apiRef) return;
@@ -804,7 +819,21 @@ export function ProcedureWorkflowPanel({
   }, [apiRef, selectedStage, stages]);
 
   function selectStage(key: string) {
+    setGlanceSection(null);
+    pendingWorkFocus.current = null;
     setSelectedKey(key);
+  }
+
+  function openWorkSection(section: "actions" | "records") {
+    pendingWorkFocus.current = section;
+    setGlanceSection(section);
+    onViewChange("work");
+  }
+
+  function selectView(next: DossierView) {
+    pendingWorkFocus.current = null;
+    setGlanceSection(null);
+    onViewChange(next);
   }
 
   async function handleRemoveStage(stage: WorkflowStage) {
@@ -832,8 +861,8 @@ export function ProcedureWorkflowPanel({
 
 
   const VIEWS: { key: DossierView; label: string; show: boolean; icon: typeof FileText; count?: number; hot?: boolean }[] = [
-    { key: "archive", label: "案件档案", show: true, icon: FileText },
-    { key: "work", label: "办案进程", show: true, icon: ListChecks, count: actions.length, hot: actions.some((a) => a.days !== null && a.days < 0) },
+    { key: "archive", label: "档案与摘要", show: true, icon: FileText },
+    { key: "work", label: "办案与材料", show: true, icon: ListChecks, count: actions.length, hot: actions.some((a) => a.days !== null && a.days < 0) },
     { key: "money", label: "委托与财务", show: Boolean(financeNode), icon: CircleDollarSign },
     { key: "seal", label: "审批用印", show: Boolean(sealNode), icon: Stamp, count: viewCounts?.seal }
   ];
@@ -844,7 +873,7 @@ export function ProcedureWorkflowPanel({
         {VIEWS.filter((v) => v.show).map((v) => {
           const Icon = v.icon;
           return (
-            <button key={v.key} type="button" role="tab" aria-selected={view === v.key} className={cn("dos-view", view === v.key && "on")} onClick={() => onViewChange(v.key)}>
+            <button key={v.key} type="button" role="tab" aria-selected={view === v.key} className={cn("dos-view", view === v.key && "on")} onClick={() => selectView(v.key)}>
               <Icon strokeWidth={1.9} />
               {v.label}
               {v.count ? <span className={cn("n", v.hot && "hot")}>{v.count}</span> : null}
@@ -909,10 +938,13 @@ export function ProcedureWorkflowPanel({
               />
               {materialsExtra}
               <CaseLog
+                sectionRef={recordSectionRef}
+                initiallyExpanded={glanceSection === "records"}
                 items={logItems}
                 stages={stages}
                 procedure={procedure}
-                focusStageName={effectiveScope === "stage" ? selectedStage?.name ?? null : null}
+                focusStageName={glanceSection === "records" ? null : effectiveScope === "stage" ? selectedStage?.name ?? null : null}
+                allScopeLabel={glanceSection === "records" ? "当前记录 · 不限环节" : procedure ? "全部环节" : "当前事项"}
                 canManage={canManage}
                 onWriteRecord={() => onWriteNote({ judgment: false, stageName: selectedStage?.name })}
                 onWriteJudgment={() => onWriteNote({ judgment: true, stageName: selectedStage?.name })}
@@ -933,10 +965,13 @@ export function ProcedureWorkflowPanel({
           {/* 待办在侧栏（2026-09-16 用户要求）：主栏留给材料与记录；其余页签显示最近待办与记录摘要 */}
           {view === "work" ? (
             <NextActions
+              sectionRef={actionSectionRef}
+              initiallyExpanded={glanceSection === "actions"}
               compact
               actions={actions}
               selectedStage={selectedStage}
-              scope={effectiveScope}
+              scope={glanceSection === "actions" ? "all" : effectiveScope}
+              allScopeLabel={procedure ? `${procedure.customLabel ?? procedureTypeLabel[procedure.type]} · 全部环节` : "当前事项"}
               canManage={canManage}
               waiting={waiting ?? []}
               onAddTask={procedure && selectedStage ? () => setTaskStage(selectedStage) : undefined}
@@ -949,7 +984,7 @@ export function ProcedureWorkflowPanel({
             logItems={logItems}
             waiting={waiting ?? []}
             procedureLabel={procedure ? procedure.customLabel ?? procedureTypeLabel[procedure.type] : null}
-            onOpenWork={() => onViewChange("work")}
+            onOpenWork={openWorkSection}
           />
           )}
         </aside>
@@ -1415,21 +1450,27 @@ function actionWhen(item: ActionItem) {
 }
 
 function NextActions({
+  sectionRef,
+  initiallyExpanded = false,
   compact = false,
   actions,
   selectedStage,
   scope,
+  allScopeLabel,
   canManage,
   waiting,
   onAddTask,
   onAddDeadline,
   onAddHearing
 }: {
+  sectionRef?: React.Ref<HTMLElement>;
+  initiallyExpanded?: boolean;
   /** 侧栏紧凑排布（办案进程页签） */
   compact?: boolean;
   actions: ActionItem[];
   selectedStage: WorkflowStage | null;
   scope: "all" | "stage";
+  allScopeLabel: string;
   canManage: boolean;
   waiting: WaitingItem[];
   onAddTask?: () => void;
@@ -1438,8 +1479,8 @@ function NextActions({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [showLater, setShowLater] = useState(false);
-  const [showOthers, setShowOthers] = useState(false);
+  const [showLater, setShowLater] = useState(initiallyExpanded);
+  const [showOthers, setShowOthers] = useState(initiallyExpanded);
   const [adjusting, setAdjusting] = useState<{ id: string; title: string; dueAt: Date } | null>(null);
   const inScope = scope === "stage" && selectedStage ? actions.filter((i) => i.stageKey === selectedStage.key) : actions;
   const overdue = inScope.filter((i) => i.days !== null && i.days < 0);
@@ -1590,16 +1631,12 @@ function NextActions({
   const empty = overdue.length + soon.length + later.length === 0;
 
   return (
-    <section className={cn("card", compact && "dos-todo-rail")} aria-label="待办">
+    <section ref={sectionRef} tabIndex={-1} className={cn("card scroll-mt-44", compact && "dos-todo-rail")} aria-label="待办">
       <div className={cn("panel-head flex-wrap", compact && "rail-sec-head")}>
         <div className={compact ? "flex items-center gap-2" : "panel-title"}>
           <ListChecks className={compact ? "h-[15px] w-[15px] text-[var(--t-muted)]" : "ic"} strokeWidth={1.8} />
           待办
-          {compact ? (
-            <span className="t-xs t-mute" style={{ fontWeight: 400 }}>{scope === "stage" && selectedStage ? selectedStage.name : "全部环节"}</span>
-          ) : (
-            <span className="t-xs t-mute" style={{ fontWeight: 400 }}>{scope === "stage" && selectedStage ? selectedStage.name : "全部环节"}</span>
-          )}
+          <span className="t-xs t-mute" style={{ fontWeight: 400 }}>{scope === "stage" && selectedStage ? selectedStage.name : allScopeLabel}</span>
         </div>
         <div className="flex items-center gap-2">
           {canManage ? (
@@ -1947,28 +1984,34 @@ function LogRow({ item, canManage }: { item: LogItem; canManage?: boolean }) {
 }
 
 function CaseLog({
+  sectionRef,
+  initiallyExpanded = false,
   items,
   stages,
   procedure,
   focusStageName,
+  allScopeLabel,
   canManage,
   onWriteRecord,
   onWriteJudgment,
   onAddLedger,
   onCaseSearch
 }: {
+  sectionRef?: React.Ref<HTMLElement>;
+  initiallyExpanded?: boolean;
   onAddLedger?: (type: "express") => void;
   onCaseSearch?: () => void;
   items: LogItem[];
   stages: WorkflowStage[];
   procedure: WorkflowProcedure | null;
   focusStageName: string | null;
+  allScopeLabel: string;
   canManage: boolean;
   onWriteRecord: () => void;
   onWriteJudgment: () => void;
 }) {
   const [filter, setFilter] = useState<"all" | LogKind>("all");
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(initiallyExpanded);
 
   // 去掉「总览」后，未归环节的记录（快递、程序级事件等）若只按环节过滤就再也看不到
   const scoped = focusStageName ? items.filter((e) => e.stageName === focusStageName || !e.stageName) : items;
@@ -1990,12 +2033,12 @@ function CaseLog({
   };
 
   return (
-    <section className="card" aria-label="记录">
+    <section ref={sectionRef} tabIndex={-1} className="card scroll-mt-44" aria-label="记录">
       <div className="panel-head flex-wrap">
         <div className="panel-title">
           <BookOpen className="ic" strokeWidth={1.8} />
           记录
-          <span className="t-xs t-mute" style={{ fontWeight: 400 }}>{focusStageName ?? "全部环节"}</span>
+          <span className="t-xs t-mute" style={{ fontWeight: 400 }}>{focusStageName ?? allScopeLabel}</span>
         </div>
         <div className="flex items-center gap-[7px]">
         {onCaseSearch ? (
@@ -2069,7 +2112,7 @@ function ArchiveGlance({
   logItems: LogItem[];
   waiting: WaitingItem[];
   procedureLabel: string | null;
-  onOpenWork: () => void;
+  onOpenWork: (section: "actions" | "records") => void;
 }) {
   const overdue = actions.filter((a) => a.days !== null && a.days < 0).length;
   return (
@@ -2079,9 +2122,9 @@ function ArchiveGlance({
           <ListChecks className="h-[15px] w-[15px] text-[var(--t-muted)]" strokeWidth={1.8} />
           最近待办
           {procedureLabel ? <span className="t-xs t-mute" style={{ fontWeight: 400 }}>{procedureLabel}</span> : null}
-          <button type="button" className="link border-0 bg-transparent p-0" onClick={onOpenWork}>
-            全部 {actions.length + waiting.length}
-          </button>
+          {actions.length + waiting.length > 0 ? <button type="button" className="link border-0 bg-transparent p-0" onClick={() => onOpenWork("actions")}>
+            查看全部待办 <span className="mono">{actions.length + waiting.length}</span>
+          </button> : null}
         </div>
         {actions.length === 0 && waiting.length === 0 ? (
           <div className="panel-body t-xs t-mute">没有待办</div>
@@ -2091,14 +2134,14 @@ function ArchiveGlance({
             {actions.slice(0, 3).map((a) => {
               const when = actionWhen(a);
               return (
-                <button key={a.key} type="button" className="dos-glance-row" onClick={onOpenWork}>
+                <button key={a.key} type="button" className="dos-glance-row" onClick={() => onOpenWork("actions")}>
                   <span className={cn("w", when.tone)}>{when.main}</span>
                   <span className="t">{a.title}</span>
                 </button>
               );
             })}
             {waiting.slice(0, actions.length >= 3 ? 0 : 3 - actions.length).map((w) => (
-              <button key={w.key} type="button" className="dos-glance-row" onClick={w.onOpen ?? onOpenWork}>
+              <button key={w.key} type="button" className="dos-glance-row" onClick={w.onOpen ?? (() => onOpenWork("actions"))}>
                 <span className="w teal">审批中</span>
                 <span className="t">{w.title}</span>
               </button>
@@ -2110,15 +2153,15 @@ function ArchiveGlance({
         <div className="rail-sec-head">
           <BookOpen className="h-[15px] w-[15px] text-[var(--t-muted)]" strokeWidth={1.8} />
           最近记录
-          <button type="button" className="link border-0 bg-transparent p-0" onClick={onOpenWork}>
-            全部 {logItems.length}
-          </button>
+          {logItems.length > 0 ? <button type="button" className="link border-0 bg-transparent p-0" onClick={() => onOpenWork("records")}>
+            查看全部记录 <span className="mono">{logItems.length}</span>
+          </button> : null}
         </div>
         {logItems.length === 0 ? (
           <div className="panel-body t-xs t-mute">暂无记录</div>
         ) : (
           logItems.slice(0, 3).map((l) => (
-            <button key={l.key} type="button" className="dos-glance-row col" onClick={onOpenWork}>
+            <button key={l.key} type="button" className="dos-glance-row col" onClick={() => onOpenWork("records")}>
               <span className="t">{l.title}</span>
               {l.body ? <span className="b">{l.body}</span> : null}
               <span className="m">{l.meta}</span>
@@ -2228,7 +2271,7 @@ function MaterialsSection({
           </button>
         ) : null}
       </div>
-      {procedure && documents.length === 0 ? <EmptyState compact icon={FileText} title="暂无材料" description="选择环节后上传，材料会归入该环节。" /> : null}
+      {procedure && documents.length === 0 ? <EmptyState compact icon={FileText} title="本程序暂无材料" description={canManage ? stages.length ? "选择环节后上传，材料会归入该环节。" : "上传后保存到本程序，暂不归入具体环节。" : undefined} /> : null}
       {stages.map((s) => {
         const docs = documents.filter((d) => homeOf.get(d.id) === s.key);
         if (!docs.length) return null;
@@ -2653,6 +2696,9 @@ function StageMaterialsPanel({
   const router = useRouter();
   const fieldId = useId();
   const stageName = stage?.name ?? "事项材料";
+  const uploadScopeTitle = stage?.name ?? (procedure ? "程序材料" : "事项材料");
+  const uploadScopeDescription = procedure && stage ? "文件将关联到当前程序，并自动归入本环节。"
+    : procedure ? "文件将保存到当前程序，暂不归入具体环节。" : "文件将保存到当前事项。";
   const fileRef = useRef<HTMLInputElement>(null);
   const uploadRequest = useRef<{ signature: string; key: string } | null>(null);
   const [open, setOpen] = useState(false);
@@ -2806,7 +2852,9 @@ function StageMaterialsPanel({
       ) : null}
 
       {shownDocs.length === 0 ? (
-        <EmptyState compact icon={FileText} title="本环节暂无材料" description={canManage ? "上传后自动归入本环节" : undefined} />
+        <EmptyState compact icon={FileText}
+          title={documents.length > 0 ? "没有符合筛选条件的材料" : stage ? "本环节暂无材料" : procedure ? "本程序暂无材料" : "本事项暂无材料"}
+          description={documents.length > 0 ? "调整上方筛选条件可查看其他材料。" : canManage ? uploadScopeDescription : undefined} />
       ) : (
         shownDocs.map((doc) => <DocRow key={doc.id} doc={doc} />)
       )}
@@ -2814,9 +2862,9 @@ function StageMaterialsPanel({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>上传材料 · {stageName}</DialogTitle>
+            <DialogTitle>上传材料 · {uploadScopeTitle}</DialogTitle>
             <DialogDescription className="text-xs">
-              {procedure && stage ? "文件将关联到当前程序，并自动归入本环节。" : "文件将保存到当前事项。"}
+              {uploadScopeDescription}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">

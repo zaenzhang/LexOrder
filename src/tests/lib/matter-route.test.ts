@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matterHref, normalizeMatterParam } from "@/lib/matters/route";
+import { decodeMatterParam, matterHref, normalizeMatterParam } from "@/lib/matters/route";
 
 describe("matterHref", () => {
   it("用 internalCode 作路由键", () => {
@@ -28,6 +28,17 @@ describe("matterHref", () => {
   });
 });
 
+describe("decodeMatterParam", () => {
+  it("解码及去空白后保留混合大小写编号和旧 ID", () => {
+    expect(decodeMatterParam(" M2C%2D2fa82183%2D21 ")).toBe("M2C-2fa82183-21");
+    expect(decodeMatterParam("cmq3lxgrm002nitzfhh8qn8ql")).toBe("cmq3lxgrm002nitzfhh8qn8ql");
+  });
+
+  it("裸百分号保留原文，不抛出解码异常", () => {
+    expect(decodeMatterParam(" M2C-100%a ")).toBe("M2C-100%a");
+  });
+});
+
 describe("normalizeMatterParam", () => {
   it("手打小写地址能命中", () => {
     expect(normalizeMatterParam("m-2026-001")).toBe("M-2026-001");
@@ -46,7 +57,7 @@ describe("normalizeMatterParam", () => {
     expect(normalizeMatterParam("M-2026-100%")).toBe("M-2026-100%");
   });
 
-  it("cuid 原样保留（大写化不影响按 id 匹配）", () => {
+  it("兼容既有大写输出；事项解析另用保留大小写的解码值", () => {
     expect(normalizeMatterParam("cmq3lxgrm002nitzfhh8qn8ql")).toBe(
       "CMQ3LXGRM002NITZFHH8QN8QL"
     );

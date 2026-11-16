@@ -63,7 +63,7 @@ export const adminNavigation: Array<{ label: string; items: AdminNavItem[] }> = 
   {
     label: "系统接入",
     items: [
-      { href: "/admin/ai", label: "AI 与元典", icon: Bot, adminOnly: true },
+      { href: "/admin/ai", label: "AI 与外部服务", icon: Bot, adminOnly: true },
       { href: "/admin/express", label: "快递接入", icon: Package, adminOnly: true },
       { href: "/admin/import", label: "批量导入", icon: FileUp }
     ]

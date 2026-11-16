@@ -1,5 +1,6 @@
 "use server";
 
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -27,6 +28,7 @@ const itemInclude = {
 type Item = Prisma.EvidenceItemGetPayload<{ include: typeof itemInclude }>;
 
 const createSchema = evidenceTextSchema.extend({
+  requestKey: z.string().uuid("保存标识无效，请关闭后重新记录").transform(value => value.toLowerCase()),
   matterId: z.string().cuid(), sourceDocumentId: z.string().cuid().optional().nullable(),
   sourcePage: z.number().int().min(1).max(10000).optional().nullable(),
   sourceRelation: sourceRelationSchema.default("CONTEXT"),
@@ -34,6 +36,48 @@ const createSchema = evidenceTextSchema.extend({
   if (value.sourcePage != null && !value.sourceDocumentId) context.addIssue({ code: "custom", path: ["sourcePage"], message: "填写页码须先选择来源材料" });
 });
 export type CreateEvidenceItemInput = z.input<typeof createSchema>;
+
+/** This describes the original submitted intent, never the item's later revisions. */
+function creationRequestHash(data: z.output<typeof createSchema>) {
+  const date = data.eventDate ?? emptyEvidenceEventDate();
+  return createHash("sha256").update(JSON.stringify({
+    matterId: data.matterId, title: data.title, content: data.content, kind: data.kind,
+    eventDate: { precision: date.precision, start: date.start, end: date.end, text: date.text },
+    source: data.sourceDocumentId ? {
+      documentId: data.sourceDocumentId, page: data.sourcePage ?? null, relation: data.sourceRelation,
+    } : null,
+  })).digest("hex");
+}
+
+function isCreationRequestConflict(error: { code: unknown; meta?: unknown }) {
+  if (error.code !== "P2002" || !error.meta || typeof error.meta !== "object") return false;
+  const meta = error.meta as { modelName?: unknown; target?: unknown };
+  if (meta.modelName !== undefined && meta.modelName !== "EvidenceItem") return false;
+  return meta.target === "EvidenceItem_createdById_requestKey_key" ||
+    (Array.isArray(meta.target) && meta.target.length === 2 &&
+      meta.target.includes("createdById") && meta.target.includes("requestKey"));
+}
+
+/** Only creation retries; a unique-key loser must read the winner in a fresh transaction. */
+async function creationTransaction<T>(work: (tx: Prisma.TransactionClient, replayOnly: boolean) => Promise<T>) {
+  let replayOnly = false;
+  for (let attempt = 0; ; attempt++) {
+    try { return await prisma.$transaction(tx => work(tx, replayOnly), { isolationLevel: "Serializable", timeout: 20000 }); }
+    catch (error) {
+      if (error && typeof error === "object" && "code" in error) {
+        const requestConflict = isCreationRequestConflict(error);
+        if ((error.code === "P2034" || requestConflict) && attempt < 2) {
+          replayOnly ||= requestConflict;
+          continue;
+        }
+        if (error.code === "P2034" || error.code === "P2002") {
+          throw new ActionError("本次保存遇到并发操作，请保留当前输入后重试");
+        }
+      }
+      throw error;
+    }
+  }
+}
 
 /** Read current membership and lifecycle inside the write transaction too. */
 async function mutationContext(tx: Prisma.TransactionClient, session: Session, matterId: string) {
@@ -104,15 +148,37 @@ async function snapshotAndAdvance(tx: Prisma.TransactionClient, item: Item, user
 export async function createEvidenceItem(input: CreateEvidenceItemInput) {
   const session = await requireSession("matters.write");
   const data = createSchema.parse(input);
+  const requestHash = creationRequestHash(data);
   await assertCanHandleMatter(session.user, data.matterId);
   await assertMatterWritable(data.matterId, { allowPrincipal: true });
-  const created = await transaction(async tx => {
+  const created = await creationTransaction(async (tx, replayOnly) => {
     await mutationContext(tx, session, data.matterId);
+    const previous = await tx.evidenceItem.findUnique({
+      where: { createdById_requestKey: { createdById: session.user.id, requestKey: data.requestKey } },
+      // Keep removed sources available only to verify the original submitted source identity.
+      include: { ...itemInclude, sources: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
+    });
+    if (previous && (previous.matterId !== data.matterId || previous.requestHash !== requestHash)) {
+      throw new ActionError("此提交已保存且内容发生变化，请先核对已有记录；需要另记一条时请关闭后重新记录");
+    }
     const source = data.sourceDocumentId ? await prepareSource(session.user.id, data.matterId, {
       documentId: data.sourceDocumentId, page: data.sourcePage, relation: data.sourceRelation,
     }, tx) : null;
+    if (previous) {
+      if (source) {
+        const original = previous.sources.find(link => link.documentId === source.documentId &&
+          link.relation === source.relation && link.locationKey === source.locationKey);
+        if (!original || original.documentSha256 !== source.documentSha256) {
+          throw new ActionError("原提交的来源身份已变化，请先核对已有记录");
+        }
+      }
+      await assertSourcesReadable(tx, previous, session.user.id);
+      return { id: previous.id };
+    }
+    if (replayOnly) throw new ActionError("本次保存结果已变化，请先刷新核对已有记录");
     const item = await tx.evidenceItem.create({ data: {
       matterId: data.matterId, title: data.title, content: data.content, kind: data.kind, createdById: session.user.id,
+      requestKey: data.requestKey, requestHash,
       ...evidenceEventDateToRecord(data.eventDate ?? emptyEvidenceEventDate()),
       ...(source ? { sources: { create: { ...source, createdById: session.user.id } } } : {}),
     }, select: { id: true } });

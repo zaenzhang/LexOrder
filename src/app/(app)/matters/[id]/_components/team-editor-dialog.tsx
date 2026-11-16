@@ -10,7 +10,7 @@ import { ColleaguePicker } from "@/components/matters/colleague-picker";
  *
  * 保存时按需触发两个 server action（基本信息 + 团队）。
  */
-import { useState, useTransition, useEffect, useMemo } from "react";
+import { useState, useTransition, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Plus, X } from "lucide-react";
@@ -149,6 +149,15 @@ type NewProcedurePartyDraft = {
   standings: LitigationStanding[];
 };
 
+export type MatterEditorSection = "matter" | "procedure" | "parties" | "team";
+
+const editorSectionTitle: Record<MatterEditorSection, string> = {
+  matter: "编辑案件信息",
+  procedure: "编辑当前程序信息",
+  parties: "编辑当前程序当事人",
+  team: "管理承办团队"
+};
+
 type Props = {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -162,6 +171,8 @@ type Props = {
   canEditMatterInfo: boolean;
   canManageTeam: boolean;
   canManageProcedure?: boolean;
+  initialSection?: MatterEditorSection;
+  onReturnFocus?: () => void;
 };
 
 const formControlClass =
@@ -378,9 +389,22 @@ export function TeamEditorDialog({
   userOptions,
   canEditMatterInfo,
   canManageTeam,
-  canManageProcedure = false
+  canManageProcedure = false,
+  initialSection = "matter",
+  onReturnFocus
 }: Props) {
   const router = useRouter();
+  const matterSectionRef = useRef<HTMLElement>(null);
+  const procedureSectionRef = useRef<HTMLElement>(null);
+  const partiesSectionRef = useRef<HTMLElement>(null);
+  const teamSectionRef = useRef<HTMLElement>(null);
+  const sectionRefs = { matter: matterSectionRef, procedure: procedureSectionRef, parties: partiesSectionRef, team: teamSectionRef };
+  const availableSections: MatterEditorSection[] = [
+    ...(canEditMatterInfo ? ["matter" as const] : []),
+    ...(currentProcedure && canManageProcedure ? ["procedure" as const, "parties" as const] : []),
+    ...(canManageTeam ? ["team" as const] : [])
+  ];
+  const activeSection = availableSections.includes(initialSection) ? initialSection : availableSections[0] ?? "matter";
   const procedureStandingOptions = currentProcedure
     ? procedureToStandingOptions(currentProcedure.type, "ours")
     : [];
@@ -727,9 +751,17 @@ export function TeamEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[86vh] w-[92vw] max-w-[720px] flex-col gap-0 overflow-hidden bg-[#EEF1F0] p-0">
+      <DialogContent className="flex max-h-[86vh] w-[92vw] max-w-[720px] flex-col gap-0 overflow-hidden bg-[#EEF1F0] p-0"
+        onOpenAutoFocus={event => {
+          const section = sectionRefs[activeSection].current;
+          if (!section) return;
+          event.preventDefault();
+          section.focus({ preventScroll: true });
+          section.scrollIntoView({ block: "start" });
+        }}
+        onCloseAutoFocus={event => { if (onReturnFocus) { event.preventDefault(); onReturnFocus(); } }}>
         <DialogHeader className="border-b border-border bg-card px-5 py-4">
-          <DialogTitle>编辑案件信息</DialogTitle>
+          <DialogTitle>{editorSectionTitle[activeSection]}</DialogTitle>
           <DialogDescription className="text-xs">
             收案日期、类别不可修改；案件基础信息和当前程序信息在同一处维护。
           </DialogDescription>
@@ -749,7 +781,7 @@ export function TeamEditorDialog({
           </section>
 
           {canEditMatterInfo && (
-            <section className={formSectionClass}>
+            <section ref={matterSectionRef} tabIndex={-1} aria-label="案件基础信息" className={formSectionClass}>
               <SectionTitle>案件基础信息</SectionTitle>
 
               <div className="space-y-1.5">
@@ -840,7 +872,7 @@ export function TeamEditorDialog({
           )}
 
           {currentProcedure && canManageProcedure && (
-            <section className={formSectionClass}>
+            <section ref={procedureSectionRef} tabIndex={-1} aria-label="当前程序信息" className={formSectionClass}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <SectionTitle>当前程序信息</SectionTitle>
                 <span className="font-mono text-[11px] text-muted-foreground">
@@ -955,7 +987,7 @@ export function TeamEditorDialog({
           )}
 
           {currentProcedure && canManageProcedure && (
-            <section className={formSectionClass}>
+            <section ref={partiesSectionRef} tabIndex={-1} aria-label="当前程序当事人" className={formSectionClass}>
               <div className="flex items-center justify-between gap-3">
                 <SectionTitle>当前程序当事人</SectionTitle>
                 <Button
@@ -970,7 +1002,7 @@ export function TeamEditorDialog({
                   ) : (
                     <Plus className="h-3.5 w-3.5" />
                   )}
-                  {showNewPartyForm ? "收起" : "添加"}
+                  {showNewPartyForm ? "收起新增当事人" : "添加当事人"}
                 </Button>
               </div>
 
@@ -1333,7 +1365,7 @@ export function TeamEditorDialog({
 
           {/* 团队 */}
           {canManageTeam && (
-            <section className={formSectionClass}>
+            <section ref={teamSectionRef} tabIndex={-1} aria-label="承办团队" className={formSectionClass}>
               <SectionTitle>承办团队</SectionTitle>
 
               <div className="space-y-1.5">
