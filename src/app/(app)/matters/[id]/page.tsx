@@ -225,7 +225,7 @@ export default async function MatterDetailPage({ params }: PageProps) {
       {/* 墨案 04 页面骨架由 MatterDetailTabs 统一承载：
           上下文头 → 信号条 → 程序链卡 → 三栏工作区（环节导航 / 工作区 / 辅助栏） */}
       <MatterDetailTabs
-        responsibilityNode={<WorkResponsibilityPanel data={await getWorkBoard({matterId:matter.id})} matterId={matter.id}/>}
+        responsibilityNode={<WorkResponsibilityPanel data={await getWorkBoard({matterId:matter.id})} matterId={matter.id} hideTasks/>}
         closureNode={<MatterClosurePanel matterId={matter.id} data={allowed("archive.read")?await getClosureBoard(matter.id):null}/>}
         conflictNode={<MatterConflictReview matterId={matter.id} data={conflictReview} canWrite={allowed("matters.write")&&matter.status!=="ARCHIVED"}/>}
         matter={matter}

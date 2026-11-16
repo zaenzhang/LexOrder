@@ -11,6 +11,7 @@ const { db, session } = vi.hoisted(() => ({
     matterProcedure: { findUnique: vi.fn() },
     deadlineRule: { findUnique: vi.fn() },
     deadline: { create: vi.fn() },
+    holiday: { findMany: vi.fn() },
     timelineEvent: { create: vi.fn() },
     reminderDelivery: { createMany: vi.fn(), updateMany: vi.fn() },
     notification: { createMany: vi.fn() },
@@ -43,6 +44,7 @@ beforeEach(() => {
   db.matterProcedure.findUnique.mockResolvedValue({ matterId: "cmatter00000000000000000001" });
   db.deadlineRule.findUnique.mockResolvedValue({ name: "民事上诉期（不服一审判决）", periodValue: 15, periodUnit: "DAYS" });
   db.deadline.create.mockResolvedValue({ id: "created-deadline" });
+  db.holiday.findMany.mockResolvedValue([{ date: new Date("2026-01-01T04:00:00Z"), name: "元旦", kind: "HOLIDAY" }]);
 });
 
 // zod 输入侧接受日期字符串/空串，输出侧为 Date——测试按输入侧构造，类型放宽
@@ -95,4 +97,40 @@ it("人工录入（无 sourceRuleId）：confirmStatus CONFIRMED，不做规则�
   const created = db.deadline.create.mock.calls[0][0].data;
   expect(created.confirmStatus).toBe("CONFIRMED");
   expect(db.deadlineRule.findUnique).not.toHaveBeenCalled();
+});
+
+it("日历查询失败时规则核对中止，未创建期限", async () => {
+  db.holiday.findMany.mockRejectedValue({ code: "P2021" });
+  await expect(addDeadline(input())).rejects.toThrow("放假安排暂时无法读取");
+  expect(db.deadline.create).not.toHaveBeenCalled();
+});
+
+it("年度未录入时保留人工日期并写明未核对，不能看似已完成顺延", async () => {
+  db.holiday.findMany.mockResolvedValue([]);
+  await addDeadline(input({ dueAt: "2026-07-20", basis: "依据".repeat(100) }));
+  const created = db.deadline.create.mock.calls[0][0].data;
+  expect(created.dueAt).toEqual(new Date("2026-07-20"));
+  expect(created.confirmStatus).toBe("PENDING");
+  expect(created.basis).toContain("2026 年放假安排未录入");
+  expect(created.basis).toContain("未完成休假日顺延核对");
+  expect(created.basis).toContain("保留提交日期 2026-07-20");
+  expect(created.basis.length).toBeLessThanOrEqual(300);
+});
+
+it("日历故障不阻断已由人工核对的普通期限录入", async () => {
+  db.holiday.findMany.mockRejectedValue(new Error("calendar unavailable"));
+  await addDeadline(input({ sourceRuleId: "", sourceTriggerDate: "", dueAt: "2026-07-20" }));
+  expect(db.holiday.findMany).not.toHaveBeenCalled();
+  const created = db.deadline.create.mock.calls[0][0].data;
+  expect(created.dueAt).toEqual(new Date("2026-07-20"));
+  expect(created.confirmStatus).toBe("CONFIRMED");
+});
+
+it("放假安排的建议不覆盖律师调整日期", async () => {
+  db.holiday.findMany.mockResolvedValue([{ date: new Date("2026-07-16T04:00:00Z"), name: "测试安排", kind: "HOLIDAY" }]);
+  await addDeadline(input({ dueAt: "2026-07-20" }));
+  const created = db.deadline.create.mock.calls[0][0].data;
+  expect(created.dueAt).toEqual(new Date("2026-07-20"));
+  expect(created.basis).toContain("建议按放假安排顺延至 2026-07-17");
+  expect(created.confirmStatus).toBe("PENDING");
 });

@@ -462,16 +462,21 @@ export async function addDeadline(input: DeadlineCreateInput) {
       const rawKey = civilKey(computeDeadlineDate(
         civilFromKey(shDayKey(data.sourceTriggerDate)), rule.periodValue, rule.periodUnit
       ));
-      // F-5：已配置放假安排时按民诉法第八十五条第三款顺延届满日（未配置/表未建时原样返回）
+      // 读取故障必须在写入前中止；年度未录入则保留人工日期与待核对提示。
       const adjusted = await adjustDeadlineForHolidays(rawKey);
       const submittedKey = shDayKey(data.dueAt);
-      if (adjusted.key !== submittedKey) {
+      let note = "";
+      if (adjusted.status === "UNCONFIGURED") {
+        note = `；系统按规则「${rule.name}」计算基础日期为 ${rawKey}；${adjusted.missingYears.join("、")} 年放假安排未录入，未完成休假日顺延核对。保留提交日期 ${submittedKey}，请人工核对`;
+      } else if (adjusted.key !== submittedKey) {
         // 口径＝提示，不改写 dueAt（第七轮体检 P2-3）：法定休假日顺延在个案中
         // 可能有例外（法院指定期间、当事人另有约定），系统不替律师改日期，
         // 只给出建议值由律师核对后自行调整。文案据此写「建议顺延至」而非「已顺延至」。
-        const note = adjusted.adjusted
+        note = adjusted.adjusted
           ? `；系统按规则「${rule.name}」重算为 ${rawKey}，建议按放假安排顺延至 ${adjusted.key}（${adjusted.reason}），与提交日期 ${submittedKey} 不一致，请核对后自行调整`
           : `；系统按规则「${rule.name}」重算为 ${rawKey}，与提交日期 ${submittedKey} 不一致，请核对`;
+      }
+      if (note) {
         // 截断保护警告本身：此前 `${basis}${note}`.slice(0,300) 从尾部截，
         // 恰好把最该被看见的不一致提示切掉。改为优先保留 note，截原 basis 尾部。
         const LIMIT = 300;

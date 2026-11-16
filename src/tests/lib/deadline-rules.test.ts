@@ -41,6 +41,10 @@ describe("computeDeadlineDate", () => {
     const withTime = new Date(civilFromKey("2026-07-01").getTime() + 5 * 3_600_000);
     expect(keyOf(computeDeadlineDate(withTime, 15, "DAYS"))).toBe("2026-07-16");
   });
+  it("上海日期转 civil 后，宿主夏令时变化不改变期间的日历结果", () => {
+    expect(keyOf(computeDeadlineDate(d("2026-03-07"), 2, "DAYS"))).toBe("2026-03-09");
+    expect(keyOf(computeDeadlineDate(d("2026-10-31"), 2, "DAYS"))).toBe("2026-11-02");
+  });
   it("非正整数期限拒绝", () => {
     const invalid: Array<[number, DeadlinePeriodUnit]> = [[0, "DAYS"], [-5, "DAYS"], [1.5, "DAYS"]];
     for (const [v, unit] of invalid) {

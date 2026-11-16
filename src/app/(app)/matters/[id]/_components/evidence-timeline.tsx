@@ -1,8 +1,6 @@
 "use client";
 
 import { useId } from "react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { groupEvidenceTimeline } from "@/lib/evidence/event-date";
 import { EvidencePoints, type EvidenceItemRow } from "./evidence-panel";
 
@@ -10,13 +8,8 @@ import { EvidencePoints, type EvidenceItemRow } from "./evidence-panel";
 export function EvidenceTimeline({ items }: { items: EvidenceItemRow[] }) {
   const id = useId();
   const { dated, unknown } = groupEvidenceTimeline(items);
-  return <Dialog>
-    <DialogTrigger asChild><Button size="sm" variant="outline">事实时间线</Button></DialogTrigger>
-    <DialogContent className="max-w-3xl">
-      <DialogHeader>
-        <DialogTitle>事项事实时间线</DialogTitle>
-        <DialogDescription>按发生日期排列；区间取开始日期，同日不表示先后。</DialogDescription>
-      </DialogHeader>
+  return <div className="flex min-w-0 flex-col gap-4">
+      <p className="text-sm text-muted-foreground">按发生日期排列；区间取开始日期，同日不表示先后。</p>
       {dated.length ? <section aria-labelledby={id + "-dated"} className="flex min-w-0 flex-col gap-3">
         <h3 id={id + "-dated"} className="text-sm font-medium">已记录日期</h3>
         <EvidencePoints items={dated} showSource />
@@ -26,7 +19,5 @@ export function EvidenceTimeline({ items }: { items: EvidenceItemRow[] }) {
         <EvidencePoints items={unknown} showSource />
       </section> : null}
       {!dated.length && !unknown.length ? <p role="status" className="text-sm text-muted-foreground">暂无可展示的要点。</p> : null}
-      <DialogFooter><DialogClose asChild><Button variant="outline">返回材料</Button></DialogClose></DialogFooter>
-    </DialogContent>
-  </Dialog>;
+  </div>;
 }

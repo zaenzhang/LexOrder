@@ -10,7 +10,8 @@ import { isSystemAdmin } from "@/lib/auth/system-role";
 import { isPersonalMode } from "@/lib/runtime/mode";
 import { resolvePersonalActor } from "@/server/runtime/personal";
 import { audit } from "@/server/audit";
-import { civilFromKey, shParts } from "@/lib/ui/sh-time";
+import { shParts } from "@/lib/ui/sh-time";
+import { holidayDateForKey, holidayDateRange } from "@/lib/calendar/holidays";
 import { ActionError } from "@/lib/action-error";
 
 const batchSchema = z.object({
@@ -34,10 +35,9 @@ export async function listHolidays(year?: number) {
   // getFullYear/getMonth，UTC 容器下 11 月 1 日前后会跨月错判（第七轮体检 P3-4）。
   const nowSh = shParts(new Date());
   const y = year ?? nowSh.y + (nowSh.m >= 11 ? 1 : 0);
-  const from = civilFromKey(`${y}-01-01`);
-  const to = civilFromKey(`${y}-12-31`);
+  const yearKey = String(y).padStart(4, "0");
   const rows = await prisma.holiday.findMany({
-    where: { date: { gte: from, lte: to } },
+    where: { date: holidayDateRange(`${yearKey}-01-01`, `${yearKey}-12-31`) },
     orderBy: { date: "asc" },
     select: { id: true, date: true, name: true, kind: true }
   });
@@ -47,13 +47,22 @@ export async function listHolidays(year?: number) {
 export async function saveHolidayBatch(input: z.input<typeof batchSchema>) {
   const session = await requireAdmin();
   const data = batchSchema.parse(input);
+  const entries = data.entries.map(entry => ({ ...entry, storedDate: holidayDateForKey(entry.date) }));
   let upserted = 0;
   await prisma.$transaction(async (tx) => {
     if (isPersonalMode()) await resolvePersonalActor(tx, session.user.id);
-    for (const e of data.entries) {
+    for (const e of entries) {
+      // 以当前界面同一上海日为身份；已有记录保留原时间戳，不猜测旧部署时区或迁移日期。
+      const existing = await tx.holiday.findMany({
+        where: { date: holidayDateRange(e.date, e.date) },
+        select: { date: true },
+        take: 2
+      });
+      if (existing.length > 1) throw new ActionError(`${e.date} 有重复的放假安排，请先核对`);
+      const date = existing[0]?.date ?? e.storedDate;
       await tx.holiday.upsert({
-        where: { date: civilFromKey(e.date) },
-        create: { date: civilFromKey(e.date), name: e.name, kind: e.kind },
+        where: { date },
+        create: { date, name: e.name, kind: e.kind },
         update: { name: e.name, kind: e.kind }
       });
       upserted++;

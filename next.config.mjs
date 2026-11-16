@@ -10,6 +10,8 @@ const nextConfig = {
   // 否则构建器会试图 parse 二进制文件，让整个依赖链上的路由 (/matters) 500
   serverExternalPackages: ["@napi-rs/canvas", "unpdf"],
   experimental: {
+    // Keep production builds within the managed development host's memory budget.
+    webpackMemoryOptimizations: true,
     serverActions: {
       // 材料上传需要更大的 body 限制（默认 1MB）
       bodySizeLimit: "25mb"

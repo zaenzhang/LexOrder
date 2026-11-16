@@ -24,8 +24,9 @@ import { contactRoleLabels } from "./info-panel";
 import { MatterArchive, TeamRailCard } from "./matter-archive";
 import { FinancePanel } from "./finance-panel";
 import { ImportantItemDialog } from "./procedure-content";
-import { ProcedureWorkflowPanel, replaceDossierLocation } from "./procedure-workflow-panel";
-import type { DossierView, WaitingItem, WorkflowApi, WorkflowNote, WorkflowPreservationCase } from "./procedure-workflow-panel";
+import { ProcedureWorkflowPanel } from "./procedure-workflow-panel";
+import { updateDossierLocation, type DossierView } from "@/lib/matters/dossier-location";
+import type { WaitingItem, WorkflowApi, WorkflowNote, WorkflowPreservationCase } from "./procedure-workflow-panel";
 
 import { ApprovalsPanel } from "./approvals-panel";
 import type { SealContractItem, ExpressItem } from "./info-extras";
@@ -82,7 +83,7 @@ type MatterPayloadBase = Prisma.MatterGetPayload<{
       include: {
         deadlines: true;
         hearings: true;
-        stages: { include: { tasks: true } };
+        stages: { include: { tasks: { include: { responsibility: { select: { state: true; closedAt: true } } } } } };
         procedureParties: { include: { party: true } };
         memos: true;
       };
@@ -242,8 +243,8 @@ export function MatterDetailTabs({
   const selectedProcId = searchParams.get("procedure");
   const requestedView = searchParams.get("view");
   const view: DossierView = requestedView === "work" || requestedView === "money" || requestedView === "seal" ? requestedView : "archive";
-  const setView = (nextView: DossierView) => replaceDossierLocation({ view: nextView });
-  const setSelectedProcId = (procedure: string) => replaceDossierLocation({ procedure, stage: null, scope: null });
+  const setView = (nextView: DossierView) => updateDossierLocation({ view: nextView });
+  const setSelectedProcId = (procedure: string) => updateDossierLocation({ procedure, stage: null });
   const [addProcOpen, setAddProcOpen] = useState(false);
   const [matterEditorOpen, setMatterEditorOpen] = useState(false);
   const [matterEditorSection, setMatterEditorSection] = useState<MatterEditorSection>("matter");
@@ -306,8 +307,9 @@ export function MatterDetailTabs({
 
   // 默认选中第一个在办程序（若有）
   const currentProcedure: ProcedureItem | null =
-    engagedProcedures.find((p) => p.id === selectedProcId) ??
+    selectedProcId !== null ? engagedProcedures.find((p) => p.id === selectedProcId) ?? null :
     engagedProcedures.find((p) => p.status !== "CONCLUDED") ?? engagedProcedures[0] ?? null;
+  const invalidProcedure = selectedProcId !== null && currentProcedure === null;
   const canEditMatterInfo = canLeadThisMatter;
   const canOpenUnifiedEditor =
     canEditMatterInfo ||
@@ -539,6 +541,8 @@ export function MatterDetailTabs({
         </div>
       ) : null}
 
+      {invalidProcedure ? <p role="alert" className="mt-3 text-sm text-destructive">指定程序不可用。<button type="button" className="ml-2 underline" onClick={() => updateDossierLocation({ procedure: null, stage: null })}>重新选择程序</button></p> : null}
+
       {/* ③ 页签 */}
       <ProcedureWorkflowPanel
         responsibilityNode={responsibilityNode}
@@ -551,6 +555,7 @@ export function MatterDetailTabs({
         templates={templates}
         users={colleagues}
         canManage={canAssociateThisMatter && !isArchived}
+        canWriteTasks={canAssociateThisMatter && !isArchived && allowed("schedule.write")}
         notes={notes}
         timelineEvents={matter.timelineEvents}
         onWriteNote={({ judgment, stageName }) => setProgress({ mode: judgment ? "judgment" : "record", stage: stageName, stageNames: workflowApi.current?.stageNames ?? [] })}
@@ -584,10 +589,13 @@ export function MatterDetailTabs({
         archiveRailTop={<><TeamRailCard matter={matter} canManage={canOwnThisMatter} onManage={() => openMatterEditor("team")} />{conflictNode}</>}
         expresses={expresses}
         onAddLedger={canAssociateThisMatter && currentProcedure ? (type) => setLedgerAdd(type) : undefined}
+        factsNode={<div className="card space-y-3 p-4">
+          <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">事实与来源</h3>{canAddEvidence ? <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEvidenceDocId(null)}>新增要点</button> : null}</div>
+          {evidenceError ? <p role="alert" className="text-sm text-destructive">证据要点读取失败：{evidenceError} <button type="button" className="underline" onClick={() => router.refresh()}>重新加载</button></p> : <EvidenceTimeline key={matter.id} items={evidenceItems} />}
+        </div>}
         materialsActions={<>
           {evidenceError ? <p role="alert" className="text-sm text-destructive">证据要点读取失败：{evidenceError} <button type="button" className="underline" onClick={() => router.refresh()}>重新加载</button></p> : null}
           <div className="flex flex-wrap items-center justify-between gap-2">
-            {!evidenceError ? <EvidenceTimeline key={matter.id} items={evidenceItems} /> : null}
             {allowed("documents.read") ? <MaterialToolsSheet
               key={`${matter.id}:${currentProcedure?.id ?? "unassigned"}`}
               matterId={matter.id}
@@ -665,7 +673,7 @@ export function MatterDetailTabs({
           initialMode={progress.mode}
           initialStage={progress.stage}
           stageNames={progress.stageNames}
-          onAddTask={canAssociateThisMatter && currentProcedure ? () => workflowApi.current?.openAddTask() : undefined}
+          onAddTask={canAssociateThisMatter && !isArchived && allowed("schedule.write") ? () => workflowApi.current?.openAddTask() : undefined}
           onAddDeadline={canAssociateThisMatter && currentProcedure ? () => setDeadlineOpen(true) : undefined}
           onAddHearing={canAssociateThisMatter && currentProcedure ? () => setHearingOpen(true) : undefined}
         />

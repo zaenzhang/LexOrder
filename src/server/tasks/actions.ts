@@ -1,228 +1,153 @@
 "use server";
-import {approvalTransaction} from "@/lib/approvals/service";
-import {changeWorkTx,readWorkRows,responsibilityReady} from "@/server/reminders/responsibility";
-import { roleMutation } from "@/lib/roles/service";
 
+import type { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { approvalTransaction } from "@/lib/approvals/service";
 import { requireSession } from "@/lib/auth/session";
-import { audit } from "@/server/audit";
-import { createNotification } from "@/server/notifications/create";
-import { assertMatterWritable } from "@/lib/archive/guard";
-import { assertCanAssociateMatter } from "@/lib/permissions";
-import { matterHrefById, revalidateMatter } from "@/server/matters/route";
-import { recordTimelineEvent } from "@/server/timeline/record";
 import { ActionError } from "@/lib/action-error";
+import { matterHref } from "@/lib/matters/route";
+import { auditTx } from "@/server/audit";
+import { assertLiveAssignees } from "@/server/intakes/workflow";
+import { revalidateMatter } from "@/server/matters/route";
+import { changeWorkTx } from "@/server/reminders/responsibility";
+import { recordTimelineEvent } from "@/server/timeline/record";
+import { assertTaskMatterAccess, getTaskForChange } from "./workflow-service";
 
 const taskCreateSchema = z.object({
   matterId: z.string().cuid(),
-  title: z.string().min(1, "事项标题必填").max(200),
+  title: z.string().trim().min(1, "任务标题必填").max(200),
   description: z.string().max(2000).optional().or(z.literal("")),
   assigneeId: z.string().cuid().optional().or(z.literal("")),
   dueAt: z.coerce.date().optional(),
   priority: z.coerce.number().int().min(0).max(2).default(0),
   stageId: z.string().cuid().optional().or(z.literal(""))
 });
-
-const taskUpdateSchema = taskCreateSchema.extend({
-  id: z.string().cuid()
-});
+const taskUpdateSchema = taskCreateSchema.extend({ id: z.string().cuid(), revision: z.number().int().nonnegative() });
 
 export type TaskCreateInput = z.infer<typeof taskCreateSchema>;
 export type TaskUpdateInput = z.infer<typeof taskUpdateSchema>;
 
-async function assertTaskStage(matterId: string, stageId?: string) {
+async function assertTaskStage(db: Prisma.TransactionClient, matterId: string, stageId?: string) {
   if (!stageId) return;
-  const stage = await prisma.matterStage.findFirst({
-    where: { id: stageId, procedure: { matterId } },
-    select: { id: true }
-  });
-  if (!stage) throw new ActionError("阶段不存在或不属于当前案件");
+  const stage = await db.matterStage.findFirst({ where: { id: stageId, procedure: { matterId } }, select: { id: true } });
+  if (!stage) throw new ActionError("环节不存在或不属于当前事项");
+}
+
+async function refreshTasks(matterId: string) {
+  await revalidateMatter(matterId);
+  revalidatePath("/schedule");
+  revalidatePath("/dashboard");
 }
 
 export async function createTask(input: TaskCreateInput) {
   const session = await requireSession("schedule.write");
   const data = taskCreateSchema.parse(input);
-  await assertCanAssociateMatter(session.user.id, data.matterId);
-  await assertMatterWritable(data.matterId);
-  await assertTaskStage(data.matterId, data.stageId);
-
-  const created = await roleMutation(session.user, "schedule.write", async roleDb => roleDb.task.create({
-    data: {
-      matterId: data.matterId,
-      title: data.title,
-      description: data.description || null,
-      assigneeId: data.assigneeId || null,
-      dueAt: data.dueAt,
-      priority: data.priority,
-      stageId: data.stageId || null
+  const created = await approvalTransaction(async db => {
+    const { matter } = await assertTaskMatterAccess(db, session.user.id, data.matterId, "write");
+    await assertTaskStage(db, matter.id, data.stageId);
+    const assigneeId = data.assigneeId || matter.ownerId;
+    if (![matter.ownerId, ...matter.members.map(member => member.userId)].includes(assigneeId)) {
+      throw new ActionError("请先将责任人加入本事项团队");
     }
-  }));
-
-  await audit({
-    userId: session.user.id,
-    action: "TASK_CREATE",
-    targetType: "Task",
-    targetId: created.id,
-    detail: { matterId: data.matterId, title: created.title }
-  });
-
-  // v0.43 项4：写入案件动态时间线
-  await roleMutation(session.user, "schedule.write", async roleDb => recordTimelineEvent(roleDb, {
-      matterId: data.matterId,
-      eventType: "TASK_ADDED",
-      title: `新增事项：${created.title}`,
-      occurredAt: new Date(),
-      refType: "Task",
-      refId: created.id
-    }));
-
-  // 通知被指派人（非创建者本人时）
-  if (data.assigneeId && data.assigneeId !== session.user.id) {
-    await createNotification({
-      userId: data.assigneeId,
-      type: "TASK_ASSIGNED",
-      title: "您有新事项",
-      content: `事项「${created.title}」已指派给您`,
-      href: await matterHrefById(data.matterId),
-      refType: "Task",
-      refId: created.id
+    await assertLiveAssignees(db, [assigneeId]);
+    const task = await db.task.create({
+      data: {
+        matterId: matter.id, title: data.title, description: data.description || null,
+        assigneeId, dueAt: data.dueAt, priority: data.priority, stageId: data.stageId || null
+      }
     });
-  }
-
-  await revalidateMatter(data.matterId);
+    await auditTx(db, {
+      userId: session.user.id, action: "TASK_CREATE", targetType: "Task", targetId: task.id,
+      detail: { matterId: matter.id, title: task.title }
+    });
+    await recordTimelineEvent(db, { matterId: matter.id, eventType: "TASK_ADDED", title: `新增事项：${task.title}`, refType: "Task", refId: task.id });
+    if (assigneeId !== session.user.id) {
+      await db.notification.create({
+        data: {
+          userId: assigneeId, type: "TASK_ASSIGNED", title: "您有新事项", content: `事项「${task.title}」已指派给您`,
+          href: matterHref(matter), refType: "Task", refId: task.id
+        }
+      });
+    }
+    return task;
+  });
+  await refreshTasks(created.matterId);
   return { ok: true, id: created.id };
 }
 
 export async function updateTask(input: TaskUpdateInput) {
   const session = await requireSession("schedule.write");
   const data = taskUpdateSchema.parse(input);
-  const current = await prisma.task.findUnique({
-    where: { id: data.id },
-    select: { matterId: true, assigneeId: true }
-  });
-  if (!current || current.matterId !== data.matterId) throw new ActionError("事项不存在或不属于当前案件");
-  await assertCanAssociateMatter(session.user.id, current.matterId);
-  await assertMatterWritable(current.matterId);
-  await assertTaskStage(current.matterId, data.stageId);
-  if(await responsibilityReady(prisma)&&data.assigneeId!==current.assigneeId)throw new ActionError("变更责任人请从事项责任面板发起交接，接收后生效");
-  const { id, matterId, ...rest } = data;
-
-  await roleMutation(session.user, "schedule.write", async roleDb => roleDb.task.update({
-    where: { id, matterId: current.matterId },
-    data: {
-      title: rest.title,
-      description: rest.description || null,
-      assigneeId: rest.assigneeId || null,
-      dueAt: rest.dueAt,
-      priority: rest.priority,
-      stageId: rest.stageId || null
+  const matterId = await approvalTransaction(async db => {
+    const task = await getTaskForChange(db, session.user.id, data.id);
+    if (task.matterId !== data.matterId) throw new ActionError("任务不存在或不属于当前事项");
+    if (task.responsibility.revision !== data.revision) throw new ActionError("任务已变化，请刷新后重试");
+    if (task.responsibility.state !== "OPEN") throw new ActionError("任务已结束，请先重开");
+    if (data.assigneeId !== undefined && data.assigneeId !== task.responsibility.assigneeId) {
+      throw new ActionError("变更责任人请从事项责任面板发起交接，接收后生效");
     }
-  }));
-
-  await audit({
-    userId: session.user.id,
-    action: "TASK_UPDATE",
-    targetType: "Task",
-    targetId: id
+    if (data.dueAt !== undefined && data.dueAt.getTime() !== task.dueAt?.getTime()) {
+      throw new ActionError("任务安排改期请从责任操作填写新日期和原因");
+    }
+    await assertTaskStage(db, task.matterId, data.stageId);
+    await db.task.update({
+      where: { id: task.id, matterId: task.matterId },
+      data: {
+        title: data.title, description: data.description || null, priority: data.priority,
+        ...(data.stageId !== undefined ? { stageId: data.stageId || null } : {})
+      }
+    });
+    await db.workResponsibility.update({ where: { id: task.responsibility.id }, data: { revision: { increment: 1 } } });
+    await auditTx(db, {
+      userId: session.user.id, action: "TASK_UPDATE", targetType: "Task", targetId: task.id,
+      detail: { previousRevision: data.revision }
+    });
+    return task.matterId;
   });
-
-  await revalidateMatter(matterId);
+  await refreshTasks(matterId);
   return { ok: true };
 }
 
+async function completeTaskTx(db: Prisma.TransactionClient, userId: string, id: string, reason: string) {
+  const task = await getTaskForChange(db, userId, id);
+  // Even a completed replay first checks the current actor, membership and archive state.
+  if (task.responsibility.state === "DONE") return task.matterId;
+  if (task.responsibility.state === "CANCELLED") throw new ActionError("任务已取消，不能作为已办结处理；如需继续办理请先重开");
+  await changeWorkTx(db, userId, { id: task.responsibility.id, revision: task.responsibility.revision, action: "COMPLETE", reason });
+  return task.matterId;
+}
+
+/** Existing task buttons complete work; reopening always requires an explicit reason. */
 export async function toggleTaskCompleted(id: string) {
   const session = await requireSession("schedule.write");
-  const current = await prisma.task.findUnique({ where: { id } });
-  if (!current) return { ok: false };
-  await assertCanAssociateMatter(session.user.id, current.matterId);
-  await assertMatterWritable(current.matterId);
-
-  if(await responsibilityReady(prisma)){
-    if(current.completed)throw new ActionError("重新办理请从事项责任面板填写原因");
-    await approvalTransaction(async db=>{const w=(await readWorkRows(db)).find(w=>w.kind==='Task'&&w.targetId===id);if(!w)throw new ActionError('事项责任缺失');await changeWorkTx(db,session.user.id,{id:w.id,revision:w.revision,action:'COMPLETE',reason:'经办通过完成操作确认已办结'});});
-    await revalidateMatter(current.matterId);return {ok:true};
-  }
-  const next = !current.completed;
-  await roleMutation(session.user, "schedule.write", async roleDb => roleDb.task.update({
-    where: { id },
-    data: {
-      completed: next,
-      completedAt: next ? new Date() : null
-    }
-  }));
-
-  await audit({
-    userId: session.user.id,
-    action: next ? "TASK_COMPLETE" : "TASK_REOPEN",
-    targetType: "Task",
-    targetId: id
-  });
-
-  await revalidateMatter(current.matterId);
+  const taskId = z.string().cuid().parse(id);
+  const matterId = await approvalTransaction(db => completeTaskTx(db, session.user.id, taskId, "经办通过完成操作确认已办结"));
+  await refreshTasks(matterId);
   return { ok: true };
 }
 
-/**
- * M-3b（2026-09-20 D 批）：批量人工办结低风险运营任务。仅 Task 类型（期限/开庭/保全天然
- * 不经此入口），逐项走与单条完成相同的责任链（COMPLETE + 原因），必须填写统一处置结果；
- * 单条失败不阻断其余，结果逐条返回。
- */
+/** Each item has its own current authorization and transaction. Input order is preserved. */
 export async function completeTasksBatch(input: { ids: string[]; reason: string }) {
   const session = await requireSession("schedule.write");
-  const reason = input.reason.trim();
-  if (!reason) throw new ActionError("请填写批量办结的统一处置结果或原因");
-  if (!input.ids.length) throw new ActionError("请先选择要办结的任务");
-  // 2026-09-20 P3 修复：超过单批上限直接报错引导分批（此前静默截断到 100，被丢条目无提示）
-  if (input.ids.length > 100) throw new ActionError(`单次批量办结最多 100 条（已选 ${input.ids.length} 条），请分批处理`);
+  const data = z.object({
+    ids: z.array(z.string()).min(1, "请先选择要办结的任务").max(100, "单次批量办结最多 100 条，请分批处理"),
+    reason: z.string().trim().min(1, "请填写批量办结的统一处置结果或原因").max(1000)
+  }).parse(input);
   const results: { id: string; ok: boolean; error?: string }[] = [];
-  for (const id of input.ids) {
+  const changedMatters = new Set<string>();
+  for (const id of data.ids) {
     try {
-      const current = await prisma.task.findUnique({ where: { id } });
-      if (!current) throw new ActionError("任务不存在");
-      if (current.completed) { results.push({ id, ok: true }); continue; }
-      await assertCanAssociateMatter(session.user.id, current.matterId);
-      await assertMatterWritable(current.matterId);
-      if (await responsibilityReady(prisma)) {
-        await approvalTransaction(async db => {
-          const w = (await readWorkRows(db)).find(w => w.kind === "Task" && w.targetId === id);
-          if (!w) throw new ActionError("事项责任缺失");
-          await changeWorkTx(db, session.user.id, { id: w.id, revision: w.revision, action: "COMPLETE", reason });
-        });
-      } else {
-        await roleMutation(session.user, "schedule.write", async roleDb => roleDb.task.update({
-          where: { id },
-          data: { completed: true, completedAt: new Date() }
-        }));
-      }
-      await audit({ userId: session.user.id, action: "TASK_COMPLETE", targetType: "Task", targetId: id, detail: { batch: true, reason } });
+      const taskId = z.string().cuid("任务标识无效").parse(id);
+      const matterId = await approvalTransaction(db => completeTaskTx(db, session.user.id, taskId, data.reason));
+      changedMatters.add(matterId);
       results.push({ id, ok: true });
-    } catch (e) {
-      results.push({ id, ok: false, error: e instanceof Error ? e.message : "失败" });
+    } catch (error) {
+      results.push({ id, ok: false, error: error instanceof Error ? error.message : "任务办结失败" });
     }
   }
+  for (const matterId of changedMatters) await revalidateMatter(matterId);
   revalidatePath("/schedule");
+  revalidatePath("/dashboard");
   return { ok: true, results };
-}
-
-export async function deleteTask(id: string) {
-  if(await responsibilityReady(prisma))throw new ActionError("请在事项责任面板取消任务并填写原因，原记录保留");
-  const session = await requireSession("schedule.write");
-  const current = await prisma.task.findUnique({ where: { id } });
-  if (!current) return { ok: false };
-  await assertCanAssociateMatter(session.user.id, current.matterId);
-  await assertMatterWritable(current.matterId);
-
-  await roleMutation(session.user, "schedule.write", async roleDb => roleDb.task.delete({ where: { id } }));
-
-  await audit({
-    userId: session.user.id,
-    action: "TASK_DELETE",
-    targetType: "Task",
-    targetId: id
-  });
-
-  await revalidateMatter(current.matterId);
-  return { ok: true };
 }

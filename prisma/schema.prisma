@@ -445,6 +445,9 @@ model RolePermission {
 }
 
 model User {
+  taskDependenciesCreated TaskDependency[] @relation("TaskDependencyCreator")
+  taskWaitingsCreated TaskWaiting[] @relation("TaskWaitingCreator")
+  taskWaitingsEnded TaskWaiting[] @relation("TaskWaitingEnder")
   contextAuthored MatterContextRecord[] @relation("ContextAuthor")
   contextConfirmed MatterContextRecord[] @relation("ContextConfirmer")
   requestedParseRuns DocumentParseRun[] @relation("ParseRequester")
@@ -1074,6 +1077,9 @@ model MatterStage {
 
 model Task {
   responsibility WorkResponsibility?
+  prerequisites TaskDependency[] @relation("TaskPrerequisites")
+  dependants TaskDependency[] @relation("TaskDependants")
+  waitings TaskWaiting[]
   id          String       @id @default(cuid())
   matterId    String
   matter      Matter       @relation(fields: [matterId], references: [id], onDelete: Cascade)
@@ -1091,6 +1097,40 @@ model Task {
 
   @@index([matterId, completed, dueAt])
   @@index([assigneeId, completed])
+}
+
+model TaskDependency {
+  taskId String
+  task Task @relation("TaskPrerequisites", fields: [taskId], references: [id], onDelete: Restrict)
+  prerequisiteId String
+  prerequisite Task @relation("TaskDependants", fields: [prerequisiteId], references: [id], onDelete: Restrict)
+  createdById String
+  createdBy User @relation("TaskDependencyCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+
+  @@id([taskId, prerequisiteId])
+  @@index([prerequisiteId])
+}
+
+model TaskWaiting {
+  // The client keeps this identity for a single start request, including retries.
+  id String @id
+  taskId String
+  task Task @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  waitingFor String
+  expectedResult String
+  initialCheckAt DateTime
+  nextCheckAt DateTime
+  startedAt DateTime @default(now())
+  createdById String
+  createdBy User @relation("TaskWaitingCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  endedAt DateTime?
+  endedById String?
+  endedBy User? @relation("TaskWaitingEnder", fields: [endedById], references: [id], onDelete: Restrict)
+  result String?
+
+  @@index([taskId, startedAt])
+  @@index([endedAt, nextCheckAt])
 }
 
 model Hearing {

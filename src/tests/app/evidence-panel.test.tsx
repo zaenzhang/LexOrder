@@ -77,7 +77,6 @@ describe("事实日期组件增量", () => {
     const unknown = { ...item, title: "时间未明的要点" };
     const restricted = { ...earlier, id: "restricted", title: "不得展示的合成日期", restricted: true, eventDate: { ...earlier.eventDate!, text: "受限时间原文" } };
     const view = render(<EvidenceTimeline items={[later, restricted, unknown, earlier]} />);
-    fireEvent.click(screen.getByRole("button", { name: "事实时间线" }));
     const dated = screen.getByRole("region", { name: "已记录日期" });
     expect(within(dated).getAllByRole("button", { name: /^查看与编辑要点：/ }).map(button => button.getAttribute("aria-label"))).toEqual(["查看与编辑要点：早期事实", "查看与编辑要点：晚期主张"]);
     expect(within(dated).getByText("2020-01-01 至 2020-12-31")).toBeInTheDocument();
@@ -194,7 +193,6 @@ describe("证据要点组件交互", () => {
       locationLabel: "第 2 页", originalUrl: "/api/documents/cdocume000000000000000000001/download?inline=1#page=2",
       previewable: false, text: "用于返回路径验收的合成原文", legacy: false, historicalParse: false });
     render(view === "timeline" ? <EvidenceTimeline items={[item]} /> : <EvidencePoints items={[item]} />);
-    if (view === "timeline") fireEvent.click(screen.getByRole("button", { name: "事实时间线" }));
     const source = screen.getByRole("button", { name: /支持 · 合成合同.pdf/ });
     source.focus();
     fireEvent.click(source);
@@ -202,7 +200,7 @@ describe("证据要点组件交互", () => {
     fireEvent.keyDown(preview, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "合成合同.pdf" })).not.toBeInTheDocument());
     await waitFor(() => expect(source).toHaveFocus());
-    if (view === "timeline") expect(screen.getByRole("dialog", { name: "事项事实时间线" })).toBeInTheDocument();
+    if (view === "timeline") expect(screen.getByRole("region", { name: "时间未明" })).toBeVisible();
 
     fireEvent.click(source);
     await screen.findByRole("dialog", { name: "合成合同.pdf" });

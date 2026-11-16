@@ -69,7 +69,8 @@ const words: Record<string, string> = {
   SCHEDULER: "调度", STARTED: "已启动",
   PURGE: "清理", PURGED: "已清理", ABANDON: "放弃", EDIT: "编辑", SOURCE: "来源",
   OPEN: "打开", LEGAL: "法律", MCP: "MCP", CONFIG: "配置", OPERATION: "操作",
-  RESULT: "结果", CONTEXT: "上下文"
+  RESULT: "结果", CONTEXT: "上下文",
+  DEPENDENCIES: "前置任务", CHANGE: "变更", WAITING: "外部等待", START: "开始", FINISH: "结束", RESCHEDULE: "改期"
 };
 export function auditActionLabel(code: string): string {
   const parts = code.split("_");
