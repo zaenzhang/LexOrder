@@ -24,7 +24,7 @@ import { contactRoleLabels } from "./info-panel";
 import { MatterArchive, TeamRailCard } from "./matter-archive";
 import { FinancePanel } from "./finance-panel";
 import { ImportantItemDialog } from "./procedure-content";
-import { ProcedureWorkflowPanel } from "./procedure-workflow-panel";
+import { ProcedureWorkflowPanel, MatterPreservationContent } from "./procedure-workflow-panel";
 import { updateDossierLocation, type DossierView } from "@/lib/matters/dossier-location";
 import { matterHref } from "@/lib/matters/route";
 import { matterListReturnHref } from "@/lib/matters/list-location";
@@ -37,6 +37,8 @@ import { ApprovalsPanel } from "./approvals-panel";
 import type { SealContractItem, ExpressItem } from "./info-extras";
 import { AddDeadlineDialog, AddHearingDialog, AddProcedureSheet } from "./procedure-forms";
 import { deleteProcedure } from "@/server/procedures/actions";
+import { procedureStateLabel } from "@/lib/procedure-status";
+import { ProcedureStatusActions } from "./procedure-status-actions";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LifecycleActions } from "./lifecycle-actions";
 import { AddBillingSheet } from "./finance-forms";
@@ -176,6 +178,7 @@ export function MatterDetailTabs({
   folders,
   templates,
   colleagues,
+  currentUserId,
   currentUserRole,
   rolePermissions,
   canAssociateThisMatter,
@@ -203,6 +206,7 @@ export function MatterDetailTabs({
   folderDocuments: FolderDocument[];
   templates: TemplateSummary[];
   colleagues: PresUserOption[];
+  currentUserId: string;
   currentUserRole: string | null;
   rolePermissions?: RoleGrant[];
   canAssociateThisMatter: boolean;
@@ -249,7 +253,7 @@ export function MatterDetailTabs({
   const requestedView = searchParams.get("view");
   const view: DossierView = requestedView === "work" || requestedView === "money" || requestedView === "seal" ? requestedView : "archive";
   const setView = (nextView: DossierView) => updateDossierLocation({ view: nextView });
-  const setSelectedProcId = (procedure: string) => updateDossierLocation({ procedure, stage: null });
+  const setSelectedProcId = (procedure: string | null) => updateDossierLocation({ procedure, stage: null, task: null });
   const [addProcOpen, setAddProcOpen] = useState(false);
   const [matterEditorOpen, setMatterEditorOpen] = useState(false);
   const [matterEditorSection, setMatterEditorSection] = useState<MatterEditorSection>("matter");
@@ -359,8 +363,10 @@ export function MatterDetailTabs({
   function handleDeleteProcedure(id: string) {
     startTransition(async () => {
       try {
-        await deleteProcedure(id);
+        const result = await deleteProcedure(id);
+        if (!result.ok) { toast.error("程序不存在或已变化"); return; }
         toast.success("程序已删除");
+        if (new URLSearchParams(window.location.search).get("procedure") === id) setSelectedProcId(null);
         router.refresh();
       } catch (err) {
         toast.error("删除失败", { description: actionErrorMessage(err) });
@@ -368,14 +374,10 @@ export function MatterDetailTabs({
     });
   }
 
-  const engagedProcedures = matter.procedures
-    .filter((p) => p.engagement === "ENGAGED")
-    .sort((a, b) => a.order - b.order);
+  const engagedProcedures = [...matter.procedures].sort((a, b) => a.order - b.order);
 
-  // 默认选中第一个在办程序（若有）
-  const currentProcedure: ProcedureItem | null =
-    selectedProcId !== null ? engagedProcedures.find((p) => p.id === selectedProcId) ?? null :
-    engagedProcedures.find((p) => p.status !== "CONCLUDED") ?? engagedProcedures[0] ?? null;
+  // A missing selection means the whole matter; viewing does not select a legal state.
+  const currentProcedure: ProcedureItem | null = selectedProcId !== null ? engagedProcedures.find((p) => p.id === selectedProcId) ?? null : null;
   const invalidProcedure = selectedProcId !== null && currentProcedure === null;
   const canEditMatterInfo = canLeadThisMatter;
   const canOpenUnifiedEditor =
@@ -383,8 +385,11 @@ export function MatterDetailTabs({
     canOwnThisMatter ||
     Boolean(currentProcedure && canAssociateThisMatter);
   const isArchived = matter.status === "ARCHIVED";
+  const isAssociated = matter.ownerId === currentUserId || matter.members.some(member => member.userId === currentUserId);
+  const canWriteSchedule = isAssociated && allowed("schedule.write") && !isArchived;
+  const canWriteMaterials = isAssociated && allowed("documents.write") && !isArchived;
   // 已归档案件只读：不再提供添加记录、上传材料与新增程序入口
-  const canWriteRecords = canAssociateThisMatter && allowed("schedule.write") && !isArchived;
+  const canWriteRecords = canWriteSchedule;
 
   // 顶栏主操作 = 添加记录（＋记录 · 沟通）
   useTopbarAction(
@@ -394,7 +399,7 @@ export function MatterDetailTabs({
 
   // 当前选中程序的文档
   const procDocs = documents
-        .filter((d) => !d.procedureId || d.procedureId === currentProcedure?.id || !engagedProcedures.some(p => p.id === d.procedureId))
+        .filter((d) => !currentProcedure || d.procedureId === currentProcedure.id)
         .map((d) => ({
           id: d.id,
           name: d.name,
@@ -517,7 +522,7 @@ export function MatterDetailTabs({
             </div>
           </div>
           <div className="ctx-actions">
-            {canAssociateThisMatter && allowed("documents.write") && !isArchived ? (
+            {canWriteMaterials ? (
               <button type="button" className="btn btn-secondary btn-sm" disabled={invalidProcedure} onClick={() => workflowApi.current?.openUpload()}>
                 <Upload />
                 上传材料
@@ -544,7 +549,18 @@ export function MatterDetailTabs({
         <div className="dos-procs-h">
           <span className="t">程序</span>
         </div>
-        <div className="dos-procs-list" role="tablist">
+        <div className="dos-procs-list" role="tablist" aria-label="案件范围">
+          <div className={cn("dos-proc", selectedProcId === null && searchParams.get("stage") !== "unassigned" && "on")}>
+            <button type="button" role="tab" aria-selected={selectedProcId === null && searchParams.get("stage") !== "unassigned"} className="dos-proc-main" onClick={() => setSelectedProcId(null)}>
+              <span className="top"><span className="nm">全案</span><span className="badge b-white">{matterStatusLabel[matter.status]}</span></span>
+              <span className="ag">全部程序与事项级内容</span>
+            </button>
+          </div>
+          <div className={cn("dos-proc", selectedProcId === null && searchParams.get("stage") === "unassigned" && "on")}>
+            <button type="button" role="tab" aria-selected={selectedProcId === null && searchParams.get("stage") === "unassigned"} className="dos-proc-main" onClick={() => updateDossierLocation({ procedure: null, stage: "unassigned", task: null, view: "work" })}>
+              <span className="nm">未归属</span><span className="ag">事项材料与事项级任务</span>
+            </button>
+          </div>
           {engagedProcedures.map((procedure) => {
             const active = currentProcedure?.id === procedure.id;
             const label = procLabel(procedure);
@@ -553,9 +569,9 @@ export function MatterDetailTabs({
               <div key={procedure.id} className={cn("dos-proc", active && "on")}>
                 <button type="button" role="tab" aria-selected={active} className="dos-proc-main" onClick={() => setSelectedProcId(procedure.id)}>
                   <span className="top">
-                    <span className="nm">{label}</span>
+                    <span className="nm">{label}{procedure.engagement === "INFORMATIONAL" ? " · 仅信息" : ""}</span>
                     <span className={cn("badge", procedure.status === "CONCLUDED" ? "b-slate" : procedure.status === "IN_PROGRESS" ? "b-teal" : "b-white")} style={{ fontSize: 10 }}>
-                      {PROC_STATUS_LABEL[procedure.status] ?? procedure.status}
+                      {procedureStateLabel(procedure)}
                     </span>
                   </span>
                   {categoryKind === "litigation" ? (
@@ -572,7 +588,7 @@ export function MatterDetailTabs({
                     </>
                   )}
                 </button>
-                {canLeadThisMatter ? (
+                {canLeadThisMatter && canWriteSchedule ? (
                   <button
                     type="button"
                     className="dos-proc-del"
@@ -585,17 +601,18 @@ export function MatterDetailTabs({
                     <X className="h-3 w-3" />
                   </button>
                 ) : null}
+                {canWriteSchedule && active ? <ProcedureStatusActions procedure={procedure} label={label} /> : null}
               </div>
             );
           })}
-          {canAssociateThisMatter && !isArchived ? (
+          {canWriteSchedule ? (
             <button type="button" className="dos-proc add" onClick={() => setAddProcOpen(true)}>
               <Plus className="h-4 w-4" />
               <span>新增程序</span>
-              <span className="t-xs t-mute">二审、执行、保全等</span>
+              <span className="t-xs t-mute">类型、案号分别登记</span>
             </button>
           ) : null}
-          {engagedProcedures.length === 0 && !(canAssociateThisMatter && !isArchived) ? <span className="t-xs t-mute">暂无程序</span> : null}
+          {engagedProcedures.length === 0 && !canWriteSchedule ? <span className="t-xs t-mute">暂无程序</span> : null}
         </div>
       </section>
 
@@ -617,14 +634,15 @@ export function MatterDetailTabs({
         matter={{ id: matter.id, internalCode: matter.internalCode, title: matter.title, category: matter.category }}
         procedure={currentProcedure}
         documents={procDocs}
-        preservationCases={preservationCases}
         folders={folders}
         templates={templates}
         users={colleagues}
-        taskUsers={colleagues.filter(user => user.id === matter.ownerId || matter.members.some(member => member.userId === user.id))}
         canManage={canAssociateThisMatter && !isArchived}
         canWriteRecords={canWriteRecords}
-        canWriteTasks={canAssociateThisMatter && !isArchived && allowed("schedule.write")}
+        canWriteTasks={canWriteSchedule}
+        canWriteMaterials={canWriteMaterials}
+        canReadSchedule={allowed("schedule.read")}
+        allProcedures={matter.procedures}
         invalidProcedure={invalidProcedure}
         notes={notes}
         timelineEvents={matter.timelineEvents}
@@ -634,6 +652,7 @@ export function MatterDetailTabs({
         viewCounts={{ seal: sealContracts.filter((sc) => sc.status === "PENDING").length }}
         waiting={waiting}
         archiveNode={<>
+          {!invalidProcedure && !currentProcedure && (preservationCases.length > 0 || canAssociateThisMatter) ? <MatterPreservationContent matter={{ id: matter.id, internalCode: matter.internalCode, title: matter.title, category: matter.category }} cases={preservationCases} users={colleagues} canManage={canAssociateThisMatter && !isArchived} /> : null}
           {briefNode ? <div className="card dos-facts">{briefNode}</div> : null}
           <MatterArchive
             matter={matter}
@@ -748,9 +767,9 @@ export function MatterDetailTabs({
           initialMode={progress.mode}
           initialStage={progress.stage}
           stageNames={progress.stageNames}
-          onAddTask={canAssociateThisMatter && !isArchived && allowed("schedule.write") ? () => workflowApi.current?.openAddTask() : undefined}
-          onAddDeadline={canAssociateThisMatter && currentProcedure ? () => setDeadlineOpen(true) : undefined}
-          onAddHearing={canAssociateThisMatter && currentProcedure ? () => setHearingOpen(true) : undefined}
+          onAddTask={canWriteSchedule ? () => workflowApi.current?.openAddTask() : undefined}
+          onAddDeadline={canWriteSchedule && currentProcedure ? () => setDeadlineOpen(true) : undefined}
+          onAddHearing={canWriteSchedule && currentProcedure ? () => setHearingOpen(true) : undefined}
         />
       ) : null}
       {currentProcedure && deadlineOpen ? (
@@ -772,7 +791,7 @@ export function MatterDetailTabs({
         />
       ) : null}
 
-      {canAssociateThisMatter && (
+      {canWriteSchedule && (
         <AddProcedureSheet
           open={addProcOpen}
           onOpenChange={setAddProcOpen}
@@ -780,7 +799,7 @@ export function MatterDetailTabs({
           category={matter.category}
           nextOrder={matter.procedures.length + 1}
           colleagues={colleagues}
-          existingTypes={matter.procedures.map(p => p.type)}
+          onCreated={id => { updateDossierLocation({ procedure: id, stage: null, task: null, view: "work", workPane: "materials" }); router.refresh(); }}
         />
       )}
       {canOpenUnifiedEditor && (
@@ -862,7 +881,6 @@ function deleteProcedureWarning(procedure: ProcedureItem, label: string): string
   );
 }
 
-const PROC_STATUS_LABEL: Record<string, string> = { PENDING: "未开始", IN_PROGRESS: "进行中", CONCLUDED: "已结" };
 
 
 /**

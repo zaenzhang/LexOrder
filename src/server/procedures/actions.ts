@@ -39,6 +39,7 @@ import { shDayKey, civilFromKey, civilKey } from "@/lib/ui/sh-time";
 import { computeDeadlineDate } from "@/lib/deadline-rules";
 import { adjustDeadlineForHolidays } from "@/lib/calendar/holidays";
 import { ActionError } from "@/lib/action-error";
+import { assertActualProcedureConclusion } from "./lifecycle";
 
 function emptyToNull<T extends Record<string, unknown>>(obj: T): T {
   const out: Record<string, unknown> = {};
@@ -56,11 +57,11 @@ export async function addProcedure(input: ProcedureCreateInput) {
   assertAgencyAllowedForProcedure(data.handlingAgency, data.type);
 
   const created = await prisma.$transaction(async tx => {
-    await lockWritableMatters(tx, session.user, "schedule.write", [data.matterId]);
+    const [matter] = await lockWritableMatters(tx, session.user, "schedule.write", [data.matterId]);
+    if (data.engagement === "ENGAGED" && matter.status === "CLOSED") throw new ActionError("案件已结案，请先重新开启案件再新增受托程序");
     const lastOrder = await tx.matterProcedure.findFirst({
       where: { matterId: data.matterId }, orderBy: { order: "desc" }, select: { order: true }
     });
-    const workflow = await responsibilityReady(tx);
     const procedure = await tx.matterProcedure.create({ data: {
       matterId: data.matterId,
       type: data.type,
@@ -75,7 +76,7 @@ export async function addProcedure(input: ProcedureCreateInput) {
       acceptedAt: data.acceptedAt,
       leadLawyerId: data.isExternalLead ? null : (data.leadLawyerId || null),
       isExternalLead: data.isExternalLead,
-      status: data.engagement === "INFORMATIONAL" ? "CONCLUDED" : workflow?"PENDING":"IN_PROGRESS"
+      status: "PENDING"
     } });
     await recordTimelineEvent(tx, {
       matterId: data.matterId,
@@ -97,7 +98,7 @@ export async function addProcedure(input: ProcedureCreateInput) {
 export async function updateProcedure(input: ProcedureUpdateInput) {
   const session = await requireSession("schedule.write");
   const data = procedureUpdateSchema.parse(input);
-  const { id, ...rest } = data;
+  const { id, expectedUpdatedAt, changeReason, ...rest } = data;
 
   const existing = await prisma.matterProcedure.findUnique({
     where: { id },
@@ -109,13 +110,15 @@ export async function updateProcedure(input: ProcedureUpdateInput) {
   // 首次进入办理时先核合同覆盖与动态冲突复核，条件更新带原状态；门禁失败零写入，
   // 重试不会因状态已落库而跳过首次启动判断。内置岗位与自定义角色走同一事务语义。
   const updated = await prisma.$transaction(async db => {
-    await lockWritableMatters(db, session.user, "schedule.write", [existing.matterId]);
+    const [matter] = await lockWritableMatters(db, session.user, "schedule.write", [existing.matterId]);
     await db.$queryRaw`SELECT id FROM "MatterProcedure" WHERE id = ${id} FOR UPDATE`;
     const current = await db.matterProcedure.findUnique({ where: { id }, select: {
-      matterId: true, status: true, engagement: true, type: true, jurisdiction: true, handlingAgency: true
+      matterId: true, status: true, engagement: true, type: true, jurisdiction: true, handlingAgency: true,
+      updatedAt: true, acceptedAt: true, concludedAt: true, outcome: true, outcomeNote: true
     } });
     if (!current) throw new ActionError("程序不存在");
     if (current.matterId !== existing.matterId) throw new ActionError("程序归属已变化，请刷新");
+    if (current.updatedAt.getTime() !== expectedUpdatedAt.getTime()) throw new ActionError("程序已被修改，请刷新后核对；当前输入尚未保存");
     assertAgencyAllowedForProcedure(rest.handlingAgency ?? current.handlingAgency, rest.type ?? current.type);
     const normalizedRest = { ...rest };
     if (rest.jurisdiction !== undefined || rest.handlingAgency !== undefined) {
@@ -123,13 +126,34 @@ export async function updateProcedure(input: ProcedureUpdateInput) {
         rest.handlingAgency ?? current.handlingAgency, rest.jurisdiction ?? current.jurisdiction
       ) ?? "";
     }
-    if (rest.status === "IN_PROGRESS" && current.status !== "IN_PROGRESS" && current.engagement === "ENGAGED" && await responsibilityReady(db)) {
-      await assertProcedureCovered(db, id);
-      await assertMatterReviewCurrent(db, current.matterId);
+    if (rest.status === "PENDING" && current.status !== "PENDING") throw new ActionError("已办理的程序不能改回未开始，请核对实际状态");
+    if (rest.status === "CONCLUDED" && !rest.concludedAt) throw new ActionError("请填写程序实际终结日期");
+    if (rest.concludedAt === null) throw new ActionError("终结日期不能直接清空；恢复办理请使用程序状态动作");
+    if (rest.concludedAt && (rest.status !== undefined ? rest.status !== "CONCLUDED" : current.status !== "CONCLUDED")) throw new ActionError("请通过终结程序动作记录实际终结日期");
+    if (rest.concludedAt) assertActualProcedureConclusion(rest.concludedAt, rest.acceptedAt ?? current.acceptedAt);
+    else if (rest.acceptedAt && current.concludedAt && (rest.status ?? current.status) === "CONCLUDED") assertActualProcedureConclusion(current.concludedAt, rest.acceptedAt);
+    if (rest.status === "IN_PROGRESS" && current.status !== "IN_PROGRESS") {
+      if (current.status === "CONCLUDED" && !changeReason) throw new ActionError(current.engagement === "INFORMATIONAL" && !current.concludedAt ? "请说明核对后的程序状态" : "请说明恢复办理的原因");
+      if (current.engagement === "ENGAGED") {
+        if (matter.status === "CLOSED") throw new ActionError("案件已结案，请先重新开启案件再恢复办理程序");
+        await assertProcedureCovered(db, id);
+        await assertMatterReviewCurrent(db, current.matterId);
+      }
+      normalizedRest.concludedAt = null;
+      // The old conclusion remains in this transition's audit record.
     }
-    const result = await db.matterProcedure.updateMany({ where: { id, status: current.status }, data: emptyToNull(normalizedRest) });
+    const mutation = emptyToNull(normalizedRest) as Prisma.MatterProcedureUpdateManyMutationInput;
+    if (rest.status === "IN_PROGRESS" && current.status === "CONCLUDED") {
+      mutation.outcome = null;
+      mutation.outcomeNote = null;
+    }
+    const result = await db.matterProcedure.updateMany({ where: { id, updatedAt: expectedUpdatedAt }, data: mutation });
     if (result.count === 0) throw new ActionError("程序状态已变化，请刷新后重试");
-    await auditTx(db, { userId: session.user.id, action: "PROCEDURE_UPDATE", targetType: "MatterProcedure", targetId: id });
+    await auditTx(db, { userId: session.user.id, action: "PROCEDURE_UPDATE", targetType: "MatterProcedure", targetId: id,
+      detail: { matterId: current.matterId, fromStatus: current.status, toStatus: rest.status ?? current.status,
+        previousConcludedAt: current.concludedAt?.toISOString() ?? null, previousOutcome: current.outcome,
+        previousOutcomeNote: current.outcomeNote, concludedAt: normalizedRest.concludedAt === undefined ? current.concludedAt?.toISOString() ?? null : normalizedRest.concludedAt?.toISOString() ?? null,
+        reason: changeReason ?? null } });
     return { matterId: current.matterId };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 20000 });
 

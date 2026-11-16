@@ -83,6 +83,9 @@ async function fixture() {
       parseRunId: null, anchorId: null, legacy: false }] } });
   const research = await db.researchRevision.create({ data: { matterId: matter.id, seriesId: randomUUID(), version: 1,
     issueId: issue.id, issueRevisionId: issueRevision.id, question: "合成研究问题", purpose: "合成归档验收", jurisdiction: "合成法域",
+    issueSnapshot: { evidenceItemId: issue.id, matterId: matter.id, revision: 1, revisionId: issueRevision.id,
+      title: issueRevision.title, content: issueRevision.content, kind: "ISSUE", eventDate: { precision: "UNKNOWN", start: null, end: null, text: null },
+      sourceSnapshot: issueRevision.sourceSnapshot, confirmedById: null, confirmedAt: null, capturedAt: new Date().toISOString(), capturedById: user.id },
     relevantDate: "2025-01-01", researchedAt: stamp, scope: "合成有限范围", queryLog: [{ query: "合成查询", result: "已读选定原文" }],
     rule: "合成规则", exceptions: "合成例外", supportingAnalysis: "合成支持分析", opposingAnalysis: "合成反向依据",
     conclusion: "合成有条件结论", unresolved: "原文适用性仍待核对", nextSteps: "人工续查", authorId: user.id,

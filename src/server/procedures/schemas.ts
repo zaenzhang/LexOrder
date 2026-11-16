@@ -41,6 +41,8 @@ export const procedureCreateSchema = z.object({
 
 export const procedureUpdateSchema = z.object({
   id: z.string().cuid(),
+  expectedUpdatedAt: z.coerce.date(),
+  changeReason: z.string().trim().max(500).optional(),
   type: procedureTypeSchema.optional(),
   customLabel: z.string().max(40).optional().or(z.literal("")),
   caseNumber: z.string().max(80).optional().or(z.literal("")),
@@ -49,7 +51,7 @@ export const procedureUpdateSchema = z.object({
   panel: z.string().max(80).optional().or(z.literal("")),
   handler: z.string().max(40).optional().or(z.literal("")),
   acceptedAt: acceptedAtSchema,
-  concludedAt: z.coerce.date().optional(),
+  concludedAt: z.coerce.date().nullable().optional(),
   status: procedureStatusSchema.optional(),
   outcome: procedureOutcomeSchema.optional(),
   outcomeNote: z.string().max(500).optional().or(z.literal(""))

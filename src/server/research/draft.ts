@@ -32,6 +32,9 @@ export function researchDraftSections(view: ResearchRevisionView): { title: stri
         `取得：${law.acquiredOn || "日期未记录"}；${law.acquiredVia || "途径未记录"}\n使用范围：${law.usageScope || "待核实"}`;
     }).join("\n\n") : "未选择固定原文；查询记录中的链接或摘要不能替代全文" },
   ];
+  if (view.issue) fields.splice(1, 0, { title: "采用的争点", text:
+    `${view.issue.title} · 修订 ${view.issue.revision}\n${view.issue.content}\n采用时核对状态：${view.issue.confirmedAt ? `已核对（${shDayKey(view.issue.confirmedAt)}）` : "尚未核对"}\n` +
+    `输入固定时间：${view.issue.capturedAt}\n争点标识：${view.issue.id}` });
   return fields;
 }
 

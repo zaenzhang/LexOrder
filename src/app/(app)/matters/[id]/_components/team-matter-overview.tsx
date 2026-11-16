@@ -4,17 +4,17 @@ import type { getMatterById } from "@/server/matters/actions";
 import { listNotes } from "@/server/notes/actions";
 import { matterStatusLabel, matterCategoryLabel, matterCategoryKind, procedureTypeLabel, litigationStandingLabel } from "@/lib/enums";
 import { avatarTone, matterStatusTone } from "@/lib/ui/moan-tones";
-import { InitialAvatar, ProcedureChain, type ChainNode } from "@/components/patterns/moan";
+import { InitialAvatar } from "@/components/patterns/moan";
+import { Badge } from "@/components/ui/badge";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import { ActionError } from "@/lib/action-error";
 import { requireSession } from "@/lib/auth/session";
 import { matterHref } from "@/lib/matters/route";
 import { hasCustomPermission } from "@/lib/roles/catalog";
+import { procedureStateLabel } from "@/lib/procedure-status";
 
 type Matter = NonNullable<Awaited<ReturnType<typeof getMatterById>>>;
 const date = (value: Date | null) => (value ? formatDate(new Date(value)) : "—");
-const shortDate = (value: Date | null) => (value ? formatDate(new Date(value)).slice(5) : null);
-const PROC_STATUS_LABEL: Record<string, string> = { NOT_STARTED: "未开始", IN_PROGRESS: "进行中", CONCLUDED: "已结", SUSPENDED: "中止" };
 
 /**
  * 团队只读视图（与案件详情同一套墨案版式：案卷头 + 程序栏 + 主栏/侧栏）。
@@ -97,8 +97,9 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
                   <span className="top">
                     <span className="nm">{proc.customLabel ?? procedureTypeLabel[proc.type]}</span>
                     <span className={cn("badge", proc.status === "CONCLUDED" ? "b-slate" : proc.status === "IN_PROGRESS" ? "b-teal" : "b-white")} style={{ fontSize: 10 }}>
-                      {PROC_STATUS_LABEL[proc.status] ?? proc.status}
+                      {procedureStateLabel(proc)}
                     </span>
+                    {proc.engagement === "INFORMATIONAL" && <Badge variant="secondary">信息记录</Badge>}
                   </span>
                   <span className="no">{proc.caseNumber || "案号未登记"}</span>
                   <span className="ag">{proc.handlingAgency || "受理机构未登记"}</span>
@@ -112,13 +113,7 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
       <div className="dos-work">
         <div className="dos-main">
           {matter.procedures.map((proc) => {
-            const doneIdx = proc.stages.filter((s) => s.completedAt).length;
-            const nodes: ChainNode[] = proc.stages.map((s, i) => ({
-              key: s.id,
-              label: s.name,
-              date: shortDate(s.startedAt),
-              state: s.completedAt ? "done" : i === doneIdx && proc.status !== "CONCLUDED" ? "current" : "todo"
-            }));
+            const stages = proc.stages.filter(stage => stage.status === "ACTIVE");
             const upcoming = [
               ...proc.hearings.map((h) => ({ id: h.id, at: h.startsAt, text: `开庭 · ${h.title}`, done: false })),
               ...proc.deadlines.map((d) => ({ id: d.id, at: d.dueAt, text: d.title, done: d.completed }))
@@ -131,12 +126,17 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
                     {proc.customLabel ?? procedureTypeLabel[proc.type]}
                     <span className="t-xs t-mute" style={{ fontWeight: 400 }}>{proc.caseNumber || "案号未登记"}</span>
                   </div>
-                  <span className="t-xs t-mute">已完成 {doneIdx}/{nodes.length}</span>
+                  <span className="t-xs t-mute">{procedureStateLabel(proc)}</span>
                 </div>
                 <div className="panel-body">
-                  {nodes.length > 0 ? <ProcedureChain nodes={nodes} /> : <p className="t-xs t-mute">尚未创建环节</p>}
+                  {stages.length > 0 ? <ul className="space-y-2" aria-label="已记录环节">
+                    {stages.map(stage => <li key={stage.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                      <span>{stage.name}</span>
+                      <span className="text-xs text-muted-foreground">{stage.completedAt ? `已记录完成 · ${date(stage.completedAt)}` : stage.startedAt ? `已记录开始 · ${date(stage.startedAt)}` : "未记录进度"}</span>
+                    </li>)}
+                  </ul> : <p className="t-xs t-mute">尚未创建环节</p>}
                   <div className="mt-3 space-y-1.5">
-                    {upcoming.length === 0 ? (
+                    {!canReadNotes ? <p className="t-xs t-mute">无日程查看权限</p> : upcoming.length === 0 ? (
                       <p className="t-xs t-mute">暂无开庭与期限</p>
                     ) : (
                       upcoming.map((u) => (

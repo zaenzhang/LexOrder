@@ -28,6 +28,7 @@ type TaskWorkPanelProps = {
   createStage?: { id: string; name: string } | null;
   defaultStage?: { id: string; name: string } | null;
   scopeStageIds?: string[] | null;
+  unassignedOnly?: boolean;
   refreshRequest?: number;
   selectedTaskId?: string | null;
   onTaskSelect?: (taskId: string | null, mode?: "push" | "replace") => void;
@@ -35,30 +36,35 @@ type TaskWorkPanelProps = {
 };
 
 /** 全案待办的 Task 入口；不从程序环节投影任务，也不生成平行任务状态。 */
-export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, createStage = null, defaultStage = null, scopeStageIds = null, refreshRequest = 0, selectedTaskId, onTaskSelect, onTaskCreated }: TaskWorkPanelProps) {
+export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, createStage = null, defaultStage = null, scopeStageIds = null, unassignedOnly = false, refreshRequest = 0, selectedTaskId, onTaskSelect, onTaskCreated }: TaskWorkPanelProps) {
   const router = useRouter();
   const [data, setData] = useState<TaskWorkflowWorkspace | null>(null);
   const [error, setError] = useState("");
   const [includeClosed, setIncludeClosed] = useState(false);
+  const [dueWaitingOnly, setDueWaitingOnly] = useState(false);
+  const [observedAt, setObservedAt] = useState(0);
   const [reload, setReload] = useState(0);
   const [creating, setCreating] = useState(false);
   const [creatingStage, setCreatingStage] = useState<{ id: string; name: string } | null>(null);
   const [localTaskId, setLocalTaskId] = useState<string | null>(null);
   const handledCreateRequest = useRef(0);
+  const creatingLocation = useRef("");
   const taskHeading = useRef<HTMLHeadingElement>(null);
   const createButton = useRef<HTMLButtonElement>(null);
   const taskButtons = useRef(new Map<string, HTMLButtonElement>());
   const openedTaskId = useRef<string | null>(null);
   const taskId = selectedTaskId === undefined ? localTaskId : selectedTaskId;
-  const scopedTasks = data?.tasks.filter(task => scopeStageIds === null || Boolean(task.stageId && scopeStageIds.includes(task.stageId))) ?? [];
-  const scopedUntracked = data?.untrackedTasks.filter(task => scopeStageIds === null || Boolean(task.stageId && scopeStageIds.includes(task.stageId))) ?? [];
+  const waitingIsDue = (task: TaskWorkflowWorkspace["tasks"][number]) => task.responsibility.state === "OPEN" && Boolean(task.activeWaiting && new Date(task.activeWaiting.nextCheckAt).getTime() <= observedAt);
+  const inScope = (task: { stageId?: string | null }) => (!unassignedOnly || !task.stageId) && (scopeStageIds === null || Boolean(task.stageId && scopeStageIds.includes(task.stageId)));
+  const scopedTasks = data?.tasks.filter(task => inScope(task) && (!dueWaitingOnly || waitingIsDue(task))) ?? [];
+  const scopedUntracked = dueWaitingOnly ? [] : data?.untrackedTasks.filter(inScope) ?? [];
 
   useEffect(() => {
     let cancelled = false;
     setData(null);
     setError("");
     getTaskWorkspace({ matterId, includeClosed }).then(result => {
-      if (!cancelled) setData(result);
+      if (!cancelled) { setData(result); setObservedAt(Date.now()); }
     }).catch(cause => {
       if (!cancelled) setError(actionErrorMessage(cause) || "任务读取失败，请重试");
     });
@@ -68,6 +74,7 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, cr
   useEffect(() => {
     if (createRequest > 0 && createRequest !== handledCreateRequest.current && canWrite && data?.canWrite) {
       handledCreateRequest.current = createRequest;
+      creatingLocation.current = window.location.href;
       setCreatingStage(createStage);
       setCreating(true);
     }
@@ -82,9 +89,11 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, cr
     openedTaskId.current = id;
     setCreating(false);
     setReload(value => value + 1);
-    if (selectedTaskId === undefined) setLocalTaskId(id);
-    if (onTaskCreated) onTaskCreated(id);
-    else onTaskSelect?.(id);
+    if (window.location.href === creatingLocation.current) {
+      if (selectedTaskId === undefined) setLocalTaskId(id);
+      if (onTaskCreated) onTaskCreated(id);
+      else onTaskSelect?.(id);
+    }
     router.refresh();
   }
 
@@ -103,17 +112,21 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, cr
   return <section className="space-y-3" aria-label="事项任务">
     <div className="flex items-center justify-between gap-3">
       <h3 ref={taskHeading} tabIndex={-1} className="text-sm font-semibold">任务</h3>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Checkbox checked={dueWaitingOnly} onCheckedChange={value => { setObservedAt(Date.now()); setDueWaitingOnly(value === true); }} />
+          仅看待检查
+        </label>
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <Checkbox checked={includeClosed} onCheckedChange={value => setIncludeClosed(value === true)} />
           显示已办结和已取消
         </label>
-        {canWrite && data?.canWrite && <Button ref={createButton} size="sm" onClick={() => { setCreatingStage(defaultStage); setCreating(true); }}><Plus />新建任务</Button>}
+        {canWrite && data?.canWrite && <Button ref={createButton} size="sm" onClick={() => { creatingLocation.current = window.location.href; setCreatingStage(defaultStage); setCreating(true); }}><Plus />新建任务</Button>}
       </div>
     </div>
     {error ? <div role="alert" className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm">
       <span>{error}</span><Button variant="outline" size="sm" onClick={() => setReload(value => value + 1)}>重试</Button>
-    </div> : !data ? <p role="status" className="py-4 text-sm text-muted-foreground">正在读取任务…</p> : scopedTasks.length === 0 ? <p className="py-4 text-sm text-muted-foreground">{scopedUntracked.length ? "没有责任记录完整的任务。" : includeClosed ? "当前范围还没有任务。" : "当前范围没有办理中的任务。"}</p> : <div className="overflow-x-auto rounded-lg border">
+    </div> : !data ? <p role="status" className="py-4 text-sm text-muted-foreground">正在读取任务…</p> : scopedTasks.length === 0 ? <p className="py-4 text-sm text-muted-foreground">{dueWaitingOnly ? "当前范围没有到期的等待检查。" : scopedUntracked.length ? "没有责任记录完整的任务。" : includeClosed ? "当前范围还没有任务。" : "当前范围没有办理中的任务。"}</p> : <div className="overflow-x-auto rounded-lg border">
       <table className="w-full text-left text-sm">
         <thead className="border-b bg-muted/40 text-muted-foreground"><tr>
           <th className="px-3 py-2 font-medium">任务</th>
@@ -132,7 +145,7 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, cr
           </td>
           <td className="px-3 py-3 align-top"><span>{task.responsibility.name}</span>{!task.responsibility.active && <p className="mt-1 text-xs text-destructive">待交接</p>}</td>
           <td className="whitespace-nowrap px-3 py-3 align-top">{task.dueAt ? formatDateTime(task.dueAt) : "未安排"}</td>
-          <td className="max-w-xs px-3 py-3 align-top">{task.activeWaiting ? <><p className="break-words">{task.activeWaiting.waitingFor}</p><p className="mt-1 text-xs text-muted-foreground">检查：{formatDateTime(task.activeWaiting.nextCheckAt)}</p></> : <span className="text-muted-foreground">—</span>}</td>
+          <td className="max-w-xs px-3 py-3 align-top">{task.activeWaiting ? <><p className="break-words">{task.activeWaiting.waitingFor}</p><p className="mt-1 text-xs text-muted-foreground">检查：{formatDateTime(task.activeWaiting.nextCheckAt)}</p>{waitingIsDue(task) && <Badge variant="outline" className="mt-1">待检查</Badge>}</> : <span className="text-muted-foreground">—</span>}</td>
         </tr>)}</tbody>
       </table>
     </div>}

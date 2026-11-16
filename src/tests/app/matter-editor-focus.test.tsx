@@ -18,6 +18,7 @@ vi.mock("@/app/(app)/matters/[id]/_components/matter-archive", () => ({
   TeamRailCard: ({ onManage }: { onManage: () => void }) => <button onClick={onManage}>管理团队</button>,
 }));
 vi.mock("@/app/(app)/matters/[id]/_components/procedure-workflow-panel", () => ({
+  MatterPreservationContent: () => null,
   ProcedureWorkflowPanel: ({ archiveNode, archiveRailTop }: { archiveNode: React.ReactNode; archiveRailTop: React.ReactNode }) => <>{archiveNode}{archiveRailTop}</>,
 }));
 vi.mock("@/app/(app)/matters/[id]/_components/finance-panel", () => ({ FinancePanel: () => null }));
@@ -54,14 +55,18 @@ const props: Props = {
     pendingReceived: 0, refund: 0, cost: 0, commission: 0, invoiced: 0,
   } },
   userOptions: [{ id: "owner", name: "合成主办", role: "PRINCIPAL_LAWYER" }], documents: [], folders: [], folderDocuments: [], templates: [], colleagues: [],
-  currentUserRole: "PRINCIPAL_LAWYER", canAssociateThisMatter: true, canLeadThisMatter: true, canOwnThisMatter: true,
+  currentUserId: "owner", currentUserRole: "PRINCIPAL_LAWYER", canAssociateThisMatter: true, canLeadThisMatter: true, canOwnThisMatter: true,
   sealContracts: [], expresses: [], latestArchive: null, customFieldDefs: [], preservationCases: [], evidenceItems: [], notes: [],
 };
 
 const scrollDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
-beforeEach(() => { Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: vi.fn() }); });
+beforeEach(() => {
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: vi.fn() });
+});
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   if (scrollDescriptor) Object.defineProperty(HTMLElement.prototype, "scrollIntoView", scrollDescriptor);
   else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
 });

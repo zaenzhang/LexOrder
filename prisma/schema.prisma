@@ -3332,6 +3332,8 @@ model ResearchRevision {
   issue EvidenceItem? @relation(fields: [issueId], references: [id], onDelete: Restrict)
   issueRevisionId String?
   issueRevision EvidenceItemRevision? @relation(fields: [issueRevisionId], references: [id], onDelete: Restrict)
+  // Captured by the explicit research save; never fabricated in evidence history on reads.
+  issueSnapshot Json?
   question String
   purpose String
   jurisdiction String

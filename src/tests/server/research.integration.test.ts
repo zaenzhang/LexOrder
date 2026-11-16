@@ -17,11 +17,17 @@ vi.mock("@/lib/storage", () => ({ storage: {
   writeFileAt: vi.fn(async (path: string, bytes: Buffer) => { if (config.failStorage) throw new Error("simulated storage failure"); config.written.set(path, bytes); }),
   deleteFile: vi.fn(async (path: string) => { config.written.delete(path); }),
 } }));
+vi.mock("@/lib/auth/session", () => ({ requireSession: vi.fn(), getSession: vi.fn() }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { prisma as db } from "@/lib/prisma";
-import { checkResearch, listResearch, readResearch, readResearchHistory, readResearchOptions, saveResearch } from "@/server/research/service";
+import { checkResearch, listResearch, readResearch, readResearchHistory, readResearchOptions, readResearchSource, saveResearch } from "@/server/research/service";
 import { createResearchDraft } from "@/server/research/draft";
 import { deliveryApprovalBlock, prepareDeliveryForActor } from "@/server/deliveries/service";
+import { requireSession } from "@/lib/auth/session";
+import { createEvidenceItem, updateEvidenceItem, confirmEvidenceItem } from "@/server/evidence/actions";
+import { assertDocumentDerivationAccess } from "@/server/documents/derivation-access";
+import { buildArchiveProfessionalHistory } from "@/server/archive/professional-history";
 
 const users: string[] = [], matters: string[] = [], clients: string[] = [];
 async function fixture() {
@@ -37,6 +43,11 @@ async function fixture() {
 function input(matterId: string, patch: Partial<ResearchSaveInput> = {}): ResearchSaveInput {
   return { ...emptyResearchContent(), matterId, requestKey: randomUUID(), supersedesId: null, expectedVersion: null,
     question: "旧法期间的合同责任如何判断", ...patch };
+}
+async function createIssue(f: Awaited<ReturnType<typeof fixture>>, withSource = false) {
+  vi.mocked(requireSession).mockResolvedValue({ user: f.actor, expires: "2099-01-01" } as Awaited<ReturnType<typeof requireSession>>);
+  return createEvidenceItem({ matterId: f.matter.id, requestKey: randomUUID(), title: "合成争点", content: "来源中的争点", kind: "ISSUE",
+    ...(withSource ? { sourceDocumentId: f.document.id, sourcePage: 1, sourceRelation: "CONTEXT" as const } : {}) });
 }
 
 describe.skipIf(!config.url)("M3 研究修订、来源与分析稿 / PostgreSQL", () => {
@@ -100,17 +111,58 @@ describe.skipIf(!config.url)("M3 研究修订、来源与分析稿 / PostgreSQL"
     await expect(createResearchDraft(db, f.actor, { matterId: f.matter.id, researchRevisionId: saved.id, requestKey: randomUUID() })).rejects.toThrow("来源");
   });
 
-  it("关联争点绑定确切修订，并继续校验该修订全部来源；越案争点拒绝", async () => {
-    const f = await fixture(), other = await fixture();
-    const issue = await db.evidenceItem.create({ data: { matterId: f.matter.id, title: "合成争点", content: "来源中的争点", kind: "ISSUE", createdById: f.actor.id,
-      revisions: { create: { revision: 1, title: "合成争点", content: "来源中的争点", kind: "ISSUE", editedById: f.actor.id,
-        sourceSnapshot: [{ id: "test", documentId: f.document.id, documentSha256: f.document.sha256, relation: "CONTEXT", location: { kind: "PAGE", page: 1 }, parseRunId: null, anchorId: null, legacy: false }] } } }, include: { revisions: true } });
-    const revision = issue.revisions[0];
-    expect((await readResearchOptions(db, f.actor, f.matter.id)).issues).toContainEqual({ id: issue.id, revisionId: revision.id, revision: 1, title: "合成争点" });
-    await expect(saveResearch(db, other.actor, input(other.matter.id, { issueId: issue.id, issueRevisionId: revision.id }))).rejects.toThrow("争点");
-    const saved = await saveResearch(db, f.actor, input(f.matter.id, { issueId: issue.id, issueRevisionId: revision.id }));
+  it("正常创建、核对及修改争点均可研究，确认时点固定且读取不制造证据历史", async () => {
+    const f = await fixture(), issue = await createIssue(f);
+    const selected = (await readResearchOptions(db, f.actor, f.matter.id)).issues[0];
+    expect(selected).toMatchObject({ id: issue.id, revision: 1, selection: { kind: "CURRENT", confirmedAt: null } });
+    const original = await saveResearch(db, f.actor, input(f.matter.id, { issueSelection: selected.selection }));
+    await confirmEvidenceItem({ evidenceItemId: issue.id, expectedRevision: 1, confirm: true });
+    const confirmed = (await readResearchOptions(db, f.actor, f.matter.id)).issues[0];
+    expect(confirmed.revision).toBe(1); expect(confirmed.selection.confirmedAt).not.toBeNull();
+    await expect(saveResearch(db, f.actor, input(f.matter.id, { issueSelection: selected.selection }))).rejects.toThrow("核对状态已变化");
+    const checkedInput = await saveResearch(db, f.actor, input(f.matter.id, { issueSelection: confirmed.selection }));
+    expect((await readResearch(db, f.actor, f.matter.id, original.id)).issue).toMatchObject({ confirmedAt: null, confirmationChanged: true });
+    expect((await readResearch(db, f.actor, f.matter.id, checkedInput.id)).issue?.confirmedAt).toBe(confirmed.selection.confirmedAt);
+    expect(await db.evidenceItemRevision.count({ where: { evidenceItemId: issue.id } })).toBe(0);
+
+    await updateEvidenceItem({ evidenceItemId: issue.id, expectedRevision: 1, title: "修改后争点", content: "修改后的真实内容", kind: "ISSUE" });
+    const updated = (await readResearchOptions(db, f.actor, f.matter.id)).issues[0];
+    expect(updated).toMatchObject({ revision: 2, title: "修改后争点", selection: { confirmedAt: null } });
+    await expect(saveResearch(db, f.actor, input(f.matter.id, { issueSelection: confirmed.selection }))).rejects.toThrow("争点内容");
+    const latest = await saveResearch(db, f.actor, input(f.matter.id, { issueSelection: updated.selection }));
+    expect((await readResearch(db, f.actor, f.matter.id, latest.id)).issue).toMatchObject({ revision: 2, content: "修改后的真实内容", confirmedAt: null });
+    const oldRevision = await db.evidenceItemRevision.findUniqueOrThrow({ where: { evidenceItemId_revision: { evidenceItemId: issue.id, revision: 1 } } });
+    const historical = await saveResearch(db, f.actor, input(f.matter.id, { issueSelection: { kind: "HISTORICAL", revisionId: oldRevision.id } }));
+    expect((await readResearch(db, f.actor, f.matter.id, historical.id)).issue).toMatchObject({ revision: 1, content: "来源中的争点", confirmedAt: confirmed.selection.confirmedAt });
+    const retained = await saveResearch(db, f.actor, input(f.matter.id, { supersedesId: original.id, expectedVersion: 1,
+      issueSelection: { kind: "SAVED", researchRevisionId: original.id }, conclusion: "按原输入补充分析" }));
+    expect((await readResearch(db, f.actor, f.matter.id, retained.id)).issue).toMatchObject({ revision: 1, confirmedAt: null, changed: true });
+    const frozen = await db.researchRevision.findUniqueOrThrow({ where: { id: original.id } });
+    await expect(db.researchRevision.update({ where: { id: original.id }, data: { issueSnapshot: {} } })).rejects.toThrow();
+    expect((await db.researchRevision.findUniqueOrThrow({ where: { id: original.id } })).issueSnapshot).toEqual(frozen.issueSnapshot);
+    expect(await db.evidenceItemRevision.count({ where: { evidenceItemId: issue.id } })).toBe(1);
+  });
+
+  it("争点当前来源在保存、派生授权和归档使用同一固定输入，越案与撤回均拒绝", async () => {
+    const f = await fixture(), other = await fixture(), issue = await createIssue(f, true);
+    const selected = (await readResearchOptions(db, f.actor, f.matter.id)).issues.find(row => row.id === issue.id)!;
+    await expect(saveResearch(db, other.actor, input(other.matter.id, { issueSelection: selected.selection }))).rejects.toThrow("争点");
+    const saved = await saveResearch(db, f.actor, input(f.matter.id, { issueSelection: selected.selection }));
+    const reopened = await readResearch(db, f.actor, f.matter.id, saved.id);
+    expect(await readResearchSource(db, f.actor, f.matter.id, saved.id, reopened.issue!.sources[0].id)).toMatchObject({ status: "AVAILABLE", documentVersion: 1, locationLabel: "第 1 页" });
+    await expect(saveResearch(db, other.actor, input(other.matter.id, { issueSelection: { kind: "SAVED", researchRevisionId: saved.id } }))).rejects.toThrow("研究");
+    const draft = await createResearchDraft(db, f.actor, { matterId: f.matter.id, researchRevisionId: saved.id, requestKey: randomUUID() });
+    const history = await buildArchiveProfessionalHistory(db, f.matter.id, [draft.documentId]);
+    expect(history.documentReferences.find(row => row.documentId === f.document.id)?.roles).toContain("ISSUE_SOURCE");
+    expect(history.research[0].issueSnapshot).toMatchObject({ evidenceItemId: issue.id, confirmedAt: null });
     await db.document.update({ where: { id: f.document.id }, data: { deletedAt: new Date() } });
+    expect((await readResearchOptions(db, f.actor, f.matter.id)).issues).toHaveLength(0);
     expect((await readResearch(db, f.actor, f.matter.id, saved.id)).content).toBeNull();
+    await expect(saveResearch(db, f.actor, input(f.matter.id, { issueSelection: selected.selection }))).rejects.toThrow("来源");
+    await expect(saveResearch(db, f.actor, input(f.matter.id, { issueSelection: { kind: "SAVED", researchRevisionId: saved.id } }))).rejects.toThrow("来源");
+    await expect(assertDocumentDerivationAccess(f.actor.id, draft.documentId, { purpose: "READ", db })).rejects.toThrow("来源");
+    await expect(assertDocumentDerivationAccess(f.actor.id, draft.documentId, { purpose: "EXPORT", db })).rejects.toThrow("来源");
+    await expect(buildArchiveProfessionalHistory(db, f.matter.id, [draft.documentId])).rejects.toThrow("材料");
   });
 
   it("未核对研究也可生成确切版本 DRAFT；重试不重复，后续研究不重绑旧稿", async () => {

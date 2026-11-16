@@ -1,5 +1,6 @@
 import { responsibilityReady } from "./responsibility";
 import {scanAdditionalWorkReminders} from "./urgent";
+import { scanTaskWaitingReminders } from "./task-waiting";
 // 内部服务，不是客户端可调用的 Server Action。
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
@@ -203,6 +204,7 @@ export async function retireScheduleReminders(
 /** 周期补扫复用同一登记服务；不读取客户端列表，日期固定为上海日历日。 */
 export async function scanScheduleReminders(now = new Date(), currentDayOnly = false) {
   await scanAdditionalWorkReminders(prisma,now);
+  await scanTaskWaitingReminders(prisma, now);
   const dayKey = shDayKey(now);
   const today = shDayStart(now);
   const configs = await prisma.deadline.findMany({ where: { completed: false }, distinct: ["remindDays"], select: { remindDays: true } });

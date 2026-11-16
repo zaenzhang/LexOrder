@@ -1,3 +1,4 @@
+import { listPreservationCases } from "@/server/preservations/actions-v2";
 import {getClosureBoard} from "@/server/archive/closure-actions";
 import {MatterClosurePanel} from "@/components/matters/closure-panel";
 import {getWorkBoard} from "@/server/reminders/work-actions";
@@ -167,25 +168,7 @@ export default async function MatterDetailPage({ params, searchParams }: PagePro
       orderBy: [{ order: "asc" }, { createdAt: "asc" }],
       select: { id: true, key: true, label: true, fieldType: true, options: true, required: true }
     }),
-    prisma.preservationCase.findMany({
-      where: { matterId: matter.id },
-      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-      include: {
-        matter: { select: { id: true, internalCode: true, title: true } },
-        owner: { select: { id: true, name: true } },
-        targets: {
-          orderBy: { createdAt: "asc" },
-          include: {
-            properties: {
-              orderBy: { expiryDate: "asc" },
-              include: {
-                renewals: { orderBy: { renewedAt: "desc" }, take: 3 }
-              }
-            }
-          }
-        }
-      }
-    })
+    listPreservationCases({ matterId: matter.id, status: "ALL" })
   ]);
 
   // getMatterFinance 已在 action 出口统一序列化 Decimal
@@ -250,6 +233,7 @@ export default async function MatterDetailPage({ params, searchParams }: PagePro
         }))}
         colleagues={allColleagues.map((c) => ({ id: c.id, name: c.name }))}
         rolePermissions={session.user.rolePermissions}
+        currentUserId={session.user.id}
         currentUserRole={session?.user.role ?? null}
         canAssociateThisMatter={canAssociateThisMatter}
         canLeadThisMatter={canLeadThisMatter}

@@ -66,7 +66,7 @@ export function ResearchWorkspace({ matterId, researchId = null, issueId = null,
         if (sequence.current !== token) return;
         const issue = next.issueId ? choices.issues.find(item => item.id === next.issueId) : null;
         if (next.issueId && !issue) throw new Error("此争点已变化或无权读取，请返回事实列表重新选择");
-        setOptions(choices); setValue({ ...emptyResearchContent(), ...(issue ? { question: issue.title, issueId: issue.id, issueRevisionId: issue.revisionId } : {}) });
+        setOptions(choices); setValue({ ...emptyResearchContent(), ...(issue ? { question: issue.title, issueSelection: issue.selection } : {}) });
         setEditing(true);
       } else {
         const records = await getResearchList(matterId);
@@ -211,6 +211,7 @@ export function ResearchWorkspace({ matterId, researchId = null, issueId = null,
       {row?.checkedAt && !editing ? <p className="text-sm text-muted-foreground">{row.checkedByName ?? "原核对人"} · {shDayKey(row.checkedAt)} 核对：{row.checkNote}</p> : null}
       {row && editing ? <p className="text-sm text-muted-foreground">保存后形成新修订，原修订及已有稿件依据保留。</p> : null}
       <ResearchEditor key={`${row?.id ?? "new"}:${editing}`} value={value} onChange={next => { setValue(next); dirty.current = true; }} options={options} disabled={pending} readOnly={!editing} saved={row}
+        onRefreshIssues={() => mutate(async () => { setOptions(await getResearchOptions(matterId)); setNotice("争点选项已更新，请核对后重新选择；研究输入已保留"); })}
         onOpenSource={id => showSource(id)} onPreviewSource={source => showSource(null, source)} />
     </> : null}
     <Dialog open={sourceOpen} onOpenChange={open => { setSourceOpen(open); if (!open) sourceSequence.current++; }}><DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">

@@ -25,7 +25,7 @@ function document(id: string) {
     approvedById: null, reviewedById: null };
 }
 function input(sourceId: string) {
-  return { researchRevision: { matterId: "matter", issueRevision: null,
+  return { researchRevision: { matterId: "matter", issueId: null, issueRevisionId: null, issueSnapshot: null, issue: null,
     sources: [{ documentId: sourceId, documentSha256: sourceId === "source" ? "a".repeat(64) : "b".repeat(64) }] } };
 }
 beforeEach(() => {

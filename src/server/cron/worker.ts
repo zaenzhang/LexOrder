@@ -55,7 +55,7 @@ const webhookDigestHandler: JobHandler = async (payload) => {
 };
 
 const emailDigestHandler: JobHandler = async () => {
-  // 个人邮件摘要：按当日站内通知按人聚合外发。
+  // 个人邮件摘要：按当日可外发通知按人聚合；等待检查只在站内提醒。
   // 第六轮体检 P1-4：跳过也写台账——未配置 SMTP 时以「跳过」完结并在提醒
   // 维护页可见，不再静默 return；重试退避与死信由队列兜底（提醒失败不可静默）。
   const dayKey = shDayKey(new Date());
@@ -81,7 +81,7 @@ const emailDigestHandler: JobHandler = async () => {
   // 的通知，不会出现在任何人的摘要里且无提示。改为先取当日有通知的用户集，
   // 再逐人取其通知（单人当日上限 50 条，超出在文末标注），不再有全局截断。
   const notifiedUsers = await prisma.notification.findMany({
-    where: { createdAt: { gte: startOfToday } },
+    where: { createdAt: { gte: startOfToday }, OR: [{ refType: null }, { refType: { not: "TaskWaiting" } }] },
     distinct: ["userId"],
     select: { userId: true }
   });
@@ -112,7 +112,7 @@ const emailDigestHandler: JobHandler = async () => {
       });
       if (alreadySent) continue;
       const notes = await prisma.notification.findMany({
-        where: { userId: u.id, createdAt: { gte: startOfToday } },
+        where: { userId: u.id, createdAt: { gte: startOfToday }, OR: [{ refType: null }, { refType: { not: "TaskWaiting" } }] },
         orderBy: { createdAt: "asc" },
         take: PER_USER_CAP,
         select: { title: true, content: true }

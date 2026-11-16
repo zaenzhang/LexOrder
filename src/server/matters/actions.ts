@@ -44,6 +44,7 @@ import { revalidateMatter } from "@/server/matters/route";
 import { recordTimelineEvent } from "@/server/timeline/record";
 import { personIdError } from "@/lib/clients/person-id";
 import { ActionError } from "@/lib/action-error";
+import { assertActualProcedureConclusion } from "@/server/procedures/lifecycle";
 
 function emptyToNull<T extends Record<string, unknown>>(obj: T): T {
   const out: Record<string, unknown> = {};
@@ -104,6 +105,7 @@ export async function getMatterTabCounts(input: {
 export async function listMatters(input: Partial<MatterListQuery> = {}) {
   const session = await requireSession("matters.read");
   const query = matterListQuerySchema.parse(input);
+  const canReadSchedule = hasCustomPermission(session.user, "schedule.read");
 
   const whereParts: Prisma.MatterWhereInput[] = [
     matterReadVisibilityFilter(session.user.id, session.user.role, session.user.rolePermissions),
@@ -158,7 +160,6 @@ export async function listMatters(input: Partial<MatterListQuery> = {}) {
         owner: { select: { id: true, name: true } },
         cause: { select: { id: true, name: true } },
         procedures: {
-          where: { engagement: "ENGAGED" },
           orderBy: { order: "desc" },
           take: 20,
           select: {
@@ -166,7 +167,11 @@ export async function listMatters(input: Partial<MatterListQuery> = {}) {
             type: true,
             caseNumber: true,
             status: true,
+            engagement: true,
+            concludedAt: true,
+            customLabel: true,
             hearings: {
+              ...(!canReadSchedule ? { where: { id: { in: [] } } } : {}),
               orderBy: { startsAt: "desc" },
               take: 1,
               select: { startsAt: true }
@@ -177,7 +182,7 @@ export async function listMatters(input: Partial<MatterListQuery> = {}) {
               select: { id: true, name: true, order: true, completedAt: true, status: true }
             },
             deadlines: {
-              where: { completed: false },
+              where: { completed: false, ...(!canReadSchedule ? { id: { in: [] } } : {}) },
               orderBy: { dueAt: "asc" },
               take: 1,
               select: { title: true, dueAt: true, category: true }
@@ -212,6 +217,7 @@ export async function listMatters(input: Partial<MatterListQuery> = {}) {
   const sorted = allItems
     .map((matter) => ({
       ...matter,
+      canReadSchedule,
       latestHearingAt:
         matter.procedures
           .map((p) => p.hearings[0]?.startsAt ?? null)
@@ -369,8 +375,12 @@ export async function updateProcedureInfo(input: ProcedureInfoEditInput) {
     }
     if (data.ourStanding !== undefined) procedureData.ourStanding = data.ourStanding;
     if (data.acceptedAt !== undefined) procedureData.acceptedAt = data.acceptedAt;
-    if (data.concludedAt !== undefined) procedureData.concludedAt = data.concludedAt;
-    if (data.concludedAt) procedureData.status = "CONCLUDED";
+    if (data.concludedAt !== undefined) {
+      if (data.concludedAt && proc.status !== "CONCLUDED") throw new ActionError("请通过终结程序动作记录实际终结日期");
+      if (!data.concludedAt && proc.status === "CONCLUDED") throw new ActionError("终结日期不能直接清空；恢复办理请使用程序状态动作");
+      if (data.concludedAt) assertActualProcedureConclusion(data.concludedAt, data.acceptedAt === undefined ? proc.acceptedAt : data.acceptedAt);
+      procedureData.concludedAt = data.concludedAt;
+    } else if (data.acceptedAt && proc.concludedAt && proc.status === "CONCLUDED") assertActualProcedureConclusion(proc.concludedAt, data.acceptedAt);
     // 关联和实际 Party 修改也更新本次程序任务的前置值。
     procedureData.updatedAt = new Date();
     const updated = await tx.matterProcedure.updateMany({

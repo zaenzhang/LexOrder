@@ -63,6 +63,45 @@ beforeEach(() => {
 });
 
 describe("任务弹窗的键盘返回", () => {
+  it("未归属与待检查筛选保留同一任务身份，不把未来检查混为已到期", async () => {
+    const wait = { ...activeWaiting(), nextCheckAt: new Date("2000-01-01T00:00:00.000Z") };
+    actions.getTaskWorkspace.mockResolvedValue(workspace([
+      task({ title: "待检查的全案任务", activeWaiting: wait, waitings: [wait] }),
+      task({ id: otherTaskId, title: "未来检查任务", activeWaiting: { ...wait, id: "ae70750d-ab89-45d9-9ad7-968203d63621", nextCheckAt: new Date("2099-01-01T00:00:00.000Z") } }),
+      task({ id: "cm3task0000000000000000003", title: "环节任务", stageId: "cstage0000000000000000001", activeWaiting: wait }),
+    ]));
+    render(<TaskWorkPanel matterId={matterId} unassignedOnly />);
+    expect(await screen.findByRole("button", { name: "待检查的全案任务" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "未来检查任务" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "环节任务" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: "仅看待检查" }));
+    expect(screen.getByRole("button", { name: "待检查的全案任务" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "未来检查任务" })).not.toBeInTheDocument();
+    expect(screen.getByText("待检查")).toBeVisible();
+  });
+
+  it("任务创建保存中的位置切换不被迟到结果改回，提交仍绑定打开时环节", async () => {
+    const originalLocation = window.location.href;
+    const stageId = "cstage0000000000000000001";
+    const onCreated = vi.fn();
+    let finish!: (value: { id: string }) => void;
+    actions.createTask.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    try {
+      window.history.replaceState(null, "", "?procedure=first&stage=preparation");
+      render(<TaskWorkPanel matterId={matterId} defaultStage={{ id: stageId, name: "准备" }} onTaskCreated={onCreated} />);
+      fireEvent.click(await screen.findByRole("button", { name: "新建任务" }));
+      fireEvent.change(screen.getByLabelText("任务名称"), { target: { value: "核对准备材料" } });
+      fireEvent.click(screen.getByRole("button", { name: "创建任务" }));
+      await waitFor(() => expect(actions.createTask).toHaveBeenCalledWith(expect.objectContaining({ matterId, stageId })));
+      window.history.replaceState(null, "", "?procedure=second&stage=review");
+      await act(async () => { finish({ id: otherTaskId }); });
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(onCreated).not.toHaveBeenCalled();
+      expect(actions.getTaskWorkflow).not.toHaveBeenCalled();
+      expect(window.location.search).toBe("?procedure=second&stage=review");
+    } finally { window.history.replaceState(null, "", originalLocation); }
+  });
+
   it("选中环节只显示该环节任务并预填新任务归属", async () => {
     const stageId = "cstage0000000000000000001";
     actions.getTaskWorkspace.mockResolvedValue(workspace([

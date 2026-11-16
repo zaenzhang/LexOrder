@@ -7,12 +7,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { shDayKey } from "@/lib/ui/sh-time";
-import { queryAccessLabels, queryOutcomeLabels, sourceRelationLabels, lawKindLabels, type ResearchContent, type ResearchOptions, type ResearchQuery, type ResearchRevisionView, type ResearchSourceInput } from "@/server/research/contracts";
+import { queryAccessLabels, queryOutcomeLabels, sourceRelationLabels, lawKindLabels, researchIssueSelectionKey, type ResearchContent, type ResearchOptions, type ResearchQuery, type ResearchRevisionView, type ResearchSourceInput } from "@/server/research/contracts";
 import { ResearchSourceEditor } from "./research-source-editor";
 
-export function ResearchEditor({ value, onChange, options, disabled, readOnly, saved, onOpenSource, onPreviewSource }: {
+export function ResearchEditor({ value, onChange, options, disabled, readOnly, saved, onOpenSource, onPreviewSource, onRefreshIssues }: {
   value: ResearchContent; onChange(value: ResearchContent): void; options: ResearchOptions | null; disabled: boolean;
   readOnly: boolean; saved: ResearchRevisionView | null; onOpenSource(id: string): void; onPreviewSource(source: ResearchSourceInput): void;
+  onRefreshIssues(): void;
 }) {
   function update(patch: Partial<ResearchContent>) { onChange({ ...value, ...patch }); }
   const textarea = (key: "purpose" | "scope" | "rule" | "exceptions" | "supportingAnalysis" | "opposingAnalysis" | "conclusion" | "unresolved" | "nextSteps", label: string, rows = 4) =>
@@ -22,12 +23,17 @@ export function ResearchEditor({ value, onChange, options, disabled, readOnly, s
     <TabsList><TabsTrigger value="question">问题与范围</TabsTrigger><TabsTrigger value="sources">依据与阅读</TabsTrigger><TabsTrigger value="analysis">论证与结论</TabsTrigger></TabsList>
     <TabsContent value="question" className="space-y-4">
       <div className="space-y-1.5"><Label htmlFor="research-question">研究问题</Label><Input id="research-question" value={value.question} onChange={event => update({ question: event.target.value })} maxLength={300} readOnly={readOnly} disabled={disabled} /></div>
-      {readOnly ? saved?.issue ? <p className="text-sm">关联争点：{saved.issue.title} · 修订 {saved.issue.revision}{saved.issue.changed ? "（争点已有新修订）" : ""}</p> : null : <div className="space-y-1.5"><Label>关联争点</Label>
-        <Select disabled={disabled || !options} value={value.issueRevisionId ?? "none"} onValueChange={revisionId => {
-          const issue = options?.issues.find(item => item.revisionId === revisionId); update({ issueId: issue?.id ?? null, issueRevisionId: issue?.revisionId ?? null });
+      {readOnly ? saved?.issue ? <details className="text-sm space-y-2"><summary className="cursor-pointer">关联争点：{saved.issue.title} · 修订 {saved.issue.revision}{saved.issue.changed ? "（争点已有新修订）" : saved.issue.confirmationChanged ? "（核对状态已有变化）" : ""}</summary>
+        <p className="whitespace-pre-wrap break-words">{saved.issue.content}</p><p className="text-xs text-muted-foreground">采用时：{saved.issue.confirmedAt ? `已核对（${shDayKey(saved.issue.confirmedAt)}）` : "尚未核对"} · 输入固定于 {shDayKey(saved.issue.capturedAt)}</p>
+        {saved.issue.sources.map(source => <div key={source.id} className="flex items-center justify-between gap-3 rounded-md border p-2"><span>{source.documentName} · V{source.documentVersion} · {source.locationLabel}</span><Button type="button" variant="outline" size="sm" disabled={disabled} onClick={() => onOpenSource(source.id)}>查看争点来源</Button></div>)}
+      </details> : null : <div className="space-y-1.5"><div className="flex items-center justify-between gap-3"><Label>关联争点</Label><Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={onRefreshIssues}>更新争点选项</Button></div>
+        <Select disabled={disabled || !options} value={researchIssueSelectionKey(value.issueSelection)} onValueChange={key => {
+          if (key === "none") { update({ issueSelection: null }); return; }
+          const issue = options?.issues.find(item => researchIssueSelectionKey(item.selection) === key);
+          if (issue) update({ issueSelection: issue.selection });
         }}><SelectTrigger aria-label="关联争点"><SelectValue placeholder="不关联争点" /></SelectTrigger><SelectContent><SelectItem value="none">不关联争点</SelectItem>
-          {value.issueRevisionId && !options?.issues.some(issue => issue.revisionId === value.issueRevisionId) ? <SelectItem value={value.issueRevisionId}>当前采用的历史争点修订</SelectItem> : null}
-          {options?.issues.map(issue => <SelectItem key={issue.revisionId} value={issue.revisionId}>{issue.title} · 修订 {issue.revision}</SelectItem>)}
+          {value.issueSelection && !options?.issues.some(issue => researchIssueSelectionKey(issue.selection) === researchIssueSelectionKey(value.issueSelection)) ? <SelectItem value={researchIssueSelectionKey(value.issueSelection)} disabled={value.issueSelection.kind === "CURRENT"}>{value.issueSelection.kind === "CURRENT" ? "所选争点已变化，请重新选择" : "保留原研究的争点输入"}</SelectItem> : null}
+          {options?.issues.map(issue => <SelectItem key={researchIssueSelectionKey(issue.selection)} value={researchIssueSelectionKey(issue.selection)}>{issue.title} · 修订 {issue.revision} · {issue.selection.confirmedAt ? "已核对" : "待核对"}</SelectItem>)}
         </SelectContent></Select>
       </div>}
       <div className="grid grid-cols-3 gap-3">

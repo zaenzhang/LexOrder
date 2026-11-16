@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { ActionError } from "@/lib/action-error";
 import { assertDocumentDerivationAccess } from "@/server/documents/derivation-access";
-import { readSourceSnapshot } from "@/server/evidence/source-links";
+import { readResearchIssueSnapshot } from "@/server/research/issue-snapshot";
 
 type ReferenceRole = "RESEARCH_OUTPUT" | "RESEARCH_SOURCE" | "ISSUE_SOURCE" | "REVIEW_DOCUMENT" |
   "REVIEW_BASIS" | "REVIEW_REVISION" | "DELIVERY_ITEM" | "DELIVERY_PROOF";
@@ -17,7 +17,7 @@ export async function buildArchiveProfessionalHistory(db: Prisma.TransactionClie
   const [research, reviews, deliveries] = await Promise.all([
     db.researchRevision.findMany({ where: { matterId, outputDocuments: { some: { documentId: { in: selected } } } },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: {
-        id: true, seriesId: true, version: true, supersedesId: true, issueId: true, issueRevisionId: true,
+        id: true, matterId: true, seriesId: true, version: true, supersedesId: true, issueId: true, issueRevisionId: true, issueSnapshot: true,
         question: true, purpose: true, jurisdiction: true, relevantDate: true, researchedAt: true, scope: true,
         queryLog: true, rule: true, exceptions: true, supportingAnalysis: true, opposingAnalysis: true,
         conclusion: true, unresolved: true, nextSteps: true, createdAt: true, checkedAt: true, checkNote: true,
@@ -28,12 +28,7 @@ export async function buildArchiveProfessionalHistory(db: Prisma.TransactionClie
         } },
         outputDocuments: { where: { documentId: { in: selected } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }],
           select: { id: true, documentId: true, createdAt: true } },
-        issueRevision: { select: {
-          id: true, evidenceItemId: true, revision: true, title: true, content: true, kind: true,
-          eventDatePrecision: true, eventDateStart: true, eventDateEnd: true, eventDateText: true,
-          sourceSnapshot: true, confirmedById: true, confirmedAt: true, createdAt: true,
-          editedBy: { select: personSelect }, evidenceItem: { select: { matterId: true } },
-        } },
+        issue: { select: { matterId: true } },
       } }),
     db.documentReviewIssue.findMany({ where: { documentId: { in: selected }, document: { matterId } },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: {
@@ -69,11 +64,10 @@ export async function buildArchiveProfessionalHistory(db: Prisma.TransactionClie
   for (const row of research) {
     row.outputDocuments.forEach(output => addReference(output.documentId, "RESEARCH_OUTPUT"));
     row.sources.forEach(source => addReference(source.documentId, "RESEARCH_SOURCE", source.documentSha256));
-    if (row.issueRevision) {
-      if (row.issueRevision.evidenceItem.matterId !== matterId) throw new ActionError("研究所引争点不属于本案，不能固定归档历史");
-      const sources = readSourceSnapshot(row.issueRevision.sourceSnapshot);
-      if (!sources) throw new ActionError("研究所引争点来源记录不完整，请先核对");
-      sources.forEach(source => addReference(source.documentId, "ISSUE_SOURCE", source.documentSha256));
+    if (row.issueId || row.issueRevisionId || row.issueSnapshot !== null) {
+      const issue = readResearchIssueSnapshot(row);
+      if (!issue) throw new ActionError("研究所引争点的固定输入缺失或不属于本案，请先核对");
+      issue.sourceSnapshot.forEach(source => addReference(source.documentId, "ISSUE_SOURCE", source.documentSha256));
     }
   }
   for (const row of reviews) {
@@ -102,20 +96,15 @@ export async function buildArchiveProfessionalHistory(db: Prisma.TransactionClie
 
   return {
     matterId, selectedDocumentIds: selected, documentReferences,
-    research: research.map(({ createdAt, researchedAt, checkedAt, sources, outputDocuments, issueRevision, ...row }) => ({
-      ...row, createdAt: createdAt.toISOString(), researchedAt: researchedAt.toISOString(), checkedAt: checkedAt?.toISOString() ?? null,
-      sources: sources.map(({ createdAt, ...source }) => ({ ...source, createdAt: createdAt.toISOString() })),
-      outputDocuments: outputDocuments.map(({ createdAt, ...output }) => ({ ...output, createdAt: createdAt.toISOString() })),
-      issueRevision: issueRevision ? {
-        id: issueRevision.id, evidenceItemId: issueRevision.evidenceItemId, revision: issueRevision.revision,
-        title: issueRevision.title, content: issueRevision.content, kind: issueRevision.kind,
-        eventDatePrecision: issueRevision.eventDatePrecision, eventDateStart: issueRevision.eventDateStart?.toISOString() ?? null,
-        eventDateEnd: issueRevision.eventDateEnd?.toISOString() ?? null, eventDateText: issueRevision.eventDateText,
-        sourceSnapshot: issueRevision.sourceSnapshot, confirmedById: issueRevision.confirmedById,
-        confirmedAt: issueRevision.confirmedAt?.toISOString() ?? null, editedBy: issueRevision.editedBy,
-        createdAt: issueRevision.createdAt.toISOString(),
-      } : null,
-    })),
+    research: research.map(({ createdAt, researchedAt, checkedAt, sources, outputDocuments, issue, ...row }) => {
+      // The current relation serves authorization only; the archived input is issueSnapshot.
+      void issue;
+      return {
+        ...row, createdAt: createdAt.toISOString(), researchedAt: researchedAt.toISOString(), checkedAt: checkedAt?.toISOString() ?? null,
+        sources: sources.map(({ createdAt, ...source }) => ({ ...source, createdAt: createdAt.toISOString() })),
+        outputDocuments: outputDocuments.map(({ createdAt, ...output }) => ({ ...output, createdAt: createdAt.toISOString() })),
+      };
+    }),
     reviews: reviews.map(({ createdAt, events, ...row }) => ({ ...row, createdAt: createdAt.toISOString(),
       events: events.map(({ createdAt, ...event }) => ({ ...event, createdAt: createdAt.toISOString() })),
     })),

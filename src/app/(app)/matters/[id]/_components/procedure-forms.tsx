@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ExternalLink, Loader2, Scale, ScanText } from "lucide-react";
 import type { MatterCategory, ProcedureType } from "@prisma/client";
 import { Button } from "@/components/ui/button";
+import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -86,7 +87,7 @@ export function AddProcedureSheet({
   category,
   nextOrder,
   colleagues,
-  existingTypes
+  onCreated
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -94,13 +95,10 @@ export function AddProcedureSheet({
   category: MatterCategory;
   nextOrder: number;
   colleagues?: { id: string; name: string }[];
-  /** 已有的程序类型，防止重复添加 */
-  existingTypes?: string[];
+  onCreated?: (procedureId: string) => void;
 }) {
   const [isPending, startTransition] = useTransition();
-  const allOptions = proceduresByCategory[category];
-  const existingSet = new Set(existingTypes ?? []);
-  const procedureOptions = allOptions.filter(p => !existingSet.has(p));
+  const procedureOptions = proceduresByCategory[category];
 
   const {
     register,
@@ -109,7 +107,7 @@ export function AddProcedureSheet({
     getValues,
     setValue,
     reset,
-    formState: { errors }
+    formState: { errors, isDirty }
   } = useForm<z.input<typeof procedureCreateSchema>, unknown, ProcedureCreateInput>({
     resolver: zodResolver(procedureCreateSchema),
     defaultValues: {
@@ -164,13 +162,21 @@ export function AddProcedureSheet({
     }
   }
 
+  async function closeProcedure() {
+    if (isPending) return;
+    if (isDirty && !await confirmDialog({ title: "放弃未保存的程序？", confirmText: "放弃修改", cancelText: "继续编辑", initialFocus: "cancel" })) return;
+    reset(); onOpenChange(false);
+  }
+
   function onSubmit(values: ProcedureCreateInput) {
+    const location = window.location.pathname + window.location.search;
     startTransition(async () => {
       try {
-        await addProcedure(values);
+        const created = await addProcedure(values);
         toast.success(`程序已添加（${procedureTypeLabel[values.type]}）`);
         reset();
         onOpenChange(false);
+        if (window.location.pathname + window.location.search === location) onCreated?.(created.id);
       } catch (err) {
         toast.error("添加失败", {
           description: actionErrorMessage(err)
@@ -180,7 +186,7 @@ export function AddProcedureSheet({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={open => { if (!open) void closeProcedure(); }}>
       <DialogContent className="max-w-xl max-h-[85vh] flex flex-col gap-0 p-0">
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle>添加程序（第 {nextOrder} 个）</DialogTitle>
@@ -307,7 +313,7 @@ export function AddProcedureSheet({
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={() => void closeProcedure()}
               disabled={isPending}
             >
               取消

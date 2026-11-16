@@ -4,19 +4,21 @@ import { ActionError } from "@/lib/action-error";
 import { hasCustomPermission } from "@/lib/roles/catalog";
 import { auditTx } from "@/server/audit";
 import { contextAccess, type ContextAccess, type ContextActor } from "@/server/matters/context-service";
-import { prepareSource, readSourceSnapshot, readableDocumentOptions, resolveReference, sourceReader } from "@/server/evidence/source-links";
+import { prepareSource, readSourceSnapshot, readableDocumentOptions, resolveReference, sourceReader, sourceReferences } from "@/server/evidence/source-links";
+import { evidenceEventDateFromRecord } from "@/lib/evidence/event-date";
+import { readResearchIssueSnapshot, researchIssueSnapshotSchema, type ResearchIssueSnapshot } from "./issue-snapshot";
 import type { SourceReference } from "@/server/evidence/contracts";
 import {
   lawMetadataSchema, researchCheckSchema, researchQuerySchema, researchSaveSchema,
   type ResearchCheckInput, type ResearchContent, type ResearchList, type ResearchOptions,
   type ResearchRevisionView, type ResearchSaveInput,
-  type ResearchSourceInput,
+  type ResearchSourceInput, type ResearchIssueSelection,
 } from "./contracts";
 
 export const researchInclude = {
   author: { select: { name: true } }, checkedBy: { select: { name: true } }, successor: { select: { id: true } },
   sources: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], include: { document: { select: { isLatest: true } } } },
-  issueRevision: { include: { evidenceItem: { select: { matterId: true, revision: true } } } },
+  issue: { select: { matterId: true, revision: true, confirmedAt: true } },
 } satisfies Prisma.ResearchRevisionInclude;
 export type ResearchRow = Prisma.ResearchRevisionGetPayload<{ include: typeof researchInclude }>;
 
@@ -26,21 +28,20 @@ function references(row: ResearchRow): SourceReference[] {
     anchorId: source.anchorId, legacy: false }));
 }
 
-/** Only the persisted issue revision contributes evidence; never replace it with today's issue. */
+/** Only the input saved with this research contributes evidence, never today's issue. */
 export function researchIssueReferences(row: ResearchRow): SourceReference[] | null {
-  if (!row.issueId && !row.issueRevisionId) return [];
-  const revision = row.issueRevision;
-  if (!revision || revision.evidenceItemId !== row.issueId || revision.evidenceItem.matterId !== row.matterId || revision.kind !== "ISSUE") return null;
-  return readSourceSnapshot(revision.sourceSnapshot);
+  if (!row.issueId && !row.issueRevisionId && row.issueSnapshot === null) return [];
+  return readResearchIssueSnapshot(row)?.sourceSnapshot ?? null;
 }
 
 export async function researchReadAccess(tx: Prisma.TransactionClient, access: ContextAccess, row: ResearchRow) {
   const issueReferences = researchIssueReferences(row);
-  if (issueReferences === null) return { readable: false, sourceViews: [] };
+  if (issueReferences === null) return { readable: false, sourceViews: [], issueSourceViews: [] };
   const ownReferences = references(row);
   const reader = await sourceReader(access.user.id, access.matter.id, [...ownReferences, ...issueReferences], tx);
   const readable = [...ownReferences, ...issueReferences].every(source => Boolean(reader.documentFor(source)));
-  return { readable, sourceViews: readable ? ownReferences.map(source => ({ reference: source, view: reader.view(source) })) : [] };
+  return { readable, sourceViews: readable ? ownReferences.map(source => ({ reference: source, view: reader.view(source) })) : [],
+    issueSourceViews: readable ? issueReferences.map(source => ({ ...reader.view(source), id: `issue:${source.id}` })) : [] };
 }
 
 export async function assertResearchReadable(tx: Prisma.TransactionClient, access: ContextAccess, row: ResearchRow) {
@@ -61,7 +62,8 @@ function contentOf(row: ResearchRow): ResearchContent {
     researchedAt: row.researchedAt.toISOString(), scope: row.scope,
     queryLog: researchQuerySchema.array().parse(row.queryLog), rule: row.rule, exceptions: row.exceptions,
     supportingAnalysis: row.supportingAnalysis, opposingAnalysis: row.opposingAnalysis, conclusion: row.conclusion,
-    unresolved: row.unresolved, nextSteps: row.nextSteps, issueId: row.issueId, issueRevisionId: row.issueRevisionId,
+    unresolved: row.unresolved, nextSteps: row.nextSteps,
+    issueSelection: row.issueId ? { kind: "SAVED", researchRevisionId: row.id } : null,
     sources: row.sources.map(source => ({ documentId: source.documentId, relation: source.relation,
       page: source.location && typeof source.location === "object" && !Array.isArray(source.location) && source.location.kind === "PAGE"
         ? Number(source.location.page) : null,
@@ -73,6 +75,7 @@ function contentOf(row: ResearchRow): ResearchContent {
 export async function presentResearch(tx: Prisma.TransactionClient, access: ContextAccess, row: ResearchRow): Promise<ResearchRevisionView> {
   const result = await researchReadAccess(tx, access, row);
   const content = result.readable ? contentOf(row) : null;
+  const issue = result.readable ? readResearchIssueSnapshot(row) : null;
   const current = !row.successor;
   return {
     id: row.id, seriesId: row.seriesId, version: row.version, current, createdAt: row.createdAt.toISOString(), authorName: row.author.name,
@@ -80,8 +83,10 @@ export async function presentResearch(tx: Prisma.TransactionClient, access: Cont
     checkNote: result.readable ? row.checkNote : null, readable: result.readable, content,
     sources: result.readable ? result.sourceViews.map(({ view }, index) => ({ ...content!.sources[index], id: row.sources[index].id,
       documentName: view.documentName!, version: view.documentVersion!, locationLabel: view.locationLabel!, changed: !row.sources[index].document.isLatest })) : [],
-    issue: result.readable && row.issueRevision ? { id: row.issueId!, revisionId: row.issueRevision.id,
-      revision: row.issueRevision.revision, title: row.issueRevision.title, changed: row.issueRevision.revision !== row.issueRevision.evidenceItem.revision } : null,
+    issue: issue ? { id: issue.evidenceItemId, revisionId: issue.revisionId,
+      revision: issue.revision, title: issue.title, content: issue.content, confirmedAt: issue.confirmedAt,
+      capturedAt: issue.capturedAt, changed: issue.revision !== row.issue!.revision,
+      confirmationChanged: issue.confirmedAt !== (row.issue!.confirmedAt?.toISOString() ?? null), sources: result.issueSourceViews } : null,
     canRevise: access.canWrite && result.readable && current, canCheck: access.canConfirm && result.readable && current && !row.checkedAt,
     canDraft: access.canWrite && result.readable && hasCustomPermission(access.user, "documents.write"),
   };
@@ -96,6 +101,42 @@ export async function researchTransaction<T>(db: PrismaClient, run: (tx: Prisma.
     }
     throw error;
   }
+}
+
+async function captureIssueInput(tx: Prisma.TransactionClient, access: ContextAccess, selection: ResearchIssueSelection | null): Promise<ResearchIssueSnapshot | null> {
+  if (!selection) return null;
+  if (selection.kind === "SAVED") {
+    const previous = await loadResearch(tx, access.matter.id, selection.researchRevisionId);
+    await assertResearchReadable(tx, access, previous);
+    const snapshot = readResearchIssueSnapshot(previous);
+    if (!snapshot) throw new ActionError("所选研究没有可复用的争点输入，请重新选择");
+    return snapshot;
+  }
+  let snapshot: ResearchIssueSnapshot;
+  if (selection.kind === "CURRENT") {
+    const issue = await tx.evidenceItem.findFirst({ where: { id: selection.issueId, matterId: access.matter.id, kind: "ISSUE" },
+      include: { sources: { where: { removedAt: null }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] } } });
+    if (!issue) throw new ActionError("争点不存在、不属于本事项或已改变性质，请重新选择");
+    if (issue.revision !== selection.revision || (issue.confirmedAt?.toISOString() ?? null) !== selection.confirmedAt) {
+      throw new ActionError("争点内容或核对状态已变化，请保留研究输入，更新争点选项并重新选择");
+    }
+    snapshot = { evidenceItemId: issue.id, matterId: issue.matterId, revision: issue.revision, revisionId: null,
+      title: issue.title, content: issue.content, kind: "ISSUE", eventDate: evidenceEventDateFromRecord(issue),
+      sourceSnapshot: sourceReferences(issue), confirmedById: issue.confirmedById, confirmedAt: issue.confirmedAt?.toISOString() ?? null,
+      capturedAt: new Date().toISOString(), capturedById: access.user.id };
+  } else {
+    const revision = await tx.evidenceItemRevision.findFirst({ where: { id: selection.revisionId, kind: "ISSUE", evidenceItem: { matterId: access.matter.id } } });
+    if (!revision) throw new ActionError("争点历史修订不存在或不属于本事项");
+    const sources = readSourceSnapshot(revision.sourceSnapshot);
+    if (!sources) throw new ActionError("争点历史来源记录不完整，请重新选择");
+    snapshot = { evidenceItemId: revision.evidenceItemId, matterId: access.matter.id, revision: revision.revision, revisionId: revision.id,
+      title: revision.title, content: revision.content, kind: "ISSUE", eventDate: evidenceEventDateFromRecord(revision),
+      sourceSnapshot: sources, confirmedById: revision.confirmedById, confirmedAt: revision.confirmedAt?.toISOString() ?? null,
+      capturedAt: new Date().toISOString(), capturedById: access.user.id };
+  }
+  const reader = await sourceReader(access.user.id, access.matter.id, snapshot.sourceSnapshot, tx);
+  if (snapshot.sourceSnapshot.some(source => !reader.documentFor(source))) throw new ActionError("无权读取所选争点的来源，或来源已撤回");
+  return researchIssueSnapshotSchema.parse(snapshot);
 }
 
 export async function saveResearch(db: PrismaClient, actor: ContextActor, input: ResearchSaveInput) {
@@ -119,15 +160,7 @@ export async function saveResearch(db: PrismaClient, actor: ContextActor, input:
       seriesId = previous.seriesId;
       version = previous.version + 1;
     }
-    if (parsed.issueId && parsed.issueRevisionId) {
-      const issue = await tx.evidenceItemRevision.findFirst({ where: { id: parsed.issueRevisionId,
-        evidenceItemId: parsed.issueId, kind: "ISSUE", evidenceItem: { matterId: parsed.matterId } } });
-      if (!issue) throw new ActionError("争点修订不存在或不属于当前事项");
-      const issueSources = readSourceSnapshot(issue.sourceSnapshot);
-      if (!issueSources) throw new ActionError("争点来源记录不可用，请先核对该争点");
-      const reader = await sourceReader(actor.id, parsed.matterId, issueSources, tx);
-      if (issueSources.some(source => !reader.documentFor(source))) throw new ActionError("无权读取所选争点的来源");
-    }
+    const issueSnapshot = await captureIssueInput(tx, access, parsed.issueSelection);
     const sources = [];
     const keys = new Set<string>();
     for (const source of parsed.sources) {
@@ -140,12 +173,16 @@ export async function saveResearch(db: PrismaClient, actor: ContextActor, input:
     const row = await tx.researchRevision.create({ data: { matterId: parsed.matterId, question: parsed.question, purpose: parsed.purpose,
       jurisdiction: parsed.jurisdiction, scope: parsed.scope, rule: parsed.rule, exceptions: parsed.exceptions,
       supportingAnalysis: parsed.supportingAnalysis, opposingAnalysis: parsed.opposingAnalysis, conclusion: parsed.conclusion,
-      unresolved: parsed.unresolved, nextSteps: parsed.nextSteps, issueId: parsed.issueId, issueRevisionId: parsed.issueRevisionId,
+      unresolved: parsed.unresolved, nextSteps: parsed.nextSteps,
+      issueId: issueSnapshot?.evidenceItemId ?? null, issueRevisionId: issueSnapshot?.revisionId ?? null,
+      issueSnapshot: issueSnapshot ? issueSnapshot as Prisma.InputJsonValue : Prisma.DbNull,
       requestKey: parsed.requestKey, supersedesId: parsed.supersedesId, seriesId, version,
       researchedAt: new Date(parsed.researchedAt), relevantDate: parsed.relevantDate || null,
       queryLog: parsed.queryLog as Prisma.InputJsonValue, authorId: actor.id, requestHash, sources: { create: sources } }, select: { id: true } });
     await auditTx(tx, { userId: actor.id, action: parsed.supersedesId ? "RESEARCH_REVISE" : "RESEARCH_CREATE", targetType: "ResearchRevision", targetId: row.id,
-      detail: { matterId: parsed.matterId, seriesId, version, supersedesId: parsed.supersedesId, sourceCount: sources.length } });
+      detail: { matterId: parsed.matterId, seriesId, version, supersedesId: parsed.supersedesId, sourceCount: sources.length,
+        issueId: issueSnapshot?.evidenceItemId ?? null, issueRevision: issueSnapshot?.revision ?? null,
+        issueSelection: parsed.issueSelection?.kind ?? null } });
     return { id: row.id, version, replayed: false };
   });
 }
@@ -205,15 +242,13 @@ export async function readResearchOptions(db: PrismaClient, actor: ContextActor,
     const access = await contextAccess(tx, actor, matterId);
     if (!access.canWrite) throw new ActionError("无权维护事项研究");
     const candidates = await tx.evidenceItem.findMany({ where: { matterId, kind: "ISSUE" }, orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      select: { id: true, revision: true, revisions: { orderBy: { revision: "desc" }, take: 1 } } });
+      include: { sources: { where: { removedAt: null }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] } } });
     const issues: ResearchOptions["issues"] = [];
     for (const item of candidates) {
-      const revision = item.revisions[0];
-      if (!revision || revision.revision !== item.revision || revision.kind !== "ISSUE") continue;
-      const issueSources = readSourceSnapshot(revision.sourceSnapshot);
-      if (!issueSources) continue;
+      const issueSources = sourceReferences(item);
       const reader = await sourceReader(actor.id, matterId, issueSources, tx);
-      if (issueSources.every(source => reader.documentFor(source))) issues.push({ id: item.id, revisionId: revision.id, revision: revision.revision, title: revision.title });
+      if (issueSources.every(source => reader.documentFor(source))) issues.push({ id: item.id, revision: item.revision, title: item.title,
+        selection: { kind: "CURRENT", issueId: item.id, revision: item.revision, confirmedAt: item.confirmedAt?.toISOString() ?? null } });
     }
     return { documents: await readableDocumentOptions(actor.id, matterId), issues };
   }, { timeout: 20000 });
@@ -224,7 +259,9 @@ export async function readResearchSource(db: PrismaClient, actor: ContextActor, 
     const access = await contextAccess(tx, actor, matterId);
     const row = await loadResearch(tx, matterId, id);
     await assertResearchReadable(tx, access, row);
-    const selected = references(row).find(source => source.id === sourceId);
+    const selected = sourceId.startsWith("issue:")
+      ? researchIssueReferences(row)?.find(source => source.id === sourceId.slice(6))
+      : references(row).find(source => source.id === sourceId);
     if (!selected) throw new ActionError("来源不属于这份研究修订");
     return selected;
   }, { timeout: 20000 });

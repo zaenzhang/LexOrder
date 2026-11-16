@@ -99,9 +99,46 @@ describe("研究工作区的保存与来源连续性", () => {
   });
 
   it("显式争点失效时不替用户换成另一争点", async () => {
-    mock.options.mockResolvedValue({ documents: [], issues: [{ id: "cm00000000000000000000006", revisionId: "cm00000000000000000000007", revision: 1, title: "另一个争点" }] });
+    mock.options.mockResolvedValue({ documents: [], issues: [{ id: "cm00000000000000000000006", revision: 1, title: "另一个争点",
+      selection: { kind: "CURRENT", issueId: "cm00000000000000000000006", revision: 1, confirmedAt: null } }] });
     render(<ResearchWorkspace matterId={matterId} issueId="cm00000000000000000000008" onSelectResearch={choose} onOpenDocument={openDocument} />);
     expect(await screen.findByRole("alert")).toHaveTextContent("此争点已变化或无权读取");
     expect(screen.queryByLabelText("研究问题")).not.toBeInTheDocument();
+  });
+
+  it("正常争点入口使用当前内容与核对时点；冲突后更新选项保留输入且不自动改绑", async () => {
+    const issueId = "cm00000000000000000000006";
+    const selection = { kind: "CURRENT", issueId, revision: 2, confirmedAt: null };
+    mock.options.mockResolvedValueOnce({ documents: [], issues: [{ id: issueId, revision: 2, title: "当前争点", selection }] })
+      .mockResolvedValueOnce({ documents: [], issues: [{ id: issueId, revision: 2, title: "当前争点", selection: { ...selection, confirmedAt: "2026-11-16T10:00:00.000Z" } }] });
+    mock.save.mockRejectedValue(new Error("争点内容或核对状态已变化，请更新争点选项并重新选择"));
+    render(<ResearchWorkspace matterId={matterId} issueId={issueId} onSelectResearch={choose} onOpenDocument={openDocument} />);
+    expect(await screen.findByLabelText("研究问题")).toHaveValue("当前争点");
+    fireEvent.change(screen.getByLabelText("研究问题"), { target: { value: "保留已输入的研究问题" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存研究" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("核对状态已变化");
+    expect(mock.save.mock.calls[0][0].issueSelection).toEqual(selection);
+    fireEvent.click(screen.getByRole("button", { name: "更新争点选项" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("研究输入已保留");
+    expect(screen.getByLabelText("研究问题")).toHaveValue("保留已输入的研究问题");
+    expect(screen.getByRole("combobox", { name: "关联争点" })).toHaveTextContent("所选争点已变化，请重新选择");
+  });
+
+  it("另存研究修订默认明确保留旧争点输入，不自动选当前新版", async () => {
+    const original = view(), issueId = "cm00000000000000000000006";
+    original.content!.issueSelection = { kind: "SAVED", researchRevisionId: researchId };
+    original.issue = { id: issueId, revisionId: null, revision: 1, title: "旧争点", content: "原始输入", confirmedAt: null,
+      capturedAt: "2026-11-16T08:00:00.000Z", changed: true, confirmationChanged: false, sources: [] };
+    mock.read.mockResolvedValue(original);
+    mock.options.mockResolvedValue({ documents: [], issues: [{ id: issueId, revision: 2, title: "新争点",
+      selection: { kind: "CURRENT", issueId, revision: 2, confirmedAt: null } }] });
+    mock.save.mockRejectedValue(new Error("合成保存中断"));
+    render(<ResearchWorkspace matterId={matterId} researchId={researchId} onSelectResearch={choose} onOpenDocument={openDocument} />);
+    fireEvent.click(await screen.findByRole("button", { name: "修改研究" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "保存新修订" })).toBeEnabled());
+    expect(screen.getByRole("combobox", { name: "关联争点" })).toHaveTextContent("保留原研究的争点输入");
+    fireEvent.click(screen.getByRole("button", { name: "保存新修订" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("合成保存中断");
+    expect(mock.save.mock.calls[0][0].issueSelection).toEqual({ kind: "SAVED", researchRevisionId: researchId });
   });
 });

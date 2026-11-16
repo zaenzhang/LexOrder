@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { ActionError } from "@/lib/action-error";
 import { prisma } from "@/lib/prisma";
 import { documentReadGrant, type DocumentReadGrant, type DocumentReadSubject } from "@/lib/approvals/documents";
-import { readSourceSnapshot } from "@/server/evidence/source-links";
+import { readResearchIssueSnapshot } from "@/server/research/issue-snapshot";
 import { resolveReviewReportSource } from "@/server/ai/review-report-source";
 
 /** Only the explicit research inputs of this concrete output are inspected. */
@@ -26,7 +26,7 @@ export async function documentDerivationReadable(
     where: { documentId: target.id },
     include: { researchRevision: { include: {
       sources: true,
-      issueRevision: { select: { sourceSnapshot: true, evidenceItem: { select: { matterId: true } } } },
+      issue: { select: { matterId: true } },
     } } },
   });
   if (!inputs.length) return true;
@@ -36,11 +36,10 @@ export async function documentDerivationReadable(
     const research = input.researchRevision;
     if (!target.matterId || research.matterId !== target.matterId) return false;
     references.push(...research.sources);
-    if (research.issueRevision) {
-      if (research.issueRevision.evidenceItem.matterId !== target.matterId) return false;
-      const issueSources = readSourceSnapshot(research.issueRevision.sourceSnapshot);
-      if (!issueSources) return false;
-      references.push(...issueSources);
+    if (research.issueId || research.issueRevisionId || research.issueSnapshot !== null) {
+      const issue = readResearchIssueSnapshot(research);
+      if (!issue) return false;
+      references.push(...issue.sourceSnapshot);
     }
   }
   const documents = await db.document.findMany({ where: { id: { in: [...new Set(references.map(row => row.documentId))] } },

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mock = vi.hoisted(() => ({ upload: vi.fn(), ensureStage: vi.fn(), refresh: vi.fn(), scroll: vi.fn(), search: "", listeners: new Set<() => void>() }));
+const mock = vi.hoisted(() => ({ upload: vi.fn(), ensureStage: vi.fn(), removeStage: vi.fn(), confirm: vi.fn(), refresh: vi.fn(), scroll: vi.fn(), search: "", listeners: new Set<() => void>() }));
 vi.mock("next/navigation", async () => {
   const { useSyncExternalStore } = await import("react");
   return {
@@ -22,7 +22,8 @@ vi.mock("@/components/matters/task-work-panel", () => ({
     <button onClick={() => onTaskSelect("task-1")}>打开合成任务</button><button onClick={() => onTaskCreated("task-created")}>创建合成任务</button>
   </section>
 }));
-vi.mock("@/server/procedures/actions", () => ({ createProcedureStage: vi.fn(), deleteProcedureMemo: vi.fn(), ensureProcedureStage: mock.ensureStage, removeProcedureStage: vi.fn(), toggleDeadlineCompleted: vi.fn(), toggleProcedureMemo: vi.fn() }));
+vi.mock("@/server/procedures/actions", () => ({ createProcedureStage: vi.fn(), deleteProcedureMemo: vi.fn(), ensureProcedureStage: mock.ensureStage, removeProcedureStage: mock.removeStage, toggleDeadlineCompleted: vi.fn(), toggleProcedureMemo: vi.fn() }));
+vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: mock.confirm }));
 vi.mock("@/server/express/actions", () => ({ deleteExpress: vi.fn() }));
 vi.mock("@/server/preservations/actions-v2", () => ({ liftProperty: vi.fn() }));
 vi.mock("@/server/deadlines/confirm", () => ({ confirmDeadline: vi.fn() }));
@@ -54,13 +55,13 @@ const notes: Props["notes"] = ["合成当前环节", "合成其他环节"].map((
 }));
 const base: Omit<Props, "view" | "onViewChange"> = {
   matter: { id: "matter-1", internalCode: "A2026001", title: "合成事项", category: "CIVIL_COMMERCIAL" },
-  procedure, documents: [], preservationCases: [], folders: [], templates: [], users: [], canManage: false, canWriteRecords: false,
+  procedure, allProcedures: [procedure], documents: [], folders: [], templates: [], users: [], canManage: false, canWriteRecords: false, canWriteTasks: false, canWriteMaterials: false, canReadSchedule: true,
   notes, timelineEvents: [], onWriteNote: vi.fn(), archiveNode: <p>合成档案内容</p>
 };
 
 function Harness({ initialView = "archive", ...overrides }: Partial<Props> & { initialView?: DossierView }) {
   const [view, setView] = useState<DossierView>(initialView);
-  return <ProcedureWorkflowPanel {...base} {...overrides} view={view} onViewChange={setView} />;
+  return <ProcedureWorkflowPanel {...base} canWriteMaterials={overrides.canManage ?? base.canWriteMaterials} {...overrides} view={view} onViewChange={setView} />;
 }
 
 function materialCard() {
@@ -74,6 +75,7 @@ const replaceState = window.history.replaceState.bind(window.history);
 const pushState = window.history.pushState.bind(window.history);
 beforeEach(() => {
   vi.clearAllMocks();
+  mock.confirm.mockResolvedValue(true);
   replaceState(null, "", "/matters/matter-1");
   mock.search = "";
   vi.spyOn(window.history, "replaceState").mockImplementation((data, unused, url) => {
@@ -96,6 +98,19 @@ afterEach(() => {
 });
 
 describe("事项工作区入口与材料范围（组件环境）", () => {
+  it("移除旧环节的迟到响应不会清空新选中的环节", async () => {
+    let finish!: (value: { hidden: boolean }) => void;
+    mock.removeStage.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    window.history.replaceState(null, "", "/matters/matter-1?workPane=materials&stage=stage-stage-1");
+    render(<Harness initialView="work" canWriteTasks />);
+    fireEvent.click(screen.getByRole("button", { name: "移除环节" }));
+    await waitFor(() => expect(mock.removeStage).toHaveBeenCalledWith({ id: "stage-1" }));
+    fireEvent.click(within(screen.getByRole("navigation", { name: "办案范围" })).getByRole("button", { name: /合成其他环节/ }));
+    await act(async () => finish({ hidden: true }));
+    expect(new URLSearchParams(window.location.search).get("stage")).toBe("stage-stage-2");
+    expect(mock.refresh).toHaveBeenCalled();
+  });
+
   it("取消唯一任务不会把该环节显示为已完成", () => {
     const cancelled = {
       ...procedure,
@@ -107,6 +122,7 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
   });
 
   it("所选真实环节可进入任务创建，失效环节不展示材料操作", () => {
+    window.history.replaceState(null, "", "/matters/matter-1?workPane=materials&stage=stage-stage-1");
     render(<Harness initialView="work" canWriteTasks />);
     fireEvent.click(screen.getByRole("button", { name: "为此环节新建任务" }));
     expect(screen.getByRole("tab", { name: "待办" })).toHaveAttribute("aria-selected", "true");
@@ -121,6 +137,7 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
   it("新程序的虚拟环节可显式启用并定位到真实环节", async () => {
     mock.ensureStage.mockResolvedValue({ id: "created-stage", created: true });
     render(<Harness initialView="work" canManage canWriteTasks procedure={{ ...procedure, stages: [] }} />);
+    fireEvent.click(within(screen.getByRole("navigation", { name: "办案范围" })).getAllByRole("button").find(button => button.title.includes("未记录进度"))!);
     fireEvent.click(screen.getByRole("button", { name: "启用此环节" }));
     await waitFor(() => expect(mock.ensureStage).toHaveBeenCalledWith(expect.objectContaining({ procedureId: procedure.id })));
     await waitFor(() => expect(new URLSearchParams(window.location.search).get("stage")).toBe("stage-created-stage"));
@@ -157,19 +174,17 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
     expect(onWriteNote).toHaveBeenCalledWith({ judgment: false });
   });
 
-  it("普通沟通不计入环节研判数，只统计同环节的研判笔记", () => {
-    const { rerender } = render(<Harness initialView="work" notes={notes} />);
+  it("名称相同的笔记标签不被当成环节关联", () => {
+    window.history.replaceState(null, "", "/matters/matter-1?workPane=materials&stage=stage-stage-1");
+    render(<Harness initialView="work" notes={notes.map(note => ({ ...note, tags: [...note.tags, "研判笔记"] }))} />);
     const stage = screen.getByRole("region", { name: "环节：合成当前环节" });
-    expect(within(stage).getByText(/研判 0/)).toBeVisible();
-    const judgments = notes.map((note) => ({ ...note, id: `${note.id}-judgment`, tags: [...note.tags, "研判笔记"] }));
-    rerender(<Harness initialView="work" notes={[...notes, ...judgments]} />);
-    expect(within(stage).getByText(/研判 1/)).toBeVisible();
+    expect(within(stage).queryByText(/研判 [0-9]/)).not.toBeInTheDocument();
   });
 
   it("零程序保留日程空态和全案任务入口，不假报全部任务为空", () => {
     render(<Harness procedure={null} notes={[]} />);
     expect(screen.getByRole("tab", { name: "档案与摘要" })).toBeVisible();
-    expect(screen.getByText("当前程序没有未结日程或审批")).toBeVisible();
+    expect(screen.getByText("当前范围没有未结日程或审批")).toBeVisible();
     expect(screen.getByText("暂无记录")).toBeVisible();
     expect(screen.getByRole("button", { name: "查看全部任务与日程" })).toBeVisible();
   });
@@ -182,7 +197,7 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
     expect(screen.getByRole("tab", { name: "待办" })).toHaveAttribute("aria-selected", "true");
     expect(within(todo).getByText("全案任务：matter-1")).toBeVisible();
     expect(screen.queryByText("合成当前待办")).not.toBeInTheDocument();
-    expect(screen.queryByRole("navigation", { name: "办案环节" })).not.toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "办案范围" })).toBeVisible();
     await waitFor(() => expect(todo).toHaveFocus());
     expect(mock.scroll.mock.contexts.at(-1)).toBe(todo);
   });
@@ -196,7 +211,7 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
     expect(within(records).getByText("合成其他环节记录内容")).toBeVisible();
     await waitFor(() => expect(records).toHaveFocus());
     fireEvent.mouseDown(screen.getByRole("tab", { name: "材料" }), { button: 0, ctrlKey: false });
-    fireEvent.click(within(screen.getByRole("navigation", { name: "办案环节" })).getByRole("button", { name: /^合成当前环节/ }));
+    fireEvent.click(within(screen.getByRole("navigation", { name: "办案范围" })).getByRole("button", { name: /^合成当前环节/ }));
     fireEvent.mouseDown(screen.getByRole("tab", { name: "办理记录" }), { button: 0, ctrlKey: false });
     expect(within(records).getByText("合成其他环节记录内容")).toBeVisible();
   });
@@ -231,7 +246,7 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
     window.history.replaceState(null, "", "/matters/matter-1?workPane=records&stage=stage-stage-2&recordsExpanded=1");
     render(<Harness initialView="work" />);
     expect(screen.getByRole("tab", { name: "办理记录" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByText("当前记录 · 不限环节")).toBeVisible();
+    expect(screen.getByText("全案记录 · 全部程序")).toBeVisible();
     expect(screen.getByText("合成其他环节记录内容")).toBeVisible();
     fireEvent.mouseDown(screen.getByRole("tab", { name: "材料" }), { button: 0, ctrlKey: false });
     expect(screen.getByRole("region", { name: "环节：合成其他环节" })).toBeVisible();
@@ -246,13 +261,13 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
     expect(screen.queryByRole("region", { name: "环节：合成当前环节" })).not.toBeInTheDocument();
   });
 
-  it("任务保存与刷新地址始终绑定原Task，不丢事项、程序或材料位置", () => {
+  it("事项任务保存后进入全案并绑定原Task", () => {
     window.history.replaceState(null, "", "/matters/matter-1?view=work&workPane=tasks&task=task-existing&stage=stage-stage-2");
     render(<Harness initialView="work" />);
     expect(screen.getByText("当前任务：task-existing")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "创建合成任务" }));
     expect(new URLSearchParams(window.location.search).get("task")).toBe("task-created");
-    expect(new URLSearchParams(window.location.search).get("stage")).toBe("stage-stage-2");
+    expect(new URLSearchParams(window.location.search).get("stage")).toBeNull();
     expect(screen.getByText("当前任务：task-created")).toBeVisible();
   });
 
@@ -275,6 +290,7 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
   });
 
   it("页头上传草稿打开后切换环节不能改写上传目标", () => {
+    window.history.replaceState(null, "", "/matters/matter-1?workPane=materials&stage=stage-stage-1");
     const apiRef: NonNullable<Props["apiRef"]> = { current: null };
     render(<Harness initialView="work" canManage apiRef={apiRef} />);
     act(() => apiRef.current?.openUpload());
@@ -291,6 +307,7 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
   });
 
   it("真实环节材料空态保留准确归属说明", () => {
+    window.history.replaceState(null, "", "/matters/matter-1?workPane=materials&stage=stage-stage-1");
     render(<Harness initialView="work" canManage />);
     expect(materialCard().getByText("本环节暂无材料")).toBeVisible();
     expect(materialCard().getByText("文件将关联到当前程序，并自动归入本环节。")).toBeVisible();
@@ -301,6 +318,7 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
   });
 
   it("未绑定环节的材料不因名称或标签相同被算作该环节材料", () => {
+    window.history.replaceState(null, "", "/matters/matter-1?workPane=materials&stage=stage-stage-1");
     const unassigned: Props["documents"][number] = {
       id: "doc-unassigned", name: "合成当前环节材料.txt", category: "PLEADING", mimeType: "text/plain", size: 10, createdAt: date,
       sourceParty: null, tags: ["阶段:合成当前环节"], stageId: null, procedureId: "procedure-1", sourceOrigin: "SELF_COLLECTED",
@@ -309,6 +327,8 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
     render(<Harness initialView="work" canManage documents={[unassigned]} />);
     expect(materialCard().getByText("本环节暂无材料")).toBeVisible();
     expect(materialCard().queryByText("合成当前环节材料.txt")).not.toBeInTheDocument();
+    expect(screen.queryByText("合成当前环节材料.txt")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "未归属环节" }));
     expect(screen.getByText("合成当前环节材料.txt")).toBeVisible();
   });
 
@@ -363,4 +383,20 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
     fireEvent.mouseDown(materialsTab, { button: 0, ctrlKey: false });
     expect(materialCard().getByText("没有符合筛选条件的材料")).toBeVisible();
   });
+
+  it("未选择环节时显示程序全部材料，不从未完成任务推定当前环节", () => {
+    render(<Harness initialView="work" procedure={{ ...procedure, stages: procedure.stages.map(stage => ({ ...stage, startedAt: null })) }} />);
+    expect(screen.getByRole("button", { name: "全部环节" })).toBeVisible();
+    expect(screen.queryByRole("region", { name: /环节：/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /合成当前环节/ })).toHaveAttribute("title", expect.stringContaining("未记录进度"));
+  });
+
+  it("过了计划开庭时间仍不宣称已经开庭", () => {
+    window.history.replaceState(null, "", "/matters/matter-1?workPane=records");
+    render(<Harness initialView="work" allProcedures={[{ ...procedure, hearings: [{ id: "hearing-past", title: "合成待核庭期", room: null, address: null, startsAt: new Date("2020-01-01") }] }]} />);
+    expect(screen.getByText("开庭计划：合成待核庭期")).toBeVisible();
+    expect(screen.getByText("计划时间已过，实际结果尚未记录。")).toBeVisible();
+    expect(screen.queryByText(/已开庭：/)).not.toBeInTheDocument();
+  });
+
 });

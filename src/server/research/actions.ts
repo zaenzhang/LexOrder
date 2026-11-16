@@ -27,7 +27,7 @@ export async function getResearchOptions(matterId: string) {
 }
 export async function getResearchSource(matterId: string, researchId: string, sourceId: string) {
   const { user } = await requireSession("matters.read");
-  return readResearchSource(prisma, user, id.parse(matterId), id.parse(researchId), id.parse(sourceId));
+  return readResearchSource(prisma, user, id.parse(matterId), id.parse(researchId), z.string().min(1).max(800).parse(sourceId));
 }
 export async function getResearchSourcePreview(matterId: string, source: ResearchSourceInput) {
   const { user } = await requireSession("matters.write");

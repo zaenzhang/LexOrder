@@ -401,7 +401,7 @@ W04 原型只证明协议契约；W05 持久化材料/任务/覆盖，W06 来源
 
 ### 6.4.6 案件操作修复合同
 
-本合同对应[交互规格 §9.3](PRODUCT_REQUIREMENTS_ACCEPTANCE.md#93-案件操作的分区与交互修复规格)和[修复计划 §7.10](WORKBENCH_PLAN.md#710-案件界面与操作流程修复计划2026-11-16)。部分修复已合入，具体状态按[计划 §8.19—8.20](WORKBENCH_PLAN.md#819-m3-保留范围的实现与验证2026-11-16)逐项核对；以下保留触及相应业务时的技术边界，不表示全部未实施或已经通过。原审查基线与证据保存在 Git 历史。
+本合同对应[交互规格 §9.3](PRODUCT_REQUIREMENTS_ACCEPTANCE.md#93-案件操作的分区与交互修复规格)和[修复计划 §7.10](WORKBENCH_PLAN.md#710-案件界面与操作流程修复计划2026-11-16)。部分修复已合入，具体状态按[计划 §8.21](WORKBENCH_PLAN.md#821-当前主线的-m3-接续执行2026-11-16)逐项核对；以下保留触及相应业务时的技术边界，不表示全部未实施或已经通过。原审查基线与证据保存在 Git 历史。
 
 | 合同 | 具体决定与必须保持的边界 |
 | --- | --- |
@@ -417,6 +417,10 @@ W04 原型只证明协议契约；W05 持久化材料/任务/覆盖，W06 来源
 | C10 任务切换与读取 | 仅当前区活动读取/轮询，材料状态父层批量读取，只轮询未完成任务；详情/原文打开时读并核资格。不把视觉 Tabs 当作服务端已延迟全部查询。草稿由当前业务编辑组件持有，同任务往返保留草稿/请求身份；受控切区/对象/关闭可取消，默认继续编辑，提交中禁用。同案仅查询参数变化且编辑壳仍在的历史切换，接受新位置前保留草稿；真正文档卸载可在浏览器允许时用标准 beforeunload。跨路由 App Router 的浏览器前进/后退不保证可取消，URL 位置恢复不等于草稿恢复；不新增全局 dirty registry、Router 补丁或持久恢复框架。离开不等于取消服务端提交，重开先核结果、不自动重提；原专项只保证同一创建意图重放。不 forceMount 全区，不把正文放 URL/localStorage |
 | C11 来源与上下文分页 | 新建要点复用既有材料版本选项及格式规则；先沿 sourceDocumentId/page/relation 创建，未知 PDF 页数不猜页码。追加锚点走 SourceAdder；确需扩展首次载荷时同步 §6.4.5 归一化/指纹，UI 不另造 hash。目标/指示列表沿用现有分页组件/查询模式，稳定二元游标、限定页长及类型/核对筛选，每页复核来源和财务资格；不为两处调用先抽泛型分页引擎。历史版本走既有入口，来源撤权不继续显示缓存正文 |
 | C12 固定包下载与空程序 | 归档导出绑定 archiveId，仅读取批准时 frozenManifest 与固定清单，删除缺 closure 表时临时 buildArchiveManifest 的现数据 fallback。复用完整导出与逐材料资格；缺冻结快照、hash 或权限不满足则整体失败并留原页，不生成缺件包，不用当前材料重建历史。必要原件/制度 hash 校验在导出边界完成并复用结果，不扩到日常列表和切换。程序删除仅用于无历史误建空程序，资格/依赖/删除同事务；取消过的期限/开庭仍是历史。成功进入已定义的程序列表，再由用户选择，不自动选另一业务对象 |
+
+**本批全案—程序—环节合同。** `Matter.status` 继续是整体状态；`MatterProcedure.status` 仅由明确业务动作改变；`MatterStage.status=ACTIVE/HIDDEN` 只表示可见性，不能作办理进度。列表、详情及团队概览显示实际程序状态与已记录日期，不再推断“当前司法环节”。材料按真实 procedureId/stageId；Task 的程序范围来自真实 stageId→procedureId，事项级 Task 保留独立入口；Note 按全案，Deadline/Hearing 按程序。PreservationCase 仍为事项级，详情页使用现行保全读取服务，而非按 matterId 直接读取全部。查看范围改变不推进业务状态，MATTER_VIEW 正常审计保留。
+
+新增受托/仅信息程序均置 `PENDING`；信息程序的新记录及旧默认 CONCLUDED 而无 concludedAt 的记录显示“状态待核对”，不回填旧法律事实。信息程序进入办理统一称“记录办理中”；旧默认 CONCLUDED 且无日期的记录要求“状态核对说明”，新 PENDING 的说明仍可选。状态动作携带所见 expectedUpdatedAt，沿共享授权锁→案件行锁→程序行锁复核当前主体、关系、归档、版本以及进入受托办理时的合同覆盖/冲突复核。受托程序在已结案案件内新增或恢复前须先重开案件；恢复保留原因并清除当前终结结果，原值写审计。实际终结日期按上海日历日校验，不得在未来或早于受理日期。信息编辑不隐式终结程序，也不能直接清空已结日期。创建成功与草稿保存均绑定实际目标，迟到响应不替换新位置；不新建程序前序字段、表或门禁。
 
 **C06 补充：** 所选批准版本以具体Document ID、未撤回、所见updatedAt和APPROVED核对，不擅自追加“必须为上传人/必须是同族最新版”的新入卷资格。所有岗位在同一tx内复核账号、角色、案件关系和归档状态，保留已固定收案送审原件保护，状态改变与DOCUMENT_FILE审计同事务；并发或重复请求不能再次产生成功事件。本人确认分支命中既有清单时不要求独立审批路由；该例外不扩展到开票/归档。退回而未修改内容的原草稿仍可按既有条件重提，不自动复制新版本。
 
@@ -477,7 +481,7 @@ W01.2/W04.1 首批在 `src/lib/workbench/` 建立不依赖 Prisma/Next 请求上
 
 ### 6.8 M3 最小持久关系与执行边界
 
-本节对应[计划 §7.11](WORKBENCH_PLAN.md#711-m3-详细执行计划与审查2026-11-16)和[需求 §9.4](PRODUCT_REQUIREMENTS_ACCEPTANCE.md#94-m3-专业工作与实际交付的操作规格)，是本轮已落地代码的最小技术边界；完成与未验范围见[计划 §8.19](WORKBENCH_PLAN.md#819-m3-保留范围的实现与验证2026-11-16)。仅在真实业务切片所需处增加模型与 SQL，不建立通用成果平台或投影服务。现有 Document、EvidenceItem、MatterContextRecord、Task、WorkResponsibility、Deadline、ClientActivity/FollowUp、FirmFile 继续是各自权威对象。
+本节对应[计划 §7.11](WORKBENCH_PLAN.md#711-m3-详细执行计划与审查2026-11-16)和[需求 §9.4](PRODUCT_REQUIREMENTS_ACCEPTANCE.md#94-m3-专业工作与实际交付的操作规格)，是本轮已落地代码的最小技术边界；完成与未验范围见[计划 §8.21](WORKBENCH_PLAN.md#821-当前主线的-m3-接续执行2026-11-16)。仅在真实业务切片所需处增加模型与 SQL，不建立通用成果平台或投影服务。现有 Document、EvidenceItem、MatterContextRecord、Task、WorkResponsibility、Deadline、ClientActivity/FollowUp、FirmFile 继续是各自权威对象。
 
 #### 数据归属与必要新增
 
@@ -515,8 +519,12 @@ W09.3 的知识候选/审核/发布/撤回表、B 比较矩阵、E 规则/日历
 - `TaskWaiting` 是 Task 的追加子记录，一次新登记持有一个 UUID，失败重试保留。`initialCheckAt` 固定原请求，`nextCheckAt` 可说明原因后调整；重放先核当前资格，再比对同一 Task、发起人及原载荷，不把改期或已结束记录恢复成初始值。一个 Task 只允许一条未结束等待，部分唯一索引和结束字段 CHECK 保证写入一致。
 - 登记、改检查日、结束等待和依赖变更都递增同一个 `WorkResponsibility.revision`。保存失败保留输入；刷新后责任 revision 已变化，界面展示现状并要求明确核对后才重提，不自动覆盖并发结果。
 - 未结束等待阻止直接办结；结束等待必须记录实际结果或结束原因，不自动办结 Task。取消 Task 在同一事务结束等待并记录“任务取消：原因”，重开不会复活旧等待。等待结束文案为“已结束”，不推断已收到外部答复。
-- 案件工作区只消费 `workPane=materials/facts/tasks/records`，任务以 `task=<具体 ID>` 保存和重开；不读取旧 `work/scope`。全案任务不从 `stage.tasks` 拼接，原保全环节创建也返回真实 ID 并刷新同一列表。案件 URL 传预期 matterId，真实 Task 不属于该案时明确拒绝；其他责任入口仍解析实际 Task 再鉴权。
+- 案件工作区只消费 `workPane=materials/facts/tasks/records`，任务以 `task=<具体 ID>` 保存和重开；不读取旧 `work/scope`。全案任务不从 `stage.tasks` 拼接；本批移除事项级保全的虚拟程序环节，任务创建返回真实 ID 并刷新同一列表。案件 URL 传预期 matterId，真实 Task 不属于该案时明确拒绝；其他责任入口仍解析实际 Task 再鉴权。
 - 读取保持现行事项业务读取资格，团队概况授权不开放任务正文。写入仍需当前经办关系、`schedule.write` 和允许状态；读取资格不能变成管理资格。任务详情、等待和同案依赖复用原对象；不加平行状态或图调度平台。
+
+- `scanScheduleReminders` 调用新增 `scanTaskWaitingReminders`。扫描在独立真实事务内先取得既有共享授权锁，再读取 nextCheckAt 已到、endedAt 为空且责任 OPEN 的等待；逐条复核当前账号/岗位、案件未归档及读取/管理关系。使用等待 ID、当前检查时点、责任人和上海日期构成必要通知幂等身份，不建新提醒表或新任务状态。
+- 只创建 refType=TaskWaiting 的站内 SYSTEM 通知；通知直达规范案件编号和确切 Task。已有 email-digest 的用户集与正文两次查询都排除该 refType，并保留 null refType 的其他通知；不加入外发摘要。改期、结束、移交、撤权等与共享授权锁序列化，锁后重新读取时点/责任，不能等待锁后继续消费旧语句快照。
+- 任务列表的到期标志和“仅看待检查”筛选基于当前读取的有效等待及责任 OPEN；它们不调用 Deadline 的改期或确认动作。事项级/未归属任务与环节任务共用同一 TaskWorkPanel，不补程序外键或重复创建任务。
 
 #### 模板、期限和可选能力的确定边界
 
@@ -538,7 +546,10 @@ W09.3/B/E/F 和 C 通用机制不分配 owner，不预建模型。迁移/权限/
 
 当前迁移包含[研究/复核/交付](../prisma/migrations/20261117000000_m3_research_review_delivery/migration.sql)、[等待/同案依赖](../prisma/migrations/20261116233000_task_waiting_dependencies/migration.sql)及[任务创建/等待原因](../prisma/migrations/20261117120000_task_creation_and_wait_reason/migration.sql)。已执行迁移字节保持；未增加知识发布、结构化比较、自动简报或期限重算平台。
 
-- ResearchRevision 每次保存新修订，ResearchSource 和 DocumentResearchSource 固定具体输入；数据库禁止覆盖历史，仅允许首次核对字段的规定变化。ISSUE 输入使用 EvidenceItemRevision 的固定来源快照，不读当前争点补旧研究。
+- ResearchRevision 每次保存新修订，ResearchSource 和 DocumentResearchSource 固定具体输入；数据库禁止覆盖历史，仅允许首次核对字段的规定变化。新增 [issueSnapshot 迁移](../prisma/migrations/20261117122000_research_issue_snapshot/migration.sql) 将 ISSUE 输入固定在实际研究保存边界，不改变 EvidenceItem 在修改前保存旧 EvidenceItemRevision 的原语义，普通读取不制造修订。
+- 选择 CURRENT 时，服务端在原事项授权和写入事务内复核当前 ISSUE 的 revision 与 confirmedAt，同时固定内容、性质、事件日期、来源、核对人/时点和实际 capturedById/capturedAt。仅核对不递增 revision，因此 confirmedAt 是必要并发条件。HISTORICAL 只指向真实 EvidenceItemRevision；SAVED 明确保留原研究已经固定的输入，仍核当前来源资格。未选争点三字段均为空；当前捕获的 issueRevisionId 为 null，真实历史来源保留其 ID。
+- `ResearchRevision.issueSnapshot` 与 issueId、matterId、真实 issueRevisionId 的一致性有数据库 CHECK，缺失布尔结果不能以 SQL NULL 通过。迁移仅从旧研究已绑定的真实修订复制内容和来源；不从当前 EvidenceItem 反推旧输入，无法满足现行关系的数据使迁移失败并留待核实。旧 EvidenceItemRevision 与已有 frozenManifest 不改写。
+- 研究来源查看、Document 派生读取与新归档专业历史共同消费固定 issueSnapshot 和当前来源授权。内容变化与核对状态变化分开提示，不重新绑定当前争点；读取来源失权时不继续下发旧正文。新归档在实际批准时固定所选成果的研究输入，历史归档继续消费原批准时的清单。
 - DocumentReviewIssue 只维护当前问题状态/版本，RESPONSE/CHECK 事件追加；DeliveryRecord/Item 和各交付事件固定，首次 SENT 有唯一约束。TaskWaiting 单任务仅一个未结束等待，结束后保留；TaskDependency 在现有授权锁和事务内查同案/环并提交。完成入口只认责任 DONE。
 - READ、EXPORT、SUBMIT 是同一来源守卫的明确目的。具体 DOCUMENT_APPROVAL 只在 READ 选用，不能被递归用于导出或再次派生；来源撤回、hash/事项不符或当前失权均停止相应内容发布。不同目的不存在失败后改用另一授权的回退。
 - 新研究稿和模板稿持久化 familyId；正常上传沿现有摄入事务。读取不补写缺失族；在用户提交新版且前版无族时，摄入事务按前版 ID 建族，并重新核对版本、归属与授权。新稿保留实际研究输入和模板快照，不继承旧批准。

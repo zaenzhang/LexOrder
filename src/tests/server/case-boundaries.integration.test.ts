@@ -179,7 +179,7 @@ describe.skipIf(!databaseUrl)("收案与案件事务边界：隔离 PG", () => {
     const [first, second] = await Promise.all([addProcedure(procedure(matter.id)), addProcedure(procedure(matter.id, "INFORMATIONAL"))]);
     const rows = await db.matterProcedure.findMany({ where: { id: { in: [first.id, second.id] } }, orderBy: { order: "asc" } });
     expect(rows.map(row => row.order)).toEqual([1, 2]);
-    expect(rows.find(row => row.engagement === "INFORMATIONAL")?.status).toBe("CONCLUDED");
+    expect(rows.find(row => row.engagement === "INFORMATIONAL")?.status).toBe("PENDING");
     expect(rows.find(row => row.engagement === "ENGAGED")?.status).toBe("PENDING");
   });
 
@@ -229,7 +229,7 @@ describe.skipIf(!databaseUrl)("收案与案件事务边界：隔离 PG", () => {
       updateMatterBasicInfo({ id: matter.id, title: "不应保存", expectedUpdatedAt: matter.updatedAt }),
       updateMatterTeam({ matterId: matter.id, expectedOwnerId: user.id, expectedMembers: [], coLeadIds: [], assistantIds: [] }),
       updateProcedureInfo({ procedureId: proc.id, expectedUpdatedAt: proc.updatedAt, caseNumber: "不应保存" }),
-      updateProcedure({ id: proc.id, caseNumber: "不应保存" }),
+      updateProcedure({ id: proc.id, expectedUpdatedAt: proc.updatedAt, caseNumber: "不应保存" }),
     ].map(promise => promise.then(() => null, error => error));
     try {
       let waiting = 0;

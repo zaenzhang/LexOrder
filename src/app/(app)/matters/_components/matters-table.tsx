@@ -16,6 +16,7 @@ import {
 import { formatCurrency, cn, formatDate as fmtDate } from "@/lib/utils";
 import { matterListEntryHref } from "@/lib/matters/list-location";
 import { shDayKey, shDaysFromToday, shTime } from "@/lib/ui/sh-time";
+import { procedureStateLabel } from "@/lib/procedure-status";
 
 export type MatterRow = Omit<Matter, "claimAmount"> & {
   primaryClient: { id: string; name: string } | null;
@@ -23,6 +24,7 @@ export type MatterRow = Omit<Matter, "claimAmount"> & {
   cause: { id: string; name: string } | null;
   procedures: {
     id: string; type: string; caseNumber: string | null; status: string;
+    engagement: string; concludedAt: Date | null; customLabel: string | null;
     stages?: { id: string; name: string; order: number; completedAt: Date | null }[];
     deadlines?: { title: string; dueAt: Date }[];
   }[];
@@ -33,6 +35,7 @@ export type MatterRow = Omit<Matter, "claimAmount"> & {
   firmCaseNo: string | null;
   intakeDate: Date | null;
   latestHearingAt: Date | null;
+  canReadSchedule: boolean;
 };
 
 type MetaColumn = "hearing" | "firmCaseNo";
@@ -476,7 +479,7 @@ export type MatterColumn = "client" | "caseNo" | "stage" | "owner" | "amount" | 
 export const MATTER_COLUMNS: { key: MatterColumn; label: string }[] = [
   { key: "client", label: "委托方" },
   { key: "caseNo", label: "案号" },
-  { key: "stage", label: "程序 · 阶段" },
+  { key: "stage", label: "程序" },
   { key: "owner", label: "主办 / 协办" },
   { key: "amount", label: "标的额" },
   { key: "deadline", label: "最近期限" },
@@ -518,7 +521,7 @@ export function MockupMattersTable({ items, columns, listQuery }: { items: Matte
             <th style={{ width: "25%", paddingLeft: 20 }}>案件 / 案由</th>
             {show("client") ? <th style={{ width: "11%" }}>委托方</th> : null}
             {show("caseNo") ? <th style={{ width: "14%" }}>案号</th> : null}
-            {show("stage") ? <th style={{ width: "11%" }}>程序 · 阶段</th> : null}
+            {show("stage") ? <th style={{ width: "15%" }}>程序</th> : null}
             {show("owner") ? <th style={{ width: "10%" }}>主办 / 协办</th> : null}
             {show("amount") ? <th style={{ width: "9%" }} className="num">标的额</th> : null}
             {show("deadline") ? <th style={{ width: "13%" }}>最近期限</th> : null}
@@ -537,18 +540,11 @@ export function MockupMattersTable({ items, columns, listQuery }: { items: Matte
 
 function MockupMatterRow({ m, show, onOpen, href }: { m: MatterRow; href: string; show: (c: MatterColumn) => boolean; onOpen: () => void }) {
   const proc = m.procedures[0] ?? null;
-  const stages = [...(proc?.stages ?? [])].filter((s) => (s as { status?: string }).status !== "HIDDEN").sort((a, b) => a.order - b.order);
-  const doneCount = stages.filter((s) => s.completedAt).length;
-  const currentStage = stages.find((s) => !s.completedAt) ?? null;
   const nearest = m.procedures.flatMap((p) => p.deadlines ?? []).sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime())[0] ?? null;
   const days = nearest ? daysBetween(nearest.dueAt) : null;
   const risk = deadlineRisk(days);
   const overdue = days !== null && days < 0;
   const spine = matterSpineTone(m.status, overdue);
-  const procLabel = proc ? (PROC_TYPE_LABEL[proc.type as keyof typeof PROC_TYPE_LABEL] ?? proc.type) : null;
-  const stageLabel = currentStage ? currentStage.name : stages.length > 0 ? "环节完成" : null;
-  const segTotal = 5;
-  const segDone = stages.length > 0 ? Math.round((doneCount / stages.length) * segTotal) : 0;
   const coLeads = (m as MatterRow & { members?: { user: { id: string; name: string } }[] }).members ?? [];
   const standingText = m.ourStanding ? litigationStandingLabel[m.ourStanding as keyof typeof litigationStandingLabel] : null;
   const shortCat = nearest ? DEADLINE_SHORT[(nearest as { category?: string }).category ?? "CUSTOM"] ?? "期限" : "";
@@ -579,15 +575,13 @@ function MockupMatterRow({ m, show, onOpen, href }: { m: MatterRow; href: string
       ) : null}
       {show("stage") ? (
         <td>
-          <div className="flex flex-col gap-1">
-            <span className="whitespace-nowrap text-[12.5px]">{procLabel ? `${procLabel}${stageLabel ? ` · ${stageLabel}` : ""}` : <span className="t-faint">—</span>}</span>
-            {stages.length > 0 ? (
-              <div className="ll-stage-track" aria-label={`环节进度 ${doneCount}/${stages.length}`}>
-                {Array.from({ length: segTotal }, (_, i) => (
-                  <i key={i} className={i < segDone ? "done" : i === segDone && currentStage ? (risk.tone === "red" || risk.tone === "amber" ? "risk" : "cur") : undefined} />
-                ))}
-              </div>
-            ) : null}
+          <div className="flex flex-col gap-1 text-[12.5px]">
+            {m.procedures.slice(0, 2).map(procedure => <div key={procedure.id}>
+              <span>{procedure.customLabel || PROC_TYPE_LABEL[procedure.type as keyof typeof PROC_TYPE_LABEL]}</span>
+              <span className="ml-2 text-xs text-muted-foreground">{procedure.engagement === "INFORMATIONAL" ? "信息记录 · " : ""}{procedureStateLabel(procedure)}</span>
+            </div>)}
+            {m.procedures.length === 0 && <span className="t-faint">暂无程序</span>}
+            {m._count.procedures > 2 && <span className="text-xs text-muted-foreground">共 {m._count.procedures} 个程序</span>}
           </div>
         </td>
       ) : null}
@@ -613,7 +607,9 @@ function MockupMatterRow({ m, show, onOpen, href }: { m: MatterRow; href: string
       {show("amount") ? <td className="num font-mono text-[12.75px] font-medium">{m.claimAmount != null ? `¥${Math.round(m.claimAmount).toLocaleString("zh-CN")}` : <span className="t-faint">—</span>}</td> : null}
       {show("deadline") ? (
         <td>
-          {days === null || !nearest ? (
+          {!m.canReadSchedule ? (
+            <span className="text-xs text-muted-foreground">无日程查看权限</span>
+          ) : days === null || !nearest ? (
             <span className="t-faint">—</span>
           ) : overdue ? (
             <span className="mo-cd mo-cd-urgent" style={{ display: "inline-block" }} title={nearest.title}>逾期 {Math.abs(days)} 天</span>

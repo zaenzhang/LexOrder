@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { db, ledgerKeys } = vi.hoisted(() => ({
   db: {
     $transaction: vi.fn(), $queryRaw: vi.fn(),
+    taskWaiting: { findMany: vi.fn() },
     deadline: { findUnique: vi.fn(), findMany: vi.fn() },
     hearing: { findUnique: vi.fn(), findMany: vi.fn() },
     user: { findUnique: vi.fn(), count: vi.fn() },
@@ -32,6 +33,7 @@ beforeEach(() => {
   vi.clearAllMocks(); ledgerKeys.clear();
   db.$transaction.mockImplementation(async (fn) => fn(db));
   db.user.count.mockResolvedValue(1);
+  db.taskWaiting.findMany.mockResolvedValue([]);
   db.notification.createMany.mockResolvedValue({ count: 1 });
   db.reminderDelivery.updateMany.mockResolvedValue({ count: 0 });
   // 登记幂等模拟：当日同键 createMany 计数 0（ON CONFLICT DO NOTHING 语义）

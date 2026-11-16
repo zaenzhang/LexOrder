@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { sourceInputSchema, type EvidenceDocumentOption, type EvidenceSourceResult } from "@/server/evidence/contracts";
+import { sourceInputSchema, type EvidenceDocumentOption, type EvidenceSourceResult, type EvidenceSourceView } from "@/server/evidence/contracts";
 
 const text = (max: number) => z.string().trim().max(max);
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "请输入完整日期").refine(value => {
@@ -50,18 +50,26 @@ export const emptyLawMetadata = (): LawMetadata => ({ kind: "MATERIAL", title: "
 export const researchSourceInputSchema = sourceInputSchema.and(z.object({ lawMetadata: lawMetadataSchema }));
 export type ResearchSourceInput = z.infer<typeof researchSourceInputSchema>;
 
+export const researchIssueSelectionSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("CURRENT"), issueId: z.string().cuid(), revision: z.number().int().positive(), confirmedAt: z.string().datetime({ offset: true }).nullable() }),
+  z.object({ kind: z.literal("HISTORICAL"), revisionId: z.string().cuid() }),
+  z.object({ kind: z.literal("SAVED"), researchRevisionId: z.string().cuid() }),
+]);
+export type ResearchIssueSelection = z.infer<typeof researchIssueSelectionSchema>;
+export function researchIssueSelectionKey(selection: ResearchIssueSelection | null) {
+  if (!selection) return "none";
+  if (selection.kind === "CURRENT") return `current:${selection.issueId}:${selection.revision}:${selection.confirmedAt ?? "unconfirmed"}`;
+  return selection.kind === "SAVED" ? `saved:${selection.researchRevisionId}` : `historical:${selection.revisionId}`;
+}
+
 export const researchContentSchema = z.object({
   question: text(300).min(1, "请填写研究问题"), purpose: text(2000), jurisdiction: text(150),
   relevantDate: optionalDay, researchedAt: z.string().datetime({ offset: true }),
   scope: text(5000), queryLog: z.array(researchQuerySchema).max(40),
   rule: text(15000), exceptions: text(10000), supportingAnalysis: text(15000), opposingAnalysis: text(15000),
   conclusion: text(15000), unresolved: text(10000), nextSteps: text(5000),
-  issueId: z.string().cuid().nullable(), issueRevisionId: z.string().cuid().nullable(),
+  issueSelection: researchIssueSelectionSchema.nullable(),
   sources: z.array(researchSourceInputSchema).max(50),
-}).superRefine((value, ctx) => {
-  if (Boolean(value.issueId) !== Boolean(value.issueRevisionId)) {
-    ctx.addIssue({ code: "custom", path: ["issueId"], message: "请选择争点的具体修订" });
-  }
 });
 export type ResearchContent = z.infer<typeof researchContentSchema>;
 export const researchSaveSchema = researchContentSchema.and(z.object({
@@ -88,19 +96,20 @@ export type ResearchRevisionView = {
   id: string; seriesId: string; version: number; current: boolean;
   createdAt: string; authorName: string | null; checkedAt: string | null; checkedByName: string | null; checkNote: string | null;
   readable: boolean; content: ResearchContent | null; sources: ResearchSourceView[];
-  issue: { id: string; revisionId: string; revision: number; title: string; changed: boolean } | null;
+  issue: { id: string; revisionId: string | null; revision: number; title: string; content: string;
+    confirmedAt: string | null; capturedAt: string; changed: boolean; confirmationChanged: boolean; sources: EvidenceSourceView[] } | null;
   canRevise: boolean; canCheck: boolean; canDraft: boolean;
 };
 export type ResearchListRow = Pick<ResearchRevisionView, "id" | "seriesId" | "version" | "createdAt" | "authorName" | "checkedAt" | "readable"> & { question: string | null };
 export type ResearchList = { records: ResearchListRow[]; canWrite: boolean; nextCursor: string | null };
 export type ResearchOptions = {
   documents: EvidenceDocumentOption[];
-  issues: { id: string; revisionId: string; revision: number; title: string }[];
+  issues: { id: string; revision: number; title: string; selection: Extract<ResearchIssueSelection, { kind: "CURRENT" }> }[];
 };
 export type ResearchSourceResult = EvidenceSourceResult;
 
 export function emptyResearchContent(): ResearchContent {
   return { question: "", purpose: "", jurisdiction: "", relevantDate: "", researchedAt: new Date().toISOString(), scope: "", queryLog: [],
     rule: "", exceptions: "", supportingAnalysis: "", opposingAnalysis: "", conclusion: "", unresolved: "", nextSteps: "",
-    issueId: null, issueRevisionId: null, sources: [] };
+    issueSelection: null, sources: [] };
 }
