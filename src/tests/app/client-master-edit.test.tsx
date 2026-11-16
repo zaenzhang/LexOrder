@@ -43,6 +43,7 @@ function renderPage(page: React.ReactNode) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.history.replaceState(null, "", `/clients/${id}`);
   mock.user = { id: client.ownerUserId!, role: "LAWYER", runtimeMode: "SERVER" };
   mock.list.mockResolvedValue(initialData);
   mock.get.mockResolvedValue({ ...client, contacts: [primary, secondary], matters: [] });
@@ -102,18 +103,20 @@ describe("Server 客户编辑入口（组件环境）", () => {
   });
 
   it("详情只读用户看不到编辑/联系人/合并入口，沟通入口保留", async () => {
-    renderPage(await ClientDetailPage({ params: Promise.resolve({ id }) }));
+    renderPage(await ClientDetailPage({ params: Promise.resolve({ id }), searchParams: Promise.resolve({}) }));
+    expect(screen.getByRole("button", { name: "记录沟通" })).toBeVisible();
+    fireEvent.keyDown(screen.getByRole("tab", { name: "客户资料" }), { key: "Enter" });
     expect(screen.queryByRole("button", { name: "编辑资料" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "添加联系人" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "合并重复档案" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "记录沟通" })).toBeVisible();
     expect(screen.queryByText(/可在「编辑资料」补充/)).not.toBeInTheDocument();
   });
 
   it("详情获授权客户保留原编辑、联系人和合并按钮", async () => {
     mock.user = { ...mock.user, role: "PRINCIPAL_LAWYER" };
     mock.editableIds.mockResolvedValue([id]);
-    renderPage(await ClientDetailPage({ params: Promise.resolve({ id }) }));
+    renderPage(await ClientDetailPage({ params: Promise.resolve({ id }), searchParams: Promise.resolve({}) }));
+    fireEvent.keyDown(screen.getByRole("tab", { name: "客户资料" }), { key: "Enter" });
     expect(screen.getByRole("button", { name: "编辑资料" })).toBeVisible();
     expect(screen.getByRole("button", { name: "添加联系人" })).toBeVisible();
     expect(screen.getByRole("button", { name: "合并重复档案" })).toBeVisible();

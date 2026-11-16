@@ -24,27 +24,27 @@ import { contactRoleLabels } from "./info-panel";
 import { MatterArchive, TeamRailCard } from "./matter-archive";
 import { FinancePanel } from "./finance-panel";
 import { ImportantItemDialog } from "./procedure-content";
-import { ProcedureWorkflowPanel } from "./procedure-workflow-panel";
+import { ProcedureWorkflowPanel, replaceDossierLocation } from "./procedure-workflow-panel";
 import type { DossierView, WaitingItem, WorkflowApi, WorkflowNote, WorkflowPreservationCase } from "./procedure-workflow-panel";
 
 import { ApprovalsPanel } from "./approvals-panel";
 import type { SealContractItem, ExpressItem } from "./info-extras";
 import { AddDeadlineDialog, AddHearingDialog, AddProcedureSheet } from "./procedure-forms";
 import { deleteProcedure } from "@/server/procedures/actions";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { LifecycleActions } from "./lifecycle-actions";
 import { AddBillingSheet } from "./finance-forms";
 import { EvidenceItemDialog, type EvidenceItemRow } from "./evidence-panel";
 import { EvidenceTimeline } from "./evidence-timeline";
 import { ArchiveStatusBanner } from "./archive-status-banner";
 import { ArchiveWizardDialog } from "./archive-wizard";
-import { TeamEditorDialog } from "./team-editor-dialog";
+import { TeamEditorDialog, type MatterEditorSection } from "./team-editor-dialog";
 import type { FolderPayload, FolderDocument, TemplateSummary } from "./folder-types";
 import type { UserOption as PresUserOption } from "@/app/(app)/preservation/_components/preservation-types";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { shDayKey, shDaysFromToday, shMonthDay, shTime } from "@/lib/ui/sh-time";
 import { actionErrorMessage } from "@/lib/action-error";
-import { MaterialProcessingStatus } from "./material-processing-status";
+import { MaterialToolsSheet } from "./material-tools-sheet";
 import { PendingMaterialUploads } from "./pending-material-uploads";
 
 type MatterPayloadBase = Prisma.MatterGetPayload<{
@@ -183,6 +183,8 @@ export function MatterDetailTabs({
   preservationCases,
   evidenceItems,
   evidenceError,
+  materialRefreshKey,
+  briefNode,
   contextNode,
   notes,
   reviewNode, responsibilityNode, closureNode, conflictNode,
@@ -223,6 +225,8 @@ export function MatterDetailTabs({
   preservationCases: WorkflowPreservationCase[];
   evidenceItems: EvidenceItemRow[];
   evidenceError?: string | null;
+  materialRefreshKey?: number;
+  briefNode?: React.ReactNode;
   contextNode?: React.ReactNode;
   notes: WorkflowNote[];
   /** AI 审查总览（服务端渲染节点），归入「信息总览」 */
@@ -234,10 +238,18 @@ export function MatterDetailTabs({
   capabilities?: { aiReview: boolean; caseSearch: boolean; yuandian?: boolean; localJudgments?: boolean };
 }) {
   const allowed = (key: import("@/lib/roles/catalog").PermissionKey) => hasCustomPermission({ role: currentUserRole ?? "", rolePermissions }, key);
-  const [selectedProcId, setSelectedProcId] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const selectedProcId = searchParams.get("procedure");
+  const requestedView = searchParams.get("view");
+  const view: DossierView = requestedView === "work" || requestedView === "money" || requestedView === "seal" ? requestedView : "archive";
+  const setView = (nextView: DossierView) => replaceDossierLocation({ view: nextView });
+  const setSelectedProcId = (procedure: string) => replaceDossierLocation({ procedure, stage: null, scope: null });
   const [addProcOpen, setAddProcOpen] = useState(false);
   const [matterEditorOpen, setMatterEditorOpen] = useState(false);
-  const [view, setView] = useState<DossierView>("archive");
+  const [matterEditorSection, setMatterEditorSection] = useState<MatterEditorSection>("matter");
+  const matterEditorTrigger = useRef<HTMLElement | null>(null);
+  const moreTrigger = useRef<HTMLButtonElement>(null);
+  const matterHeading = useRef<HTMLHeadingElement>(null);
   const [ledgerAdd, setLedgerAdd] = useState<"express" | "hearing" | "deadline" | null>(null);
   const [caseSearchOpen, setCaseSearchOpen] = useState(false);
   const [reviewDocId, setReviewDocId] = useState<string | null>(null);
@@ -269,6 +281,13 @@ export function MatterDetailTabs({
   const [, startTransition] = useTransition();
   const router = useRouter();
 
+  function openMatterEditor(section: MatterEditorSection, returnFocusTarget?: HTMLElement | null) {
+    matterEditorTrigger.current = returnFocusTarget ?? (document.activeElement instanceof HTMLElement && document.activeElement !== document.body
+      ? document.activeElement : null);
+    setMatterEditorSection(section);
+    setMatterEditorOpen(true);
+  }
+
   function handleDeleteProcedure(id: string) {
     startTransition(async () => {
       try {
@@ -286,9 +305,9 @@ export function MatterDetailTabs({
     .sort((a, b) => a.order - b.order);
 
   // 默认选中第一个在办程序（若有）
-  const currentProcedure: ProcedureItem | null = selectedProcId
-    ? engagedProcedures.find((p) => p.id === selectedProcId) ?? null
-    : engagedProcedures.find((p) => p.status !== "CONCLUDED") ?? engagedProcedures[0] ?? null;
+  const currentProcedure: ProcedureItem | null =
+    engagedProcedures.find((p) => p.id === selectedProcId) ??
+    engagedProcedures.find((p) => p.status !== "CONCLUDED") ?? engagedProcedures[0] ?? null;
   const canEditMatterInfo = canLeadThisMatter;
   const canOpenUnifiedEditor =
     canEditMatterInfo ||
@@ -300,7 +319,7 @@ export function MatterDetailTabs({
 
   // 顶栏主操作 = 添加记录（＋记录 · 沟通）
   useTopbarAction(
-    canWriteRecords ? { label: "添加记录", onClick: () => setProgress({ mode: "record", stage: workflowApi.current?.currentStageName ?? undefined, stageNames: workflowApi.current?.stageNames ?? [] }) } : null,
+    canWriteRecords ? { label: "记录办案进展", onClick: () => setProgress({ mode: "record", stage: workflowApi.current?.currentStageName ?? undefined, stageNames: workflowApi.current?.stageNames ?? [] }) } : null,
     [canWriteRecords]
   );
 
@@ -339,7 +358,7 @@ export function MatterDetailTabs({
   // 页头「···」菜单只留页面级编辑入口；页签切换（财务/用印）、类案检索、安排开庭与新增程序
   // 均在各自常驻位置有入口，不在此重复（2026-09-20 用户确认收敛）
   const moreItems = [
-    ...(canOpenUnifiedEditor ? [{ key: "edit", label: "编辑信息与团队", icon: Pencil, onSelect: () => setMatterEditorOpen(true) }] : [])
+    ...(canOpenUnifiedEditor ? [{ key: "edit", label: "编辑案件与团队", icon: Pencil, onSelect: () => openMatterEditor("matter", moreTrigger.current) }] : [])
   ];
 
   const archiveBadge = matter.status === "ARCHIVED"
@@ -389,7 +408,7 @@ export function MatterDetailTabs({
               {matter.firmCaseNo ? <span className="code">所内 {matter.firmCaseNo}</span> : null}
               <span>{[matterCategoryLabel[matter.category], matter.cause?.name ?? matter.causeFreeText].filter(Boolean).join(" · ")}</span>
             </div>
-            <h1 className="ctx-title dos-title">{matter.title}</h1>
+            <h1 ref={matterHeading} tabIndex={-1} className="ctx-title dos-title">{matter.title}</h1>
             <div className="dos-sides">
               {categoryKind === "litigation" ? (
                 <>
@@ -442,6 +461,7 @@ export function MatterDetailTabs({
               canChangeStatus={Boolean(currentUserRole && canLeadThisMatter)}
               canExportBundle={currentUserRole !== "FINANCE" && allowed("matters.export") && allowed("matters.read") && allowed("finance.read") && allowed("documents.download")}
               extraItems={moreItems}
+              moreTriggerRef={moreTrigger}
             />
           </div>
         </div>
@@ -539,6 +559,7 @@ export function MatterDetailTabs({
         viewCounts={{ seal: sealContracts.filter((sc) => sc.status === "PENDING").length }}
         waiting={waiting}
         archiveNode={<>
+          {briefNode ? <div className="card dos-facts">{briefNode}</div> : null}
           <MatterArchive
             matter={matter}
             contextNode={contextNode}
@@ -552,23 +573,33 @@ export function MatterDetailTabs({
             onOpenFinance={() => setView("money")}
             customFieldDefs={customFieldDefs}
             customValues={customValues}
-            canEdit={canOpenUnifiedEditor}
+            canEdit={canEditMatterInfo}
+            canEditProcedure={canAssociateThisMatter && Boolean(currentProcedure)}
             canEditCustom={canLeadThisMatter}
             canManageRelated={canAssociateThisMatter}
-            onEdit={() => setMatterEditorOpen(true)}
+            onEdit={openMatterEditor}
           />
           {closureNode}
         </>}
-        archiveRailTop={<><TeamRailCard matter={matter} canManage={canOwnThisMatter} onManage={() => setMatterEditorOpen(true)} />{conflictNode}</>}
+        archiveRailTop={<><TeamRailCard matter={matter} canManage={canOwnThisMatter} onManage={() => openMatterEditor("team")} />{conflictNode}</>}
         expresses={expresses}
         onAddLedger={canAssociateThisMatter && currentProcedure ? (type) => setLedgerAdd(type) : undefined}
-        materialsExtra={<>
+        materialsActions={<>
           {evidenceError ? <p role="alert" className="text-sm text-destructive">证据要点读取失败：{evidenceError} <button type="button" className="underline" onClick={() => router.refresh()}>重新加载</button></p> : null}
-          {!evidenceError ? <EvidenceTimeline key={matter.id} items={evidenceItems} /> : null}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {!evidenceError ? <EvidenceTimeline key={matter.id} items={evidenceItems} /> : null}
+            {allowed("documents.read") ? <MaterialToolsSheet
+              key={`${matter.id}:${currentProcedure?.id ?? "unassigned"}`}
+              matterId={matter.id}
+              documents={procDocs.map(document => ({ id: document.id, name: document.name, version: document.version }))}
+              scopeLabel={currentProcedure ? `${procLabel(currentProcedure)}及未归属材料 · 不限环节` : "当前事项材料"}
+              canManage={canAssociateThisMatter && !isArchived && allowed("documents.write")}
+              refreshKey={materialRefreshKey}
+            /> : null}
+          </div>
           {canAssociateThisMatter && allowed("documents.write") ? <PendingMaterialUploads key={matter.id} matterId={matter.id} /> : null}
-          {allowed("documents.read") ? <MaterialProcessingStatus matterId={matter.id} documentIds={procDocs.map(document => document.id)} canManage={canAssociateThisMatter && !isArchived && allowed("documents.write")} /> : null}
-          {reviewNode}
         </>}
+        materialsExtra={reviewNode}
         onCaseSearch={capabilities.caseSearch && allowed("matters.write") ? () => setCaseSearchOpen(true) : undefined}
         financeNode={
           <div className="dos-main">
@@ -673,6 +704,11 @@ export function MatterDetailTabs({
         <TeamEditorDialog
           open={matterEditorOpen}
           onOpenChange={setMatterEditorOpen}
+          initialSection={matterEditorSection}
+          onReturnFocus={() => {
+            if (matterEditorTrigger.current?.isConnected) matterEditorTrigger.current.focus({ preventScroll: true });
+            else matterHeading.current?.focus({ preventScroll: true });
+          }}
           matterId={matter.id}
           matterMeta={{
             intakeDate: matter.intakeDate ?? null,

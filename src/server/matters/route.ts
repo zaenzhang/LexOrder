@@ -1,30 +1,47 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { matterHref, normalizeMatterParam } from "@/lib/matters/route";
+import { decodeMatterParam, matterHref } from "@/lib/matters/route";
 
 /**
  * 把详情页路由参数解析成案件主键。
  *
- * 不去猜参数形状（cuid 还是编号），直接让数据库同时匹配两者：
- * `internalCode` 有唯一索引，cuid 不含 `-`、编号必含，两者不可能撞，
- * 一次查询即可，也不用为 cuid 的具体格式（v1/v2）写正则。
+ * 先精确匹配原编号或旧 ID，再尝试解码值，避免字面 `%xx` 被二次解码。
+ * 只有唯一的大小写不敏感编号才允许回退；ID 不做大小写模糊匹配。
+ * 精确命中已删除事项或存在歧义时直接拒绝，不跳到另一个相似编号。
  *
  * 返回 `internalCode` 供调用方判断是否需要重定向到规范地址。
  */
 export async function resolveMatterRoute(
   param: string
 ): Promise<{ id: string; internalCode: string } | null> {
-  const normalized = normalizeMatterParam(param);
+  const decoded = decodeMatterParam(param);
+  const exactKeys = [...new Set([param.trim(), decoded])].filter(Boolean);
+  for (const key of exactKeys) {
+    const matches = await prisma.matter.findMany({
+      where: { OR: [{ id: key }, { internalCode: key }] },
+      select: { id: true, internalCode: true, deletedAt: true },
+      take: 2
+    });
+    if (matches.length > 1) return null;
+    if (matches.length === 1) {
+      const matter = matches[0];
+      return matter.deletedAt ? null : { id: matter.id, internalCode: matter.internalCode };
+    }
+  }
+  if (!decoded) return null;
 
-  const matter = await prisma.matter.findFirst({
+  const matches = await prisma.matter.findMany({
     where: {
       deletedAt: null,
-      OR: [{ id: param }, { internalCode: normalized }]
+      internalCode: { equals: decoded, mode: "insensitive" }
     },
-    select: { id: true, internalCode: true }
+    select: { id: true, internalCode: true },
+    take: 2
   });
-
-  return matter;
+  if (matches.length !== 1) return null;
+  const matter = matches[0];
+  // 只接受字面编号的大小写差异，查询层返回的其他相似候选不得成为路由。
+  return matter.internalCode.toLowerCase() === decoded.toLowerCase() ? matter : null;
 }
 
 /**

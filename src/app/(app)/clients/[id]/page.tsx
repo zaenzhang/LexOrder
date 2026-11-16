@@ -1,4 +1,5 @@
 import { clientIdTypeLabel } from "@/lib/clients/person-id";
+import { clientListReturnHref } from "@/lib/clients/navigation";
 import { requireSession } from "@/lib/auth/session";
 import { hasCustomPermission } from "@/lib/roles/catalog";
 import { notFound } from "next/navigation";
@@ -11,23 +12,26 @@ import { editableClientIds } from "@/server/clients/master-access";
 import { ClientRelationshipPanel } from "./_components/client-relationship-panel";
 import { ClientMattersPanel } from "./_components/client-matters-panel";
 import { ClientHistoryPanel } from "./_components/client-history-panel";
+import { ClientDetailTabs } from "./_components/client-detail-tabs";
 import { getClientHistoryPage } from "@/server/clients/history-actions";
 import { decryptIdNumber } from "@/lib/clients/id-number-crypto";
 import { clientTypeLabel, cooperationStatusLabel, genderLabel } from "@/lib/enums";
 import { avatarTone } from "@/lib/ui/moan-tones";
 import { FieldGrid, FieldItem, InitialAvatar } from "@/components/patterns/moan";
-import { TopbarLinkAction } from "@/components/layout/topbar-link-action";
 import { ClientEditButton } from "./_components/client-edit-button";
 import { AddContactButton, MergeBanner } from "./_components/client-detail-parts";
 
 const COOP_BADGE: Record<string, string> = { POTENTIAL: "b-slate", NEGOTIATING: "b-amber", SIGNED: "b-teal", TERMINATED: "b-bronze" };
 
-const compact = (n: number) => (n >= 1_000_000 ? `¥${(n / 1_000_000).toFixed(2)}M` : n >= 10_000 ? `¥${Math.round(n / 1000)}K` : `¥${Math.round(n).toLocaleString("zh-CN")}`);
 const yuan = (n: number) => `¥${Math.round(n).toLocaleString("zh-CN")}`;
 const ymd = (d: Date | string | null | undefined) => (d ? new Date(d).toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" }) : "—");
 
-export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ClientDetailPage({ params, searchParams }: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string | string[]; returnTo?: string | string[] }>;
+}) {
   const { id } = await params;
+  const query = await searchParams;
   const client = await getClientById(id).catch(() => null);
   if (!client) notFound();
   const session = await requireSession("clients.read");
@@ -57,13 +61,10 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
 
   return (
     <div className="mo-client">
-      <TopbarLinkAction label="为此客户新建收案" href={hasCustomPermission(session.user, "intakes.create") ? intakeHref : null} />
-      <Link href="/clients" className="mo-back">
+      <Link href={clientListReturnHref(query.returnTo)} className="mo-back">
         <ChevronLeft className="h-3.5 w-3.5" />
         返回客户列表
       </Link>
-
-      {canMerge && insights.suspects.length > 0 ? <MergeBanner keepId={client.id} keepName={client.name} suspects={insights.suspects} canMerge={canMerge} /> : null}
 
       <div className="card client-hero">
         <div className="ch-top flex-wrap">
@@ -72,137 +73,95 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             <h1 className="ch-name truncate" title={client.name}>{client.name}</h1>
             <div className="ch-badges">
               <span className="badge b-white">{clientTypeLabel[client.type]}</span>
-              {client.source ? <span className="src-chip party">来源：{client.source}</span> : null}
               <span className={`badge ${COOP_BADGE[client.cooperationStatus] ?? "b-white"}`}><span className="bdot" />{cooperationStatusLabel[client.cooperationStatus]}</span>
-              {activeCount > 0 ? <span className="badge b-blue"><span className="bdot" />在办 {activeCount} 件</span> : null}
-              {client.tags.slice(0, 3).map((t) => <span key={t} className="badge b-white">{t}</span>)}
-            </div>
-            <div className="ch-meta">
-              <div className="m">
-                <span className="k">{isIndividual ? (!client.idType || client.idType === "ID_CARD" ? "身份证号" : clientIdTypeLabel[client.idType]) : "统一社会信用代码"}</span>
-                {idNumber ? <span className="v mono">{idNumber}</span> : <span className="v t-faint">未登记</span>}
-              </div>
-              {!isIndividual ? <div className="m"><span className="k">法定代表人</span><span className="v">{client.legalRep || "—"}</span></div> : null}
-              <div className="m"><span className="k">建档</span><span className="v mono">{ymd(client.createdAt)}</span></div>
-              {client.address ? <div className="m"><span className="k">{isIndividual ? "住所地" : "注册地"}</span><span className="v max-w-[260px] truncate" title={client.address}>{client.address}</span></div> : null}
             </div>
           </div>
-          <div className="ch-stats">
-            <div className="ch-stat"><div className="n">{insights.matterPage.total}</div><div className="l">累计案件</div></div>
-            <div className="ch-stat"><div className="n" style={{ color: "var(--teal-deep)" }}>{activeCount}</div><div className="l">办理中</div></div>
-            <div className="ch-stat"><div className="n">{finance ? compact(finance.received) : "—"}</div><div className="l">累计实收</div></div>
-            <div className="ch-stat"><div className="n" style={{ color: finance && finance.pending > 0 ? "var(--amber)" : undefined }}>{finance ? compact(finance.pending) : "—"}</div><div className="l">待回款</div></div>
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap", alignItems: "center" }}>
-          {canWrite ? <ClientEditButton client={{ ...client, idNumber: idNumber || null }} /> : null}
-          <Link href={`/conflicts?name=${encodeURIComponent(client.name)}`} className="btn btn-secondary btn-sm">冲突预检</Link>
-          {canMerge && insights.suspects.length === 0 ? <MergeBanner keepId={client.id} keepName={client.name} suspects={[]} canMerge={canMerge} /> : null}
-          <div style={{ flex: 1 }} />
-          <span className="t-xs t-faint">资料修改与审计同事务留痕</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-3.5 xl:grid-cols-[minmax(0,1fr)_296px]">
-        <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
-          <ClientRelationshipPanel key={client.id} clientId={client.id} view={relationship} />
-          <ClientMattersPanel clientId={client.id} initial={insights.matterPage} />
-
-          <div className="card" style={{ overflow: "hidden" }}>
-            <div className="panel-head">
-              <div className="panel-title">
-                <Users className="ic" strokeWidth={1.8} />
-                <span id="client-contacts">联系人</span> <span className="badge b-white" style={{ marginLeft: 2 }}>{client.contacts.length}</span>
-              </div>
-              {canWrite ? <AddContactButton clientId={client.id} /> : null}
+      <ClientDetailTabs
+        key={client.id}
+        initialTab={typeof query.tab === "string" ? query.tab : undefined}
+        defaultTab={relationship ? "followups" : "profile"}
+        sections={{
+          followups: <ClientRelationshipPanel clientId={client.id} view={relationship} />,
+          matters: <div className="space-y-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="t-sm t-mute">在办 {activeCount} 件</span>
+              {hasCustomPermission(session.user, "intakes.create") ? <Link href={intakeHref} className="btn btn-secondary btn-sm">为此客户新建收案</Link> : null}
             </div>
-            {client.contacts.length === 0 ? (
-              <div className="empty mo-empty-compact"><div className="mo-empty-title">暂无联系人</div></div>
-            ) : (
-              client.contacts.map((c) => (
-                <div key={c.id} className="contact">
-                  <InitialAvatar name={c.name} tone={c.isPrimary ? "teal" : avatarTone(c.name)} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="ct-name flex flex-wrap items-center gap-1.5">
-                      {c.name}
-                      {c.isPrimary ? <span className="badge b-teal" style={{ fontSize: 10 }}>主要联系人</span> : null}
-                      {c.title ? <span className="badge b-white" style={{ fontSize: 10 }}>{c.title}</span> : null}
-                    </div>
-                    <div className="ct-meta flex flex-wrap items-center gap-x-1.5">
-                      {c.phone ? <span className="mono">{c.phone}</span> : null}
-                      {c.email ? <span>· {c.email}</span> : null}
+            <div className={`grid items-start gap-3.5 ${finance ? "xl:grid-cols-[minmax(0,1fr)_296px]" : "grid-cols-1"}`}>
+              <ClientMattersPanel clientId={client.id} initial={insights.matterPage} />
+              {finance ? <section className="card min-w-0" aria-labelledby="client-finance-title">
+                <div className="panel-head"><h2 id="client-finance-title" className="panel-title"><CreditCard className="ic" strokeWidth={1.8} />财务往来</h2></div>
+                <div className="panel-body">
+                  <div className="flex justify-between py-1"><span className="t-sm t-mute">合同总额</span><span className="num-md">{yuan(finance.contractTotal)}</span></div>
+                  <div className="flex justify-between py-1"><span className="t-sm t-mute">累计实收</span><span className="num-md" style={{ color: "var(--green)" }}>{yuan(finance.received)}</span></div>
+                  <div className="flex justify-between py-1"><span className="t-sm t-mute">待回款</span><span className="num-md" style={{ color: finance.pending ? "var(--amber)" : undefined }}>{yuan(finance.pending)}</span></div>
+                  <div className="progress mt-2.5"><div className="progress-fill" style={{ width: `${paidRate}%` }} /></div>
+                  <div className="mt-1.5 flex justify-between"><span className="t-xs t-mute">回款进度</span><span className="num-sm t-mute">{paidRate}%</span></div>
+                </div>
+              </section> : null}
+            </div>
+          </div>,
+          history: <ClientHistoryPanel clientId={client.id} initial={history} />,
+          profile: <div className="space-y-3.5">
+            {canMerge && insights.suspects.length > 0 ? <MergeBanner keepId={client.id} keepName={client.name} suspects={insights.suspects} canMerge={canMerge} /> : null}
+            <div className="flex flex-wrap items-center gap-2">
+              {canWrite ? <ClientEditButton client={{ ...client, idNumber: idNumber || null }} /> : null}
+              <Link href={`/conflicts?name=${encodeURIComponent(client.name)}`} className="btn btn-secondary btn-sm">冲突预检</Link>
+              {canMerge && insights.suspects.length === 0 ? <MergeBanner keepId={client.id} keepName={client.name} suspects={[]} canMerge={canMerge} /> : null}
+            </div>
+            <div className="grid items-start gap-3.5 xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.65fr)]">
+              <section className="card min-w-0" aria-labelledby="client-profile-title">
+                <div className="panel-head"><h2 id="client-profile-title" className="panel-title"><UserRound className="ic" strokeWidth={1.8} />{isIndividual ? "个人信息" : "工商信息"}</h2></div>
+                <div className="panel-body">
+                  <FieldGrid cols={2}>
+                    <FieldItem label="客户编号" mono>{client.internalCode || "—"}</FieldItem>
+                    <FieldItem label="建档日期" mono>{ymd(client.createdAt)}</FieldItem>
+                    <FieldItem label={isIndividual ? (!client.idType || client.idType === "ID_CARD" ? "身份证号" : clientIdTypeLabel[client.idType]) : "统一社会信用代码"} mono wide>{idNumber || "未登记"}</FieldItem>
+                    <FieldItem label="客户来源">{client.source || "—"}</FieldItem>
+                    <FieldItem label="所属行业">{client.industry || "—"}</FieldItem>
+                    {isIndividual ? <FieldItem label="性别">{client.gender ? genderLabel[client.gender] : "—"}</FieldItem> : <FieldItem label="法定代表人">{client.legalRep || "—"}</FieldItem>}
+                    {isIndividual ? <FieldItem label="民族">{client.ethnicity || "—"}</FieldItem> : null}
+                    <FieldItem label="联系电话" mono>{client.phone || "—"}</FieldItem>
+                    <FieldItem label="邮箱">{client.email || "—"}</FieldItem>
+                    <FieldItem label={isIndividual ? "住所地" : "注册地"} wide>{client.address || "—"}</FieldItem>
+                    {client.tags.length > 0 ? <FieldItem label="标签" wide><span className="flex flex-wrap gap-1.5">{client.tags.map(tag => <span key={tag} className="badge b-white">{tag}</span>)}</span></FieldItem> : null}
+                    {client.notes ? <FieldItem label="备注" wide><span className="whitespace-pre-wrap">{client.notes}</span></FieldItem> : null}
+                  </FieldGrid>
+                  {insights.source ? <details className="mt-4 border-t border-[var(--bd-hair)] pt-3 text-xs text-[var(--t-muted)]">
+                    <summary className="cursor-pointer">来源渠道统计</summary>
+                    <p className="mt-2">可见客户中，同渠道 {insights.source.sameSourceClients} 家，占 {Math.round((insights.source.sameSourceClients / Math.max(1, insights.source.totalClients)) * 100)}%。</p>
+                  </details> : null}
+                </div>
+              </section>
+              <section className="card min-w-0 overflow-hidden" aria-labelledby="client-contacts">
+                <div className="panel-head flex-wrap gap-2">
+                  <h2 id="client-contacts" className="panel-title"><Users className="ic" strokeWidth={1.8} />联系人 <span className="badge b-white">{client.contacts.length}</span></h2>
+                  {canWrite ? <AddContactButton clientId={client.id} /> : null}
+                </div>
+                {client.contacts.length === 0 ? <div className="empty mo-empty-compact"><div className="mo-empty-title">暂无联系人</div></div> : client.contacts.map(c => (
+                  <div key={c.id} className="contact">
+                    <InitialAvatar name={c.name} tone={c.isPrimary ? "teal" : avatarTone(c.name)} />
+                    <div className="min-w-0 flex-1">
+                      <div className="ct-name flex flex-wrap items-center gap-1.5">
+                        {c.name}
+                        {c.isPrimary ? <span className="badge b-teal text-[10px]">主要联系人</span> : null}
+                        {c.title ? <span className="badge b-white text-[10px]">{c.title}</span> : null}
+                      </div>
+                      <div className="ct-meta flex flex-wrap items-center gap-x-1.5 break-all">
+                        {c.phone ? <span className="mono">{c.phone}</span> : null}
+                        {c.email ? <span>{c.email}</span> : null}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          <div className="card">
-            <div className="panel-head">
-              <div className="panel-title">
-                <UserRound className="ic" strokeWidth={1.8} />
-                {isIndividual ? "个人信息" : "工商信息"}
-              </div>
-            </div>
-            <div className="panel-body" style={{ paddingTop: 4 }}>
-              <FieldGrid cols={2}>
-                <FieldItem label="客户编号" mono>{client.internalCode || "—"}</FieldItem>
-                <FieldItem label="客户来源">{client.source || "—"}</FieldItem>
-                <FieldItem label="所属行业">{client.industry || "—"}</FieldItem>
-                {isIndividual ? <FieldItem label="性别">{client.gender ? genderLabel[client.gender] : "—"}</FieldItem> : <FieldItem label="法定代表人">{client.legalRep || "—"}</FieldItem>}
-                {isIndividual ? <FieldItem label="民族">{client.ethnicity || "—"}</FieldItem> : null}
-                <FieldItem label="联系电话" mono>{client.phone || "—"}</FieldItem>
-                <FieldItem label="邮箱">{client.email || "—"}</FieldItem>
-                <FieldItem label="住所地" wide>{client.address || "—"}</FieldItem>
-                {client.notes ? <FieldItem label="备注" wide><span className="whitespace-pre-wrap">{client.notes}</span></FieldItem> : null}
-              </FieldGrid>
+                ))}
+              </section>
             </div>
           </div>
-        </div>
-
-        <aside style={{ display: "flex", flexDirection: "column", gap: 14 }} className="min-w-0 xl:sticky xl:top-[68px]">
-          <div className="card">
-            <div className="panel-head">
-              <div className="panel-title" style={{ fontSize: 13 }}><CreditCard className="ic" strokeWidth={1.8} />财务往来</div>
-              <span className="t-xs t-mute">累计</span>
-            </div>
-            {finance ? (
-              <div className="panel-body" style={{ paddingTop: 10 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}><span className="t-sm t-mute">合同总额</span><span className="num-md">{yuan(finance.contractTotal)}</span></div>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}><span className="t-sm t-mute">累计实收</span><span className="num-md" style={{ color: "var(--green)" }}>{yuan(finance.received)}</span></div>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}><span className="t-sm t-mute">待回款</span><span className="num-md" style={{ color: finance.pending ? "var(--amber)" : undefined }}>{yuan(finance.pending)}</span></div>
-                <div className="progress" style={{ marginTop: 10 }}><div className="progress-fill" style={{ width: `${paidRate}%` }} /></div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}><span className="t-xs t-mute">回款进度</span><span className="num-sm t-mute">{paidRate}%</span></div>
-              </div>
-            ) : (
-              <div className="panel-body t-xs t-mute">无财务查看权限</div>
-            )}
-          </div>
-
-          <div className="card">
-            <div className="panel-head">
-              <div className="panel-title" style={{ fontSize: 13 }}><UserRound className="ic" strokeWidth={1.8} />来源渠道</div>
-              <span className="t-xs t-mute">{insights.matterPage.total} 个案件</span>
-            </div>
-            {insights.source ? (
-              <div className="src-bars">
-                <div className="src-bar">
-                  <span className="n truncate" title={insights.source.name}>{insights.source.name}</span>
-                  <div className="track"><div className="fill" style={{ width: `${Math.max(6, (insights.source.sameSourceClients / Math.max(1, insights.source.totalClients)) * 100)}%`, background: "var(--teal)" }} /></div>
-                  <span className="v">{insights.source.sameSourceClients} 家</span>
-                </div>
-                <div className="t-xs t-mute" style={{ marginTop: 6 }}>可见客户中同渠道占比 {Math.round((insights.source.sameSourceClients / Math.max(1, insights.source.totalClients)) * 100)}%</div>
-              </div>
-            ) : (
-              <div className="panel-body t-xs t-mute">{canWrite ? "建档时未登记客户来源，可在「编辑资料」补充。" : "未登记客户来源"}</div>
-            )}
-          </div>
-
-          <ClientHistoryPanel clientId={client.id} initial={history} />
-
-        </aside>
-      </div>
+        }}
+      />
     </div>
   );
 }

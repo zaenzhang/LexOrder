@@ -117,7 +117,7 @@ export function ProgressDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[560px]">
         <DialogHeader>
-          <DialogTitle>{mode === "judgment" ? "添加记录 · 研判" : "添加记录 · 沟通"}</DialogTitle>
+          <DialogTitle>{mode === "judgment" ? "记录办案进展 · 研判" : "记录办案进展 · 沟通"}</DialogTitle>
           <DialogDescription>
             {mode === "judgment" ? "我的判断与分析，独立陈列，不与事实记录混排；保存后写入审计。" : "记录已发生的沟通、送达、会见等事实，自动带时间与操作人。"}
           </DialogDescription>

@@ -27,7 +27,7 @@
 | 法律 MCP | 官方机构预设与自定义接入；端点、认证和来源有登记，凭据服务端保存 |
 | 交付 | Server 固定镜像/部署配置、安装升级与恢复说明；不等待个人安装包 |
 
-部署版 M2 业务预览已收口，后续按既有 M3 专业研究/实际交付、M4 固定发行/升级/整套恢复推进。界面专项由用户另行委派，本执行组交接已改代码和未验事项；M2 代表性业务检查不等于全站设计或手机实物验收。性能只观察，不反复运行无关测试或 hash 扫描。
+部署版 M2 业务预览已收口。M3 当前保留研究、既有方案/指示、轻量模板/人工复核、轻量同案依赖/等待、人工简报和实际交付；M4 完成固定发行/升级/整套恢复。知识沉淀、结构化比较、深化期限重算、自动客户简报及通用访谈机制暂缓至最低优先级，不作为门禁、不自动安排恢复。参考依据及范围见[实施计划 §7.11](docs/WORKBENCH_PLAN.md#711-m3-详细执行计划与审查2026-11-16)。界面专项继续收口，性能只观察。
 
 ## 项目文档
 
@@ -37,7 +37,7 @@
 | --- | --- |
 | [产品需求、技能与界面](docs/PRODUCT_REQUIREMENTS_ACCEPTANCE.md) | RQ01—RQ20、SK01—SK12、界面和场景验收 |
 | [架构、发布与审查](docs/REFACTOR_DESKTOP_TEAM_RAG.md) | Server、可选服务、搁置设计、开发部署与恢复 |
-| [实施计划与交接](docs/WORKBENCH_PLAN.md) | 第一阶段 M0—M4、W01—W17 及子任务、16 组验收场景、当前证据与下一步 |
+| [实施计划与交接](docs/WORKBENCH_PLAN.md) | M0—M4 当前范围、W/子项/AC 编号追踪、暂缓清单、证据与下一步；编号保留不等于全部必做 |
 | [研究与决策依据](docs/RESEARCH_AND_DECISIONS.md) | 项目来源、固定版本、采用边界及全球律所职业能力资料 |
 
 协作入口：[AGENTS.md](AGENTS.md)、[贡献说明](CONTRIBUTING.md)、[变更记录](CHANGELOG.md)、[安全说明](SECURITY.md)、[社区准则](CODE_OF_CONDUCT.md)。
@@ -118,6 +118,7 @@ npm run build
 | [Paperless-ngx](https://github.com/paperless-ngx/paperless-ngx/tree/4610171a94e5932e85a80e480032e397cdb6f309) | 原件、处理状态、逐件失败和恢复 | 已用于契约/验收设计的行为参考，`4610171` |
 | [Kosmos](https://github.com/Kosmos-Law/kosmos/tree/c6454fd5488c0d231e2b4756846f690c679586ca) | 原文位置、事实关系及 OCR 覆盖 | 已用于来源/覆盖设计的行为参考，`c6454fd` |
 | [Frappe CRM](https://github.com/frappe/crm/tree/3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952) | 对象导航、列表/详情、客户活动与跟进 | 后续全局交互主参考，`3509bd4`；UI 改版后置 |
+| [ERPNext](https://github.com/frappe/erpnext/tree/19964b09a0045c014bb2f9ab66cd8703eb3722df/erpnext/projects/doctype/task) | 轻量任务前置关系、环/完成检查与详情选择 | 本轮固定源码研究，采用业务设计；不引入 ERP/自动排程平台 |
 | [Twenty](https://github.com/twentyhq/twenty/tree/26fa97ebc8a5773e842ba0d2f01e0b24bed6e7d0) | 关联记录与筛选 | 已比较的辅助参考，`26fa97e` |
 | [案齐 ANQI](https://github.com/zj-ai-lab/anqi) | 今日计划、程序事件、期限解释与人工保护 | 后续行为参考，尚未合入 |
 | [诉讼可视化](https://github.com/MiaoQichuan/new-litigation-visualization) | 多来源事实、矛盾和时间线 | 后续行为/数据关系参考，尚未合入 |

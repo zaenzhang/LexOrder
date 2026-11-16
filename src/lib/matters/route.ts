@@ -25,16 +25,18 @@ export function matterHref(matter: MatterRouteKey, suffix = ""): string {
   return `/matters/${encodeURIComponent(key)}${suffix}`;
 }
 
-/**
- * 规范化路由参数：URL 解码 + 去空白 + 转大写。
- * 编号里的字母恒为大写，允许用户手打小写地址（`m-2026-001`）也能命中。
- */
-export function normalizeMatterParam(param: string): string {
+/** URL 解码并去首尾空白，保留编号和旧 ID 的实际大小写。 */
+export function decodeMatterParam(param: string): string {
   let decoded = param;
   try {
     decoded = decodeURIComponent(param);
   } catch {
     // 参数里有裸 `%` 时 decodeURIComponent 会抛，保持原值继续走查询即可
   }
-  return decoded.trim().toUpperCase();
+  return decoded.trim();
+}
+
+/** 兼容既有的大写规范化用途；解析事项时须先保留原编号做精确匹配。 */
+export function normalizeMatterParam(param: string): string {
+  return decodeMatterParam(param).toUpperCase();
 }

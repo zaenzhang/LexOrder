@@ -36,7 +36,7 @@ async function fixture() {
   return { user, matter };
 }
 async function manual(f: Awaited<ReturnType<typeof fixture>>, sourceDocumentId?: string) {
-  return createEvidenceItem({ matterId: f.matter.id, title: "合成付款要点", content: "合成原始内容", kind: "FACT", sourceDocumentId, sourceRelation: "SUPPORTS" });
+  return createEvidenceItem({ requestKey: randomUUID(), matterId: f.matter.id, title: "合成付款要点", content: "合成原始内容", kind: "FACT", sourceDocumentId, sourceRelation: "SUPPORTS" });
 }
 async function document(f: Awaited<ReturnType<typeof fixture>>, version = 1, familyId: string = randomUUID()) {
   // Metadata fixture only. These tests exercise reference persistence, not original-file download or parsing.

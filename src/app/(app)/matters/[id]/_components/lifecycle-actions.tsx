@@ -47,7 +47,8 @@ export function LifecycleActions({
   canArchive,
   canChangeStatus = true,
   canExportBundle = false,
-  extraItems = []
+  extraItems = [],
+  moreTriggerRef
 }: {
   matterId: string;
   status: MatterStatus;
@@ -58,6 +59,8 @@ export function LifecycleActions({
   canChangeStatus?: boolean;
   /** 墨案 04 页头「···」菜单：页面级入口（编辑信息）。服务轴 UI 已移除（2026-09-20 用户确认） */
   extraItems?: { key: string; label: string; icon: React.ComponentType<{ className?: string }>; onSelect: () => void }[];
+  /** 菜单项卸载后，外部弹窗仍可返回常驻的页头按钮。 */
+  moreTriggerRef?: React.Ref<HTMLButtonElement>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -135,7 +138,7 @@ export function LifecycleActions({
         {extras.length > 0 ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button type="button" className="btn btn-secondary btn-sm btn-icon" aria-label="更多操作">
+              <button ref={moreTriggerRef} type="button" className="btn btn-secondary btn-sm btn-icon" aria-label="更多操作">
                 <MoreHorizontal />
               </button>
             </DropdownMenuTrigger>
@@ -152,7 +155,7 @@ export function LifecycleActions({
       {extras.length > 0 || canChangeStatus ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button type="button" disabled={isPending} className="btn btn-secondary btn-sm btn-icon" aria-label="更多操作">
+            <button ref={moreTriggerRef} type="button" disabled={isPending} className="btn btn-secondary btn-sm btn-icon" aria-label="更多操作">
               {isPending ? <Loader2 className="animate-spin" /> : <MoreHorizontal />}
             </button>
           </DropdownMenuTrigger>

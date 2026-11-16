@@ -15,6 +15,8 @@ type BaseOptions = {
   description?: React.ReactNode;
   confirmText?: string;
   cancelText?: string;
+  /** Explicit initial focus for this request; omitted keeps the existing behavior. */
+  initialFocus?: "confirm" | "cancel";
   /** 危险操作：确认按钮用红色 */
   danger?: boolean;
 };
@@ -58,12 +60,19 @@ export function ConfirmHost() {
   const [value, setValue] = useState("");
   const [touched, setTouched] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (req?.kind === "prompt") {
       setValue(req.opts.defaultValue ?? "");
       setTouched(false);
     }
+  }, [req]);
+
+  useEffect(() => {
+    // Queued requests reuse the mounted dialog, so an explicit choice also applies here.
+    if (req?.opts.initialFocus) (req.opts.initialFocus === "cancel" ? cancelRef : confirmRef).current?.focus();
   }, [req]);
 
   if (!req) return null;
@@ -87,7 +96,10 @@ export function ConfirmHost() {
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) close(false); }}>
-      <DialogContent className="max-w-md" onOpenAutoFocus={(e) => { if (promptReq) { e.preventDefault(); inputRef.current?.focus(); } }}>
+      <DialogContent className="max-w-md" onOpenAutoFocus={(e) => {
+        if (opts.initialFocus) { e.preventDefault(); (opts.initialFocus === "cancel" ? cancelRef : confirmRef).current?.focus(); }
+        else if (promptReq) { e.preventDefault(); inputRef.current?.focus(); }
+      }}>
         <DialogHeader className={promptReq ? undefined : "border-b-0 pb-0"}>
           <DialogTitle>{opts.title}</DialogTitle>
           {opts.description ? <DialogDescription className="whitespace-pre-line">{opts.description}</DialogDescription> : null}
@@ -113,8 +125,8 @@ export function ConfirmHost() {
           </div>
         ) : null}
         <DialogFooter className={promptReq ? undefined : "border-t-0 pt-1"}>
-          <button type="button" className="btn btn-secondary" onClick={() => close(false)}>{opts.cancelText ?? "取消"}</button>
-          <button type="button" className={opts.danger ? "btn btn-danger" : "btn btn-primary"} onClick={() => close(true)} autoFocus={!promptReq}>
+          <button ref={cancelRef} type="button" className="btn btn-secondary" onClick={() => close(false)}>{opts.cancelText ?? "取消"}</button>
+          <button ref={confirmRef} type="button" className={opts.danger ? "btn btn-danger" : "btn btn-primary"} onClick={() => close(true)} autoFocus={!promptReq && opts.initialFocus !== "cancel"}>
             {opts.confirmText ?? "确认"}
           </button>
         </DialogFooter>
