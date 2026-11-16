@@ -323,6 +323,19 @@ M2 收口时，首次创建要点的请求身份缺口来自 **LexOrder 当前�
 
 这些是当前切片的边界和实施决定，不增加 W09.3 或 B/E/F、C 通用机制，不预建平台/投影。三名 reviewer 的发现、修订与复核结论统一记录在[计划 §7.11.11](WORKBENCH_PLAN.md#71111-裁剪后的一轮执行优化2026-11-16)。未执行 M3 代码、数据库、浏览器或专业验收；此前真实结果保持原记录边界。
 
+### 3.15 案件状态与核心界面的多项目审查（2026-11-16）
+
+用户希望一个案件有一个整体状态，全案总览与多个程序及其材料/环节分明；文档连续修改只是痛点举例，本轮先研究案件状态和核心界面。实际只读了下列固定源码及官方文档，未运行第三方产品；浏览器事实与计划见[计划 §8.13](WORKBENCH_PLAN.md#813-案件状态与核心界面审查2026-11-16)。
+
+| 参考与实际依据 | 可取的核心模型或交互 | 对本项目的边界 |
+| --- | --- | --- |
+| Kosmos `c6454fd`：[案件总览](https://github.com/Kosmos-Law/kosmos/blob/c6454fd5488c0d231e2b4756846f690c679586ca/templates/matters/overview/main.html)、[程序](https://github.com/Kosmos-Law/kosmos/blob/c6454fd5488c0d231e2b4756846f690c679586ca/apps/matters/proceedings/models.py)、[材料程序归属](https://github.com/Kosmos-Law/kosmos/blob/c6454fd5488c0d231e2b4756846f690c679586ca/templates/case/documents/proceeding-display.html) | 全案概览、一案多程序、材料按真实程序归属及筛选，与用户目标最接近 | 未发现程序下通用环节或环节材料外键；其案件首次进入 Complete/Closed 时批量终结非 Dismissed 程序，程序编辑/删除亦未见同时限定 URL 案件和目标程序，不能照搬状态和授权；材料处理的部分路径覆盖原件。 |
+| ANQI `25efcf7`：[案件页](https://github.com/zj-ai-lab/anqi/blob/25efcf7f2a3329f9ecdc092b3ced0e17a685c83a/public/case.html)、[阶段操作](https://github.com/zj-ai-lab/anqi/blob/25efcf7f2a3329f9ecdc092b3ced0e17a685c83a/public/js/case.js#L1694-L1711) | 阶段线、清晰的阶段切换和事件/期限提示 | 只有案件行上的一套程序/阶段，点击节点即修改事实；附件没有程序或环节外键，不适合直接替换本案多程序模型。 |
+| j-lawyer `f523d14`：[案件摘要](https://github.com/jlawyerorg/j-lawyer-org/blob/f523d141327e5c74269dd9c71b54ae1c05a415a3/j-lawyer-client/src/main/java/com/jdimension/jlawyer/client/editors/files/CaseSummaryPanel.java)、[专用状态事件](https://github.com/jlawyerorg/j-lawyer-org/blob/f523d141327e5c74269dd9c71b54ae1c05a415a3/j-lawyer-server-entities/src/main/java/com/jdimension/jlawyer/persistence/DunningCaseEvent.java) | 全案概要、未结事项和对特定程序状态变更留历史 | 通用案件模型不等于本项目多程序环节；德国催告程序规则不能作为中国诉讼规则。 |
+| 商业产品官方说明：[Clio 案件状态](https://help.clio.com/hc/en-us/articles/9286056633115-Change-Matter-Statuses)、[Clio 阶段](https://help.clio.com/hc/en-us/articles/15083241879195-Create-and-Manage-Matter-Stages)、[Filevine 阶段](https://support.filevine.com/hc/en-us/articles/360004140772-Phases) | 案件状态和可配置办理阶段清晰显示，阶段变更可回查或触发工作 | 官方说明是产品行为而非其数据库实现；不能把销售式单阶段、自动重建任务或自动迁移旧阶段当作法律事实。 |
+
+LexOrder 已有 `Matter → MatterProcedure → MatterStage` 与 `Document.procedureId/stageId`，有基础可用，缺口主要在程序状态操作、真实环节状态、跨程序总览、归属一致性和用户可见的错误出口。历史 Note 没有程序/环节外键，期限/开庭只有程序外键；不能声称这些对象已精确绑定环节。Kosmos、ANQI 和 j-lawyer 均为 AGPL 项目；直接复制或翻译实质代码需核对许可与分发/网络使用义务，不能无条件作为 MIT 代码粘贴。当前结论是按业务行为设计并保护既有身份、原件、授权和审批历史，尚未移植其源码或更换数据库模型。
+
 ### 当前项目状态对计划的影响
 
 - 当前 Server M2 已按原七条条件收口，详见计划 §8.9；W08 是本地 `NOT_SENT` 读取范围检查。完整 AiRun、候选记忆、M3 专业交付及 M4 固定发行/恢复仍是后续工作；界面专项继续由用户委派的 agent 负责。
