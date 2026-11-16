@@ -47,7 +47,7 @@ export function ClientsTable({
   returnTo = "/clients"
 }: {
   items: ClientRow[];
-  onEdit: (c: ClientRow) => void;
+  onEdit: (c: ClientRow, trigger: HTMLButtonElement) => void;
   canCreate: boolean;
   editableClientIds: string[];
   loadingClientId: string | null;
@@ -117,7 +117,7 @@ export function ClientsTable({
                     <span className="font-mono text-[11px] text-[var(--t-muted)]"> / {c._count.intakes}</span>
                   </td>
                   {canEditAny ? <td className="text-right">
-                    {editableClientIds.includes(c.id) ? <button type="button" className="btn btn-ghost btn-sm btn-icon opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100" onClick={() => onEdit(c)} aria-label={`编辑 ${c.name}`} disabled={!!loadingClientId} aria-busy={loadingClientId === c.id}>
+                    {editableClientIds.includes(c.id) ? <button type="button" className="btn btn-ghost btn-sm btn-icon opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100" onClick={event => onEdit(c, event.currentTarget)} aria-label={`编辑 ${c.name}`} disabled={!!loadingClientId} aria-busy={loadingClientId === c.id}>
                       <Pencil />
                     </button> : null}
                   </td> : null}
@@ -152,7 +152,7 @@ export function ClientsTable({
                     </div>
                   )}
                 </Link>
-                {editableClientIds.includes(c.id) ? <button type="button" className="btn btn-ghost btn-sm btn-icon shrink-0" onClick={() => onEdit(c)} aria-label={`编辑 ${c.name}`} disabled={!!loadingClientId} aria-busy={loadingClientId === c.id}>
+                {editableClientIds.includes(c.id) ? <button type="button" className="btn btn-ghost btn-sm btn-icon shrink-0" onClick={event => onEdit(c, event.currentTarget)} aria-label={`编辑 ${c.name}`} disabled={!!loadingClientId} aria-busy={loadingClientId === c.id}>
                   <Pencil />
                 </button> : null}
               </div>

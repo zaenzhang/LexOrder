@@ -727,6 +727,7 @@ export function ProcedureWorkflowPanel({
   templates,
   users,
   canManage,
+  canWriteRecords,
   notes,
   timelineEvents,
   onWriteNote,
@@ -753,6 +754,7 @@ export function ProcedureWorkflowPanel({
   templates: TemplateSummary[];
   users: UserOption[];
   canManage: boolean;
+  canWriteRecords: boolean;
   notes: WorkflowNote[];
   timelineEvents: WorkflowTimelineEvent[];
   onWriteNote: (opts: { judgment: boolean; stageName?: string }) => void;
@@ -1007,6 +1009,7 @@ export function ProcedureWorkflowPanel({
                 focusStageName={glanceSection === "records" ? null : effectiveScope === "stage" ? selectedStage?.name ?? null : null}
                 allScopeLabel={glanceSection === "records" ? "当前记录 · 不限环节" : procedure ? "全部环节" : "当前事项"}
                 canManage={canManage}
+                canWriteRecords={canWriteRecords}
                 onWriteRecord={() => onWriteNote({ judgment: false, stageName: selectedStage?.name })}
                 onWriteJudgment={() => onWriteNote({ judgment: true, stageName: selectedStage?.name })}
                 onAddLedger={canManage && onAddLedger ? () => onAddLedger("express") : undefined}
@@ -1144,7 +1147,7 @@ function StageBar({
   const src = procedure.stages.find((s) => s.id === stage.id);
   const openTasks = stage.tasks.filter((t) => !t.completed).length;
   const docCount = documents.filter((d) => documentMatchesStage(d, stage)).length;
-  const noteCount = notes.filter((n) => n.tags.includes(stageNoteTag(stage.name))).length;
+  const noteCount = notes.filter((n) => n.tags.includes(stageNoteTag(stage.name)) && n.tags.includes(JUDGMENT_NOTE_TAG)).length;
   const tone = stage.status === "risk" ? "amber" : stage.status === "done" ? "green" : stage.status === "active" ? "teal" : "slate";
 
   return (
@@ -2046,6 +2049,7 @@ function CaseLog({
   focusStageName,
   allScopeLabel,
   canManage,
+  canWriteRecords,
   onWriteRecord,
   onWriteJudgment,
   onAddLedger,
@@ -2062,6 +2066,7 @@ function CaseLog({
   focusStageName: string | null;
   allScopeLabel: string;
   canManage: boolean;
+  canWriteRecords: boolean;
   onWriteRecord: () => void;
   onWriteJudgment: () => void;
 }) {
@@ -2107,16 +2112,14 @@ function CaseLog({
             类案检索
           </button>
         ) : null}
-        {canManage ? (
           <AddMenu
             label="记录"
             items={[
-              { key: "talk", label: "沟通", hint: "电话、微信、邮件、会见、法院沟通", icon: MessageSquare, onSelect: onWriteRecord },
+              ...(canWriteRecords ? [{ key: "talk", label: "沟通", hint: "电话、微信、邮件、会见、法院沟通", icon: MessageSquare, onSelect: onWriteRecord }] : []),
               ...(onAddLedger ? [{ key: "express", label: "快递", hint: "填单号，物流状态自动更新", icon: Truck, onSelect: () => onAddLedger("express") }] : []),
-              { key: "judgment", label: "研判", hint: "我的判断与分析，独立样式陈列", icon: PenLine, onSelect: onWriteJudgment }
+              ...(canWriteRecords ? [{ key: "judgment", label: "研判", hint: "我的判断与分析，独立样式陈列", icon: PenLine, onSelect: onWriteJudgment }] : [])
             ]}
           />
-        ) : null}
         </div>
       </div>
       <div className="dos-log-filters" role="group" aria-label="记录筛选">

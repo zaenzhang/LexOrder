@@ -9,6 +9,8 @@ import { canEnterAdminWorkspace } from "@/lib/auth/system-role";
 import { hasCustomPermission } from "@/lib/roles/catalog";
 import { isEmailConfigured } from "@/lib/notifications/email";
 import { lunarDateLabel } from "@/lib/ui/lunar";
+import { shTime } from "@/lib/ui/sh-time";
+import { formatDate } from "@/lib/utils";
 import { ConflictSearchButton } from "@/components/dashboard/conflict-search-button";
 import { RevenueChart } from "@/components/dashboard/revenue-chart";
 import { CategoryChart } from "@/components/dashboard/category-chart";
@@ -50,8 +52,8 @@ export default async function DashboardPage() {
   const weekday = now.toLocaleDateString("zh-CN", { weekday: "short", timeZone: "Asia/Shanghai" });
   const lunar = lunarDateLabel(now);
 
-  const focus = scheduleItems.find((s) => s.type === "deadline") ?? scheduleItems[0] ?? null;
-  const focusHref = focus?.matterId ? matterHref({ id: focus.matterId, internalCode: focus.matterCode }) : "/schedule";
+  const focus = hero.focus;
+  const focusHref = focus?.href ?? "/schedule";
   const urgentApprovals = queue.approvals.filter((a) => a.waitDays >= 2).length;
   const todoCount = hero.todayDeadlineCount + queue.tasks.filter((t) => t.overdue).length;
 
@@ -103,30 +105,30 @@ export default async function DashboardPage() {
 
         <Link href={focusHref} className="hero-focus no-underline">
           <div className="focus-label">
-            <span className={`dot ${focus && focus.daysUntil <= 3 ? "dot-red dot-pulse-red" : "dot-amber"}`} />
-            今日焦点 · 全案最近期限
+            <span className={`dot ${focus && focus.daysLeft <= 3 ? "dot-red dot-pulse-red" : "dot-amber"}`} />
+            今日焦点 · {focus && focus.daysLeft < 0 ? "逾期期限" : "最近期限"}
           </div>
           {focus ? (
             <>
               <div className="focus-countdown">
-                <span className="focus-days" style={focus.daysUntil > 3 ? { color: "var(--amber)" } : undefined}>{Math.abs(focus.daysUntil)}</span>
-                <span className="focus-unit">{focus.daysUntil < 0 ? "天 · 已逾期" : focus.daysUntil === 0 ? "天 · 今天到期" : "天"}</span>
+                <span className="focus-days" style={focus.daysLeft > 3 ? { color: "var(--amber)" } : undefined}>{Math.abs(focus.daysLeft)}</span>
+                <span className="focus-unit">{focus.daysLeft < 0 ? "天 · 已逾期" : focus.daysLeft === 0 ? "天 · 今天到期" : "天"}</span>
               </div>
               <div className="focus-tag">
-                {focus.daysUntil < 0 ? "已过" : "距"} <b style={{ color: "var(--t-primary)" }}>{focus.title}</b> · {focus.date} {focus.time ?? ""}
+                {focus.daysLeft < 0 ? "已过" : "距"} <b style={{ color: "var(--t-primary)" }}>{focus.title}</b> · {formatDate(focus.dueAt, "month-day")} {shTime(focus.dueAt)}
               </div>
               <div className="focus-matter truncate">{focus.matter}</div>
-              <div className="focus-code">{[focus.matterCode, focus.procedure].filter(Boolean).join(" · ")}</div>
+              <div className="focus-code">{[focus.internalCode, focus.procedure].filter(Boolean).join(" · ")}</div>
             </>
           ) : (
             <>
               <div className="focus-countdown">
                 <span className="focus-days" style={{ color: "var(--green)", fontSize: 32 }}>✓</span>
               </div>
-              <div className="focus-tag">未来 30 天没有未完成的期限</div>
+              <div className="focus-tag">暂无未完成期限</div>
             </>
           )}
-          <div className="focus-link">前往{focus?.matterId ? "案件" : "日程"} →</div>
+          <div className="focus-link">前往{focus ? "案件" : "日程"} →</div>
         </Link>
       </section>
 

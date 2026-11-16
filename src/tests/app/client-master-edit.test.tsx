@@ -1,5 +1,5 @@
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Client, Contact } from "@prisma/client";
 import type { RoleUser } from "@/lib/roles/catalog";
@@ -24,6 +24,7 @@ import ClientsPage from "@/app/(app)/clients/page";
 import ClientDetailPage from "@/app/(app)/clients/[id]/page";
 import { ClientsView } from "@/app/(app)/clients/_components/clients-view";
 import { TopbarActionProvider, useTopbarActionValue } from "@/components/layout/topbar-action";
+import { ConfirmHost } from "@/components/patterns/confirm-dialog";
 
 const date = new Date("2026-11-16T00:00:00Z");
 const id = "cmtestclient00000000000001";
@@ -38,7 +39,7 @@ function Topbar() {
   return action && action !== "none" ? <button type="button" onClick={action.onClick} disabled={action.disabled}>{action.label}</button> : null;
 }
 function renderPage(page: React.ReactNode) {
-  return render(<TopbarActionProvider><Topbar />{page}</TopbarActionProvider>);
+  return render(<TopbarActionProvider><Topbar />{page}<ConfirmHost /></TopbarActionProvider>);
 }
 
 beforeEach(() => {
@@ -82,7 +83,8 @@ describe("Server 客户编辑入口（组件环境）", () => {
 
   it("列表编辑先加载完整主档，保存姓名修改仍提交两个联系人", async () => {
     renderPage(<ClientsView initialData={initialData} initialFilters={filters} canCreate editableClientIds={[id]} />);
-    fireEvent.click(screen.getAllByRole("button", { name: `编辑 ${client.name}` })[0]);
+    const trigger = screen.getAllByRole("button", { name: `编辑 ${client.name}` })[0];
+    fireEvent.click(trigger);
     await waitFor(() => expect(screen.getByDisplayValue("合成次要联系人")).toBeInTheDocument());
     expect(mock.edit).toHaveBeenCalledWith(id);
     fireEvent.change(screen.getByDisplayValue(client.name), { target: { value: "合成客户已更新" } });
@@ -90,6 +92,137 @@ describe("Server 客户编辑入口（组件环境）", () => {
     await waitFor(() => expect(mock.update).toHaveBeenCalledOnce());
     expect(mock.update.mock.calls[0][0]).toMatchObject({ id, name: "合成客户已更新", contacts: [{ name: primary.name, isPrimary: true }, { name: secondary.name, isPrimary: false }] });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it("改名保存刷新后原行不再匹配筛选，关闭表单回搜索输入", async () => {
+    let resolveSave: () => void = () => undefined;
+    mock.update.mockImplementationOnce(() => new Promise(resolve => { resolveSave = () => resolve({ ok: true }); }));
+    const selectedFilters = { ...filters, search: client.name };
+    const rendered = renderPage(<ClientsView initialData={initialData} initialFilters={selectedFilters} canCreate editableClientIds={[id]} />);
+    const trigger = screen.getAllByRole("button", { name: `编辑 ${client.name}` })[0];
+    fireEvent.click(trigger);
+    const editor = await screen.findByRole("dialog", { name: "编辑客户" });
+    fireEvent.change(within(editor).getByLabelText(/^客户名称\s*\*$/), { target: { value: "已改名的合成客户" } });
+    fireEvent.click(within(editor).getByRole("button", { name: "保存" }));
+    await waitFor(() => expect(mock.update).toHaveBeenCalledOnce());
+
+    rendered.rerender(<TopbarActionProvider><Topbar />
+      <ClientsView initialData={{ ...initialData, items: [], total: 0 }} initialFilters={selectedFilters} canCreate editableClientIds={[]} />
+      <ConfirmHost />
+    </TopbarActionProvider>);
+    expect(trigger.isConnected).toBe(false);
+    expect(editor).toBeInTheDocument();
+    await act(async () => { resolveSave(); });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("textbox", { name: "搜索客户" })).toHaveValue(client.name);
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "搜索客户" })).toHaveFocus());
+  });
+
+  it("编辑字段可通过标签访问，X 和取消保护修改并回到原行", async () => {
+    renderPage(<ClientsView initialData={initialData} initialFilters={filters} canCreate editableClientIds={[id]} />);
+    const trigger = screen.getAllByRole("button", { name: `编辑 ${client.name}` })[1];
+    fireEvent.click(trigger);
+    const editor = await screen.findByRole("dialog", { name: "编辑客户" });
+    const name = within(editor).getByLabelText(/^客户名称\s*\*$/);
+    expect(within(editor).getByLabelText(/^类型\s*\*$/)).toHaveAttribute("role", "combobox");
+    expect(within(editor).getByLabelText(/^证件类型\s*\*$/)).toHaveAttribute("role", "combobox");
+    expect(within(editor).getByLabelText("合作状态")).toHaveAttribute("role", "combobox");
+    expect(within(editor).getAllByLabelText(/^姓名\s*\*$/).map(input => (input as HTMLInputElement).value)).toEqual([primary.name, secondary.name]);
+    expect(within(editor).getByRole("button", { name: `删除联系人 ${secondary.name}` })).toBeInTheDocument();
+    fireEvent.change(name, { target: { value: "未保存的客户名称" } });
+    fireEvent.click(within(editor).getByRole("button", { name: "关闭" }));
+    const continueButton = await screen.findByRole("button", { name: "继续编辑" });
+    expect(continueButton).toHaveFocus();
+    fireEvent.click(continueButton);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "放弃更改" })).not.toBeInTheDocument());
+    expect(name).toHaveValue("未保存的客户名称");
+    fireEvent.click(within(editor).getByRole("button", { name: "取消" }));
+    fireEvent.click(await screen.findByRole("button", { name: "放弃更改" }));
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(mock.update).not.toHaveBeenCalled();
+    fireEvent.click(trigger);
+    await waitFor(() => expect(screen.getByLabelText(/^客户名称\s*\*$/)).toHaveValue(client.name));
+  });
+
+  it("新建时未添加的标签也受 Esc 保护，放弃后回到顶栏入口", async () => {
+    renderPage(<ClientsView initialData={initialData} initialFilters={filters} canCreate editableClientIds={[id]} />);
+    const trigger = screen.getByRole("button", { name: "新建客户" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const editor = screen.getByRole("dialog", { name: "新建客户" });
+    const tag = within(editor).getByLabelText("标签");
+    fireEvent.change(tag, { target: { value: "尚未按回车" } });
+    tag.focus();
+    fireEvent.keyDown(editor, { key: "Escape" });
+    fireEvent.click(await screen.findByRole("button", { name: "继续编辑" }));
+    await waitFor(() => expect(tag).toHaveFocus());
+    expect(tag).toHaveValue("尚未按回车");
+    fireEvent.keyDown(editor, { key: "Escape" });
+    fireEvent.click(await screen.findByRole("button", { name: "放弃更改" }));
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(mock.create).not.toHaveBeenCalled();
+  });
+
+  it("详情仅切换主要联系人也受保护，未修改关闭可直接回资料入口", async () => {
+    mock.editableIds.mockResolvedValue([id]);
+    renderPage(await ClientDetailPage({ params: Promise.resolve({ id }), searchParams: Promise.resolve({}) }));
+    fireEvent.keyDown(screen.getByRole("tab", { name: "客户资料" }), { key: "Enter" });
+    const trigger = screen.getByRole("button", { name: "编辑资料" });
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getAllByRole("checkbox", { name: "主要联系人" })[1]);
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    fireEvent.click(await screen.findByRole("button", { name: "放弃更改" }));
+    await waitFor(() => expect(trigger).toHaveFocus());
+    fireEvent.click(trigger);
+    expect(screen.getAllByRole("checkbox", { name: "主要联系人" })[0]).toBeChecked();
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("客户保存中关闭不打断请求，失败后继续编辑保留输入", async () => {
+    let rejectSave: (error: Error) => void = () => undefined;
+    mock.update.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectSave = reject; }));
+    renderPage(<ClientsView initialData={initialData} initialFilters={filters} canCreate editableClientIds={[id]} />);
+    fireEvent.click(screen.getAllByRole("button", { name: `编辑 ${client.name}` })[0]);
+    const editor = await screen.findByRole("dialog", { name: "编辑客户" });
+    fireEvent.change(within(editor).getByLabelText(/^客户名称\s*\*$/), { target: { value: "待保存的合成客户" } });
+    fireEvent.click(within(editor).getByRole("button", { name: "保存" }));
+    await waitFor(() => expect(mock.update).toHaveBeenCalledOnce());
+    expect(within(editor).getByLabelText(/^客户名称\s*\*$/)).toBeDisabled();
+    fireEvent.keyDown(editor, { key: "Escape" });
+    fireEvent.click(within(editor).getByRole("button", { name: "关闭" }));
+    expect(editor).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "放弃更改" })).not.toBeInTheDocument();
+    await act(async () => { rejectSave(new Error("合成保存失败")); });
+    await waitFor(() => expect(mock.error).toHaveBeenCalledWith("保存失败", expect.any(Object)));
+    expect(within(editor).getByLabelText(/^客户名称\s*\*$/)).toBeEnabled();
+    fireEvent.keyDown(editor, { key: "Escape" });
+    fireEvent.click(await screen.findByRole("button", { name: "继续编辑" }));
+    await waitFor(() => expect(screen.getByLabelText(/^客户名称\s*\*$/)).toHaveValue("待保存的合成客户"));
+  });
+
+  it("添加联系人标签可访问，普通关闭保留草稿且回添加入口", async () => {
+    mock.editableIds.mockResolvedValue([id]);
+    renderPage(await ClientDetailPage({ params: Promise.resolve({ id }), searchParams: Promise.resolve({}) }));
+    fireEvent.keyDown(screen.getByRole("tab", { name: "客户资料" }), { key: "Enter" });
+    const trigger = screen.getByRole("button", { name: "添加联系人" });
+    fireEvent.click(trigger);
+    const editor = screen.getByRole("dialog", { name: "添加联系人" });
+    fireEvent.change(within(editor).getByLabelText("姓名 *"), { target: { value: "合成联系人草稿" } });
+    fireEvent.change(within(editor).getByLabelText("职务 / 对接事项"), { target: { value: "资料对接" } });
+    fireEvent.change(within(editor).getByLabelText("电话"), { target: { value: "13800000000" } });
+    fireEvent.change(within(editor).getByLabelText("邮箱"), { target: { value: "example@example.test" } });
+    fireEvent.click(within(editor).getByRole("button", { name: "取消" }));
+    await waitFor(() => expect(trigger).toHaveFocus());
+    fireEvent.click(trigger);
+    expect(screen.getByLabelText("姓名 *")).toHaveValue("合成联系人草稿");
+    expect(screen.getByLabelText("职务 / 对接事项")).toHaveValue("资料对接");
+    expect(screen.getByLabelText("电话")).toHaveValue("13800000000");
+    expect(screen.getByLabelText("邮箱")).toHaveValue("example@example.test");
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 
   it("完整主档加载失败不打开摘要表单，错误可见且可重试", async () => {

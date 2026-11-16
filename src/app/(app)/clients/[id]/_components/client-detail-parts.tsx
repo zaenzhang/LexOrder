@@ -1,13 +1,13 @@
 "use client";
 
 /** 墨案 10 客户详情的交互零件：疑似重复横幅 + 合并向导、添加联系人 */
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { GitMerge, Loader2, Plus, ScanSearch } from "lucide-react";
 import { mergeClientsByCode } from "@/server/clients/dedup";
 import { addContact } from "@/server/clients/actions";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -119,6 +119,7 @@ export function MergeBanner({
 
 export function AddContactButton({ clientId }: { clientId: string }) {
   const router = useRouter();
+  const formId = useId();
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
   const [form, setForm] = useState({ name: "", title: "", phone: "", email: "", isPrimary: false });
@@ -140,21 +141,22 @@ export function AddContactButton({ clientId }: { clientId: string }) {
     });
   }
   return (
-    <>
-      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(true)}>
-        <Plus />
-        添加联系人
-      </button>
-      <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button type="button" className="btn btn-ghost btn-sm">
+          <Plus />
+          添加联系人
+        </button>
+      </DialogTrigger>
         <DialogContent className="sm:max-w-[460px]">
           <DialogHeader>
             <DialogTitle>添加联系人</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5"><Label>姓名 *</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-            <div className="space-y-1.5"><Label>职务 / 对接事项</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="如：财务对接" /></div>
-            <div className="space-y-1.5"><Label>电话</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="font-mono" /></div>
-            <div className="space-y-1.5"><Label>邮箱</Label><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label htmlFor={`${formId}-name`}>姓名 *</Label><Input id={`${formId}-name`} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label htmlFor={`${formId}-title`}>职务 / 对接事项</Label><Input id={`${formId}-title`} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="如：财务对接" /></div>
+            <div className="space-y-1.5"><Label htmlFor={`${formId}-phone`}>电话</Label><Input id={`${formId}-phone`} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="font-mono" /></div>
+            <div className="space-y-1.5"><Label htmlFor={`${formId}-email`}>邮箱</Label><Input id={`${formId}-email`} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
             <label className="col-span-2 flex items-center gap-2 text-[12.5px]"><Checkbox checked={form.isPrimary} onCheckedChange={(v) => setForm({ ...form, isPrimary: v === true })} />设为主要联系人</label>
           </div>
           <DialogFooter>
@@ -162,7 +164,6 @@ export function AddContactButton({ clientId }: { clientId: string }) {
             <button type="button" className="btn btn-primary" onClick={submit} disabled={pending}>{pending ? <Loader2 className="animate-spin" /> : null}添加</button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
-    </>
+    </Dialog>
   );
 }
