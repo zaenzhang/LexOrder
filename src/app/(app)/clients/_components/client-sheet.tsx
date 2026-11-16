@@ -2,7 +2,7 @@
 
 import type { z } from "zod";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -45,10 +45,12 @@ import {
 import { cn } from "@/lib/utils";
 import { readFormPath } from "@/lib/form-path";
 import { actionErrorMessage } from "@/lib/action-error";
+import { confirmDialog } from "@/components/patterns/confirm-dialog";
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onReturnFocus: () => void;
   editingClient: (Client & { contacts?: Contact[] }) | null;
 };
 
@@ -71,8 +73,12 @@ const emptyDefaults: ClientCreateInput = {
   contacts: [{ name: "", title: "", phone: "", email: "", wechat: "", isPrimary: true, notes: "" }]
 };
 
-export function ClientSheet({ open, onOpenChange, editingClient }: Props) {
+export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }: Props) {
   const [isPending, startTransition] = useTransition();
+  const formId = useId();
+  const editorContent = useRef<HTMLDivElement>(null);
+  const tagInput = useRef<HTMLInputElement>(null);
+  const closePending = useRef(false);
   const isEdit = !!editingClient;
 
   const {
@@ -82,7 +88,7 @@ export function ClientSheet({ open, onOpenChange, editingClient }: Props) {
     getValues,
     setValue,
     reset,
-    formState: { errors }
+    formState: { errors, isDirty }
   } = useForm<z.input<typeof clientCreateSchema>, unknown, ClientCreateInput>({
     resolver: zodResolver(clientCreateSchema),
     defaultValues: emptyDefaults
@@ -134,6 +140,29 @@ export function ClientSheet({ open, onOpenChange, editingClient }: Props) {
       reset(emptyDefaults);
     }
   }, [editingClient, open, reset]);
+
+  async function requestClose() {
+    if (isPending || closePending.current) return;
+    const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closePending.current = true;
+    try {
+      if ((isDirty || tagInput.current?.value) && !await confirmDialog({
+        title: "放弃未保存的客户资料？",
+        confirmText: "放弃更改",
+        cancelText: "继续编辑",
+        initialFocus: "cancel"
+      })) {
+        requestAnimationFrame(() => {
+          const target = returnFocus?.isConnected ? returnFocus : editorContent.current;
+          target?.focus({ preventScroll: true });
+        });
+        return;
+      }
+      onOpenChange(false);
+    } finally {
+      closePending.current = false;
+    }
+  }
 
   function onSubmit(values: ClientCreateInput) {
     startTransition(async () => {
@@ -220,10 +249,15 @@ export function ClientSheet({ open, onOpenChange, editingClient }: Props) {
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={(value) => { if (!value) void requestClose(); }}>
       <SheetContent
+        ref={editorContent}
         side="right"
         className="flex w-full max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          onReturnFocus();
+        }}
       >
         <SheetHeader className="border-b border-border bg-background px-6 py-4">
           <SheetTitle className="text-lg">
@@ -238,11 +272,14 @@ export function ClientSheet({ open, onOpenChange, editingClient }: Props) {
           onSubmit={handleSubmit(onSubmit)}
           className="flex flex-1 flex-col overflow-hidden"
         >
-          <div className="flex-1 overflow-y-auto px-6 py-5">
+          <fieldset disabled={isPending} className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 py-5">
             {/* 基本信息 */}
             <Section title="基本信息">
-              <Field label="客户名称" required error={errors.name?.message}>
+              <Field id={`${formId}-name`} label="客户名称" required error={errors.name?.message}>
                 <Input
+                  id={`${formId}-name`}
+                  aria-invalid={!!errors.name}
+                  aria-describedby={errors.name ? `${formId}-name-error` : undefined}
                   placeholder={
                     watchedType === "INDIVIDUAL" ? "张三" : "上海某某有限公司"
                   }
@@ -250,7 +287,7 @@ export function ClientSheet({ open, onOpenChange, editingClient }: Props) {
                 />
               </Field>
 
-              <Field label="类型" required>
+              <Field id={`${formId}-type`} label="类型" required>
                 <Select
                   value={watchedType}
                   onValueChange={(v) => {
@@ -265,7 +302,7 @@ export function ClientSheet({ open, onOpenChange, editingClient }: Props) {
                     }
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id={`${formId}-type`}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -276,7 +313,7 @@ export function ClientSheet({ open, onOpenChange, editingClient }: Props) {
                 </Select>
               </Field>
 
-              <Field label="证件类型" required>
+              <Field id={`${formId}-idType`} label="证件类型" required>
                 <Select
                   value={watch<ClientCreateInput["idType"]>("idType") || (watchedType === "INDIVIDUAL" ? "ID_CARD" : "USCC")}
                   onValueChange={(v) => {
@@ -284,7 +321,7 @@ export function ClientSheet({ open, onOpenChange, editingClient }: Props) {
                     if (watchedType === "INDIVIDUAL") setValue("idNumber", sanitizePersonIdInput(v, watch("idNumber") ?? ""), { shouldDirty: true });
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id={`${formId}-idType`}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -299,12 +336,16 @@ export function ClientSheet({ open, onOpenChange, editingClient }: Props) {
               </Field>
 
               <Field
+                id={`${formId}-idNumber`}
                 label={watchedType === "INDIVIDUAL" ? "证件号码" : "统一社会信用代码"}
                 error={errors.idNumber?.message}
               >
                 {watchedType === "INDIVIDUAL" ? (
                   <div className="space-y-1">
                     <Input
+                      id={`${formId}-idNumber`}
+                      aria-invalid={!!errors.idNumber}
+                      aria-describedby={errors.idNumber ? `${formId}-idNumber-error` : undefined}
                       className="font-mono"
                       inputMode={personIdType === "ID_CARD" ? "numeric" : undefined}
                       placeholder={personIdType === "ID_CARD" ? "18 位，仅数字或 X" : "证件号码"}
@@ -319,6 +360,9 @@ export function ClientSheet({ open, onOpenChange, editingClient }: Props) {
                   <div className="space-y-1">
                     <div className="flex gap-1">
                       <Input
+                        id={`${formId}-idNumber`}
+                        aria-invalid={!!errors.idNumber}
+                        aria-describedby={errors.idNumber ? `${formId}-idNumber-error` : undefined}
                         className="flex-1 font-mono"
                         placeholder="18 位信用代码"
                         {...register("idNumber")}
@@ -375,29 +419,29 @@ export function ClientSheet({ open, onOpenChange, editingClient }: Props) {
                 )}
               </Field>
 
-              <Field label="主要联系电话">
-                <Input className="font-mono" placeholder="11 位手机号" {...register("phone")} />
+              <Field id={`${formId}-phone`} label="主要联系电话">
+                <Input id={`${formId}-phone`} className="font-mono" placeholder="11 位手机号" {...register("phone")} />
               </Field>
 
-              <Field label="邮箱" error={errors.email?.message}>
-                <Input type="email" placeholder="contact@example.com" {...register("email")} />
+              <Field id={`${formId}-email`} label="邮箱" error={errors.email?.message}>
+                <Input id={`${formId}-email`} aria-invalid={!!errors.email} aria-describedby={errors.email ? `${formId}-email-error` : undefined} type="email" placeholder="contact@example.com" {...register("email")} />
               </Field>
 
-              <Field label="地址">
-                <Input placeholder="详细地址" {...register("address")} />
+              <Field id={`${formId}-address`} label="地址">
+                <Input id={`${formId}-address`} placeholder="详细地址" {...register("address")} />
               </Field>
 
               {watchedType !== "INDIVIDUAL" && (
-                <Field label="法定代表人">
-                  <Input placeholder="法定代表人姓名" {...register("legalRep")} />
+                <Field id={`${formId}-legalRep`} label="法定代表人">
+                  <Input id={`${formId}-legalRep`} placeholder="法定代表人姓名" {...register("legalRep")} />
                 </Field>
               )}
 
-              <Field label="案源">
-                <Input placeholder="介绍人 / 公开来源 / 老客户复购" {...register("source")} />
+              <Field id={`${formId}-source`} label="案源">
+                <Input id={`${formId}-source`} placeholder="介绍人 / 公开来源 / 老客户复购" {...register("source")} />
               </Field>
 
-              <Field label="合作状态">
+              <Field id={`${formId}-cooperationStatus`} label="合作状态">
                 <Select
                   value={watch("cooperationStatus")}
                   onValueChange={(v) =>
@@ -406,7 +450,7 @@ export function ClientSheet({ open, onOpenChange, editingClient }: Props) {
                     })
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id={`${formId}-cooperationStatus`}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -419,13 +463,13 @@ export function ClientSheet({ open, onOpenChange, editingClient }: Props) {
                 </Select>
               </Field>
 
-              <Field label="所属行业">
-                <Input placeholder="如 制造业 / 互联网 / 房地产" {...register("industry")} />
+              <Field id={`${formId}-industry`} label="所属行业">
+                <Input id={`${formId}-industry`} placeholder="如 制造业 / 互联网 / 房地产" {...register("industry")} />
               </Field>
 
               {watchedType === "INDIVIDUAL" && (
                 <>
-                  <Field label="性别">
+                  <Field id={`${formId}-gender`} label="性别">
                     <Select
                       value={watch("gender") || "UNSET"}
                       onValueChange={(v) =>
@@ -436,7 +480,7 @@ export function ClientSheet({ open, onOpenChange, editingClient }: Props) {
                         )
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id={`${formId}-gender`}>
                         <SelectValue placeholder="未填" />
                       </SelectTrigger>
                       <SelectContent>
@@ -450,22 +494,24 @@ export function ClientSheet({ open, onOpenChange, editingClient }: Props) {
                     </Select>
                   </Field>
 
-                  <Field label="民族">
-                    <Input placeholder="如 汉族" {...register("ethnicity")} />
+                  <Field id={`${formId}-ethnicity`} label="民族">
+                    <Input id={`${formId}-ethnicity`} placeholder="如 汉族" {...register("ethnicity")} />
                   </Field>
                 </>
               )}
 
-              <Field label="标签">
+              <Field id={`${formId}-tags`} label="标签">
                 <TagInput
+                  id={`${formId}-tags`}
+                  inputRef={tagInput}
                   tags={watchedTags || []}
                   onAdd={addTag}
                   onRemove={removeTag}
                 />
               </Field>
 
-              <Field label="备注" full>
-                <Textarea rows={3} placeholder="可选" {...register("notes")} />
+              <Field id={`${formId}-notes`} label="备注" full>
+                <Textarea id={`${formId}-notes`} rows={3} placeholder="可选" {...register("notes")} />
               </Field>
             </Section>
 
@@ -513,10 +559,10 @@ export function ClientSheet({ open, onOpenChange, editingClient }: Props) {
                               if (c) {
                                 // 单选：取消其他主联系人
                                 fields.forEach((_, i) => {
-                                  setValue(`contacts.${i}.isPrimary`, i === idx);
+                                  setValue(`contacts.${i}.isPrimary`, i === idx, { shouldDirty: true });
                                 });
                               } else {
-                                setValue(`contacts.${idx}.isPrimary`, false);
+                                setValue(`contacts.${idx}.isPrimary`, false, { shouldDirty: true });
                               }
                             }}
                           />
@@ -528,6 +574,7 @@ export function ClientSheet({ open, onOpenChange, editingClient }: Props) {
                             variant="ghost"
                             size="sm"
                             onClick={() => remove(idx)}
+                            aria-label={`删除联系人 ${watch(`contacts.${idx}.name`) || idx + 1}`}
                             className="h-7 w-7 p-0 text-destructive"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -538,55 +585,65 @@ export function ClientSheet({ open, onOpenChange, editingClient }: Props) {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <Field
+                        id={`${formId}-${field.id}-name`}
                         label="姓名"
                         required
                         error={errors.contacts?.[idx]?.name?.message}
                       >
                         <Input
+                          id={`${formId}-${field.id}-name`}
+                          aria-invalid={!!errors.contacts?.[idx]?.name}
+                          aria-describedby={errors.contacts?.[idx]?.name ? `${formId}-${field.id}-name-error` : undefined}
                           placeholder="姓名"
                           {...register(`contacts.${idx}.name`)}
                         />
                       </Field>
-                      <Field label="职务">
+                      <Field id={`${formId}-${field.id}-title`} label="职务">
                         <Input
+                          id={`${formId}-${field.id}-title`}
                           placeholder="法定代表人 / 总经理 / 法务"
                           {...register(`contacts.${idx}.title`)}
                         />
                       </Field>
-                      <Field label="电话">
+                      <Field id={`${formId}-${field.id}-phone`} label="电话">
                         <Input
+                          id={`${formId}-${field.id}-phone`}
                           className="font-mono"
                           {...register(`contacts.${idx}.phone`)}
                         />
                       </Field>
                       <Field
+                        id={`${formId}-${field.id}-email`}
                         label="邮箱"
                         error={errors.contacts?.[idx]?.email?.message}
                       >
                         <Input
+                          id={`${formId}-${field.id}-email`}
+                          aria-invalid={!!errors.contacts?.[idx]?.email}
+                          aria-describedby={errors.contacts?.[idx]?.email ? `${formId}-${field.id}-email-error` : undefined}
                           type="email"
                           {...register(`contacts.${idx}.email`)}
                         />
                       </Field>
-                      <Field label="微信">
-                        <Input {...register(`contacts.${idx}.wechat`)} />
+                      <Field id={`${formId}-${field.id}-wechat`} label="微信">
+                        <Input id={`${formId}-${field.id}-wechat`} {...register(`contacts.${idx}.wechat`)} />
                       </Field>
-                      <Field label="备注">
-                        <Input {...register(`contacts.${idx}.notes`)} />
+                      <Field id={`${formId}-${field.id}-notes`} label="备注">
+                        <Input id={`${formId}-${field.id}-notes`} {...register(`contacts.${idx}.notes`)} />
                       </Field>
                     </div>
                   </div>
                 ))}
               </div>
             </Section>
-          </div>
+          </fieldset>
 
           {/* 底栏 */}
           <SheetFooter className="border-t border-border bg-background px-6 py-4">
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={() => { void requestClose(); }}
               disabled={isPending}
             >
               取消
@@ -632,12 +689,14 @@ function Section({
 }
 
 function Field({
+  id,
   label,
   required,
   full,
   error,
   children
 }: {
+  id: string;
   label: string;
   required?: boolean;
   full?: boolean;
@@ -646,21 +705,25 @@ function Field({
 }) {
   return (
     <div className={cn("space-y-1.5", full && "col-span-2")}>
-      <Label className="flex items-center gap-1 text-xs">
+      <Label htmlFor={id} className="flex items-center gap-1 text-xs">
         {label}
         {required && <span className="text-destructive">*</span>}
       </Label>
       {children}
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && <p id={`${id}-error`} className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }
 
 function TagInput({
+  id,
+  inputRef,
   tags,
   onAdd,
   onRemove
 }: {
+  id: string;
+  inputRef: React.RefObject<HTMLInputElement | null>;
   tags: string[];
   onAdd: (t: string) => void;
   onRemove: (t: string) => void;
@@ -684,6 +747,8 @@ function TagInput({
         </span>
       ))}
       <input
+        id={id}
+        ref={inputRef}
         type="text"
         placeholder={tags.length === 0 ? "输入后回车添加标签" : ""}
         onKeyDown={(e) => {

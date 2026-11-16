@@ -176,7 +176,7 @@ export function YuandianSettingsForm({
         )}
       </div>
 
-      {testResult && (
+      {!changed && testResult && (
         <div
           className={
             "mt-3 flex items-start gap-2 rounded-md border p-3 text-[12px] " +

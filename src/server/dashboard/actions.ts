@@ -9,7 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/session";
 import { matterFinanceVisibilityFilter, matterReadVisibilityFilter, intakeReadVisibilityFilter } from "@/lib/permissions";
 import { matterCategoryColor, matterCategoryLabel, matterCategoryShort, procedureTypeLabel } from "@/lib/enums";
-import { shDayKey, shParts as shPartsOf } from "@/lib/ui/sh-time";
+import { shDayKey, shDaysFromToday, shParts as shPartsOf } from "@/lib/ui/sh-time";
 import { matterHref } from "@/lib/matters/route";
 
 // ============ Types ============
@@ -50,6 +50,8 @@ export type HeroData = {
     title: string;
     matter: string;
     internalCode: string;
+    procedure: string;
+    dueAt: Date;
     daysLeft: number;
     href: string;
   } | null;
@@ -226,7 +228,7 @@ export async function getDashboardCategoryDistribution() {
   return result;
 }
 
-// ============ Schedule (past 2 days to next 15 days：开庭 + 期限) ============
+// ============ Schedule (上海今日起 30 个日历日：开庭 + 期限预览) ============
 
 export async function getDashboardSchedule(): Promise<ScheduleItem[]> {
   const session = await requireSession("personal");
@@ -235,8 +237,8 @@ export async function getDashboardSchedule(): Promise<ScheduleItem[]> {
   if (session.user.role === "CUSTOM") visFilter.AND = [matterReadVisibilityFilter(session.user.id, session.user.role, session.user.rolePermissions), customMatterFilter(session.user.id, session.user.rolePermissions, "schedule.read", true)];
 
   const now = new Date();
-  const from = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
-  const to = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000);
+  const from = new Date(`${shDayKey(now)}T00:00:00+08:00`);
+  const to = new Date(from.getTime() + 30 * 24 * 60 * 60 * 1000);
   const procWhere = { engagement: "ENGAGED" as const, matter: { deletedAt: null, ...visFilter } };
   const procSelect = {
     type: true,
@@ -261,13 +263,13 @@ export async function getDashboardSchedule(): Promise<ScheduleItem[]> {
   const excludedHearings=await closedHearingIds(prisma);
   const [hearings, deadlines] = await Promise.all([
     prisma.hearing.findMany({
-      where: { id:{notIn:excludedHearings}, startsAt: { gte: from, lte: to }, procedure: procWhere },
+      where: { id:{notIn:excludedHearings}, startsAt: { gte: from, lt: to }, procedure: procWhere },
       include: { procedure: { select: procSelect } },
       orderBy: { startsAt: "asc" },
       take: 12
     }),
     prisma.deadline.findMany({
-      where: { dueAt: { gte: from, lte: to }, completed: false, procedure: procWhere },
+      where: { dueAt: { gte: from, lt: to }, completed: false, procedure: procWhere },
       include: { procedure: { select: procSelect } },
       orderBy: { dueAt: "asc" },
       take: 12
@@ -388,7 +390,7 @@ export async function getDashboardHeroData(): Promise<HeroData> {
     // Near-term deadlines (7 days)
     prisma.deadline.count({
       where: {
-        dueAt: { gte: now, lte: in7d },
+        dueAt: { gte: todayStart, lt: in7d },
         completed: false,
         procedure: {
           engagement: "ENGAGED",
@@ -396,10 +398,9 @@ export async function getDashboardHeroData(): Promise<HeroData> {
         }
       }
     }),
-    // Most urgent deadline (nearest future uncompleted)
+    // 最早未完成期限包含逾期，不受日程预览的时间窗口或条数限制。
     prisma.deadline.findFirst({
       where: {
-        dueAt: { gte: now },
         completed: false,
         procedure: {
           engagement: "ENGAGED",
@@ -410,6 +411,8 @@ export async function getDashboardHeroData(): Promise<HeroData> {
       include: {
         procedure: {
           select: {
+            type: true,
+            customLabel: true,
             matter: { select: { id: true, internalCode: true, title: true } }
           }
         }
@@ -418,7 +421,7 @@ export async function getDashboardHeroData(): Promise<HeroData> {
     // v1.x 批次④：逾期未完成期限（行动入口）
     prisma.deadline.count({
       where: {
-        dueAt: { lt: now },
+        dueAt: { lt: todayStart },
         completed: false,
         procedure: {
           engagement: "ENGAGED",
@@ -433,13 +436,14 @@ export async function getDashboardHeroData(): Promise<HeroData> {
   let focus: HeroData["focus"] = null;
   if (urgentDeadline) {
     const dueDate = new Date(urgentDeadline.dueAt);
-    const daysLeft = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     const matter = urgentDeadline.procedure.matter;
     focus = {
       title: urgentDeadline.title,
       matter: matter.title,
       internalCode: matter.internalCode,
-      daysLeft,
+      procedure: urgentDeadline.procedure.customLabel ?? procedureTypeLabel[urgentDeadline.procedure.type],
+      dueAt: dueDate,
+      daysLeft: shDaysFromToday(dueDate),
       href: matterHref(matter)
     };
   }

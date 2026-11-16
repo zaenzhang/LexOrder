@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Pencil } from "lucide-react";
 import type { Client, Contact } from "@prisma/client";
 import { ClientSheet } from "@/app/(app)/clients/_components/client-sheet";
@@ -15,9 +15,11 @@ export function ClientEditButton({
   client: Client & { contacts?: Contact[] };
 }) {
   const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
   return (
     <>
       <button
+        ref={trigger}
         type="button"
         onClick={() => setOpen(true)}
         className="btn btn-secondary btn-sm"
@@ -25,7 +27,7 @@ export function ClientEditButton({
         <Pencil />
         编辑资料
       </button>
-      <ClientSheet open={open} onOpenChange={setOpen} editingClient={client} />
+      <ClientSheet open={open} onOpenChange={setOpen} editingClient={client} onReturnFocus={() => trigger.current?.focus({ preventScroll: true })} />
     </>
   );
 }

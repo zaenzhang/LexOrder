@@ -46,7 +46,7 @@ const notes: Props["notes"] = ["合成当前环节", "合成其他环节"].map((
 }));
 const base: Omit<Props, "view" | "onViewChange"> = {
   matter: { id: "matter-1", internalCode: "A2026001", title: "合成事项", category: "CIVIL_COMMERCIAL" },
-  procedure, documents: [], preservationCases: [], folders: [], templates: [], users: [], canManage: false,
+  procedure, documents: [], preservationCases: [], folders: [], templates: [], users: [], canManage: false, canWriteRecords: false,
   notes, timelineEvents: [], onWriteNote: vi.fn(), archiveNode: <p>合成档案内容</p>
 };
 
@@ -82,6 +82,45 @@ afterEach(() => {
 });
 
 describe("事项工作区入口与材料范围（组件环境）", () => {
+  it("具有案件维护资格但没有记录写入资格时，只保留获准的快递入口", async () => {
+    window.history.replaceState(null, "", "/matters/matter-1?work=records");
+    const onAddLedger = vi.fn();
+    render(<Harness initialView="work" canManage canWriteRecords={false} onAddLedger={onAddLedger} />);
+    const records = screen.getByRole("region", { name: "记录" });
+    const add = within(records).getByRole("button", { name: "记录" });
+    add.focus();
+    fireEvent.keyDown(add, { key: "Enter" });
+    const express = await screen.findByRole("menuitem", { name: /^快递/ });
+    expect(screen.queryByRole("menuitem", { name: /^沟通/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /^研判/ })).not.toBeInTheDocument();
+    fireEvent.click(express);
+    expect(onAddLedger).toHaveBeenCalledWith("express");
+    expect(base.onWriteNote).not.toHaveBeenCalled();
+  });
+
+  it("有记录写入资格时沟通与研判入口正常，并携带当前环节", async () => {
+    window.history.replaceState(null, "", "/matters/matter-1?work=records");
+    const onWriteNote = vi.fn();
+    render(<Harness initialView="work" canManage canWriteRecords onWriteNote={onWriteNote} />);
+    const records = screen.getByRole("region", { name: "记录" });
+    const add = within(records).getByRole("button", { name: "记录" });
+    add.focus();
+    fireEvent.keyDown(add, { key: "Enter" });
+    const communication = await screen.findByRole("menuitem", { name: /^沟通/ });
+    expect(screen.getByRole("menuitem", { name: /^研判/ })).toBeVisible();
+    fireEvent.click(communication);
+    expect(onWriteNote).toHaveBeenCalledWith({ judgment: false, stageName: "合成当前环节" });
+  });
+
+  it("普通沟通不计入环节研判数，只统计同环节的研判笔记", () => {
+    const { rerender } = render(<Harness initialView="work" notes={notes} />);
+    const stage = screen.getByRole("region", { name: "环节：合成当前环节" });
+    expect(within(stage).getByText(/研判 0/)).toBeVisible();
+    const judgments = notes.map((note) => ({ ...note, id: `${note.id}-judgment`, tags: [...note.tags, "研判笔记"] }));
+    rerender(<Harness initialView="work" notes={[...notes, ...judgments]} />);
+    expect(within(stage).getByText(/研判 1/)).toBeVisible();
+  });
+
   it("零待办、零记录保留真实空态，不提供“全部 0”入口", () => {
     render(<Harness procedure={null} notes={[]} />);
     expect(screen.getByRole("tab", { name: "档案与摘要" })).toBeVisible();

@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Archive, ArrowDownUp, ChevronDown, Columns3, Download, Search } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader, Pager, Segmented } from "@/components/patterns/moan";
@@ -81,6 +82,8 @@ export function MattersViewV4({
   const [, startTransition] = useTransition();
   const [wizardOpen, setWizardOpen] = useState(Boolean(autoOpenIntake));
   const [searchInput, setSearchInput] = useState(initialFilters.search);
+  const [dateFilterOpen, setDateFilterOpen] = useState(false);
+  const [dateDraft, setDateDraft] = useState({ from: initialFilters.from ?? "", to: initialFilters.to ?? "" });
   useTopbarAction({ label: "新建收案", onClick: () => setWizardOpen(true) }, []);
 
   const f = initialFilters;
@@ -211,7 +214,10 @@ export function MattersViewV4({
         {showStatus ? (
           <FilterSelect label="状态" value={f.status && f.status !== "ALL" ? f.status : undefined} options={[{ value: "active", label: "办理中" }, { value: "closed", label: "已结案" }, { value: "archived", label: "已归档" }]} onChange={(v) => go({ status: v ?? "ALL", page: 1 })} />
         ) : null}
-        <Popover>
+        <Popover open={dateFilterOpen} onOpenChange={(open) => {
+          if (open) setDateDraft({ from: f.from ?? "", to: f.to ?? "" });
+          setDateFilterOpen(open);
+        }}>
           <PopoverTrigger asChild>
             <button type="button" className={cn("mo-filter-btn", (f.from || f.to) && "on")}>
               收案日期
@@ -222,15 +228,22 @@ export function MattersViewV4({
             <div className="space-y-2.5">
               <label className="block text-[12px] text-[var(--t-secondary)]">
                 起
-                <Input type="date" defaultValue={f.from ?? ""} onChange={(e) => go({ from: e.target.value, page: 1 })} className="mt-1" />
+                <Input type="date" value={dateDraft.from} onChange={(e) => setDateDraft({ ...dateDraft, from: e.target.value })} className="mt-1" />
               </label>
               <label className="block text-[12px] text-[var(--t-secondary)]">
                 止
-                <Input type="date" defaultValue={f.to ?? ""} onChange={(e) => go({ to: e.target.value, page: 1 })} className="mt-1" />
+                <Input type="date" value={dateDraft.to} onChange={(e) => setDateDraft({ ...dateDraft, to: e.target.value })} className="mt-1" />
               </label>
-              {f.from || f.to ? (
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => go({ from: "", to: "", page: 1 })}>清除日期</button>
-              ) : null}
+              <div className="flex items-center justify-between gap-2">
+                <Button type="button" variant="ghost" size="sm" disabled={!f.from && !f.to && !dateDraft.from && !dateDraft.to} onClick={() => {
+                  setDateDraft({ from: "", to: "" });
+                  go({ from: "", to: "", page: 1 });
+                }}>清除日期</Button>
+                <Button type="button" size="sm" onClick={() => {
+                  go({ ...dateDraft, page: 1 });
+                  setDateFilterOpen(false);
+                }}>应用</Button>
+              </div>
             </div>
           </PopoverContent>
         </Popover>

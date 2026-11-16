@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition, type FormEvent } from "react";
+import { useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarClock, Check, Loader2, MessageSquare, Plus, X } from "lucide-react";
 import { toast } from "sonner";
@@ -9,11 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
 import { actionErrorMessage } from "@/lib/action-error";
 import { clientChannelLabels, fromShanghaiInput, toShanghaiInput, type ClientActivityInput, type ClientRelationshipView, type ClientCommunicationPage, type ClientFollowUpPage } from "@/lib/clients/relationship";
 import { shDayKey, shTime } from "@/lib/ui/sh-time";
 import { getClientCommunicationPage, getClientFollowUpPage, recordClientActivity } from "@/server/clients/relationship-actions";
 import { ClientPagination, useClientPagination } from "./client-pagination";
+import { confirmDialog } from "@/components/patterns/confirm-dialog";
 
 const when = (value: string) => `${shDayKey(value)} ${shTime(value)}`;
 type Mode = { id?: string; title?: string; status: "COMPLETED" | "CANCELLED" };
@@ -33,22 +35,50 @@ export function ClientRelationshipPanel({ clientId, view }: { clientId: string; 
   const [channel, setChannel] = useState<ClientActivityInput["channel"]>("PHONE");
   const [content, setContent] = useState("");
   const [occurredAt, setOccurredAt] = useState("");
+  const [initialOccurredAt, setInitialOccurredAt] = useState("");
   const [scheduleNext, setScheduleNext] = useState(false);
   const [nextTitle, setNextTitle] = useState("");
   const [nextDueAt, setNextDueAt] = useState("");
   const [error, setError] = useState("");
+  const editorTrigger = useRef<HTMLButtonElement | null>(null);
+  const recordTrigger = useRef<HTMLButtonElement>(null);
+  const sectionTitle = useRef<HTMLHeadingElement>(null);
+  const editorContent = useRef<HTMLDivElement>(null);
+  const closePending = useRef(false);
+  const dirty = Boolean(content || scheduleNext || nextTitle || nextDueAt || occurredAt !== initialOccurredAt || channel !== (mode.status === "CANCELLED" ? "OTHER" : "PHONE"));
 
-  function begin(nextMode: Mode) {
+  function begin(nextMode: Mode, trigger: HTMLButtonElement) {
+    editorTrigger.current = trigger;
+    const now = toShanghaiInput(new Date());
     setMode(nextMode);
     setRequestKey(crypto.randomUUID());
     setChannel(nextMode.status === "CANCELLED" ? "OTHER" : "PHONE");
     setContent("");
-    setOccurredAt(toShanghaiInput(new Date()));
+    setOccurredAt(now);
+    setInitialOccurredAt(now);
     setScheduleNext(false);
     setNextTitle("");
     setNextDueAt("");
     setError("");
     setOpen(true);
+  }
+
+  async function requestClose() {
+    if (pending || closePending.current) return;
+    const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closePending.current = true;
+    try {
+      if (dirty && !await confirmDialog({ title: "放弃未保存的沟通记录？", confirmText: "放弃更改", cancelText: "继续编辑", initialFocus: "cancel" })) {
+        requestAnimationFrame(() => {
+          const target = returnFocus?.isConnected ? returnFocus : editorContent.current;
+          target?.focus({ preventScroll: true });
+        });
+        return;
+      }
+      setOpen(false);
+    } finally {
+      closePending.current = false;
+    }
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -81,12 +111,12 @@ export function ClientRelationshipPanel({ clientId, view }: { clientId: string; 
   return (
     <section className="card min-w-0 overflow-hidden" aria-labelledby="client-relationship-title">
       <div className="panel-head flex-wrap gap-2">
-        <h2 id="client-relationship-title" className="panel-title"><MessageSquare className="ic" strokeWidth={1.8} />沟通与跟进</h2>
-        {view?.canWrite && activities?.canWrite && followUps?.canWrite ? <button type="button" className="btn btn-secondary btn-sm" onClick={() => begin({ status: "COMPLETED" })}><Plus />记录沟通</button> : null}
+        <h2 ref={sectionTitle} tabIndex={-1} id="client-relationship-title" className="panel-title"><MessageSquare className="ic" strokeWidth={1.8} />沟通与跟进</h2>
+        {view?.canWrite && activities?.canWrite && followUps?.canWrite ? <button ref={recordTrigger} type="button" className="btn btn-secondary btn-sm" onClick={event => begin({ status: "COMPLETED" }, event.currentTarget)}><Plus />记录沟通</button> : null}
       </div>
       {!view ? <div className="panel-body t-sm t-mute">沟通记录仅向客户经办人员及获授权的管理人员开放。</div> : (
-        <div className="panel-body space-y-5">
-          <div>
+        <div className="panel-body grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
+          <div className="min-w-0">
             <h3 className="mb-2 flex items-center gap-2 text-sm font-medium"><CalendarClock className="h-4 w-4" />待跟进 {followUps ? <span className="badge b-white">{followUps.total}</span> : null}</h3>
             {followUps?.items.length === 0 ? <p className="t-sm t-mute py-2">本页暂无待跟进。</p> : <ul className="space-y-2">
               {followUps?.items.map(item => <li key={item.id} className="flex flex-wrap items-start gap-2 rounded-lg border border-[var(--bd-hair)] p-3">
@@ -98,29 +128,34 @@ export function ClientRelationshipPanel({ clientId, view }: { clientId: string; 
                   </div>
                 </div>
                 {item.canClose ? <div className="flex flex-wrap gap-1">
-                  <button type="button" className="btn btn-secondary btn-sm" aria-label={`录入结果：${item.title}`} onClick={() => begin({ id: item.id, title: item.title, status: "COMPLETED" })}><Check />录入结果</button>
-                  <button type="button" className="btn btn-ghost btn-sm" aria-label={`取消跟进：${item.title}`} onClick={() => begin({ id: item.id, title: item.title, status: "CANCELLED" })}><X />取消</button>
+                  <button type="button" className="btn btn-secondary btn-sm" aria-label={`录入结果：${item.title}`} onClick={event => begin({ id: item.id, title: item.title, status: "COMPLETED" }, event.currentTarget)}><Check />录入结果</button>
+                  <button type="button" className="btn btn-ghost btn-sm" aria-label={`取消跟进：${item.title}`} onClick={event => begin({ id: item.id, title: item.title, status: "CANCELLED" }, event.currentTarget)}><X />取消</button>
                 </div> : null}
               </li>)}
             </ul>}
             <ClientPagination controls={followUpPager} label="待跟进" />
           </div>
-          <div className="border-t border-[var(--bd-hair)] pt-4">
+          <div className="min-w-0 border-t border-[var(--bd-hair)] pt-4 lg:border-t-0 lg:pt-0">
             <h3 className="mb-3 text-sm font-medium">沟通历史 {activities ? <span className="t-xs t-mute">{activities.total} 条</span> : null}</h3>
             {activities?.items.length === 0 ? <p className="t-sm t-mute">本页暂无沟通记录。</p> : <ol className="space-y-4">
               {activities?.items.map(item => <li key={item.id} className="border-l-2 border-[var(--bd-hair)] pl-3">
                 <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-[var(--t-muted)]"><span className="badge b-white">{clientChannelLabels[item.channel]}</span><span>{item.authorName}</span><time dateTime={item.occurredAt}>{when(item.occurredAt)}</time></div>
                 {item.closedTitle ? <p className="mb-1 text-xs font-medium text-[var(--teal-deep)]">{item.closedStatus === "CANCELLED" ? "已取消" : "已完成"}：{item.closedTitle}</p> : null}
-                <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{item.content}</p>
+                <CommunicationContent activityId={item.id} content={item.content} />
               </li>)}
             </ol>}
             <ClientPagination controls={activityPager} label="沟通历史" />
           </div>
-          <p className="t-xs t-mute">时间均为北京时间。到期状态在打开页面时更新。</p>
+          <p className="t-xs t-mute lg:col-span-2">时间均为北京时间。到期状态在打开页面时更新。</p>
         </div>
       )}
-      <Dialog open={open} onOpenChange={value => { if (!pending) setOpen(value); }}>
-        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-[560px]">
+      <Dialog open={open} onOpenChange={value => { if (!value) void requestClose(); }}>
+        <DialogContent ref={editorContent} className="max-h-[90dvh] overflow-y-auto sm:max-w-[560px]" onCloseAutoFocus={event => {
+          event.preventDefault();
+          const trigger = editorTrigger.current;
+          const target = trigger?.isConnected && !trigger.disabled ? trigger : recordTrigger.current ?? sectionTitle.current;
+          target?.focus({ preventScroll: true });
+        }}>
           <DialogHeader><DialogTitle>{dialogTitle}</DialogTitle><DialogDescription>{mode.title ? `当前事项：${mode.title}` : "保留本次沟通内容，并按需要安排下一次跟进。"}</DialogDescription></DialogHeader>
           <form onSubmit={submit} className="space-y-4">
             <fieldset disabled={pending} className="space-y-4">
@@ -137,10 +172,28 @@ export function ClientRelationshipPanel({ clientId, view }: { clientId: string; 
               </div> : null}
             </fieldset>
             {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
-            <DialogFooter><button type="button" className="btn btn-secondary" disabled={pending} onClick={() => setOpen(false)}>返回</button><button type="submit" className="btn btn-primary" disabled={pending}>{pending ? <Loader2 className="animate-spin" /> : <Check />}保存{mode.status === "CANCELLED" ? "取消原因" : mode.id ? "结果" : "沟通"}</button></DialogFooter>
+            <DialogFooter><button type="button" className="btn btn-secondary" disabled={pending} onClick={() => void requestClose()}>返回</button><button type="submit" className="btn btn-primary" disabled={pending}>{pending ? <Loader2 className="animate-spin" /> : <Check />}保存{mode.status === "CANCELLED" ? "取消原因" : mode.id ? "结果" : "沟通"}</button></DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
     </section>
   );
+}
+
+function CommunicationContent({ activityId, content }: { activityId: string; content: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = content.length > 120 || content.split("\n").length > 4;
+  const contentId = `client-communication-${activityId}`;
+  return <div>
+    <p id={contentId} className={`whitespace-pre-wrap break-words text-sm leading-relaxed${isLong && !expanded ? " line-clamp-4" : ""}`}>{content}</p>
+    {isLong ? <Button
+      type="button"
+      variant="link"
+      size="sm"
+      className="mt-0.5 h-auto px-0"
+      aria-expanded={expanded}
+      aria-controls={contentId}
+      onClick={() => setExpanded(value => !value)}
+    >{expanded ? "收起" : "展开全文"}</Button> : null}
+  </div>;
 }

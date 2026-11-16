@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useCallback } from "react";
+import { useState, useTransition, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Search, X } from "lucide-react";
@@ -44,9 +44,11 @@ export function ClientsView({ initialData, initialFilters, canCreate, editableCl
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [search, setSearch] = useState(initialFilters.search);
+  const searchInput = useRef<HTMLInputElement>(null);
   const [type, setType] = useState<ClientType | "ALL">(initialFilters.type);
 
   const [sheetOpen, setSheetOpen] = useState(false);
+  const sheetTrigger = useRef<HTMLElement | null>(null);
   const [loadingClientId, setLoadingClientId] = useState<string | null>(null);
   useTopbarAction(canCreate ? { label: "新建客户", onClick: () => handleNew(), disabled: !!loadingClientId } : "none", [canCreate, loadingClientId]);
   const [editingClient, setEditingClient] = useState<(Client & { contacts: Contact[] }) | null>(null);
@@ -85,12 +87,14 @@ export function ClientsView({ initialData, initialFilters, canCreate, editableCl
 
   function handleNew() {
     if (!canCreate || loadingClientId) return;
+    sheetTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setEditingClient(null);
     setSheetOpen(true);
   }
 
-  function handleEdit(client: ClientRow) {
+  function handleEdit(client: ClientRow, trigger: HTMLButtonElement) {
     if (!editableClientIds.includes(client.id) || loadingClientId) return;
+    sheetTrigger.current = trigger;
     setLoadingClientId(client.id);
     startTransition(async () => {
       try {
@@ -133,7 +137,7 @@ export function ClientsView({ initialData, initialFilters, canCreate, editableCl
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <form className="mo-toolbar-input" onSubmit={handleSearchSubmit}>
           <Search aria-hidden />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} onBlur={handleSearchBlur} placeholder="搜索客户名称 / 证件号 / 电话 / 邮箱" aria-label="搜索客户" />
+          <input ref={searchInput} value={search} onChange={(e) => setSearch(e.target.value)} onBlur={handleSearchBlur} placeholder="搜索客户名称 / 证件号 / 电话 / 邮箱" aria-label="搜索客户" />
         </form>
         {search || type !== "ALL" ? (
           <button type="button" className="btn btn-ghost btn-sm" onClick={clearFilters}>
@@ -152,7 +156,11 @@ export function ClientsView({ initialData, initialFilters, canCreate, editableCl
         ) : null}
       </div>
 
-      <ClientSheet open={sheetOpen} onOpenChange={setSheetOpen} editingClient={editingClient} />
+      <ClientSheet open={sheetOpen} onOpenChange={setSheetOpen} editingClient={editingClient} onReturnFocus={() => {
+        const trigger = sheetTrigger.current;
+        const target = trigger?.isConnected && !trigger.matches(":disabled") ? trigger : searchInput.current;
+        target?.focus({ preventScroll: true });
+      }} />
     </div>
   );
 }

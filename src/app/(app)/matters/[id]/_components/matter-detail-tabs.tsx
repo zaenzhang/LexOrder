@@ -551,6 +551,7 @@ export function MatterDetailTabs({
         templates={templates}
         users={colleagues}
         canManage={canAssociateThisMatter && !isArchived}
+        canWriteRecords={canWriteRecords}
         notes={notes}
         timelineEvents={matter.timelineEvents}
         onWriteNote={({ judgment, stageName }) => setProgress({ mode: judgment ? "judgment" : "record", stage: stageName, stageNames: workflowApi.current?.stageNames ?? [] })}
@@ -946,7 +947,8 @@ function MatterStickyBar({
                 {caseNumber}
               </span>
             )}
-            <span className="ml-auto flex shrink-0 items-center gap-2 text-[11px]">
+            <span className="ml-auto flex shrink-0 items-center gap-2 text-[11px]" aria-label="全案节点">
+              <span className="badge b-white">全案</span>
               {deadline ? (
                 <span className={cn("inline-flex items-center gap-1", deadlineTone)}>
                   <Clock3 className="h-3 w-3" />
