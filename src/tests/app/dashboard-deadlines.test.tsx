@@ -40,14 +40,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   mock.hero.mockResolvedValue(hero);
   mock.schedule.mockResolvedValue([]);
-  mock.queue.mockResolvedValue({ approvals: [], tasks: [], approvalTotal: 0 });
+  mock.queue.mockResolvedValue({ followUps: { available: true, items: [], total: 0, page: 1, pageSize: 5, filter: "all" as const, observedAt: "2026-11-17T10:00:00.000Z" }, approvals: [], tasks: [], approvalTotal: 0 });
 });
 afterEach(cleanup);
 
 // 仅检查异步取数完成后的页面组合；不替代 Next Server Component 或浏览器验收。
 describe("首页期限焦点组合", () => {
   it("未知审批时间仍计入待办总数，但不计入超时紧急数量", async () => {
-    mock.queue.mockResolvedValue({ approvals: [{ waitDays: null }, { waitDays: 2 }], tasks: [], approvalTotal: 2 });
+    mock.queue.mockResolvedValue({ followUps: { available: true, items: [], total: 0, page: 1, pageSize: 5, filter: "all" as const, observedAt: "2026-11-17T10:00:00.000Z" }, approvals: [{ waitDays: null }, { waitDays: 2 }], tasks: [], approvalTotal: 2 });
     render(await DashboardPage());
     expect(screen.getByText("待我审批 · 1 件等待超 2 天")).toBeVisible();
     expect(screen.queryByText("待我审批 · 2 件等待超 2 天")).not.toBeInTheDocument();

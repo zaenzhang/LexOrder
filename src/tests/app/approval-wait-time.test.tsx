@@ -8,7 +8,7 @@ afterEach(cleanup);
 describe("待我处理的审批等待标签", () => {
   it("区分未知提交时间、今日和已等待，不把未知审批渲染为紧急", () => {
     const row = { action: "INTAKE_APPROVE", requester: "合成申请人", matter: null, task: "approve" };
-    const queue: WorkQueue = {
+    const queue: WorkQueue = { followUps: { available: true, items: [], total: 0, page: 1, pageSize: 5, filter: "all" as const, observedAt: "2026-11-17T10:00:00.000Z" },
       approvals: [
         { ...row, id: "unknown", title: "未知时间申请", waitDays: null },
         { ...row, id: "today", title: "今日申请", waitDays: 0 },

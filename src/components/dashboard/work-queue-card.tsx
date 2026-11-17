@@ -4,7 +4,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { ApprovalAction } from "@prisma/client";
-import { AlertTriangle, ListChecks, SquareCheck, Stamp } from "lucide-react";
+import { AlertTriangle, ListChecks, SquareCheck, Stamp, CalendarClock } from "lucide-react";
 import { ACTION_LABELS } from "@/lib/approvals/rules";
 import { approvalHref } from "@/lib/approvals/workspace";
 import { matterHref } from "@/lib/matters/route";
@@ -14,15 +14,17 @@ import { Badge } from "@/components/ui/badge";
 import type { WorkQueue } from "@/server/dashboard/actions";
 import type { AlertItem } from "./alerts-list";
 import { shParts } from "@/lib/ui/sh-time";
+import { personalFollowUpHref } from "@/lib/clients/follow-ups";
 
-type Seg = "approvals" | "tasks" | "alerts";
+type Seg = "approvals" | "tasks" | "followups" | "alerts";
 
 export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: AlertItem[] }) {
   const reminders = alerts.filter((a) => a.source !== "approval");
-  const [seg, setSeg] = useState<Seg>(queue.approvalTotal > 0 || (queue.taskTotal === 0 && reminders.length === 0) ? "approvals" : queue.taskTotal > 0 ? "tasks" : "alerts");
+  const [seg, setSeg] = useState<Seg>(queue.approvalTotal > 0 ? "approvals" : queue.taskTotal > 0 ? "tasks" : queue.followUps.total > 0 ? "followups" : reminders.length > 0 ? "alerts" : "approvals");
   const items: [Seg, string, number][] = [
     ["approvals", "审批", queue.approvalTotal],
     ["tasks", "任务", queue.taskTotal],
+    ["followups", "跟进", queue.followUps.total],
     ["alerts", "提醒", reminders.length]
   ];
   const fmt = (d: Date | null) => (d ? `${shParts(d).m}月${shParts(d).d}日` : "");
@@ -37,7 +39,7 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
         <div className="segmented" style={{ padding: 2 }} role="tablist">
           {items.map(([k, label, n]) => (
             <button key={k} type="button" role="tab" aria-selected={seg === k} className={cn("seg", seg === k && "active")} style={{ padding: "4px 11px", fontSize: 11.5 }} onClick={() => setSeg(k)}>
-              {label} <span className="count">{k === "tasks" && !queue.tasksAvailable ? "—" : n}</span>
+              {label} <span className="count">{(k === "tasks" && !queue.tasksAvailable) || (k === "followups" && !queue.followUps.available) ? "—" : n}</span>
             </button>
           ))}
         </div>
@@ -103,6 +105,13 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
           )
         ) : null}
 
+        {seg === "followups" && (!queue.followUps.available ? <p className="p-4 text-sm text-muted-foreground">当前资格不能读取客户跟进</p>
+          : queue.followUps.items.length === 0 ? <p className="p-4 text-sm text-muted-foreground">暂无本人待跟进</p>
+          : queue.followUps.items.map(item => <Link key={item.id} href={personalFollowUpHref({}, { followUpId: item.id, clientId: item.client.id })} className="todo-item">
+            <span className={cn("type-ic", item.overdue ? "t-red" : "t-teal")} aria-hidden><CalendarClock /></span>
+            <div className="min-w-0 flex-1"><div className="todo-title truncate">{item.title}</div><div className="todo-meta"><span>{item.client.name}</span><span>{formatDateTime(item.dueAt)}</span></div></div>
+            <span className={cn("due-pill", item.overdue && "d-red")}>{item.overdue ? "已逾期" : "待跟进"}</span>
+          </Link>))}
         {seg === "alerts" ? (
           reminders.length === 0 ? (
             <div className="empty mo-empty-compact"><div className="mo-empty-title">暂无保全到期与法院短信提醒</div></div>
@@ -125,10 +134,10 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
 
       <div className="panel-foot" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span className="t-xs t-mute">
-          {seg === "approvals" ? `共 ${queue.approvalTotal} 件审批${queue.tasksAvailable ? ` · ${queue.taskTotal} 项任务` : ""}` : seg === "tasks" ? queue.tasksAvailable ? `本人共 ${queue.taskTotal} 项任务，逾期任务优先` : "任务详情当前不可读取" : "保全到期 · 法院短信"}
+          {seg === "approvals" ? `共 ${queue.approvalTotal} 件审批${queue.tasksAvailable ? ` · ${queue.taskTotal} 项任务` : ""}` : seg === "tasks" ? queue.tasksAvailable ? `本人共 ${queue.taskTotal} 项任务，逾期任务优先` : "任务详情当前不可读取" : seg === "followups" ? queue.followUps.available ? `本人共 ${queue.followUps.total} 项待跟进，按时间先后显示前五项` : "客户跟进当前不可读取" : "保全到期 · 法院短信"}
         </span>
-        <Link href={seg === "approvals" ? "/approvals" : seg === "tasks" ? "/schedule#work-responsibilities" : "/inbox"} className="t-sm" style={{ color: "var(--teal-deep)", fontWeight: 550 }}>
-          {seg === "approvals" ? "进入审批工作台 →" : seg === "tasks" ? "打开任务责任总览 →" : "进入法院短信 →"}
+        <Link href={seg === "approvals" ? "/approvals" : seg === "tasks" ? "/schedule#work-responsibilities" : seg === "followups" ? "/clients/follow-ups" : "/inbox"} className="t-sm" style={{ color: "var(--teal-deep)", fontWeight: 550 }}>
+          {seg === "approvals" ? "进入审批工作台 →" : seg === "tasks" ? "打开任务责任总览 →" : seg === "followups" ? "查看全部待跟进 →" : "进入法院短信 →"}
         </Link>
       </div>
     </div>

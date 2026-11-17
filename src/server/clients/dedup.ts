@@ -160,5 +160,9 @@ export async function mergeClients(input: z.infer<typeof mergeSchema>) {
 
   const { revalidatePath } = await import("next/cache");
   revalidatePath("/clients");
+  revalidatePath("/");
+  revalidatePath("/clients/follow-ups");
+  revalidatePath(`/clients/${result.keptId}`);
+  revalidatePath(`/clients/${result.mergedId}`);
   return { ok: true, ...result };
 }

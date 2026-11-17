@@ -13,6 +13,7 @@ import { matterCategoryColor, matterCategoryLabel, matterCategoryShort, procedur
 import { shDayKey, shDaysFromToday, shParts as shPartsOf } from "@/lib/ui/sh-time";
 import { matterHref } from "@/lib/matters/route";
 import { readPersonalTaskProgressTx } from "@/server/tasks/workflow-service";
+import { personalFollowUpsInTransaction } from "@/server/clients/follow-up-queue";
 
 // ============ Types ============
 
@@ -477,6 +478,7 @@ export type WorkQueue = {
   tasks: Awaited<ReturnType<typeof readPersonalTaskProgressTx>>["tasks"];
   taskTotal: number;
   tasksAvailable: boolean;
+  followUps: Awaited<ReturnType<typeof personalFollowUpsInTransaction>>;
 };
 
 /** 待我处理：审批复用统一审批工作台口径；任务为指派给本人且未完成、所在案件本人可读 */
@@ -485,9 +487,10 @@ export async function getDashboardWorkQueue(): Promise<WorkQueue> {
   const { listApprovalWorkspace } = await import("@/server/approval-permissions/inbox");
   const approvalsPromise = listApprovalWorkspace({ tab: "pending" }).catch(() => null);
   const now = new Date();
-  const [ws, taskQueue] = await Promise.all([
+  const [ws, taskQueue, followUps] = await Promise.all([
     approvalsPromise,
-    prisma.$transaction(db => readPersonalTaskProgressTx(db, session.user.id, now), { isolationLevel: "RepeatableRead" })
+    prisma.$transaction(db => readPersonalTaskProgressTx(db, session.user.id, now), { isolationLevel: "RepeatableRead" }),
+    prisma.$transaction(db => personalFollowUpsInTransaction(db, session.user.id, {}, 5, now), { isolationLevel: "RepeatableRead" })
   ]);
   return {
     approvals: (ws?.rows ?? []).slice(0, 5).map((r) => ({
@@ -502,7 +505,8 @@ export async function getDashboardWorkQueue(): Promise<WorkQueue> {
     approvalTotal: ws?.counts.pending ?? 0,
     tasks: taskQueue.tasks,
     taskTotal: taskQueue.total,
-    tasksAvailable: taskQueue.available
+    tasksAvailable: taskQueue.available,
+    followUps
   };
 }
 

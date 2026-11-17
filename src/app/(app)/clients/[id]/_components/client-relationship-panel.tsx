@@ -1,24 +1,17 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition, type FormEvent } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarClock, Check, Loader2, MessageSquare, Plus, X } from "lucide-react";
-import { toast } from "sonner";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
+import { CalendarClock, Check, MessageSquare, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { actionErrorMessage } from "@/lib/action-error";
-import { clientChannelLabels, fromShanghaiInput, toShanghaiInput, type ClientActivityInput, type ClientRelationshipView, type ClientCommunicationPage, type ClientFollowUpPage } from "@/lib/clients/relationship";
+import { clientChannelLabels, type ClientRelationshipView, type ClientCommunicationPage, type ClientFollowUpPage } from "@/lib/clients/relationship";
 import { shDayKey, shTime } from "@/lib/ui/sh-time";
-import { getClientCommunicationPage, getClientFollowUpPage, recordClientActivity } from "@/server/clients/relationship-actions";
+import { getClientCommunicationPage, getClientFollowUpPage } from "@/server/clients/relationship-actions";
 import { ClientPagination, useClientPagination } from "./client-pagination";
-import { confirmDialog } from "@/components/patterns/confirm-dialog";
+import { ClientActivityDialog, type ClientActivityMode } from "@/components/clients/client-activity-dialog";
 
 const when = (value: string) => `${shDayKey(value)} ${shTime(value)}`;
-type Mode = { id?: string; title?: string; status: "COMPLETED" | "CANCELLED" };
+
 
 export function ClientRelationshipPanel({ clientId, view }: { clientId: string; view: ClientRelationshipView | null }) {
   const router = useRouter();
@@ -28,85 +21,20 @@ export function ClientRelationshipPanel({ clientId, view }: { clientId: string; 
   const followUpPager = useClientPagination(clientId, followUpInitial, getClientFollowUpPage);
   const activities = activityPager.page;
   const followUps = followUpPager.page;
-  const [open, setOpen] = useState(false);
-  const [pending, start] = useTransition();
-  const [mode, setMode] = useState<Mode>({ status: "COMPLETED" });
-  const [requestKey, setRequestKey] = useState("");
-  const [channel, setChannel] = useState<ClientActivityInput["channel"]>("PHONE");
-  const [content, setContent] = useState("");
-  const [occurredAt, setOccurredAt] = useState("");
-  const [initialOccurredAt, setInitialOccurredAt] = useState("");
-  const [scheduleNext, setScheduleNext] = useState(false);
-  const [nextTitle, setNextTitle] = useState("");
-  const [nextDueAt, setNextDueAt] = useState("");
-  const [error, setError] = useState("");
+  const [mode, setMode] = useState<ClientActivityMode | null>(null);
   const editorTrigger = useRef<HTMLButtonElement | null>(null);
   const recordTrigger = useRef<HTMLButtonElement>(null);
   const sectionTitle = useRef<HTMLHeadingElement>(null);
-  const editorContent = useRef<HTMLDivElement>(null);
-  const closePending = useRef(false);
-  const dirty = Boolean(content || scheduleNext || nextTitle || nextDueAt || occurredAt !== initialOccurredAt || channel !== (mode.status === "CANCELLED" ? "OTHER" : "PHONE"));
-
-  function begin(nextMode: Mode, trigger: HTMLButtonElement) {
+  function begin(nextMode: ClientActivityMode, trigger: HTMLButtonElement) {
     editorTrigger.current = trigger;
-    const now = toShanghaiInput(new Date());
     setMode(nextMode);
-    setRequestKey(crypto.randomUUID());
-    setChannel(nextMode.status === "CANCELLED" ? "OTHER" : "PHONE");
-    setContent("");
-    setOccurredAt(now);
-    setInitialOccurredAt(now);
-    setScheduleNext(false);
-    setNextTitle("");
-    setNextDueAt("");
-    setError("");
-    setOpen(true);
   }
-
-  async function requestClose() {
-    if (pending || closePending.current) return;
-    const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    closePending.current = true;
-    try {
-      if (dirty && !await confirmDialog({ title: "放弃未保存的沟通记录？", confirmText: "放弃更改", cancelText: "继续编辑", initialFocus: "cancel" })) {
-        requestAnimationFrame(() => {
-          const target = returnFocus?.isConnected ? returnFocus : editorContent.current;
-          target?.focus({ preventScroll: true });
-        });
-        return;
-      }
-      setOpen(false);
-    } finally {
-      closePending.current = false;
-    }
+  function saved() {
+    setMode(null);
+    activityPager.invalidate();
+    followUpPager.invalidate();
+    router.refresh();
   }
-
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
-    let input: ClientActivityInput;
-    try {
-      input = { clientId, requestKey, channel, content, occurredAt: fromShanghaiInput(occurredAt), followUpId: mode.id, closeStatus: mode.status,
-        nextFollowUp: scheduleNext ? { title: nextTitle, dueAt: fromShanghaiInput(nextDueAt) } : undefined };
-    } catch (err) {
-      setError(actionErrorMessage(err));
-      return;
-    }
-    start(async () => {
-      try {
-        await recordClientActivity(input);
-        toast.success(mode.id ? mode.status === "CANCELLED" ? "跟进已取消，原因已保存" : "跟进结果已保存" : "沟通记录已保存");
-        setOpen(false);
-        activityPager.invalidate();
-        followUpPager.invalidate();
-        router.refresh();
-      } catch (err) {
-        setError(actionErrorMessage(err) || "保存失败，请重试");
-      }
-    });
-  }
-
-  const dialogTitle = mode.id ? mode.status === "CANCELLED" ? "取消跟进" : "录入跟进结果" : "记录沟通";
 
   return (
     <section className="card min-w-0 overflow-hidden" aria-labelledby="client-relationship-title">
@@ -149,33 +77,8 @@ export function ClientRelationshipPanel({ clientId, view }: { clientId: string; 
           <p className="t-xs t-mute lg:col-span-2">时间均为北京时间。到期状态在打开页面时更新。</p>
         </div>
       )}
-      <Dialog open={open} onOpenChange={value => { if (!value) void requestClose(); }}>
-        <DialogContent ref={editorContent} className="max-h-[90dvh] overflow-y-auto sm:max-w-[560px]" onCloseAutoFocus={event => {
-          event.preventDefault();
-          const trigger = editorTrigger.current;
-          const target = trigger?.isConnected && !trigger.disabled ? trigger : recordTrigger.current ?? sectionTitle.current;
-          target?.focus({ preventScroll: true });
-        }}>
-          <DialogHeader><DialogTitle>{dialogTitle}</DialogTitle><DialogDescription>{mode.title ? `当前事项：${mode.title}` : "保留本次沟通内容，并按需要安排下一次跟进。"}</DialogDescription></DialogHeader>
-          <form onSubmit={submit} className="space-y-4">
-            <fieldset disabled={pending} className="space-y-4">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5"><Label htmlFor="crm-channel">沟通方式</Label><select id="crm-channel" value={channel} onChange={event => setChannel(event.target.value as ClientActivityInput["channel"])} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">{Object.entries(clientChannelLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div>
-                <div className="space-y-1.5"><Label htmlFor="crm-occurred">发生时间（北京时间）</Label><Input id="crm-occurred" type="datetime-local" required value={occurredAt} onChange={event => setOccurredAt(event.target.value)} /></div>
-              </div>
-              <div className="space-y-1.5"><Label htmlFor="crm-content">{mode.status === "CANCELLED" ? "取消原因" : mode.id ? "跟进结果" : "沟通内容"} *</Label><Textarea id="crm-content" rows={5} required maxLength={8000} value={content} onChange={event => setContent(event.target.value)} placeholder="记录事实、客户需求与已约定事项" /></div>
-              <label className="flex items-center gap-2 text-sm"><Checkbox checked={scheduleNext} onCheckedChange={value => setScheduleNext(value === true)} />安排下次跟进</label>
-              {scheduleNext ? <div className="space-y-3 rounded-lg border border-[var(--bd-hair)] p-3">
-                <div className="space-y-1.5"><Label htmlFor="crm-next-title">下次跟进事项 *</Label><Input id="crm-next-title" required maxLength={200} value={nextTitle} onChange={event => setNextTitle(event.target.value)} placeholder="例如：核对委托材料并确认办理方案" /></div>
-                <div className="space-y-1.5"><Label htmlFor="crm-next-due">跟进时间（北京时间）*</Label><Input id="crm-next-due" type="datetime-local" required value={nextDueAt} onChange={event => setNextDueAt(event.target.value)} /></div>
-                <p className="t-xs t-mute">此项由你负责，可在客户详情中录入结果。</p>
-              </div> : null}
-            </fieldset>
-            {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
-            <DialogFooter><button type="button" className="btn btn-secondary" disabled={pending} onClick={() => void requestClose()}>返回</button><button type="submit" className="btn btn-primary" disabled={pending}>{pending ? <Loader2 className="animate-spin" /> : <Check />}保存{mode.status === "CANCELLED" ? "取消原因" : mode.id ? "结果" : "沟通"}</button></DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {mode && <ClientActivityDialog clientId={clientId} mode={mode} trigger={editorTrigger} fallback={sectionTitle}
+        onClose={() => setMode(null)} onSaved={saved} />}
     </section>
   );
 }

@@ -64,12 +64,13 @@ export default async function ClientDetailPage({ params, searchParams }: {
         : 0
     : 0;
   const intakeHref = `/matters?tab=intake&new=1&clientId=${client.id}`;
+  const returnHref = clientListReturnHref(query.returnTo);
 
   return (
     <div className="mo-client">
-      <Link href={clientListReturnHref(query.returnTo)} className="mo-back">
+      <Link href={returnHref} className="mo-back">
         <ChevronLeft className="h-3.5 w-3.5" />
-        返回客户列表
+        {returnHref.startsWith("/clients/follow-ups") ? "返回待跟进" : "返回客户列表"}
       </Link>
 
       <div className="card client-hero">

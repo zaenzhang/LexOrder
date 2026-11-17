@@ -7,6 +7,18 @@ import type { ClientActivityInput, ClientRelationshipView } from "@/lib/clients/
 import type { ClientPageInput } from "@/lib/clients/history";
 import { saveClientActivity } from "./relationship-service";
 import { readClientRelationship, readClientCommunicationPage, readClientFollowUpPage } from "./history-service";
+import type { PersonalFollowUpQuery, PersonalFollowUpTarget } from "@/lib/clients/follow-ups";
+import { readPersonalFollowUp, readPersonalFollowUps } from "./follow-up-queue";
+
+export async function getPersonalFollowUps(input: PersonalFollowUpQuery) {
+  const { user } = await requireSession("clients.read");
+  return readPersonalFollowUps(prisma, user.id, input);
+}
+
+export async function getPersonalFollowUp(input: PersonalFollowUpTarget) {
+  const { user } = await requireSession("clients.read");
+  return readPersonalFollowUp(prisma, user.id, input);
+}
 
 export async function getClientRelationship(clientId: string): Promise<ClientRelationshipView | null> {
   const { user } = await requireSession("clients.read");
@@ -28,5 +40,7 @@ export async function recordClientActivity(input: ClientActivityInput) {
   const result = await saveClientActivity(prisma, user, input);
   revalidatePath(`/clients/${input.clientId}`);
   revalidatePath("/clients");
+  revalidatePath("/");
+  revalidatePath("/clients/follow-ups");
   return result;
 }

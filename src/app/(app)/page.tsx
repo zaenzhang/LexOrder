@@ -54,7 +54,6 @@ export default async function DashboardPage() {
   const focus = hero.focus;
   const focusHref = focus?.href ?? "/schedule";
   const urgentApprovals = queue.approvals.filter((a) => a.waitDays !== null && a.waitDays >= 2).length;
-  const todoCount = hero.todayDeadlineCount + queue.tasks.filter((t) => t.overdue).length;
 
   // 只列最近 3 条：与右侧「待我处理」卡高度对齐，更多进完整日历（2026-09-19 用户确认）
   const SCHEDULE_PREVIEW = 3;
@@ -88,7 +87,8 @@ export default async function DashboardPage() {
             {name ? <span className="name">，{name}</span> : null}
           </h1>
           <p className="greet-sub">
-            今天有 <b>{todoCount}</b> 件事需要处理；本周开庭 <b>{hero.weekHearingCount}</b> 场
+            今日到期期限 <b>{hero.todayDeadlineCount}</b> 项；本周开庭 <b>{hero.weekHearingCount}</b> 场
+            {queue.followUps.available && queue.followUps.total > 0 ? <>；本人待跟进 <b>{queue.followUps.total}</b> 项</> : null}
             {hero.overdueDeadlineCount > 0 ? (
               <>
                 ，<b className="warn">{hero.overdueDeadlineCount} 项期限已逾期</b>

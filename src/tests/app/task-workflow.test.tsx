@@ -245,7 +245,7 @@ describe("G02 首页与完整任务责任总览", () => {
   it("首页显示真实等待成果并进入确切任务；旧无责任任务回案内记录，总览链接不冒称本人全集", () => {
     const progress: TaskProgressSummary = { availability: "AVAILABLE", waiting: activeWaiting(), blockingPrerequisiteCount: 1, cancelledPrerequisiteCount: 1, checkDue: true };
     const row = { id: taskId, title: "核对客户回单", dueAt: stamp, priority: 0, matterTitle: "合成案件", matterCode: "CASE-G02", matterId, overdue: true, progress, hasResponsibility: true };
-    const queue: WorkQueue = { approvals: [], approvalTotal: 0, tasksAvailable: true, taskTotal: 8, tasks: [row, { ...row, id: otherTaskId, title: "历史原任务", progress: { availability: "REVIEW" }, hasResponsibility: false }] };
+    const queue: WorkQueue = { followUps: { available: true, items: [], total: 0, page: 1, pageSize: 5, filter: "all" as const, observedAt: "2026-11-17T10:00:00.000Z" }, approvals: [], approvalTotal: 0, tasksAvailable: true, taskTotal: 8, tasks: [row, { ...row, id: otherTaskId, title: "历史原任务", progress: { availability: "REVIEW" }, hasResponsibility: false }] };
     render(<WorkQueueCard queue={queue} alerts={[]} />);
     const link = screen.getByRole("link", { name: /核对客户回单/ });
     expect(link).toHaveAttribute("href", `/matters/CASE-G02?view=work&workPane=tasks&task=${taskId}`);
@@ -257,7 +257,7 @@ describe("G02 首页与完整任务责任总览", () => {
   });
 
   it("任务资格不可用不显示零待办断言，独立审批入口保持", () => {
-    const queue: WorkQueue = { approvals: [{ id: "approval", action: "INTAKE_APPROVE", title: "独立审批", requester: "合成申请人", matter: null, task: "approve", waitDays: null }], approvalTotal: 1, tasks: [], taskTotal: 0, tasksAvailable: false };
+    const queue: WorkQueue = { followUps: { available: true, items: [], total: 0, page: 1, pageSize: 5, filter: "all" as const, observedAt: "2026-11-17T10:00:00.000Z" }, approvals: [{ id: "approval", action: "INTAKE_APPROVE", title: "独立审批", requester: "合成申请人", matter: null, task: "approve", waitDays: null }], approvalTotal: 1, tasks: [], taskTotal: 0, tasksAvailable: false };
     render(<WorkQueueCard queue={queue} alerts={[]} />);
     expect(screen.getByRole("link", { name: /独立审批/ })).toBeVisible();
     fireEvent.click(screen.getByRole("tab", { name: "任务 —" }));

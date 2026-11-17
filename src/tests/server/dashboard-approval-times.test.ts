@@ -6,6 +6,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: { $transaction: async (fn: (db: object)
 vi.mock("@/lib/auth/session", () => ({ requireSession: async () => ({ user: { id: "reviewer", role: "LAWYER" } }) }));
 vi.mock("@/lib/permissions", () => ({ matterReadVisibilityFilter: () => ({ ownerId: "reviewer" }), customMatterFilter: vi.fn(), matterFinanceVisibilityFilter: vi.fn(), intakeReadVisibilityFilter: vi.fn() }));
 vi.mock("@/server/approval-permissions/inbox", () => ({ listApprovalWorkspace: mock.approvals }));
+vi.mock("@/server/clients/follow-up-queue", () => ({ personalFollowUpsInTransaction: async () => ({ available: true, items: [], total: 0, page: 1, pageSize: 5, filter: "all" as const, observedAt: "2026-11-17T10:00:00.000Z" }) }));
 vi.mock("@/server/tasks/workflow-service", () => ({ readPersonalTaskProgressTx: mock.readTasks }));
 vi.mock("@/server/reminders/responsibility", () => ({ closedHearingIds: vi.fn() }));
 vi.mock("@/server/finance/facts", () => ({ getFinanceFacts: vi.fn(), periodReceipts: vi.fn(), sumAmounts: vi.fn(), shMonthStart: vi.fn(), financeTrend: vi.fn() }));

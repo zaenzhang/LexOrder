@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Search, X } from "lucide-react";
 import type { Client, ClientType, Contact } from "@prisma/client";
@@ -123,6 +124,7 @@ export function ClientsView({ initialData, initialFilters, canCreate, editableCl
         title="客户"
         sub={<>共 <span className="font-mono">{initialData.total}</span> 位客户</>}
       />
+      <Link href="/clients/follow-ups" className="mb-3 inline-flex text-sm font-medium text-primary">查看本人待跟进 →</Link>
 
       <Segmented
         className="mb-3"

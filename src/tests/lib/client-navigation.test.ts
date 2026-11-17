@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { clientHistoryHref, clientHistoryReturnHref, clientListHref, clientListReturnHref } from "@/lib/clients/navigation";
+import { personalFollowUpHref, personalFollowUpLocation } from "@/lib/clients/follow-ups";
 
 describe("客户列表返回参数", () => {
   it("保留中文及特殊字符搜索、客户类型和页码", () => {
@@ -39,6 +40,29 @@ describe("客户列表返回参数", () => {
 
   it.each(["", "0", "-1", "1.5", "1e2", "+2", "02", "NaN", "Infinity", "9007199254740992", "2&page=3", "2&%70age=3"])("非法或重复 page 回到默认列表：%s", page => {
     expect(clientListReturnHref(`/clients?search=合同&page=${page}`)).toBe("/clients");
+  });
+});
+
+describe("本人跟进定位与客户档案返回", () => {
+  it("返回白名单只保留队列筛选与有效页码", () => {
+    const href = personalFollowUpHref({ filter: "overdue", page: 3 });
+    expect(clientListReturnHref(href)).toBe(href);
+    expect(clientListReturnHref("/clients/follow-ups?filter=all&page=1")).toBe("/clients/follow-ups");
+    for (const invalid of [
+      "/clients/follow-ups?followUp=cmtestfollowup000000000001&client=cmtestclient00000000000001",
+      "/clients/follow-ups?filter=today&next=%2Ffinance", "/clients/follow-ups?filter=today&filter=overdue",
+      "/clients/follow-ups?page=02", "/clients/follow-ups?page=2&page=3", "/clients/follow-ups?filter=unknown",
+      "/clients/follow-ups#target", "https://outside.example/clients/follow-ups?filter=today"
+    ]) expect(clientListReturnHref(invalid)).toBe("/clients");
+  });
+  it("精确 ID 必须成对有效，坏位置不能回退成另一条目标", () => {
+    const target = { followUpId: "cmtestfollowup000000000001", clientId: "cmtestclient00000000000001" };
+    const url = new URL(personalFollowUpHref({ filter: "today", page: 2 }, target), "https://example.test");
+    expect(personalFollowUpLocation(Object.fromEntries(url.searchParams))).toEqual({ query: { filter: "today", page: 2 }, target, error: "" });
+    for (const invalid of [{ followUp: target.followUpId }, { followUp: [target.followUpId, target.followUpId], client: target.clientId }, { followUp: "wrong", client: target.clientId }]) {
+      expect(personalFollowUpLocation(invalid)).toMatchObject({ target: null, error: "跟进位置无效，请从列表重新打开" });
+    }
+    expect(personalFollowUpLocation({ page: "1e2" }).query).toBeNull();
   });
 });
 
