@@ -454,6 +454,7 @@ function buildMatterWhere(params: MattersExportParams, user: ExportUser): Prisma
         { internalCode: { contains: params.search, mode: "insensitive" } },
         { firmCaseNo: { contains: params.search, mode: "insensitive" } },
         { primaryClient: { name: { contains: params.search, mode: "insensitive" } } },
+        { clientLinks: { some: { client: { name: { contains: params.search, mode: "insensitive" } } } } },
         { cause: { name: { contains: params.search, mode: "insensitive" } } },
         { parties: { some: { name: { contains: params.search, mode: "insensitive" } } } },
         { procedures: { some: { caseNumber: { contains: params.search, mode: "insensitive" } } } }

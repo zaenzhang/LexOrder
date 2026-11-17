@@ -132,7 +132,11 @@ export async function listMatters(input: Partial<MatterListQuery> = {}) {
       OR: [
         { title: { contains: query.search, mode: "insensitive" } },
         { internalCode: { contains: query.search, mode: "insensitive" } },
-        { primaryClient: { name: { contains: query.search, mode: "insensitive" } } }
+        { firmCaseNo: { contains: query.search, mode: "insensitive" } },
+        { primaryClient: { name: { contains: query.search, mode: "insensitive" } } },
+        { clientLinks: { some: { client: { name: { contains: query.search, mode: "insensitive" } } } } },
+        { parties: { some: { name: { contains: query.search, mode: "insensitive" } } } },
+        { procedures: { some: { caseNumber: { contains: query.search, mode: "insensitive" } } } }
       ]
     });
   }
