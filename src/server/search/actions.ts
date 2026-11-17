@@ -15,7 +15,7 @@ import { matterHref } from "@/lib/matters/route";
 import { customMatterFilter } from "@/lib/permissions";
 import { clientTypeLabel, deadlineCategoryLabel, intakeStatusLabel, matterStatusLabel } from "@/lib/enums";
 import type { DocumentSourceOrigin, Prisma } from "@prisma/client";
-import { materialTextProjection, publishedMaterialSnapshot } from "@/server/documents/material-processing";
+import { materialOriginalUrl, materialTextProjection, publishedMaterialSnapshot } from "@/server/documents/material-processing";
 import type { SourceAnchor } from "@/lib/workbench/contracts";
 
 export interface SearchResultItem {
@@ -135,7 +135,7 @@ async function searchDocumentsAuthorized(
     take: DOCUMENT_CANDIDATE_LIMIT,
     orderBy: { createdAt: "desc" },
     select: {
-      id: true, name: true, category: true, textContent: true, tags: true,
+      id: true, name: true, mimeType: true, category: true, textContent: true, tags: true,
       uploadedById: true, matterId: true, intakeId: true,
       sourceOrigin: true, textSource: true, deletedAt: true,
       sha256: true, version: true, parseGeneration: true,
@@ -175,12 +175,12 @@ async function searchDocumentsAuthorized(
     const contextLabel =
       doc.matter?.internalCode
       ?? (doc.intake ? `收案 · ${doc.intake.title}` : "");
-    const href = doc.matter ? matterHref(doc.matter) : doc.intake ? `/intakes/${doc.intake.id}` : "";
+    const matterLink = doc.matter ? matterHref(doc.matter) : doc.intake ? `/intakes/${doc.intake.id}` : undefined;
     results.push({
       id: doc.id,
       title: doc.name,
       subtitle: snippet ? `${contextLabel}${pageNo ? ` · 第 ${pageNo} 页` : ""} · 命中正文：…${snippet}…` : contextLabel,
-      href,
+      href: materialOriginalUrl(doc, anchor?.location ?? (pageNo ? { kind: "PAGE", page: pageNo } : undefined)),
       type: "document" as const,
       snippet: snippet || undefined,
       pageNo,
@@ -191,7 +191,7 @@ async function searchDocumentsAuthorized(
         ? `属于 ${doc.matter.title ?? ""}${doc.stage?.name ? ` · ${doc.stage.name}` : ""}`
         : doc.intake ? `属于 收案 · ${doc.intake.title}` : "",
       code: doc.matter?.internalCode,
-      matterLink: href || undefined,
+      matterLink,
       documentVersion: doc.version,
       parseRunId: snapshot ? run.id : undefined,
       anchorId: anchor?.anchorId,

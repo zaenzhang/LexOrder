@@ -11,6 +11,8 @@ import { useRouter } from "next/navigation";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Building2, Clock, FileText, Folder, Inbox, Loader2, Lock, Search, Sparkle } from "lucide-react";
 import { globalSearch, type GlobalSearchResult, type SearchResultItem } from "@/server/search/actions";
+import type { MaterialSourceInput } from "@/server/documents/material-processing";
+import { SearchMaterialSourceDialog } from "./search-material-source-dialog";
 import { documentSourceChip } from "@/lib/ui/moan-tones";
 import { cn } from "@/lib/utils";
 
@@ -61,8 +63,13 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const [loading, setLoading] = useState(false);
   const [scope, setScope] = useState<Scope>("all");
   const [sel, setSel] = useState(0);
+  const [source, setSource] = useState<MaterialSourceInput | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const sourceTrigger = useRef<HTMLElement | null>(null);
   const router = useRouter();
+
+  useEffect(() => { if (!open) setSource(null); }, [open]);
 
   // Cmd+K / Ctrl+K 全局快捷键
   useEffect(() => {
@@ -130,6 +137,7 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const go = useCallback(
     (href: string) => {
       if (!href) return;
+      setSource(null);
       onOpenChange(false);
       setQuery("");
       setScope("all");
@@ -138,11 +146,26 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     [router, onOpenChange]
   );
 
+  function openResult(item: SearchResultItem, trigger?: HTMLElement) {
+    if (item.type !== "document") { go(item.href); return; }
+    if (item.parseRunId && item.anchorId) {
+      sourceTrigger.current = trigger ?? bodyRef.current?.querySelector<HTMLElement>(`[data-idx="${sel}"]`) ?? null;
+      setSource({ documentId: item.id, runId: item.parseRunId, anchorId: item.anchorId });
+    } else if (item.href) window.open(item.href, "_blank", "noopener,noreferrer");
+  }
+
+  function returnToResult() {
+    const body = bodyRef.current;
+    if (!body?.closest('[role="dialog"][data-state="open"]')) return;
+    (sourceTrigger.current?.isConnected && body.contains(sourceTrigger.current) ? sourceTrigger.current : inputRef.current)?.focus({ preventScroll: true });
+  }
+
   useEffect(() => {
     bodyRef.current?.querySelector<HTMLElement>(`[data-idx="${sel}"]`)?.scrollIntoView({ block: "nearest" });
   }, [sel]);
 
   function onKeyDown(e: React.KeyboardEvent) {
+    if (source) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setSel((s) => Math.min(flat.length - 1, s + 1));
@@ -150,10 +173,11 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       e.preventDefault();
       setSel((s) => Math.max(0, s - 1));
     } else if (e.key === "Enter") {
+      if (e.target instanceof HTMLElement && e.target.closest("button, a")) return;
       const item = flat[sel];
       if (item) {
         e.preventDefault();
-        go(item.href);
+        openResult(item);
       }
     } else if (e.key === "Tab") {
       e.preventDefault();
@@ -166,11 +190,11 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const total = GROUPS.reduce((n, g) => n + counts[g.key], 0);
 
   return (
-    <DialogPrimitive.Root
+    <><DialogPrimitive.Root
       open={open}
       onOpenChange={(v) => {
         onOpenChange(v);
-        if (!v) setScope("all");
+        if (!v) { setScope("all"); setSource(null); }
       }}
     >
       <DialogPrimitive.Portal>
@@ -185,6 +209,7 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             <div className="gs-input">
               {loading ? <Loader2 className="animate-spin" aria-hidden /> : <Search aria-hidden />}
               <input
+                ref={inputRef}
                 className="q mo-gs-q"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -252,10 +277,11 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                           key={`${group.key}-${item.id}`}
                           data-idx={myIdx}
                           role="option"
+                          tabIndex={-1}
                           aria-selected={sel === myIdx}
                           className={cn("gs-item", sel === myIdx && "sel")}
                           onMouseMove={() => sel !== myIdx && setSel(myIdx)}
-                          onClick={() => go(item.href)}
+                          onClick={event => { setSel(myIdx); openResult(item, event.currentTarget); }}
                           style={item.href ? undefined : { cursor: "default" }}
                         >
                           <div className={cn("gs-ic", group.tone)}>
@@ -278,7 +304,7 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                                 <>
                                   <span className="mono">{item.pageNo ? `第 ${item.pageNo} 页命中` : item.matchedBy}</span>
                                   {chip ? <span className={cn("src-chip", chip.kind)}>{chip.label}</span> : null}
-                                  {item.context ? <span className="truncate">{item.context}</span> : <span>未挂案件或收案（如模板、申请附件），请在对应模块打开</span>}
+                                  {item.context ? <span className="truncate">{item.context}</span> : <span>未挂案件或收案</span>}
                                   {item.code ? <span className="mono">{item.code}</span> : null}
                                 </>
                               ) : item.type === "matter" ? (
@@ -325,7 +351,7 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
               <span className="hint"><span className="kbd">Tab</span> 切换范围</span>
               <span className="perm">
                 <Lock style={{ width: 12, height: 12 }} aria-hidden />
-                仅展示你有权限访问的内容 · 材料正文支持按页定位
+                仅展示你有权限访问的内容 · 有具体位置的材料可直接查看来源
                 {results && results.documentsFailedCount > 0 ? ` · 另有 ${results.documentsFailedCount} 份材料识别失败未纳入全文` : ""}
               </span>
             </div>
@@ -333,5 +359,8 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
+      {open && source && <SearchMaterialSourceDialog key={`${source.documentId}:${source.runId}:${source.anchorId}`} input={source}
+        onClose={() => setSource(null)} onReturnFocus={returnToResult} />}
+    </>
   );
 }

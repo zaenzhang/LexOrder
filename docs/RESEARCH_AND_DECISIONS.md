@@ -1060,6 +1060,21 @@ G15交付后按用户约束先查agent、认领和全部分支，在`43bea7a`确
 
 本地按已安装Next 16.4.6文档核对use-search-params及Server Action边界，沿用现有updateDossierLocation、Radix Dialog和来源服务。三轮计划纠正包括：保留Timeline过滤掉的受限占位、源弹层隔离父键盘、Office按实际支持格式分流、读取材料不新增案件写权门槛。没有运行参考项目、复制第三方源码或进行浏览器验收；独立原件另页、错误优先及保留搜索位置是本项目对当前断点的设计判断。S06/F01仍在分别审查，不以本节替代其合同。
 
+S08/S09实际交付反馈见计划§8.35：复用了原件URL和现有reader，保留受限占位；root定点复审另外纠正失败状态说明及内部错误原文。两名独立代码reviewer确认无剩余阻断，34条服务/组件验证不等于真实HTTP、浏览器或律师验收。
+
+### 3.29 模板作用域与期限精度的参考取舍（2026-11-17）
+
+S06/F01在最新认领核对后分别由business/context核实际调用链，material及另一分工交叉审查，root第三轮核具体框架/SQL/消费者；计划见§7.14.7、技术合同见架构§6.11，以下阅读不等于实现。
+
+| 实际读取与用户任务 | 采用判断及边界 |
+| --- | --- |
+| 轻量DOCX实际字段；本地docxtemplater 3.71.1的inspect-module/get-tags/scope-manager/modules/loop相关方法；[官方标签语义](https://docxtemplater.com/docs/tag-types/)及[FAQ占位符检查](https://docxtemplater.com/faq/) | 编译器已有结构化scope，空集合和反向块须沿实际渲染。用官方检查模块补当前准备层，不写第二解释器。variables改为索引、移除extra输入；存量错误并集不能证明额外必填，历史不回写。InspectModule现实际需要lodash，声明现有4.18.1运行依赖，不升级整套依赖 |
+| 模板核对与可选字段；docassemble固定`36d7bd4`的[docx-template.yml全文](https://github.com/jhpyle/docassemble/blob/36d7bd4d27324a3cde2ea92ebd5afe074cdcfe2d/docassemble_base/docassemble/base/data/questions/examples/docx-template.yml)；j-lawyer固定`f523d14`的[模板对话框](https://github.com/jlawyerorg/j-lawyer-org/blob/f523d141327e5c74269dd9c71b54ae1c05a415a3/j-lawyer-client/src/main/java/com/jdimension/jlawyer/client/editors/files/AddDocumentFromTemplateDialog.java)生成/选模板/实际占位符及空值提示部分 | 采用实际字段、显式可选和人工核对，不移入访谈平台/Java UI。本地静态核25份内置定义：T16未消费的案由不是独立必填证据；专用T10归档目录自己注入数组，可空页码/备注保留。准备原值与补填值分开、同对象重核保稿、真实数组身份是本项目设计判断 |
+| 明确期限日期及人工调整；ANQI固定`25efcf7`的[deadline-core.js](https://github.com/zj-ai-lab/anqi/blob/25efcf7f2a3329f9ecdc092b3ced0e17a685c83a/src/lib/deadline-core.js)日期键/UTC算术/due_on片段，及[case.js](https://github.com/zj-ai-lab/anqi/blob/25efcf7f2a3329f9ecdc092b3ced0e17a685c83a/public/js/case.js)editDeadlineDueByDate | 采用明确日期、调整理由和人工保护，不宣称ANQI已有DATE/DATETIME精度；不迁入variants/级联重算。LexOrder历史无精度证据故nullable不回填，新写显式精度并贯通实际责任/通知/显示 |
+| 日历准确截止点；[RFC5545 §3.6.1](https://datatracker.ietf.org/doc/html/rfc5545#section-3.6.1)VEVENT日期与时点语义 | DATE-TIME无DTEND的事件在起始时点结束；沿现有ICS生成器明确表达截止点，避免默认增加一小时。不是新订阅/日历平台，UID及庭期原行为不改 |
+
+本地已核Next 16.4.6的Forms/Server Action文档与当前Prisma、Zod、RHF输入边界，复用现有Input/Select/Dialog。F01审查纠正旧NULL编辑被默认值升格、未改值秒毫秒丢失、同值精度变更遗漏触发器、混合ScheduleItem误分类及真实逾期查询；排除无调用的旧KPI函数，保留同日已发送提醒不重发。S06审查纠正只修新上传、重核清草稿和以补填值作原值比较。没有运行参考项目或移植第三方实质代码，不扩大维护/复杂期限重算/通用访谈范围。
+
 ## 4. 可选法律服务 MCP 与来源
 
 核查日期 2026-11-16；以下为官方公开的接入信息，不是本项目已取得账号、权益或实测成功。机构目录可扩展，自定义远程 MCP 为未预置服务保留入口；不虚构“市面所有机构都提供官方 MCP”。

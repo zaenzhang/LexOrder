@@ -136,7 +136,9 @@ function SourceButton({ itemId, revision, source }: { itemId: string; revision?:
 }
 
 /** Self-contained presentation shared by material rows and portalled timelines. */
-export function EvidencePoints({ items, showSource = false }: { items: EvidenceItemRow[]; showSource?: boolean }) {
+export function EvidencePoints({ items, showSource = false, onResearch }: {
+  items: EvidenceItemRow[]; showSource?: boolean; onResearch?(itemId: string): void;
+}) {
   const [pending, startTransition] = useTransition();
   const [detail, setDetail] = useState<EditorData | null>(null);
   const detailTrigger = useRef<HTMLButtonElement | null>(null);
@@ -166,6 +168,8 @@ export function EvidencePoints({ items, showSource = false }: { items: EvidenceI
           onClick={event => { detailTrigger.current = event.currentTarget; openItem(item.id); }}>
           {item.canEdit ? "查看与编辑要点" : "查看要点"}
         </Button> : null}
+        {onResearch && item.kind === "ISSUE" && !item.restricted ? <Button type="button" variant="outline" size="sm" disabled={pending}
+          onClick={() => onResearch(item.id)}>以此争点开始研究</Button> : null}
       </div>
     </li>)}</ul>
     {detail && items.some(item => item.id === detail.item.id && !item.restricted) ? <EvidenceDetailDialog key={detail.item.id} initial={detail} onClose={() => setDetail(null)} onReturnFocus={() => (detailTrigger.current?.isConnected ? detailTrigger.current : listRef.current)?.focus({ preventScroll: true })} /> : null}

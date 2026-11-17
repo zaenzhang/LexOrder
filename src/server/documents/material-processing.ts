@@ -56,9 +56,9 @@ export function materialLocationLabel(location: SourceAnchor["location"]): strin
   }
 }
 
-function originalUrl(doc: Pick<Document, "id" | "mimeType" | "name">, location?: SourceAnchor["location"]): string {
+export function materialOriginalUrl(doc: Pick<Document, "id" | "mimeType" | "name">, location?: SourceAnchor["location"]): string {
   if (officePreviewKind(doc.mimeType, doc.name)) return `/api/documents/${encodeURIComponent(doc.id)}/preview`;
-  const page = location?.kind === "PAGE" ? `#page=${location.page}` : "";
+  const page = doc.mimeType?.toLowerCase() === "application/pdf" && location?.kind === "PAGE" ? `#page=${location.page}` : "";
   return `/api/documents/${encodeURIComponent(doc.id)}/download?inline=1${page}`;
 }
 
@@ -262,7 +262,7 @@ export async function readMaterialSource(userId: string, input: MaterialSourceIn
   if (!current || !await canReadDocument(userId, current)) return { status: "UNAVAILABLE" };
   return { status: "AVAILABLE", document: { id: doc.id, name: doc.name, version: doc.version, sha256: doc.sha256, mimeType: doc.mimeType },
     run: { id: run.id, generation: run.generation, parserVersion: run.parserVersion, isCurrent: current.parseGeneration === run.generation },
-    anchor, coverage: snapshot.coverage, locationLabel: materialLocationLabel(anchor.location), originalUrl: originalUrl(doc, anchor.location) };
+    anchor, coverage: snapshot.coverage, locationLabel: materialLocationLabel(anchor.location), originalUrl: materialOriginalUrl(doc, anchor.location) };
 }
 
 export async function readMaterialSources(userId: string, input: { matterId: string; documentIds: string[]; offset?: number; limit?: number }): Promise<MaterialSourceListResult> {
@@ -279,7 +279,7 @@ export async function readMaterialSources(userId: string, input: { matterId: str
     if (!snapshot || !doc.sha256) continue;
     for (const anchor of snapshot.anchors) items.push({ documentId: doc.id, documentName: doc.name, documentVersion: doc.version,
       documentSha256: doc.sha256, runId: run.id, anchorId: anchor.anchorId, location: anchor.location,
-      locationLabel: materialLocationLabel(anchor.location), excerpt: anchor.text.slice(0, 240), originalUrl: originalUrl(doc, anchor.location) });
+      locationLabel: materialLocationLabel(anchor.location), excerpt: anchor.text.slice(0, 240), originalUrl: materialOriginalUrl(doc, anchor.location) });
   }
   return { items: items.slice(offset, offset + limit), nextOffset: offset + limit < items.length ? offset + limit : null };
 }
@@ -312,7 +312,7 @@ export async function readMaterialProcessingStatuses(userId: string, input: { ma
     results.push({ documentId: doc.id, documentName: doc.name, generation: doc.parseGeneration, runId: run?.id ?? null, state,
       label: state === "PENDING" && run?.finishedAt ? "尚有未识别内容" : labels[state],
       detail: run?.errorCode ? details[run.errorCode] ?? "处理尚未完成，请查看原件。" : !doc.sha256 ? "原件校验信息缺失，请补传一个材料版本。" : "",
-      inProgress, canRetry, originalUrl: originalUrl(doc), coverage: coverage.success ? { unitKind: coverage.data.unitKind, totalUnits: coverage.data.totalUnits,
+      inProgress, canRetry, originalUrl: materialOriginalUrl(doc), coverage: coverage.success ? { unitKind: coverage.data.unitKind, totalUnits: coverage.data.totalUnits,
         ready: unitNumbers("READY").length, pending: unitNumbers("PENDING"), failed: unitNumbers("FAILED"), unsupported: unitNumbers("UNSUPPORTED"), truncated: unitNumbers("TRUNCATED") } : null });
   }
   return results;
