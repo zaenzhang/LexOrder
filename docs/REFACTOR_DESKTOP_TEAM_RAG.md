@@ -707,6 +707,14 @@ uploadDocument采用唯一discriminated结果合同，成功返回实际id，确
 
 本片无schema、迁移、新依赖、轮询或后台扫描器改动；原记录改期、责任转交、离岗检查和后台提醒继续按G01未完成范围追踪，不以“安排下次跟进”替代。
 
+### 6.19 三人集成与桌面程序卡合同（2026-11-17）
+
+用户指定 A/B/C 后，三个独立 main clone 的真实路径、基线和准确认领以计划 §7.14.4 为唯一账本；C 独占四主文档、必要 schema/迁移、公共授权、全局入口和 main 发布。A/B 交领域小提交或基于明确 base 的 patch，不直接发布主线；C 复核当前 main/重叠、接口及实际消费者，完成定点验证后发布正式 SHA。集成期间暂停 C 自身业务写入；每个检出一名写者，隔离数据库/运行进程另登记当次 owner。
+
+D02 只修 `src/app/moan-pages.css` 的既有 `.mo-dossier .dos-proc*`：卡片纵向排列，原主信息与同级 `ProcedureStatusActions` 上下分区；标题/徽标自然换行，案号/机构允许连续字符串断行。保持已有网格、主题、字号和焦点样式，不新建 Card 或菜单、不改 CSS 导入与公共 Button/Badge。团队只读概况同用该规则，Portal 内 Dialog 保持自身组件样式，不依赖卡片祖先。
+
+本片不改 `setSelectedProcId`、程序状态载荷、`expectedUpdatedAt`、`updateProcedure`、会话/资格、归档守卫或数据身份，不需要 API/schema/迁移。静态检查只证明 CSS 合法及改动边界，浏览器真实排版由用户另验；CSS-only 不新增镜像实现测试或数据库/全量构建门禁。详细合同和 M3 证据补齐顺序见计划 §7.16。
+
 ## 7. 参考项目如何进入 LexOrder
 
 沿用 [来源记录](RESEARCH_AND_DECISIONS.md)，按“观察行为 → 输入输出与规则 → LexOrder 设计 → 场景验收”吸收。实际复制代码另记固定提交、文件、依赖与来源；研究范围不按协议类型排除。
