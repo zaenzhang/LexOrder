@@ -10,11 +10,14 @@ import {
   PopoverTrigger
 } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
-import { searchCauses, type CauseSearchResult } from "@/server/causes/actions";
+import { getCauseById, searchCauses, type CauseSearchResult } from "@/server/causes/actions";
 import { causeScopeForSelection } from "@/lib/cause-scope";
 import { cn } from "@/lib/utils";
 
 type Node = CauseSearchResult;
+type CauseLookup =
+  | { id: string; status: "found"; name: string }
+  | { id: string; status: "missing" | "error" };
 
 type Props = {
   value: string;
@@ -46,7 +49,15 @@ export function CauseCombobox({
   const [open, setOpen] = useState(false);
   const [allNodes, setAllNodes] = useState<Node[]>([]);
   const [isPending, startTransition] = useTransition();
-  const [selectedName, setSelectedName] = useState<string>("");
+  const [lookup, setLookup] = useState<CauseLookup | null>(null);
+  const listedName = allNodes.find((node) => node.id === value)?.name;
+  const currentLookup = lookup?.id === value ? lookup : null;
+  const displayName = listedName ?? (currentLookup?.status === "found" ? currentLookup.name : null);
+  const displayText = !value ? placeholder : displayName ?? (
+    currentLookup?.status === "missing" ? "未找到已选案由"
+      : currentLookup?.status === "error" ? "案由名称加载失败"
+        : "案由名称加载中…"
+  );
 
   const [pickedL2, setPickedL2] = useState<string | null>(null);
   const [pickedL3, setPickedL3] = useState<string | null>(null);
@@ -88,20 +99,23 @@ export function CauseCombobox({
     setAllNodes([]);
     if (value) {
       onChange("", "");
-      setSelectedName("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [causeScopeKey]);
 
-  // 同步显示已选名字 / l2 路径
+  // 已有 ID 按需读取名称，打开选择器之前不加载整个案由库。
   useEffect(() => {
-    if (value && allNodes.length > 0) {
-      const found = allNodes.find((o) => o.id === value);
-      if (found) {
-        setSelectedName(found.name);
-      }
-    }
-  }, [value, allNodes]);
+    if (!value || listedName) return;
+    let active = true;
+    void getCauseById(value).then((cause) => {
+      if (active) setLookup(cause
+        ? { id: value, status: "found", name: cause.name }
+        : { id: value, status: "missing" });
+    }).catch(() => {
+      if (active) setLookup({ id: value, status: "error" });
+    });
+    return () => { active = false; };
+  }, [value, listedName]);
 
   // 去掉一级：二级直接平铺为第一列
   const l2Nodes = useMemo(() => allNodes.filter((n) => n.level === 2), [allNodes]);
@@ -132,7 +146,6 @@ export function CauseCombobox({
   // 有子级 → 选中并展开下一列（可继续下钻，也可就此停下）；叶子 → 选中并关闭。
   function selectNode(node: Node, level: number) {
     onChange(node.id, node.name);
-    setSelectedName(node.name);
     if (hasChildren(node)) {
       if (level === 2) {
         setPickedL2(node.id);
@@ -148,7 +161,6 @@ export function CauseCombobox({
   // 搜索结果直接选中并关闭
   function pickNode(node: Node) {
     onChange(node.id, node.name);
-    setSelectedName(node.name);
     setOpen(false);
   }
 
@@ -162,11 +174,7 @@ export function CauseCombobox({
           aria-expanded={open}
           className={cn("h-10 w-full justify-between rounded-sm font-normal", triggerClassName)}
         >
-          {value && selectedName ? (
-            <span className="truncate">{selectedName}</span>
-          ) : (
-            <span className="truncate text-muted-foreground">{placeholder}</span>
-          )}
+          <span className={cn("truncate", !(value && displayName) && "text-muted-foreground")}>{displayText}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>

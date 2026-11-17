@@ -608,7 +608,7 @@ S05复用registerBillingTx已有assertLedgerWrite和Serializable；仅当signedA
 
 F03/F05/F06复用现有IntakeRevision送审轮次与审批授权/状态链：最新round的submittedAt可以为缺历史的null，读模型和真实消费方共同保持未知语义，不新增字段、投影或历史回填；已处理日期沿本人实际decision。页面编辑资格与后端冻结一致，原核查note继续只读展示。实现与验证见计划§8.32。
 
-F04/D01/D04的向导使用现有intakeCreateSchema及包含CLIENT_PARTY的原始RHF输入，问题按完整字段路径去重并映射真实步骤；派生完成度和确认摘要不建立同步影子状态，不修改共享身份schema的可选规则。F09以现有getCauseById读取已有ID的显示名称，异步结果按请求ID隔离，名称读取不触发onChange；选择范围沿causeScopeForSelection。后两阶段的实施状态以计划§7.14.5为准。
+F04/D01/D04的向导使用现有intakeCreateSchema及包含CLIENT_PARTY的原始RHF输入，问题按完整字段路径去重并映射真实步骤；派生完成度和确认摘要不建立同步影子状态，不修改共享身份schema的可选规则。类别切换在用户事件内定点重校验已有诉讼地位/当事人错误。F09以现有getCauseById读取已有ID的显示名称，异步结果按请求ID隔离，名称读取不触发onChange；选择范围沿causeScopeForSelection。A/B/C实现与开发证据均见计划§8.32，浏览器与专业验收独立保留。
 
 ## 7. 参考项目如何进入 LexOrder
 
