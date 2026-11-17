@@ -1,5 +1,5 @@
 /**
- * 上海时区的日期 / 时刻展示工具。
+ * 上海时区的日期 / 时刻转换与展示工具。
  *
  * 客户端组件会先在服务端渲染再在浏览器水合：若直接用 getHours()/getDate() 等本地时区方法，
  * 服务器（常为 UTC 或其他时区）与浏览器所在时区不同就会得到不同文本，导致水合失败、时间显示错位。
@@ -41,6 +41,14 @@ const pad = (n: number) => String(n).padStart(2, "0");
 export function shDayKey(value: Date | string | number): string {
   const p = shParts(value);
   return `${p.y}-${pad(p.m)}-${pad(p.d)}`;
+}
+
+/** 日期筛选的上海日界；无效日期不自动滚入下一月，不读取宿主时区。 */
+export function shDayBoundary(input: string | undefined, endOfDay = false): Date | undefined {
+  if (!input || !/^\d{4}-\d{2}-\d{2}$/.test(input)) return undefined;
+  const day = new Date(`${input}T00:00:00Z`);
+  if (Number.isNaN(day.getTime()) || day.toISOString().slice(0, 10) !== input) return undefined;
+  return new Date(`${input}T${endOfDay ? "23:59:59.999" : "00:00:00"}+08:00`);
 }
 
 /** 上海时刻 HH:mm */

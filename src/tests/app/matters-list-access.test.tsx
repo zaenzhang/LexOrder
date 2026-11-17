@@ -65,3 +65,40 @@ describe("案件浏览与收案客户选项独立授权", () => {
     expect(page.props.canCreateIntake).toBe(true);
   });
 });
+
+describe("案件与收案列表的上海业务日期筛选", () => {
+  it.each(["active", "intake", "revision", "archived", "all"])("%s 查询包含上海整天，不跨入相邻业务日", async tab => {
+    await MattersPage({ searchParams: Promise.resolve({ tab, from: "2026-11-17", to: "2026-11-17" }) });
+    const intake = tab === "intake" || tab === "revision";
+    const query = (intake ? listIntakes : listMatters).mock.calls[0][0];
+    const from: Date = query[intake ? "receivedAtFrom" : "intakeDateFrom"];
+    const to: Date = query[intake ? "receivedAtTo" : "intakeDateTo"];
+    expect(from.toISOString()).toBe("2026-11-16T16:00:00.000Z");
+    expect(to.toISOString()).toBe("2026-11-17T15:59:59.999Z");
+  });
+
+  it.each([
+    { from: "2026-12-31", start: "2026-12-30T16:00:00.000Z" },
+    { to: "2027-01-01", end: "2027-01-01T15:59:59.999Z" },
+    { from: "2028-02-29", to: "2028-02-29", start: "2028-02-28T16:00:00.000Z", end: "2028-02-29T15:59:59.999Z" },
+  ])("保留单端、跨年和有效闰日输入：%j", async ({ from, to, start, end }) => {
+    await MattersPage({ searchParams: Promise.resolve({ from, to }) });
+    const query = listMatters.mock.calls[0][0];
+    expect(query.intakeDateFrom?.toISOString()).toBe(start);
+    expect(query.intakeDateTo?.toISOString()).toBe(end);
+  });
+
+  it.each([undefined, "", "2026-2-03", "2026-02-30", "2026-02-29", "2026-13-01"])("无效或空日期不生成查询时间：%s", async input => {
+    await MattersPage({ searchParams: Promise.resolve({ tab: "intake", from: input, to: input }) });
+    const query = listIntakes.mock.calls[0][0];
+    expect(query.receivedAtFrom).toBeUndefined();
+    expect(query.receivedAtTo).toBeUndefined();
+  });
+
+  it("倒置区间不被自动交换", async () => {
+    await MattersPage({ searchParams: Promise.resolve({ from: "2026-11-18", to: "2026-11-17" }) });
+    const query = listMatters.mock.calls[0][0];
+    expect(query.intakeDateFrom.toISOString()).toBe("2026-11-17T16:00:00.000Z");
+    expect(query.intakeDateTo.toISOString()).toBe("2026-11-17T15:59:59.999Z");
+  });
+});

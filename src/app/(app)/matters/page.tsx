@@ -7,6 +7,7 @@ import { MattersViewV4 } from "./_components/matters-view-v4";
 import type { MatterCategory } from "@prisma/client";
 import { requireSession } from "@/lib/auth/session";
 import { hasCustomPermission } from "@/lib/roles/catalog";
+import { shDayBoundary } from "@/lib/ui/sh-time";
 
 export type MattersTab = "intake" | "active" | "archived" | "revision" | "all";
 export type MatterSortBy = "hearing" | "intakeDate" | "claimAmount" | "archivedAt";
@@ -50,30 +51,6 @@ function resolvePage(input?: string) {
   return Number.isInteger(value) && value > 0 ? value : 1;
 }
 
-function resolveDateStart(input?: string) {
-  return resolveDateBoundary(input, false);
-}
-
-function resolveDateEnd(input?: string) {
-  return resolveDateBoundary(input, true);
-}
-
-function resolveDateBoundary(input: string | undefined, endOfDay: boolean) {
-  if (!input) return undefined;
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input);
-  if (!match) return undefined;
-  const [, year, month, day] = match;
-  return new Date(
-    Number(year),
-    Number(month) - 1,
-    Number(day),
-    endOfDay ? 23 : 0,
-    endOfDay ? 59 : 0,
-    endOfDay ? 59 : 0,
-    endOfDay ? 999 : 0
-  );
-}
-
 type Props = {
   searchParams: Promise<{
     tab?: string;
@@ -103,8 +80,8 @@ export default async function MattersPage({ searchParams }: Props) {
   const page = resolvePage(params.page);
   const sortBy = resolveSortBy(params.sortBy, tab);
   const sortDir = resolveSortDir(params.sortDir);
-  const dateFrom = resolveDateStart(params.from);
-  const dateTo = resolveDateEnd(params.to);
+  const dateFrom = shDayBoundary(params.from);
+  const dateTo = shDayBoundary(params.to, true);
 
   // 客户选项仅供有收案登记及客户读取资格的人使用；案件浏览独立于客户档案权限。
   const [clientsResponse, colleagues, readableTeams] = await Promise.all([
