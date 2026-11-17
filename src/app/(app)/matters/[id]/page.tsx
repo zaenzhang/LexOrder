@@ -7,6 +7,7 @@ import {readMatterReview} from "@/server/conflicts/matter-review";
 import {MatterConflictReview} from "./_components/conflict-review";
 import { hasCustomPermission } from "@/lib/roles/catalog";
 import { hasMatterBusinessAccess } from "@/lib/permissions";
+import { canReadDocument } from "@/lib/approvals/documents";
 import { TeamMatterOverview } from "./_components/team-matter-overview";
 import { notFound, redirect } from "next/navigation";
 import { getMatterById } from "@/server/matters/actions";
@@ -79,7 +80,7 @@ export default async function MatterDetailPage({ params, searchParams }: PagePro
   const [
     financeRaw,
     userOptions,
-    documents,
+    documentsRaw,
     folders,
     templates,
     allColleagues,
@@ -89,7 +90,7 @@ export default async function MatterDetailPage({ params, searchParams }: PagePro
     customFieldDefs,
     preservationCases
   ] = await Promise.all([
-    allowed("finance.read") ? getMatterFinance(matter.id) : Promise.resolve({ billings: [], entries: [], plans: [], stats: { outstanding:0, allocated:0, clientFunds:0, contractAmount: 0, receivable: 0, received: 0, pendingReceived: 0, refund: 0, cost: 0, commission: 0, invoiced: 0 } }),
+    allowed("finance.read") ? getMatterFinance(matter.id) : Promise.resolve({ billings: [], entries: [], plans: [], contractDocuments: [], stats: { outstanding:0, allocated:0, clientFunds:0, contractAmount: 0, receivable: 0, received: 0, pendingReceived: 0, refund: 0, cost: 0, commission: 0, invoiced: 0 } }),
     listActiveColleagues(),
     prisma.document.findMany({
       where: { matterId: matter.id, deletedAt: null, ...(!allowed("documents.read") ? { id: { in: [] } } : {}) },
@@ -173,6 +174,9 @@ export default async function MatterDetailPage({ params, searchParams }: PagePro
 
   // getMatterFinance 已在 action 出口统一序列化 Decimal
   const finance = financeRaw;
+  // Keep every authorized concrete version for exact references and the detail history.
+  const readableDocuments = await Promise.all(documentsRaw.map(document => canReadDocument(session.user.id, document)));
+  const documents = documentsRaw.filter((_, index) => readableDocuments[index]);
 
   // v0.22: 本案 AI 审查总览（聚合 ReviewRecord）
   const reviewSummary = allowed("documents.read") ? await getMatterReviewSummary(matter.id) : null;

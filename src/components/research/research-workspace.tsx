@@ -210,7 +210,7 @@ export function ResearchWorkspace({ matterId, researchId = null, issueId = null,
     {!loading && showingEditor && (editing || row?.readable) ? <>
       {row?.checkedAt && !editing ? <p className="text-sm text-muted-foreground">{row.checkedByName ?? "原核对人"} · {shDayKey(row.checkedAt)} 核对：{row.checkNote}</p> : null}
       {row && editing ? <p className="text-sm text-muted-foreground">保存后形成新修订，原修订及已有稿件依据保留。</p> : null}
-      <ResearchEditor key={`${row?.id ?? "new"}:${editing}`} value={value} onChange={next => { setValue(next); dirty.current = true; }} options={options} disabled={pending} readOnly={!editing} saved={row}
+      <ResearchEditor key={`${row?.id ?? "new"}:${editing}`} matterId={matterId} value={value} onChange={next => { setValue(next); dirty.current = true; }} options={options} disabled={pending} readOnly={!editing} saved={row}
         onRefreshIssues={() => mutate(async () => { setOptions(await getResearchOptions(matterId)); setNotice("争点选项已更新，请核对后重新选择；研究输入已保留"); })}
         onOpenSource={id => showSource(id)} onPreviewSource={source => showSource(null, source)} />
     </> : null}

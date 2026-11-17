@@ -26,7 +26,7 @@ export type SmsRow = Prisma.SmsMessageGetPayload<{
       select: { id: true; originalName: true; displayName: true; mimeType: true; size: true; state: true; uploadSource: true; downloadedAt: true; documentId: true; sourceUrl: true; analysisState: true; docType: true; analysisError: true };
     };
     suggestions: {
-      select: { id: true; kind: true; fieldKey: true; currentValue: true; suggestedValue: true; sourcePage: true; sourceExcerpt: true; status: true; fileId: true; payload: true };
+      select: { id: true; kind: true; fieldKey: true; currentValue: true; suggestedValue: true; sourcePage: true; sourceExcerpt: true; status: true; fileId: true; payload: true; updatedAt: true; targetType: true; targetId: true };
     };
   };
 }>;

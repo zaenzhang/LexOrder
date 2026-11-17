@@ -1,24 +1,20 @@
 "use client";
 
-/**
- * 案卷工作台「＋记录」：沟通与研判（2026-09-15 入口统一，原「登记进展 / 写研判笔记」）：
- * - 办案记录（事务记录）：沟通、送达、会见等事实登记，按渠道归类；
- * - 研判：人工判断内容，带 `研判笔记` 标签（数据标签不变）独立陈列，可按环节归档。
- * 期限、任务、开庭仍走各自的专用表单，本弹窗只提供入口。
- */
-import { useEffect, useState, useTransition } from "react";
+import { useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CalendarClock, Landmark, ListChecks, Loader2 } from "lucide-react";
-import { createNote } from "@/server/notes/actions";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Loader2 } from "lucide-react";
+import { createNote, updateNote, type NoteCreateInput } from "@/server/notes/actions";
+import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FormDialogBody, FormDialogContent } from "@/components/patterns/form-dialog";
+import { confirmDialog } from "@/components/patterns/confirm-dialog";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioChips } from "@/components/ui/radio-chips";
-import { Segmented } from "@/components/patterns/moan";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { JUDGMENT_NOTE_TAG, stageNoteTag } from "./procedure-workflow-panel";
+import { JUDGMENT_NOTE_TAG, stageNoteTag, type WorkflowNote } from "./procedure-workflow-panel";
 import { shDayKey, shTime } from "@/lib/ui/sh-time";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -31,192 +27,121 @@ const CHANNELS = [
   { value: "MEETING", label: "面谈/会见" },
   { value: "OTHER", label: "其他" }
 ] as const;
+const shInput = (value: Date) => `${shDayKey(value)}T${shTime(value)}`;
 
-/** 记录时间默认「现在的上海墙钟」；datetime-local 值统一按 +08:00 解释，非上海浏览器不偏移 */
-function nowSh() {
-  const now = new Date();
-  return `${shDayKey(now)}T${shTime(now)}`;
-}
-function parseSh(value: string): Date {
-  return new Date(`${value}:00+08:00`);
-}
-
-export function ProgressDialog({
-  open,
-  onOpenChange,
-  matterId,
-  initialMode = "record",
-  initialStage,
-  stageNames,
-  onAddTask,
-  onAddDeadline,
-  onAddHearing
-}: {
+/** Each opening mounts a fresh form. A server refresh must not replace the observed edit snapshot. */
+export function ProgressDialog({ open, onOpenChange, matterId, initialMode = "record", initialStage, stageNames, note, canWrite = true }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   matterId: string;
   initialMode?: Mode;
   initialStage?: string;
   stageNames: string[];
-  onAddTask?: () => void;
-  onAddDeadline?: () => void;
-  onAddHearing?: () => void;
+  note?: WorkflowNote;
+  canWrite?: boolean;
 }) {
   const router = useRouter();
+  const fieldId = useId();
   const [pending, startTransition] = useTransition();
-  const [mode, setMode] = useState<Mode>(initialMode);
-  const [channel, setChannel] = useState<string>("COURT");
-  const [withWhom, setWithWhom] = useState("");
-  const [occurredAt, setOccurredAt] = useState(nowSh());
-  const [content, setContent] = useState("");
-  const [stage, setStage] = useState(initialStage ?? "");
+  const busy = useRef(false);
+  const confirmingClose = useRef(false);
+  const [returnTarget] = useState(() => typeof document !== "undefined" && document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  const [original] = useState(() => note ? { ...note, tags: [...note.tags], occurredAt: new Date(note.occurredAt), updatedAt: new Date(note.updatedAt) } : null);
+  const [baseline] = useState(() => ({
+    mode: (original ? original.tags.includes(JUDGMENT_NOTE_TAG) ? "judgment" : "record" : initialMode) as Mode,
+    channel: (original?.channel ?? "COURT") as NoteCreateInput["channel"],
+    withWhom: original?.withWhom ?? "",
+    occurredAt: shInput(original?.occurredAt ?? new Date()),
+    content: original?.content ?? "",
+    stage: original ? original.tags.find(tag => tag.startsWith("环节:"))?.slice(3) ?? "" : initialStage ?? ""
+  }));
+  const [mode, setMode] = useState(baseline.mode);
+  const [channel, setChannel] = useState(baseline.channel);
+  const [withWhom, setWithWhom] = useState(baseline.withWhom);
+  const [occurredAt, setOccurredAt] = useState(baseline.occurredAt);
+  const [content, setContent] = useState(baseline.content);
+  const [stage, setStage] = useState(baseline.stage);
+  const [error, setError] = useState("");
+  const dirty = mode !== baseline.mode || channel !== baseline.channel || withWhom !== baseline.withWhom
+    || occurredAt !== baseline.occurredAt || content !== baseline.content || stage !== baseline.stage;
+  const availableStages = [...new Set([...stageNames, ...(baseline.stage ? [baseline.stage] : [])])];
 
-  useEffect(() => {
-    if (!open) return;
-    setMode(initialMode);
-    setStage(initialStage ?? "");
-    setChannel("COURT");
-    setWithWhom("");
-    setOccurredAt(nowSh());
-    setContent("");
-  }, [open, initialMode, initialStage]);
+  async function close() {
+    if (busy.current || pending || confirmingClose.current) return;
+    confirmingClose.current = true;
+    try {
+      if (dirty && !await confirmDialog({ title: "放弃未保存的记录？", confirmText: "放弃修改", cancelText: "继续编辑", initialFocus: "cancel" })) return;
+      onOpenChange(false);
+    } finally { confirmingClose.current = false; }
+  }
 
   function submit() {
-    if (!content.trim()) {
-      toast.warning(mode === "judgment" ? "请填写研判内容" : "请填写记录内容");
-      return;
-    }
+    if (busy.current || !canWrite) return;
+    if (!content.trim()) { setError(mode === "judgment" ? "请填写研判内容" : "请填写记录内容"); return; }
+    const time = original && occurredAt === baseline.occurredAt ? original.occurredAt : new Date(`${occurredAt}:00+08:00`);
+    if (!Number.isFinite(time.getTime())) { setError("请填写有效的发生时间"); return; }
+    // Only the displayed stage tag is managed here; preserve all other original tags.
+    let tags: string[];
+    if (original) {
+      const managedTagIndex = original.tags.findIndex(tag => tag.startsWith("环节:"));
+      tags = stage === baseline.stage ? [...original.tags]
+        : [...original.tags.filter((_, index) => index !== managedTagIndex), ...(stage ? [stageNoteTag(stage)] : [])];
+    } else tags = [...(mode === "judgment" ? [JUDGMENT_NOTE_TAG] : []), ...(stage ? [stageNoteTag(stage)] : [])];
+    const input: NoteCreateInput = { matterId, channel: !original && mode === "judgment" ? "OTHER" : channel,
+      withWhom: !original && mode === "judgment" ? "" : withWhom, occurredAt: time, content: content.trim(), tags };
+    busy.current = true;
+    setError("");
     startTransition(async () => {
       try {
-        await createNote({
-          matterId,
-          channel: (mode === "judgment" ? "OTHER" : channel) as "OTHER",
-          withWhom: mode === "judgment" ? "" : withWhom,
-          occurredAt: parseSh(occurredAt),
-          content: content.trim(),
-          tags: mode === "judgment" ? [JUDGMENT_NOTE_TAG, ...(stage ? [stageNoteTag(stage)] : [])] : stage ? [stageNoteTag(stage)] : []
-        });
-        toast.success(mode === "judgment" ? "研判已保存" : "记录已保存");
+        if (original) await updateNote({ ...input, id: original.id, expectedUpdatedAt: original.updatedAt });
+        else await createNote(input);
+        toast.success(original ? "记录已更新" : mode === "judgment" ? "研判已保存" : "记录已保存");
         onOpenChange(false);
         router.refresh();
-      } catch (err) {
-        toast.error("保存失败", { description: actionErrorMessage(err) });
-      }
+      } catch (cause) {
+        setError(actionErrorMessage(cause));
+      } finally { busy.current = false; }
     });
   }
 
-  const jump = (fn?: () => void) =>
-    fn
-      ? () => {
-          onOpenChange(false);
-          fn();
-        }
-      : undefined;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[560px]">
-        <DialogHeader>
-          <DialogTitle>{mode === "judgment" ? "记录办案进展 · 研判" : "记录办案进展 · 沟通"}</DialogTitle>
-          <DialogDescription>
-            {mode === "judgment" ? "我的判断与分析，独立陈列，不与事实记录混排；保存后写入审计。" : "记录已发生的沟通、送达、会见等事实，自动带时间与操作人。"}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3.5">
-          <Segmented
-            items={[
-              { key: "record", label: "沟通" },
-              { key: "judgment", label: "研判" }
-            ]}
-            value={mode}
-            onChange={setMode}
-          />
-
-          {mode === "record" ? (
-            <>
-              <div className="space-y-1.5">
-                <Label>类型</Label>
-                <RadioChips items={CHANNELS.map((c) => ({ value: c.value, label: c.label }))} value={channel} onChange={setChannel} size="sm" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>对象</Label>
-                  <Input value={withWhom} onChange={(e) => setWithWhom(e.target.value)} placeholder="如：长宁法院 · 书记员" maxLength={80} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>发生时间</Label>
-                  <Input type="datetime-local" value={occurredAt} onChange={(e) => setOccurredAt(e.target.value)} />
-                </div>
-              </div>
-            </>
-          ) : null}
-
-          {stageNames.length > 0 ? (
-            <div className="space-y-1.5">
-              <Label>归档到环节（可选）</Label>
-              <Select value={stage || "__none__"} onValueChange={(v) => setStage(v === "__none__" ? "" : v)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">不归档到环节</SelectItem>
-                  {stageNames.map((n) => (
-                    <SelectItem key={n} value={n}>
-                      {n}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ) : null}
-
+  return <Dialog open={open} onOpenChange={next => { if (!next) void close(); }}>
+    <FormDialogContent className="sm:max-w-[560px]" onCloseAutoFocus={event => {
+      event.preventDefault();
+      const target = returnTarget?.isConnected && !returnTarget.closest("[hidden]") ? returnTarget : document.querySelector<HTMLElement>('[aria-label="记录"]');
+      if (target?.isConnected && !target.closest("[hidden]")) target.focus({ preventScroll: true });
+    }}>
+      <DialogHeader>
+        <DialogTitle>{original ? "编辑" : "记录办案进展 · "}{mode === "judgment" ? "研判" : "沟通"}</DialogTitle>
+        <DialogDescription>{mode === "judgment" ? "记录判断与分析，保存后写入审计。" : "记录已发生的沟通、送达、会见等事实。"}</DialogDescription>
+      </DialogHeader>
+      <FormDialogBody>
+        {!canWrite ? <p role="alert" className="mb-3 text-sm text-destructive">当前已无此案件的记录写入资格，输入仍保留。</p> : null}
+        <fieldset disabled={pending || !canWrite} className="space-y-3.5">
+          {!original ? <RadioChips items={[{ value: "record", label: "沟通" }, { value: "judgment", label: "研判" }]} value={mode} onChange={setMode} /> : null}
+          {mode === "record" ? <>
+            <div className="space-y-1.5"><Label>类型</Label><RadioChips items={CHANNELS.map(item => ({ ...item }))} value={channel} onChange={setChannel} size="sm" /></div>
+            <div className="space-y-1.5"><Label htmlFor={`${fieldId}-with`}>对象</Label><Input id={`${fieldId}-with`} value={withWhom} onChange={event => setWithWhom(event.target.value)} placeholder="如：长宁法院 · 书记员" maxLength={80} /></div>
+          </> : null}
+          <div className="space-y-1.5"><Label htmlFor={`${fieldId}-time`}>发生时间</Label><Input id={`${fieldId}-time`} type="datetime-local" value={occurredAt} onChange={event => setOccurredAt(event.target.value)} /></div>
+          {availableStages.length > 0 ? <div className="space-y-1.5">
+            <Label>环节标签（可选）</Label>
+            <Select value={stage || "__none__"} onValueChange={value => setStage(value === "__none__" ? "" : value)} disabled={pending || !canWrite}>
+              <SelectTrigger aria-label="环节标签"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="__none__">不标注环节</SelectItem>{availableStages.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent>
+            </Select>
+          </div> : null}
           <div className="space-y-1.5">
-            <Label>{mode === "judgment" ? "研判内容" : "记录内容"}</Label>
-            <Textarea
-              rows={mode === "judgment" ? 7 : 4}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              maxLength={5000}
-              placeholder={mode === "judgment" ? "第一行作为标题，如：诉讼方案 v2 · 争议焦点与举证思路" : "如：签收法院送达材料 2 份（开庭传票、举证通知）"}
-            />
+            <Label htmlFor={`${fieldId}-content`}>{mode === "judgment" ? "研判内容" : "记录内容"}</Label>
+            <Textarea id={`${fieldId}-content`} rows={mode === "judgment" ? 7 : 4} value={content} onChange={event => setContent(event.target.value)} maxLength={5000}
+              placeholder={mode === "judgment" ? "如：争议焦点与举证思路" : "如：签收法院送达材料 2 份"} />
           </div>
-
-          {mode === "record" && (onAddTask || onAddDeadline || onAddHearing) ? (
-            <div className="flex flex-wrap items-center gap-1.5 rounded-[8px] bg-[var(--bg-sunken)] px-2.5 py-2">
-              <span className="t-xs t-mute mr-1">改记事项：</span>
-              {onAddTask ? (
-                <button type="button" className="btn btn-ghost btn-sm" onClick={jump(onAddTask)}>
-                  <ListChecks />
-                  任务
-                </button>
-              ) : null}
-              {onAddDeadline ? (
-                <button type="button" className="btn btn-ghost btn-sm" onClick={jump(onAddDeadline)}>
-                  <CalendarClock />
-                  期限
-                </button>
-              ) : null}
-              {onAddHearing ? (
-                <button type="button" className="btn btn-ghost btn-sm" onClick={jump(onAddHearing)}>
-                  <Landmark />
-                  开庭
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-
-        <DialogFooter>
-          <button type="button" className="btn btn-secondary" onClick={() => onOpenChange(false)} disabled={pending}>
-            取消
-          </button>
-          <button type="button" className="btn btn-primary" onClick={submit} disabled={pending}>
-            {pending ? <Loader2 className="animate-spin" /> : null}
-            保存
-          </button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+        </fieldset>
+        {error ? <p role="alert" className="mt-3 text-sm text-destructive">保存失败：{error}</p> : null}
+      </FormDialogBody>
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={() => void close()} disabled={pending}>取消</Button>
+        <Button type="button" onClick={submit} disabled={pending || !canWrite}>{pending ? <Loader2 className="animate-spin" /> : null}保存</Button>
+      </DialogFooter>
+    </FormDialogContent>
+  </Dialog>;
 }

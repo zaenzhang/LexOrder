@@ -10,7 +10,8 @@ import { shDayKey } from "@/lib/ui/sh-time";
 import { queryAccessLabels, queryOutcomeLabels, sourceRelationLabels, lawKindLabels, researchIssueSelectionKey, type ResearchContent, type ResearchOptions, type ResearchQuery, type ResearchRevisionView, type ResearchSourceInput } from "@/server/research/contracts";
 import { ResearchSourceEditor } from "./research-source-editor";
 
-export function ResearchEditor({ value, onChange, options, disabled, readOnly, saved, onOpenSource, onPreviewSource, onRefreshIssues }: {
+export function ResearchEditor({ matterId, value, onChange, options, disabled, readOnly, saved, onOpenSource, onPreviewSource, onRefreshIssues }: {
+  matterId: string;
   value: ResearchContent; onChange(value: ResearchContent): void; options: ResearchOptions | null; disabled: boolean;
   readOnly: boolean; saved: ResearchRevisionView | null; onOpenSource(id: string): void; onPreviewSource(source: ResearchSourceInput): void;
   onRefreshIssues(): void;
@@ -56,7 +57,7 @@ export function ResearchEditor({ value, onChange, options, disabled, readOnly, s
             <dt>取得时间 / 途径</dt><dd>{source.lawMetadata.acquiredOn || "未记录"} / {source.lawMetadata.acquiredVia || "未记录"}</dd>
             <dt>使用范围</dt><dd className="whitespace-pre-wrap break-words">{source.lawMetadata.usageScope || "待核实"}</dd>
           </dl></details>
-        </div>) : <p className="text-sm text-muted-foreground">尚未选入原文。链接与摘要见下方查询记录。</p> : <ResearchSourceEditor value={value.sources} documents={options?.documents ?? []} disabled={disabled || !options} onChange={sources => update({ sources })} onPreview={onPreviewSource} />}
+        </div>) : <p className="text-sm text-muted-foreground">尚未选入原文。链接与摘要见下方查询记录。</p> : <ResearchSourceEditor matterId={matterId} value={value.sources} documents={options?.documents ?? []} disabled={disabled || !options} onChange={sources => update({ sources })} onPreview={onPreviewSource} />}
       </section>
       <section className="space-y-3"><div className="flex items-center justify-between"><h3 className="font-medium text-sm">查询与阅读记录</h3>{!readOnly ? <Button size="sm" variant="outline" disabled={disabled || value.queryLog.length >= 40} onClick={() => update({ queryLog: [...value.queryLog, { query: "", location: "", access: "NONE", outcome: "NOT_OBTAINED", notes: "" }] })}>添加记录</Button> : null}</div>
         {value.queryLog.map((query, index) => <div key={index} className="rounded-md border p-3 space-y-3">

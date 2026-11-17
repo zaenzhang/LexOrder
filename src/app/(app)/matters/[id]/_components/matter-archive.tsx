@@ -338,7 +338,7 @@ export function MatterArchive({
                   ) : null}
                 </FieldItem>
               ) : null}
-              <FieldItem label="扫描件" wide>
+              {canReadFinance ? <FieldItem label="扫描件" wide>
                 {contractDocs.length ? (
                   <span className="dos-ct">
                     {contractDocs.map((d) => (
@@ -350,7 +350,7 @@ export function MatterArchive({
                     ))}
                   </span>
                 ) : null}
-              </FieldItem>
+              </FieldItem> : null}
             </FieldGrid>
           </Group>
 

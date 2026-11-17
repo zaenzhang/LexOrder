@@ -34,12 +34,11 @@ import {
   SMS_FILE_STATE_CN,
   SMS_FILE_SOURCE_CN,
   SMS_ANALYSIS_CN,
-  SMS_SUGGESTION_CN,
   type SmsRow,
   type MatterOption,
   type ParsedJson
 } from "./sms-types";
-import { analyzeSmsInboundFiles, decideSmsSuggestions } from "@/server/sms/confirm-actions";
+import { SmsSuggestions } from "./sms-suggestions";
 import { SmsPasteDialog } from "./sms-paste-dialog";
 import {
   BackfillCaseNumberDialog,
@@ -453,77 +452,13 @@ function SmsCard({
         </div>
       )}
 
-      {/* B2/B3 整理建议：系统已准备好的内容（归属/文件/事项/档案修正），律师核对一次确认（v3 §3.2） */}
-      {(() => {
-        const pendingSuggestions = (sms.suggestions ?? []).filter(g => g.status === "PENDING" && g.kind !== "DOC_TYPE");
-        const decidedSuggestions = (sms.suggestions ?? []).filter(g => g.status !== "PENDING");
-        const analyzable = (sms.inboundFiles ?? []).some(f => f.analysisState === "PENDING" || f.analysisState === "NEEDS_OCR" || f.analysisState === "FAILED");
-        if (!pendingSuggestions.length && !decidedSuggestions.length && !analyzable) return null;
-        const decide = (ids: string[], decision: "ACCEPTED" | "REJECTED") =>
-          startTransition(async () => {
-            try {
-              const res = await decideSmsSuggestions({ ids, decision });
-              toast.success(decision === "ACCEPTED" ? `已确认应用 ${res.count} 项建议${res.filedFiles ? `，转正 ${res.filedFiles} 个文件` : ""}` : `已拒绝 ${res.count} 项建议`);
-              router.refresh();
-            } catch (e) {
-              toast.error(e instanceof Error ? actionErrorMessage(e) : "处理失败");
-            }
-          });
-        return (
-          <div className="mt-3 border-t border-border pt-3">
-            <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[11px] font-medium text-foreground/80">
-              <FileDigit className="h-3.5 w-3.5 text-primary" />
-              整理建议（{pendingSuggestions.length} 项待确认）
-              {analyzable ? (
-                <button type="button" disabled={pending || uploading} className="rounded border border-border px-2 py-0.5 text-[10px] font-normal text-muted-foreground hover:bg-muted/50" onClick={() =>
-                  startTransition(async () => {
-                    try {
-                      const res = await analyzeSmsInboundFiles({ smsId: sms.id });
-                      const analyzed = res.results.filter(r => r.state === "ANALYZED").length;
-                      const needsOcr = res.results.filter(r => r.state === "NEEDS_OCR").length;
-                      toast.success(`已完成分析 ${analyzed} 个文件${needsOcr ? `，${needsOcr} 个需人工（OCR 不可用）` : ""}，共产生 ${res.results.reduce((n, r) => n + r.suggestionCount, 0)} 项建议`);
-                      router.refresh();
-                    } catch (e) {
-                      toast.error(e instanceof Error ? actionErrorMessage(e) : "分析失败");
-                    }
-                  })
-                }>阅读并整理</button>
-              ) : null}
-              {pendingSuggestions.length > 1 ? (
-                <button type="button" disabled={pending} className="rounded border border-border px-2 py-0.5 text-[10px] font-normal text-primary hover:bg-primary/5" onClick={() => decide(pendingSuggestions.map(g => g.id), "ACCEPTED")}>全部确认</button>
-              ) : null}
-            </div>
-            <div className="space-y-1.5">
-              {pendingSuggestions.map(g => (
-                <div key={g.id} className="flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/20 px-2.5 py-1.5 text-[11px]">
-                  <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">{SMS_SUGGESTION_CN[g.kind] ?? g.kind}</span>
-                  <span className="text-foreground/85">
-                    {g.kind === "FIELD_CHANGE"
-                      ? `${g.fieldKey === "caseNumber" ? "案号" : "法院"}：${g.currentValue || "（空）"} → ${g.suggestedValue}`
-                      : g.kind === "MATTER_MATCH"
-                        ? `建议归属：${g.suggestedValue}（依据案号 ${g.sourceExcerpt ?? ""}）`
-                        : `${g.suggestedValue}`}
-                  </span>
-                  {g.sourcePage ? <span className="text-[10px] text-muted-foreground">来源第 {g.sourcePage} 页</span> : null}
-                  <span className="ml-auto flex gap-1.5">
-                    <button type="button" disabled={pending} className="rounded border border-border px-2 py-0.5 text-[10px] text-primary hover:bg-primary/5" onClick={() => decide([g.id], "ACCEPTED")}>采用</button>
-                    <button type="button" disabled={pending} className="rounded border border-border px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/50" onClick={() => decide([g.id], "REJECTED")}>拒绝</button>
-                  </span>
-                </div>
-              ))}
-              {decidedSuggestions.length > 0 ? (
-                <p className="text-[10px] text-muted-foreground">已处理 {decidedSuggestions.filter(g => g.status === "ACCEPTED").length} 项 · 已拒绝 {decidedSuggestions.filter(g => g.status === "REJECTED").length} 项（拒绝过的建议内容变化时才会重新出现）</p>
-              ) : null}
-            </div>
-          </div>
-        );
-      })()}
+      <SmsSuggestions sms={sms} busy={pending || uploading} />
 
       {/* B1 人工接续：需登录/验证码平台的来件，律师平台下载后补传回本条（v3 §4.2） */}
-      {sms.processingState === "NEEDS_MANUAL_FETCH" && (
+      {(sms.processingState === "NEEDS_MANUAL_FETCH" || sms.inboundFiles.some(file => !file.documentId && ["PENDING_REVIEW", "FAILED"].includes(file.state))) && (
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
           <span className="text-[11px] text-muted-foreground">
-            平台需登录 / 验证码时：打开链接完成必要步骤后，把下载的文书补传回本条来件
+            收件人可把实际取得的原件补传回本条来件；同内容补传可接续尚未入卷的文件。
           </span>
           <label className="cursor-pointer rounded-md border border-border px-2.5 py-1 text-[11px] text-foreground/85 transition-colors hover:bg-muted/50">
             {uploading ? <Loader2 className="mr-1 inline h-3 w-3 animate-spin" /> : <Upload className="mr-1 inline h-3 w-3" />}
@@ -531,6 +466,7 @@ function SmsCard({
             <input
               type="file"
               multiple
+              disabled={uploading || pending}
               className="hidden"
               onChange={(e) => {
                 const files = Array.from(e.target.files ?? []);
@@ -542,8 +478,10 @@ function SmsCard({
                 files.forEach((f) => fd.append("files", f));
                 uploadSmsInboundFile(fd)
                   .then((res) => {
-                    toast.success(res.saved.length > 0 ? `已补传 ${res.saved.length} 个文件` : "文件已在本次来件中，未重复保存");
+                    if (res.saved.length || res.replenished.length) toast.success(`新增 ${res.saved.length} 个，补存原件 ${res.replenished.length} 个，入卷 ${res.filedFiles} 个`);
                     if (res.skippedDuplicates.length) toast.info(`重复跳过：${res.skippedDuplicates.join("、")}`);
+                    for (const failure of res.failed) toast.error(`${failure.name}：${failure.message}`);
+                    if (res.warning) toast.warning(res.warning);
                     startTransition(() => router.refresh());
                   })
                   .catch((err) => toast.error(err instanceof Error ? actionErrorMessage(err) : "补传失败"))

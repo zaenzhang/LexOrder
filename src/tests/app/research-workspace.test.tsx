@@ -8,6 +8,7 @@ vi.mock("@/server/research/actions", () => ({ getResearchList: mock.list, getRes
   getResearchHistory: mock.history, getResearchSource: mock.source, getResearchSourcePreview: mock.preview,
   saveResearchRevision: mock.save, checkResearchRevision: mock.check, formResearchDraft: mock.draft }));
 vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: mock.ask, promptDialog: mock.prompt }));
+vi.mock("@/server/documents/processing-actions", () => ({ listMaterialSources: vi.fn() }));
 import { ResearchWorkspace } from "@/components/research/research-workspace";
 
 const matterId = "cm00000000000000000000001", researchId = "cm00000000000000000000002", documentId = "cm00000000000000000000003";

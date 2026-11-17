@@ -32,7 +32,7 @@ type TaskWorkPanelProps = {
   refreshRequest?: number;
   selectedTaskId?: string | null;
   onTaskSelect?: (taskId: string | null, mode?: "push" | "replace") => void;
-  onTaskCreated?: (taskId: string) => void;
+  onTaskCreated?: (taskId: string, stageId: string | null) => void;
 };
 
 /** 全案待办的 Task 入口；不从程序环节投影任务，也不生成平行任务状态。 */
@@ -91,7 +91,7 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, cr
     setReload(value => value + 1);
     if (window.location.href === creatingLocation.current) {
       if (selectedTaskId === undefined) setLocalTaskId(id);
-      if (onTaskCreated) onTaskCreated(id);
+      if (onTaskCreated) onTaskCreated(id, creatingStage?.id ?? null);
       else onTaskSelect?.(id);
     }
     router.refresh();

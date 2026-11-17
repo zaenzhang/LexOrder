@@ -244,7 +244,7 @@ describe("事项任务的同一对象与保稿", () => {
     expect(await screen.findByRole("heading", { name: "核对客户原件" })).toBeVisible();
     expect(actions.createTask).toHaveBeenLastCalledWith({ matterId, title: "核对客户原件", description: "现场核对后登记结果", assigneeId: userId, priority: 0, dueAt: undefined, requestKey: expect.any(String) });
     expect(actions.createTask.mock.calls[0][0].requestKey).toBe(actions.createTask.mock.calls[1][0].requestKey);
-    expect(onCreated).toHaveBeenCalledWith(createdId);
+    expect(onCreated).toHaveBeenCalledWith(createdId, null);
     expect(actions.getTaskWorkflow).toHaveBeenLastCalledWith(createdId, matterId);
   });
 

@@ -101,6 +101,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { documentSourceChip } from "@/lib/ui/moan-tones";
 import type { FolderPayload, TemplateSummary } from "./folder-types";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
+import { materialFamilyRows } from "@/lib/documents/family-rows";
 import { useDocActions } from "./doc-actions-context";
 import { EvidencePoints } from "./evidence-panel";
 import { evidenceKindLabel } from "@/lib/enums";
@@ -189,6 +190,8 @@ type WorkflowDocument = {
   sha256: string | null;
   templateId: string | null;
   version: number | null;
+  familyId: string | null;
+  isLatest: boolean;
 };
 
 type WorkflowMatter = {
@@ -663,6 +666,7 @@ export type WorkflowNote = {
   channel: string;
   withWhom: string | null;
   occurredAt: Date;
+  updatedAt: Date;
   content: string;
   tags: string[];
   author: { id: string; name: string };
@@ -712,6 +716,8 @@ export function ProcedureWorkflowPanel({
   notes,
   timelineEvents,
   onWriteNote,
+  onEditNote,
+  currentUserId,
   apiRef,
   view,
   onViewChange,
@@ -745,6 +751,8 @@ export function ProcedureWorkflowPanel({
   notes: WorkflowNote[];
   timelineEvents: WorkflowTimelineEvent[];
   onWriteNote: (opts: { judgment: boolean; stageName?: string }) => void;
+  onEditNote?: (note: WorkflowNote) => void;
+  currentUserId?: string;
   apiRef?: React.MutableRefObject<WorkflowApi | null>;
   view: DossierView;
   onViewChange: (view: DossierView) => void;
@@ -997,7 +1005,9 @@ export function ProcedureWorkflowPanel({
                   unassignedOnly={unassignedOnly}
                   selectedTaskId={searchParams.get("task")}
                   onTaskSelect={(task, mode) => updateDossierLocation({ ...(task ? { view: "work", workPane: "tasks" } : {}), task }, mode)}
-                  onTaskCreated={task => updateDossierLocation({ view: "work", workPane: "tasks", procedure: null, stage: null, task })}
+                  onTaskCreated={(task, stageId) => updateDossierLocation({ view: "work", workPane: "tasks",
+                    procedure: stageId ? allProcedures.find(item => item.stages.some(stage => stage.id === stageId))?.id ?? null : null,
+                    stage: stageId ? `stage-${stageId}` : null, task })}
                 /> : null}
                 {canReadSchedule ? <NextActions
                   initiallyExpanded
@@ -1027,6 +1037,8 @@ export function ProcedureWorkflowPanel({
                 allScopeLabel="全案记录 · 全部程序"
                 canManage={canWriteRecords}
                 canWriteRecords={canWriteRecords}
+                currentUserId={currentUserId}
+                onEditNote={onEditNote}
                 onWriteRecord={() => onWriteNote({ judgment: false })}
                 onWriteJudgment={() => onWriteNote({ judgment: true })}
                 onAddLedger={canManage && onAddLedger ? () => onAddLedger("express") : undefined}
@@ -1720,6 +1732,7 @@ type LogItem = {
   eventType?: string;
   memo?: { id: string; done: boolean };
   express?: { id: string; outbound: boolean };
+  note?: WorkflowNote;
 };
 
 function buildLogItems({ procedures, notes, events, users, expresses }: {
@@ -1736,7 +1749,7 @@ function buildLogItems({ procedures, notes, events, users, expresses }: {
     const judgment = note.tags.includes(JUDGMENT_NOTE_TAG);
     items.push({ key: `n-${note.id}`, kind: judgment ? "note" : note.channel === "COURT" ? "court" : "talk", at,
       stageName: null, title: judgment ? "研判笔记" : `${NOTE_CHANNEL_LABEL[note.channel] ?? "办案记录"}${note.withWhom ? ` · ${note.withWhom}` : ""}`,
-      body: note.content, meta: `${note.author.name} · ${formatDateTimeShort(at)}`, stageTag: noteStage(note) });
+      body: note.content, meta: `${note.author.name} · ${formatDateTimeShort(at)}`, stageTag: noteStage(note), note });
   }
   for (const procedure of procedures) {
     const procedureLabel = procedure.customLabel ?? procedureTypeLabel[procedure.type];
@@ -1788,7 +1801,7 @@ const LOG_FILTERS: { key: "all" | LogKind; label: string }[] = [
   { key: "sys", label: "系统" }
 ];
 
-function LogRow({ item, canManage }: { item: LogItem; canManage?: boolean }) {
+function LogRow({ item, canManage, onEditNote }: { item: LogItem; canManage?: boolean; onEditNote?: (note: WorkflowNote) => void }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   function run(fn: () => Promise<unknown>, ok: string) {
@@ -1823,6 +1836,7 @@ function LogRow({ item, canManage }: { item: LogItem; canManage?: boolean }) {
         </button>
       </div>
     ) : null;
+  const noteOps = item.note && onEditNote ? <Button type="button" variant="ghost" size="sm" onClick={() => onEditNote(item.note!)}>编辑</Button> : null;
   if (item.kind === "note") {
     return (
       <div className="rec">
@@ -1838,6 +1852,7 @@ function LogRow({ item, canManage }: { item: LogItem; canManage?: boolean }) {
           <div className="rec-note whitespace-pre-wrap">{item.body}</div>
           <div className="rec-meta">{item.meta}</div>
         </div>
+        {noteOps}
       </div>
     );
   }
@@ -1865,6 +1880,7 @@ function LogRow({ item, canManage }: { item: LogItem; canManage?: boolean }) {
         <div className="rec-meta">{item.meta}</div>
       </div>
       {ledgerOps}
+      {noteOps}
     </div>
   );
 }
@@ -1879,6 +1895,8 @@ function CaseLog({
   canWriteRecords,
   onWriteRecord,
   onWriteJudgment,
+  currentUserId,
+  onEditNote,
   onAddLedger,
   onCaseSearch
 }: {
@@ -1893,6 +1911,8 @@ function CaseLog({
   canWriteRecords: boolean;
   onWriteRecord: () => void;
   onWriteJudgment: () => void;
+  currentUserId?: string;
+  onEditNote?: (note: WorkflowNote) => void;
 }) {
   const [filter, setFilter] = useState<"all" | LogKind>("all");
   const [expanded, setExpanded] = useState(initiallyExpanded);
@@ -1942,7 +1962,8 @@ function CaseLog({
           );
         })}
       </div>
-      {shown.length === 0 ? <EmptyState compact title="暂无记录" /> : <div className="dos-seg">{visible.map(item => <LogRow key={item.key} item={item} canManage={canManage} />)}</div>}
+      {shown.length === 0 ? <EmptyState compact title="暂无记录" /> : <div className="dos-seg">{visible.map(item => <LogRow key={item.key} item={item} canManage={canManage}
+        onEditNote={canWriteRecords && item.note?.author.id === currentUserId ? onEditNote : undefined} />)}</div>}
       {shown.length > visible.length ? <Button variant="ghost" className="m-3" onClick={() => setExpanded(true)}>展开更早的 {shown.length - visible.length} 条记录</Button> : null}
     </section>
   );
@@ -2043,7 +2064,7 @@ function MaterialsSection({ matterId, procedure, documents, stage, unassignedOnl
   </>;
 }
 
-function DocRow({ doc, compact = false }: { doc: WorkflowDocument; compact?: boolean }) {
+function DocRow({ doc, versionCount = 1, compact = false }: { doc: WorkflowDocument; versionCount?: number; compact?: boolean }) {
   const { onReview, onOpenDocument, evidenceByDoc, onAddEvidence } = useDocActions();
   const [evOpen, setEvOpen] = useState(false);
   const pUrl = documentPreviewUrl(doc);
@@ -2056,7 +2077,8 @@ function DocRow({ doc, compact = false }: { doc: WorkflowDocument; compact?: boo
   meta.push(`${shortDay(doc.createdAt)} ${doc.templateId ? "从模板生成" : "上传"}`);
   if (doc.ocrStatus === "READY" && doc.pageCount) meta.push(`已抽取文本 · ${doc.pageCount} 页`);
   if (!compact && doc.sha256) meta.push(`校验值 ${doc.sha256.slice(0, 4)}…${doc.sha256.slice(-4)}`);
-  if (doc.version && doc.version > 1) meta.push(`版本 ${doc.version}`);
+  meta.push(`${doc.isLatest ? "当前版" : "历史版本"}${doc.version ? ` · V${doc.version}` : ""}`);
+  if (versionCount > 1) meta.push(`${versionCount} 个可读版本`);
   return (
     <div className={cn("dos-doc", evOpen && "open")}>
       <div className="doc-row">
@@ -2089,7 +2111,6 @@ function DocRow({ doc, compact = false }: { doc: WorkflowDocument; compact?: boo
         </div>
         {!compact ? (
           <div className="dos-doc-ops">
-            {onOpenDocument ? <button type="button" className="btn btn-secondary btn-sm" onClick={() => onOpenDocument(doc.id)}>文书与复核</button> : null}
             {onAddEvidence ? (
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => onAddEvidence(doc.id)} title="记录这份材料证明的事实、主张或分析">
                 ＋证据要点
@@ -2399,6 +2420,8 @@ function StageMaterialsPanel({
     : procedure ? "文件将保存到当前程序，暂不归入具体环节。" : "文件将保存到当前事项。";
   const fileRef = useRef<HTMLInputElement>(null);
   const uploadRequest = useRef<{ signature: string; key: string } | null>(null);
+  const uploadBusy = useRef(false);
+  const confirmingClose = useRef(false);
   const currentTarget = { matterId, procedureId: procedure?.id ?? null, stageKey: stage?.key ?? null, stageId: stage?.id ?? null, canManage };
   const currentTargetRef = useRef(currentTarget);
   useEffect(() => { currentTargetRef.current = currentTarget; });
@@ -2415,6 +2438,27 @@ function StageMaterialsPanel({
   const [category, setCategory] = useState<DocumentCategory>(defaultCategoryForStage(stageName));
   const [isPending, startTransition] = useTransition();
   const sourceOptions = useMemo(() => procedure ? buildSourceOptions(procedure) : [], [procedure]);
+
+  function clearUpload() {
+    setOpen(false);
+    setPicked(null);
+    setCustomName("");
+    setSourceParty("");
+    setSourceOrigin("");
+    setUploadTarget(null);
+    uploadRequest.current = null;
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  async function closeUpload() {
+    if (uploadBusy.current || isPending || confirmingClose.current) return;
+    const dirty = Boolean(picked || customName || sourceParty || sourceOrigin || category !== defaultCategoryForStage(uploadTarget?.stageName ?? stageName));
+    confirmingClose.current = true;
+    try {
+      if (dirty && !await confirmDialog({ title: "放弃未上传的材料？", confirmText: "放弃上传", cancelText: "继续编辑", initialFocus: "cancel" })) return;
+      clearUpload();
+    } finally { confirmingClose.current = false; }
+  }
 
   function targetIsCurrent(target: NonNullable<typeof uploadTarget>) {
     const current = currentTargetRef.current;
@@ -2438,6 +2482,7 @@ function StageMaterialsPanel({
   }
 
   function submitUpload() {
+    if (uploadBusy.current) return;
     const target = uploadTarget;
     if (!target || !targetIsCurrent(target)) {
       toast.error("上传目标已变化，请返回原程序和环节核对草稿");
@@ -2447,6 +2492,7 @@ function StageMaterialsPanel({
       toast.warning("请先选择文件");
       return;
     }
+    uploadBusy.current = true;
     startTransition(async () => {
       try {
         let submissionTarget = target;
@@ -2480,33 +2526,34 @@ function StageMaterialsPanel({
         if (uploadRequest.current?.signature !== signature) uploadRequest.current = { signature, key: crypto.randomUUID() };
         fd.set("requestKey", uploadRequest.current.key);
         await uploadDocument(fd);
-        uploadRequest.current = null;
         toast.success("材料已保存，等待处理");
-        setOpen(false);
+        clearUpload();
         router.refresh();
       } catch (err) {
         toast.error("上传失败", { description: actionErrorMessage(err) });
         router.refresh();
-      }
+      } finally { uploadBusy.current = false; }
     });
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (uploadSignal > 0 && canManage) openUploadDialog(); }, [uploadSignal]);
 
-  const originCounts = documents.reduce<Partial<Record<DocumentSourceOrigin, number>>>((acc, d) => {
+  const familyRows = materialFamilyRows(documents);
+  const representatives = familyRows.map(row => row.document);
+  const originCounts = representatives.reduce<Partial<Record<DocumentSourceOrigin, number>>>((acc, d) => {
     if (d.sourceOrigin) acc[d.sourceOrigin] = (acc[d.sourceOrigin] ?? 0) + 1;
     return acc;
   }, {});
   const isWritten = (d: WorkflowDocument) => Boolean(d.templateId) || d.category === "PLEADING" || d.category === "JUDGMENT";
-  const writtenCount = documents.filter(isWritten).length;
+  const writtenCount = representatives.filter(isWritten).length;
   const [writtenOnly, setWrittenOnly] = useState(false);
   const [evidenceOnly, setEvidenceOnly] = useState(false);
   const { evidenceByDoc } = useDocActions();
-  const evidenceDocCount = documents.filter((d) => (evidenceByDoc?.get(d.id)?.length ?? 0) > 0).length;
-  const shownDocs = (originFilter === "ALL" ? documents : documents.filter((d) => d.sourceOrigin === originFilter))
-    .filter((d) => !writtenOnly || isWritten(d))
-    .filter((d) => !evidenceOnly || (evidenceByDoc?.get(d.id)?.length ?? 0) > 0);
+  const evidenceDocCount = representatives.filter((d) => (evidenceByDoc?.get(d.id)?.length ?? 0) > 0).length;
+  const shownRows = familyRows.filter(({ document }) => originFilter === "ALL" || document.sourceOrigin === originFilter)
+    .filter(({ document }) => !writtenOnly || isWritten(document))
+    .filter(({ document }) => !evidenceOnly || (evidenceByDoc?.get(document.id)?.length ?? 0) > 0);
 
   const originChips = (
   <>
@@ -2532,7 +2579,7 @@ function StageMaterialsPanel({
         <div className="panel-title min-w-0">
           <FileText className="ic" strokeWidth={1.8} />
           材料
-          <span className="badge b-white" style={{ marginLeft: 2 }}>{documents.length}</span>
+          <span className="badge b-white" style={{ marginLeft: 2 }}>{familyRows.length}</span>
         </div>
         <div className="flex shrink-0 items-center gap-[7px]">
           {canManage && onOpenTemplate ? (
@@ -2557,7 +2604,7 @@ function StageMaterialsPanel({
             aria-pressed={!writtenOnly && !evidenceOnly && originFilter === "ALL"}
             onClick={() => { setWrittenOnly(false); setEvidenceOnly(false); setOriginFilter("ALL"); }}
           >
-            <b style={{ fontWeight: 550 }}>全部 {documents.length}</b>
+            <b style={{ fontWeight: 550 }}>全部 {familyRows.length}</b>
           </button>
           {evidenceDocCount > 0 ? (
             <button type="button" className={cn("src-chip cursor-pointer", evidenceOnly && "self")} aria-pressed={evidenceOnly} onClick={() => setEvidenceOnly((v) => !v)}>
@@ -2574,15 +2621,15 @@ function StageMaterialsPanel({
         </div>
       ) : null}
 
-      {shownDocs.length === 0 ? (
+      {shownRows.length === 0 ? (
         <EmptyState compact icon={FileText}
           title={documents.length > 0 ? "没有符合筛选条件的材料" : stage ? "本环节暂无材料" : procedure ? "本程序暂无材料" : "本事项暂无材料"}
           description={documents.length > 0 ? "调整上方筛选条件可查看其他材料。" : canManage ? uploadScopeDescription : undefined} />
       ) : (
-        shownDocs.map((doc) => <DocRow key={doc.id} doc={doc} />)
+        shownRows.map(({ document, versionCount }) => <DocRow key={document.id} doc={document} versionCount={versionCount} />)
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={next => { if (!next) void closeUpload(); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>上传材料 · {uploadTarget?.title ?? uploadScopeTitle}</DialogTitle>
@@ -2590,7 +2637,7 @@ function StageMaterialsPanel({
               {uploadTarget?.description ?? uploadScopeDescription}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
+          <fieldset disabled={isPending} className="space-y-3">
             {uploadTarget && (!canManage || matterId !== uploadTarget.matterId || (procedure?.id ?? null) !== uploadTarget.procedureId || ((stage?.key ?? null) !== uploadTarget.stageKey && (uploadTarget.stageId === null || stage?.id !== uploadTarget.stageId))) ? <p role="alert" className="text-sm text-destructive">上传目标已变化，请返回原程序和环节核对草稿。</p> : null}
             <div className="space-y-1.5">
               <Label className="text-xs">材料类别 *</Label>
@@ -2667,12 +2714,12 @@ function StageMaterialsPanel({
               <Input
                 value={customName}
                 onChange={(event) => setCustomName(event.target.value)}
-                placeholder={`${stageName}材料`}
+                placeholder={uploadTarget?.stageKey ? `${uploadTarget.stageName}材料` : uploadTarget?.title ?? uploadScopeTitle}
               />
             </div>
-          </div>
+          </fieldset>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
+            <Button variant="outline" onClick={() => void closeUpload()} disabled={isPending}>
               取消
             </Button>
             <Button onClick={submitUpload} disabled={isPending || !picked || !uploadTarget || !canManage || matterId !== uploadTarget.matterId || (procedure?.id ?? null) !== uploadTarget.procedureId || ((stage?.key ?? null) !== uploadTarget.stageKey && (uploadTarget.stageId === null || stage?.id !== uploadTarget.stageId))} className="gap-1.5">

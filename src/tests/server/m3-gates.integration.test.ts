@@ -144,6 +144,26 @@ describe.skipIf(!config.url)("M3 程序冲突、合同与人工期限守卫：�
     expect(await latestCheck(f.matter.id)).toEqual(decided);
   });
 
+  it("直接登记已签署与草稿后签署采用同一当前复核，拒绝时不留下合同或应收", async () => {
+    const f = await fixture();
+    const base = { matterId: f.matter.id, title: "合成承接收费", moneyKind: "LAWYER_FEE" as const, amount: "100" };
+    const draft = await approvalTransaction(tx => registerBillingTx(tx, f.user.id, { ...base, installments: [] }));
+    const signed = { ...base, signedAt: new Date("2026-10-01T04:00:00Z"), installments: [{ title: "合成一期", amount: "100", dueState: "UNKNOWN" as const }] };
+    await expect(approvalTransaction(tx => registerBillingTx(tx, f.user.id, signed))).rejects.toThrow(/复核|人工/);
+    expect(await db.billing.count({ where: { matterId: f.matter.id } })).toBe(1);
+    expect(await db.receivable.count({ where: { matterId: f.matter.id } })).toBe(0);
+    expect(await db.auditLog.count({ where: { action: "BILLING_CREATE", detail: { path: ["matterId"], equals: f.matter.id } } })).toBe(1);
+    await review(f.matter.id);
+    const direct = await approvalTransaction(tx => registerBillingTx(tx, f.user.id, signed));
+    await approvalTransaction(tx => signBillingTx(tx, f.user.id, { id: draft.id, revision: 0, signedAt: signed.signedAt, installments: signed.installments }));
+    expect(await db.billing.findUniqueOrThrow({ where: { id: direct.id } })).toMatchObject({ status: "ACTIVE", signedAt: signed.signedAt });
+    expect(await db.receivable.count({ where: { matterId: f.matter.id } })).toBe(2);
+    await db.party.update({ where: { id: f.party.id }, data: { name: `合成主体变化-${randomUUID()}` } });
+    await expect(approvalTransaction(tx => registerBillingTx(tx, f.user.id, signed))).rejects.toThrow(/复核|变化/);
+    expect(await db.billing.count({ where: { matterId: f.matter.id } })).toBe(2);
+    expect(await db.receivable.count({ where: { matterId: f.matter.id } })).toBe(2);
+  });
+
   it("旧自动 DIFFERENT 与不匹配身份的审计均不冒充人工决定；读取不改旧字段", async () => {
     const f = await fixture(), other = await makeUser();
     const state = await matterReviewState(db, f.matter.id);

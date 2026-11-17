@@ -5,7 +5,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { db, ai, ocr } = vi.hoisted(() => ({
   db: {
+    $transaction: vi.fn(), $queryRaw: vi.fn(),
+    smsMessage: { findUnique: vi.fn(), update: vi.fn() },
+    auditLog: { create: vi.fn() },
     smsInboundFile: { findUnique: vi.fn(), update: vi.fn() },
+    user: { findUnique: vi.fn() },
     smsSuggestion: { findFirst: vi.fn(), create: vi.fn(), findMany: vi.fn() },
     matterProcedure: { findFirst: vi.fn(), findMany: vi.fn() }
   },
@@ -29,11 +33,17 @@ const FILE = { id: "f1", smsId: "s1", storageKey: "k", mimeType: "application/pd
 
 beforeEach(() => {
   vi.resetAllMocks();
+  db.$transaction.mockImplementation(async callback => callback(db));
+  db.$queryRaw.mockResolvedValue([]);
+  db.smsMessage.findUnique.mockResolvedValue({ matchedMatterId: null, processingState: "READY_FOR_REVIEW", processed: false });
+  db.smsMessage.update.mockResolvedValue({});
+  db.auditLog.create.mockResolvedValue({});
   db.smsInboundFile.findUnique.mockResolvedValue(FILE);
   db.smsInboundFile.update.mockResolvedValue({});
   db.smsSuggestion.findFirst.mockResolvedValue(null);
   db.smsSuggestion.create.mockResolvedValue({});
-  db.matterProcedure.findFirst.mockResolvedValue(null);
+  db.matterProcedure.findMany.mockResolvedValue([]);
+  db.user.findUnique.mockResolvedValue({ role: "LAWYER", active: true });
   global.fetch = vi.fn();
 });
 
@@ -47,7 +57,7 @@ describe("B2 阅读分析管道", () => {
     expect(update.data.analysisError).toContain("AI 未配置");
   });
 
-  it("AI 结构化输出落建议：文书分类 + 未匹配案号提出归属 + 开庭/期限事项", async () => {
+  it("文书分类留在文件上，唯一案号提出归属和实际程序候选", async () => {
     ai.aiChat.mockResolvedValue({ content: JSON.stringify({
       docType: "传票", suggestedName: "传票-张三案.pdf",
       fields: [{ key: "caseNumber", value: "（2026）沪01民初1号", page: 1, excerpt: "案号（2026）沪01民初1号" }],
@@ -57,14 +67,16 @@ describe("B2 阅读分析管道", () => {
       ],
       caseNumbers: ["（2026）沪01民初1号"], court: "上海市第一中级人民法院"
     }) });
-    db.matterProcedure.findFirst.mockResolvedValue({ id: "p1", matterId: "m1", matter: { internalCode: "A-1", title: "张三案" } });
+    db.matterProcedure.findMany.mockResolvedValue([{ id: "p1", matterId: "m1", engagement: "ENGAGED", matter: { internalCode: "A-1", title: "张三案" } }]);
     const res = await analyzeInboundFile("f1");
     expect(res.state).toBe("ANALYZED");
-    expect(res.suggestionCount).toBe(4); // DOC_TYPE + MATTER_MATCH + HEARING + DEADLINE（未匹配案件无 FIELD_CHANGE 可比）
+    expect(res.suggestionCount).toBe(3); // Only decisions; classification is file metadata.
     const kinds = db.smsSuggestion.create.mock.calls.map(c => c[0].data.kind);
     expect(kinds).toContain("MATTER_MATCH");
     expect(kinds).toContain("HEARING");
     expect(kinds).toContain("DEADLINE");
+    expect(kinds).not.toContain("DOC_TYPE");
+    expect(db.smsSuggestion.create.mock.calls.find(call => call[0].data.kind === "HEARING")?.[0].data.payload.procedureId).toBe("p1");
   });
 
   it("拒绝过/已存在的同内容建议不重复创建", async () => {
@@ -73,6 +85,17 @@ describe("B2 阅读分析管道", () => {
     const res = await analyzeInboundFile("f1");
     expect(res.state).toBe("ANALYZED");
     expect(db.smsSuggestion.create).not.toHaveBeenCalled();
+  });
+
+  it("迟到分析在同一事务按当前案件保存新建议并重开整理，后台不冒充律师确认", async () => {
+    db.smsMessage.findUnique.mockResolvedValue({ matchedMatterId: "current-matter", processingState: "ORGANIZED", processed: false });
+    ai.aiChat.mockResolvedValue({ content: JSON.stringify({ docType: "传票", fields: [], events: [{ kind: "HEARING", title: "新安排", dateText: "2027-02-03" }], caseNumbers: ["当前案号"] }) });
+    const result = await analyzeInboundFile("f1");
+    expect(result).toEqual({ state: "ANALYZED", suggestionCount: 1 });
+    expect(db.$transaction).toHaveBeenCalledTimes(1);
+    expect(db.matterProcedure.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ matterId: "current-matter" }) }));
+    expect(db.smsMessage.update).toHaveBeenCalledWith({ where: { id: "s1" }, data: { processingState: "READY_FOR_REVIEW" } });
+    expect(db.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ userId: null, action: "SMS_ANALYSIS_ADDED_PENDING_SUGGESTIONS", detail: expect.objectContaining({ source: "BACKGROUND_ANALYSIS", sourceDownloadedById: "u1" }) }) }));
   });
 
   it("AI 输出垃圾文本时标 FAILED 并保留错误信息", async () => {

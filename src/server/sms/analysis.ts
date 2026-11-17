@@ -8,12 +8,14 @@
  * 去重并保留 REJECTED 历史。
  */
 import { prisma } from "@/lib/prisma";
+import { matterAssociationFilter } from "@/lib/permissions";
 import { storage } from "@/lib/storage";
 import { aiChat, AiNotConfiguredError } from "@/lib/ai/client";
 import { extractDocumentTextLayer, NoTextLayerError, UnsupportedTextExtraction } from "@/lib/documents/text-extraction";
 import { recognizeText, OcrNotConfiguredError } from "@/server/ocr/provider";
-import type { SmsSuggestionKind } from "@prisma/client";
+import { Prisma, type SmsSuggestionKind } from "@prisma/client";
 import { ActionError } from "@/lib/action-error";
+import { auditTx } from "@/server/audit";
 
 const MAX_ANALYSIS_TEXT_CHARS = 12_000;
 
@@ -106,7 +108,7 @@ function normalizeAnalyzed(raw: Record<string, unknown>): AnalyzedDoc {
  * 分析一个来件文件并落建议（幂等入口：每个文件可重复分析，建议按内容去重）。
  * 返回分析状态；不抛中断性错误——全部失败形态落 analysisState。
  */
-export async function analyzeInboundFile(fileId: string): Promise<{ state: string; suggestionCount: number }> {
+export async function analyzeInboundFile(fileId: string, initiatedById?: string): Promise<{ state: string; suggestionCount: number }> {
   const file = await prisma.smsInboundFile.findUnique({
     where: { id: fileId },
     include: { sms: { select: { id: true, matchedMatterId: true, smsType: true, parsedJson: true, receivedById: true } } }
@@ -154,8 +156,8 @@ export async function analyzeInboundFile(fileId: string): Promise<{ state: strin
       data: { analysisState: "ANALYZED", analyzedAt: new Date(), docType: analyzed.docType, displayName: file.displayName ?? analyzed.suggestedName ?? undefined, extractedPages: pageCountFinal }
     });
 
-    // 建议落库：DOC_TYPE + FIELD_CHANGE（有匹配案件才有「原值→建议值」可比）+ HEARING/DEADLINE
-    const created = await persistSuggestions(file.smsId, fileId, file.sms.matchedMatterId, analyzed, file.downloadedById);
+    // 分类已保存在文件上；这里只产生需要人工决定的业务建议。
+    const created = await persistSuggestions(file.smsId, fileId, analyzed, file.downloadedById, initiatedById);
     return { state: "ANALYZED", suggestionCount: created };
   } catch (err) {
     const message = err instanceof Error ? err.message : "分析失败";
@@ -173,88 +175,87 @@ function countPages(text: string): number {
 async function persistSuggestions(
   smsId: string,
   fileId: string,
-  matchedMatterId: string | null,
   analyzed: AnalyzedDoc,
-  createdById: string
+  createdById: string,
+  initiatedById?: string,
 ): Promise<number> {
-  const rows: {
-    smsId: string; fileId: string; kind: SmsSuggestionKind; targetType?: string; targetId?: string;
-    fieldKey?: string; currentValue?: string; suggestedValue?: string; sourcePage?: number; sourceExcerpt?: string;
-    payload?: object;
-  }[] = [{ smsId, fileId, kind: "DOC_TYPE", suggestedValue: analyzed.docType, payload: { suggestedName: analyzed.suggestedName, caseNumbers: analyzed.caseNumbers, court: analyzed.court } }];
+  return prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM "SmsMessage" WHERE id=${smsId} FOR UPDATE`;
+    const sms = await tx.smsMessage.findUnique({ where: { id: smsId }, select: { matchedMatterId: true, processingState: true, processed: true } });
+    if (!sms) throw new ActionError("来件不存在");
+    const matchedMatterId = sms.matchedMatterId;
+    const rows: {
+      smsId: string; fileId: string; kind: SmsSuggestionKind; targetType?: string; targetId?: string;
+      fieldKey?: string; currentValue?: string; suggestedValue?: string; sourcePage?: number; sourceExcerpt?: string;
+      payload?: object;
+    }[] = [];
 
-  // 案件匹配建议：文书案号与已有归属不一致/未匹配时提出（不自动选首条）
-  if (!matchedMatterId && analyzed.caseNumbers.length) {
-    const proc = await prisma.matterProcedure.findFirst({
-      where: { caseNumber: { in: analyzed.caseNumbers }, matter: { deletedAt: null } },
-      select: { id: true, matterId: true, matter: { select: { internalCode: true, title: true } } }
-    });
-    if (proc) {
-      rows.push({ smsId, fileId, kind: "MATTER_MATCH", targetId: proc.matterId, suggestedValue: `${proc.matter.internalCode} · ${proc.matter.title}`, sourceExcerpt: analyzed.caseNumbers.join("、"), payload: { caseNumbers: analyzed.caseNumbers } });
+    const actor = await tx.user.findUnique({ where: { id: createdById }, select: { role: true, active: true } });
+    if (!actor?.active) throw new ActionError("建议创建人当前不可用");
+    const matchingProcedures = analyzed.caseNumbers.length ? await tx.matterProcedure.findMany({
+      where: { caseNumber: { in: analyzed.caseNumbers }, ...(matchedMatterId ? { matterId: matchedMatterId } : {}),
+        matter: { deletedAt: null, ...(actor.role === "PRINCIPAL_LAWYER" ? {} : matterAssociationFilter(createdById)) } },
+      select: { id: true, matterId: true, caseNumber: true, handlingAgency: true, engagement: true, matter: { select: { internalCode: true, title: true } } },
+    }) : [];
+    const matchedMatters = [...new Set(matchingProcedures.map(procedure => procedure.matterId))];
+    if (!matchedMatterId && matchedMatters.length === 1) {
+      const match = matchingProcedures[0];
+      rows.push({ smsId, fileId, kind: "MATTER_MATCH", targetType: "Matter", targetId: match.matterId,
+        suggestedValue: `${match.matter.internalCode} · ${match.matter.title}`, sourceExcerpt: analyzed.caseNumbers.join("、"), payload: { caseNumbers: analyzed.caseNumbers } });
     }
-  }
-
-  // 字段修正：与已匹配案件的程序比对（原值→建议值）
-  if (matchedMatterId) {
-    const procedures = await prisma.matterProcedure.findMany({
-      where: { matterId: matchedMatterId },
-      orderBy: { order: "asc" },
-      select: { id: true, caseNumber: true, handlingAgency: true, type: true, procedureParties: { select: { party: { select: { name: true } } } } }
-    });
-    // 2026-09-20 P3 修复：字段修正挂到「文书案号所属的程序」（找不到再退第一个），
-    // 不再恒指 procedures[0]——文书案号属第二程序时建议不再错指主程序。
-    const caseMatched = analyzed.caseNumbers.length
-      ? procedures.find(p => {
-          const cn = p.caseNumber;
-          if (!cn) return false;
-          return analyzed.caseNumbers.some(x => cn === x || cn.includes(x) || x.includes(cn));
-        })
-      : undefined;
-    const target = caseMatched ?? procedures[0];
-    if (target) {
-      for (const f of analyzed.fields) {
-        if (f.key === "caseNumber") {
-          if (f.value && (!target.caseNumber || target.caseNumber !== f.value)) {
-            rows.push({ smsId, fileId, kind: "FIELD_CHANGE", targetType: "MatterProcedure", targetId: target.id, fieldKey: "caseNumber", currentValue: target.caseNumber ?? "", suggestedValue: f.value, sourcePage: f.page, sourceExcerpt: f.excerpt });
-          }
-        } else if (f.key === "courtName") {
-          if (f.value && (!target.handlingAgency || !target.handlingAgency.includes(f.value))) {
-            rows.push({ smsId, fileId, kind: "FIELD_CHANGE", targetType: "MatterProcedure", targetId: target.id, fieldKey: "handlingAgency", currentValue: target.handlingAgency ?? "", suggestedValue: f.value, sourcePage: f.page, sourceExcerpt: f.excerpt });
+    // Only a unique exact case-number match is a proposed procedure. Never select by list order.
+    const target = matchingProcedures.length === 1 ? matchingProcedures[0] : undefined;
+    if (matchedMatterId) {
+      if (target) {
+        for (const f of analyzed.fields) {
+          if (f.key === "caseNumber") {
+            if (f.value && (!target.caseNumber || target.caseNumber !== f.value)) {
+              rows.push({ smsId, fileId, kind: "FIELD_CHANGE", targetType: "MatterProcedure", targetId: target.id, fieldKey: "caseNumber", currentValue: target.caseNumber ?? "", suggestedValue: f.value, sourcePage: f.page, sourceExcerpt: f.excerpt });
+            }
+          } else if (f.key === "courtName") {
+            if (f.value && (!target.handlingAgency || !target.handlingAgency.includes(f.value))) {
+              rows.push({ smsId, fileId, kind: "FIELD_CHANGE", targetType: "MatterProcedure", targetId: target.id, fieldKey: "handlingAgency", currentValue: target.handlingAgency ?? "", suggestedValue: f.value, sourcePage: f.page, sourceExcerpt: f.excerpt });
+            }
           }
         }
       }
     }
-  }
 
-  // 事项建议：开庭/期限（确认后建立；缴费通知建待办不自动记支付——v3 §5.3）
-  for (const e of analyzed.events) {
-    rows.push({
-      smsId, fileId, kind: e.kind === "HEARING" ? "HEARING" : "DEADLINE",
-      suggestedValue: `${e.title} ${e.dateText}${e.timeText ? ` ${e.timeText}` : ""}`,
-      sourceExcerpt: e.note,
-      payload: { title: e.title, dateText: e.dateText, timeText: e.timeText, note: e.note }
-    });
-  }
+    // 事项建议：开庭/期限（确认后建立；缴费通知建待办不自动记支付——v3 §5.3）
+    for (const e of analyzed.events) {
+      rows.push({
+        smsId, fileId, kind: e.kind === "HEARING" ? "HEARING" : "DEADLINE",
+        suggestedValue: `${e.title} ${e.dateText}${e.timeText ? ` ${e.timeText}` : ""}`,
+        sourceExcerpt: e.note,
+        payload: { title: e.title, dateText: e.dateText, timeText: e.timeText, note: e.note, caseNumbers: analyzed.caseNumbers, ...(target?.engagement === "ENGAGED" ? { procedureId: target.id } : {}) }
+      });
+    }
 
-  // 去重：REJECTED 的建议不重复弹回，除非建议值变化（v3 §5.2）
-  let created = 0;
-  for (const row of rows) {
-    const dup = await prisma.smsSuggestion.findFirst({
-      where: { smsId, fileId, kind: row.kind, fieldKey: row.fieldKey ?? null, suggestedValue: row.suggestedValue ?? "" },
-      select: { id: true, status: true }
-    });
-    if (dup) continue;
-    await prisma.smsSuggestion.create({
-      data: {
-        smsId: row.smsId, fileId: row.fileId, kind: row.kind,
-        targetType: row.targetType ?? null, targetId: row.targetId ?? null,
-        fieldKey: row.fieldKey ?? null, currentValue: row.currentValue ?? null,
-        suggestedValue: row.suggestedValue ?? null,
-        sourcePage: row.sourcePage ?? null, sourceExcerpt: row.sourceExcerpt ?? null,
-        payload: (row.payload ?? {}) as object, createdById
-      }
-    });
-    created++;
-  }
-  return created;
+    // 去重：REJECTED 的建议不重复弹回，除非建议值变化（v3 §5.2）
+    let created = 0;
+    for (const row of rows) {
+      const dup = await tx.smsSuggestion.findFirst({
+        where: { smsId, fileId, kind: row.kind, fieldKey: row.fieldKey ?? null, suggestedValue: row.suggestedValue ?? "" },
+        select: { id: true, status: true }
+      });
+      if (dup) continue;
+      await tx.smsSuggestion.create({
+        data: {
+          smsId: row.smsId, fileId: row.fileId, kind: row.kind,
+          targetType: row.targetType ?? null, targetId: row.targetId ?? null,
+          fieldKey: row.fieldKey ?? null, currentValue: row.currentValue ?? null,
+          suggestedValue: row.suggestedValue ?? null,
+          sourcePage: row.sourcePage ?? null, sourceExcerpt: row.sourceExcerpt ?? null,
+          payload: (row.payload ?? {}) as object, createdById
+        }
+      });
+      created++;
+    }
+    if (created > 0 && sms.processingState === "ORGANIZED" && !sms.processed) {
+      await tx.smsMessage.update({ where: { id: smsId }, data: { processingState: "READY_FOR_REVIEW" } });
+      await auditTx(tx, { userId: initiatedById ?? null, action: "SMS_ANALYSIS_ADDED_PENDING_SUGGESTIONS", targetType: "SmsMessage", targetId: smsId,
+        detail: { fileId, created, sourceDownloadedById: createdById, source: initiatedById ? "MANUAL_ANALYSIS" : "BACKGROUND_ANALYSIS" } });
+    }
+    return created;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
 }

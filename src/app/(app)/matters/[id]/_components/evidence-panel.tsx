@@ -16,7 +16,7 @@ import {
   addEvidenceSource, confirmEvidenceItem, createEvidenceItem, getEvidenceItem,
   listEvidenceRevisions, removeEvidenceSource, resolveEvidenceSource, updateEvidenceItem,
 } from "@/server/evidence/actions";
-import { listMaterialSources } from "@/server/documents/processing-actions";
+import { MaterialSourceLocationPicker, type MaterialSourceLocation } from "@/components/documents/material-source-location-picker";
 import { sourceRelationLabel } from "@/server/evidence/contracts";
 import type { EvidenceDocumentOption, EvidenceItemView, EvidenceRevisionView, EvidenceSourceResult, EvidenceSourceView } from "@/server/evidence/contracts";
 import { evidenceKindLabel } from "@/lib/enums";
@@ -30,7 +30,6 @@ import {
 type EvidenceKind = keyof typeof evidenceKindLabel;
 type Relation = keyof typeof sourceRelationLabel;
 type EditorData = Awaited<ReturnType<typeof getEvidenceItem>>;
-type MaterialChoice = Awaited<ReturnType<typeof listMaterialSources>>["items"][number];
 
 export type EvidenceItemRow = {
   id: string; title: string; content: string; kind: EvidenceKind;
@@ -282,30 +281,18 @@ function SourceAdder({ item, documents, disabled, onAdded, onBusyChange }: { ite
   const [expanded, setExpanded] = useState(false);
   const [documentId, setDocumentId] = useState("");
   const [relation, setRelation] = useState<Relation>("CONTEXT");
-  const [page, setPage] = useState("");
-  const [choices, setChoices] = useState<MaterialChoice[] | null>(null);
-  const [nextOffset, setNextOffset] = useState<number | null>(null);
-  const [selected, setSelected] = useState<MaterialChoice | null>(null);
+  const [location, setLocation] = useState<MaterialSourceLocation>({ page: "", position: null });
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
   const document = documents.find(option => option.id === documentId);
-  function selectDocument(value: string) { setDocumentId(value); setPage(""); setChoices(null); setSelected(null); setNextOffset(null); setError(""); }
-  function loadPositions(more = false) {
-    setError("");
-    startTransition(async () => {
-      try {
-        const result = await listMaterialSources({ matterId: item.matterId, documentIds: [documentId], limit: 20, ...(more && nextOffset !== null ? { offset: nextOffset } : {}) });
-        setChoices(current => more ? [...(current ?? []), ...result.items] : result.items); setNextOffset(result.nextOffset);
-      } catch (failure) { setError(actionErrorMessage(failure)); }
-    });
-  }
+  function selectDocument(value: string) { setDocumentId(value); setLocation({ page: "", position: null }); setError(""); }
   function submit() {
     setError("");
     onBusyChange(true);
     startTransition(async () => {
       try {
         await addEvidenceSource({ evidenceItemId: item.id, expectedRevision: item.revision, documentId, relation,
-          ...(selected ? { parseRunId: selected.runId, anchorId: selected.anchorId } : { page: page ? Number(page) : null }) });
+          ...(location.position ? { parseRunId: location.position.runId, anchorId: location.position.anchorId } : { page: location.page ? Number(location.page) : null }) });
         await onAdded(); toast.success("来源已添加，记录待核对");
       } catch (failure) { setError(actionErrorMessage(failure)); }
       finally { onBusyChange(false); }
@@ -327,17 +314,7 @@ function SourceAdder({ item, documents, disabled, onAdded, onBusyChange }: { ite
       </div>
     </div>
     {document && !document.hasIdentity ? <p className="text-sm text-muted-foreground">该材料原件标识尚未就绪，请先核对材料。</p> : null}
-    {document?.isPdf && document.pageCount && !selected ? <div className="space-y-1"><Label htmlFor={id + "-page"}>页码（可选，共 {document.pageCount} 页）</Label><Input id={id + "-page"} type="number" min={1} max={document.pageCount} value={page} onChange={event => setPage(event.target.value)} disabled={disabled || pending} /></div> : null}
-    {document ? <Button size="sm" variant="ghost" disabled={disabled || pending || choices !== null} onClick={() => loadPositions()}>读取可引用的原文位置</Button> : null}
-    {choices !== null ? <div className="space-y-2">
-      <Select value={selected ? selected.runId + ":" + selected.anchorId : "original"} onValueChange={value => { setSelected(choices.find(choice => choice.runId + ":" + choice.anchorId === value) ?? null); setPage(""); }} disabled={disabled || pending}>
-        <SelectTrigger aria-label="原文位置"><SelectValue /></SelectTrigger>
-        <SelectContent><SelectItem value="original">引用原件</SelectItem>{choices.map(choice => <SelectItem key={choice.runId + ":" + choice.anchorId} value={choice.runId + ":" + choice.anchorId}>{choice.locationLabel} · {choice.excerpt.slice(0, 55)}</SelectItem>)}</SelectContent>
-      </Select>
-      {selected ? <p className="whitespace-pre-wrap break-words text-xs text-muted-foreground">{selected.excerpt}</p> : null}
-      {!choices.length ? <p className="text-xs text-muted-foreground">暂无可引用的已处理位置，可以引用原件。</p> : null}
-      {nextOffset !== null ? <Button size="sm" variant="ghost" disabled={disabled || pending} onClick={() => loadPositions(true)}>更多位置</Button> : null}
-    </div> : null}
+    {document ? <MaterialSourceLocationPicker key={`${item.matterId}:${document.id}`} matterId={item.matterId} document={document} value={location} onChange={setLocation} disabled={disabled || pending} /> : null}
     {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
     <div className="flex gap-2"><Button size="sm" variant="outline" disabled={disabled || pending} onClick={() => setExpanded(false)}>取消添加</Button><Button size="sm" disabled={disabled || pending || !document?.hasIdentity} onClick={submit}>添加来源</Button></div>
   </div>;

@@ -7,7 +7,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/session";
 import { refreshScheduleReminderAfterSave } from "@/server/reminders/schedule";
-import { audit } from "@/server/audit";
+import { audit, auditTx } from "@/server/audit";
 import { createNotification } from "@/server/notifications/create";
 import { assertMatterWritable } from "@/lib/archive/guard";
 import { assertCanAccessMatter, assertCanHandleMatter, isManager } from "@/lib/permissions";
@@ -32,6 +32,7 @@ import { storage } from "@/lib/storage";
 import { sha256 } from "@/lib/storage/crypto";
 import { validateUploadedFile } from "@/lib/storage/file-validator";
 import { ActionError } from "@/lib/action-error";
+import { finishSmsSuggestionsTx, lockSmsActor, smsActor } from "./suggestion-service";
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 解析并保存（支持批量）
@@ -243,7 +244,7 @@ export async function listSmsMessages(input?: z.input<typeof smsListFilterSchema
       },
       suggestions: {
         orderBy: [{ status: "asc" }, { createdAt: "asc" }],
-        select: { id: true, kind: true, fieldKey: true, currentValue: true, suggestedValue: true, sourcePage: true, sourceExcerpt: true, status: true, fileId: true, payload: true }
+        select: { id: true, kind: true, fieldKey: true, currentValue: true, suggestedValue: true, sourcePage: true, sourceExcerpt: true, status: true, fileId: true, payload: true, updatedAt: true, targetType: true, targetId: true }
       },
       matchedMatter: {
         select: {
@@ -346,61 +347,87 @@ export async function matchSmsToMatter(input: z.infer<typeof smsMatchToMatterSch
  * 统一落 PENDING_REVIEW，经「整理建议确认 → 转正」真正入卷，与私有暂存同一动线。
  */
 export async function uploadSmsInboundFile(formData: FormData) {
-  const session = await requireSession("matters.write");
-  const smsId = String(formData.get("smsId") ?? "");
-  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
-  if (!smsId || files.length === 0) throw new ActionError("请选择要补传的文件");
+  const actor = await smsActor();
+  const smsId = z.string().cuid().parse(formData.get("smsId"));
+  const files = formData.getAll("files").filter((file): file is File => file instanceof File);
+  if (!files.length) throw new ActionError("请选择要补传的文件");
   const sms = await prisma.smsMessage.findUnique({ where: { id: smsId }, select: { receivedById: true, matchedMatterId: true } });
-  if (!sms) throw new ActionError("来件不存在");
-  if (sms.receivedById !== session.user.id) throw new ActionError("仅来件接收人可补传文件");
+  if (!sms || sms.receivedById !== actor.id) throw new ActionError("仅来件接收人可补传文件");
 
-  const saved: string[] = [];
-  const skipped: string[] = [];
+  const saved: string[] = [], replenished: string[] = [], skipped: string[] = [];
+  const failed: { name: string; message: string }[] = [];
   for (const file of files) {
-    const validated = validateUploadedFile(file, { purpose: "document", maxBytes: 20 * 1024 * 1024 });
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const hash = sha256(buffer);
-    const storageKey = await storage.writeFile("sms-inbound", buffer);
-    const res = await prisma.smsInboundFile.createMany({
-      data: [{
-        smsId,
-        matterId: sms.matchedMatterId,
-        sourceUrl: "manual-upload",
-        storageKey,
-        originalName: file.name,
-        mimeType: validated.mimeType,
-        size: buffer.length,
-        sha256: hash,
-        downloadedById: session.user.id,
-        uploadSource: "MANUAL_UPLOAD",
-        state: "PENDING_REVIEW"
-      }],
-      skipDuplicates: true
-    });
-    if (res.count) saved.push(file.name); else skipped.push(file.name);
-  }
-  await audit({
-    userId: session.user.id,
-    action: "SMS_INBOUND_FILE_UPLOAD",
-    targetType: "SmsMessage",
-    targetId: smsId,
-    detail: { saved: saved.length, skippedDuplicates: skipped.length }
-  });
-  // 复查修复 P2-2：来件已匹配案件时补传文件随即转正（归属此前已确认，无需再走
-  // 建议确认动线）——否则 PENDING_REVIEW 文件无任何转正出口（MATTER_MATCH 建议
-  // 只在未匹配来件上产生，UI 的案件选择器也只在未匹配时渲染）。
-  // 收件人非本案经办时转正会被门禁拒绝，文件保留待确认由经办律师处置。
-  let filedCount = 0;
-  if (saved.length > 0 && sms.matchedMatterId) {
+    let storageKey: string | null = null;
+    let mappingAttempted = false;
     try {
-      filedCount = await fileSmsInboundFilesToMatter({ smsId, matterId: sms.matchedMatterId, userId: session.user.id });
-    } catch {
-      filedCount = 0; // 留 PENDING_REVIEW：非经办收件人补传，由案件经办律师后续处置
+      const validated = validateUploadedFile(file, { purpose: "document", maxBytes: 20 * 1024 * 1024 });
+      const buffer = Buffer.from(await file.arrayBuffer()), hash = sha256(buffer);
+      let before = await prisma.smsInboundFile.findUnique({ where: { smsId_sha256: { smsId, sha256: hash } } });
+      let outcome: "SAVED" | "REPLENISHED" | "SKIPPED" | null = null;
+      // A concurrent upload can supply the original while this one prepares its private copy.
+      // Recheck those actual bytes once, outside locks, then revalidate that exact identity in the transaction.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        let usableOriginal = false;
+        if (before && !before.documentId && ["PENDING_REVIEW", "FAILED"].includes(before.state)) {
+          try { usableOriginal = sha256(await storage.readFile(before.storageKey)) === hash; }
+          catch (error) {
+            if (!(error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT")) throw error;
+          }
+        }
+        if (!storageKey && (!before || (!before.documentId && ["PENDING_REVIEW", "FAILED"].includes(before.state) && !usableOriginal))) {
+          storageKey = await storage.writeFile("sms-inbound", buffer);
+        }
+        const preparedKey = storageKey, observed = before;
+        const result = await prisma.$transaction(async tx => {
+          await lockSmsActor(tx, actor);
+          await tx.$queryRaw`SELECT id FROM "SmsMessage" WHERE id=${smsId} FOR UPDATE`;
+          const currentSms = await tx.smsMessage.findUnique({ where: { id: smsId } });
+          if (!currentSms || currentSms.receivedById !== actor.id) throw new ActionError("来件接收人已变化，请刷新后核对");
+          await tx.$queryRaw`SELECT id FROM "SmsInboundFile" WHERE "smsId"=${smsId} AND sha256=${hash} FOR UPDATE`;
+          const current = await tx.smsInboundFile.findUnique({ where: { smsId_sha256: { smsId, sha256: hash } } });
+          if (current?.documentId || (current && !["PENDING_REVIEW", "FAILED"].includes(current.state))) return { kind: "SKIPPED" } as const;
+          if (current && (!observed || current.id !== observed.id || current.storageKey !== observed.storageKey || current.updatedAt.getTime() !== observed.updatedAt.getTime())) {
+            return { kind: "RECHECK", file: current } as const;
+          }
+          if (current && usableOriginal) return { kind: "SKIPPED" } as const;
+          if (!preparedKey || (!current && observed)) throw new ActionError("文件已被其他操作修改，请刷新后重试");
+          mappingAttempted = true;
+          const stored = current
+            ? await tx.smsInboundFile.update({ where: { id: current.id }, data: { storageKey: preparedKey, state: "PENDING_REVIEW" } })
+            : await tx.smsInboundFile.create({ data: { smsId, matterId: currentSms.matchedMatterId, sourceUrl: "manual-upload", storageKey: preparedKey,
+              originalName: file.name, mimeType: validated.mimeType, size: buffer.length, sha256: hash, downloadedById: actor.id, uploadSource: "MANUAL_UPLOAD", state: "PENDING_REVIEW" } });
+          // Same content restores only the pending original's storage, preserving its provenance and suggestions.
+          await auditTx(tx, { userId: actor.id, action: current ? "SMS_INBOUND_FILE_REPLENISHED" : "SMS_INBOUND_FILE_UPLOAD", targetType: "SmsInboundFile", targetId: stored.id,
+            detail: { smsId, sameContent: Boolean(current) } });
+          if (currentSms.processingState === "ORGANIZED" && !currentSms.processed) await tx.smsMessage.update({ where: { id: smsId }, data: { processingState: "READY_FOR_REVIEW" } });
+          return { kind: current ? "REPLENISHED" as const : "SAVED" as const };
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
+        if (result.kind !== "RECHECK") { outcome = result.kind; break; }
+        before = result.file;
+      }
+      if (!outcome) throw new ActionError("文件已被其他操作修改，请刷新后重试");
+      if (outcome === "SAVED") saved.push(file.name);
+      else if (outcome === "REPLENISHED") replenished.push(file.name);
+      else {
+        skipped.push(file.name);
+        if (storageKey) try { await storage.deleteFile(storageKey); } catch { /* Cleanup does not change the committed duplicate result. */ }
+      }
+    } catch (error) {
+      failed.push({ name: file.name, message: error instanceof ActionError ? error.message : "补传失败，请重试" });
+      if (storageKey && !mappingAttempted) try { await storage.deleteFile(storageKey); } catch { /* Keep an unreferenced private copy when cleanup is unavailable. */ }
     }
+  }
+  let filedCount = 0, warning: string | null = null;
+  if ((saved.length || replenished.length) && sms.matchedMatterId) {
+    try {
+      filedCount = await fileSmsInboundFilesToMatter({ smsId, matterId: sms.matchedMatterId, userId: actor.id });
+      const remaining = await prisma.$transaction(tx => finishSmsSuggestionsTx(tx, actor, smsId), { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
+      warning = remaining.remainingFiles ? remaining.processingNote ?? `仍有 ${remaining.remainingFiles} 个文件待入卷` : null;
+    } catch (error) { warning = `补传已保存，入卷待继续处理：${error instanceof ActionError ? error.message : "请刷新后核对"}`; }
   }
   revalidatePath("/inbox");
   if (sms.matchedMatterId) await revalidateMatter(sms.matchedMatterId);
-  return { ok: true, saved, skippedDuplicates: skipped, filedFiles: filedCount };
+  return { ok: failed.length === 0, saved, replenished, skippedDuplicates: skipped, failed, filedFiles: filedCount, warning };
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

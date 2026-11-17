@@ -23,6 +23,8 @@ export async function registerBillingTx(db:Prisma.TransactionClient,userId:strin
   const data=billingRegistrationInput.parse(input);
   await requireFinanceLedger(db);
   await assertLedgerWrite(db,userId,data.matterId,"finance.write",{allowTail:false});
+  // 直接登记与草稿后签署使用同一正式承接条件；草稿保存不要求已作承接决定。
+  if(data.signedAt)await assertMatterReviewCurrent(db,data.matterId);
   const id=randomUUID();
   await db.$executeRaw`INSERT INTO "Billing" (id,"matterId",title,"contractAmount",status,"signedAt","moneyKind","amendmentType","updatedAt") VALUES
     (${id},${data.matterId},${data.title},${new Prisma.Decimal(data.amount)},${data.signedAt?'ACTIVE':'DRAFT'}::"BillingStatus",${data.signedAt??null},${data.moneyKind}::"MoneyKind",'ORIGINAL',NOW())`;

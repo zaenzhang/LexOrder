@@ -17,9 +17,9 @@ vi.mock("next/navigation", async () => {
 vi.mock("@/server/documents/actions", () => ({ uploadDocument: mock.upload }));
 vi.mock("@/server/tasks/actions", () => ({ createTask: vi.fn() }));
 vi.mock("@/components/matters/task-work-panel", () => ({
-  TaskWorkPanel: ({ matterId, selectedTaskId, onTaskSelect, onTaskCreated }: { matterId: string; selectedTaskId: string | null; onTaskSelect: (id: string | null) => void; onTaskCreated: (id: string) => void }) => <section aria-label="事项任务">
+  TaskWorkPanel: ({ matterId, selectedTaskId, onTaskSelect, onTaskCreated }: { matterId: string; selectedTaskId: string | null; onTaskSelect: (id: string | null) => void; onTaskCreated: (id: string, stageId: string | null) => void }) => <section aria-label="事项任务">
     <span>全案任务：{matterId}</span><span>当前任务：{selectedTaskId ?? "未选择"}</span>
-    <button onClick={() => onTaskSelect("task-1")}>打开合成任务</button><button onClick={() => onTaskCreated("task-created")}>创建合成任务</button>
+    <button onClick={() => onTaskSelect("task-1")}>打开合成任务</button><button onClick={() => onTaskCreated("task-created", null)}>创建合成任务</button>
   </section>
 }));
 vi.mock("@/server/procedures/actions", () => ({ createProcedureStage: vi.fn(), deleteProcedureMemo: vi.fn(), ensureProcedureStage: mock.ensureStage, removeProcedureStage: mock.removeStage, toggleDeadlineCompleted: vi.fn(), toggleProcedureMemo: vi.fn() }));
@@ -49,7 +49,7 @@ const procedure: NonNullable<Props["procedure"]> = {
   }))
 };
 const notes: Props["notes"] = ["合成当前环节", "合成其他环节"].map((stage, index) => ({
-  id: `note-${index}`, channel: "PHONE", withWhom: null, occurredAt: date,
+  id: `note-${index}`, channel: "PHONE", withWhom: null, occurredAt: date, updatedAt: date,
   content: index === 0 ? "合成当前环节记录内容" : "合成其他环节记录内容",
   tags: [`环节:${stage}`], author: { id: "author-1", name: "合成经办人" }
 }));
@@ -322,7 +322,7 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
     const unassigned: Props["documents"][number] = {
       id: "doc-unassigned", name: "合成当前环节材料.txt", category: "PLEADING", mimeType: "text/plain", size: 10, createdAt: date,
       sourceParty: null, tags: ["阶段:合成当前环节"], stageId: null, procedureId: "procedure-1", sourceOrigin: "SELF_COLLECTED",
-      ocrStatus: "READY", textSource: "MANUAL", pageCount: null, sha256: null, templateId: null, version: 1
+      ocrStatus: "READY", textSource: "MANUAL", pageCount: null, sha256: null, templateId: null, version: 1, familyId: null, isLatest: true
     };
     render(<Harness initialView="work" canManage documents={[unassigned]} />);
     expect(materialCard().getByText("本环节暂无材料")).toBeVisible();
@@ -336,7 +336,7 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
     const document: Props["documents"][number] = {
       id: "doc-1", name: "合成文书.txt", category: "PLEADING", mimeType: "text/plain", size: 10, createdAt: date,
       sourceParty: null, tags: [], stageId: "stage-1", procedureId: "procedure-1", sourceOrigin: "SELF_COLLECTED",
-      ocrStatus: "READY", textSource: "MANUAL", pageCount: null, sha256: null, templateId: null, version: 1
+      ocrStatus: "READY", textSource: "MANUAL", pageCount: null, sha256: null, templateId: null, version: 1, familyId: null, isLatest: true
     };
     render(<Harness initialView="work" canManage documents={[document, { ...document, id: "doc-2", name: "合成证据.txt", category: "EVIDENCE", sourceOrigin: "CLIENT_PROVIDED" }]} />);
     const card = materialCard();
@@ -354,7 +354,7 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
     const document: Props["documents"][number] = {
       id: "doc-1", name: "合成文书.txt", category: "PLEADING", mimeType: "text/plain", size: 10, createdAt: date,
       sourceParty: null, tags: [], stageId: null, procedureId: null, sourceOrigin: "SELF_COLLECTED",
-      ocrStatus: "READY", textSource: "MANUAL", pageCount: null, sha256: null, templateId: null, version: 1
+      ocrStatus: "READY", textSource: "MANUAL", pageCount: null, sha256: null, templateId: null, version: 1, familyId: null, isLatest: true
     };
     render(<Harness procedure={null} canManage financeNode={<p>合成财务内容</p>}
       documents={[document, { ...document, id: "doc-2", name: "合成证据.txt", category: "EVIDENCE", sourceOrigin: "CLIENT_PROVIDED" }]} />);

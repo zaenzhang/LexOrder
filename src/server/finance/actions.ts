@@ -464,7 +464,7 @@ export async function getMatterFinance(matterId: string) {
   const session = await requireSession("finance.read");
   await assertCanAccessMatterFinance(session.user.id, session.user.role, matterId, session.user.rolePermissions);
 
-  const [billings, entries, plans, issuedInvoices] = await Promise.all([
+  const [billings, entries, plans, issuedInvoices, attachmentDocuments] = await Promise.all([
     prisma.billing.findMany({
       where: { matterId },
       orderBy: { createdAt: "desc" }
@@ -486,8 +486,16 @@ export async function getMatterFinance(matterId: string) {
     prisma.invoiceRequest.findMany({
       where: { matterId, status: "ISSUED" },
       select: { id: true, amount: true }
+    }),
+    prisma.document.findMany({
+      where: { matterId, deletedAt: null, billingAttachments: { some: { billing: { matterId } } } },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, name: true, createdAt: true, mimeType: true, uploadedById: true, matterId: true, intakeId: true }
     })
   ]);
+  const readableAttachments = await Promise.all(attachmentDocuments.map(document => canReadDocument(session.user.id, document)));
+  const contractDocuments = attachmentDocuments.filter((_, index) => readableAttachments[index])
+    .map(({ id, name, createdAt, mimeType }) => ({ id, name, createdAt, mimeType }));
 
   const sum = (filter: (e: (typeof entries)[number]) => boolean) =>
     entries.filter(filter).reduce((acc, e) => acc + Number(e.amount), 0);
@@ -523,7 +531,7 @@ export async function getMatterFinance(matterId: string) {
     invoiced: issuedInvoices.reduce((acc, i) => acc + Number(i.amount), 0) - invoiceAdjustmentTotal
   };
 
-  return serializeDecimals({ billings, entries, plans, stats, ledgerReady:Boolean(facts) });
+  return serializeDecimals({ billings, entries, plans, contractDocuments, stats, ledgerReady:Boolean(facts) });
 }
 
 /**

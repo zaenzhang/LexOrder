@@ -27,6 +27,8 @@ import { deliveryApprovalBlock, prepareDeliveryForActor } from "@/server/deliver
 import { requireSession } from "@/lib/auth/session";
 import { createEvidenceItem, updateEvidenceItem, confirmEvidenceItem } from "@/server/evidence/actions";
 import { assertDocumentDerivationAccess } from "@/server/documents/derivation-access";
+import { readMaterialSources } from "@/server/documents/material-processing";
+import { getResearchSourcePreview } from "@/server/research/actions";
 import { buildArchiveProfessionalHistory } from "@/server/archive/professional-history";
 
 const users: string[] = [], matters: string[] = [], clients: string[] = [];
@@ -79,9 +81,64 @@ describe.skipIf(!config.url)("M3 研究修订、来源与分析稿 / PostgreSQL"
     const reopened = await readResearch(db, f.actor, f.matter.id, saved.id);
     expect(reopened.content?.relevantDate).toBe("2019-06-10");
     expect(reopened.sources[0]).toMatchObject({ documentId: f.document.id, relation: "REBUTS", version: 1 });
+    expect(reopened.content?.sources[0]).toMatchObject({ page: 2 });
+    expect(reopened.content?.sources[0]).not.toHaveProperty("parseRunId");
     expect(reopened.content?.queryLog.map(query => query.outcome)).toEqual(["NOT_OBTAINED", "UNREAD"]);
     await expect(db.researchRevision.update({ where: { id: saved.id }, data: { question: "直接覆盖" } })).rejects.toThrow();
     await expect(db.researchSource.update({ where: { id: reopened.sources[0].id }, data: { lawMetadata: {} } })).rejects.toThrow();
+  });
+
+  it("PAGE 锚点保存后更新解析，重开编辑预览和修订仍引用原代次，不同时恢复手填页码", async () => {
+    const f = await fixture(), anchorId = "synthetic-page-2";
+    // Publish the actual W05 snapshot contract; parser execution belongs to the material-processing suite.
+    async function publishPage(generation: number, text: string) {
+      const run = await db.documentParseRun.create({ data: { documentId: f.document.id, generation,
+        requestedById: f.actor.id, parserVersion: "research-page-fixture-v1", sourceSha256: f.document.sha256! } });
+      await db.documentParseRun.update({ where: { id: run.id }, data: { state: "PARTIAL", finishedAt: new Date(),
+        coverage: { unitKind: "PAGE", totalUnits: 3, units: [{ unit: 1, status: "FAILED" }, { unit: 2, status: "READY" }, { unit: 3, status: "FAILED" }] },
+        anchors: [{ anchorId, parseGenerationId: run.id,
+          source: { kind: "CASE_MATERIAL", documentId: f.document.id, matterId: f.matter.id, sha256: f.document.sha256 },
+          unit: 2, location: { kind: "PAGE", page: 2 }, text }],
+      } });
+      await db.document.update({ where: { id: f.document.id }, data: { parseGeneration: generation } });
+      return run;
+    }
+    const originalText = "合成第二页原代次文本", originalRun = await publishPage(1, originalText);
+    const choices = await readMaterialSources(f.actor.id, { matterId: f.matter.id, documentIds: [f.document.id], limit: 20 });
+    expect(choices.items).toHaveLength(1);
+    const selected = choices.items[0];
+    expect(selected).toMatchObject({ documentId: f.document.id, runId: originalRun.id, anchorId, location: { kind: "PAGE", page: 2 } });
+    const selectedSource = { documentId: selected.documentId, parseRunId: selected.runId, anchorId: selected.anchorId,
+      relation: "SUPPORTS" as const, lawMetadata: emptyLawMetadata() };
+    const saved = await saveResearch(db, f.actor, input(f.matter.id, { sources: [selectedSource] }));
+    const originalSource = await db.researchSource.findFirstOrThrow({ where: { researchRevisionId: saved.id } });
+    expect(originalSource).toMatchObject({ parseRunId: originalRun.id, anchorId,
+      location: { kind: "PAGE", page: 2 }, locationKey: `ANCHOR:${originalRun.id}:${anchorId}` });
+
+    const latestRun = await publishPage(2, "合成第二页新代次文本");
+    expect((await readMaterialSources(f.actor.id, { matterId: f.matter.id, documentIds: [f.document.id] })).items[0].runId).toBe(latestRun.id);
+    const reopened = await readResearch(db, f.actor, f.matter.id, saved.id);
+    expect(reopened.content).not.toBeNull();
+    const content = reopened.content!;
+    expect(content.sources).toEqual([{ ...selectedSource, page: null }]);
+    expect(reopened.sources[0].locationLabel).toBe("第 2 页");
+    vi.mocked(requireSession).mockResolvedValue({ user: f.actor, expires: "2099-01-01" } as Awaited<ReturnType<typeof requireSession>>);
+    // The editor calls this action, whose input schema rejects simultaneous page and anchor fields.
+    const preview = await getResearchSourcePreview(f.matter.id, content.sources[0]);
+    expect(preview).toMatchObject({ status: "AVAILABLE", text: originalText, locationLabel: "第 2 页",
+      historicalParse: true, originalUrl: `/api/documents/${f.document.id}/download?inline=1#page=2` });
+    expect(await readResearchSource(db, f.actor, f.matter.id, saved.id, originalSource.id)).toEqual(preview);
+
+    const revised = await saveResearch(db, f.actor, input(f.matter.id, { ...content, supersedesId: saved.id,
+      expectedVersion: 1, conclusion: "补充分析，保留当时选入的原文位置" }));
+    expect(revised.version).toBe(2);
+    expect((await readResearch(db, f.actor, f.matter.id, revised.id)).content?.sources).toEqual(content.sources);
+    const revisedSource = await db.researchSource.findFirstOrThrow({ where: { researchRevisionId: revised.id } });
+    expect(revisedSource.id).not.toBe(originalSource.id);
+    expect(revisedSource).toMatchObject({ documentId: f.document.id, parseRunId: originalRun.id, anchorId,
+      documentSha256: f.document.sha256, locationKey: originalSource.locationKey, location: originalSource.location });
+    expect(await db.researchSource.findUniqueOrThrow({ where: { id: originalSource.id } })).toEqual(originalSource);
+    expect(await db.documentParseRun.count({ where: { documentId: f.document.id } })).toBe(2);
   });
 
   it("已核对研究另存新修订，核对不继承；并发更正不能分叉", async () => {

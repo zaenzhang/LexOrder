@@ -6,15 +6,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MaterialSourceLocationPicker, type MaterialSourceLocation } from "@/components/documents/material-source-location-picker";
 import type { EvidenceDocumentOption } from "@/server/evidence/contracts";
 import { emptyLawMetadata, lawKindLabels, sourceRelationLabels, type LawMetadata, type ResearchSourceInput } from "@/server/research/contracts";
 
-type Props = { value: ResearchSourceInput[]; documents: EvidenceDocumentOption[]; disabled: boolean; onChange(value: ResearchSourceInput[]): void; onPreview(source: ResearchSourceInput): void };
+type Props = { matterId: string; value: ResearchSourceInput[]; documents: EvidenceDocumentOption[]; disabled: boolean; onChange(value: ResearchSourceInput[]): void; onPreview(source: ResearchSourceInput): void };
+const locationKey = (source: Pick<ResearchSourceInput, "documentId" | "parseRunId" | "anchorId">) => `${source.documentId}:${source.parseRunId ?? ""}:${source.anchorId ?? ""}`;
 
-export function ResearchSourceEditor({ value, documents, disabled, onChange, onPreview }: Props) {
+export function ResearchSourceEditor({ matterId, value, documents, disabled, onChange, onPreview }: Props) {
   const [documentId, setDocumentId] = useState("");
   const [relation, setRelation] = useState<ResearchSourceInput["relation"]>("SUPPORTS");
-  const [page, setPage] = useState("");
+  const [location, setLocation] = useState<MaterialSourceLocation>({ page: "", position: null });
+  const [locationLabels, setLocationLabels] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const selected = documents.find(document => document.id === documentId);
   const updateLaw = (index: number, patch: Partial<LawMetadata>) => onChange(value.map((source, i) => {
@@ -25,20 +28,25 @@ export function ResearchSourceEditor({ value, documents, disabled, onChange, onP
   }));
   function add() {
     if (!selected || disabled) return;
-    const numericPage = page ? Number(page) : null;
-    if (numericPage !== null && (!Number.isInteger(numericPage) || numericPage < 1 || !selected.pageCount || numericPage > selected.pageCount)) {
+    const numericPage = !location.position && location.page ? Number(location.page) : null;
+    if (numericPage !== null && (!selected.isPdf || !Number.isInteger(numericPage) || numericPage < 1 || !selected.pageCount || numericPage > selected.pageCount)) {
       setError("页码须在这份 PDF 的已知页数内"); return;
     }
-    if (value.some(source => source.documentId === selected.id && source.relation === relation && (source.page ?? null) === numericPage && !source.anchorId)) {
+    if (value.some(source => source.documentId === selected.id && source.relation === relation && (source.page ?? null) === numericPage
+      && (source.parseRunId ?? null) === (location.position?.runId ?? null) && (source.anchorId ?? null) === (location.position?.anchorId ?? null))) {
       setError("此材料位置和用途已选入"); return;
     }
-    onChange([...value, { documentId: selected.id, relation, page: numericPage, lawMetadata: { ...emptyLawMetadata(), title: selected.name } }]);
-    setDocumentId(""); setPage(""); setError("");
+    const source: ResearchSourceInput = { documentId: selected.id, relation,
+      ...(location.position ? { parseRunId: location.position.runId, anchorId: location.position.anchorId } : { page: numericPage }),
+      lawMetadata: { ...emptyLawMetadata(), title: selected.name } };
+    if (location.position) setLocationLabels(previous => ({ ...previous, [locationKey(source)]: location.position!.locationLabel }));
+    onChange([...value, source]);
+    setDocumentId(""); setLocation({ page: "", position: null }); setError("");
   }
   return <div className="space-y-4">
     <div className="flex items-end gap-3">
       <div className="min-w-0 flex-1 space-y-1.5"><Label>材料版本</Label>
-        <Select value={documentId} onValueChange={value => { setDocumentId(value); setPage(""); setError(""); }} disabled={disabled}>
+        <Select value={documentId} onValueChange={value => { setDocumentId(value); setLocation({ page: "", position: null }); setError(""); }} disabled={disabled}>
           <SelectTrigger aria-label="选择研究来源材料"><SelectValue placeholder="选择本事项材料" /></SelectTrigger>
           <SelectContent>{documents.filter(document => document.hasIdentity).map(document => <SelectItem key={document.id} value={document.id}>{document.name} · V{document.version}</SelectItem>)}</SelectContent>
         </Select>
@@ -46,15 +54,15 @@ export function ResearchSourceEditor({ value, documents, disabled, onChange, onP
       <div className="w-32 space-y-1.5"><Label>用途</Label><Select value={relation} onValueChange={value => setRelation(value as ResearchSourceInput["relation"])} disabled={disabled}>
         <SelectTrigger aria-label="来源用途"><SelectValue /></SelectTrigger><SelectContent>{Object.entries(sourceRelationLabels).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent>
       </Select></div>
-      {selected?.isPdf && selected.pageCount ? <div className="w-24 space-y-1.5"><Label htmlFor="research-source-page">页码</Label><Input id="research-source-page" type="number" min={1} max={selected.pageCount} value={page} onChange={event => setPage(event.target.value)} disabled={disabled} /></div> : null}
       <Button type="button" variant="outline" onClick={add} disabled={disabled || !selected || value.length >= 50}>选入</Button>
     </div>
+    {selected ? <MaterialSourceLocationPicker key={`${matterId}:${selected.id}`} matterId={matterId} document={selected} value={location} onChange={setLocation} disabled={disabled} /> : null}
     {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
     {value.map((source, index) => {
       const document = documents.find(document => document.id === source.documentId);
       return <div key={`${source.documentId}:${index}`} className="rounded-md border p-3 space-y-3">
         <div className="flex items-center justify-between gap-3"><div className="min-w-0"><p className="break-words font-medium text-sm">{document?.name ?? "已选具体材料"}{document ? ` · V${document.version}` : ""}</p>
-          <p className="text-xs text-muted-foreground">{sourceRelationLabels[source.relation]} · {source.anchorId ? "固定原文片段" : source.page ? `第 ${source.page} 页` : "原件"}</p></div>
+          <p className="text-xs text-muted-foreground">{sourceRelationLabels[source.relation]} · {source.anchorId ? locationLabels[locationKey(source)] ?? "固定原文片段" : source.page ? `第 ${source.page} 页` : "原件"}</p></div>
           <div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => onPreview(source)}>查看原文</Button><Button type="button" size="sm" variant="ghost" disabled={disabled} onClick={() => onChange(value.filter((_, i) => i !== index))}>移除</Button></div>
         </div>
         <details><summary className="cursor-pointer text-sm">来源身份与使用范围</summary>

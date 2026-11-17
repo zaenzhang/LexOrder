@@ -105,6 +105,7 @@ type MatterPayload = Omit<MatterPayloadBase, "claimAmount" | "members" | "intake
 };
 
 export type FinancePayload = {
+  contractDocuments: { id: string; name: string; createdAt: Date; mimeType: string | null }[];
   billings: {
     id: string;
     title: string;
@@ -167,6 +168,7 @@ export type NotePayload = {
   author: { id: string; name: string };
   authorId: string;
   createdAt: Date;
+  updatedAt: Date;
 };
 
 
@@ -345,7 +347,7 @@ export function MatterDetailTabs({
     }),
     [capabilities.aiReview, currentUserRole, rolePermissions, evidenceByDoc, evidenceItems, canAddEvidence, openDocument] // eslint-disable-line react-hooks/exhaustive-deps
   );
-  const [progress, setProgress] = useState<{ mode: "record" | "judgment"; stage?: string; stageNames: string[] } | null>(null);
+  const [progress, setProgress] = useState<{ mode: "record" | "judgment"; stage?: string; stageNames: string[]; note?: WorkflowNote } | null>(null);
   const [deadlineOpen, setDeadlineOpen] = useState(false);
   const [hearingOpen, setHearingOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -417,7 +419,9 @@ export function MatterDetailTabs({
           pageCount: d.pageCount ?? null,
           sha256: d.sha256 ?? null,
           templateId: d.templateId ?? null,
-          version: d.version ?? null
+          version: d.version ?? null,
+          familyId: d.familyId,
+          isLatest: d.isLatest
         }));
   const procedureParties = buildProcedurePartyOptions(matter);
   const customValues =
@@ -639,6 +643,7 @@ export function MatterDetailTabs({
         users={colleagues}
         canManage={canAssociateThisMatter && !isArchived}
         canWriteRecords={canWriteRecords}
+        currentUserId={currentUserId}
         canWriteTasks={canWriteSchedule}
         canWriteMaterials={canWriteMaterials}
         canReadSchedule={allowed("schedule.read")}
@@ -647,6 +652,7 @@ export function MatterDetailTabs({
         notes={notes}
         timelineEvents={matter.timelineEvents}
         onWriteNote={({ judgment, stageName }) => setProgress({ mode: judgment ? "judgment" : "record", stage: stageName, stageNames: workflowApi.current?.stageNames ?? [] })}
+        onEditNote={note => setProgress({ mode: note.tags.includes("研判笔记") ? "judgment" : "record", note, stageNames: workflowApi.current?.stageNames ?? [] })}
         view={view}
         onViewChange={setView}
         viewCounts={{ seal: sealContracts.filter((sc) => sc.status === "PENDING").length }}
@@ -660,9 +666,7 @@ export function MatterDetailTabs({
             currentProcedure={currentProcedure}
             parties={parties}
             billings={finance.billings}
-            contractDocs={documents
-              .filter((d: { category: string; deletedAt?: Date | null }) => d.category === "CONTRACT")
-              .map((d: { id: string; name: string; createdAt: Date; mimeType: string | null }) => ({ id: d.id, name: d.name, createdAt: d.createdAt, mimeType: d.mimeType }))}
+            contractDocs={finance.contractDocuments}
             canReadFinance={allowed("finance.read")}
             onOpenFinance={() => setView("money")}
             customFieldDefs={customFieldDefs}
@@ -700,7 +704,7 @@ export function MatterDetailTabs({
         onCaseSearch={capabilities.caseSearch && allowed("matters.write") ? () => setCaseSearchOpen(true) : undefined}
         financeNode={
           <div className="dos-main">
-            {allowed("finance.read") ? <Link href={`/finance/reconciliation?matterId=${matter.id}`} className="btn btn-secondary btn-sm w-fit">应收与收款分配</Link> : null}
+            {allowed("finance.read") ? <Link href={`/finance/reconciliation?${new URLSearchParams({ matterId: matter.id, returnTo: matterReturnTo })}`} className="btn btn-secondary btn-sm w-fit">应收与收款分配</Link> : null}
             {allowed("finance.read") ? <FinanceHero stats={finance.stats} /> : null}
             {allowed("finance.read") ? (
               <BillingsCard
@@ -761,15 +765,15 @@ export function MatterDetailTabs({
 
       {progress ? (
         <ProgressDialog
+          key={progress.note?.id ?? "new"}
           open={Boolean(progress)}
           onOpenChange={(o) => !o && setProgress(null)}
           matterId={matter.id}
           initialMode={progress.mode}
           initialStage={progress.stage}
           stageNames={progress.stageNames}
-          onAddTask={canWriteSchedule ? () => workflowApi.current?.openAddTask() : undefined}
-          onAddDeadline={canWriteSchedule && currentProcedure ? () => setDeadlineOpen(true) : undefined}
-          onAddHearing={canWriteSchedule && currentProcedure ? () => setHearingOpen(true) : undefined}
+          note={progress.note}
+          canWrite={canWriteRecords && (!progress.note || progress.note.author.id === currentUserId)}
         />
       ) : null}
       {currentProcedure && deadlineOpen ? (

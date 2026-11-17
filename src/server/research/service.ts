@@ -65,7 +65,7 @@ function contentOf(row: ResearchRow): ResearchContent {
     unresolved: row.unresolved, nextSteps: row.nextSteps,
     issueSelection: row.issueId ? { kind: "SAVED", researchRevisionId: row.id } : null,
     sources: row.sources.map(source => ({ documentId: source.documentId, relation: source.relation,
-      page: source.location && typeof source.location === "object" && !Array.isArray(source.location) && source.location.kind === "PAGE"
+      page: !(source.parseRunId && source.anchorId) && source.location && typeof source.location === "object" && !Array.isArray(source.location) && source.location.kind === "PAGE"
         ? Number(source.location.page) : null,
       ...(source.parseRunId && source.anchorId ? { parseRunId: source.parseRunId, anchorId: source.anchorId } : {}),
       lawMetadata: lawMetadataSchema.parse(source.lawMetadata) })),
