@@ -35,6 +35,7 @@ import { matterHref } from "@/lib/matters/route";
 import { revalidateMatter } from "@/server/matters/route";
 import { recordTimelineEvent } from "@/server/timeline/record";
 import { ActionError } from "@/lib/action-error";
+import { archiveListSchema, decodeArchiveListCursor, encodeArchiveListCursor, type ArchiveListInput } from "./list-cursor";
 
 /**
  * v0.9.4 归档：完整流程
@@ -581,15 +582,30 @@ export async function getArchivePrepData(matterId: string) {
 /**
  * 已归档案件列表（/archive 总览页）—— 仅 status=APPROVED
  */
-export async function listArchivedMatters() {
+export async function listArchivedMatters(input: ArchiveListInput = {}) {
   const session = await requireSession("archive.read");
-  const rows = await prisma.archiveRecord.findMany({
-    where: {
-      status: "APPROVED",
-      matter: { deletedAt: null, ...matterReadVisibilityFilter(session.user.id, session.user.role, session.user.rolePermissions) }
-    },
-    orderBy: { archivedAt: "desc" },
-    take: 200,
+  const data = archiveListSchema.parse(input);
+  const position = data.cursor ? decodeArchiveListCursor(data.cursor, session.user.id, data.query) : null;
+  const where: Prisma.ArchiveRecordWhereInput = {
+    status: "APPROVED",
+    matter: { deletedAt: null, ...matterReadVisibilityFilter(session.user.id, session.user.role, session.user.rolePermissions) },
+    ...(data.query ? { AND: [{ OR: [
+      { archiveNo: { contains: data.query, mode: "insensitive" as const } },
+      { matter: { title: { contains: data.query, mode: "insensitive" as const } } },
+      { matter: { internalCode: { contains: data.query, mode: "insensitive" as const } } },
+      { matter: { firmCaseNo: { contains: data.query, mode: "insensitive" as const } } },
+      { matter: { procedures: { some: { caseNumber: { contains: data.query, mode: "insensitive" as const } } } } },
+    ] }] } : {}),
+  };
+  const pageWhere: Prisma.ArchiveRecordWhereInput = position ? { AND: [where, { OR: [
+    { archivedAt: { lt: new Date(position.at) } },
+    { archivedAt: new Date(position.at), id: { lt: position.id } },
+  ] }] } : where;
+  const { rows, recordTotal } = await prisma.$transaction(async db => {
+    const [rows, recordTotal] = await Promise.all([db.archiveRecord.findMany({
+    where: pageWhere,
+    orderBy: [{ archivedAt: "desc" }, { id: "desc" }],
+    take: 51,
     select: {
       id: true,
       archiveNo: true,
@@ -612,12 +628,16 @@ export async function listArchivedMatters() {
         }
       }
     }
-  });
-  return rows.map((row) => ({
-    ...row,
-    materialSnapshotVerified: !!parseArchiveSnapshot(row.checklistJson),
-    checklistJson: undefined
-  }));
+    }), db.archiveRecord.count({ where })]);
+    return { rows, recordTotal };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  const visible = rows.slice(0, 50);
+  const last = visible.at(-1);
+  return {
+    items: visible.map(({ checklistJson, ...row }) => ({ ...row, materialSnapshotVerified: !!parseArchiveSnapshot(checklistJson) })),
+    recordTotal,
+    nextCursor: rows.length > 50 && last ? encodeArchiveListCursor(session.user.id, data.query, { at: last.archivedAt.toISOString(), id: last.id }) : null,
+  };
 }
 
 /**

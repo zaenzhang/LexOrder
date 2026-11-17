@@ -4,18 +4,19 @@ import { deadlineDays, deadlineRelative, formatDeadlineDue, type DeadlineDuePrec
 /**
  * 全局搜索（墨案 11 效果图 palette）。
  * 范围 chip 带计数、按类型分组、关键词高亮、材料页码 / 来源 chip / OCR 标识、
- * 「跳转案件」、键盘 ↑↓ 选择 · ↵ 打开 · Tab 切换范围；底部注明权限口径与识别失败数。
+ * 「跳转案件」、键盘 ↑↓ 选择 · ↵ 打开 · Tab 遍历控件；底部注明权限口径与识别失败数。
  * 数据与授权过滤全部在 server/search/actions.ts（候选逐条 canReadDocument）。
  */
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Building2, Clock, FileText, Folder, Inbox, Loader2, Lock, Search, Sparkle } from "lucide-react";
-import { globalSearch, type GlobalSearchResult, type SearchResultItem } from "@/server/search/actions";
+import { continueGlobalSearch, globalSearch, type GlobalSearchResult, type SearchResultItem } from "@/server/search/actions";
 import type { MaterialSourceInput } from "@/server/documents/material-processing";
 import { SearchMaterialSourceDialog } from "./search-material-source-dialog";
 import { documentSourceChip } from "@/lib/ui/moan-tones";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 type GroupKey = "documents" | "matters" | "clients" | "deadlines" | "intakes";
 type Scope = "all" | GroupKey;
@@ -56,9 +57,21 @@ function dueLabel(iso: string, precision: DeadlineDuePrecision | null) {
 
 export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<GlobalSearchResult | null>(null);
+  const [loaded, setLoaded] = useState<{ query: string; data: GlobalSearchResult } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState(false);
+  const [searchRetry, setSearchRetry] = useState(0);
+  const [pages, setPages] = useState<Partial<Record<GroupKey, { loading: boolean; failed: boolean; retryCursor?: string | null }>>>({});
+  const generation = useRef(0);
+  const pageRequests = useRef<Partial<Record<GroupKey, number>>>({});
+  const failedSelection = useRef<Partial<Record<GroupKey, string>>>({});
+  const failedScroll = useRef<Partial<Record<GroupKey, number>>>({});
+  const restoreScroll = useRef<{ top: number; scope: Scope; selectedId: string | null } | null>(null);
+  const allSelectionAfterRead = useRef<Pick<SearchResultItem, "id" | "type"> | null | undefined>(undefined);
+  const skipRelocationScroll = useRef(false);
   const [scope, setScope] = useState<Scope>("all");
+  const scopeRef = useRef(scope);
+  useEffect(() => { scopeRef.current = scope; }, [scope]);
   const [sel, setSel] = useState(0);
   const [source, setSource] = useState<MaterialSourceInput | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -83,8 +96,16 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   // 防抖搜索
   useEffect(() => {
     const q = query.trim();
+    const serial = ++generation.current;
+    setPages({});
+    setSearchError(false);
+    failedSelection.current = {};
+    failedScroll.current = {};
+    restoreScroll.current = null;
+    allSelectionAfterRead.current = undefined;
+    skipRelocationScroll.current = false;
     if (!q) {
-      setResults(null);
+      setLoaded(null);
       setLoading(false);
       return;
     }
@@ -93,12 +114,12 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     const timer = setTimeout(async () => {
       try {
         const r = await globalSearch(q);
-        if (!cancelled) {
-          setResults(r);
+        if (!cancelled && serial === generation.current) {
+          setLoaded({ query: q, data: r });
           setSel(0);
         }
       } catch {
-        if (!cancelled) setResults(null);
+        if (!cancelled && serial === generation.current) { setLoaded(null); setSearchError(true); }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -107,9 +128,10 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, searchRetry]);
 
   const q = query.trim();
+  const results = loaded?.query === q ? loaded.data : null;
   const counts = useMemo(() => {
     const c = { documents: 0, matters: 0, clients: 0, deadlines: 0, intakes: 0 } as Record<GroupKey, number>;
     if (results) for (const g of GROUPS) c[g.key] = results[g.key].length;
@@ -122,14 +144,72 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     let start = 0;
     return GROUPS.filter((g) => scope === "all" || g.key === scope)
       .map((g) => ({ group: g, items: scope === "all" ? results[g.key].slice(0, ALL_SCOPE_LIMIT) : results[g.key] }))
-      .filter((g) => g.items.length > 0)
+      .filter((g) => g.items.length > 0 || Boolean(results.nextCursorByGroup[g.group.key]) || Boolean(pages[g.group.key]?.failed))
       .map((g) => {
         const out = { ...g, start };
         start += g.items.length;
         return out;
       });
-  }, [results, scope]);
+  }, [results, scope, pages]);
   const flat = useMemo(() => visible.flatMap((g) => g.items), [visible]);
+  const selectionRef = useRef<SearchResultItem | null>(null);
+  useLayoutEffect(() => {
+    const preserved = allSelectionAfterRead.current;
+    if (preserved === undefined) return;
+    allSelectionAfterRead.current = undefined;
+    if (scopeRef.current === "all") {
+      const nextIndex = preserved ? flat.findIndex(item => item.id === preserved.id && item.type === preserved.type) : -1;
+      // Keeping the same selected object is not a new user navigation action.
+      if (preserved && nextIndex >= 0 && nextIndex !== sel) skipRelocationScroll.current = true;
+      setSel(nextIndex);
+    }
+  }, [flat, sel]);
+  useEffect(() => { selectionRef.current = flat[sel] ?? null; }, [flat, sel]);
+
+  function chooseScope(value: Scope) {
+    scopeRef.current = value;
+    setScope(value);
+    setSel(0);
+  }
+
+  async function continueGroup(group: GroupKey, restart = false) {
+    if (!results || loading || pages[group]?.loading) return;
+    const wasFailed = pages[group]?.failed === true;
+    const cursor = restart ? undefined : wasFailed ? pages[group]?.retryCursor ?? undefined : results.nextCursorByGroup[group] ?? undefined;
+    if (!restart && !cursor && !wasFailed) return;
+    const serial = generation.current, request = (pageRequests.current[group] ?? 0) + 1;
+    pageRequests.current[group] = request;
+    const selected = flat[sel];
+    const requestedScope = scopeRef.current;
+    const stillAtRequest = () => scopeRef.current === requestedScope && (selectionRef.current?.id ?? null) === (selected?.id ?? null);
+    if (selected && results[group].some(item => item.id === selected.id)) failedSelection.current[group] = selected.id;
+    const scrollTop = wasFailed ? failedScroll.current[group] ?? 0 : bodyRef.current?.scrollTop ?? 0;
+    failedScroll.current[group] = scrollTop;
+    setPages(previous => ({ ...previous, [group]: { loading: true, failed: wasFailed, retryCursor: cursor ?? null } }));
+    try {
+      const page = await continueGlobalSearch({ query: q, group, ...(cursor ? { cursor } : {}) });
+      if (serial !== generation.current || pageRequests.current[group] !== request) return;
+      // A background group's new rows may shift later groups in the combined list.
+      if (scopeRef.current === "all") allSelectionAfterRead.current = selectionRef.current;
+      if (stillAtRequest()) restoreScroll.current = { top: scrollTop, scope: requestedScope, selectedId: selected?.id ?? null };
+      setLoaded(previous => {
+        if (previous?.query !== q) return previous;
+        // A failed read discarded this scope's old projection. Only the newly authorized page may return.
+        const items = new Map((restart || wasFailed ? [] : previous.data[group]).map(item => [item.id, item]));
+        for (const item of page.items) items.set(item.id, item);
+        return { query: q, data: { ...previous.data, [group]: [...items.values()], nextCursorByGroup: { ...previous.data.nextCursorByGroup, [group]: page.nextCursor } } };
+      });
+      setPages(previous => ({ ...previous, [group]: { loading: false, failed: false } }));
+      if ((wasFailed || restart) && scopeRef.current === group && stillAtRequest()) setSel(page.items.findIndex(item => item.id === failedSelection.current[group]));
+    } catch {
+      if (serial !== generation.current || pageRequests.current[group] !== request) return;
+      if (scopeRef.current === "all") allSelectionAfterRead.current = selectionRef.current;
+      setLoaded(previous => previous?.query === q ? { ...previous, data: { ...previous.data, [group]: [], ...(group === "documents" ? { documentsFailedCount: 0 } : {}) } } : previous);
+      setPages(previous => ({ ...previous, [group]: { loading: false, failed: true, retryCursor: cursor ?? null } }));
+      if (group === "documents") setSource(null);
+      if (stillAtRequest() && (scopeRef.current === group || selected && results[group].some(item => item.id === selected.id))) setSel(-1);
+    }
+  }
 
   const go = useCallback(
     (href: string) => {
@@ -158,8 +238,16 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   }
 
   useEffect(() => {
+    if (skipRelocationScroll.current) { skipRelocationScroll.current = false; return; }
     bodyRef.current?.querySelector<HTMLElement>(`[data-idx="${sel}"]`)?.scrollIntoView({ block: "nearest" });
   }, [sel]);
+  useEffect(() => {
+    if (restoreScroll.current !== null && bodyRef.current) {
+      const position = restoreScroll.current;
+      if (position.scope === scopeRef.current && position.selectedId === (selectionRef.current?.id ?? null)) bodyRef.current.scrollTop = position.top;
+      restoreScroll.current = null;
+    }
+  }, [loaded]);
 
   function onKeyDown(e: React.KeyboardEvent) {
     if (source) return;
@@ -176,11 +264,6 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         e.preventDefault();
         openResult(item);
       }
-    } else if (e.key === "Tab") {
-      e.preventDefault();
-      const i = SCOPE_ORDER.indexOf(scope);
-      setScope(SCOPE_ORDER[(i + (e.shiftKey ? SCOPE_ORDER.length - 1 : 1)) % SCOPE_ORDER.length]);
-      setSel(0);
     }
   }
 
@@ -228,12 +311,11 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                     aria-selected={scope === s}
                     className={cn("gs-chip", scope === s && "active")}
                     onClick={() => {
-                      setScope(s);
-                      setSel(0);
+                      chooseScope(s);
                     }}
                   >
                     {label}
-                    {s !== "all" && results ? <span className="c">{counts[s] >= 20 ? "20+" : counts[s]}</span> : null}
+                    {s !== "all" && results ? <span className="c">{pages[s]?.failed ? "—" : counts[s]}</span> : null}
                   </button>
                 );
               })}
@@ -246,10 +328,12 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                   <div className="mo-empty-title">输入关键词开始检索</div>
                   <div className="mo-empty-desc">可搜案件名称 / 所内编号、客户名称 / 证件号 / 电话、材料名称与正文、期限事项、在途收案。</div>
                 </div>
-              ) : results && flat.length === 0 && !loading ? (
+              ) : searchError ? (
+                <div role="alert" className="p-4 text-sm">搜索读取失败，请重试。<Button variant="outline" size="sm" className="ml-2" onClick={() => setSearchRetry(value => value + 1)}>重新检索</Button></div>
+              ) : results && visible.length === 0 && !loading ? (
                 <div className="mo-gs-empty">
                   <div className="mo-empty-title">{total === 0 ? "未找到相关结果" : "该范围下没有结果"}</div>
-                  <div className="mo-empty-desc">{total === 0 ? "换个关键词试试；证件号需完整输入才会精确匹配。" : "按 Tab 切换到其他范围查看。"}</div>
+                  <div className="mo-empty-desc">{total === 0 ? "换个关键词试试；证件号需完整输入才会精确匹配。" : "可切换到其他范围查看。"}</div>
                 </div>
               ) : null}
 
@@ -258,10 +342,10 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 return (
                   <Fragment key={group.key}>
                     <div className="gs-group">
-                      {group.label} · {counts[group.key] >= 20 ? "20+" : counts[group.key]}
+                      {group.label} · {pages[group.key]?.failed ? "读取失败" : `已显示 ${counts[group.key]} 条`}
                       {scope === "all" && counts[group.key] > items.length ? (
-                        <button type="button" className="mo-gs-more" onClick={() => { setScope(group.key); setSel(0); }}>
-                          查看全部 →
+                        <button type="button" className="mo-gs-more" onClick={() => chooseScope(group.key)}>
+                          查看此范围 →
                         </button>
                       ) : null}
                     </div>
@@ -337,6 +421,16 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                         </div>
                       );
                     })}
+                    {pages[group.key]?.failed ? <div role="alert" className="flex flex-wrap items-center gap-2 px-4 py-3 text-sm">
+                      <span>此范围读取失败，先前结果已隐藏。</span>
+                      <Button variant="outline" size="sm" disabled={pages[group.key]?.loading} onClick={() => void continueGroup(group.key)}>重试此批</Button>
+                      <Button variant="ghost" size="sm" disabled={pages[group.key]?.loading} onClick={() => void continueGroup(group.key, true)}>从头检索</Button>
+                    </div> : results?.nextCursorByGroup[group.key] ? <div className="flex items-center gap-2 px-4 py-3">
+                      {!items.length ? <span className="text-sm text-muted-foreground">本批没有可展示结果。</span> : null}
+                      <Button variant="outline" size="sm" disabled={pages[group.key]?.loading || loading} onClick={() => { if (scope === "all") chooseScope(group.key); void continueGroup(group.key); }}>
+                        {pages[group.key]?.loading ? "正在检索…" : "继续检索"}
+                      </Button>
+                    </div> : null}
                   </Fragment>
                 );
               })}
@@ -345,7 +439,7 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             <div className="gs-foot">
               <span className="hint"><span className="kbd">↑</span><span className="kbd">↓</span> 选择</span>
               <span className="hint"><span className="kbd">↵</span> 打开</span>
-              <span className="hint"><span className="kbd">Tab</span> 切换范围</span>
+              <span className="hint"><span className="kbd">Tab</span> 切换控件</span>
               <span className="perm">
                 <Lock style={{ width: 12, height: 12 }} aria-hidden />
                 仅展示你有权限访问的内容 · 有具体位置的材料可直接查看来源

@@ -1098,7 +1098,17 @@ material核真实三窗口、context复核当前授权/选中身份与失败、r
 
 本轮实际读取固定Frappe CRM `3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952` 的[ViewControls.vue](https://github.com/frappe/crm/blob/3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952/frontend/src/components/ViewControls.vue)默认页长/loadMore、filter/sort重读、独立选择状态与读取中拒重复片段（557–579、624–634、738–751、1252–1279、1544–1562），同时复用本轮已读Tasks.vue的列表/确切对象入口。仅借“原列表就近继续、保筛选与选择身份、避免重复请求”；不搬其增加page_length后全表reload、保存视图或看板，也未运行参考产品。
 
-LexOrder的有界keyset、材料last-consumed游标、逐件现权、复核exact Document保稿及ArchiveRecord计数是本项目设计，参考不能证明这些法律业务。三轮具体纠正：材料20条已足时不把cursor推进至预取第200条；全过滤批次仍可继续但不声称必有可读命中；复核分页不reload整张表或改requestId，独立审批授权不开放整案；归档补充记录不能当成案件数，ALL台账/借阅/ZIP保持原边界。错误无稳定权限分类时，继续失败遮蔽该组旧正文并保查询/选择身份，恢复不能把未重新授权的旧页随新页一起展示；不建立通用错误或分页框架。当前只有计划审查，无本项通过证据，无新依赖、schema/迁移或维护准备。
+LexOrder的有界keyset、材料last-consumed游标、逐件现权、复核exact Document保稿及ArchiveRecord计数是本项目设计，参考不能证明这些法律业务。三轮具体纠正：材料20条已足时不把cursor推进至预取第200条；全过滤批次仍可继续但不声称必有可读命中；复核分页不reload整张表或改requestId，独立审批授权不开放整案；归档补充记录不能当成案件数，ALL台账/借阅/ZIP保持原边界。错误无稳定权限分类时，继续失败遮蔽该组旧正文并保查询/选择身份，恢复不能把未重新授权的旧页随新页一起展示；不建立通用错误或分页框架。该合同已先以ddf7c1d发布；实际实现和本批验证现见计划§8.39，无新依赖、schema/迁移或维护准备。
+
+G07实码反馈：三条独立续查已接现入口，API范围与页面ALL入口未混同；复核canBrowseSources明确要求实际matterId。三路复审收口了搜索组切换/全部组身份与滚动、原生Tab可达、复核已选确切撤权盖过旧缓存，并补真实程序案号查询。6测试文件51不同用例含PG11条通过；真实PG服务、公开Action和mock边界分别沿计划§8.39，不称HTTP/浏览器或完整归档打包通过。
+
+### 3.32 固定抽取来源与Office转换说明（G06子范围，2026-11-17）
+
+root实际读取material-processing、evidence/source-links及契约、三个来源弹层、material-processing-status、Office preview和download路由相关边界；context第二轮复核消费者，business第三轮核完整调用与验证。S08/G09已提供确切Document/run/anchor全文及真实TEXT/TABLE坐标，应直接复用；当前确定缺口是Office整份转换被称原件、来源入口缺同版独立下载。未做原文DOM定位，不把已有抽取片段或本片文字修正冒充完整G06完成。
+
+本轮root完整读取固定Counsel OS `c4f40f1ffd40146531bcaa7f43e6877a733f92ca` 的[DocumentReader.tsx](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/ui/src/workspace/DocumentReader.tsx)92行，核reading/saved模式、媒体类型优先及引用文本保持。只采用阅读呈现与实际引用文本分清，不复制Markdown/编辑器/agent框架，也不据此宣称上游证明了LexOrder Office精确映射；未运行参考产品或引入第三方源码。
+
+精简决定：仅统一真实消费的previewKind/previewUrl/downloadUrl，删闲置MaterialSourceListItem URL；研究已有EvidenceSourceResult，不造新来源服务。撤销“弹窗无限高”推断，现公共Dialog已有边界；保留原稿/焦点。处理状态同链误标须覆盖；download现可能对PDF/图像加水印，不承诺字节等存储SHA。CONVERTED只表示入口，保原失败语义与当前授权。认领/合同见计划§7.14.10、架构§6.14，当前无本子范围实现或通过证据；原文DOM精确跳转/完整OOXML映射继续保留未实现边界。
 
 ## 4. 可选法律服务 MCP 与来源
 

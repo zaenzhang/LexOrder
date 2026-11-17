@@ -653,13 +653,21 @@ prepare从同次templateMatterInputs生成真实主体ID/顺序和原值期望�
 
 ### 6.13 三条有界续查合同（G07，2026-11-17）
 
-计划§7.14.9已审定、认领，尚未实现。仅复用server/pagination-cursor加密原语，各服务独立校验domain/user/规范化查询/分组及排序键，当前授权每页重验，不新建分页框架、全量读取或DB模型。排序追加真实id，以键值继续，不要求被删除的cursor实体仍存在；当前分页不是跨请求冻结快照。
+计划§7.14.9合同已实现，本批开发验证见计划§8.39，浏览器及专业验收另记。仅复用server/pagination-cursor加密原语，各服务独立校验domain/user/规范化查询/分组及排序键，当前授权每页重验，不新建分页框架、全量读取或DB模型。排序追加真实id，以键值继续，不要求被删除的cursor实体仍存在；当前分页不是跨请求冻结快照。
 
 搜索保留五组首屏与单组继续，材料候选有界、逐件授权/验证真实发布文本，游标只越过实际检查过的候选，不能因预取200而跳过20条显示之后的未消费候选。过滤为空仍可继续；只称已显示数量，不泄露未授权候选ID/时间/计数。S08来源reader、返回位置及F01精度保留。继续失败遮蔽该组旧正文/来源入口但保留查询/位置身份供重试，恢复仅使用当前重新授权的投影，不用message文本识别权限。
 
-复核依据页独立于整张DocumentReview读取，reviewAccess＋canRespond控制同案枚举，canReadDocument逐件生效；按createdAt/id，所选exact Document单独当前核验，不以不在当前页当无权、不换同族最新版。原草稿/requestId/事务保存守卫保留，不扩后续版本选择器或G08。
+复核依据页独立于整张DocumentReview读取，reviewAccess＋canRespond且确有matterId控制同案枚举，canBrowseSources准确透传此条件，canReadDocument逐件生效；按createdAt/id，所选exact Document单独当前核验，不以不在当前页当无权、不换同族最新版。原草稿/requestId/事务保存守卫保留，不扩后续版本选择器或G08。
 
-归档读取沿原APPROVED＋matterReadVisibility where按archivedAt/id继续，同where计ArchiveRecord数；URL保query/cursor，明确包含补充归档。listArchivePageData的ALL台账入口、借阅及exact archiveId导出保持各自资格。无schema/迁移，不启动整套归档打包、恢复或维护专项。
+归档读取沿原APPROVED＋matterReadVisibility及真实名称/归档号/所内号/程序案号where按archivedAt/id继续，50条/页并在同次RR按同where计ArchiveRecord数；URL保query/cursor，明确包含补充归档。Action仍为archive.read＋事项范围，listArchivePageData的ALL台账入口、借阅及exact archiveId导出保持各自资格，不把页面条件扩成新API门禁。无schema/迁移，不启动整套归档打包、恢复或维护专项。
+
+### 6.14 固定来源与转换预览展示合同（G06子范围，2026-11-17）
+
+计划§7.14.10已审定、认领，尚未实现。本片只对既有已授权Document投影纯展示链接：previewKind为NATIVE/CONVERTED/NONE，previewUrl可null，downloadUrl指同版下载；不承载授权或解析状态。当前材料读取与evidence/source-links共用实际mime-ext判断，research沿EvidenceSourceResult，无新来源模型。仅真实PDF页码加预览hash，Office整份转换不伪造定位。
+
+S08/G09的固定Document/run/anchor、旧run/SHA匹配、真实TEXT/TABLE位置及当前资格保持；UNAVAILABLE不带链接。删清旧originalUrl/previewable同义合同与未消费URL，各实际消费者同步；不为位置选择器新增入口，不扩DocumentDetail或公共Dialog。转换类型不是成功回执，下载沿既有水印/授权，原件存储与hash不改变。Office路由仅增加可信说明，releaseDocumentRead、CSP、no-store和错误响应不改变。
+
+范围明确为准确呈现与同版下载，原文DOM精确跳转/完整OOXML映射仍未实现；不借此启动编辑同步、重解析、schema/迁移或新预览平台。验证按实际受影响来源/转换/消费者，不将参考读取或组件检查写作浏览器通过。
 
 ## 7. 参考项目如何进入 LexOrder
 

@@ -14,6 +14,7 @@ import { actionErrorMessage } from "@/lib/action-error";
 import { shDayKey, shTime } from "@/lib/ui/sh-time";
 import { checkReviewIssue, createReviewIssue, getDocumentReview, respondReviewIssue } from "@/server/document-reviews/actions";
 import { reviewDispositionLabel, reviewIssueStateLabel, type DocumentReviewView, type ReviewDocumentOption } from "@/server/document-reviews/contracts";
+import { ReviewSourcePicker } from "./review-source-picker";
 
 type Props = { documentId: string; initialIssueId?: string | null; onIssueChange?: (issueId: string | null) => void;
   onDirtyChange?: (dirty: boolean) => void; onPendingChange?: (pending: boolean) => void };
@@ -101,8 +102,8 @@ export function DocumentReviewPanel({ documentId, initialIssueId, onIssueChange,
           <div className="flex flex-col gap-1.5"><Label htmlFor="review-question">问题</Label><Textarea id="review-question" value={draft.title} maxLength={2000} required disabled={pending} onChange={event => edit("title", event.target.value)} /></div>
           <div className="flex flex-col gap-1.5"><Label htmlFor="review-location">文书位置</Label><Input id="review-location" placeholder="例如：第 2 页第 3 段" value={draft.location} maxLength={500} disabled={pending} onChange={event => edit("location", event.target.value)} /></div>
           <div className="flex flex-col gap-1.5"><Label htmlFor="review-basis">依据与理由</Label><Textarea id="review-basis" value={draft.basis} maxLength={6000} required disabled={pending} onChange={event => edit("basis", event.target.value)} /></div>
-          {view.sourceOptions.length > 0 && <DocumentChoice id="review-basis-document" label="关联依据材料（可选）" value={draft.basisDocumentId} choices={view.sourceOptions} disabled={pending} onChange={value => edit("basisDocumentId", value)} />}
-          {view.sourcesTruncated && <p className="text-sm text-muted-foreground">仅显示最近 100 份可读取材料</p>}
+          {view.canBrowseSources && <ReviewSourcePicker key={documentId} documentId={documentId} initialOptions={view.sourceOptions}
+            initialNextCursor={view.sourceNextCursor} value={draft.basisDocumentId} disabled={pending} onChange={value => edit("basisDocumentId", value)} />}
           <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={pending} onClick={() => void select(null)}>取消</Button><Button type="submit" disabled={pending || !draft.title.trim() || !draft.basis.trim()}>保存问题</Button></div>
         </form> : selected ? <>
           <div className="flex flex-col gap-2"><div className="flex items-start justify-between gap-3"><h4 className="whitespace-pre-wrap break-words font-medium">{selected.title}</h4><Badge variant="secondary">{reviewIssueStateLabel[selected.state]}</Badge></div>

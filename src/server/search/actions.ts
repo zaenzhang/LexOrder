@@ -18,6 +18,9 @@ import { clientTypeLabel, deadlineCategoryLabel, intakeStatusLabel, matterStatus
 import type { DocumentSourceOrigin, Prisma } from "@prisma/client";
 import { materialOriginalUrl, materialTextProjection, publishedMaterialSnapshot } from "@/server/documents/material-processing";
 import type { SourceAnchor } from "@/lib/workbench/contracts";
+import { ActionError } from "@/lib/action-error";
+import { decodeSearchCursor, encodeSearchCursor, searchBoundary, searchGroups, searchPageSchema, searchQuerySchema, type SearchGroup, type SearchPosition } from "./cursor";
+import type { z } from "zod";
 
 export interface SearchResultItem {
   id: string;
@@ -54,7 +57,9 @@ export interface GlobalSearchResult {
   deadlines: SearchResultItem[];
   /** v1.x 批次⑤（11 页注脚）：识别失败未纳入全文的材料数（失败状态可见） */
   documentsFailedCount: number;
+  nextCursorByGroup: Record<SearchGroup, string | null>;
 }
+export type SearchResultPage = { items: SearchResultItem[]; nextCursor: string | null };
 
 /** 文档检索候选窗口：粗过滤后仍大于展示上限，留出逐条精校被拒的余量 */
 const DOCUMENT_CANDIDATE_LIMIT = 200;
@@ -96,13 +101,14 @@ async function searchDocumentsAuthorized(
   userId: string,
   role: string,
   rolePermissions: unknown,
-  limit: number
-): Promise<SearchResultItem[]> {
+  limit: number,
+  point: SearchPosition | null
+): Promise<SearchResultPage> {
   if (!hasCustomPermission(
     { role, rolePermissions } as Parameters<typeof hasCustomPermission>[0],
     "documents.read"
   )) {
-    return [];
+    return { items: [], nextCursor: null };
   }
 
   // 第八轮体检：取数窗口必须收窄到「可能可见」的集合。此前 take 在 canReadDocument
@@ -125,6 +131,7 @@ async function searchDocumentsAuthorized(
       // 必须用 AND 包裹：可见性与关键词都是 OR 组，平铺会让后写的 OR 覆盖前一个
       AND: [
         visibilityScope,
+        searchBoundary("createdAt", point),
         {
           OR: [
             { name: { contains: q, mode: "insensitive" } },
@@ -134,10 +141,10 @@ async function searchDocumentsAuthorized(
         },
       ],
     },
-    take: DOCUMENT_CANDIDATE_LIMIT,
-    orderBy: { createdAt: "desc" },
+    take: DOCUMENT_CANDIDATE_LIMIT + 1,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     select: {
-      id: true, name: true, mimeType: true, category: true, textContent: true, tags: true,
+      id: true, createdAt: true, name: true, mimeType: true, category: true, textContent: true, tags: true,
       uploadedById: true, matterId: true, intakeId: true,
       sourceOrigin: true, textSource: true, deletedAt: true,
       sha256: true, version: true, parseGeneration: true,
@@ -149,8 +156,10 @@ async function searchDocumentsAuthorized(
   });
 
   const results: SearchResultItem[] = [];
-  for (const doc of candidates) {
+  let scanned = 0;
+  for (const doc of candidates.slice(0, DOCUMENT_CANDIDATE_LIMIT)) {
     if (results.length >= limit) break;
+    scanned++;
     if (!(await canReadDocument(userId, doc))) continue;
 
     // New parses use only their current immutable representation. Legacy text remains searchable,
@@ -201,146 +210,104 @@ async function searchDocumentsAuthorized(
       meta: [doc.version > 1 ? `版本 ${doc.version}` : "", snapshot && run.state === "PARTIAL" ? "仅部分内容已处理" : ""].filter(Boolean).join(" · ") || undefined,
     });
   }
-  return results;
+  const last = candidates[scanned - 1];
+  return { items: results, nextCursor: last && scanned < candidates.length
+    ? encodeSearchCursor(userId, q, "documents", { at: last.createdAt.toISOString(), id: last.id }) : null };
+}
+
+type SearchActor = Awaited<ReturnType<typeof requireSession>>["user"];
+const PAGE_SIZE = 20;
+
+function groupAvailable(actor: SearchActor, group: SearchGroup) {
+  const permission = group === "documents" ? "documents.read" : group === "deadlines" ? "schedule.read"
+    : group === "clients" ? "clients.read" : "matters.read";
+  return hasCustomPermission(actor, permission);
+}
+
+async function readSearchGroup(actor: SearchActor, q: string, group: SearchGroup, point: SearchPosition | null): Promise<SearchResultPage> {
+  if (!groupAvailable(actor, group)) return { items: [], nextCursor: null };
+  const userId = actor.id, role = actor.role, lower = q.toLowerCase();
+  const mVis = matterReadVisibilityFilter(userId, role, actor.rolePermissions);
+  const finish = <T extends { id: string }>(rows: T[], date: (row: T) => Date, project: (row: T) => SearchResultItem): SearchResultPage => {
+    const displayed = rows.slice(0, PAGE_SIZE), last = displayed.at(-1);
+    return { items: displayed.map(project), nextCursor: rows.length > PAGE_SIZE && last
+      ? encodeSearchCursor(userId, q, group, { at: date(last).toISOString(), id: last.id }) : null };
+  };
+  if (group === "documents") return searchDocumentsAuthorized(q, userId, role, actor.rolePermissions, PAGE_SIZE, point);
+  if (group === "matters") {
+    const rows = await prisma.matter.findMany({
+      where: { deletedAt: null, AND: [mVis, searchBoundary("updatedAt", point), { OR: [
+        { title: { contains: q, mode: "insensitive" } }, { internalCode: { contains: q, mode: "insensitive" } },
+        { primaryClient: { name: { contains: q, mode: "insensitive" } } },
+      ] }] }, take: PAGE_SIZE + 1, orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      select: { id: true, updatedAt: true, title: true, internalCode: true, status: true, owner: { select: { name: true } }, primaryClient: { select: { name: true } } },
+    });
+    return finish(rows, row => row.updatedAt, m => {
+      const matchedBy = m.title.toLowerCase().includes(lower) ? "名称命中" : m.internalCode.toLowerCase().includes(lower) ? "编号命中" : "委托方命中";
+      return { id: m.id, title: m.title, subtitle: `${m.internalCode} · ${matterStatusLabel[m.status]}`, href: matterHref(m), type: "matter", code: m.internalCode,
+        matchedBy: matchedBy === "委托方命中" && m.primaryClient?.name ? `委托方「${m.primaryClient.name}」命中` : matchedBy,
+        meta: [m.owner?.name ? `主办 ${m.owner.name}` : null, matterStatusLabel[m.status]].filter(Boolean).join(" · ") };
+    });
+  }
+  if (group === "clients") {
+    const rows = await prisma.client.findMany({
+      where: { deletedAt: null, AND: [clientVisibilityFilter(userId, role, actor.rolePermissions), searchBoundary("updatedAt", point), { OR: [
+        { name: { contains: q, mode: "insensitive" } }, { idNumberBlind: blindIdNumber(normalizeIdNumber(q) ?? "") },
+        { phone: { contains: q } }, { notes: { contains: q, mode: "insensitive" } },
+      ] }] }, take: PAGE_SIZE + 1, orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      select: { id: true, updatedAt: true, name: true, type: true, notes: true, _count: { select: { matters: true } } },
+    });
+    return finish(rows, row => row.updatedAt, c => {
+      const byNotes = !c.name.toLowerCase().includes(lower) && c.notes?.toLowerCase().includes(lower);
+      const text = c.notes ?? "", idx = text.toLowerCase().indexOf(lower);
+      const around = idx < 0 ? text.slice(0, 40) : `${idx > 12 ? "…" : ""}${text.slice(Math.max(0, idx - 12), idx + q.length + 24)}${idx + q.length + 24 < text.length ? "…" : ""}`;
+      return { id: c.id, title: c.name, subtitle: clientTypeLabel[c.type], href: `/clients/${c.id}`, type: "client",
+        matchedBy: byNotes ? `备注：「${around}」` : c.name.toLowerCase().includes(lower) ? "名称命中" : "证件/电话命中",
+        meta: `${clientTypeLabel[c.type]} · 累计案件 ${c._count.matters}` };
+    });
+  }
+  if (group === "intakes") {
+    const rows = await prisma.intake.findMany({
+      where: { status: { not: "CONVERTED" }, AND: [intakeReadVisibilityFilter(userId, role, actor.rolePermissions), searchBoundary("receivedAt", point), { OR: [
+        { title: { contains: q, mode: "insensitive" } }, { client: { name: { contains: q, mode: "insensitive" } } },
+      ] }] }, take: PAGE_SIZE + 1, orderBy: [{ receivedAt: "desc" }, { id: "desc" }],
+      select: { id: true, title: true, status: true, receivedAt: true, client: { select: { name: true } } },
+    });
+    return finish(rows, row => row.receivedAt, i => ({ id: i.id, title: i.title, subtitle: intakeStatusLabel[i.status], href: `/intakes/${i.id}`, type: "intake",
+      meta: [i.client?.name ? `委托方 ${i.client.name}` : null, intakeStatusLabel[i.status]].filter(Boolean).join(" · "), dueAt: i.receivedAt.toISOString() }));
+  }
+  const deadlineMatterFilter = role === "CUSTOM"
+    ? { AND: [customMatterFilter(userId, actor.rolePermissions, "schedule.read", true), mVis] } : mVis;
+  const rows = await prisma.deadline.findMany({
+    where: { completed: false, title: { contains: q, mode: "insensitive" },
+      procedure: { engagement: "ENGAGED", matter: { deletedAt: null, ...deadlineMatterFilter } }, AND: [searchBoundary("dueAt", point, true)] },
+    take: PAGE_SIZE + 1, orderBy: [{ dueAt: "asc" }, { id: "asc" }],
+    select: { id: true, title: true, category: true, dueAt: true, duePrecision: true,
+      procedure: { select: { matter: { select: { id: true, internalCode: true, title: true } } } } },
+  });
+  return finish(rows, row => row.dueAt, d => {
+    const matter = d.procedure.matter;
+    return { id: d.id, title: d.title, subtitle: `${matter.internalCode} · ${deadlineCategoryLabel[d.category]}`, href: matterHref(matter), type: "deadline",
+      code: matter.internalCode, context: matter.title, meta: deadlineCategoryLabel[d.category], dueAt: d.dueAt.toISOString(), duePrecision: d.duePrecision, matterLink: matterHref(matter) };
+  });
 }
 
 export async function globalSearch(query: string): Promise<GlobalSearchResult> {
-  const session = await requireSession("personal");
-  if (!query || query.trim().length < 1) {
-    return { matters: [], clients: [], intakes: [], documents: [], deadlines: [], documentsFailedCount: 0 };
-  }
-
-  const q = query.trim();
-  const userId = session.user.id;
-  const role = session.user.role;
-  const mVis = matterReadVisibilityFilter(userId, role, session.user.rolePermissions);
-  const cVis = clientVisibilityFilter(userId, role, session.user.rolePermissions);
-  const iVis = intakeReadVisibilityFilter(userId, role, session.user.rolePermissions);
-  // 分组各取前 20 条：「全部」范围前端每组展示前几条，切换到单一范围时展示全部
-  const limit = 20;
-  const canSchedule = hasCustomPermission(session.user, "schedule.read");
-  // 期限与日程页同口径：CUSTOM 走 schedule.read 授权范围，其余角色走站内读取口径——
-  // 此前对内置角色用旧版 matterVisibilityFilter，FINANCE 被放大到全所（P2-8）。
-  const deadlineMatterFilter = role === "CUSTOM"
-    ? { AND: [customMatterFilter(userId, session.user.rolePermissions, "schedule.read", true), mVis] }
-    : matterReadVisibilityFilter(userId, role, session.user.rolePermissions);
-
-  const [matters, clients, intakes, documents, deadlines, documentsFailedCount] = await Promise.all([
-    prisma.matter.findMany({
-      where: { deletedAt: null, ...mVis, OR: [
-        { title: { contains: q, mode: "insensitive" } },
-        { internalCode: { contains: q, mode: "insensitive" } },
-        { primaryClient: { name: { contains: q, mode: "insensitive" } } },
-      ]},
-      take: limit,
-      select: { id: true, title: true, internalCode: true, status: true, owner: { select: { name: true } }, primaryClient: { select: { name: true } } },
-      orderBy: { updatedAt: "desc" },
-    }),
-    prisma.client.findMany({
-      where: { deletedAt: null, AND: [cVis], OR: [
-        { name: { contains: q, mode: "insensitive" } },
-        // P1 §三：证件号改盲索引等值（模糊退役）
-        { idNumberBlind: blindIdNumber(normalizeIdNumber(q) ?? "") },
-        { phone: { contains: q } },
-        { notes: { contains: q, mode: "insensitive" } },
-      ]},
-      take: limit,
-      select: { id: true, name: true, type: true, notes: true, _count: { select: { matters: true } } },
-      orderBy: { updatedAt: "desc" },
-    }),
-    prisma.intake.findMany({
-      where: {
-        status: { not: "CONVERTED" },
-        ...iVis,
-        OR: [
-          { title: { contains: q, mode: "insensitive" } },
-          { client: { name: { contains: q, mode: "insensitive" } } },
-        ],
-      },
-      take: limit,
-      select: { id: true, title: true, status: true, receivedAt: true, client: { select: { name: true } } },
-      orderBy: { receivedAt: "desc" },
-    }),
-    // v1.x P0-2: 文档检索走授权后过滤（名称/标签/正文文本层，覆盖收案材料）
-    searchDocumentsAuthorized(q, userId, role, session.user.rolePermissions, limit),
-    canSchedule
-      ? prisma.deadline.findMany({
-          where: {
-            completed: false,
-            title: { contains: q, mode: "insensitive" },
-            procedure: { engagement: "ENGAGED", matter: { deletedAt: null, ...deadlineMatterFilter } },
-          },
-          take: limit,
-          orderBy: { dueAt: "asc" },
-          select: {
-            id: true, title: true, category: true, dueAt: true, duePrecision: true,
-            procedure: { select: { matter: { select: { id: true, internalCode: true, title: true } } } },
-          },
-        })
-      : Promise.resolve([]),
-    countDocumentFailuresAuthorized(userId, role, session.user.rolePermissions),
+  const session = await requireSession("personal"), q = searchQuerySchema.parse(query);
+  const [pages, documentsFailedCount] = await Promise.all([
+    Promise.all(searchGroups.map(async group => [group, q ? await readSearchGroup(session.user, q, group, null) : { items: [], nextCursor: null }] as const)),
+    q ? countDocumentFailuresAuthorized(session.user.id, session.user.role, session.user.rolePermissions) : Promise.resolve(0),
   ]);
+  const byGroup = Object.fromEntries(pages) as Record<SearchGroup, SearchResultPage>;
+  return { matters: byGroup.matters.items, clients: byGroup.clients.items, intakes: byGroup.intakes.items,
+    documents: byGroup.documents.items, deadlines: byGroup.deadlines.items, documentsFailedCount,
+    nextCursorByGroup: Object.fromEntries(pages.map(([group, page]) => [group, page.nextCursor])) as Record<SearchGroup, string | null> };
+}
 
-  const lower = q.toLowerCase();
-  const around = (text: string) => {
-    const idx = text.toLowerCase().indexOf(lower);
-    if (idx < 0) return text.slice(0, 40);
-    return `${idx > 12 ? "…" : ""}${text.slice(Math.max(0, idx - 12), idx + q.length + 24)}${idx + q.length + 24 < text.length ? "…" : ""}`;
-  };
-
-  return {
-    matters: matters.map((m) => {
-      const matchedBy = m.title.toLowerCase().includes(lower) ? "名称命中"
-        : m.internalCode.toLowerCase().includes(lower) ? "编号命中"
-        : "委托方命中";
-      return {
-        id: m.id,
-        title: m.title,
-        subtitle: `${m.internalCode} · ${matterStatusLabel[m.status]}`,
-        href: matterHref(m),
-        type: "matter" as const,
-        code: m.internalCode,
-        matchedBy: matchedBy === "委托方命中" && m.primaryClient?.name ? `委托方「${m.primaryClient.name}」命中` : matchedBy,
-        meta: [m.owner?.name ? `主办 ${m.owner.name}` : null, matterStatusLabel[m.status]].filter(Boolean).join(" · "),
-      };
-    }),
-    clients: clients.map((c) => {
-      const byNotes = !c.name.toLowerCase().includes(lower) && c.notes?.toLowerCase().includes(lower);
-      return {
-        id: c.id,
-        title: c.name,
-        subtitle: clientTypeLabel[c.type],
-        href: `/clients/${c.id}`,
-        type: "client" as const,
-        matchedBy: byNotes ? `备注：「${around(c.notes ?? "")}」` : c.name.toLowerCase().includes(lower) ? "名称命中" : "证件/电话命中",
-        meta: `${clientTypeLabel[c.type]} · 累计案件 ${c._count.matters}`,
-      };
-    }),
-    intakes: intakes.map((i) => ({
-      id: i.id,
-      title: i.title,
-      subtitle: intakeStatusLabel[i.status],
-      href: `/intakes/${i.id}`,
-      type: "intake" as const,
-      meta: [i.client?.name ? `委托方 ${i.client.name}` : null, intakeStatusLabel[i.status]].filter(Boolean).join(" · "),
-      dueAt: i.receivedAt.toISOString(),
-    })),
-    documents: documents.map((d) => ({ ...d, type: "document" as const })),
-    deadlines: deadlines.map((d) => {
-      const matter = d.procedure.matter;
-      return {
-        id: d.id,
-        title: d.title,
-        subtitle: `${matter.internalCode} · ${deadlineCategoryLabel[d.category]}`,
-        href: `${matterHref(matter)}`,
-        type: "deadline" as const,
-        code: matter.internalCode,
-        context: matter.title,
-        meta: deadlineCategoryLabel[d.category],
-        dueAt: d.dueAt.toISOString(), duePrecision: d.duePrecision,
-        matterLink: matterHref(matter),
-      };
-    }),
-    documentsFailedCount,
-  };
+/** A continuation is a current authorized read, never an authority granted by an old cursor. */
+export async function continueGlobalSearch(input: z.input<typeof searchPageSchema>): Promise<SearchResultPage> {
+  const data = searchPageSchema.parse(input), session = await requireSession("personal");
+  if (!groupAvailable(session.user, data.group)) throw new ActionError("当前资格不能读取此检索范围");
+  const point = decodeSearchCursor(data.cursor, session.user.id, data.query, data.group);
+  return readSearchGroup(session.user, data.query, data.group, point);
 }

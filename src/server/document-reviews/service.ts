@@ -8,12 +8,13 @@ import { matterAssociationFilter } from "@/lib/permissions";
 import { resolveRoleUser } from "@/lib/roles/service";
 import { hasCustomPermission } from "@/lib/roles/catalog";
 import { auditTx } from "@/server/audit";
-import { checkReviewIssueSchema, createReviewIssueSchema, respondReviewIssueSchema,
-  type DocumentReviewView, type ReviewDocumentOption, type ReviewEventView, type ReviewIssueView } from "./contracts";
+import { checkReviewIssueSchema, createReviewIssueSchema, respondReviewIssueSchema, reviewSourcePageSchema,
+  type DocumentReviewView, type ReviewDocumentOption, type ReviewEventView, type ReviewIssueView, type ReviewSourcePage } from "./contracts";
+import { decodeReviewSourceCursor, encodeReviewSourceCursor } from "./source-cursor";
 import type { z } from "zod";
 
 type Db = Prisma.TransactionClient;
-const documentSelect = { id: true, name: true, version: true, familyId: true, matterId: true, intakeId: true,
+const documentSelect = { id: true, createdAt: true, name: true, version: true, familyId: true, matterId: true, intakeId: true,
   uploadedById: true, deletedAt: true, status: true, matter: { select: { status: true, deletedAt: true } } } satisfies Prisma.DocumentSelect;
 type ReviewDocument = Prisma.DocumentGetPayload<{ select: typeof documentSelect }>;
 const issueInclude = { createdBy: { select: { name: true } }, events: { orderBy: { version: "asc" },
@@ -45,6 +46,35 @@ async function reviewAccess(db: Db, userId: string, documentId: string, mutation
     canRespond: writable && associated && hasCustomPermission(role, "documents.write"),
     canCheck: writable && approver,
   };
+}
+
+async function sourcePageInTransaction(db: Db, userId: string, access: Awaited<ReturnType<typeof reviewAccess>>,
+  data: z.infer<typeof reviewSourcePageSchema>): Promise<ReviewSourcePage> {
+  if (!access.canRespond || !access.document.matterId) throw new ActionError("当前资格不能查找本案依据材料");
+  const point = decodeReviewSourceCursor(data.cursor, userId, data.documentId, data.query);
+  const rows = await db.document.findMany({
+    where: { matterId: access.document.matterId, deletedAt: null,
+      ...(data.query ? { name: { contains: data.query, mode: "insensitive" } } : {}),
+      ...(point ? { OR: [{ createdAt: { lt: new Date(point.at) } }, { createdAt: new Date(point.at), id: { lt: point.id } }] } : {}),
+    }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 101, select: documentSelect,
+  });
+  const items: ReviewDocumentOption[] = [];
+  let scanned = 0;
+  for (const row of rows.slice(0, 100)) {
+    if (items.length >= 20) break;
+    scanned++;
+    if (!row.matter?.deletedAt && await canReadDocument(userId, row, db)) items.push(documentOption(row));
+  }
+  const selected = data.selectedId ? await readableDocument(db, userId, data.selectedId) : null;
+  const last = rows[scanned - 1];
+  return { items, nextCursor: last && scanned < rows.length
+    ? encodeReviewSourceCursor(userId, data.documentId, data.query, { at: last.createdAt.toISOString(), id: last.id }) : null,
+    selected: data.selectedId ? { id: data.selectedId, document: selected?.matterId === access.document.matterId ? documentOption(selected) : null } : null };
+}
+
+export async function readDocumentReviewSourcePage(userId: string, input: z.input<typeof reviewSourcePageSchema>): Promise<ReviewSourcePage> {
+  const data = reviewSourcePageSchema.parse(input);
+  return prisma.$transaction(async db => sourcePageInTransaction(db, userId, await reviewAccess(db, userId, data.documentId), data), { timeout: 20000, isolationLevel: "RepeatableRead" });
 }
 
 /** Read the bound version and current permissions, including separately authorized issue sources. */
@@ -81,18 +111,16 @@ export async function readDocumentReview(userId: string, documentId: string): Pr
         canResolve: access.canCheck && !basisUnavailable && !events.at(-1)?.revisionUnavailable };
     }));
     // Only matter handlers get a source picker. An approval grant never enumerates the rest of the file.
-    const sourceRows = access.canRespond && access.document.matterId ? await db.document.findMany({
-      where: { matterId: access.document.matterId, deletedAt: null }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 101, select: documentSelect,
-    }) : [];
-    const sourceOptions: ReviewDocumentOption[] = [];
-    for (const row of sourceRows.slice(0, 100)) { const permitted = await read(row.id); if (permitted) sourceOptions.push(documentOption(permitted)); }
+    const sourcePage = access.canRespond && access.document.matterId
+      ? await sourcePageInTransaction(db, userId, access, { documentId, query: "" }) : { items: [], nextCursor: null };
     const revisionRows = access.canRespond && access.document.familyId ? await db.document.findMany({ where: { deletedAt: null, matterId: access.document.matterId,
       version: { gt: access.document.version }, familyId: access.document.familyId },
       orderBy: { version: "desc" }, select: documentSelect }) : [];
     const revisionOptions: ReviewDocumentOption[] = [];
     for (const row of revisionRows) { const permitted = await read(row.id); if (permitted) revisionOptions.push(documentOption(permitted)); }
     return { document: documentOption(access.document), canCreate: access.canCreate, canRespond: access.canRespond, canCheck: access.canCheck,
-      issues, sourceOptions, revisionOptions, sourcesTruncated: sourceRows.length > 100 };
+      canBrowseSources: access.canRespond && Boolean(access.document.matterId),
+      issues, sourceOptions: sourcePage.items, revisionOptions, sourceNextCursor: sourcePage.nextCursor };
   }, { timeout: 20000 });
 }
 

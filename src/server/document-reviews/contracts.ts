@@ -25,6 +25,14 @@ export const checkReviewIssueSchema = z.object({
 }).strict();
 
 export type ReviewDocumentOption = { id: string; name: string; version: number };
+export const reviewSourcePageSchema = z.object({
+  documentId: z.string().cuid(), query: z.string().trim().max(200).default(""),
+  cursor: z.string().min(1).max(1200).optional(), selectedId: z.string().cuid().optional(),
+}).strict();
+export type ReviewSourcePage = {
+  items: ReviewDocumentOption[]; nextCursor: string | null;
+  selected: { id: string; document: ReviewDocumentOption | null } | null;
+};
 export type ReviewEventView = {
   id: string; version: number; kind: "RESPONSE" | "CHECK";
   disposition: keyof typeof reviewDispositionLabel | null; note: string | null;
@@ -37,7 +45,7 @@ export type ReviewIssueView = {
   authorName: string; createdAt: string; events: ReviewEventView[]; canResolve: boolean;
 };
 export type DocumentReviewView = {
-  document: ReviewDocumentOption; canCreate: boolean; canRespond: boolean; canCheck: boolean;
+  document: ReviewDocumentOption; canCreate: boolean; canRespond: boolean; canCheck: boolean; canBrowseSources: boolean;
   issues: ReviewIssueView[]; sourceOptions: ReviewDocumentOption[]; revisionOptions: ReviewDocumentOption[];
-  sourcesTruncated: boolean;
+  sourceNextCursor: string | null;
 };

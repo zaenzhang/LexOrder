@@ -1,12 +1,12 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ActionError } from "@/lib/action-error";
-import type { GlobalSearchResult, SearchResultItem } from "@/server/search/actions";
+import type { GlobalSearchResult, SearchResultItem, SearchResultPage } from "@/server/search/actions";
 import type { MaterialSourceResult } from "@/server/documents/material-processing";
 
-const mock = vi.hoisted(() => ({ search: vi.fn(), source: vi.fn(), push: vi.fn(), openChange: vi.fn() }));
+const mock = vi.hoisted(() => ({ search: vi.fn(), next: vi.fn(), source: vi.fn(), push: vi.fn(), openChange: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mock.push }) }));
-vi.mock("@/server/search/actions", () => ({ globalSearch: mock.search }));
+vi.mock("@/server/search/actions", () => ({ globalSearch: mock.search, continueGlobalSearch: mock.next }));
 vi.mock("@/server/documents/processing-actions", () => ({ getMaterialSource: mock.source }));
 import { SearchDialog } from "@/components/layout/search-dialog";
 
@@ -16,7 +16,8 @@ const first: SearchResultItem = { id: "document-old", type: "document", title: "
   sourceLocation: { kind: "PAGE", page: 20 } };
 const second: SearchResultItem = { ...first, id: "document-other", title: "合成命中乙.pdf", parseRunId: "run-other", anchorId: "anchor-other" };
 function results(documents: SearchResultItem[] = [first]): GlobalSearchResult {
-  return { documents, matters: [], clients: [], intakes: [], deadlines: [], documentsFailedCount: 0 };
+  return { documents, matters: [], clients: [], intakes: [], deadlines: [], documentsFailedCount: 0,
+    nextCursorByGroup: { documents: null, matters: null, clients: null, intakes: null, deadlines: null } };
 }
 function source(hit = first): MaterialSourceResult {
   return { status: "AVAILABLE", document: { id: hit.id, name: `核对后的${hit.title}`, version: hit.documentVersion!, sha256: "a".repeat(64), mimeType: "application/pdf" },
@@ -130,5 +131,84 @@ describe("材料搜索命中的固定来源与返回", () => {
     expect(window.open).toHaveBeenCalledTimes(2);
     fireEvent.click(jump);
     expect(mock.push).toHaveBeenCalledWith(first.matterLink); expect(mock.openChange).toHaveBeenCalledWith(false);
+  });
+
+  it("空候选页仍可继续，输入框不吞Tab且新按钮能独立接受键盘操作", async () => {
+    const initial = results([]); initial.nextCursorByGroup.documents = "after-scan-200";
+    mock.search.mockResolvedValue(initial); mock.next.mockResolvedValue({ items: [first], nextCursor: null });
+    render(<SearchDialog open onOpenChange={mock.openChange} />);
+    const input = screen.getByLabelText("搜索关键词");
+    fireEvent.change(input, { target: { value: "命中" } });
+    expect(await screen.findByText("本批没有可展示结果。")).toBeInTheDocument();
+    const tab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    input.dispatchEvent(tab); expect(tab.defaultPrevented).toBe(false);
+    const more = screen.getByRole("button", { name: "继续检索" });
+    more.focus(); expect(more).toHaveFocus();
+    fireEvent.keyDown(more, { key: "Enter" });
+    expect(mock.source).not.toHaveBeenCalled(); expect(mock.push).not.toHaveBeenCalled();
+    fireEvent.click(more);
+    expect(await screen.findByRole("option", { name: /合成命中甲/ })).toBeInTheDocument();
+    expect(mock.next).toHaveBeenCalledWith({ query: "命中", group: "documents", cursor: "after-scan-200" });
+    expect(screen.getByRole("tab", { name: /^材料正文/ })).toHaveAttribute("aria-selected", "true");
+    expect(input).toHaveValue("命中");
+  });
+
+  it("继续失败隐藏旧片段及来源入口，重试同一游标只恢复当前重读页", async () => {
+    const initial = results(); initial.nextCursorByGroup.documents = "after-first";
+    mock.search.mockResolvedValue(initial); mock.next.mockRejectedValueOnce(new Error("synthetic internal detail"));
+    await search(); fireEvent.click(screen.getByRole("tab", { name: /^材料正文/ }));
+    fireEvent.click(screen.getByRole("button", { name: "继续检索" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("先前结果已隐藏");
+    expect(screen.queryByRole("option", { name: /合成命中甲/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/旧搜索缓存/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/synthetic internal/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("搜索关键词")).toHaveValue("命中");
+    mock.next.mockResolvedValue({ items: [second], nextCursor: null });
+    fireEvent.click(screen.getByRole("button", { name: "重试此批" }));
+    const fresh = await screen.findByRole("option", { name: /合成命中乙/ });
+    expect(mock.next.mock.calls[1][0]).toEqual(mock.next.mock.calls[0][0]);
+    expect(screen.queryByRole("option", { name: /合成命中甲/ })).not.toBeInTheDocument();
+    mock.source.mockResolvedValue(source(second)); fireEvent.click(fresh);
+    await screen.findByRole("dialog", { name: "核对后的合成命中乙.pdf" });
+    expect(mock.source).toHaveBeenCalledWith({ documentId: second.id, runId: second.parseRunId, anchorId: second.anchorId });
+  });
+
+  it.each([["success", "clients"], ["failure", "clients"], ["success", "all"], ["failure", "all"]] as const)("材料续查%s迟到时保留%s范围的当前客户身份和滚动", async (outcome, scope) => {
+    let resolve!: (value: SearchResultPage) => void, reject!: (reason: Error) => void;
+    const initial = results(); initial.nextCursorByGroup.documents = "after-first";
+    initial.clients = [{ id: "client-one", type: "client", title: "合成命中客户甲", href: "/clients/client-one" },
+      { id: "client-two", type: "client", title: "合成命中客户乙", href: "/clients/client-two" }];
+    mock.search.mockResolvedValue(initial);
+    mock.next.mockImplementationOnce(() => new Promise<SearchResultPage>((yes, no) => { resolve = yes; reject = no; }));
+    await search(); fireEvent.click(screen.getByRole("tab", { name: /^材料正文/ }));
+    const body = screen.getByRole("option", { name: /合成命中甲/ }).parentElement!; body.scrollTop = 180;
+    fireEvent.click(screen.getByRole("button", { name: "继续检索" }));
+    const activeTab = scope === "all" ? /^全部/ : /^客户/;
+    fireEvent.click(screen.getByRole("tab", { name: activeTab }));
+    const client = screen.getByRole("option", { name: /合成命中客户乙/ });
+    fireEvent.mouseMove(client); body.scrollTop = 45;
+    vi.mocked(HTMLElement.prototype.scrollIntoView).mockClear();
+    await act(async () => { if (outcome === "success") resolve({ items: [second], nextCursor: null }); else reject(new Error("合成继续失败")); });
+    expect(client).toHaveAttribute("aria-selected", "true"); expect(body.scrollTop).toBe(45);
+    expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+    expect(screen.getByRole("tab", { name: activeTab })).toHaveAttribute("aria-selected", "true");
+    expect(mock.push).not.toHaveBeenCalled();
+    fireEvent.keyDown(screen.getByLabelText("搜索关键词"), { key: "ArrowUp" });
+    expect(screen.getByRole("option", { name: /合成命中客户甲/ })).toHaveAttribute("aria-selected", "true");
+    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalled();
+  });
+
+  it("更换查询后旧续查响应不会写入新查询列表", async () => {
+    let resolve!: (value: SearchResultPage) => void;
+    const initial = results(); initial.nextCursorByGroup.documents = "after-first";
+    mock.search.mockResolvedValueOnce(initial).mockResolvedValueOnce(results([{ ...second, title: "合成新词结果" }]));
+    mock.next.mockImplementationOnce(() => new Promise<SearchResultPage>(done => { resolve = done; }));
+    await search(); fireEvent.click(screen.getByRole("button", { name: "继续检索" }));
+    fireEvent.change(screen.getByLabelText("搜索关键词"), { target: { value: "新词" } });
+    await screen.findByRole("option", { name: /合成新词结果/ });
+    await act(async () => resolve({ items: [first], nextCursor: "stale-next" }));
+    expect(screen.queryByRole("option", { name: /合成命中甲/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /合成新词结果/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "继续检索" })).not.toBeInTheDocument();
   });
 });
