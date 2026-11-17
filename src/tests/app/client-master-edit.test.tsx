@@ -7,17 +7,17 @@ import type { RoleUser } from "@/lib/roles/catalog";
 const mock = vi.hoisted(() => ({
   user: { id: "cmtestuser0000000000000001", role: "LAWYER", runtimeMode: "SERVER" } as RoleUser & { id: string },
   list: vi.fn(), get: vi.fn(), edit: vi.fn(), update: vi.fn(), create: vi.fn(), editableIds: vi.fn(),
-  finance: vi.fn(), insights: vi.fn(), relationship: vi.fn(), refresh: vi.fn(), error: vi.fn()
+  finance: vi.fn(), insights: vi.fn(), relationship: vi.fn(), history: vi.fn(), refresh: vi.fn(), error: vi.fn()
 }));
 vi.mock("@/lib/auth/session", () => ({ requireSession: async () => ({ user: mock.user }) }));
 vi.mock("@/server/clients/actions", () => ({ listClients: mock.list, getClientById: mock.get, getClientForEdit: mock.edit, updateClient: mock.update, createClient: mock.create, getClientFinanceSummary: mock.finance, addContact: vi.fn() }));
 vi.mock("@/server/clients/master-access", () => ({ editableClientIds: mock.editableIds }));
 vi.mock("@/server/clients/insights", () => ({ getClientInsights: mock.insights }));
 vi.mock("@/server/clients/relationship-actions", () => ({ getClientRelationship: mock.relationship, recordClientActivity: vi.fn(), getClientCommunicationPage: vi.fn(), getClientFollowUpPage: vi.fn() }));
-vi.mock("@/server/clients/history-actions", () => ({ getClientHistoryPage: vi.fn(async () => ({ items: [], nextCursor: null })), getClientMatterPage: vi.fn() }));
+vi.mock("@/server/clients/history-actions", () => ({ getClientHistoryPage: mock.history, getClientMatterPage: vi.fn() }));
 vi.mock("@/server/clients/dedup", () => ({ mergeClientsByCode: vi.fn() }));
 vi.mock("@/server/yuandian/enterprise", () => ({ searchEnterpriseCandidates: vi.fn(), getEnterpriseDetail: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mock.refresh, replace: vi.fn() }), notFound: () => { throw new Error("not found"); } }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mock.refresh, replace: vi.fn() }), useSearchParams: () => new URLSearchParams(window.location.search), notFound: () => { throw new Error("not found"); } }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), warning: vi.fn(), error: mock.error } }));
 
 import ClientsPage from "@/app/(app)/clients/page";
@@ -25,6 +25,7 @@ import ClientDetailPage from "@/app/(app)/clients/[id]/page";
 import { ClientsView } from "@/app/(app)/clients/_components/clients-view";
 import { TopbarActionProvider, useTopbarActionValue } from "@/components/layout/topbar-action";
 import { ConfirmHost } from "@/components/patterns/confirm-dialog";
+import { ActionError } from "@/lib/action-error";
 
 const date = new Date("2026-11-16T00:00:00Z");
 const id = "cmtestclient00000000000001";
@@ -55,11 +56,32 @@ beforeEach(() => {
   mock.finance.mockResolvedValue(null);
   mock.insights.mockResolvedValue({ matterPage: { items: [], total: 0, activeCount: 0, nextCursor: null }, suspects: [], source: null });
   mock.relationship.mockResolvedValue({ canWrite: true, activityCount: 0, openCount: 0, activities: [], followUps: [] });
+  mock.history.mockResolvedValue({ items: [], nextCursor: null });
   vi.stubGlobal("ResizeObserver", class { observe = vi.fn(); unobserve = vi.fn(); disconnect = vi.fn(); });
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("Server 客户编辑入口（组件环境）", () => {
+  it("客户历史服务端首读使用返回游标，坏参数不会降级读取第一页", async () => {
+    window.history.replaceState(null, "", `/clients/${id}?tab=history&historyCursor=opaque-page`);
+    const rendered = renderPage(await ClientDetailPage({ params: Promise.resolve({ id }), searchParams: Promise.resolve({ tab: "history", historyCursor: "opaque-page" }) }));
+    expect(mock.history).toHaveBeenCalledWith({ clientId: id, cursor: "opaque-page" });
+    rendered.unmount(); mock.history.mockClear();
+    window.history.replaceState(null, "", `/clients/${id}?tab=history&historyCursor=a&historyCursor=b`);
+    renderPage(await ClientDetailPage({ params: Promise.resolve({ id }), searchParams: Promise.resolve({ tab: "history", historyCursor: ["a", "b"] }) }));
+    expect(mock.history).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent("客户动态位置无效");
+  });
+
+  it.each([new Error("不得外泄的数据库连接细节"), new ActionError("分页位置已失效，请重新核对")])("客户历史读取错误只公开业务说明：%s", async error => {
+    window.history.replaceState(null, "", `/clients/${id}?tab=history&historyCursor=opaque-page`);
+    mock.history.mockRejectedValueOnce(error);
+    renderPage(await ClientDetailPage({ params: Promise.resolve({ id }), searchParams: Promise.resolve({ tab: "history", historyCursor: "opaque-page" }) }));
+    expect(screen.getByRole("alert")).toHaveTextContent(error instanceof ActionError ? error.message : "客户动态读取失败，请重试");
+    expect(screen.queryByText("不得外泄的数据库连接细节")).not.toBeInTheDocument();
+    expect(mock.history).toHaveBeenCalledOnce();
+  });
+
   it("普通 LAWYER 的列表保留新建，桌面与移动端都不显示主档编辑", async () => {
     renderPage(await ClientsPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByRole("button", { name: "新建客户" })).toBeVisible();

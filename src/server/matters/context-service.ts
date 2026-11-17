@@ -137,6 +137,16 @@ export async function readMatterContext(db: PrismaClient, actor: ContextActor, m
   return db.$transaction(async tx => contextViewInTransaction(tx, await contextAccess(tx, actor, matterId), position), { timeout: 20_000 });
 }
 
+/** An explicit history link opens this revision, including one outside the current list. */
+export async function readMatterContextRecord(db: PrismaClient, actor: ContextActor, matterId: string, recordId: string): Promise<ContextRecordView> {
+  return db.$transaction(async tx => {
+    const access = await contextAccess(tx, actor, matterId);
+    const [record] = await readContextRecordsForHistory(tx, access, [recordId]);
+    if (!record) throw new ActionError("这条记录不存在或已无权读取，请返回客户动态重新核对");
+    return record;
+  }, { timeout: 20_000 });
+}
+
 export async function saveMatterContext(db: PrismaClient, actor: ContextActor, input: ContextRecordInput) {
   const parsed = contextRecordSchema.parse(input);
   if (new Date(parsed.occurredAt).getTime() > Date.now() + 300_000) throw new ActionError("发生时间不能晚于当前时间；未来安排请记在内容中");

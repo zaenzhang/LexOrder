@@ -2,13 +2,13 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ContextRecordView, MatterContextView } from "@/lib/matters/context";
 
-const mocks = vi.hoisted(() => ({ options: vi.fn(), history: vi.fn(), source: vi.fn(), save: vi.fn(), confirm: vi.fn(), ask: vi.fn(), refresh: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }), useSearchParams: () => new URLSearchParams() }));
+const mocks = vi.hoisted(() => ({ options: vi.fn(), history: vi.fn(), source: vi.fn(), exact: vi.fn(), save: vi.fn(), confirm: vi.fn(), ask: vi.fn(), refresh: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }), useSearchParams: () => new URLSearchParams(window.location.search) }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: mocks.ask }));
 vi.mock("@/server/matters/context-actions", () => ({
   getMatterContextSourceOptions: mocks.options, getMatterContextHistory: mocks.history,
-  getMatterContextSource: mocks.source, recordMatterContext: mocks.save, confirmMatterContextRecord: mocks.confirm,
+  getMatterContextSource: mocks.source, getMatterContextRecord: mocks.exact, recordMatterContext: mocks.save, confirmMatterContextRecord: mocks.confirm,
 }));
 import { MatterContextSection } from "@/app/(app)/matters/[id]/_components/matter-context-section";
 
@@ -16,6 +16,7 @@ let record: ContextRecordView;
 let view: MatterContextView;
 beforeEach(() => {
   vi.resetAllMocks();
+  window.history.replaceState(null, "", "/matters/MATTER-1");
   record = {
     id: "record", seriesId: "record-series", version: 2, kind: "GOAL", visibility: "MATTER",
     content: "本条合成目标：补齐交付资料后再作决定", reason: null, sourceDescription: "合成沟通记录",
@@ -27,6 +28,8 @@ beforeEach(() => {
   mocks.options.mockResolvedValue({ choices: [], nextCursors: { DOCUMENT: null, NOTE: null, CLIENT_ACTIVITY: null } });
   mocks.history.mockResolvedValue({ records: [{ ...record, id: "old-record", version: 1, content: "历史合成目标" }], nextBeforeVersion: null });
   mocks.source.mockResolvedValue({ type: "CLIENT_ACTIVITY", label: "客户沟通记录", content: "合成来源正文", href: null });
+  mocks.exact.mockResolvedValue({ ...record, id: "cmtestrecord00000000000001", kind: "INSTRUCTION", version: 1,
+    content: "合成客户动态所指旧版", confirmationStatus: "CONFIRMED", confirmedAt: "2026-11-15T08:00:00Z", confirmedByName: "合成核对人", canRevise: false, canConfirm: false });
   mocks.ask.mockResolvedValue(false);
 });
 afterEach(cleanup);
@@ -169,5 +172,109 @@ describe("目标与指示的明确动作与焦点", () => {
       description: expect.stringContaining(record.content!),
     })));
     expect(mocks.confirm).not.toHaveBeenCalled();
+  });
+
+  it("直接读取当前列表外确切旧版，来源Esc返回本版；关闭只清本路径定位", async () => {
+    const recordId = "cmtestrecord00000000000001";
+    const back = `/clients/cmtestclient00000000000001?tab=history&historyCursor=opaque-page&rowId=CONTEXT:${recordId}`;
+    window.history.replaceState(null, "", `/matters/MATTER-1?${new URLSearchParams({ view: "archive", procedure: "procedure-a", stage: "stage-a", document: "document-a", contextRecord: recordId, contextReturnTo: back })}`);
+    render(<MatterContextSection matterId="matter" view={view} />);
+    const exact = await screen.findByRole("dialog", { name: "客户指示记录（第 1 版）" });
+    expect(mocks.exact).toHaveBeenCalledWith("matter", recordId);
+    expect(within(exact).getByText("合成客户动态所指旧版")).toBeInTheDocument();
+    expect(within(exact).getByText("已核对")).toBeInTheDocument();
+    expect(within(exact).getByRole("link", { name: "返回客户动态" }).getAttribute("href")).toContain("historyCursor=opaque-page");
+    expect(mocks.history).not.toHaveBeenCalled();
+    const trigger = within(exact).getByRole("button", { name: "查看客户指示第 1 版的来源：客户沟通记录" });
+    fireEvent.click(trigger);
+    const source = await screen.findByRole("dialog", { name: "客户指示第 1 版的来源" });
+    await within(source).findByText("合成来源正文");
+    fireEvent.keyDown(source, { key: "Escape" });
+    await waitFor(() => expect(trigger).toHaveFocus());
+    fireEvent.keyDown(exact, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    const remaining = new URLSearchParams(window.location.search);
+    expect(remaining.has("contextRecord")).toBe(false); expect(remaining.has("contextReturnTo")).toBe(false);
+    expect(Object.fromEntries(remaining)).toEqual({ view: "archive", procedure: "procedure-a", stage: "stage-a", document: "document-a" });
+    expect(mocks.save).not.toHaveBeenCalled(); expect(mocks.confirm).not.toHaveBeenCalled();
+  });
+
+  it("目标切换与关闭都使旧精确读取失效，不显示另一个修订", async () => {
+    let resolveOld!: (value: ContextRecordView) => void;
+    mocks.exact.mockImplementationOnce(() => new Promise<ContextRecordView>(resolve => { resolveOld = resolve; }))
+      .mockResolvedValueOnce({ ...record, id: "record-b", content: "只显示B的正文" });
+    window.history.replaceState(null, "", "/matters/MATTER-1?contextRecord=record-a");
+    const rendered = render(<MatterContextSection matterId="matter" view={view} />);
+    window.history.replaceState(null, "", "/matters/MATTER-1?contextRecord=record-b");
+    rendered.rerender(<MatterContextSection matterId="matter" view={view} />);
+    await screen.findByText("只显示B的正文");
+    await act(async () => resolveOld({ ...record, id: "record-a", content: "不得显示的A迟到正文" }));
+    expect(screen.queryByText("不得显示的A迟到正文")).not.toBeInTheDocument();
+    let resolveClosed!: (value: ContextRecordView) => void;
+    mocks.exact.mockImplementationOnce(() => new Promise<ContextRecordView>(resolve => { resolveClosed = resolve; }));
+    window.history.replaceState(null, "", "/matters/MATTER-1?contextRecord=record-c");
+    rendered.rerender(<MatterContextSection matterId="matter" view={view} />);
+    fireEvent.click(within(screen.getByRole("dialog", { name: "查看指定记录" })).getByRole("button", { name: "关闭" }));
+    await act(async () => resolveClosed({ ...record, id: "record-c", content: "关闭后不得出现的正文" }));
+    expect(screen.queryByText("关闭后不得出现的正文")).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("重复定位或读取失权只显示错误，立即遮蔽原记录与嵌套来源", async () => {
+    window.history.replaceState(null, "", "/matters/MATTER-1?contextRecord=cmtestrecord00000000000001");
+    const rendered = render(<MatterContextSection matterId="matter" view={view} />);
+    const exact = await screen.findByRole("dialog", { name: "客户指示记录（第 1 版）" });
+    fireEvent.click(within(exact).getByRole("button", { name: "查看客户指示第 1 版的来源：客户沟通记录" }));
+    await screen.findByText("合成来源正文");
+    window.history.replaceState(null, "", "/matters/MATTER-1?contextRecord=cmtestrecord00000000000001&contextRecord=other");
+    rendered.rerender(<MatterContextSection matterId="matter" view={view} />);
+    expect(screen.queryByText("合成客户动态所指旧版")).not.toBeInTheDocument();
+    expect(screen.queryByText("合成来源正文")).not.toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("记录位置无效");
+    expect(mocks.exact).toHaveBeenCalledTimes(1);
+    mocks.exact.mockRejectedValueOnce(new Error("这条记录不存在或已无权读取"));
+    window.history.replaceState(null, "", "/matters/MATTER-1?contextRecord=unavailable");
+    rendered.rerender(<MatterContextSection matterId="matter" view={view} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("不存在或已无权读取");
+    expect(mocks.history).not.toHaveBeenCalled();
+  });
+
+  it("新服务端payload使原来源关闭，返回仍打开的精确记录标题", async () => {
+    window.history.replaceState(null, "", "/matters/MATTER-1?contextRecord=cmtestrecord00000000000001");
+    const rendered = render(<MatterContextSection matterId="matter" view={view} />);
+    const exact = await screen.findByRole("dialog", { name: "客户指示记录（第 1 版）" });
+    fireEvent.click(within(exact).getByRole("button", { name: "查看客户指示第 1 版的来源：客户沟通记录" }));
+    await screen.findByText("合成来源正文");
+    mocks.exact.mockRejectedValueOnce(new Error("原来源已撤回"));
+    rendered.rerender(<MatterContextSection matterId="matter" view={{ ...view, records: [] }} />);
+    expect(screen.queryByText("合成来源正文")).not.toBeInTheDocument();
+    await screen.findByText("原来源已撤回");
+    await waitFor(() => expect(screen.getByRole("heading", { name: "查看指定记录" })).toHaveFocus());
+  });
+
+  it("精确链接到达不重挂当前草稿，保存失败及关闭确认保持原行为", async () => {
+    let rejectSave!: (reason: Error) => void;
+    mocks.save.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectSave = reject; }));
+    const rendered = render(<MatterContextSection matterId="matter" view={view} />);
+    fireEvent.click(screen.getByRole("button", { name: "记录目标或指示" }));
+    const editor = await screen.findByRole("dialog", { name: "记录目标或指示" });
+    fireEvent.change(within(editor).getByLabelText("内容 *"), { target: { value: "必须保留的编辑输入" } });
+    fireEvent.change(within(editor).getByLabelText("来源说明 *"), { target: { value: "合成电话" } });
+    fireEvent.click(within(editor).getByRole("button", { name: "保存记录" }));
+    await waitFor(() => expect(mocks.save).toHaveBeenCalledOnce());
+    window.history.replaceState(null, "", "/matters/MATTER-1?contextRecord=cmtestrecord00000000000001");
+    rendered.rerender(<MatterContextSection matterId="matter" view={view} />);
+    await waitFor(() => expect(mocks.exact).toHaveBeenCalledOnce());
+    fireEvent.click(within(editor).getByRole("button", { name: "关闭" }));
+    expect(mocks.ask).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: "客户指示记录（第 1 版）" })).not.toBeInTheDocument();
+    await act(async () => rejectSave(new Error("合成保存失败")));
+    expect(within(editor).getByLabelText("内容 *")).toHaveValue("必须保留的编辑输入");
+    fireEvent.keyDown(editor, { key: "Escape" });
+    await waitFor(() => expect(mocks.ask).toHaveBeenCalledOnce());
+    expect(editor).toBeInTheDocument();
+    mocks.ask.mockResolvedValueOnce(true);
+    fireEvent.keyDown(editor, { key: "Escape" });
+    expect(await screen.findByRole("dialog", { name: "客户指示记录（第 1 版）" })).toBeInTheDocument();
   });
 });

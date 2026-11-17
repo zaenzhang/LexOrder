@@ -14,8 +14,12 @@ vi.mock("@/lib/prisma", async () => {
   const { createPrismaClient } = await import("@/lib/prisma-client");
   return { prisma: createPrismaClient(config.url ?? "postgresql://unused:unused@127.0.0.1:1/context_test") };
 });
+vi.mock("@/lib/auth/session", () => ({ requireSession: vi.fn() }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import { prisma as db } from "@/lib/prisma";
-import { saveMatterContext, confirmMatterContext, readMatterContext, readContextHistory, readContextSource, readContextSourceOptions } from "@/server/matters/context-service";
+import { requireSession } from "@/lib/auth/session";
+import { getMatterContextRecord } from "@/server/matters/context-actions";
+import { saveMatterContext, confirmMatterContext, readMatterContext, readMatterContextRecord, readContextHistory, readContextSource, readContextSourceOptions } from "@/server/matters/context-service";
 import { readMatterBrief } from "@/server/matters/brief";
 
 const userIds: string[] = [], matterIds: string[] = [], clientIds: string[] = [], roleIds: string[] = [], teamIds: string[] = [];
@@ -61,6 +65,55 @@ describe.skipIf(!config.url)("W07 上下文：真实 PostgreSQL 历史、并发�
     await db.team.updateMany({ where: { id: { in: teamIds } }, data: { active: false } });
     await db.$disconnect();
     vi.unstubAllEnvs();
+  });
+
+  it("精确读取Action保留50条历史窗口之外的原修订和核对时点，读取不造历史", async () => {
+    const f = await fixture();
+    const original = await saveMatterContext(db, f.user, input(f.matter.id, { kind: "INSTRUCTION", content: "合成原始指示，必须返回本版" }));
+    await confirmMatterContext(db, f.user, confirm(f.matter.id, original.id, 1));
+    const originalRow = await db.matterContextRecord.findUniqueOrThrow({ where: { id: original.id } });
+    let previousId = original.id;
+    for (let version = 2; version <= 53; version++) {
+      previousId = (await saveMatterContext(db, f.user, input(f.matter.id, { kind: "INSTRUCTION", supersedesId: previousId, content: `合成后来指示 ${version}` }))).id;
+    }
+    expect((await readMatterContext(db, f.user, f.matter.id)).records.map(row => row.id)).toEqual([previousId]);
+    expect((await readContextHistory(db, f.user, f.matter.id, original.id)).records.some(row => row.id === original.id)).toBe(false);
+    vi.mocked(requireSession).mockResolvedValue({ user: f.user } as Awaited<ReturnType<typeof requireSession>>);
+    const transactions = vi.spyOn(db, "$transaction");
+    await expect(getMatterContextRecord("invalid-matter", original.id)).rejects.toThrow();
+    await expect(getMatterContextRecord(f.matter.id, "invalid-record")).rejects.toThrow();
+    expect(transactions).not.toHaveBeenCalled();
+    transactions.mockRestore();
+    const before = await db.matterContextRecord.count({ where: { matterId: f.matter.id } });
+    expect(await getMatterContextRecord(f.matter.id, original.id)).toMatchObject({
+      id: original.id, version: 1, content: originalRow.content, confirmationStatus: "CONFIRMED",
+      confirmedAt: originalRow.confirmedAt!.toISOString(), canRevise: false, canConfirm: false,
+    });
+    expect(requireSession).toHaveBeenLastCalledWith("matters.read");
+    expect(await db.matterContextRecord.count({ where: { matterId: f.matter.id } })).toBe(before);
+    expect(await db.matterContextRecord.findUniqueOrThrow({ where: { id: original.id } })).toEqual(originalRow);
+    vi.mocked(requireSession).mockRejectedValueOnce(new Error("合成读取资格拒绝"));
+    await expect(getMatterContextRecord(f.matter.id, original.id)).rejects.toThrow("合成读取资格拒绝");
+  }, 30_000);
+
+  it("精确旧版读取拒绝跨案、财务失权、原件撤权或撤回以及停用账号，不替换为当前版", async () => {
+    const f = await fixture(), other = await fixture(), member = await restrictedMember(f.matter.id);
+    const foreign = await saveMatterContext(db, other.user, input(other.matter.id));
+    await expect(readMatterContextRecord(db, f.user, f.matter.id, foreign.id)).rejects.toThrow("不存在或已无权读取");
+    const privateRecord = await saveMatterContext(db, f.user, input(f.matter.id, { kind: "INSTRUCTION", visibility: "FINANCE", content: "合成财务指示" }));
+    await db.rolePermission.create({ data: { roleId: member.role.id, permissionKey: "finance.read", scope: "OWN" } });
+    expect((await readMatterContextRecord(db, member.user, f.matter.id, privateRecord.id)).content).toBe("合成财务指示");
+    await db.rolePermission.delete({ where: { roleId_permissionKey: { roleId: member.role.id, permissionKey: "finance.read" } } });
+    await expect(readMatterContextRecord(db, member.user, f.matter.id, privateRecord.id)).rejects.toThrow("不存在或已无权读取");
+    const doc = await db.document.create({ data: { name: "合成指示来源.txt", path: `synthetic/${randomUUID()}.txt`, tags: [], matterId: f.matter.id, uploadedById: f.user.id } });
+    const record = await saveMatterContext(db, f.user, input(f.matter.id, { sourceDocumentId: doc.id }));
+    expect((await readMatterContextRecord(db, member.user, f.matter.id, record.id)).readable).toBe(true);
+    await db.rolePermission.delete({ where: { roleId_permissionKey: { roleId: member.role.id, permissionKey: "documents.download" } } });
+    await expect(readMatterContextRecord(db, member.user, f.matter.id, record.id)).rejects.toThrow("不存在或已无权读取");
+    await db.document.update({ where: { id: doc.id }, data: { deletedAt: new Date() } });
+    await expect(readMatterContextRecord(db, f.user, f.matter.id, record.id)).rejects.toThrow("不存在或已无权读取");
+    await db.user.update({ where: { id: member.user.id }, data: { active: false } });
+    await expect(readMatterContextRecord(db, member.user, f.matter.id, privateRecord.id)).rejects.toThrow("账号或岗位");
   });
 
   it("同键并发提交只创建一条记录、审计及事件；同键不同正文拒绝", async () => {

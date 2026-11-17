@@ -26,3 +26,34 @@ export function clientListReturnHref(value: unknown): string {
   if (page !== null && (!/^[1-9]\d*$/.test(page) || !Number.isSafeInteger(Number(page)))) return "/clients";
   return clientListHref({ search: params.get("search") ?? undefined, type: type ?? undefined, page: page === null ? undefined : Number(page) });
 }
+import { clientHistoryLocationSchema, clientPageInputSchema } from "./history";
+
+
+/** This return link belongs only to a concrete context record in client history. */
+export function clientHistoryHref(clientId: string, input: { cursor?: string | null; rowId?: string | null; returnTo?: unknown } = {}) {
+  const params = new URLSearchParams({ tab: "history" });
+  if (input.cursor) params.set("historyCursor", input.cursor);
+  if (input.rowId) params.set("rowId", input.rowId);
+  const listReturn = clientListReturnHref(input.returnTo);
+  if (listReturn !== "/clients") params.set("returnTo", listReturn);
+  return `/clients/${encodeURIComponent(clientId)}?${params}`;
+}
+
+export function clientHistoryReturnHref(value: unknown): string | null {
+  if (typeof value !== "string" || value.includes("#")) return null;
+  const queryAt = value.indexOf("?");
+  if (queryAt < 0) return null;
+  const path = value.slice(0, queryAt);
+  const clientId = path.startsWith("/clients/") ? path.slice("/clients/".length) : "";
+  if (!clientPageInputSchema.shape.clientId.safeParse(clientId).success) return null;
+  const params = new URLSearchParams(value.slice(queryAt + 1));
+  const allowed = new Set(["tab", "historyCursor", "rowId", "returnTo"]);
+  for (const key of params.keys()) if (!allowed.has(key) || params.getAll(key).length !== 1) return null;
+  if (params.get("tab") !== "history") return null;
+  const location = clientHistoryLocationSchema.safeParse({
+    historyCursor: params.has("historyCursor") ? params.get("historyCursor") : undefined,
+    rowId: params.has("rowId") ? params.get("rowId") : undefined,
+  });
+  if (!location.success) return null;
+  return clientHistoryHref(clientId, { cursor: location.data.historyCursor, rowId: location.data.rowId, returnTo: params.get("returnTo") });
+}

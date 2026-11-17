@@ -1,25 +1,26 @@
 "use client";
 
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { actionErrorMessage } from "@/lib/action-error";
 import type { ClientPageInput } from "@/lib/clients/history";
 
 /** Stores only the current page and opaque navigation positions, never old bodies. */
 export function useClientPagination<T extends { nextCursor: string | null }>(
-  clientId: string, initial: T, read: (input: ClientPageInput) => Promise<T>
+  clientId: string, initial: T | null, read: (input: ClientPageInput) => Promise<T>,
+  { initialCursor = null, initialError = "" }: { initialCursor?: string | null; initialError?: string } = {},
 ) {
-  const scope = useMemo(() => ({ clientId, initial }), [clientId, initial]);
+  const scope = useMemo(() => ({ clientId, initial, initialCursor, initialError }), [clientId, initial, initialCursor, initialError]);
   const live = useRef<{ scope: typeof scope | null; serial: number }>({ scope: null, serial: 0 });
   type State = { scope: typeof scope; page: T | null; cursor: string | null; previous: (string | null)[]; pending: boolean; error: string };
-  const [state, setState] = useState<State>({ scope, page: initial, cursor: null, previous: [], pending: false, error: "" });
+  const [state, setState] = useState<State>({ scope, page: initial, cursor: initialCursor, previous: [], pending: false, error: initialError });
   // A fresh server payload is authoritative immediately, before passive cleanup.
-  const current = state.scope === scope ? state : { scope, page: initial, cursor: null, previous: [], pending: false, error: "" };
+  const current = state.scope === scope ? state : { scope, page: initial, cursor: initialCursor, previous: [], pending: false, error: initialError };
   useLayoutEffect(() => {
     live.current = { scope, serial: live.current.serial + 1 };
     return () => { live.current = { scope: null, serial: live.current.serial + 1 }; };
   }, [scope]);
 
-  async function load(cursor: string | null, previous: (string | null)[]) {
+  const load = useCallback(async (cursor: string | null, previous: (string | null)[]) => {
     if (live.current.scope !== scope) return;
     const serial = ++live.current.serial;
     setState({ scope, page: null, cursor, previous, pending: true, error: "" });
@@ -30,9 +31,11 @@ export function useClientPagination<T extends { nextCursor: string | null }>(
       if (live.current.scope === scope && serial === live.current.serial) setState({ scope, page: null, cursor, previous, pending: false,
         error: actionErrorMessage(error) || "加载失败，请重试" });
     }
-  }
+  }, [scope, read, clientId]);
+  const goTo = useCallback((cursor: string | null) => { void load(cursor, []); }, [load]);
   return {
-    page: current.page, pending: current.pending, error: current.error,
+    page: current.page, cursor: current.cursor, pending: current.pending, error: current.error,
+    goTo,
     hasPrevious: current.previous.length > 0,
     next: () => { if (!current.pending && current.page?.nextCursor) void load(current.page.nextCursor, [...current.previous, current.cursor]); },
     previous: () => { if (!current.pending && current.previous.length) void load(current.previous.at(-1) ?? null, current.previous.slice(0, -1)); },

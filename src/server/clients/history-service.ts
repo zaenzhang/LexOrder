@@ -181,7 +181,7 @@ async function candidates(tx: Prisma.TransactionClient, access: Access, canRelat
     canMatters ? tx.matterContextRecord.findMany({ where: { matter: matters, ...pageBoundary("occurredAt", point, "CONTEXT") },
       take, orderBy: [{ occurredAt: "desc" }, { id: "desc" }], select: { id: true, matterId: true, occurredAt: true, matter: { select: matterSelect } } })
       .then(rows => rows.map(row => ({ source: "CONTEXT" as const, id: row.id, at: row.occurredAt.toISOString(), matterId: row.matterId,
-        matterTitle: row.matter.title, href: matterHref(row.matter) }))) : [],
+        matterTitle: row.matter.title, href: matterHref(row.matter, `?${new URLSearchParams({ view: "archive", contextRecord: row.id })}`) }))) : [],
     canMatters && hasCustomPermission(user, "documents.download") ? tx.deliveryEvent.findMany({ where: {
       delivery: { recipientClientId: client.id, matter: { deletedAt: null,
         AND: [matterReadVisibilityFilter(user.id, user.role, user.rolePermissions)] } },
@@ -281,7 +281,7 @@ async function historyInTransaction(tx: Prisma.TransactionClient, access: Access
         contextItems.set(record.id, { source: "CONTEXT", id: record.id, key: `CONTEXT:${record.id}`, at: record.occurredAt, recordedAt: record.createdAt,
           title: `${contextKindLabels[record.kind]} · 第 ${record.version} 版`,
           meta: `${row.matterTitle} · ${record.authorName} · ${record.confirmationStatus === "CONFIRMED" ? "已确认" : "待确认"}`,
-          content: record.content, href: row.href!, linkLabel: "打开事项上下文" });
+          content: record.content, href: row.href!, linkLabel: "打开这版记录" });
       }
     }
     const deliveryItems = await deliveryHistoryItems(tx, access, batch.filter(row => row.source === "DELIVERY"));

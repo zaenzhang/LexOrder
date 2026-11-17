@@ -5,7 +5,7 @@ import type { ClientHistoryItem } from "@/lib/clients/history";
 const mock = vi.hoisted(() => ({ history: vi.fn(), saveAi: vi.fn(), refresh: vi.fn(), scroll: vi.fn() }));
 vi.mock("@/server/clients/history-actions", () => ({ getClientHistoryPage: mock.history }));
 vi.mock("@/server/settings/ai-actions", () => ({ saveAiSettingsAction: mock.saveAi, clearAiKeyAction: vi.fn(), testAiConnection: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mock.refresh }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mock.refresh }), useSearchParams: () => new URLSearchParams(window.location.search) }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 import { ClientDetailTabs } from "@/app/(app)/clients/[id]/_components/client-detail-tabs";

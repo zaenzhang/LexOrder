@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Check, FileText, History, Loader2, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -13,13 +14,15 @@ import { actionErrorMessage } from "@/lib/action-error";
 import { fromShanghaiInput, toShanghaiInput } from "@/lib/clients/relationship";
 import { shDayKey, shTime } from "@/lib/ui/sh-time";
 import { contextTextSummary } from "@/lib/matters/context-source-labels";
+import { clientHistoryReturnHref } from "@/lib/clients/navigation";
+import { updateDossierLocation } from "@/lib/matters/dossier-location";
 import {
   contextKindLabels, contextVisibilityLabels, type ContextKind, type ContextVisibility,
   type MatterContextView, type ContextRecordView, type ContextHistoryView, type ContextSourceContent,
   type ContextSourceOptions, type ContextSourcePageInput, type ContextSourceType, type ContextRecordInput
 } from "@/lib/matters/context";
 import {
-  recordMatterContext, confirmMatterContextRecord, getMatterContext, getMatterContextHistory, getMatterContextSource, getMatterContextSourceOptions
+  recordMatterContext, confirmMatterContextRecord, getMatterContext, getMatterContextRecord, getMatterContextHistory, getMatterContextSource, getMatterContextSourceOptions
 } from "@/server/matters/context-actions";
 
 const when = (value: string) => `${shDayKey(value)} ${shTime(value)}`;
@@ -43,6 +46,9 @@ export function MatterContextSection(props: Props) {
 function ContextSection({ matterId, view, error: initialError = null }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const requestedRecordId = searchParams.get("contextRecord");
+  const exactLocationValid = searchParams.getAll("contextRecord").length <= 1;
+  const historyReturnHref = searchParams.getAll("contextReturnTo").length === 1 ? clientHistoryReturnHref(searchParams.get("contextReturnTo")) : null;
   const overviewVisible = (searchParams.get("view") ?? "archive") === "archive";
   const scope = useMemo(() => ({ matterId, view, initialError }), [matterId, view, initialError]);
   type PageState = { scope: typeof scope; data: MatterContextView | null; cursor: string | null; previous: (string | null)[]; pending: boolean; error: string };
@@ -50,6 +56,7 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
   const livePage = useRef<{ scope: typeof scope | null; serial: number }>({ scope: null, serial: 0 });
   const historyRequest = useRef(0);
   const sourceRequest = useRef(0);
+  const exactRequest = useRef(0);
   const page = pageState.scope === scope ? pageState : { scope, data: view, cursor: null, previous: [], pending: false, error: initialError ?? "" };
   useLayoutEffect(() => {
     livePage.current = { scope, serial: livePage.current.serial + 1 };
@@ -68,20 +75,52 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
   const historyTrigger = useRef<HTMLButtonElement | null>(null);
   const sourceTrigger = useRef<HTMLButtonElement | null>(null);
   const historyTitle = useRef<HTMLHeadingElement>(null);
+  const exactTitle = useRef<HTMLHeadingElement>(null);
   const sourceFromHistory = useRef(false);
+  const sourceFromExact = useRef(false);
   const [pending, start] = useTransition();
   const [editorBusy, setEditorBusy] = useState(false);
   const [editorDirty, setEditorDirty] = useState(false);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [history, setHistory] = useState<{ id: string; kind: ContextKind; scope: typeof scope; data: ContextHistoryView | null; loading: boolean; error: string } | null>(null);
-  const [source, setSource] = useState<{ id: string; recordLabel: string; scope: typeof scope; data: ContextSourceContent | null; loading: boolean; error: string } | null>(null);
+  const [source, setSource] = useState<{ id: string; recordLabel: string; exactRecordId?: string; scope: typeof scope; data: ContextSourceContent | null; loading: boolean; error: string } | null>(null);
+  const [exactAttempt, setExactAttempt] = useState(0);
+  const [exact, setExact] = useState<{ id: string; locationValid: boolean; scope: typeof scope; data: ContextRecordView | null; loading: boolean; error: string } | null>(null);
   // A new server payload is authoritative before effects run. Editor state stays independent.
   const historyData = history?.scope === scope ? history.data : null;
-  const sourceData = source?.scope === scope ? source.data : null;
+  const sourceVisible = source !== null && (requestedRecordId === null ? !source.exactRecordId
+    : exactLocationValid && source.exactRecordId === requestedRecordId);
+  const sourceData = sourceVisible && source?.scope === scope ? source.data : null;
   const historyLoading = history?.scope === scope && history.loading;
   const sourceLoading = source?.scope === scope && source.loading;
   const historyError = history && history.scope !== scope ? initialError || "记录已更新，请重新读取历史。" : history?.error;
   const sourceError = source && source.scope !== scope ? initialError || "记录已更新，请重新读取来源。" : source?.error;
+  const exactCurrent = exact?.locationValid === exactLocationValid && exact.id === requestedRecordId && exact.scope === scope ? exact : null;
+
+  useEffect(() => {
+    const serial = ++exactRequest.current;
+    if (requestedRecordId === null) { setExact(null); return; }
+    // Opening a precise read never replaces the current editor or its unsaved input.
+    historyRequest.current++; setHistory(null);
+    sourceRequest.current++; setSource(null);
+    setExact({ id: requestedRecordId, locationValid: exactLocationValid, scope, data: null, loading: true, error: "" });
+    const read = exactLocationValid ? getMatterContextRecord(matterId, requestedRecordId)
+      : Promise.reject(new Error("记录位置无效，请返回客户动态重新打开"));
+    void read.then(data => {
+      if (serial === exactRequest.current && livePage.current.scope === scope) setExact({ id: requestedRecordId, locationValid: exactLocationValid, scope, data, loading: false, error: "" });
+    }).catch(error => {
+      if (serial === exactRequest.current && livePage.current.scope === scope) setExact({ id: requestedRecordId, locationValid: exactLocationValid, scope, data: null, loading: false,
+        error: actionErrorMessage(error) || "记录读取失败，请重试" });
+    });
+  }, [matterId, requestedRecordId, exactLocationValid, scope, exactAttempt]);
+
+  function closeExact() {
+    exactRequest.current++;
+    sourceRequest.current++;
+    if (source?.exactRecordId) setSource(null);
+    setExact(null);
+    updateDossierLocation({ contextRecord: null, contextReturnTo: null }, "replace");
+  }
 
   async function loadRecords(cursor: string | null, previous: (string | null)[]) {
     const serial = ++livePage.current.serial;
@@ -160,15 +199,16 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
     }
   }
 
-  function showSource(record: ContextRecordView, trigger: HTMLButtonElement, fromHistory = false) {
+  function showSource(record: ContextRecordView, trigger: HTMLButtonElement, fromHistory = false, fromExact = false) {
     sourceTrigger.current = trigger;
     sourceFromHistory.current = fromHistory;
-    void loadSource(record.id, `${contextKindLabels[record.kind]}第 ${record.version} 版`);
+    sourceFromExact.current = fromExact;
+    void loadSource(record.id, `${contextKindLabels[record.kind]}第 ${record.version} 版`, fromExact ? requestedRecordId ?? undefined : undefined);
   }
 
-  async function loadSource(recordId: string, recordLabel: string) {
+  async function loadSource(recordId: string, recordLabel: string, exactRecordId?: string) {
     const serial = ++sourceRequest.current;
-    setSource({ id: recordId, recordLabel, scope, data: null, loading: true, error: "" });
+    setSource({ id: recordId, recordLabel, exactRecordId, scope, data: null, loading: true, error: "" });
     try {
       const data = await getMatterContextSource(matterId, recordId);
       if (sourceRequest.current === serial && livePage.current.scope === scope) {
@@ -226,6 +266,7 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
       <Sheet open={editor !== null} onOpenChange={open => { if (!open) void closeEditor(); }}>
         <SheetContent ref={editorContent} className="w-full overflow-y-auto sm:max-w-xl" onCloseAutoFocus={event => { event.preventDefault(); restoreFocus(editorTrigger.current, addTrigger.current, sectionTitle.current); }}>
           <SheetHeader><SheetTitle>{editor?.record ? `更正${contextKindLabels[editor.record.kind]}记录（当前第 ${editor.record.version} 版）` : "记录目标或指示"}</SheetTitle><SheetDescription>{editor?.record ? `保存为第 ${editor.record.version + 1} 版，保留第 ${editor.record.version} 版；新版需重新核对确认。` : "保存后待主办或协办核对确认。"}</SheetDescription></SheetHeader>
+          {requestedRecordId !== null ? <p role="status" className="mt-3 text-sm text-muted-foreground">关闭当前编辑后显示选中的记录，当前输入已保留。</p> : null}
           {editor ? <ContextEditor key={editor.key} matterId={matterId} state={editor} canReadFinance={Boolean(page.data?.canReadFinance)} onSaving={setEditorBusy} onDirtyChange={setEditorDirty}
             onLoadSources={request => void loadSources(editor.key, request)}
             onSaved={() => { setEditor(null); router.refresh(); }} /> : null}
@@ -245,10 +286,28 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
         </SheetContent>
       </Sheet>
 
-      <Sheet open={source !== null} onOpenChange={open => { if (!open) { sourceRequest.current++; setSource(null); } }}>
+      <Sheet open={requestedRecordId !== null && editor === null} onOpenChange={open => { if (!open) closeExact(); }}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-xl" onCloseAutoFocus={event => {
+          event.preventDefault(); restoreFocus(addTrigger.current, sectionTitle.current);
+        }}>
+          <SheetHeader><SheetTitle ref={exactTitle} tabIndex={-1}>{exactCurrent?.data
+            ? `${contextKindLabels[exactCurrent.data.kind]}记录（第 ${exactCurrent.data.version} 版）` : "查看指定记录"}</SheetTitle>
+            <SheetDescription>查看客户动态所指向的这版记录及来源。</SheetDescription></SheetHeader>
+          <div className="mt-5 space-y-4">
+            {!exactCurrent || exactCurrent.loading ? <p role="status" className="text-sm text-muted-foreground">正在读取指定记录…</p> : null}
+            {exactCurrent?.error ? <div className="space-y-3"><p role="alert" className="text-sm text-destructive">{exactCurrent.error}</p>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setExactAttempt(value => value + 1)}>重新读取这版记录</button></div> : null}
+            {exactCurrent?.data ? <RecordContent record={exactCurrent.data} onSource={trigger => showSource(exactCurrent.data!, trigger, false, true)} /> : null}
+            {historyReturnHref ? <Link className="btn btn-secondary btn-sm" href={historyReturnHref}>返回客户动态</Link> : null}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={sourceVisible} onOpenChange={open => { if (!open) { sourceRequest.current++; setSource(null); } }}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-xl" onCloseAutoFocus={event => {
           event.preventDefault();
-          restoreFocus(sourceTrigger.current, sourceFromHistory.current && history !== null ? historyTitle.current : null, addTrigger.current, sectionTitle.current);
+          restoreFocus(sourceTrigger.current, sourceFromExact.current || requestedRecordId !== null && editor === null ? exactTitle.current : null,
+            sourceFromHistory.current && history !== null ? historyTitle.current : null, addTrigger.current, sectionTitle.current);
         }}>
           <SheetHeader><SheetTitle>{source ? `${source.recordLabel}的来源` : "查看记录来源"}</SheetTitle><SheetDescription>{sourceData?.label ?? "按当前资格读取关联原记录。"}</SheetDescription></SheetHeader>
           <div className="mt-5 space-y-4">
@@ -256,7 +315,7 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
             {sourceLoading ? <p role="status" className="t-sm t-mute">正在读取来源…</p> : null}
             {sourceData?.content ? <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{sourceData.content}</p> : null}
             {sourceData?.href ? <a className="btn btn-secondary" href={sourceData.href} target="_blank" rel="noopener noreferrer">打开来源原件</a> : null}
-            {source && sourceError ? <button type="button" className="btn btn-secondary btn-sm" disabled={sourceLoading} onClick={() => void loadSource(source.id, source.recordLabel)}>重新读取来源</button> : null}
+            {source && sourceError ? <button type="button" className="btn btn-secondary btn-sm" disabled={sourceLoading} onClick={() => void loadSource(source.id, source.recordLabel, source.exactRecordId)}>重新读取来源</button> : null}
           </div>
         </SheetContent>
       </Sheet>

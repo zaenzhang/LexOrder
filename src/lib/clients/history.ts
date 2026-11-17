@@ -8,6 +8,11 @@ export const clientPageInputSchema = z.object({
   cursor: z.string().min(1).max(1200, "分页位置无效，请刷新").optional()
 }).strict();
 export type ClientPageInput = z.input<typeof clientPageInputSchema>;
+export const clientHistoryLocationSchema = z.object({
+  historyCursor: clientPageInputSchema.shape.cursor,
+  rowId: z.string().refine(value => value.startsWith("CONTEXT:") && z.string().cuid().safeParse(value.slice(8)).success,
+    "客户动态位置无效，请重新打开客户动态").optional(),
+}).strict();
 export type ClientPage<T> = { items: T[]; nextCursor: string | null };
 export type ClientMatterItem = {
   id: string; internalCode: string | null; title: string; status: MatterStatus;

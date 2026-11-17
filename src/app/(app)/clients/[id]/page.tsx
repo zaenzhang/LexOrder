@@ -1,5 +1,7 @@
 import { clientIdTypeLabel } from "@/lib/clients/person-id";
-import { clientListReturnHref } from "@/lib/clients/navigation";
+import { clientHistoryHref, clientListReturnHref } from "@/lib/clients/navigation";
+import { clientHistoryLocationSchema } from "@/lib/clients/history";
+import { ActionError } from "@/lib/action-error";
 import { requireSession } from "@/lib/auth/session";
 import { hasCustomPermission } from "@/lib/roles/catalog";
 import { notFound } from "next/navigation";
@@ -28,7 +30,7 @@ const ymd = (d: Date | string | null | undefined) => (d ? new Date(d).toLocaleDa
 
 export default async function ClientDetailPage({ params, searchParams }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string | string[]; returnTo?: string | string[] }>;
+  searchParams: Promise<{ tab?: string | string[]; returnTo?: string | string[]; historyCursor?: string | string[]; rowId?: string | string[] }>;
 }) {
   const { id } = await params;
   const query = await searchParams;
@@ -38,11 +40,15 @@ export default async function ClientDetailPage({ params, searchParams }: {
   const canReadFinance = hasCustomPermission(session.user, "finance.read");
   const canWrite = (await editableClientIds(session.user, [id])).includes(id);
   const canMerge = canWrite;
+  const historyLocation = clientHistoryLocationSchema.safeParse({ historyCursor: query.historyCursor, rowId: query.rowId });
   const [finance, insights, relationship, history] = await Promise.all([
     canReadFinance ? getClientFinanceSummary(id) : Promise.resolve(null),
     getClientInsights(id),
     getClientRelationship(id),
-    getClientHistoryPage({ clientId: id })
+    historyLocation.success
+      ? getClientHistoryPage({ clientId: id, cursor: historyLocation.data.historyCursor })
+        .then(page => ({ page, error: "" })).catch(error => ({ page: null, error: error instanceof ActionError ? error.message : "客户动态读取失败，请重试" }))
+      : Promise.resolve({ page: null, error: "客户动态位置无效，请重新打开客户动态" })
   ]);
 
   const isIndividual = client.type === "INDIVIDUAL";
@@ -104,7 +110,11 @@ export default async function ClientDetailPage({ params, searchParams }: {
               </section> : null}
             </div>
           </div>,
-          history: <ClientHistoryPanel clientId={client.id} initial={history} />,
+          history: historyLocation.success
+            ? <ClientHistoryPanel clientId={client.id} initial={history.page} initialError={history.error}
+              initialCursor={historyLocation.data.historyCursor} rowId={historyLocation.data.rowId} returnTo={query.returnTo} />
+            : <section className="card p-4 space-y-3"><p role="alert" className="text-sm text-destructive">{history.error}</p>
+              <Link className="btn btn-secondary btn-sm" href={clientHistoryHref(client.id, { returnTo: query.returnTo })}>查看最新客户动态</Link></section>,
           profile: <div className="space-y-3.5">
             {canMerge && insights.suspects.length > 0 ? <MergeBanner keepId={client.id} keepName={client.name} suspects={insights.suspects} canMerge={canMerge} /> : null}
             <div className="flex flex-wrap items-center gap-2">

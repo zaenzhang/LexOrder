@@ -17,6 +17,8 @@ type DossierUpdate = Partial<{
   delivery: string | null;
   deliveryEvent: string | null;
   deliveryDocument: string | null;
+  contextRecord: string | null;
+  contextReturnTo: string | null;
 }>;
 
 /** Native history is integrated with Next useSearchParams. */

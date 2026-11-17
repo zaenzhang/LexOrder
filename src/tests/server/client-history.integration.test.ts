@@ -170,4 +170,24 @@ describe.skipIf(!config.url)("M2 客户连续记录：真实 PostgreSQL 读取",
     await db.user.update({ where: { id: owner.id }, data: { active: false } });
     await expect(readClientCommunicationPage(db, owner, { clientId: target.client.id })).rejects.toThrow("账号已停用");
   }, 30_000);
+
+  it("历史分页中的指示链接固定原修订，原游标重读保留该页并拒绝跨客户位置", async () => {
+    const f = await fixture(), other = await fixture(f.actor);
+    const first = await saveMatterContext(db, f.actor, { matterId: f.matter.id, requestKey: randomUUID(), kind: "INSTRUCTION", visibility: "MATTER",
+      content: "合成旧版指示", sourceDescription: "合成电话", occurredAt: at.toISOString() });
+    const latest = await saveMatterContext(db, f.actor, { matterId: f.matter.id, requestKey: randomUUID(), kind: "INSTRUCTION", visibility: "MATTER",
+      content: "合成新版指示", sourceDescription: "合成电话", occurredAt: at.toISOString(), supersedesId: first.id });
+    await db.clientActivity.createMany({ data: Array.from({ length: 21 }, () => ({ clientId: f.client.id, authorId: f.actor.id,
+      channel: "PHONE" as const, content: "合成较新动态", occurredAt: new Date("2026-10-01T00:00:00Z"), requestKey: randomUUID(), requestHash: "synthetic" })) });
+    const head = await readClientHistory(db, f.actor, { clientId: f.client.id });
+    expect(head.items.some(row => row.id === first.id)).toBe(false);
+    expect(head.nextCursor).toBeTruthy();
+    const page = await readClientHistory(db, f.actor, { clientId: f.client.id, cursor: head.nextCursor! });
+    const old = page.items.find(row => row.id === first.id)!;
+    expect(old.content).toBe("合成旧版指示");
+    expect(new URL(old.href, "https://example.test").searchParams.get("contextRecord")).toBe(first.id);
+    expect(new URL(page.items.find(row => row.id === latest.id)!.href, "https://example.test").searchParams.get("contextRecord")).toBe(latest.id);
+    expect(await readClientHistory(db, f.actor, { clientId: f.client.id, cursor: head.nextCursor! })).toEqual(page);
+    await expect(readClientHistory(db, f.actor, { clientId: other.client.id, cursor: head.nextCursor! })).rejects.toThrow();
+  });
 });
