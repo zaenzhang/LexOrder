@@ -12,7 +12,7 @@ export interface IcsEvent {
   uid: string;
   title: string;
   start: Date;
-  end?: Date;       // 不传 = 1 小时事件；如果是 allDay 用 startAllDay
+  end?: Date | null; // 不传维持默认时长；null 明确表示准确截止时点，无 DTEND
   allDay?: boolean; // true → 用 DTSTART;VALUE=DATE
   description?: string;
   location?: string;
@@ -88,8 +88,10 @@ export function buildIcs(opts: {
       lines.push(`DTEND;VALUE=DATE:${fmtDate(end)}`);
     } else {
       lines.push(`DTSTART:${fmtUtc(ev.start)}`);
-      const end = ev.end ?? new Date(ev.start.getTime() + 3600000);
-      lines.push(`DTEND:${fmtUtc(end)}`);
+      if (ev.end !== null) {
+        const end = ev.end ?? new Date(ev.start.getTime() + 3600000);
+        lines.push(`DTEND:${fmtUtc(end)}`);
+      }
     }
     lines.push(fold(`SUMMARY:${esc(ev.title)}`));
     if (ev.description) lines.push(fold(`DESCRIPTION:${esc(ev.description)}`));

@@ -1,4 +1,5 @@
 "use client";
+import { deadlineOverdue, formatDeadlineDue } from "@/lib/deadline-due";
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
@@ -136,7 +137,7 @@ function Legend() {
 }
 
 function EventChip({ item, onSelect }: { item: ScheduleItem; onSelect: (item: ScheduleItem) => void }) {
-  const hasTime = shTime(item.occurredAt) !== "00:00";
+  const hasTime = item.deadlineId ? item.duePrecision === "DATETIME" : shTime(item.occurredAt) !== "00:00";
   return (
     <button
       type="button"
@@ -144,10 +145,10 @@ function EventChip({ item, onSelect }: { item: ScheduleItem; onSelect: (item: Sc
         e.stopPropagation();
         onSelect(item);
       }}
-      title={`${typeMeta[item.type].label}：${hasTime ? `${formatTime(item.occurredAt)} ` : ""}${item.title} · ${displaySubject(item)}`}
+      title={`${typeMeta[item.type].label}：${hasTime ? `${scheduleTime(item)} ` : ""}${item.title} · ${displaySubject(item)}`}
       className={cn("ev w-full border-0 text-left font-[inherit]", evClass(item), item.completed && "line-through opacity-50")}
     >
-      <span className="t">{hasTime ? formatTime(item.occurredAt) : "—"}</span>
+      <span className="t">{item.deadlineId ? scheduleTime(item) : hasTime ? scheduleTime(item) : "—"}</span>
       <span className="min-w-0 truncate">{item.type === "hearing" && !/^(开庭|庭审|询问)/.test(item.title) ? `开庭·${item.title}` : item.title}</span>
     </button>
   );
@@ -317,7 +318,7 @@ function ListView({ items, today, onSelectItem }: { items: (ScheduleItem & { dat
               <span className="t-xs t-mute">{WEEKDAYS[(d.getDay() + 6) % 7]}</span>
               <span className={cn("t-xs ml-auto", days < 0 ? "t-red" : "t-mute")}>{days === 0 ? "今天" : days === 1 ? "明天" : days > 0 ? `${days} 天后` : `${-days} 天前`}</span>
             </div>
-            {group.map((it) => <SideItem key={it.id} item={it} onSelectItem={onSelectItem} lead={formatTime(it.occurredAt)} />)}
+            {group.map((it) => <SideItem key={it.id} item={it} onSelectItem={onSelectItem} lead={scheduleTime(it)} />)}
           </div>
         );
       })}
@@ -326,7 +327,7 @@ function ListView({ items, today, onSelectItem }: { items: (ScheduleItem & { dat
 }
 
 function SideItem({ item, onSelectItem, lead }: { item: ScheduleItem; onSelectItem: (item: ScheduleItem) => void; lead: string }) {
-  const overdue = item.type === "deadline" && !item.completed && new Date(item.occurredAt).getTime() < Date.now();
+  const overdue = item.type === "deadline" && !item.completed && (item.deadlineId ? deadlineOverdue(item.occurredAt, item.duePrecision ?? null) : new Date(item.occurredAt).getTime() < Date.now());
   return (
     <button type="button" onClick={() => onSelectItem(item)} className="today-item w-full border-0 bg-transparent text-left font-[inherit]">
       <span className={cn("w-12 shrink-0 font-mono text-[12px]", overdue ? "t-red" : "t-mute")}>{lead}</span>
@@ -336,7 +337,7 @@ function SideItem({ item, onSelectItem, lead }: { item: ScheduleItem; onSelectIt
           {item.type === "deadline" && item.category && item.category !== "CUSTOM" ? "（法定）" : ""}
         </span>
         <span className="tm block truncate">
-          {[lead === formatTime(item.occurredAt) ? null : formatTime(item.occurredAt), displaySubject(item), item.procedureLabel ? formatProcedureLabel(item.procedureLabel) : null].filter(Boolean).join(" · ")}
+          {[lead === scheduleTime(item) ? null : scheduleTime(item), displaySubject(item), item.procedureLabel ? formatProcedureLabel(item.procedureLabel) : null].filter(Boolean).join(" · ")}
         </span>
       </span>
     </button>
@@ -363,7 +364,7 @@ function ScheduleSideRail({
     { label: "3 日内到期", test: (t: number) => t >= 0 && t <= 3, tone: "red" as const, level: 3 },
     { label: "7 日内到期", test: (t: number) => t > 3 && t <= 7, tone: "amber" as const, level: 3 },
     { label: "30 日内到期", test: (t: number) => t > 7 && t <= 30, tone: "blue" as const, level: 2 }
-  ].map((b) => ({ ...b, list: open.filter((it) => b.test(dayDiff(it.occurredAt))) }));
+  ].map((b) => ({ ...b, list: open.filter((it) => (it.deadlineId ? (b.label === "已逾期" ? deadlineOverdue(it.occurredAt, it.duePrecision ?? null) : !deadlineOverdue(it.occurredAt, it.duePrecision ?? null) && b.test(dayDiff(it.occurredAt))) : b.test(dayDiff(it.occurredAt)))) }));
   const todayKey = shDayKey(new Date());
   const todayItems = itemsByKey.get(todayKey) ?? [];
   const tomorrowFirst = itemsByKey.get(shDayKey(nowMs + dayMs))?.[0];
@@ -385,11 +386,11 @@ function ScheduleSideRail({
             <div className="empty" style={{ padding: "16px 10px" }}>
               <div className="empty-ic"><CheckCircle2 /></div>
               <div style={{ fontSize: 12.5, color: "var(--t-muted)" }}>今天没有安排</div>
-              {tomorrowFirst ? <div className="t-xs t-faint" style={{ marginTop: 3 }}>明天 {formatTime(tomorrowFirst.occurredAt)} {tomorrowFirst.title}</div> : null}
+              {tomorrowFirst ? <div className="t-xs t-faint" style={{ marginTop: 3 }}>明天 {scheduleTime(tomorrowFirst)} {tomorrowFirst.title}</div> : null}
             </div>
           </div>
         ) : (
-          todayItems.map((it) => <SideItem key={it.id} item={it} onSelectItem={onSelectItem} lead={formatTime(it.occurredAt)} />)
+          todayItems.map((it) => <SideItem key={it.id} item={it} onSelectItem={onSelectItem} lead={scheduleTime(it)} />)
         )}
       </div>
 
@@ -476,7 +477,7 @@ function ScheduleItemDialog({
             </DialogHeader>
 
             <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
-              <DetailLine label="时间" value={`${formatFullDate(item.occurredAt)} ${formatTime(item.occurredAt)}`} />
+              <DetailLine label="时间" value={item.deadlineId ? formatDeadlineDue(item.occurredAt, item.duePrecision ?? null) : `${formatFullDate(item.occurredAt)} ${scheduleTime(item)}`} />
               <DetailLine label="客户" value={item.clientName ?? "未填写客户"} />
               <DetailLine
                 label="关联案件"
@@ -531,6 +532,10 @@ function DetailLine({ label, value }: { label: string; value: React.ReactNode })
       <span className="min-w-0 text-foreground">{value}</span>
     </div>
   );
+}
+
+function scheduleTime(item: ScheduleItem) {
+  return item.deadlineId && item.duePrecision !== "DATETIME" ? (item.duePrecision === "DATE" ? "日期" : "精度未记录") : formatTime(item.occurredAt);
 }
 
 function formatTime(value: Date) {

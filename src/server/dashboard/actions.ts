@@ -1,4 +1,5 @@
 "use server";
+import { deadlineOverdue, overdueDeadlineWhere, type DeadlineDuePrecision } from "@/lib/deadline-due";
 import {closedHearingIds} from "@/server/reminders/responsibility";
 import { agingFromFacts } from "@/server/finance/facts-aging";
 import { getFinanceFacts, periodReceipts, sumAmounts, shMonthStart, financeTrend } from "@/server/finance/facts";
@@ -30,6 +31,8 @@ export type ScheduleItem = {
   date: string;
   weekday: string;
   time?: string;
+  duePrecision?: DeadlineDuePrecision | null;
+  overdue?: boolean;
   type: "deadline" | "hearing";
   title: string;
   matter: string;
@@ -52,6 +55,8 @@ export type HeroData = {
     internalCode: string;
     procedure: string;
     dueAt: Date;
+    duePrecision: DeadlineDuePrecision | null;
+    overdue: boolean;
     daysLeft: number;
     href: string;
   } | null;
@@ -331,6 +336,9 @@ export async function getDashboardSchedule(): Promise<ScheduleItem[]> {
       item: {
         id: `d-${dl.id}`,
         ...fmt(d),
+        time: dl.duePrecision === "DATETIME" ? fmt(d).time : undefined,
+        duePrecision: dl.duePrecision,
+        overdue: deadlineOverdue(d, dl.duePrecision, now),
         type: "deadline",
         title: dl.title,
         matter: matter.title,
@@ -421,7 +429,7 @@ export async function getDashboardHeroData(): Promise<HeroData> {
     // v1.x 批次④：逾期未完成期限（行动入口）
     prisma.deadline.count({
       where: {
-        dueAt: { lt: todayStart },
+        ...overdueDeadlineWhere(now),
         completed: false,
         procedure: {
           engagement: "ENGAGED",
@@ -443,6 +451,8 @@ export async function getDashboardHeroData(): Promise<HeroData> {
       internalCode: matter.internalCode,
       procedure: urgentDeadline.procedure.customLabel ?? procedureTypeLabel[urgentDeadline.procedure.type],
       dueAt: dueDate,
+      duePrecision: urgentDeadline.duePrecision,
+      overdue: deadlineOverdue(dueDate, urgentDeadline.duePrecision, now),
       daysLeft: shDaysFromToday(dueDate),
       href: matterHref(matter)
     };

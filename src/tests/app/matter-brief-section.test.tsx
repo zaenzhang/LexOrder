@@ -26,7 +26,7 @@ function brief(id = matterId): MatterBrief {
     matterId: id, serviceScope: "合成合同审查服务", deliverables: "合成审查意见",
     context: { canWrite: false, canReadFinance: false, canConfirm: false, records: [record()], hasMore: false, nextCursor: null },
     nextActions: [{ id: "task-1", title: "合成核对材料", dueAt: when, assigneeName: "合成律师", accepted: false }],
-    deadlines: [{ id: "deadline-1", title: "合成提交期限", dueAt: when, confirmationStatus: "ADJUSTED", assigneeName: null }],
+    deadlines: [{ id: "deadline-1", title: "合成提交期限", dueAt: when, duePrecision: "DATETIME", confirmationStatus: "ADJUSTED", assigneeName: null }],
     clientFollowUps: [{ id: "follow-up-1", clientId: "client-1", clientName: "合成客户", title: "合成联系客户", dueAt: when, assigneeName: "合成律师" }],
     recentClientActivities: [{ id: "activity-1", clientId: "client-1", clientName: "合成客户", channel: "PHONE", occurredAt: when }],
     businessTimeZone: "Asia/Shanghai",

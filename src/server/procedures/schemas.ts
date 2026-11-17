@@ -1,3 +1,4 @@
+import { deadlineDueSchema } from "@/lib/deadline-due";
 import { z } from "zod";
 import { procedureTypeSchema } from "@/server/matters/schemas";
 
@@ -73,11 +74,6 @@ export const deadlineCreateSchema = z.object({
   procedureId: z.string().cuid(),
   title: z.string().min(1, "期限名称必填").max(100),
   category: deadlineCategorySchema.default("CUSTOM"),
-  // 必填日期：date input 清空得到空串，先归一成 undefined，配中文 error 提示补填
-  dueAt: z.preprocess(
-    v => (v === "" ? undefined : v),
-    z.coerce.date({ error: "请选择到期日" })
-  ),
   basis: z.string().max(200).optional().or(z.literal("")),
   remindDays: z.coerce
     .number({ error: "请填写提醒天数" })
@@ -95,7 +91,7 @@ export const deadlineCreateSchema = z.object({
     v => (v === "" || v == null ? undefined : v),
     z.coerce.date().optional()
   )
-});
+}).and(deadlineDueSchema);
 
 export const hearingCreateSchema = z.object({
   procedureId: z.string().cuid(),

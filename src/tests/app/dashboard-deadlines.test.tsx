@@ -29,7 +29,7 @@ const hero: HeroData = {
 };
 const focus: NonNullable<HeroData["focus"]> = {
   title: "合成期限焦点", matter: "合成期限案件", internalCode: "LL-TEST-0001", procedure: "一审",
-  dueAt: new Date("2026-12-06T00:00:00+08:00"), daysLeft: 20, href: "/matters/LL-TEST-0001"
+  dueAt: new Date("2026-12-06T00:00:00+08:00"), duePrecision: "DATE", overdue: false, daysLeft: 20, href: "/matters/LL-TEST-0001"
 };
 const hearing: ScheduleItem = {
   id: "hearing-1", type: "hearing", title: "合成开庭", date: "11月17日", weekday: "周二", time: "09:00",
@@ -75,8 +75,17 @@ describe("首页期限焦点组合", () => {
   });
 
   it.each([[-1, "天 · 已逾期"], [0, "天 · 今天到期"]])("期限剩余 %s 天时显示对应状态", async (daysLeft, label) => {
-    mock.hero.mockResolvedValue({ ...hero, focus: { ...focus, daysLeft } });
+    mock.hero.mockResolvedValue({ ...hero, focus: { ...focus, daysLeft, overdue: Number(daysLeft) < 0 } });
     render(await DashboardPage());
     expect(within(screen.getByRole("link", { name: /今日焦点/ })).getByText(label)).toBeVisible();
   });
+  it("当天已过的准确午夜明确显示逾期而非零天尚未到期", async () => {
+    mock.hero.mockResolvedValue({ ...hero, focus: { ...focus, dueAt: new Date("2026-11-16T00:00:00+08:00"), duePrecision: "DATETIME", daysLeft: 0, overdue: true } });
+    render(await DashboardPage());
+    const card = screen.getByRole("link", { name: /今日焦点/ });
+    expect(within(card).getByText("已逾期")).toBeVisible();
+    expect(card).toHaveTextContent("2026-11-16 00:00");
+    expect(card).not.toHaveTextContent("今天到期");
+  });
+
 });

@@ -1,3 +1,4 @@
+import type { DeadlineDuePrecision } from "@/lib/deadline-due";
 import { z } from "zod";
 import { contextInputSelectionsSchema, type ContextInputSummary } from "./context-inputs";
 
@@ -92,7 +93,7 @@ export type MatterBrief = {
   serviceScope: string | null;
   deliverables: string | null;
   nextActions: { id: string; title: string; dueAt: string | null; assigneeName: string | null; accepted: boolean | null }[];
-  deadlines: { id: string; title: string; dueAt: string; confirmationStatus: string; assigneeName: string | null }[];
+  deadlines: { id: string; title: string; dueAt: string; duePrecision: DeadlineDuePrecision | null; confirmationStatus: string; assigneeName: string | null }[];
   clientFollowUps: { id: string; clientId: string; clientName: string; title: string; dueAt: string; assigneeName: string }[];
   recentClientActivities: { id: string; clientId: string; clientName: string; channel: string; occurredAt: string }[];
   businessTimeZone: "Asia/Shanghai";

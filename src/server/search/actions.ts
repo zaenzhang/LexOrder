@@ -1,4 +1,5 @@
 "use server";
+import type { DeadlineDuePrecision } from "@/lib/deadline-due";
 
 import { hasCustomPermission } from "@/lib/roles/catalog";
 import { prisma } from "@/lib/prisma";
@@ -36,6 +37,7 @@ export interface SearchResultItem {
   matchedBy?: string;
   meta?: string;
   dueAt?: string;
+  duePrecision?: DeadlineDuePrecision | null;
   /** 材料/期限所属案件链接（「跳转案件」） */
   matterLink?: string;
   documentVersion?: number;
@@ -271,7 +273,7 @@ export async function globalSearch(query: string): Promise<GlobalSearchResult> {
           take: limit,
           orderBy: { dueAt: "asc" },
           select: {
-            id: true, title: true, category: true, dueAt: true,
+            id: true, title: true, category: true, dueAt: true, duePrecision: true,
             procedure: { select: { matter: { select: { id: true, internalCode: true, title: true } } } },
           },
         })
@@ -335,7 +337,7 @@ export async function globalSearch(query: string): Promise<GlobalSearchResult> {
         code: matter.internalCode,
         context: matter.title,
         meta: deadlineCategoryLabel[d.category],
-        dueAt: d.dueAt.toISOString(),
+        dueAt: d.dueAt.toISOString(), duePrecision: d.duePrecision,
         matterLink: matterHref(matter),
       };
     }),

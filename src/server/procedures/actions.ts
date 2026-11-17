@@ -456,6 +456,7 @@ export async function addDeadline(input: DeadlineCreateInput) {
       title: data.title,
       category: data.category,
       dueAt: data.dueAt,
+      duePrecision: data.duePrecision,
       basis,
       remindDays: data.remindDays,
       // v1.x P0-8: 带来源规则的期限为"待确认"（律师核对起算事实后确认）；
@@ -478,7 +479,7 @@ export async function addDeadline(input: DeadlineCreateInput) {
       action: "DEADLINE_CREATE",
       targetType: "Deadline",
       targetId: created.id,
-      detail: { matterId: procedure.matterId, procedureId: data.procedureId }
+      detail: { matterId: procedure.matterId, procedureId: data.procedureId, dueAt: data.dueAt.toISOString(), duePrecision: data.duePrecision }
     });
     // v0.43 项4：写入案件动态时间线
     await roleMutation(session.user, "schedule.write", async roleDb => recordTimelineEvent(roleDb, {

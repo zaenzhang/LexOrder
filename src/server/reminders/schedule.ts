@@ -1,3 +1,4 @@
+import { formatDeadlineDue, deadlineOverdue } from "@/lib/deadline-due";
 import { responsibilityReady } from "./responsibility";
 import {scanAdditionalWorkReminders} from "./urgent";
 import { scanTaskWaitingReminders } from "./task-waiting";
@@ -108,18 +109,18 @@ export async function evaluateScheduleReminder(
   const pending = "confirmStatus" in row && row.confirmStatus === "PENDING";
   const when = kind === "Hearing"
     ? `${offset === 0 ? "今天" : offset === -1 ? "明天" : `${-offset} 天后`} ${shTime(date)} 开庭${date < now ? "（时间已过，请核对）" : ""}`
-    : offset > 0 ? `逾期 ${offset} 天` : offset === 0 ? "今天到期" : `还有 ${-offset} 天到期`;
+    : offset > 0 ? `逾期 ${offset} 天` : "duePrecision" in row && deadlineOverdue(date, row.duePrecision, now) ? "已逾期" : offset === 0 ? "今天到期" : `还有 ${-offset} 天到期`;
   const title = `${ownership.length && !ownership[0].acceptedAt ? "待承接 · " : ""}${pending ? "待核期限 · " : ""}${when}：${row.title}`;
   const place = "room" in row ? [row.room, row.judge ? `审判员 ${row.judge}` : null].filter(Boolean).join(" · ") : "";
   // 去重键不含 row.updatedAt：同一天内改标题/备注（未改期）不应生成新 id
   // 绕过当日去重重发提醒；改期则经 date 变化自然成为新提醒（2026-09-19 审计）。
-  const key = JSON.stringify([kind, id, date.toISOString(), pending, user.id, shDayKey(now)]);
+  const key = JSON.stringify([kind, id, date.toISOString(), ...("duePrecision" in row ? [row.duePrecision] : []), pending, user.id, shDayKey(now)]);
   const notificationId = `reminder_${createHash("sha256").update(key).digest("hex")}`;
   const refType = `DueReminder:${offset >= 0 ? "+" : ""}${offset}:${kind}`;
   return {
     outcome: "DUE",
     kind, id, offset, userId: user.id, title,
-    content: `案件 ${row.procedure.matter.internalCode}·${row.procedure.matter.title}${place ? ` · ${place}` : ""}${pending ? "；规则计算结果尚待人工确认，请核对起算事实。" : ""}`,
+    content: `${"duePrecision" in row ? `${formatDeadlineDue(date, row.duePrecision)} · ` : ""}案件 ${row.procedure.matter.internalCode}·${row.procedure.matter.title}${place ? ` · ${place}` : ""}${pending ? "；规则计算结果尚待人工确认，请核对起算事实。" : ""}`,
     href: matterHref(row.procedure.matter),
     notificationId, refType,
     notificationType: kind === "Deadline" ? "DEADLINE_REMINDER" : "HEARING_REMINDER",

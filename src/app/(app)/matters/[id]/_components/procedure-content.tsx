@@ -1,5 +1,8 @@
 "use client";
 
+import { DeadlineDueFields } from "@/components/matters/deadline-due-fields";
+import { deadlineDueDraft, deadlineDueFromDraft, formatDeadlineDue, deadlineOverdue, deadlineRelative, type DeadlineDuePrecision } from "@/lib/deadline-due";
+
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -78,9 +81,6 @@ type ProcedureWithChildren = MatterProcedure & {
 type HearingRowItem = Hearing & { procLabel: string };
 type DeadlineRowItem = Deadline & { procLabel: string };
 
-function formatIsoDate(d: Date | string) {
-  return shDayKey(d);
-}
 type MemoRowItem = ProcedureMemo & { procLabel: string };
 export type ImportantCategory = "hearing" | "deadline" | "express" | "memo";
 type ImportantFilter = "all" | ImportantCategory;
@@ -410,21 +410,18 @@ function ImportantItemsCard({
 }
 
 /** v1.x P0-8: 人工调整到期日（写已调整 + 留痕；规则重算不再覆盖）——日期控件 + 必填原因 */
-export function AdjustDeadlineDialog({ deadline, onClose }: { deadline: { id: string; title: string; dueAt: Date; updatedAt: Date }; onClose: () => void }) {
-  const [date, setDate] = useState(formatIsoDate(deadline.dueAt));
+export function AdjustDeadlineDialog({ deadline, onClose }: { deadline: { id: string; title: string; dueAt: Date; duePrecision: DeadlineDuePrecision | null; updatedAt: Date }; onClose: () => void }) {
+  const [dueDraft, setDueDraft] = useState(() => deadlineDueDraft(deadline));
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   function submit() {
-    // 落库瞬间统一上海午夜（P1-6）：不再用浏览器本地午夜，UTC 容器/异时区浏览器下口径一致
-    const dueAt = new Date(`${date}T00:00:00+08:00`);
-    if (!date || Number.isNaN(dueAt.getTime())) return setError("请选择调整后的到期日");
     if (!reason.trim()) return setError("请填写调整原因（将记入审计）");
     setError(null);
     startTransition(async () => {
       try {
-        await adjustDeadline({ id: deadline.id, expectedUpdatedAt: deadline.updatedAt, dueAt, reason: reason.trim() });
+        await adjustDeadline({ id: deadline.id, expectedUpdatedAt: deadline.updatedAt, ...deadlineDueFromDraft(dueDraft, deadline), reason: reason.trim() });
         toast.success("期限已调整");
         onClose();
       } catch (err) {
@@ -438,16 +435,13 @@ export function AdjustDeadlineDialog({ deadline, onClose }: { deadline: { id: st
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>调整到期日</DialogTitle>
-          <DialogDescription>「{deadline.title}」原到期日 {formatIsoDate(deadline.dueAt)}。人工调整后标记为「已调整」，规则重算不再覆盖。</DialogDescription>
+          <DialogDescription>「{deadline.title}」原期限 {formatDeadlineDue(deadline.dueAt, deadline.duePrecision)}。人工调整后标记为「已调整」，规则重算不再覆盖。</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label>调整后的到期日 *</Label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="font-mono" />
-          </div>
+          <DeadlineDueFields value={dueDraft} onChange={setDueDraft} original={deadline} disabled={pending} />
           <div className="space-y-1.5">
             <Label>调整原因 *</Label>
-            <Textarea rows={3} value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} placeholder="如：法院通知书载明举证期限延长至…" />
+            <Textarea rows={3} disabled={pending} value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} placeholder="如：法院通知书载明举证期限延长至…" />
           </div>
           {error ? <div className="text-[12px] text-[var(--red)]">{error}</div> : null}
         </div>
@@ -609,7 +603,7 @@ function DeadlineRow({
   canManage: boolean;
 }) {
   const days = daysUntil(d.dueAt);
-  const isOverdue = !d.completed && days < 0;
+  const isOverdue = !d.completed && deadlineOverdue(d.dueAt, d.duePrecision);
   const isWarn = !d.completed && days <= d.remindDays && days >= 0;
   return (
     <li
@@ -671,7 +665,7 @@ function DeadlineRow({
           {d.completed ? (
             "已完成"
           ) : isOverdue ? (
-            <span className="text-destructive">逾期 {-days}d</span>
+            <span className="text-destructive">{deadlineRelative(d.dueAt, d.duePrecision)}</span>
           ) : days === 0 ? (
             <span className="text-[var(--amber)]">今天</span>
           ) : isWarn ? (
@@ -681,7 +675,7 @@ function DeadlineRow({
           )}
         </div>
         <div className="font-mono text-[10px] text-muted-foreground tabular">
-          {formatDate(new Date(d.dueAt))}
+          {formatDeadlineDue(d.dueAt, d.duePrecision)}
         </div>
       </div>
 
@@ -898,10 +892,6 @@ const CN_NUM: Record<number, string> = {
 };
 
 /** 输入框值是上海墙钟；默认「现在的上海日期/时刻」，解析统一按 +08:00 固定偏移 */
-function toDateInput(date = new Date()) {
-  return shDayKey(date);
-}
-
 function toDateTimeInput(date = new Date()) {
   return `${shDayKey(date)}T${shTime(date)}`;
 }
@@ -949,7 +939,7 @@ export function ImportantItemDialog({
   const [deadlineTitle, setDeadlineTitle] = useState("");
   const [deadlineCategory, setDeadlineCategory] =
     useState<DeadlineCreateInput["category"]>("CUSTOM");
-  const [deadlineDueAt, setDeadlineDueAt] = useState(toDateInput());
+  const [deadlineDue, setDeadlineDue] = useState(() => deadlineDueDraft());
   const [deadlineBasis, setDeadlineBasis] = useState("");
   const [deadlineRemindDays, setDeadlineRemindDays] = useState(3);
 
@@ -981,7 +971,7 @@ export function ImportantItemDialog({
     setDeadlineProcedureId(procId);
     setDeadlineTitle("");
     setDeadlineCategory("CUSTOM");
-    setDeadlineDueAt(toDateInput());
+    setDeadlineDue(deadlineDueDraft());
     setDeadlineBasis("");
     setDeadlineRemindDays(3);
     setTrackingNo("");
@@ -1105,18 +1095,13 @@ export function ImportantItemDialog({
       toast.error("请填写期限名称");
       return;
     }
-    const dueAt = new Date(`${deadlineDueAt}T00:00+08:00`);
-    if (Number.isNaN(dueAt.getTime())) {
-      toast.error("请填写有效到期日");
-      return;
-    }
     startTransition(async () => {
       try {
         await addDeadline({
           procedureId: deadlineProcedureId,
           title: deadlineTitle.trim(),
           category: deadlineCategory,
-          dueAt,
+          ...deadlineDueFromDraft(deadlineDue),
           basis: deadlineBasis.trim(),
           remindDays: deadlineRemindDays
         });
@@ -1391,14 +1376,7 @@ export function ImportantItemDialog({
                       </SelectContent>
                     </Select>
                   </ImportantField>
-                  <ImportantField label="到期日" required>
-                    <Input
-                      type="date"
-                      value={deadlineDueAt}
-                      onChange={(e) => setDeadlineDueAt(e.target.value)}
-                      disabled={procedureMissing}
-                    />
-                  </ImportantField>
+                  <DeadlineDueFields value={deadlineDue} onChange={setDeadlineDue} disabled={procedureMissing || isPending} />
                 </div>
                 <ImportantField label="计算依据">
                   <Input

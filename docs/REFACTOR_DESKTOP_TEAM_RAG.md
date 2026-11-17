@@ -624,24 +624,24 @@ FactsWorkspace删除第二套逐项列表，EvidenceTimeline保留日期和时�
 
 ### 6.11 模板作用域与期限精度合同（2026-11-17）
 
-本节对应计划§7.14.7；S06已实现并完成本阶段开发验证（计划§8.36），F01仍为审定后待接续合同。两切片按唯一写权顺序交接，原授权、事务、来源、审批、归档和审计守卫保留。
+本节对应计划§7.14.7；S06/F01均已实现并取得各自开发证据（计划§8.36/§8.37），浏览器与专业验收仍独立保留。两切片按唯一写权顺序交接，原授权、事务、来源、审批、归档和审计守卫保留。
 
 **S06。** 当前DOCX编译结构是准备及普通生成的唯一字段合同，DocumentTemplate.variables仅为索引元数据，移除extraVariables入口，不回填旧数组。复用已安装docxtemplater 3.71.1 InspectModule及实际ScopeManager语义：null/undefined才向父scope读取，空字符串不借父同名值，空数组不执行正向块、可启用反向块。检查活跃标量，循环集合不是必填文本；合法数组下标只指向当前实际成员，禁止替换集合、增删成员和原型路径。InspectModule需要的既有lodash 4.18.1声明为直接运行依赖，不新增解析器、表达式或访谈引擎。
 
 prepare从同次templateMatterInputs生成真实主体ID/顺序和原值期望，另给应用本稿overrides后的显示/激活字段；render核当前原值与身份后才保存本次允许的活跃补填。字段观察不在求值中修改context：先构成完整候选输入，按实际消费范围剔除隐藏补填，必要时再从原值重建并观察；最终活跃fields、required与DOCX使用同一有效context；expectedValues仍按这些活跃路径从base原值取得，若剩余资格继续变化则明确拒绝相互影响的条件。主体快照只取服务端当前实际身份，不把请求中的额外键当历史事实。原告来自CLIENT_PARTY，空时才用所选client，不能以choices.clients/姓名/下标单独认人。补填只存本稿context及既有快照；临时隐藏的草稿不静默用于输出。明确同对象重核保留overrides和G15 inputs，普通击键不读DOCX；换模板/主体沿已有放弃确认，失败保稿。模板版本、请求身份、成功重放前当前授权、来源与G15事务、DRAFT和auditTx保持。renderDocxBuffer只渲染，专用归档目录实际注入documents及可空pages/remark不受普通生成门槛影响。
 
-**F01。** 仅Deadline新增DeadlineDuePrecision(DATE/DATETIME)可空duePrecision，无默认/回填。DATE由真实日期键经shDayBoundary解释，DATETIME接受明确带时区瞬间；服务端统一校验，不按宿主时区解析无时区字符串。历史null表示精度未记录，dueAt原值不变；新建/显式调整要求声明，确认、办结和交接不补值。未改日期/时间且精度不变时保留原ISO秒毫秒；未知编辑不能因默认控件而成为DATE。
+**F01。** 仅Deadline新增DeadlineDuePrecision(DATE/DATETIME)可空duePrecision，无默认/回填。DATE由真实日期键经shDayBoundary解释，DATETIME接受明确带时区瞬间；服务端统一校验，不按宿主时区解析无时区字符串。历史null表示精度未记录，dueAt原值不变；新建/显式调整要求声明，确认、办结和交接不补值。规则建议初始化DATE且沿原PENDING策略，律师随后明确改DATETIME时保留该人工选择。未改日期/时间且精度不变时保留原ISO秒毫秒；未知编辑不能因默认控件而成为DATE。
 
-新业务迁移仅新增枚举/列、DATE一致性约束并扩展Deadline_date_change及实际比较，使同dueAt下精度变化也递增责任revision、清承接、退役旧提醒及留真实审计。共用函数只在Deadline分支访问新列，Task/Hearing原规则保留；约束按既有UTC存储和明确上海日界，不依赖session时区，旧18迁移不改。readWorkRows直接join源表，只加投影，不建镜像字段；新交接快照/指纹含精度，旧冻结内容不查当前补写。
+新业务迁移仅新增枚举/列、DATE一致性约束并扩展Deadline_date_change及实际比较，使同dueAt下精度变化也递增责任revision、清承接、退役旧提醒及留真实审计。共用函数只在Deadline分支访问新列，Task/Hearing原规则保留；约束按既有UTC存储和明确上海日界，不依赖session时区，旧18迁移不改。readWorkRows直接join源表，只加投影，不建镜像字段；新交接快照/指纹含精度，旧冻结内容不查当前补写；面板读取冻结precision，旧字段缺失按null如实展示，不套普通formatDateTime。
 
 | F01实际消费者 | 最小接线 |
 | --- | --- |
 | 新建/修改 | procedures schema/addDeadline、AddDeadlineDialog、仍实际调用的ImportantItemDialog、AdjustDeadlineDialog/adjustDeadline、实际Deadline责任RESCHEDULE、旧短信生成schema/action/dialog；保存日期及精度，调整审计记前后值，确认审计带当前nullable精度 |
 | 短信建议 | 现CREATE已有必填timeText，固化DATETIME；目标读取/展示及LINK/重复判断辨精度，DATE/null不冒充相同准确时刻。旧成功回执与目标不回填，不扩日期型候选流程 |
 | 站内读取 | 程序DeadlineRow/WorkflowDeadline/ActionItem/调整props、signalStrip、MatterBrief、matter-detail-tabs页头逾期数、MatterStickyBar/nextUncompletedDeadline、WorkRow/交接、实际首页hero/近期日程、搜索与schedule视图；DATE/null按上海日界判断日级逾期，DATETIME按真实瞬间。无调用getDashboardKpis排除 |
-| 提醒及日历 | 既有日档位、台账与同日SENT去重保持，精度进当前通知身份/文案；ScheduleItem混有其他实体，只有真实Deadline启用新语义。ICS DATE按VALUE=DATE，DATETIME截止点明确省略DTEND，不套一小时默认；未知给日标记及说明，UID/庭期/其他实体保留 |
+| 提醒及日历 | 既有日档位、台账与同日SENT去重保持，精度进当前通知身份/文案；ScheduleItem混有其他实体，只有真实Deadline启用新语义。ICS DATE按VALUE=DATE，DATETIME截止点明确省略DTEND，不套一小时默认；未知给日标记及说明，UID/庭期/其他实体保留；准确期限不继承庭期专用2小时提醒，Deadline沿原24小时提醒 |
 
-验证只覆盖这些实际链，F01须隔离PG证明新迁移/触发器及权限/并发、提醒和快照反例；不重跑全仓、不启动升级恢复或延期重算。浏览器/专业验收与代码、API/组件、PG证据分别记账。
+验证覆盖上述实际链：本次第19业务迁移已在隔离PG应用且schema一致，精度-only、当前权限/旧版本、真实责任类型、提醒与固定快照反例见计划§8.37；没有重跑全仓或启动升级恢复、延期重算。浏览器/专业验收与代码、API/组件、PG证据分别记账。
 
 ## 7. 参考项目如何进入 LexOrder
 

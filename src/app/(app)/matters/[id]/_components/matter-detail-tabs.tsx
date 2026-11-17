@@ -1,4 +1,5 @@
 "use client";
+import { deadlineOverdue, deadlineRelative, formatDeadlineDue } from "@/lib/deadline-due";
 import Link from "next/link";
 import { hasCustomPermission, type RoleGrant } from "@/lib/roles/catalog";
 
@@ -455,7 +456,7 @@ export function MatterDetailTabs({
   // 案卷头异常标签：当前程序逾期事项、保全临期
   const overdueCount = currentProcedure
     ? currentProcedure.stages.flatMap((s) => (s.status === "HIDDEN" ? [] : s.tasks)).filter((t) => !t.completed && t.dueAt && shDaysFromToday(t.dueAt) < 0).length +
-      currentProcedure.deadlines.filter((d) => !d.completed && shDaysFromToday(d.dueAt) < 0).length
+      currentProcedure.deadlines.filter((d) => !d.completed && deadlineOverdue(d.dueAt, d.duePrecision)).length
     : 0;
   const expiringProps = preservationCases
     .flatMap((c) => c.targets.flatMap((t) => t.properties))
@@ -983,7 +984,7 @@ function nextUncompletedDeadline(procedures: ProcedureItem[]) {
     .flatMap((procedure) => procedure.deadlines)
     .filter((deadline) => !deadline.completed)
     .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
-  return all.find((deadline) => daysFromToday(deadline.dueAt) >= 0) ?? all[0] ?? null;
+  return all.find((deadline) => !deadlineOverdue(deadline.dueAt, deadline.duePrecision)) ?? all[0] ?? null;
 }
 
 function nextUpcomingHearing(procedures: ProcedureItem[]) {
@@ -1037,7 +1038,7 @@ function MatterStickyBar({
   const deadlineTone =
     days === null ? "" : days < 0 || days <= 3 ? "text-[var(--red)]" : days <= 7 ? "text-[var(--amber)]" : "text-[var(--t-muted)]";
   const deadlineText =
-    days === null ? "" : days < 0 ? `逾期 ${-days} 天` : days === 0 ? "今天到期" : `剩 ${days} 天`;
+    deadline ? deadlineRelative(deadline.dueAt, deadline.duePrecision) : "";
 
   return (
     <div ref={wrapRef} className="h-0 w-full" aria-hidden={!pinned}>
@@ -1059,7 +1060,7 @@ function MatterStickyBar({
                   <Clock3 className="h-3 w-3" />
                   <span className="max-w-[160px] truncate">{deadline.title}</span>
                   <span className="font-mono tabular">
-                    {formatMonthDay(deadline.dueAt)} · {deadlineText}
+                    {formatDeadlineDue(deadline.dueAt, deadline.duePrecision)} · {deadlineText}
                   </span>
                 </span>
               ) : (

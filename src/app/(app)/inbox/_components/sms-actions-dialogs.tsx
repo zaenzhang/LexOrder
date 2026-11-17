@@ -1,5 +1,8 @@
 "use client";
 
+import { DeadlineDueFields } from "@/components/matters/deadline-due-fields";
+import { deadlineDueDraft, deadlineDueFromDraft } from "@/lib/deadline-due";
+
 import { useState, useTransition } from "react";
 import { Loader2, Gavel, Clock, FileDigit } from "lucide-react";
 import { toast } from "sonner";
@@ -258,7 +261,7 @@ export function GenerateDeadlineDialog({
   const [procedureId, setProcedureId] = useState(preferredProcedureId(matter.procedures, parsed));
   const [title, setTitle] = useState(defaults.title);
   const [category, setCategory] = useState<DeadlineCategory>(defaults.category);
-  const [dateStr, setDateStr] = useState(initDue ? formatLocalDateOnly(initDue) : "");
+  const [dueDraft, setDueDraft] = useState(() => ({ ...deadlineDueDraft(), date: initDue ? formatLocalDateOnly(initDue) : "" }));
   const [basis, setBasis] = useState(parsed.summary.slice(0, 100));
   const [remindDays, setRemindDays] = useState(3);
   const [pending, startTransition] = useTransition();
@@ -268,11 +271,6 @@ export function GenerateDeadlineDialog({
       toast.error("请选择程序");
       return;
     }
-    const d = dateStr ? parseLocalInput(dateStr) : null;
-    if (!d) {
-      toast.error("请填写有效的截止日期");
-      return;
-    }
     startTransition(async () => {
       try {
         await generateDeadlineFromSms({
@@ -280,7 +278,7 @@ export function GenerateDeadlineDialog({
           procedureId,
           title: title.trim() || "期限",
           category,
-          dueAt: d,
+          ...deadlineDueFromDraft(dueDraft),
           basis: basis.trim(),
           remindDays
         });
@@ -338,15 +336,7 @@ export function GenerateDeadlineDialog({
             />
           </div>
 
-          <div>
-            <Label className="text-[11px]">截止日期 *</Label>
-            <Input
-              type="date"
-              value={dateStr}
-              onChange={(e) => setDateStr(e.target.value)}
-              className="mt-1"
-            />
-          </div>
+          <DeadlineDueFields value={dueDraft} onChange={setDueDraft} disabled={pending} />
 
           <div>
             <Label className="text-[11px]">提前提醒（天）</Label>

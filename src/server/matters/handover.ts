@@ -15,7 +15,7 @@ export async function handoverSnapshot(db:Prisma.TransactionClient,matterId:stri
  const invoices=await db.invoiceRequest.findMany({where:{matterId,status:{in:['PENDING','APPROVED']}},orderBy:{id:'asc'},select:{id:true,title:true,status:true}});
  const seals=await db.sealRequest.findMany({where:{matterId,status:{in:['PENDING','APPROVED']}},orderBy:{id:'asc'},select:{id:true,documentTitle:true,status:true}});
  const preservations=await db.preservationCase.findMany({where:{matterId,status:{in:['ACTIVE','RENEWED']}},orderBy:{id:'asc'},select:{id:true,ownerId:true,targets:{select:{properties:{select:{id:true,status:true,expiryDate:true}}}}}});
- const workEssential=work.map(w=>({id:w.id,kind:w.kind,title:w.title,dueAt:w.dueAt?.toISOString()??null,assigneeId:w.assigneeId,name:w.name,proposedAssigneeId:w.proposedAssigneeId,state:w.state}));
+ const workEssential=work.map(w=>({id:w.id,kind:w.kind,title:w.title,dueAt:w.dueAt?.toISOString()??null,...(w.kind==='Deadline'?{duePrecision:w.duePrecision}:{}),assigneeId:w.assigneeId,name:w.name,proposedAssigneeId:w.proposedAssigneeId,state:w.state}));
  const snapshot={matter,procedures,work:workEssential,pendingReceipts,invoices,seals,preservations};return {snapshot,fingerprint:fingerprint(snapshot)};
 }
 async function actor(db:Prisma.TransactionClient,userId:string){await db.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(72606101)`;const u=await db.user.findUnique({where:{id:userId},select:{active:true,role:true}});if(!u?.active)throw new ActionError('账号不可用');const r=await resolveRoleUser(userId,u.role,db);if(!r.enabled)throw new ActionError('岗位已停用');return r;}

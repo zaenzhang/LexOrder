@@ -1,4 +1,5 @@
 "use client";
+import { formatDeadlineDue } from "@/lib/deadline-due";
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
@@ -171,7 +172,7 @@ function EventChoiceEditor({ sms, row, disabled, onChange }: { sms: SmsRow; row:
     {mode === "LINK" ? <div className="space-y-2">
       <div className="flex gap-2"><Input aria-label="查找同日已有事项" placeholder="在来源日期内按标题查找" value={query} disabled={disabled} onChange={event => setQuery(event.target.value)} /><Button variant="outline" size="sm" disabled={disabled || loading} onClick={() => { setSearch(query); setReload(value => value + 1); }}>查找</Button></div>
       {loading ? <p className="text-sm text-muted-foreground">正在读取实际事项…</p> : error ? <p role="alert" className="text-sm text-destructive">{error}</p> : targets ? <>
-        {targets.targets.length ? <Select value={targetId} onValueChange={setTargetId} disabled={disabled}><SelectTrigger aria-label="已有事项"><SelectValue placeholder="选择并核对原事项" /></SelectTrigger><SelectContent>{targets.targets.map(target => <SelectItem key={target.id} value={target.id}>{target.title} · {formatDateTime(target.at)}</SelectItem>)}</SelectContent></Select> : <p className="text-sm text-muted-foreground">所选程序在来源日期没有符合条件的事项；可核对程序、缩小查询或先手工登记。</p>}
+        {targets.targets.length ? <Select value={targetId} onValueChange={setTargetId} disabled={disabled}><SelectTrigger aria-label="已有事项"><SelectValue placeholder="选择并核对原事项" /></SelectTrigger><SelectContent>{targets.targets.map(target => <SelectItem key={target.id} value={target.id}>{target.title} · {row.kind === "DEADLINE" ? formatDeadlineDue(target.at, target.duePrecision) : formatDateTime(target.at)}</SelectItem>)}</SelectContent></Select> : <p className="text-sm text-muted-foreground">所选程序在来源日期没有符合条件的事项；可核对程序、缩小查询或先手工登记。</p>}
         {targets.truncated ? <p className="text-xs text-muted-foreground">显示前100项，请按标题继续查找。</p> : null}
       </> : null}
     </div> : null}

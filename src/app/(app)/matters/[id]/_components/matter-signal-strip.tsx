@@ -1,3 +1,4 @@
+import { deadlineOverdue, formatDeadlineDue, type DeadlineDuePrecision } from "@/lib/deadline-due";
 /**
  * 墨案 04 ② 信号条：固定四卡——最近期限 / 下次开庭 / 收费进度 / 本环节任务。
  * 无数据时保留卡位并给出空态说明，避免版面随数据跳动。
@@ -9,7 +10,7 @@ import { RiskLadder } from "@/components/patterns/moan";
 import { cn } from "@/lib/utils";
 
 type SignalProcedure = {
-  deadlines: { id: string; title: string; category: keyof typeof deadlineCategoryLabel; dueAt: Date; completed: boolean; basis: string | null; confirmStatus?: string; sourceRuleId?: string | null }[];
+  deadlines: { id: string; title: string; category: keyof typeof deadlineCategoryLabel; dueAt: Date; duePrecision: DeadlineDuePrecision | null; completed: boolean; basis: string | null; confirmStatus?: string; sourceRuleId?: string | null }[];
   hearings: { id: string; title: string; startsAt: Date; room: string | null }[];
   stages: { status: string; tasks: { title: string; completed: boolean; dueAt: Date | null }[] }[];
 };
@@ -50,6 +51,7 @@ export function MatterSignalStrip({
     .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
   const nearest = deadlines[0] ?? null;
   const nDays = nearest ? dayDiff(nearest.dueAt) : null;
+  const isOverdue = nearest ? deadlineOverdue(nearest.dueAt, nearest.duePrecision) : false;
   const risk = deadlineRisk(nDays);
   const pendingConfirm = allProcedures.flatMap((p) => p.deadlines).filter((d) => d.confirmStatus === "PENDING").length;
 
@@ -81,7 +83,7 @@ export function MatterSignalStrip({
                 {nDays < 0 ? Math.abs(nDays) : nDays}
               </span>
               <span className="signal-unit">
-                {nDays < 0 ? "天 · 已逾期" : "天"} · {shParts(nearest.dueAt).m}月{shParts(nearest.dueAt).d}日 {hhmm(new Date(nearest.dueAt))}
+                {isOverdue && nDays === 0 ? "已逾期" : isOverdue ? "天 · 已逾期" : "天"} · {formatDeadlineDue(nearest.dueAt, nearest.duePrecision)}
               </span>
             </div>
             <div className="signal-sub truncate">

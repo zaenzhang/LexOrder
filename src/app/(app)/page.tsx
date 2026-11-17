@@ -1,3 +1,4 @@
+import { formatDeadlineDue } from "@/lib/deadline-due";
 /**
  * 工作台（墨案 02 效果图）：今日行动与风险（问候 + 今日焦点）→ 行动入口四卡 →
  * 近期日程与期限 + 待我处理 → 趋势与分布（实收应收 / 案件类型 / 客户来源）。
@@ -9,8 +10,6 @@ import { canEnterAdminWorkspace } from "@/lib/auth/system-role";
 import { hasCustomPermission } from "@/lib/roles/catalog";
 import { isEmailConfigured } from "@/lib/notifications/email";
 import { lunarDateLabel } from "@/lib/ui/lunar";
-import { shTime } from "@/lib/ui/sh-time";
-import { formatDate } from "@/lib/utils";
 import { ConflictSearchButton } from "@/components/dashboard/conflict-search-button";
 import { RevenueChart } from "@/components/dashboard/revenue-chart";
 import { CategoryChart } from "@/components/dashboard/category-chart";
@@ -106,16 +105,16 @@ export default async function DashboardPage() {
         <Link href={focusHref} className="hero-focus no-underline">
           <div className="focus-label">
             <span className={`dot ${focus && focus.daysLeft <= 3 ? "dot-red dot-pulse-red" : "dot-amber"}`} />
-            今日焦点 · {focus && focus.daysLeft < 0 ? "逾期期限" : "最近期限"}
+            今日焦点 · {focus && focus.overdue ? "逾期期限" : "最近期限"}
           </div>
           {focus ? (
             <>
               <div className="focus-countdown">
-                <span className="focus-days" style={focus.daysLeft > 3 ? { color: "var(--amber)" } : undefined}>{Math.abs(focus.daysLeft)}</span>
-                <span className="focus-unit">{focus.daysLeft < 0 ? "天 · 已逾期" : focus.daysLeft === 0 ? "天 · 今天到期" : "天"}</span>
+                <span className="focus-days" style={focus.daysLeft > 3 ? { color: "var(--amber)" } : undefined}>{focus.overdue && focus.daysLeft === 0 ? "已逾期" : Math.abs(focus.daysLeft)}</span>
+                <span className="focus-unit">{focus.overdue && focus.daysLeft === 0 ? "" : focus.overdue ? "天 · 已逾期" : focus.daysLeft === 0 ? "天 · 今天到期" : "天"}</span>
               </div>
               <div className="focus-tag">
-                {focus.daysLeft < 0 ? "已过" : "距"} <b style={{ color: "var(--t-primary)" }}>{focus.title}</b> · {formatDate(focus.dueAt, "month-day")} {shTime(focus.dueAt)}
+                {focus.overdue ? "已过" : "距"} <b style={{ color: "var(--t-primary)" }}>{focus.title}</b> · {formatDeadlineDue(focus.dueAt, focus.duePrecision)}
               </div>
               <div className="focus-matter truncate">{focus.matter}</div>
               <div className="focus-code">{[focus.internalCode, focus.procedure].filter(Boolean).join(" · ")}</div>
@@ -201,13 +200,13 @@ export default async function DashboardPage() {
                         : { background: "var(--blue-bg)", color: "var(--blue)" };
                       const body = (
                         <>
-                          <span className="sched-time">{it.time ?? "全天"}</span>
+                          <span className="sched-time">{it.time ?? (it.type === "deadline" && it.duePrecision == null ? "精度未记录" : "全天")}</span>
                           <span className="sched-ic" style={icStyle}>{isDeadline ? <Clock3 strokeWidth={2} /> : <Gavel strokeWidth={2} />}</span>
                           <span style={{ flex: 1, minWidth: 0 }}>
                             <span className="sched-title block truncate">{isDeadline || /^(开庭|庭审|询问)/.test(it.title) ? it.title : `开庭 · ${it.title}`}</span>
                             <span className="sched-meta block truncate">{[it.matter, it.procedure].filter(Boolean).join(" · ")}</span>
                           </span>
-                          <span className={`cd cd-${tone}`}>{d < 0 ? `逾期 ${-d} 天` : d === 0 ? "今天" : d === 1 ? "明天" : `${d} 天`}</span>
+                          <span className={`cd cd-${tone}`}>{it.overdue && d === 0 ? "已逾期" : d < 0 ? `逾期 ${-d} 天` : d === 0 ? "今天" : d === 1 ? "明天" : `${d} 天`}</span>
                         </>
                       );
                       return it.matterId ? (

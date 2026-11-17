@@ -204,7 +204,7 @@ describe("任务弹窗的键盘返回", () => {
     const value = task();
     const data: NonNullable<Parameters<typeof WorkResponsibilityPanel>[0]["data"]> = {
       currentUserId: userId, emergency: false, canWrite: true, canTransfer: false, people: detail().people,
-      items: [{ ...value.responsibility, kind: "Task", targetId: taskId, matterId, intakeId: null, title: value.title, dueAt: value.dueAt, taskHref: null }],
+      items: [{ ...value.responsibility, kind: "Task", duePrecision: null, targetId: taskId, matterId, intakeId: null, title: value.title, dueAt: value.dueAt, taskHref: null }],
       matters: [], intakes: [], handovers: [], intakeHandovers: []
     };
     const view = render(<WorkResponsibilityPanel data={data} matterId={matterId} />);

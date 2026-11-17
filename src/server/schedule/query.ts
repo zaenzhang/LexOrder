@@ -1,3 +1,4 @@
+import type { DeadlineDuePrecision } from "@/lib/deadline-due";
 import {Prisma} from "@prisma/client";
 import {scopeFor} from "@/lib/roles/catalog";
 import {responsibilityReady,closedHearingIds} from "@/server/reminders/responsibility";
@@ -17,6 +18,9 @@ export type ScheduleItem = {
   type: "hearing" | "deadline" | "task";
   title: string;
   occurredAt: Date;
+  /** Present only for an actual Deadline, not preservation or intake urgent items. */
+  deadlineId?: string;
+  duePrecision?: DeadlineDuePrecision | null;
   matter: { id: string; internalCode: string; title: string };
   clientName: string | null;
   href?:string;
@@ -216,6 +220,8 @@ export async function queryScheduleItems(
       type: "deadline",
       title: d.title,
       occurredAt: d.dueAt,
+      deadlineId: d.id,
+      duePrecision: d.duePrecision,
       matter: matterBrief(matter),
       clientName: clientNameOf(matter),
       procedureLabel: d.procedure.customLabel ?? d.procedure.type,

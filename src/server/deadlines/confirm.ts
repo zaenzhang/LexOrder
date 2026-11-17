@@ -9,13 +9,13 @@ import { auditTx } from "@/server/audit";
 import { lockWritableMatters } from "@/server/matters/write-access";
 import { refreshScheduleReminderAfterSave, retireScheduleReminders } from "@/server/reminders/schedule";
 import { revalidateMatter } from "@/server/matters/route";
+import { deadlineDueSchema } from "@/lib/deadline-due";
 import { ActionError } from "@/lib/action-error";
 
 const confirmSchema = z.object({ id: z.string().cuid(), expectedUpdatedAt: z.coerce.date() });
 const adjustSchema = confirmSchema.extend({
-  dueAt: z.coerce.date(),
   reason: z.string().trim().min(1, "请填写调整原因").max(200)
-});
+}).and(deadlineDueSchema);
 
 async function deadlineMatterId(id: string) {
   const reference = await prisma.deadline.findUnique({ where: { id }, select: { procedure: { select: { matterId: true } } } });
@@ -52,7 +52,7 @@ export async function confirmDeadline(input: z.infer<typeof confirmSchema>) {
     if (changed.count !== 1) throw new ActionError("期限已被其他人处理，请刷新后重试");
     await retireScheduleReminders(tx, "Deadline", data.id);
     await auditTx(tx, { userId: session.user.id, action: "DEADLINE_CONFIRM", targetType: "Deadline", targetId: data.id,
-      detail: { sourceRuleId: deadline.sourceRuleId, dueAt: deadline.dueAt.toISOString() } });
+      detail: { sourceRuleId: deadline.sourceRuleId, dueAt: deadline.dueAt.toISOString(), duePrecision: deadline.duePrecision } });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 20000 });
   await refreshScheduleReminderAfterSave("Deadline", data.id);
   await revalidateMatter(matterId);
@@ -60,7 +60,7 @@ export async function confirmDeadline(input: z.infer<typeof confirmSchema>) {
 }
 
 /** Explicit adjustment preserves the actual prior date and the user's reason. */
-export async function adjustDeadline(input: z.infer<typeof adjustSchema>) {
+export async function adjustDeadline(input: z.input<typeof adjustSchema>) {
   const session = await requireSession("schedule.write");
   const data = adjustSchema.parse(input);
   const matterId = await deadlineMatterId(data.id);
@@ -68,12 +68,12 @@ export async function adjustDeadline(input: z.infer<typeof adjustSchema>) {
     const deadline = await lockedDeadline(tx, session.user, matterId, data);
     const changed = await tx.deadline.updateMany({
       where: { id: data.id, updatedAt: data.expectedUpdatedAt },
-      data: { dueAt: data.dueAt, confirmStatus: "ADJUSTED", adjustedById: session.user.id, adjustedAt: new Date() }
+      data: { dueAt: data.dueAt, duePrecision: data.duePrecision, confirmStatus: "ADJUSTED", adjustedById: session.user.id, adjustedAt: new Date() }
     });
     if (changed.count !== 1) throw new ActionError("期限已被其他人修改，请刷新后重试");
     await retireScheduleReminders(tx, "Deadline", data.id);
     await auditTx(tx, { userId: session.user.id, action: "DEADLINE_ADJUST", targetType: "Deadline", targetId: data.id,
-      detail: { previousDueAt: deadline.dueAt.toISOString(), newDueAt: data.dueAt.toISOString(), reason: data.reason, sourceRuleId: deadline.sourceRuleId } });
+      detail: { previousDueAt: deadline.dueAt.toISOString(), newDueAt: data.dueAt.toISOString(), previousDuePrecision: deadline.duePrecision, newDuePrecision: data.duePrecision, reason: data.reason, sourceRuleId: deadline.sourceRuleId } });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 20000 });
   await refreshScheduleReminderAfterSave("Deadline", data.id);
   await revalidateMatter(matterId);

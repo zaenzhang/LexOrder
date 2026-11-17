@@ -508,6 +508,7 @@ export async function generateDeadlineFromSms(input: z.infer<typeof smsGenerateD
       title: data.title.trim(),
       category: data.category,
       dueAt: data.dueAt,
+      duePrecision: data.duePrecision,
       basis: data.basis?.trim() || null,
       remindDays: data.remindDays
     }
@@ -527,7 +528,7 @@ export async function generateDeadlineFromSms(input: z.infer<typeof smsGenerateD
     action: "SMS_GENERATE_DEADLINE",
     targetType: "Deadline",
     targetId: deadline.id,
-    detail: { smsId: data.smsId, procedureId: data.procedureId }
+    detail: { smsId: data.smsId, procedureId: data.procedureId, dueAt: data.dueAt.toISOString(), duePrecision: data.duePrecision }
   });
 
   revalidatePath("/inbox");

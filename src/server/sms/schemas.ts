@@ -1,3 +1,4 @@
+import { deadlineDueSchema } from "@/lib/deadline-due";
 import { z } from "zod";
 
 export const smsParseAndSaveSchema = z.object({
@@ -57,10 +58,9 @@ export const smsGenerateDeadlineSchema = z.object({
       "CUSTOM"
     ])
     .default("CUSTOM"),
-  dueAt: z.coerce.date(),
   basis: z.string().max(200).optional().or(z.literal("")),
   remindDays: z.coerce.number().int().positive().default(3)
-});
+}).and(deadlineDueSchema);
 
 export const smsIdSchema = z.object({ id: z.string().cuid() });
 

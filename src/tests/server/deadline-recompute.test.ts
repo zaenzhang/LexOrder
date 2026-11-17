@@ -53,6 +53,7 @@ const input = (overrides: Record<string, unknown> = {}): any => ({
   title: "上诉期限",
   category: "APPEAL",
   dueAt: "2026-07-16",
+  duePrecision: "DATE",
   basis: "《民事诉讼法》第一百七十一条；自判决书送达之日（2026-07-01）起 15 日",
   remindDays: 7,
   sourceRuleId: RULE_ID,
@@ -66,13 +67,14 @@ it("重算一致：basis 原样落库，confirmStatus PENDING", async () => {
   const created = db.deadline.create.mock.calls[0][0].data;
   expect(created.basis).not.toContain("重算");
   expect(created.confirmStatus).toBe("PENDING");
+  expect(created.duePrecision).toBe("DATE");
   expect(created.sourceRuleId).toBe(RULE_ID);
 });
 
 it("重算不一致：不拒绝，basis 追加「重算为 X 请核对」提示", async () => {
   await addDeadline(input({ dueAt: "2026-07-20" })); // 律师人工调整为 20 日届满
   const created = db.deadline.create.mock.calls[0][0].data;
-  expect(created.dueAt).toEqual(new Date("2026-07-20")); // 提交值保留
+  expect(created.dueAt).toEqual(new Date("2026-07-20T00:00:00+08:00")); // 提交值保留
   expect(created.basis).toContain("重算为 2026-07-16");
   expect(created.basis).toContain("2026-07-20");
   expect(created.basis).toContain("请核对");
@@ -109,8 +111,9 @@ it("年度未录入时保留人工日期并写明未核对，不能看似已完�
   db.holiday.findMany.mockResolvedValue([]);
   await addDeadline(input({ dueAt: "2026-07-20", basis: "依据".repeat(100) }));
   const created = db.deadline.create.mock.calls[0][0].data;
-  expect(created.dueAt).toEqual(new Date("2026-07-20"));
+  expect(created.dueAt).toEqual(new Date("2026-07-20T00:00:00+08:00"));
   expect(created.confirmStatus).toBe("PENDING");
+  expect(created.duePrecision).toBe("DATE");
   expect(created.basis).toContain("2026 年放假安排未录入");
   expect(created.basis).toContain("未完成休假日顺延核对");
   expect(created.basis).toContain("保留提交日期 2026-07-20");
@@ -122,7 +125,7 @@ it("日历故障不阻断已由人工核对的普通期限录入", async () => {
   await addDeadline(input({ sourceRuleId: "", sourceTriggerDate: "", dueAt: "2026-07-20" }));
   expect(db.holiday.findMany).not.toHaveBeenCalled();
   const created = db.deadline.create.mock.calls[0][0].data;
-  expect(created.dueAt).toEqual(new Date("2026-07-20"));
+  expect(created.dueAt).toEqual(new Date("2026-07-20T00:00:00+08:00"));
   expect(created.confirmStatus).toBe("CONFIRMED");
 });
 
@@ -130,7 +133,8 @@ it("放假安排的建议不覆盖律师调整日期", async () => {
   db.holiday.findMany.mockResolvedValue([{ date: new Date("2026-07-16T04:00:00Z"), name: "测试安排", kind: "HOLIDAY" }]);
   await addDeadline(input({ dueAt: "2026-07-20" }));
   const created = db.deadline.create.mock.calls[0][0].data;
-  expect(created.dueAt).toEqual(new Date("2026-07-20"));
+  expect(created.dueAt).toEqual(new Date("2026-07-20T00:00:00+08:00"));
   expect(created.basis).toContain("建议按放假安排顺延至 2026-07-17");
   expect(created.confirmStatus).toBe("PENDING");
+  expect(created.duePrecision).toBe("DATE");
 });

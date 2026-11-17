@@ -273,9 +273,9 @@ describe.skipIf(!config.url)("M3 程序冲突、合同与人工期限守卫：�
     const confirmed = await db.deadline.findUniqueOrThrow({ where: { id: pending.id } });
     expect(confirmed).toMatchObject({ confirmStatus: "CONFIRMED", dueAt: pending.dueAt });
     await expect(assertDeadlineRecalcWritable([pending.id])).rejects.toThrow("人工确认或调整");
-    await expect(adjustDeadline({ id: pending.id, expectedUpdatedAt: pending.updatedAt, dueAt: new Date("2027-02-03T04:00:00Z"), reason: "旧页面" })).rejects.toThrow("期限已被修改");
+    await expect(adjustDeadline({ duePrecision: "DATETIME", id: pending.id, expectedUpdatedAt: pending.updatedAt, dueAt: new Date("2027-02-03T04:00:00Z"), reason: "旧页面" })).rejects.toThrow("期限已被修改");
     const nextDue = new Date("2027-02-02T04:00:00Z");
-    await adjustDeadline({ id: pending.id, expectedUpdatedAt: confirmed.updatedAt, dueAt: nextDue, reason: "合成核实实际送达日期" });
+    await adjustDeadline({ duePrecision: "DATETIME", id: pending.id, expectedUpdatedAt: confirmed.updatedAt, dueAt: nextDue, reason: "合成核实实际送达日期" });
     const adjusted = await db.deadline.findUniqueOrThrow({ where: { id: pending.id } });
     expect(adjusted).toMatchObject({ confirmStatus: "ADJUSTED", dueAt: nextDue, adjustedById: f.user.id });
     await expect(assertDeadlineRecalcWritable([pending.id])).rejects.toThrow("人工确认或调整");
@@ -289,7 +289,7 @@ describe.skipIf(!config.url)("M3 程序冲突、合同与人工期限守卫：�
     const f = await fixture(state === "permission"), pending = await pendingDeadline(f.procedure.id);
     const result = await priorCommit(tx => revoke(tx, f, state), () => action === "confirm"
       ? confirmDeadline({ id: pending.id, expectedUpdatedAt: pending.updatedAt })
-      : adjustDeadline({ id: pending.id, expectedUpdatedAt: pending.updatedAt, dueAt: new Date("2027-02-04T04:00:00Z"), reason: "排队期间已失效的请求" }));
+      : adjustDeadline({ duePrecision: "DATETIME", id: pending.id, expectedUpdatedAt: pending.updatedAt, dueAt: new Date("2027-02-04T04:00:00Z"), reason: "排队期间已失效的请求" }));
     expect(result.error).toBeInstanceOf(Error);
     expect(await db.deadline.findUniqueOrThrow({ where: { id: pending.id } })).toEqual(pending);
     expect(await db.auditLog.count({ where: { targetId: pending.id, action: { in: ["DEADLINE_CONFIRM", "DEADLINE_ADJUST"] } } })).toBe(0);

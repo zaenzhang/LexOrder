@@ -1,4 +1,5 @@
 "use client";
+import { deadlineOverdue, deadlineRelative, formatDeadlineDue, type DeadlineDuePrecision } from "@/lib/deadline-due";
 
 import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -140,6 +141,7 @@ type WorkflowDeadline = {
   title: string;
   category: DeadlineCategory;
   dueAt: Date;
+  duePrecision: DeadlineDuePrecision | null;
   basis: string | null;
   remindDays: number;
   completed: boolean;
@@ -1348,6 +1350,8 @@ type ActionItem = {
   priority: number;
   deadlineId?: string;
   deadlineUpdatedAt?: Date;
+  duePrecision?: DeadlineDuePrecision | null;
+  overdue: boolean;
   memoId?: string;
   pendingConfirm?: boolean;
 };
@@ -1370,6 +1374,8 @@ function buildActionItems(procedure: WorkflowProcedure | null): ActionItem[] {
       priority: 2,
       deadlineId: deadline.id,
       deadlineUpdatedAt: deadline.updatedAt,
+      duePrecision: deadline.duePrecision,
+      overdue: deadlineOverdue(deadline.dueAt, deadline.duePrecision),
       pendingConfirm: deadline.confirmStatus === "PENDING"
     });
   }
@@ -1378,6 +1384,7 @@ function buildActionItems(procedure: WorkflowProcedure | null): ActionItem[] {
     items.push({
       key: `h-${hearing.id}`,
       kind: "hearing",
+      overdue: days < 0,
       title: hearing.title,
       at: hearing.startsAt,
       days,
@@ -1393,6 +1400,7 @@ function buildActionItems(procedure: WorkflowProcedure | null): ActionItem[] {
     items.push({
       key: `m-${memo.id}`,
       kind: "memo",
+      overdue: false,
       title: memo.content.split("\n")[0].slice(0, 80),
       at: null,
       days: null,
@@ -1408,8 +1416,8 @@ function buildActionItems(procedure: WorkflowProcedure | null): ActionItem[] {
 }
 
 function actionWhen(item: ActionItem) {
-  const tone = item.days !== null && item.days < 0 ? "red" : item.kind === "hearing" ? "blue" : item.days !== null && item.days <= 7 ? "amber" : "slate";
-  const main =
+  const tone = item.overdue ? "red" : item.kind === "hearing" ? "blue" : item.days !== null && item.days <= 7 ? "amber" : "slate";
+  const main = item.kind === "deadline" && item.at ? deadlineRelative(item.at, item.duePrecision ?? null) :
     item.kind === "hearing" && item.at
       ? shortDay(item.at)
       : item.days === null
@@ -1419,7 +1427,7 @@ function actionWhen(item: ActionItem) {
           : item.days === 0
             ? "今天"
             : `剩 ${item.days} 天`;
-  const sub = item.at ? (item.kind === "hearing" ? shTime(item.at) : `${shortDay(item.at)} 截止`) : "";
+  const sub = item.at ? (item.kind === "hearing" ? shTime(item.at) : `${formatDeadlineDue(item.at, item.duePrecision ?? null)} 截止`) : "";
   return { tone, main, sub };
 }
 
@@ -1460,13 +1468,13 @@ function NextActions({
     setShowLater(true);
     setShowOthers(true);
   }, [expandRequest]);
-  const [adjusting, setAdjusting] = useState<{ id: string; title: string; dueAt: Date; updatedAt: Date } | null>(null);
+  const [adjusting, setAdjusting] = useState<{ id: string; title: string; dueAt: Date; duePrecision: DeadlineDuePrecision | null; updatedAt: Date } | null>(null);
   const inScope = scope === "stage" && selectedStage ? actions.filter((i) => i.stageKey === selectedStage.key) : actions;
-  const overdue = inScope.filter((i) => i.days !== null && i.days < 0);
-  const soon = inScope.filter((i) => i.days !== null && i.days >= 0 && i.days <= 7);
+  const overdue = inScope.filter((i) => i.overdue);
+  const soon = inScope.filter((i) => !i.overdue && i.days !== null && i.days >= 0 && i.days <= 7);
   const later = inScope.filter((i) => i.days === null || i.days > 7);
   const others = scope === "stage" && selectedStage ? actions.filter((i) => i.stageKey !== selectedStage.key) : [];
-  const othersOverdue = others.filter((i) => i.days !== null && i.days < 0).length;
+  const othersOverdue = others.filter((i) => i.overdue).length;
 
   function run(action: () => Promise<unknown>, ok: string) {
     startTransition(async () => {
@@ -1524,7 +1532,7 @@ function NextActions({
                         确认
                       </button>
                     ) : null}
-                    <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => item.at && setAdjusting({ id: item.deadlineId!, title: item.title, dueAt: item.at, updatedAt: item.deadlineUpdatedAt! })}>
+                    <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => item.at && setAdjusting({ id: item.deadlineId!, title: item.title, dueAt: item.at, duePrecision: item.duePrecision ?? null, updatedAt: item.deadlineUpdatedAt! })}>
                       调整
                     </button>
                     <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => completeDeadline(item)}>
@@ -1581,7 +1589,7 @@ function NextActions({
                   确认
                 </button>
               ) : null}
-              <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => item.at && setAdjusting({ id: item.deadlineId!, title: item.title, dueAt: item.at, updatedAt: item.deadlineUpdatedAt! })}>
+              <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => item.at && setAdjusting({ id: item.deadlineId!, title: item.title, dueAt: item.at, duePrecision: item.duePrecision ?? null, updatedAt: item.deadlineUpdatedAt! })}>
                 调整
               </button>
               <button type="button" className="btn btn-secondary btn-sm" disabled={pending} onClick={() => completeDeadline(item)}>
@@ -1987,7 +1995,7 @@ function ArchiveGlance({
   canReadSchedule: boolean;
   onOpenWork: (section: "tasks" | "records") => void;
 }) {
-  const overdue = actions.filter((a) => a.days !== null && a.days < 0).length;
+  const overdue = actions.filter((a) => a.overdue).length;
   return (
     <>
       <div className="card">

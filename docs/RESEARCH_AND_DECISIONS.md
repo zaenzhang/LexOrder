@@ -1073,9 +1073,11 @@ S06/F01在最新认领核对后分别由business/context核实际调用链，mat
 | 明确期限日期及人工调整；ANQI固定`25efcf7`的[deadline-core.js](https://github.com/zj-ai-lab/anqi/blob/25efcf7f2a3329f9ecdc092b3ced0e17a685c83a/src/lib/deadline-core.js)日期键/UTC算术/due_on片段，及[case.js](https://github.com/zj-ai-lab/anqi/blob/25efcf7f2a3329f9ecdc092b3ced0e17a685c83a/public/js/case.js)editDeadlineDueByDate | 采用明确日期、调整理由和人工保护，不宣称ANQI已有DATE/DATETIME精度；不迁入variants/级联重算。LexOrder历史无精度证据故nullable不回填，新写显式精度并贯通实际责任/通知/显示 |
 | 日历准确截止点；[RFC5545 §3.6.1](https://datatracker.ietf.org/doc/html/rfc5545#section-3.6.1)VEVENT日期与时点语义 | DATE-TIME无DTEND的事件在起始时点结束；沿现有ICS生成器明确表达截止点，避免默认增加一小时。不是新订阅/日历平台，UID及庭期原行为不改 |
 
-本地已核Next 16.4.6的Forms/Server Action文档与当前Prisma、Zod、RHF输入边界，复用现有Input/Select/Dialog。F01审查纠正旧NULL编辑被默认值升格、未改值秒毫秒丢失、同值精度变更遗漏触发器、混合ScheduleItem误分类及真实逾期查询；排除无调用的旧KPI函数，保留同日已发送提醒不重发。S06审查纠正只修新上传、重核清草稿和以补填值作原值比较。F01只读实施准备另确认案件页头逾期数和MatterStickyBar/nextUncompletedDeadline为实际消费者，补入同一精度合同，尚未记为实现。没有运行参考项目或移植第三方实质代码，不扩大维护/复杂期限重算/通用访谈范围。
+本地已核Next 16.4.6的Forms/Server Action文档与当前Prisma、Zod、RHF输入边界，复用现有Input/Select/Dialog。F01审查纠正旧NULL编辑被默认值升格、未改值秒毫秒丢失、同值精度变更遗漏触发器、混合ScheduleItem误分类及真实逾期查询；排除无调用的旧KPI函数，保留同日已发送提醒不重发。S06审查纠正只修新上传、重核清草稿和以补填值作原值比较。F01只读实施准备另确认案件页头逾期数和MatterStickyBar/nextUncompletedDeadline为实际消费者，当时补入同一精度合同；随后实际实现与验证见计划§8.37。没有运行参考项目或移植第三方实质代码，不扩大维护/复杂期限重算/通用访谈范围。
 
 S06实码反馈见计划§8.36：直接观察官方ScopeManager而非另写循环解释器；交叉审查发现边求值边补填会使后置根字段/对象不能影响前方条件，已改为完整context的无mutation观察并用精确顺序反例验证。剔除隐藏输入后只允许一次重新观察，后续相互影响须明确调整模板；保留纯归档渲染边界。根空白误锁、反向条件文案及客户端额外主体快照也在本批修正。4文件31条通过（含旧组合中的3条非S06用例）、真实PG7例、最终类型/lint及三方实码复审均有本次证据；没有浏览器、HTTP或专业验收。
+
+F01实码反馈见计划§8.37：使用期限领域schema/草稿/格式与逾期函数贯通当前写入和真正消费入口，历史null不凭原钟点猜精度。三方实码审查纠正初始schema目标位置、固定交接清单的假时刻以及ICS准确期限误继承庭期2小时提醒；现有PENDING/SENT日级台账沿原去重，不以精度变更增加投递安排。规则建议DATE与人工随后明确时刻分开，保留原PENDING及人工日期保护。新业务迁移与实际PG反例、受控Action/Handler和组件均有本次证据；既有18迁移、历史时间及冻结快照保持原值。未把单元、数据库、参考阅读或日历字符串验证当作浏览器/专业验收。
 
 ## 4. 可选法律服务 MCP 与来源
 

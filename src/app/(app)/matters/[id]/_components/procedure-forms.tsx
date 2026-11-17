@@ -1,5 +1,8 @@
 "use client";
 
+import { DeadlineDueFields } from "@/components/matters/deadline-due-fields";
+import { deadlineDueDraft, type DeadlineDueDraft } from "@/lib/deadline-due";
+
 import { useTransition, useRef, useState, useEffect, useMemo, useCallback } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -354,6 +357,7 @@ function deadlineDefaults(procedureId: string): z.input<typeof deadlineCreateSch
     category: "CUSTOM",
     // yyyy-MM-dd 字符串默认值：date input 不回显 Date 对象；空串会在 zod 校验报错并显示
     dueAt: shDayKey(new Date()),
+    duePrecision: "DATE",
     basis: "",
     remindDays: 3
   };
@@ -372,6 +376,7 @@ export function AddDeadlineDialog({
   defaultProcedureId: string;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [dueDraft, setDueDraft] = useState<DeadlineDueDraft>(() => deadlineDueDraft());
 
   const {
     register,
@@ -430,15 +435,15 @@ export function AddDeadlineDialog({
     setValue("category", selectedRule.category, { shouldDirty: true });
     // v1.x P0-8: 规则生成的期限带来源——提交后以"待确认"落库，律师核对起算事实后确认
     setValue("sourceRuleId", selectedRule.id, { shouldDirty: true });
-    // 第六轮体检 P2-1：携带规则起算日，服务端据此按规则重算比对（不一致在 basis 标注）；
-    // 与 dueAt 同款：date 字符串经 as-cast 赋值，提交时 zod coerce.date() 转回
+    // 起算日期继续交由既有规则核对；本次建议只确定日期，不推断准确时刻。
     setValue("sourceTriggerDate", triggerDate as unknown as Date, { shouldDirty: true });
     setValue("startFact", `${selectedRule.triggerLabel}（${formatLocalDate(trigger)}）`, {
       shouldDirty: true
     });
-    // date input 注册了 valueAsDate，程序化赋值需要 yyyy-MM-dd 字符串才能正确
-    // 回显；提交时 zod coerce.date() 会转回 Date
-    setValue("dueAt", formatLocalDate(computedDue) as unknown as Date, {
+    // DATE 从明确日期键生成上海日界；用户随后可明确选择准确时刻。
+    setDueDraft({ precision: "DATE", date: formatLocalDate(computedDue), time: "" });
+    setValue("duePrecision", "DATE", { shouldDirty: true });
+    setValue("dueAt", formatLocalDate(computedDue), {
       shouldDirty: true
     });
     setValue(
@@ -460,22 +465,22 @@ export function AddDeadlineDialog({
   useEffect(() => {
     if (!open) return;
     reset(deadlineDefaults(defaultProcedureId));
+    setDueDraft(deadlineDueDraft());
     // 起算日默认「上海的今天」同理，随打开刷新
     setTriggerDate(shDayKey(new Date()));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // 打开时把所处程序默认值同步为当前选中程序
+  // 程序仅在打开时初始化；选择规则不覆盖用户已选程序。
   useEffect(() => {
     if (open) {
-      setValue("procedureId", defaultProcedureId);
       // 手动重新打开时清空上次的规则来源（未选规则=人工录入=已确认）
       if (!selectedRuleId) {
         setValue("sourceRuleId", "", { shouldDirty: false });
         setValue("startFact", "", { shouldDirty: false });
       }
     }
-  }, [open, defaultProcedureId, setValue, selectedRuleId]);
+  }, [open, setValue, selectedRuleId]);
 
   function onSubmit(values: DeadlineCreateInput) {
     startTransition(async () => {
@@ -493,7 +498,7 @@ export function AddDeadlineDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={value => { if (!isPending) onOpenChange(value); }}>
       <DialogContent className="flex max-h-[85vh] max-w-md flex-col gap-0 p-0">
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle>添加期限</DialogTitle>
@@ -629,9 +634,11 @@ export function AddDeadlineDialog({
               </Select>
             </Field>
 
-            <Field label="到期日" required error={errors.dueAt?.message}>
-              <Input type="date" {...register("dueAt")} />
-            </Field>
+            <div className="space-y-1.5"><DeadlineDueFields value={dueDraft} disabled={isPending} onChange={next => {
+              setDueDraft(next);
+              setValue("duePrecision", next.precision!, { shouldDirty: true });
+              setValue("dueAt", next.precision === "DATE" ? next.date : `${next.date}T${next.time}:00+08:00`, { shouldDirty: true });
+            }} />{errors.dueAt?.message && <p className="text-sm text-destructive">{errors.dueAt.message}</p>}</div>
 
             <Field label="计算依据">
               <Input

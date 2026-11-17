@@ -109,6 +109,7 @@ describe.skipIf(!config.url)("来件逐项采纳：真实 PostgreSQL", () => {
     const f = await fixture(), hearing = await suggestion(f), deadline = await suggestion(f, "DEADLINE", "2027-02-05", "17:00");
     const result = await decideSmsSuggestions(request(f, [hearing, deadline]));
     expect(result.results.map(row => row.outcome)).toEqual(["CREATED", "CREATED"]);
+    expect(await db.deadline.findUniqueOrThrow({ where: { id: result.results[1].targetId! } })).toMatchObject({ duePrecision: "DATETIME", dueAt: new Date("2027-02-05T17:00:00+08:00") });
     expect(await db.hearing.count({ where: { procedureId: f.first.id } })).toBe(0);
     expect(await db.deadline.count({ where: { procedureId: f.first.id } })).toBe(0);
     for (const item of result.results) {
@@ -174,6 +175,26 @@ describe.skipIf(!config.url)("来件逐项采纳：真实 PostgreSQL", () => {
     input.items[0].event = { mode: "LINK", procedureId: f.second.id, targetId: target.id, expectedTargetUpdatedAt: current.updatedAt };
     expect((await decideSmsSuggestions(input)).results[0]).toMatchObject({ outcome: "LINKED", targetId: target.id });
     expect(await db.deadline.count({ where: { procedureId: f.second.id } })).toBe(1);
+  });
+
+  it("准确时刻建议不关联DATE或历史未知；准确午夜CREATE不被日期载体误判重复", async () => {
+    const f = await fixture(), row = await suggestion(f, "DEADLINE", "2027-02-03", "00:00");
+    const at = new Date("2027-02-03T00:00:00+08:00");
+    const dates = await Promise.all(["DATE", null].map(duePrecision => db.deadline.create({ data: {
+      procedureId: f.second.id, title: "合成DEADLINE", dueAt: at, duePrecision: duePrecision as "DATE" | null,
+    } })));
+    const targets = await listSmsEventTargets({ smsId: f.sms.id, suggestionId: row.id, procedureId: f.second.id });
+    for (const target of dates) {
+      expect(targets.targets.find(item => item.id === target.id)?.duePrecision).toBe(target.duePrecision);
+      const input = request(f, [row]); input.items[0].event = { mode: "LINK", procedureId: f.second.id, targetId: target.id, expectedTargetUpdatedAt: target.updatedAt };
+      await expect(decideSmsSuggestions(input)).rejects.toThrow("时刻与建议原文不一致");
+    }
+    const input = request(f, [row]);
+    const saved = await decideSmsSuggestions(input), targetId = saved.results[0].targetId!;
+    expect(await db.deadline.findUniqueOrThrow({ where: { id: targetId } })).toMatchObject({ dueAt: at, duePrecision: "DATETIME" });
+    await db.deadline.update({ where: { id: targetId }, data: { duePrecision: "DATE" } });
+    expect((await decideSmsSuggestions(input)).results[0]).toMatchObject({ targetId, replayed: true });
+    expect((await db.deadline.findUniqueOrThrow({ where: { id: targetId } })).duePrecision).toBe("DATE");
   });
 
   it("旧ACCEPTED无产物仍保留原样；旧DOC_TYPE不伪造人工决定、不阻塞真实完成", async () => {

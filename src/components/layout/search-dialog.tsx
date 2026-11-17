@@ -1,4 +1,5 @@
 "use client";
+import { deadlineDays, deadlineRelative, formatDeadlineDue, type DeadlineDuePrecision } from "@/lib/deadline-due";
 
 /**
  * 全局搜索（墨案 11 效果图 palette）。
@@ -49,12 +50,8 @@ function Highlight({ text, q }: { text: string; q: string }) {
   return <>{parts}</>;
 }
 
-function dueLabel(iso: string) {
-  const d = new Date(iso);
-  const date = d.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Shanghai" }).replace("/", "-");
-  const days = Math.ceil((d.getTime() - Date.now()) / 86_400_000);
-  const left = days < 0 ? `已逾期 ${-days} 天` : days === 0 ? "今天到期" : `剩余 ${days} 天`;
-  return { date, left, urgent: days <= 3 };
+function dueLabel(iso: string, precision: DeadlineDuePrecision | null) {
+  return { date: formatDeadlineDue(iso, precision), left: deadlineRelative(iso, precision), urgent: deadlineDays(iso) <= 3 };
 }
 
 export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
@@ -271,7 +268,7 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                     {items.map((item, i) => {
                       const myIdx = start + i;
                       const chip = item.sourceOrigin ? documentSourceChip[item.sourceOrigin] : null;
-                      const due = item.dueAt && item.type === "deadline" ? dueLabel(item.dueAt) : null;
+                      const due = item.dueAt && item.type === "deadline" ? dueLabel(item.dueAt, item.duePrecision ?? null) : null;
                       return (
                         <div
                           key={`${group.key}-${item.id}`}

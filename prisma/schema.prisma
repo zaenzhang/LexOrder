@@ -1172,6 +1172,7 @@ model Deadline {
   title            String
   category         DeadlineCategory      @default(CUSTOM)
   dueAt            DateTime
+  duePrecision     DeadlineDuePrecision?
   basis            String?
   remindDays       Int                   @default(3)
   completed        Boolean               @default(false)
@@ -1192,6 +1193,11 @@ model Deadline {
 }
 
 // v1.x P0-8: 规则重算只生成待复核结果，不静默覆盖已确认期限
+enum DeadlineDuePrecision {
+  DATE
+  DATETIME
+}
+
 enum DeadlineConfirmStatus {
   PENDING // 规则计算待律师确认
   CONFIRMED // 已确认（存量数据默认值）

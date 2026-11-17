@@ -26,7 +26,7 @@ const lead = { ...owner, id: "lead" };
 const matter = { id: "m1", internalCode: "TEST", title: "测试案件", deletedAt: null, ownerId: "owner", owner };
 const deadline = () => ({
   id: "d1", updatedAt: now, title: "举证期限", dueAt: new Date("2026-09-19T00:00:00+08:00"), completed: false,
-  confirmStatus: "CONFIRMED", remindDays: 3, procedure: { matter, leadLawyer: { ...lead }, isExternalLead: false }
+  confirmStatus: "CONFIRMED", duePrecision: "DATE", remindDays: 3, procedure: { matter, leadLawyer: { ...lead }, isExternalLead: false }
 });
 
 beforeEach(() => {
@@ -118,4 +118,13 @@ describe("统一日程提醒登记（F-1 阶段二）", () => {
       skipDuplicates: true
     }));
   });
+  it("通知内容与身份辨精度，日级台账键仍同日去重", async () => {
+    db.deadline.findUnique.mockResolvedValue({ ...deadline(), duePrecision: "DATETIME" });
+    const exact = await refreshScheduleReminder("Deadline", "d1", now);
+    expect(exact?.title).toContain("已逾期");
+    db.deadline.findUnique.mockResolvedValue(deadline());
+    expect((await refreshScheduleReminder("Deadline", "d1", now))?.registered).toBe(false);
+    expect(ledgerKeys.size).toBe(1);
+  });
+
 });

@@ -1,4 +1,5 @@
 "use client";
+import { formatDeadlineDue } from "@/lib/deadline-due";
 
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
@@ -145,7 +146,7 @@ function BriefContent({ brief }: { brief: MatterBrief }) {
                   <li key={deadline.id}>
                     <p className="break-words">{deadline.title}</p>
                     <p className="t-xs t-mute">
-                      {formatDateTime(deadline.dueAt)} · {deadlineStatusLabels[deadline.confirmationStatus] || "确认状态待核实"}
+                      {formatDeadlineDue(deadline.dueAt, deadline.duePrecision)} · {deadlineStatusLabels[deadline.confirmationStatus] || "确认状态待核实"}
                       {deadline.assigneeName ? ` · ${deadline.assigneeName}` : ""}
                     </p>
                   </li>

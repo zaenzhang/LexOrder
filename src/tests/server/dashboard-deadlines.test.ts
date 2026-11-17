@@ -36,7 +36,7 @@ const procedure = {
     primaryClient: null, clientLinks: []
   }
 };
-const deadline = (dueAt: string) => ({ id: "deadline-1", title: "合成提交期限", dueAt: new Date(dueAt), procedure });
+const deadline = (dueAt: string) => ({ id: "deadline-1", title: "合成提交期限", dueAt: new Date(dueAt), duePrecision: null, procedure });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -90,12 +90,25 @@ describe("首页期限查询", () => {
     db.deadline.findFirst.mockResolvedValue(deadline(dueAt));
     const hero = await getDashboardHeroData();
     expect(hero.focus).toMatchObject({ daysLeft });
-    const ranges = db.deadline.count.mock.calls.map(([query]) => query.where.dueAt);
+    const ranges = db.deadline.count.mock.calls.slice(0, 2).map(([query]) => query.where.dueAt);
+    expect(db.deadline.count.mock.calls[2][0].where.OR).toEqual([
+      { duePrecision: "DATETIME", dueAt: { lt: new Date() } },
+      { duePrecision: "DATE", dueAt: { lt: todayStart } },
+      { duePrecision: null, dueAt: { lt: todayStart } },
+    ]);
     expect(ranges).toEqual([
       { gte: todayStart, lt: new Date("2026-11-17T00:00:00+08:00") },
-      { gte: todayStart, lt: new Date("2026-11-23T00:00:00+08:00") },
-      { lt: todayStart }
+      { gte: todayStart, lt: new Date("2026-11-23T00:00:00+08:00") }
     ]);
+  });
+
+  it.each(["DATE", "DATETIME", null] as const)("当天午夜焦点与预览按 %s 真精度判断", async duePrecision => {
+    const row = { ...deadline("2026-11-16T00:00:00+08:00"), duePrecision };
+    db.deadline.findFirst.mockResolvedValue(row); db.deadline.findMany.mockResolvedValue([row]);
+    const hero = await getDashboardHeroData(), preview = await getDashboardSchedule();
+    expect(hero.focus).toMatchObject({ duePrecision, daysLeft: 0, overdue: duePrecision === "DATETIME" });
+    expect(preview[0]).toMatchObject({ duePrecision, overdue: duePrecision === "DATETIME" });
+    expect(preview[0].time).toBe(duePrecision === "DATETIME" ? "00:00" : undefined);
   });
 
   it("没有未完成期限时焦点为空，不取开庭代替", async () => {

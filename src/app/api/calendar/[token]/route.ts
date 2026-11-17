@@ -62,20 +62,23 @@ export async function GET(
     const prefix = TYPE_PREFIX[item.type] ?? "";
     // 客户名而非完整案件名（与站内日程一致，减少日历外泄的敏感信息）
     const who = item.clientName ?? item.matter.internalCode;
-    const isTimed = item.type === "hearing";
+    const deadlinePoint = Boolean(item.deadlineId && item.duePrecision === "DATETIME");
+    const isTimed = item.type === "hearing" || deadlinePoint;
     return {
       uid: `${item.id}`,
       title: `${prefix} ${item.title} · ${who}`,
       start: item.occurredAt,
       allDay: !isTimed,
+      ...(deadlinePoint ? { end: null } : {}),
       description: [
         item.matter.internalCode,
         item.procedureLabel,
-        item.description ?? undefined
+        item.description ?? undefined,
+        item.deadlineId && item.duePrecision == null ? "时间精度未记录；此日标记不代表已核对的准确时刻" : undefined
       ]
         .filter(Boolean)
         .join(" / "),
-      reminderMinutes: isTimed ? [24 * 60, 2 * 60] : [24 * 60]
+      reminderMinutes: item.type === "hearing" ? [24 * 60, 2 * 60] : [24 * 60]
     };
   });
 
