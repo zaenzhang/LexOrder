@@ -14,6 +14,8 @@ import { Dialog, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormDialogBody, FormDialogContent } from "@/components/patterns/form-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
+import { ContextInputPicker } from "@/components/matters/context-input-picker";
+import type { ContextInputSelection } from "@/lib/matters/context-inputs";
 import { actionErrorMessage } from "@/lib/action-error";
 import { formatDateTime } from "@/lib/utils";
 import { fromShanghaiInput, toShanghaiInput } from "@/lib/clients/relationship";
@@ -62,7 +64,7 @@ export function DeliveryPanel({ matterId, initialDeliveryId, initialEventId, ini
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => ({ ...emptyDraft(), documentIds: initialDocumentId ? [initialDocumentId] : [] }));
-  const [brief, setBrief] = useState({ title: "", content: "" });
+  const [brief, setBrief] = useState({ title: "", content: "", contextInputs: [] as ContextInputSelection[] });
   const [eventKind, setEventKind] = useState<(typeof manualKinds)[number]>("SENT");
   const [eventTime, setEventTime] = useState("");
   const [channel, setChannel] = useState("");
@@ -157,7 +159,7 @@ export function DeliveryPanel({ matterId, initialDeliveryId, initialEventId, ini
       disclosureScope: replacement.disclosureScope, unresolvedItems: replacement.unresolvedItems,
       documentIds: replacement.items.map(item => item.documentId), sourceDeclarations: [], recipientClientId: replacement.recipientClientId, supersedesId: replacement.id,
     } : emptyDraft());
-    setBrief({ title: "", content: "" }); setMode(next);
+    setBrief({ title: "", content: "", contextInputs: [] }); setMode(next);
   }
   function openDetail(id: string, button?: HTMLElement) {
     if (button) trigger.current = button;
@@ -298,6 +300,9 @@ export function DeliveryPanel({ matterId, initialDeliveryId, initialEventId, ini
             <div className="flex flex-col gap-2"><Label htmlFor="delivery-unresolved">未决事项</Label><Textarea id="delivery-unresolved" rows={2} value={draft.unresolvedItems} maxLength={4000} disabled={busy} onChange={event => changeDraft({ unresolvedItems: event.target.value })} /></div>
           </>}
           {mode === "brief" && <>
+            <ContextInputPicker matterId={matterId} value={brief.contextInputs} disabled={busy} onChange={contextInputs => {
+              setBrief(value => ({ ...value, contextInputs })); setDirty(true); requestKey.current = crypto.randomUUID();
+            }} />
             <div className="flex flex-col gap-2"><Label htmlFor="brief-title">简报标题</Label><Input id="brief-title" value={brief.title} maxLength={200} disabled={busy} onChange={event => { setBrief(value => ({ ...value, title: event.target.value })); setDirty(true); }} /></div>
             <div className="flex flex-col gap-2"><Label htmlFor="brief-content">简报正文</Label><Textarea id="brief-content" rows={16} value={brief.content} maxLength={40000} disabled={busy} onChange={event => { setBrief(value => ({ ...value, content: event.target.value })); setDirty(true); }} placeholder="进展、风险、待决定事项、下一步" /></div>
           </>}

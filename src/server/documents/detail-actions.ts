@@ -9,6 +9,7 @@ import { hasCustomPermission } from "@/lib/roles/catalog";
 import { resolveRoleUser } from "@/lib/roles/service";
 import { matterAssociationFilter } from "@/lib/permissions";
 import { archiveSnapshotDocumentIds } from "@/lib/archive/snapshot";
+import { readDocumentContextInputs } from "@/server/matters/context-inputs";
 
 /** Exact-version detail shared with the matter shell; no raw file path or extracted text. */
 export async function getDocumentDetail(matterId: string, documentId: string) {
@@ -46,6 +47,7 @@ export async function getDocumentDetail(matterId: string, documentId: string) {
     const versions: { id: string; name: string; version: number; isLatest: boolean; status: string }[] = [];
     for (const row of family) if (await canReadDocument(session.user.id, row, db)) versions.push({ id: row.id, name: row.name, version: row.version, isLatest: row.isLatest, status: row.status });
     return { id: document.id, name: document.name, version: document.version, isLatest: document.isLatest, status: document.status,
+      contextInputs: await readDocumentContextInputs(db, session.user.id, document.id, document.matterId),
       mimeType: document.mimeType, createdAt: document.createdAt.toISOString(), updatedAt: document.updatedAt, uploadedByName: document.uploadedBy.name,
       folderName: document.folder?.name ?? null, reviewSourceId: document.reviewReportFor?.documentId ?? null, versions, hasVersionFamily: Boolean(document.familyId),
       canUploadVersion: editable && filingAssociated && !frozen && document.isLatest && !document.tags.includes("AI审查") && !document.reviewReportFor,

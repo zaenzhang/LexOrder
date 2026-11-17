@@ -5,10 +5,13 @@ import type { Prisma } from "@prisma/client";
 const mocks = vi.hoisted(() => ({
   state: { associated: false, qualifiedTarget: true, qualifiedSource: false, restrictedSource: true, nested: false,
     sourceDeleted: false, sourceHash: "a".repeat(64), sourceMatterId: "matter", targetDeleted: false },
-  db: { user: { findUnique: vi.fn() }, matter: { count: vi.fn() }, document: { findUnique: vi.fn(), findMany: vi.fn() },
+  report: vi.fn(),
+  db: { user: { findUnique: vi.fn() }, matter: { count: vi.fn(), findFirst: vi.fn() }, document: { findUnique: vi.fn(), findMany: vi.fn(), findFirst: vi.fn() },
+    documentContextInput: { findMany: vi.fn() },
     documentResearchSource: { findMany: vi.fn() }, sealRequest: { findFirst: vi.fn() }, invoiceRequest: { findMany: vi.fn() }, archiveRecord: { findMany: vi.fn() } },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: mocks.db }));
+vi.mock("@/server/ai/review-report-source", () => ({ resolveReviewReportSource: mocks.report }));
 vi.mock("@/lib/roles/service", () => ({ resolveRoleUser: vi.fn(async () => ({ role: "CUSTOM", enabled: true,
   rolePermissions: mocks.state.associated ? [{ permissionKey: "matters.read", scope: "OWN" }, { permissionKey: "documents.download", scope: "OWN" }] : [] })) }));
 vi.mock("@/lib/approvals/service", () => ({ canApproveItem: vi.fn(async (_userId: string, action: string, id: string) =>
@@ -17,6 +20,7 @@ vi.mock("@/lib/approvals/history-access", () => ({ hasHandledApproval: vi.fn(asy
 
 import { canReadDocument } from "@/lib/approvals/documents";
 import { assertDocumentDerivationAccess } from "@/server/documents/derivation-access";
+import { readDocumentContextInputs } from "@/server/matters/context-inputs";
 
 function document(id: string) {
   return { id, uploadedById: "author", matterId: id === "source" ? mocks.state.sourceMatterId : "matter", intakeId: null,
@@ -32,6 +36,8 @@ beforeEach(() => {
   vi.clearAllMocks(); Object.assign(mocks.state, { associated: false, qualifiedTarget: true, qualifiedSource: false, restrictedSource: true, nested: false,
     sourceDeleted: false, sourceHash: "a".repeat(64), sourceMatterId: "matter", targetDeleted: false });
   mocks.db.user.findUnique.mockResolvedValue({ active: true, role: "CUSTOM" });
+  mocks.db.documentContextInput.findMany.mockResolvedValue([]);
+  mocks.report.mockResolvedValue({ kind: "NONE" });
   mocks.db.matter.count.mockImplementation(async () => mocks.state.associated ? 1 : 0);
   mocks.db.document.findUnique.mockImplementation(async ({ where }) => document(where.id));
   mocks.db.document.findMany.mockImplementation(async ({ where }) => where.id.in.map((id: string) => document(id)));
@@ -44,6 +50,27 @@ beforeEach(() => {
 const transaction = mocks.db as unknown as Prisma.TransactionClient;
 
 describe("派生文书的原审批与来源权限", () => {
+  it("采用指示的审批正文只核原来源存在，合法审查报告仍可作来源；不因此授予原指示或原件权限", async () => {
+    const record = { id: "goal", matterId: "matter", kind: "GOAL", visibility: "FINANCE", content: "不得披露的原指示",
+      sourceDocumentId: "source", sourceNoteId: null, sourceClientActivityId: null };
+    mocks.db.documentContextInput.findMany.mockImplementation(async ({ where }) => where.documentId === "output" ? [{ contextRecord: record }] : []);
+    mocks.db.documentResearchSource.findMany.mockResolvedValue([]);
+    mocks.db.matter.findFirst.mockResolvedValue({ primaryClientId: null, intake: null, clientLinks: [] });
+    mocks.db.document.findFirst.mockImplementation(async ({ where }) => document(where.id));
+    mocks.report.mockImplementation(async (id: string) => id === "source" ? { kind: "SOURCE", document: document("leaf") } : { kind: "NONE" });
+    expect(await canReadDocument("reviewer", document("output"), transaction)).toBe(true);
+    expect(await canReadDocument("reviewer", document("source"), transaction)).toBe(false);
+    expect(await canReadDocument("reviewer", document("leaf"), transaction)).toBe(false);
+    expect(await readDocumentContextInputs(transaction, "reviewer", "output", "matter")).toEqual({ inputs: [], unavailable: true });
+    for (const purpose of ["EXPORT", "SUBMIT"] as const) await expect(assertDocumentDerivationAccess("reviewer", "output", { purpose, db: transaction })).rejects.toThrow("来源已撤回");
+    mocks.report.mockImplementation(async (id: string) => id === "source" ? { kind: "UNAVAILABLE" } : { kind: "NONE" });
+    expect(await canReadDocument("reviewer", document("output"), transaction)).toBe(false);
+    mocks.report.mockResolvedValue({ kind: "NONE" });
+    mocks.db.documentContextInput.findMany.mockImplementation(async ({ where }) => where.documentId === "output" ? [{ contextRecord: record }]
+      : where.documentId === "source" ? [{ contextRecord: { ...record, sourceDocumentId: "output" } }] : []);
+    expect(await canReadDocument("reviewer", document("output"), transaction)).toBe(false);
+  });
+
   it("精确文书审批可读取送审正文，不获得来源正文、对外导出或重新送审资格", async () => {
     expect(await canReadDocument("reviewer", document("output"), transaction)).toBe(true);
     expect(await canReadDocument("reviewer", document("source"), transaction)).toBe(false);

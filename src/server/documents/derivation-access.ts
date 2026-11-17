@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { documentReadGrant, type DocumentReadGrant, type DocumentReadSubject } from "@/lib/approvals/documents";
 import { readResearchIssueSnapshot } from "@/server/research/issue-snapshot";
 import { resolveReviewReportSource } from "@/server/ai/review-report-source";
+import { documentContextInputsReadable } from "@/server/matters/context-inputs";
 
 /** Only the explicit research inputs of this concrete output are inspected. */
 export async function documentDerivationReadable(
@@ -13,14 +14,17 @@ export async function documentDerivationReadable(
   db: Prisma.TransactionClient = prisma,
   purpose: "READ" | "EXPORT" | "SUBMIT" = "READ",
   ancestors: ReadonlySet<string> = new Set(),
+  sourceExistenceOnly = false,
 ): Promise<boolean> {
+  if (sourceExistenceOnly && (purpose !== "READ" || grant !== "DOCUMENT_APPROVAL")) return false;
   if (ancestors.has(target.id)) return false;
   const visited = new Set(ancestors).add(target.id);
+  if (!await documentContextInputsReadable(db, userId, target, grant, purpose, visited)) return false;
   const report = await resolveReviewReportSource(target.id, db);
   if (report.kind === "UNAVAILABLE" || (report.kind === "LEGACY" && purpose !== "READ")) return false;
   if (report.kind === "SOURCE") {
-    const sourceGrant = await documentReadGrant(userId, report.document, db, purpose);
-    if (!sourceGrant || !await documentDerivationReadable(userId, report.document, sourceGrant, db, purpose, visited)) return false;
+    const sourceGrant = sourceExistenceOnly ? "DOCUMENT_APPROVAL" : await documentReadGrant(userId, report.document, db, purpose);
+    if (!sourceGrant || !await documentDerivationReadable(userId, report.document, sourceGrant, db, purpose, visited, sourceExistenceOnly)) return false;
   }
   const inputs = await db.documentResearchSource.findMany({
     where: { documentId: target.id },
@@ -51,10 +55,10 @@ export async function documentDerivationReadable(
     if (!source || source.deletedAt || source.matterId !== target.matterId || source.id === target.id
       || (!reference.legacy && source.sha256 !== reference.documentSha256)) return false;
   }
-  if (purpose === "READ" && grant === "DOCUMENT_APPROVAL") return true;
+  if (purpose === "READ" && grant === "DOCUMENT_APPROVAL" && !sourceExistenceOnly) return true;
   for (const source of documents) {
-    const sourceGrant = await documentReadGrant(userId, source, db, purpose);
-    if (!sourceGrant || !await documentDerivationReadable(userId, source, sourceGrant, db, purpose, visited)) return false;
+    const sourceGrant = sourceExistenceOnly ? "DOCUMENT_APPROVAL" : await documentReadGrant(userId, source, db, purpose);
+    if (!sourceGrant || !await documentDerivationReadable(userId, source, sourceGrant, db, purpose, visited, sourceExistenceOnly)) return false;
   }
   return true;
 }

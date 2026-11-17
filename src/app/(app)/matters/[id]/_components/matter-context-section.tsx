@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
+import { ContextInputPicker, ContextInputsSummary } from "@/components/matters/context-input-picker";
+import { carriedContextInputs } from "@/lib/matters/context-inputs";
 import { actionErrorMessage } from "@/lib/action-error";
 import { fromShanghaiInput, toShanghaiInput } from "@/lib/clients/relationship";
 import { shDayKey, shTime } from "@/lib/ui/sh-time";
@@ -247,7 +249,7 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
         {page.data?.records.length === 0 ? <p className="t-sm t-mute">{page.cursor ? "本页暂无记录。" : "尚未记录目标或指示。"}</p> : null}
         {page.data?.records.length ? <ol className="space-y-4">
           {page.data.records.map(record => <li key={record.id} className="border-b border-[var(--bd-hair)] pb-4 last:border-0 last:pb-0">
-            <RecordContent record={record} onSource={trigger => showSource(record, trigger)} />
+            <RecordContent matterId={matterId} record={record} onSource={trigger => showSource(record, trigger)} />
             <div className="mt-2 flex flex-wrap gap-1">
               <button type="button" className="btn btn-ghost btn-sm" disabled={pending} aria-label={`查看${contextKindLabels[record.kind]}记录的历史版本`} onClick={event => showHistory(record, undefined, event.currentTarget)}><History />查看历史版本</button>
               {record.canRevise ? <button type="button" className="btn btn-ghost btn-sm" disabled={pending} aria-label={`更正${contextKindLabels[record.kind]}第 ${record.version} 版记录`} onClick={event => begin(record, event.currentTarget)}><Pencil />更正此记录</button> : null}
@@ -279,7 +281,7 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
           <div className="mt-5 space-y-5">
             {historyError ? <p role="alert" className="text-sm text-destructive">{historyError}</p> : null}
             {historyLoading ? <p role="status" className="t-sm t-mute">正在读取历史…</p> : null}
-            {historyData?.records.map(record => <article key={record.id} className="border-b border-[var(--bd-hair)] pb-4"><RecordContent record={record} onSource={trigger => showSource(record, trigger, true)} /></article>)}
+            {historyData?.records.map(record => <article key={record.id} className="border-b border-[var(--bd-hair)] pb-4"><RecordContent matterId={matterId} record={record} onSource={trigger => showSource(record, trigger, true)} /></article>)}
             {history && historyData?.nextBeforeVersion ? <button type="button" disabled={historyLoading} className="btn btn-secondary btn-sm" onClick={() => void showHistory(history, historyData.nextBeforeVersion!)}>查看更早版本</button> : null}
             {history && historyError ? <button type="button" disabled={historyLoading} className="btn btn-secondary btn-sm" onClick={() => void showHistory(history)}>重新读取历史版本</button> : null}
           </div>
@@ -297,7 +299,7 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
             {!exactCurrent || exactCurrent.loading ? <p role="status" className="text-sm text-muted-foreground">正在读取指定记录…</p> : null}
             {exactCurrent?.error ? <div className="space-y-3"><p role="alert" className="text-sm text-destructive">{exactCurrent.error}</p>
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => setExactAttempt(value => value + 1)}>重新读取这版记录</button></div> : null}
-            {exactCurrent?.data ? <RecordContent record={exactCurrent.data} onSource={trigger => showSource(exactCurrent.data!, trigger, false, true)} /> : null}
+            {exactCurrent?.data ? <RecordContent matterId={matterId} record={exactCurrent.data} onSource={trigger => showSource(exactCurrent.data!, trigger, false, true)} /> : null}
             {historyReturnHref ? <Link className="btn btn-secondary btn-sm" href={historyReturnHref}>返回客户动态</Link> : null}
           </div>
         </SheetContent>
@@ -323,7 +325,7 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
   );
 }
 
-function RecordContent({ record, onSource }: { record: ContextRecordView; onSource: (trigger: HTMLButtonElement) => void }) {
+function RecordContent({ matterId, record, onSource }: { matterId: string; record: ContextRecordView; onSource: (trigger: HTMLButtonElement) => void }) {
   return <>
     <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-[var(--t-muted)]">
       <span className="font-medium text-foreground">{contextKindLabels[record.kind]}</span><span>第 {record.version} 版</span>
@@ -334,6 +336,7 @@ function RecordContent({ record, onSource }: { record: ContextRecordView; onSour
       <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{record.content}</p>
       {record.reason ? <p className="mt-2 whitespace-pre-wrap break-words text-sm"><span className="t-mute">理由：</span>{record.reason}</p> : null}
       <p className="mt-2 whitespace-pre-wrap break-words text-xs text-[var(--t-muted)]">来源：{record.sourceDescription}</p>
+      {record.contextInputs && <div className="mt-3"><ContextInputsSummary summary={record.contextInputs} matterId={matterId} /></div>}
       {record.source?.available ? <button type="button" className="link-inline mt-1 text-xs" aria-label={`查看${contextKindLabels[record.kind]}第 ${record.version} 版的来源：${record.source.label}`} onClick={event => onSource(event.currentTarget)}>查看来源：{record.source.label}</button> : null}
     </> : <p className="text-sm text-[var(--t-muted)]">关联来源已不可读取，记录正文暂不显示。</p>}
     <p className="mt-2 flex flex-wrap gap-x-2 text-xs text-[var(--t-muted)]"><span>{record.authorName}</span><time dateTime={record.occurredAt}>{when(record.occurredAt)}</time>
@@ -352,6 +355,7 @@ function ContextEditor({ matterId, state, canReadFinance, onSaved, onSaving, onD
   const [sourceDescription, setSourceDescription] = useState(record?.sourceDescription ?? "");
   const [sourceKey, setSourceKey] = useState(record?.source?.id ? `${record.source.type}:${record.source.id}` : "");
   const [sourceLabel, setSourceLabel] = useState(record?.source?.label ?? "");
+  const [contextInputs, setContextInputs] = useState(() => carriedContextInputs(record?.contextInputs));
   const [initialOccurredAt] = useState(() => toShanghaiInput(new Date()));
   const [occurredAt, setOccurredAt] = useState(initialOccurredAt);
   const [error, setError] = useState("");
@@ -362,7 +366,7 @@ function ContextEditor({ matterId, state, canReadFinance, onSaved, onSaving, onD
     || content !== (record?.content ?? "") || reason !== (record?.reason ?? "")
     || sourceDescription !== (record?.sourceDescription ?? "")
     || sourceKey !== (record?.source?.id ? `${record.source.type}:${record.source.id}` : "")
-    || occurredAt !== initialOccurredAt;
+    || occurredAt !== initialOccurredAt || JSON.stringify(contextInputs) !== JSON.stringify(carriedContextInputs(record?.contextInputs));
 
   useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
 
@@ -372,6 +376,7 @@ function ContextEditor({ matterId, state, canReadFinance, onSaved, onSaving, onD
     try {
       const [sourceType, sourceId] = sourceKey.split(":");
       input = { matterId, requestKey: state.key, supersedesId: record?.id, kind, visibility, content, reason,
+        contextInputs: kind === "OPTION" ? contextInputs : [],
         sourceDescription, occurredAt: fromShanghaiInput(occurredAt),
         sourceDocumentId: sourceType === "DOCUMENT" ? sourceId : null,
         sourceNoteId: sourceType === "NOTE" ? sourceId : null,
@@ -392,6 +397,7 @@ function ContextEditor({ matterId, state, canReadFinance, onSaved, onSaving, onD
         <div className="space-y-1.5"><Label htmlFor={`${prefix}-visibility`}>可见范围</Label><select id={`${prefix}-visibility`} value={visibility} disabled={Boolean(record)} onChange={event => setVisibility(event.target.value as ContextVisibility)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">{Object.entries(contextVisibilityLabels).filter(([value]) => value !== "FINANCE" || canReadFinance || visibility === "FINANCE").map(([value, label]) => <option key={value} value={value} disabled={value === "FINANCE" && !canReadFinance}>{label}</option>)}</select></div>
       </div>
       <div className="space-y-1.5"><Label htmlFor={`${prefix}-content`}>内容 *</Label><Textarea id={`${prefix}-content`} required maxLength={8000} rows={6} value={content} onChange={event => setContent(event.target.value)} /></div>
+      {kind === "OPTION" && <ContextInputPicker matterId={matterId} value={contextInputs} onChange={setContextInputs} initial={record?.contextInputs} disabled={pending} />}
       {kind === "CONSTRAINT" ? <p className="t-xs t-mute">费用及预算约束请选择财务可见范围。</p> : null}
       <div className="space-y-1.5"><Label htmlFor={`${prefix}-occurred`}>发生时间（北京时间）*</Label><Input id={`${prefix}-occurred`} type="datetime-local" required value={occurredAt} onChange={event => setOccurredAt(event.target.value)} /></div>
       <div className="space-y-1.5"><Label htmlFor={`${prefix}-reason`}>{record ? "更正或决定理由" : "理由"}</Label><Textarea id={`${prefix}-reason`} rows={2} maxLength={3000} value={reason} onChange={event => setReason(event.target.value)} /></div>

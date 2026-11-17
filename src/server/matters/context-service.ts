@@ -1,7 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { ActionError } from "@/lib/action-error";
-import { canReadDocument } from "@/lib/approvals/documents";
+import { canReadDocument, documentReadGrant, type DocumentReadPurpose } from "@/lib/approvals/documents";
+import { documentDerivationReadable } from "@/server/documents/derivation-access";
+import { assertContextInputSelections, readOptionContextInputs } from "./context-inputs";
 import { matterAssociationFilter, matterFinanceVisibilityFilter, matterReadVisibilityFilter, customMatterFilter } from "@/lib/permissions";
 import { hasCustomPermission, type RoleUser } from "@/lib/roles/catalog";
 import { resolveRoleUser } from "@/lib/roles/service";
@@ -64,11 +66,13 @@ function recordWhere(access: ContextAccess): Prisma.MatterContextRecordWhereInpu
   return { matterId: access.matter.id, ...(access.canReadFinance ? {} : { visibility: "MATTER" as const }) };
 }
 
-async function sourceView(tx: Prisma.TransactionClient, access: ContextAccess, source: SourceIds): Promise<ContextSourceView | null> {
+export async function sourceView(tx: Prisma.TransactionClient, access: ContextAccess, source: SourceIds,
+  visitedDocuments: ReadonlySet<string> = new Set(), purpose: DocumentReadPurpose = "READ"): Promise<ContextSourceView | null> {
   if (source.sourceDocumentId) {
     const doc = await tx.document.findFirst({ where: { id: source.sourceDocumentId, matterId: access.matter.id, deletedAt: null },
       select: { id: true, name: true, uploadedById: true, matterId: true, intakeId: true, deletedAt: true } });
-    const available = Boolean(doc && await canReadDocument(access.user.id, doc, tx));
+    const grant = doc && await documentReadGrant(access.user.id, doc, tx, purpose);
+    const available = Boolean(doc && grant && await documentDerivationReadable(access.user.id, doc, grant, tx, purpose, visitedDocuments));
     return { type: "DOCUMENT", id: available ? doc!.id : null, label: available ? doc!.name : null, available };
   }
   if (source.sourceNoteId) {
@@ -91,10 +95,11 @@ async function assertSources(tx: Prisma.TransactionClient, access: ContextAccess
 
 async function present(tx: Prisma.TransactionClient, access: ContextAccess, row: ContextRow): Promise<ContextRecordView> {
   const source = await sourceView(tx, access, row);
-  const readable = !source || source.available;
+  const contextInputs = row.kind === "OPTION" ? await readOptionContextInputs(tx, access, row.id) : undefined;
+  const readable = (!source || source.available) && !contextInputs?.unavailable;
   const current = !row.supersededBy;
   return {
-    id: row.id, seriesId: row.seriesId, version: row.version, kind: row.kind, visibility: row.visibility,
+    id: row.id, seriesId: row.seriesId, version: row.version, kind: row.kind, visibility: row.visibility, contextInputs,
     // The record may quote the source; hiding only the source link would still disclose it.
     content: readable ? row.content : null, reason: readable ? row.reason : null,
     sourceDescription: readable ? row.sourceDescription : null, source, readable,
@@ -155,7 +160,7 @@ export async function saveMatterContext(db: PrismaClient, actor: ContextActor, i
     sourceDescription: parsed.sourceDescription, supersedesId: parsed.supersedesId ?? null,
     sourceNoteId: parsed.sourceNoteId ?? null, sourceClientActivityId: parsed.sourceClientActivityId ?? null,
     sourceDocumentId: parsed.sourceDocumentId ?? null };
-  const requestHash = createHash("sha256").update(JSON.stringify(data)).digest("hex");
+  const requestHash = createHash("sha256").update(JSON.stringify({ ...data, contextInputs: parsed.contextInputs })).digest("hex");
   return db.$transaction(async tx => {
     const access = await contextAccess(tx, actor, data.matterId, true);
     if (data.visibility === "FINANCE" && !access.canReadFinance) throw new ActionError("无权维护此事项的费用约束");
@@ -164,6 +169,7 @@ export async function saveMatterContext(db: PrismaClient, actor: ContextActor, i
     if (priorRequest) {
       if (priorRequest.requestHash !== requestHash) throw new ActionError("此提交已经保存且内容发生变化，请重新打开记录表单");
       await assertSources(tx, access, priorRequest);
+      await assertContextInputSelections(tx, actor.id, data.matterId, parsed.contextInputs, false);
       return { ok: true as const, id: priorRequest.id, version: priorRequest.version, replayed: true };
     }
     let seriesId: string = randomUUID();
@@ -174,13 +180,19 @@ export async function saveMatterContext(db: PrismaClient, actor: ContextActor, i
       if (previous.supersededBy) throw new ActionError("记录已被更新，请刷新后根据最新版本更正");
       if (previous.kind !== data.kind || previous.visibility !== data.visibility) throw new ActionError("更正不能改变记录类型或可见范围");
       await assertSources(tx, access, previous);
+      if (previous.kind === "OPTION" && (await readOptionContextInputs(tx, access, previous.id)).unavailable) throw new ActionError("原方案采用的目标或指示已无权读取，不能更正");
+      if (previous.kind === "OPTION" && input.contextInputs === undefined && await tx.optionContextInput.count({ where: { optionRecordId: previous.id } })) {
+        throw new ActionError("请明确沿用或调整原方案采用的目标和指示，再保存新修订");
+      }
       seriesId = previous.seriesId;
       version = previous.version + 1;
     }
     await assertSources(tx, access, data);
+    const adopted = await assertContextInputSelections(tx, actor.id, data.matterId, parsed.contextInputs);
     const row = await tx.matterContextRecord.create({ data: {
       ...data, occurredAt: new Date(data.occurredAt), authorId: actor.id, requestHash, seriesId, version
     }, select: { id: true } });
+    if (adopted.length) await tx.optionContextInput.createMany({ data: adopted.map(input => ({ optionRecordId: row.id, ...input })) });
     await auditTx(tx, { userId: actor.id, action: data.supersedesId ? "MATTER_CONTEXT_REVISE" : "MATTER_CONTEXT_CREATE",
       targetType: "MatterContextRecord", targetId: row.id, detail: { matterId: data.matterId, kind: data.kind, version, visibility: data.visibility, supersedesId: data.supersedesId } });
     // Timeline is broadly readable: never copy content, source titles, reasons or amounts.
@@ -201,6 +213,7 @@ export async function confirmMatterContext(db: PrismaClient, actor: ContextActor
     if (!row) throw new ActionError("记录不存在或无权确认");
     if (row.supersededBy || row.version !== data.expectedVersion) throw new ActionError("记录已被更新，请刷新后核对最新版本");
     await assertSources(tx, access, row);
+    if (row.kind === "OPTION" && (await readOptionContextInputs(tx, access, row.id)).unavailable) throw new ActionError("方案采用的目标或指示已无权读取，不能确认");
     if (row.confirmationStatus === "CONFIRMED") return { ok: true as const, id: row.id, replayed: true };
     const result = await tx.matterContextRecord.updateMany({ where: { id: row.id, version: data.expectedVersion, confirmationStatus: "PENDING" },
       data: { confirmationStatus: "CONFIRMED", confirmedById: actor.id, confirmedAt: new Date() } });

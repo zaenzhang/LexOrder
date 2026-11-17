@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mock = vi.hoisted(() => ({
-  db: { document: { findUnique: vi.fn(), findMany: vi.fn() }, user: { findUniqueOrThrow: vi.fn() }, matter: { count: vi.fn() }, archiveRecord: { findMany: vi.fn() }, $transaction: vi.fn() },
+  db: { document: { findUnique: vi.fn(), findMany: vi.fn() }, documentContextInput: { findMany: vi.fn() }, user: { findUniqueOrThrow: vi.fn() }, matter: { count: vi.fn() }, archiveRecord: { findMany: vi.fn() }, $transaction: vi.fn() },
   read: vi.fn(), role: vi.fn(),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: mock.db }));
@@ -28,6 +28,7 @@ beforeEach(() => {
   mock.db.user.findUniqueOrThrow.mockResolvedValue({ role: "LAWYER" });
   mock.db.matter.count.mockResolvedValue(1);
   mock.db.archiveRecord.findMany.mockResolvedValue([]);
+  mock.db.documentContextInput.findMany.mockResolvedValue([]);
   mock.role.mockResolvedValue({ role: "LAWYER", enabled: true });
   mock.read.mockResolvedValue(true);
 });

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { contextInputSelectionsSchema } from "@/lib/matters/context-inputs";
 
 const id = z.string().cuid("对象标识无效，请重新打开");
 const requestKey = z.string().uuid("保存标识无效，请重新打开").transform(value => value.toLowerCase());
@@ -54,6 +55,7 @@ export const registerDeliveryEventSchema = z.object({
 });
 
 export const briefSchema = z.object({
+  contextInputs: contextInputSelectionsSchema.optional(),
   matterId: id,
   requestKey,
   title: z.string().trim().min(1, "请填写简报标题").max(200),

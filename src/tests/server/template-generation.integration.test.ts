@@ -41,6 +41,8 @@ import { prisma as db } from "@/lib/prisma";
 import { pack, body } from "@/lib/template-builder";
 import { encryptIdNumber } from "@/lib/clients/id-number-crypto";
 import { prepareTemplate, renderTemplate } from "@/server/document-templates/actions";
+import { saveMatterContext } from "@/server/matters/context-service";
+import { readContextInputChoice } from "@/server/matters/context-inputs";
 const users: string[] = [], matters: string[] = [], clients: string[] = [], templates: string[] = [], blobs: string[] = [];
 async function fixture() {
   const user = await db.user.create({ data: { name: "合成起草律师", email: `${randomUUID()}@example.invalid`, passwordHash: "disabled-test-only", role: "LAWYER" } });
@@ -85,6 +87,26 @@ describe.skipIf(!databaseUrl)("模板字段核对与生成：真实 PG", () => {
     await db.client.updateMany({ where: { id: { in: clients } }, data: { deletedAt: new Date() } });
     await db.user.updateMany({ where: { id: { in: users } }, data: { active: false } });
     mocks.files.clear(); await db.$disconnect();
+  });
+
+  it("模板生成固定采用输入，后来指示更正不阻断原请求重放，事务失败不留关系", async () => {
+    const f = await fixture();
+    const goalInput = { matterId: f.matter.id, requestKey: randomUUID(), kind: "GOAL" as const, visibility: "MATTER" as const,
+      content: "合成模板采用目标", sourceDescription: "合成真实记录", occurredAt: new Date().toISOString() };
+    const goal = await saveMatterContext(db, f.user, goalInput);
+    const selection = (await readContextInputChoice(db, f.user, f.matter.id, goal.id)).selection;
+    const input = { ...renderInput(await chosenPreparation(f), f.matter.id), contextInputs: [selection] };
+    const saved = await renderTemplate(input);
+    expect(await db.documentContextInput.findFirst({ where: { documentId: saved.documentId } })).toMatchObject({ contextRecordId: goal.id, currentRecordIdAtAdoption: goal.id, adoptedConfirmedAt: null });
+    await saveMatterContext(db, f.user, { ...goalInput, requestKey: randomUUID(), supersedesId: goal.id, content: "合成后来目标" });
+    expect(await renderTemplate(input)).toEqual(saved);
+    await expect(renderTemplate({ ...input, contextInputs: [] })).rejects.toThrow("生成请求已用于其他内容");
+    await expect(renderTemplate({ ...input, requestKey: randomUUID() })).rejects.toThrow("新修订或确认变化");
+    mocks.failAudit = true;
+    const failedKey = randomUUID();
+    await expect(renderTemplate({ ...input, requestKey: failedKey, contextInputs: [(await readContextInputChoice(db, f.user, f.matter.id, goal.id)).selection] })).rejects.toThrow("审计写入失败");
+    expect(await db.document.findUnique({ where: { generationRequestKey: failedKey } })).toBeNull();
+    expect(await db.documentContextInput.count({ where: { contextRecordId: goal.id } })).toBe(1);
   });
 
   it("实际字段核对、取消和成功生成均不回写主档；选中第二主体/程序，重试仍返回同一草稿", async () => {

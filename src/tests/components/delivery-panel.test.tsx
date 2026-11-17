@@ -6,7 +6,9 @@ import type { DeliveryDetail, DeliveryOptions } from "@/server/deliveries/contra
 const mocks = vi.hoisted(() => ({
   listDeliveryRecords: vi.fn(), getDeliveryOptions: vi.fn(), getDeliveryDetail: vi.fn(), prepareDelivery: vi.fn(),
   findDeliveryByRequest: vi.fn(), registerDeliveryEvent: vi.fn(), findDeliveryEventByRequest: vi.fn(), createClientBrief: vi.fn(), confirmDialog: vi.fn(),
+  contextOptions: vi.fn(), contextChoice: vi.fn(), contextHistory: vi.fn(),
 }));
+vi.mock("@/server/matters/context-actions", () => ({ getMatterContextInputOptions: mocks.contextOptions, getMatterContextInputChoice: mocks.contextChoice, getMatterContextHistory: mocks.contextHistory }));
 vi.mock("@/server/deliveries/actions", () => mocks);
 vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: mocks.confirmDialog }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
@@ -45,6 +47,25 @@ async function enterPreparation() {
 }
 
 describe("交付面板", () => {
+  it("人工简报将明确选择交给真实保存入口，失败保留选择并以同一请求重试", async () => {
+    const selection = { recordId: "cm00000000000000000000004", expectedCurrentRecordId: "cm00000000000000000000005", expectedConfirmedAt: null };
+    mocks.contextOptions.mockResolvedValue({ choices: [{ selection, kind: "GOAL", version: 1, content: "合成简报旧目标", sourceDescription: "合成来源", historical: true }], nextCursor: null });
+    mocks.createClientBrief.mockRejectedValueOnce(new Error("合成简报保存失败")).mockResolvedValueOnce({ id: newerId });
+    const onDocumentOpen = vi.fn();
+    render(<DeliveryPanel matterId={matterId} onDocumentOpen={onDocumentOpen} />);
+    fireEvent.click(await screen.findByRole("button", { name: "准备简报" }));
+    fireEvent.change(screen.getByLabelText("简报标题"), { target: { value: "合成采用简报" } });
+    fireEvent.change(screen.getByLabelText("简报正文"), { target: { value: "合成仍待核对的进展" } });
+    fireEvent.click(screen.getByRole("button", { name: "选择目标或指示" }));
+    fireEvent.click(await screen.findByRole("button", { name: "采用所显示的这版" }));
+    fireEvent.click(screen.getByRole("button", { name: "保存为文书草稿" }));
+    await screen.findByText("合成简报保存失败");
+    fireEvent.click(screen.getByRole("button", { name: "保存为文书草稿" }));
+    await waitFor(() => expect(onDocumentOpen).toHaveBeenCalledWith(newerId));
+    expect(mocks.createClientBrief.mock.calls[0][0]).toEqual(mocks.createClientBrief.mock.calls[1][0]);
+    expect(mocks.createClientBrief.mock.calls[0][0]).toMatchObject({ contextInputs: [selection] });
+  });
+
   it("保存失败保留草稿，关闭默认继续编辑，明确放弃才退出", async () => {
     mocks.prepareDelivery.mockRejectedValue(new Error("合成保存失败"));
     render(<DeliveryPanel matterId={matterId} />);

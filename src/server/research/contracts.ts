@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { contextInputSelectionsSchema } from "@/lib/matters/context-inputs";
 import { sourceInputSchema, type EvidenceDocumentOption, type EvidenceSourceResult, type EvidenceSourceView } from "@/server/evidence/contracts";
 
 const text = (max: number) => z.string().trim().max(max);
@@ -86,8 +87,9 @@ export const researchCheckSchema = z.object({
 export type ResearchCheckInput = z.infer<typeof researchCheckSchema>;
 export const researchDraftSchema = z.object({
   matterId: z.string().cuid(), researchRevisionId: z.string().cuid(), requestKey: z.string().uuid(),
+  contextInputs: contextInputSelectionsSchema.optional().default([]),
 });
-export type ResearchDraftInput = z.infer<typeof researchDraftSchema>;
+export type ResearchDraftInput = z.input<typeof researchDraftSchema>;
 
 export type ResearchSourceView = ResearchSourceInput & {
   id: string; documentName: string; version: number; locationLabel: string; changed: boolean;

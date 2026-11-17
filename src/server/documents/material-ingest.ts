@@ -17,6 +17,8 @@ import { recordTimelineEvent } from "@/server/timeline/record";
 import { assertCurrentJobLease, type JobLease } from "@/server/cron/queue";
 import { enqueueMaterialProcessing, cancelMaterialProcessing } from "./material-processing";
 import { assertDocumentDerivationAccess } from "./derivation-access";
+import { contextInputSelectionsSchema, type ContextInputSelection } from "@/lib/matters/context-inputs";
+import { assertContextInputSelections } from "@/server/matters/context-inputs";
 
 const nullableId = z.string().min(1).nullable().default(null);
 const documentInput = z.object({
@@ -33,6 +35,7 @@ const documentInput = z.object({
 });
 export type MaterialDocumentInput = z.input<typeof documentInput>;
 const metadataSchema = z.object({ document: documentInput, priorDocumentId: nullableId,
+  contextInputs: contextInputSelectionsSchema.optional().default([]),
   checkout: z.object({ jti: z.string(), baselineVersion: z.number().int() }).nullable().default(null) });
 
 function sameUpload(left: z.output<typeof metadataSchema>, right: z.output<typeof metadataSchema>) {
@@ -95,11 +98,11 @@ async function assertUploadAuthority(tx: Prisma.TransactionClient, userId: strin
 
 /** The intent is durable before file I/O; originals use a reserved non-overwriting key. */
 export async function ingestMaterial(input: { userId: string; document: MaterialDocumentInput; bytes: Buffer;
-  priorDocumentId?: string; requestKey?: string; checkout?: { jti: string; baselineVersion: number } | null }) {
+  priorDocumentId?: string; requestKey?: string; checkout?: { jti: string; baselineVersion: number } | null; contextInputs?: ContextInputSelection[] }) {
   const data = documentInput.parse(input.document);
   const id = input.requestKey ? z.uuid().parse(input.requestKey) : randomUUID();
   const priorDocumentId = input.priorDocumentId ?? null;
-  const metadata = metadataSchema.parse({ document: data, priorDocumentId, checkout: input.checkout ?? null });
+  const metadata = metadataSchema.parse({ document: data, priorDocumentId, checkout: input.checkout ?? null, contextInputs: input.contextInputs });
   const existing = await prisma.materialIngestIntent.findUnique({ where: { id } });
   if (existing) {
     const previous = metadataSchema.parse(existing.metadata);
@@ -109,6 +112,10 @@ export async function ingestMaterial(input: { userId: string; document: Material
   const storagePath = `${data.matterId ? `m_${data.matterId}` : `i_${data.intakeId}`}/${new Date().toISOString().slice(0, 7).replace("-", "")}/${id}.bin`;
   try { await approvalTransaction(async tx => {
     await assertUploadAuthority(tx, input.userId, data, priorDocumentId, true);
+    if (priorDocumentId && input.contextInputs === undefined && await tx.documentContextInput.count({ where: { documentId: priorDocumentId } })) {
+      throw new ActionError("请明确沿用或调整原稿采用的目标和指示，再保存新版本");
+    }
+    await assertContextInputSelections(tx, input.userId, data.matterId, metadata.contextInputs);
     await tx.materialIngestIntent.create({ data: { id, storagePath, requestedById: input.userId,
       matterId: data.matterId, intakeId: data.matterId ? null : data.intakeId, priorDocumentId,
       sourceSha256: data.sha256, size: data.size, metadata: metadata as Prisma.InputJsonValue } });
@@ -137,8 +144,9 @@ async function commitStoredIngest(intentId: string, userId: string, lease?: JobL
     const intent = await tx.materialIngestIntent.findUniqueOrThrow({ where: { id: intentId } });
     if (intent.requestedById !== userId) throw new ActionError("无权处理此上传");
     if (intent.errorCode === "UPLOAD_ABANDONED") throw new ActionError("此上传已关闭，请重新选择文件开始新上传");
-    const { document: data, priorDocumentId, checkout } = metadataSchema.parse(intent.metadata);
+    const { document: data, priorDocumentId, checkout, contextInputs } = metadataSchema.parse(intent.metadata);
     await assertUploadAuthority(tx, userId, data, priorDocumentId);
+    const adopted = await assertContextInputSelections(tx, userId, data.matterId, contextInputs, !intent.documentId);
     if (intent.documentId) return tx.document.findUniqueOrThrow({ where: { id: intent.documentId }, select: { id: true, version: true } });
     if (intent.state !== "STORED") throw new ActionError("原件尚未确认保存，请重新上传");
     let familyId: string | null = null;
@@ -169,6 +177,7 @@ async function commitStoredIngest(intentId: string, userId: string, lease?: JobL
     }
     const created = await tx.document.create({ data: { ...data, path: intent.storagePath, familyId, version, isLatest: true,
       templateId, templateContextSnapshot } });
+    if (adopted.length) await tx.documentContextInput.createMany({ data: adopted.map(input => ({ documentId: created.id, ...input })) });
     if (researchInputs.length) await tx.documentResearchSource.createMany({ data: researchInputs.map(source => ({ documentId: created.id, researchRevisionId: source.researchRevisionId })) });
     if (!familyId) await tx.document.update({ where: { id: created.id }, data: { familyId: created.id } });
     if (data.matterId) await enqueueMaterialProcessing(tx, { documentId: created.id, requestedById: userId });
@@ -264,7 +273,7 @@ export async function assertDocumentCanBePurged(tx: Prisma.TransactionClient, do
   const doc = await tx.document.findUniqueOrThrow({ where: { id: documentId } });
   await assertNotIntakeSnapshot(tx, doc.intakeId, documentId);
   const [legacy, links, contexts, family, reviews, invoices, seals, billings, adjustments, templates,
-    researchSources, researchOutputs, manualIssues, manualRevisions, deliveryItems, deliveryProofs] = await Promise.all([
+    researchSources, researchOutputs, contextInputs, manualIssues, manualRevisions, deliveryItems, deliveryProofs] = await Promise.all([
     tx.evidenceItem.count({ where: { sourceDocumentId: documentId } }),
     tx.evidenceSourceLink.count({ where: { documentId } }),
     tx.matterContextRecord.count({ where: { sourceDocumentId: documentId } }),
@@ -277,6 +286,7 @@ export async function assertDocumentCanBePurged(tx: Prisma.TransactionClient, do
     tx.documentTemplate.count({ where: { docxBlobId: documentId } }),
     tx.researchSource.count({ where: { documentId } }),
     tx.documentResearchSource.count({ where: { documentId } }),
+    tx.documentContextInput.count({ where: { documentId } }),
     tx.documentReviewIssue.count({ where: { OR: [{ documentId }, { basisDocumentId: documentId }] } }),
     tx.documentReviewEvent.count({ where: { revisionDocumentId: documentId } }),
     tx.deliveryItem.count({ where: { documentId } }),
@@ -284,7 +294,7 @@ export async function assertDocumentCanBePurged(tx: Prisma.TransactionClient, do
   ]);
   const archives = doc.matterId ? await tx.archiveRecord.findMany({ where: { matterId: doc.matterId }, select: { checklistJson: true, coverDocId: true, catalogDocId: true } }) : [];
   if (legacy || links || contexts || family > 1 || reviews || invoices || seals || billings || adjustments || templates ||
-    researchSources || researchOutputs || manualIssues || manualRevisions || deliveryItems || deliveryProofs || doc.tags.includes("AI审查") || doc.version > 1 || doc.status !== "DRAFT" ||
+    researchSources || researchOutputs || contextInputs || manualIssues || manualRevisions || deliveryItems || deliveryProofs || doc.tags.includes("AI审查") || doc.version > 1 || doc.status !== "DRAFT" ||
     archives.some(a => a.coverDocId === documentId || a.catalogDocId === documentId || archiveSnapshotDocumentIds(a.checklistJson).includes(documentId))) {
     throw new ActionError("材料已进入来源、版本或审批历史，须保留原件，仅可撤回");
   }

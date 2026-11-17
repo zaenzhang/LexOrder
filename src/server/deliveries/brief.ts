@@ -32,6 +32,7 @@ export async function createClientBriefForActor(userId: string, input: BriefInpu
   const bytes = await renderClientBriefBytes(data);
   const encrypted = encryptBuffer(bytes);
   return ingestMaterial({ userId, requestKey: data.requestKey, priorDocumentId: data.priorDocumentId ?? undefined,
+    contextInputs: data.contextInputs,
     bytes: encrypted.ciphertext,
     document: {
       matterId: data.matterId, intakeId: null, procedureId: null, stageId: null, folderId: null,

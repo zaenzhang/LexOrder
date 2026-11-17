@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { contextInputSelectionsSchema, type ContextInputSummary } from "./context-inputs";
 
 export const contextKindLabels = {
   GOAL: "客户目标", CONSTRAINT: "约束", INSTRUCTION: "客户指示", OPTION: "备选方案", DECISION: "决定"
@@ -29,9 +30,11 @@ export const contextRecordSchema = z.object({
   sourceDescription: z.string().trim().min(1, "请说明指示人、沟通方式或其他依据").max(1200, "来源说明最多 1200 字"),
   sourceNoteId: optionalId,
   sourceClientActivityId: optionalId,
-  sourceDocumentId: optionalId
+  sourceDocumentId: optionalId,
+  contextInputs: contextInputSelectionsSchema.optional().default([]),
 }).strict().refine(value => [value.sourceNoteId, value.sourceClientActivityId, value.sourceDocumentId].filter(Boolean).length <= 1,
-  "每条记录选择一个主要来源；其他依据可在来源说明中记录");
+  "每条记录选择一个主要来源；其他依据可在来源说明中记录")
+  .refine(value => value.kind === "OPTION" || !value.contextInputs.length, "仅备选方案可以采用目标或客户指示");
 
 export const contextConfirmSchema = z.object({
   matterId: z.string().cuid("事项标识无效"),
@@ -51,6 +54,7 @@ export type ContextSourceView = {
   available: boolean;
 };
 export type ContextRecordView = {
+  contextInputs?: ContextInputSummary;
   id: string;
   seriesId: string;
   version: number;

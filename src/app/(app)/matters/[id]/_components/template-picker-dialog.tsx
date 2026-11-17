@@ -12,6 +12,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
+import { ContextInputPicker } from "@/components/matters/context-input-picker";
+import type { ContextInputSelection } from "@/lib/matters/context-inputs";
 import { prepareTemplate, renderTemplate } from "@/server/document-templates/actions";
 import { type TemplateSummary, type FolderPayload, TEMPLATE_CATEGORY_CN, VARIABLE_LABEL_CN } from "./folder-types";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -25,6 +27,7 @@ export function TemplatePickerDialog({ open, onOpenChange, matterId, matterCateg
   const [preparation, setPreparation] = useState<TemplatePreparation | null>(null);
   const [targetFolderId, setTargetFolderId] = useState("auto");
   const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [contextInputs, setContextInputs] = useState<ContextInputSelection[]>([]);
   const [reviewed, setReviewed] = useState(false);
   const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +36,7 @@ export function TemplatePickerDialog({ open, onOpenChange, matterId, matterCateg
   const loadSequence = useRef(0);
   const applicable = useMemo(() => templates.filter(template => !template.applicableCategories.length || template.applicableCategories.includes(matterCategory)), [templates, matterCategory]);
   const selected = applicable.find(template => template.id === selectedId);
-  const dirty = Object.keys(overrides).length > 0;
+  const dirty = Object.keys(overrides).length > 0 || contextInputs.length > 0;
   const missing = preparation?.fields.filter(field => field.editable ? !(overrides[field.path] ?? field.value).trim() : field.missing) ?? [];
   const unselected = preparation ? missingTemplateTargets(preparation.fields.map(field => field.path), preparation.selection, preparation.choices) : [];
 
@@ -42,6 +45,7 @@ export function TemplatePickerDialog({ open, onOpenChange, matterId, matterCateg
   }
   function clear() {
     loadSequence.current += 1;
+    setContextInputs([]);
     setSelectedId(null); setPreparation(null); setTargetFolderId("auto"); setOverrides({}); setReviewed(false); setError(null); setLoading(false); setRequestKey(crypto.randomUUID());
   }
   async function close() {
@@ -51,6 +55,7 @@ export function TemplatePickerDialog({ open, onOpenChange, matterId, matterCateg
   async function load(templateId: string, selection?: TemplateSelection) {
     if (pending || !await canDiscard()) return;
     const sequence = ++loadSequence.current;
+    setContextInputs([]);
     setSelectedId(templateId); setPreparation(null); setOverrides({}); setReviewed(false); setError(null); setLoading(true); setRequestKey(crypto.randomUUID());
     try {
       const result = await prepareTemplate({ matterId, templateId, ...(selection ? { selection } : {}) });
@@ -69,6 +74,7 @@ export function TemplatePickerDialog({ open, onOpenChange, matterId, matterCateg
     startTransition(async () => {
       try {
         const result = await renderTemplate({ matterId, templateId: preparation.templateId, templateUpdatedAt: preparation.templateUpdatedAt,
+          contextInputs,
           selection: preparation.selection, requestKey, folderId: targetFolderId === "auto" ? null : targetFolderId,
           expectedValues: Object.fromEntries(preparation.fields.map(field => [field.path, field.value])), overrides, reviewed: true });
         toast.success(`已保存「${result.fileName}」草稿`);
@@ -126,6 +132,7 @@ export function TemplatePickerDialog({ open, onOpenChange, matterId, matterCateg
               </Select>
             </div>
             <div className="flex items-center gap-2"><Checkbox id="template-reviewed" disabled={pending || missing.length > 0 || unselected.length > 0} checked={reviewed} onCheckedChange={value => setReviewed(value === true)} /><Label htmlFor="template-reviewed">已核对主体、程序及字段，仅用于本次文书</Label></div>
+            <ContextInputPicker matterId={matterId} value={contextInputs} disabled={pending} onChange={value => { setContextInputs(value); setRequestKey(crypto.randomUUID()); }} />
           </>}
         </div>
       </div>

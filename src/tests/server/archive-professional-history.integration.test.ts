@@ -16,6 +16,7 @@ vi.mock("@/lib/prisma", async () => {
 
 import { prisma as db } from "@/lib/prisma";
 import { buildArchiveProfessionalHistory, assertArchiveProfessionalHistoryAccess, type ArchiveProfessionalHistory } from "@/server/archive/professional-history";
+import { saveMatterContext } from "@/server/matters/context-service";
 
 const users: string[] = [], matters: string[] = [], documents: string[] = [];
 const stamp = new Date("2026-07-02T03:04:05.000Z");
@@ -81,6 +82,34 @@ describe.skipIf(!config.url)("M3 归档专业历史：真实 PostgreSQL", () => 
     await db.matter.updateMany({ where: { id: { in: matters } }, data: { deletedAt: new Date() } });
     await db.user.updateMany({ where: { id: { in: users } }, data: { active: false } });
     await db.$disconnect();
+  });
+
+  it("只冻结所选文书的真实采用输入和来源版本；之后hash变化或撤回不改原快照而拒绝整包", async () => {
+    const f = await fixture();
+    const contextSource = await db.document.create({ data: { name: "合成指示唯一来源.txt", matterId: f.matter.id, uploadedById: f.user.id,
+      path: `synthetic/${randomUUID()}.txt`, tags: [], sha256: "d".repeat(64) } }); documents.push(contextSource.id);
+    const input = { matterId: f.matter.id, requestKey: randomUUID(), kind: "INSTRUCTION" as const, visibility: "MATTER" as const,
+      content: "合成已选固定指示", sourceDescription: "合成来源原件", sourceDocumentId: contextSource.id, occurredAt: new Date().toISOString() };
+    const chosen = await saveMatterContext(db, f.user, input);
+    const excluded = await saveMatterContext(db, f.user, { ...input, requestKey: randomUUID(), content: "未选文书的指示不进入快照" });
+    // Synthetic metadata fixture only; creation of actual output/relations is covered by the generation/ingest suites.
+    await db.documentContextInput.createMany({ data: [
+      { documentId: f.output.id, contextRecordId: chosen.id, currentRecordIdAtAdoption: chosen.id },
+      { documentId: f.unselected.id, contextRecordId: excluded.id, currentRecordIdAtAdoption: excluded.id },
+    ] });
+    const frozen = await buildArchiveProfessionalHistory(db, f.matter.id, [f.output.id]);
+    expect(frozen.documentContextInputs).toHaveLength(1);
+    expect(frozen.documentContextInputs[0]).toMatchObject({ documentId: f.output.id, contextRecordId: chosen.id,
+      currentRecordIdAtAdoption: chosen.id, adoptedConfirmedAt: null, adoptedAt: f.output.createdAt.toISOString(), adoptedBy: { id: f.user.id }, record: { content: input.content } });
+    expect(frozen.documentReferences.find(row => row.documentId === contextSource.id)).toMatchObject({ documentVersion: contextSource.version, documentSha256: contextSource.sha256, roles: ["CONTEXT_SOURCE"] });
+    const unchanged = JSON.stringify(frozen);
+    expect(unchanged).not.toContain("未选文书的指示不进入快照");
+    await assertArchiveProfessionalHistoryAccess(db, f.user.id, frozen);
+    await db.document.update({ where: { id: contextSource.id }, data: { sha256: "e".repeat(64) } });
+    await expect(assertArchiveProfessionalHistoryAccess(db, f.user.id, frozen)).rejects.toThrow("版本已变化");
+    await db.document.update({ where: { id: contextSource.id }, data: { deletedAt: new Date() } });
+    await expect(assertArchiveProfessionalHistoryAccess(db, f.user.id, frozen)).rejects.toThrow();
+    expect(JSON.stringify(frozen)).toBe(unchanged);
   });
 
   it("只固定选中具体稿件的三条链，来源和修订凭据仅形成引用", async () => {

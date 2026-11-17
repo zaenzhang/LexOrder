@@ -1410,6 +1410,7 @@ model Document {
   generationRequestHash String?
   researchSources ResearchSource[]
   researchInputs DocumentResearchSource[]
+  contextInputs DocumentContextInput[]
   manualReviewIssues DocumentReviewIssue[] @relation("ManualReviewDocument")
   manualReviewBases DocumentReviewIssue[] @relation("ManualReviewBasis")
   manualReviewRevisions DocumentReviewEvent[] @relation("ManualReviewRevision")
@@ -3286,10 +3287,45 @@ model MatterContextRecord {
   visibility MatterContextVisibility @default(MATTER)
   requestKey String
   requestHash String
+  optionInputs OptionContextInput[] @relation("OptionContextTarget")
+  adoptedByOptions OptionContextInput[] @relation("OptionContextSource")
+  optionAdoptionHeads OptionContextInput[] @relation("OptionContextHead")
+  adoptedByDocuments DocumentContextInput[] @relation("DocumentContextSource")
+  documentAdoptionHeads DocumentContextInput[] @relation("DocumentContextHead")
 
   @@unique([seriesId, version])
   @@unique([authorId, requestKey])
   @@index([matterId, kind, createdAt])
+}
+
+// Explicit inputs of a newly created option or concrete document version.
+// Actor and adoption time belong to that target's immutable creation identity.
+model OptionContextInput {
+  optionRecordId String
+  optionRecord MatterContextRecord @relation("OptionContextTarget", fields: [optionRecordId], references: [id], onDelete: Restrict)
+  contextRecordId String
+  contextRecord MatterContextRecord @relation("OptionContextSource", fields: [contextRecordId], references: [id], onDelete: Restrict)
+  currentRecordIdAtAdoption String
+  currentRecordAtAdoption MatterContextRecord @relation("OptionContextHead", fields: [currentRecordIdAtAdoption], references: [id], onDelete: Restrict)
+  adoptedConfirmedAt DateTime?
+
+  @@id([optionRecordId, contextRecordId])
+  @@index([contextRecordId])
+  @@index([currentRecordIdAtAdoption])
+}
+
+model DocumentContextInput {
+  documentId String
+  document Document @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  contextRecordId String
+  contextRecord MatterContextRecord @relation("DocumentContextSource", fields: [contextRecordId], references: [id], onDelete: Restrict)
+  currentRecordIdAtAdoption String
+  currentRecordAtAdoption MatterContextRecord @relation("DocumentContextHead", fields: [currentRecordIdAtAdoption], references: [id], onDelete: Restrict)
+  adoptedConfirmedAt DateTime?
+
+  @@id([documentId, contextRecordId])
+  @@index([contextRecordId])
+  @@index([currentRecordIdAtAdoption])
 }
 
 enum MaterialIngestState {

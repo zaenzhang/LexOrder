@@ -28,6 +28,7 @@ import {
 } from "./schemas";
 import { revalidateMatter } from "@/server/matters/route";
 import { ActionError } from "@/lib/action-error";
+import { assertContextInputSelections } from "@/server/matters/context-inputs";
 
 export async function listTemplates(input?: z.input<typeof templateListFilterSchema>) {
   await requireSession("personal");
@@ -134,7 +135,7 @@ export async function prepareTemplate(input: z.input<typeof templatePrepareSchem
 }
 
 /** Generates one reviewed draft. Master records remain untouched on success, cancel, or failure. */
-export async function renderTemplate(input: z.infer<typeof templateRenderSchema>) {
+export async function renderTemplate(input: z.input<typeof templateRenderSchema>) {
   const session = await requireSession("documents.write");
   const data = templateRenderSchema.parse(input);
   const requestHash = createHash("sha256").update(JSON.stringify({ ...data,
@@ -147,6 +148,7 @@ export async function renderTemplate(input: z.infer<typeof templateRenderSchema>
     result = await approvalTransaction(async db => {
       const matter = await templateWriteContext(db, session.user, data.matterId);
       const existing = await db.document.findUnique({ where: { generationRequestKey: data.requestKey } });
+      const adopted = await assertContextInputSelections(db, session.user.id, data.matterId, data.contextInputs, !existing);
       if (existing) {
         if (existing.uploadedById !== session.user.id || existing.matterId !== data.matterId || existing.generationRequestHash !== requestHash || existing.deletedAt || !await canReadDocument(session.user.id, existing, db)) {
           throw new ActionError("生成请求已用于其他内容，请重新核对后生成");
@@ -191,6 +193,7 @@ export async function renderTemplate(input: z.infer<typeof templateRenderSchema>
         encrypted: true, algorithm: encrypted.algorithm, iv: encrypted.iv.toString("base64"), authTag: encrypted.authTag.toString("base64"),
         tags: ["模板生成", template.name], uploadedById: session.user.id,
       } });
+      if (adopted.length) await db.documentContextInput.createMany({ data: adopted.map(input => ({ documentId: doc.id, ...input })) });
       await enqueueMaterialProcessing(db, { documentId: doc.id, requestedById: session.user.id });
       await auditTx(db, { userId: session.user.id, action: "TEMPLATE_RENDER", targetType: "Document", targetId: doc.id,
         detail: { templateId: template.id, templateSourceDocumentId: template.docxBlob.id, matterId: data.matterId, selection: data.selection } });

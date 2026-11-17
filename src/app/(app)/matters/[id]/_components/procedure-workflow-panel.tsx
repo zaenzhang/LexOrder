@@ -3,6 +3,8 @@
 import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { ContextInputPicker } from "@/components/matters/context-input-picker";
+import type { ContextInputSelection } from "@/lib/matters/context-inputs";
 import {
   Archive,
   BookOpen,
@@ -2431,6 +2433,7 @@ function StageMaterialsPanel({
   } | null>(null);
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<File | null>(null);
+  const [contextInputs, setContextInputs] = useState<ContextInputSelection[]>([]);
   const [customName, setCustomName] = useState("");
   const [sourceParty, setSourceParty] = useState("");
   const [sourceOrigin, setSourceOrigin] = useState<DocumentSourceOrigin | "">("");
@@ -2440,6 +2443,7 @@ function StageMaterialsPanel({
   const sourceOptions = useMemo(() => procedure ? buildSourceOptions(procedure) : [], [procedure]);
 
   function clearUpload() {
+    setContextInputs([]);
     setOpen(false);
     setPicked(null);
     setCustomName("");
@@ -2452,7 +2456,7 @@ function StageMaterialsPanel({
 
   async function closeUpload() {
     if (uploadBusy.current || isPending || confirmingClose.current) return;
-    const dirty = Boolean(picked || customName || sourceParty || sourceOrigin || category !== defaultCategoryForStage(uploadTarget?.stageName ?? stageName));
+    const dirty = Boolean(picked || customName || sourceParty || sourceOrigin || contextInputs.length || category !== defaultCategoryForStage(uploadTarget?.stageName ?? stageName));
     confirmingClose.current = true;
     try {
       if (dirty && !await confirmDialog({ title: "放弃未上传的材料？", confirmText: "放弃上传", cancelText: "继续编辑", initialFocus: "cancel" })) return;
@@ -2469,6 +2473,7 @@ function StageMaterialsPanel({
   function openUploadDialog() {
     if (!canManage) return;
     if (open) { toast.info("请先处理已打开的上传草稿"); return; }
+    setContextInputs([]);
     setUploadTarget({ matterId, procedureId: procedure?.id ?? null, stageKey: stage?.key ?? null, stageId: stage?.id ?? null,
       stageName, title: uploadScopeTitle, description: uploadScopeDescription, sourceOptions });
     setCategory(defaultCategoryForStage(stageName));
@@ -2517,12 +2522,13 @@ function StageMaterialsPanel({
         fd.set("file", picked);
         fd.set("category", category);
         fd.set("name", customName.trim() || picked.name);
+        fd.set("contextInputs", JSON.stringify(contextInputs));
         fd.set("tags", submissionTarget.stageKey ? stageMaterialTag(submissionTarget.stageName) : "");
         if (SOURCE_MATERIAL_CATEGORIES.includes(category) && sourceParty) {
           fd.set("sourceParty", sourceParty);
         }
         if (sourceOrigin) fd.set("sourceOrigin", sourceOrigin);
-        const signature = JSON.stringify([picked.name, picked.size, picked.lastModified, customName.trim(), category, sourceParty, sourceOrigin, stageId]);
+        const signature = JSON.stringify([picked.name, picked.size, picked.lastModified, customName.trim(), category, sourceParty, sourceOrigin, stageId, contextInputs]);
         if (uploadRequest.current?.signature !== signature) uploadRequest.current = { signature, key: crypto.randomUUID() };
         fd.set("requestKey", uploadRequest.current.key);
         await uploadDocument(fd);
@@ -2630,7 +2636,7 @@ function StageMaterialsPanel({
       )}
 
       <Dialog open={open} onOpenChange={next => { if (!next) void closeUpload(); }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>上传材料 · {uploadTarget?.title ?? uploadScopeTitle}</DialogTitle>
             <DialogDescription className="text-xs">
@@ -2717,6 +2723,7 @@ function StageMaterialsPanel({
                 placeholder={uploadTarget?.stageKey ? `${uploadTarget.stageName}材料` : uploadTarget?.title ?? uploadScopeTitle}
               />
             </div>
+            {uploadTarget && <ContextInputPicker matterId={uploadTarget.matterId} value={contextInputs} onChange={setContextInputs} disabled={isPending} />}
           </fieldset>
           <DialogFooter>
             <Button variant="outline" onClick={() => void closeUpload()} disabled={isPending}>

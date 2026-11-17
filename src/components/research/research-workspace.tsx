@@ -16,6 +16,8 @@ import {
   type ResearchRevisionView, type ResearchSourceInput, type ResearchSourceResult,
 } from "@/server/research/contracts";
 import { ResearchEditor } from "./research-editor";
+import { ContextInputPicker } from "@/components/matters/context-input-picker";
+import type { ContextInputSelection } from "@/lib/matters/context-inputs";
 
 type Props = {
   matterId: string; researchId?: string | null; issueId?: string | null;
@@ -44,15 +46,18 @@ export function ResearchWorkspace({ matterId, researchId = null, issueId = null,
   const [historyOpen, setHistoryOpen] = useState(false);
   const [history, setHistory] = useState<{ records: ResearchRevisionView[]; nextVersion: number | null } | null>(null);
   const [historyError, setHistoryError] = useState("");
+  const [contextInputs, setContextInputs] = useState<ContextInputSelection[]>([]);
+  const [draftFailed, setDraftFailed] = useState(false);
   const dirty = useRef(false), busy = useRef(false), sequence = useRef(0), sourceSequence = useRef(0), historySequence = useRef(0);
   const target = useRef<Target>({ researchId, issueId, creating: Boolean(issueId) });
   const seenProps = useRef("");
   const requestKey = useRef(crypto.randomUUID()), draftRequestKey = useRef(crypto.randomUUID());
-  useEffect(() => { onDraftStateChange?.(dirty.current, pending); }, [value, editing, pending, onDraftStateChange]);
+  useEffect(() => { onDraftStateChange?.(dirty.current, pending); }, [value, editing, contextInputs, pending, onDraftStateChange]);
 
   const load = useCallback(async (next: Target) => {
     const token = ++sequence.current;
     target.current = next;
+    setContextInputs([]); setDraftFailed(false);
     setLoading(true); setError(""); setRow(null); setList(null); setOptions(null); setEditing(false);
     setHistoryOpen(false); setSourceOpen(false); sourceSequence.current++; historySequence.current++;
     requestKey.current = crypto.randomUUID(); draftRequestKey.current = crypto.randomUUID();
@@ -113,18 +118,19 @@ export function ResearchWorkspace({ matterId, researchId = null, issueId = null,
   }
   function mutate(run: () => Promise<void>) {
     if (busy.current) return;
-    busy.current = true; setError(""); setNotice("");
+    busy.current = true; setError(""); setNotice(""); setDraftFailed(false);
     startTransition(async () => {
       try { await run(); } catch (failure) { setError(errorText(failure, "操作未完成，请保留输入并重试")); }
       finally { busy.current = false; }
     });
   }
-  function edit() {
+  async function edit() {
     if (!row?.content || !row.canRevise) return;
+    if (!await allowLeave()) return;
     const content = row.content;
     mutate(async () => {
       const choices = await getResearchOptions(matterId);
-      setOptions(choices); setValue(content); setEditing(true); requestKey.current = crypto.randomUUID();
+      setOptions(choices); setValue(content); setContextInputs([]); dirty.current = false; setEditing(true); requestKey.current = crypto.randomUUID();
     });
   }
   function save() {
@@ -142,6 +148,7 @@ export function ResearchWorkspace({ matterId, researchId = null, issueId = null,
   }
   async function check() {
     if (!row?.canCheck || editing) return;
+    if (!await allowLeave()) return;
     const note = await promptDialog({ title: "核对这份研究", label: "核对结论及仍待核实项", description: "核对研究范围、来源时点和结论条件。未知项仍需明确保留。", required: true, maxLength: 2000, confirmText: "记录核对", cancelText: "取消" });
     if (note === null) return;
     mutate(async () => {
@@ -151,8 +158,12 @@ export function ResearchWorkspace({ matterId, researchId = null, issueId = null,
   }
   function draft() {
     if (!row?.canDraft || editing) return;
+    setDraftFailed(false);
     mutate(async () => {
-      const result = await formResearchDraft({ matterId, researchRevisionId: row.id, requestKey: draftRequestKey.current });
+      let result;
+      try { result = await formResearchDraft({ matterId, researchRevisionId: row.id, requestKey: draftRequestKey.current, contextInputs }); }
+      catch (failure) { setDraftFailed(true); throw failure; }
+      dirty.current = false;
       setNotice("分析草稿已保存到材料，仍需按原流程复核与审批");
       onOpenDocument(result.documentId);
     });
@@ -196,7 +207,7 @@ export function ResearchWorkspace({ matterId, researchId = null, issueId = null,
         {editing ? <><Button variant="outline" size="sm" disabled={pending} onClick={() => void navigate(row?.id ?? null)}>取消编辑</Button><Button size="sm" disabled={pending || !options} onClick={save}>{pending ? "保存中…" : row ? "保存新修订" : "保存研究"}</Button></> : null}
       </div>
     </div>
-    {error ? <div role="alert" className="rounded-md border border-destructive/30 p-3 text-sm space-y-2"><p>{error}</p>{!editing ? <Button size="sm" variant="outline" disabled={pending} onClick={() => void load(target.current)}>重试</Button> : null}</div> : null}
+    {error ? <div role="alert" className="rounded-md border border-destructive/30 p-3 text-sm space-y-2"><p>{error}</p>{!editing ? <Button size="sm" variant="outline" disabled={pending} onClick={() => { if (draftFailed) draft(); else void allowLeave().then(allowed => { if (allowed) void load(target.current); }); }}>重试</Button> : null}</div> : null}
     {notice ? <p role="status" className="text-sm text-muted-foreground">{notice}</p> : null}
     {loading ? <p role="status" className="text-sm text-muted-foreground">正在读取研究…</p> : null}
     {!loading && list ? <div className="divide-y rounded-md border">
@@ -208,6 +219,7 @@ export function ResearchWorkspace({ matterId, researchId = null, issueId = null,
     </div> : null}
     {!loading && row && !row.readable ? <p role="alert" className="rounded-md border p-4 text-sm">研究来源已撤回、变化或无权读取。请核对材料资格后重试。</p> : null}
     {!loading && showingEditor && (editing || row?.readable) ? <>
+      {!editing && row?.canDraft && <ContextInputPicker matterId={matterId} value={contextInputs} disabled={pending} onChange={value => { setContextInputs(value); dirty.current = true; draftRequestKey.current = crypto.randomUUID(); }} />}
       {row?.checkedAt && !editing ? <p className="text-sm text-muted-foreground">{row.checkedByName ?? "原核对人"} · {shDayKey(row.checkedAt)} 核对：{row.checkNote}</p> : null}
       {row && editing ? <p className="text-sm text-muted-foreground">保存后形成新修订，原修订及已有稿件依据保留。</p> : null}
       <ResearchEditor key={`${row?.id ?? "new"}:${editing}`} matterId={matterId} value={value} onChange={next => { setValue(next); dirty.current = true; }} options={options} disabled={pending} readOnly={!editing} saved={row}

@@ -9,8 +9,18 @@ import {
   saveMatterContext, confirmMatterContext, readMatterContext, readMatterContextRecord, readContextHistory, readContextSource, readContextSourceOptions
 } from "./context-service";
 import { readMatterBrief } from "./brief";
+import { readContextInputChoice, readContextInputOptions } from "./context-inputs";
 
 const id = z.string().cuid("记录或事项标识无效");
+
+export async function getMatterContextInputOptions(matterId: string, cursor?: string) {
+  const { user } = await requireSession("matters.read");
+  return readContextInputOptions(prisma, user, id.parse(matterId), cursor);
+}
+export async function getMatterContextInputChoice(matterId: string, recordId: string) {
+  const { user } = await requireSession("matters.read");
+  return readContextInputChoice(prisma, user, id.parse(matterId), id.parse(recordId));
+}
 
 export async function getMatterContext(matterId: string, cursor?: string) {
   const { user } = await requireSession("matters.read");

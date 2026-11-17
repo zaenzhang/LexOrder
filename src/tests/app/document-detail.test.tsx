@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mock = vi.hoisted(() => ({
   detail: vi.fn(), approval: vi.fn(), upload: vi.fn(), submit: vi.fn(), file: vi.fn(), approve: vi.fn(), reject: vi.fn(),
   confirm: vi.fn(), refresh: vi.fn(), push: vi.fn(), replace: vi.fn(), toast: vi.fn(),
+  contextOptions: vi.fn(), contextChoice: vi.fn(), contextHistory: vi.fn(),
 }));
+vi.mock("@/server/matters/context-actions", () => ({ getMatterContextInputOptions: mock.contextOptions, getMatterContextInputChoice: mock.contextChoice, getMatterContextHistory: mock.contextHistory }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mock.refresh, push: mock.push, replace: mock.replace }), useSearchParams: () => new URLSearchParams(window.location.search) }));
 vi.mock("sonner", () => ({ toast: { success: mock.toast, error: mock.toast } }));
 vi.mock("@/server/documents/detail-actions", () => ({ getDocumentDetail: mock.detail }));
@@ -46,6 +48,7 @@ const matterId = "cm00000000000000000000001", oldId = "cm00000000000000000000002
 const close = vi.fn(), change = vi.fn(), issue = vi.fn(), prepare = vi.fn();
 function detail(changes: Partial<Awaited<ReturnType<typeof getDocumentDetail>>> = {}): Awaited<ReturnType<typeof getDocumentDetail>> {
   return { id: oldId, name: "合成旧版意见.docx", version: 1, isLatest: false, status: "APPROVED", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    contextInputs: { inputs: [], unavailable: false },
     createdAt: "2026-11-16T08:00:00.000Z", updatedAt: new Date("2026-11-16T08:00:00.000Z"), uploadedByName: "合成作者", folderName: null, reviewSourceId: null, canWithdraw: false, withdrawBlockedReason: null, hasVersionFamily: true, canUploadVersion: false, canSubmit: false, canFile: true, canPrepareDelivery: true,
     versions: [{ id: oldId, version: 1, name: "合成旧版意见.docx", isLatest: false, status: "APPROVED" }, { id: latestId, version: 2, name: "合成新稿.docx", isLatest: true, status: "DRAFT" }], ...changes };
 }
@@ -69,6 +72,31 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("文书详情的版本定位与输入保护", () => {
+  it("新稿沿用确切旧输入而不自动核对，失败保留文件；明确重读再采用后可调整所见位置", async () => {
+    const recordId = "cm00000000000000000000004", tailId = "cm00000000000000000000005";
+    const selected = { recordId, expectedCurrentRecordId: recordId, expectedConfirmedAt: null };
+    const current = { recordId, expectedCurrentRecordId: tailId, expectedConfirmedAt: "2026-11-17T08:00:00.000Z" };
+    const input = { selection: current, kind: "GOAL" as const, version: 1, content: "合成旧版目标", sourceDescription: "合成电话", historical: false,
+      currentRecordIdAtAdoption: recordId, adoptedConfirmedAt: null, changed: true };
+    mock.detail.mockResolvedValue(detail({ isLatest: true, canUploadVersion: true, contextInputs: { inputs: [input], unavailable: false } }));
+    mock.contextChoice.mockResolvedValue({ ...input, historical: true });
+    mock.upload.mockRejectedValueOnce(new Error("采用输入已有变化")).mockResolvedValueOnce({ id: latestId, version: 2 });
+    renderDetail(); await screen.findByText("采用后发生变化，待核对"); tab("版本");
+    const file = new File(["synthetic"], "合成新稿.pdf", { type: "application/pdf" });
+    fireEvent.change(screen.getByLabelText("上传新稿"), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: "保存新版本" }));
+    await screen.findByRole("alert");
+    expect(mock.upload.mock.calls[0][0]).toMatchObject({ file, contextInputs: [selected] });
+    await waitFor(() => expect(screen.getByRole("button", { name: "重新读取这版" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "重新读取这版" }));
+    await waitFor(() => expect(mock.contextChoice).toHaveBeenCalledWith(matterId, recordId));
+    fireEvent.click(await screen.findByRole("button", { name: "采用所显示的这版" }));
+    fireEvent.click(screen.getByRole("button", { name: "保存新版本" }));
+    await waitFor(() => expect(change).toHaveBeenCalledWith(latestId));
+    expect(mock.upload.mock.calls[1][0]).toMatchObject({ file, contextInputs: [current] });
+    expect(mock.upload.mock.calls[1][0].requestKey).not.toBe(mock.upload.mock.calls[0][0].requestKey);
+  });
+
   it("读取指定案件和旧版，审批另页打开；切页签保留复核输入，切新版本须确认", async () => {
     renderDetail({ issueId });
     expect(await screen.findByTestId("review-target")).toHaveTextContent(`${oldId}:${issueId}`);

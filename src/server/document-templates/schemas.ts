@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { contextInputSelectionsSchema } from "@/lib/matters/context-inputs";
 
 export const templateListFilterSchema = z.object({
   category: z
@@ -47,6 +48,7 @@ export const templatePrepareSchema = z.object({
 
 /** Values are used only for this rendered version and its immutable input snapshot. */
 export const templateRenderSchema = z.object({
+  contextInputs: contextInputSelectionsSchema.optional().default([]),
   requestKey: z.string().uuid(),
   matterId: z.string().cuid(),
   templateId: z.string().cuid(),

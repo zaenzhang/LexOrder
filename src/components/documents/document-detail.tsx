@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
+import { ContextInputPicker, ContextInputsSummary } from "@/components/matters/context-input-picker";
+import { carriedContextInputs, type ContextInputSelection } from "@/lib/matters/context-inputs";
 import { DocumentReviewPanel } from "@/components/document-reviews/document-review-panel";
 import { getDocumentDetail } from "@/server/documents/detail-actions";
 import { deleteDocument, fileDocument, submitDocumentForReview, uploadNewVersion } from "@/server/documents/actions";
@@ -28,6 +30,9 @@ export function DocumentDetail({ matterId, documentId, issueId, onClose, onDocum
   const [detail, setDetail] = useState<Detail | null>(null), [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
   const [file, setFile] = useState<File | null>(null);
+  const [inputEdits, setInputEdits] = useState<ContextInputSelection[] | null>(null);
+  const contextInputs = inputEdits ?? carriedContextInputs(detail?.contextInputs);
+  const contextDirty = inputEdits !== null && JSON.stringify(inputEdits) !== JSON.stringify(carriedContextInputs(detail?.contextInputs));
   const [activeTab, setActiveTab] = useState(issueId ? "review" : "document");
   const [visitedReview, setVisitedReview] = useState(Boolean(issueId));
   const reviewState = useRef({ dirty: false, busy: false });
@@ -47,20 +52,20 @@ export function DocumentDetail({ matterId, documentId, issueId, onClose, onDocum
   }, []);
   const onReviewDirty = useCallback((dirty: boolean) => { reviewState.current.dirty = dirty; publishDraft(); }, [publishDraft]);
   const onReviewPending = useCallback((busy: boolean) => { reviewState.current.busy = busy; publishDraft(); }, [publishDraft]);
-  useEffect(() => { ownState.current = { dirty: Boolean(file), busy: pending }; publishDraft(); }, [file, pending, publishDraft]);
+  useEffect(() => { ownState.current = { dirty: Boolean(file) || contextDirty, busy: pending }; publishDraft(); }, [file, contextDirty, pending, publishDraft]);
   useEffect(() => () => { draftCallback.current?.(false, false); }, []);
   useEffect(() => {
-    const protect = (event: BeforeUnloadEvent) => { if (file || pending || reviewState.current.dirty || reviewState.current.busy) { event.preventDefault(); event.returnValue = ""; } };
+    const protect = (event: BeforeUnloadEvent) => { if (file || contextDirty || pending || reviewState.current.dirty || reviewState.current.busy) { event.preventDefault(); event.returnValue = ""; } };
     window.addEventListener("beforeunload", protect); return () => window.removeEventListener("beforeunload", protect);
-  }, [file, pending]);
+  }, [file, contextDirty, pending]);
   async function canLeave() {
-    return !pending && !reviewState.current.busy && (!(file || reviewState.current.dirty) || await confirmDialog({
+    return !pending && !reviewState.current.busy && (!(file || contextDirty || reviewState.current.dirty) || await confirmDialog({
       title: "放弃未保存的文书输入？", confirmText: "放弃并离开", cancelText: "继续编辑", initialFocus: "cancel",
     }));
   }
   async function retry() {
     if (!await canLeave()) return;
-    setFile(null); requestKey.current = crypto.randomUUID(); reviewState.current = { dirty: false, busy: false };
+    setFile(null); setInputEdits(null); requestKey.current = crypto.randomUUID(); reviewState.current = { dirty: false, busy: false };
     await reload();
   }
   function mutate(run: () => Promise<unknown>, message: string) {
@@ -102,6 +107,7 @@ export function DocumentDetail({ matterId, documentId, issueId, onClose, onDocum
         </div>
         {detail.folderName && <p className="text-sm text-muted-foreground">卷宗：{detail.folderName}</p>}
         {detail.withdrawBlockedReason && <p className="text-sm text-muted-foreground">{detail.withdrawBlockedReason}</p>}
+        <ContextInputsSummary summary={detail.contextInputs} matterId={matterId} />
         <Tabs value={activeTab} onValueChange={value => { setActiveTab(value); if (value === "review") setVisitedReview(true); }}>
           <TabsList aria-label="文书详情分区"><TabsTrigger value="document">正文</TabsTrigger><TabsTrigger value="review">人工复核</TabsTrigger><TabsTrigger value="versions">版本</TabsTrigger></TabsList>
           <TabsContent value="document" className="space-y-3">{previewable ? <><iframe title="具体文书版本正文" src={preview} className="h-[60vh] w-full rounded-lg border bg-white" /><Button asChild variant="link"><a href={preview} target="_blank" rel="noreferrer">另页查看此版本</a></Button></> : <p className="py-6 text-sm text-muted-foreground">此格式请下载原件查看。</p>}</TabsContent>
@@ -110,8 +116,10 @@ export function DocumentDetail({ matterId, documentId, issueId, onClose, onDocum
             {!detail.hasVersionFamily && <p role="status" className="text-sm text-muted-foreground">此文书尚未记录版本关系。保存新版本时将以当前原件建立版本关系。</p>}
             <div className="flex flex-col gap-2">{detail.versions.map(version => <Button key={version.id} variant={version.id === documentId ? "secondary" : "outline"} className="h-auto justify-start whitespace-normal text-left" disabled={pending} onClick={() => void canLeave().then(allowed => { if (allowed && version.id !== documentId) onDocumentChange(version.id); })}>第 {version.version} 版 · {version.name} {version.isLatest ? "（当前版本）" : ""}</Button>)}</div>
             {detail.canUploadVersion && <div className="space-y-2 rounded-lg border p-4"><Label htmlFor="document-new-version">上传新稿</Label><Input id="document-new-version" type="file" disabled={pending} onChange={event => { setFile(event.target.files?.[0] ?? null); requestKey.current = crypto.randomUUID(); }} /><p className="text-xs text-muted-foreground">新稿保存为新版本，审批需重新完成。</p><Button disabled={!file || pending} onClick={() => mutate(async () => {
-              const result = await uploadNewVersion({ documentId, file: file!, requestKey: requestKey.current }); setFile(null); onDocumentChange(result.id);
-            }, "新版本已保存")}>保存新版本</Button></div>}
+              const result = await uploadNewVersion({ documentId, file: file!, requestKey: requestKey.current, contextInputs }); setFile(null); setInputEdits(null); onDocumentChange(result.id);
+            }, "新版本已保存")}>保存新版本</Button>
+              <ContextInputPicker matterId={matterId} initial={detail.contextInputs} value={contextInputs} disabled={pending} onChange={value => { setInputEdits(value); requestKey.current = crypto.randomUUID(); }} />
+            </div>}
           </TabsContent>
         </Tabs>
       </>}

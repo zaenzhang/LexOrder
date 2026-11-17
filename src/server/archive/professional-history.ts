@@ -4,7 +4,7 @@ import { assertDocumentDerivationAccess } from "@/server/documents/derivation-ac
 import { readResearchIssueSnapshot } from "@/server/research/issue-snapshot";
 
 type ReferenceRole = "RESEARCH_OUTPUT" | "RESEARCH_SOURCE" | "ISSUE_SOURCE" | "REVIEW_DOCUMENT" |
-  "REVIEW_BASIS" | "REVIEW_REVISION" | "DELIVERY_ITEM" | "DELIVERY_PROOF";
+  "REVIEW_BASIS" | "REVIEW_REVISION" | "DELIVERY_ITEM" | "DELIVERY_PROOF" | "CONTEXT_OUTPUT" | "CONTEXT_SOURCE";
 type DocumentReference = {
   documentId: string; documentName: string; documentVersion: number; documentSha256: string; roles: ReferenceRole[];
 };
@@ -14,7 +14,7 @@ const documentSelect = { id: true, matterId: true, deletedAt: true, name: true, 
 /** Called once in the existing archive approval transaction. Extra references never add physical files. */
 export async function buildArchiveProfessionalHistory(db: Prisma.TransactionClient, matterId: string, selectedDocumentIds: string[]) {
   const selected = [...new Set(selectedDocumentIds)];
-  const [research, reviews, deliveries] = await Promise.all([
+  const [research, reviews, deliveries, contextInputs] = await Promise.all([
     db.researchRevision.findMany({ where: { matterId, outputDocuments: { some: { documentId: { in: selected } } } },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: {
         id: true, matterId: true, seriesId: true, version: true, supersedesId: true, issueId: true, issueRevisionId: true, issueSnapshot: true,
@@ -51,6 +51,14 @@ export async function buildArchiveProfessionalHistory(db: Prisma.TransactionClie
           channel: true, note: true, proofDocumentId: true, correctsEventId: true,
         } },
       } }),
+    db.documentContextInput.findMany({ where: { documentId: { in: selected }, document: { matterId } },
+      orderBy: [{ documentId: "asc" }, { contextRecordId: "asc" }], select: {
+        documentId: true, contextRecordId: true, currentRecordIdAtAdoption: true, adoptedConfirmedAt: true,
+        document: { select: { createdAt: true, uploadedBy: { select: personSelect } } },
+        contextRecord: { select: { id: true, matterId: true, seriesId: true, version: true, kind: true, visibility: true,
+          content: true, reason: true, sourceDescription: true, sourceDocumentId: true, sourceNoteId: true, sourceClientActivityId: true,
+          occurredAt: true, createdAt: true, author: { select: personSelect } } },
+      } }),
   ]);
 
   const references = new Map<string, { roles: Set<ReferenceRole>; hashes: Set<string>; versions: Set<number> }>();
@@ -79,6 +87,10 @@ export async function buildArchiveProfessionalHistory(db: Prisma.TransactionClie
     row.items.forEach(item => addReference(item.documentId, "DELIVERY_ITEM", item.documentSha256, item.documentVersion));
     for (const event of row.events) if (event.proofDocumentId) addReference(event.proofDocumentId, "DELIVERY_PROOF");
   }
+  for (const row of contextInputs) {
+    addReference(row.documentId, "CONTEXT_OUTPUT");
+    if (row.contextRecord.sourceDocumentId) addReference(row.contextRecord.sourceDocumentId, "CONTEXT_SOURCE");
+  }
 
   const documents = await db.document.findMany({ where: { id: { in: [...references.keys()] } }, select: documentSelect });
   const byId = new Map(documents.map(document => [document.id, document]));
@@ -96,6 +108,11 @@ export async function buildArchiveProfessionalHistory(db: Prisma.TransactionClie
 
   return {
     matterId, selectedDocumentIds: selected, documentReferences,
+    documentContextInputs: contextInputs.map(({ document, contextRecord, adoptedConfirmedAt, ...input }) => ({
+      ...input, adoptedConfirmedAt: adoptedConfirmedAt?.toISOString() ?? null,
+      adoptedAt: document.createdAt.toISOString(), adoptedBy: document.uploadedBy,
+      record: { ...contextRecord, occurredAt: contextRecord.occurredAt.toISOString(), createdAt: contextRecord.createdAt.toISOString() },
+    })),
     research: research.map(({ createdAt, researchedAt, checkedAt, sources, outputDocuments, issue, ...row }) => {
       // The current relation serves authorization only; the archived input is issueSnapshot.
       void issue;

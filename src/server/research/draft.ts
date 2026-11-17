@@ -9,6 +9,7 @@ import { encryptBuffer, sha256 } from "@/lib/storage/crypto";
 import { shDayKey } from "@/lib/ui/sh-time";
 import { auditTx } from "@/server/audit";
 import { contextAccess, type ContextActor } from "@/server/matters/context-service";
+import { assertContextInputSelections } from "@/server/matters/context-inputs";
 import { queryAccessLabels, queryOutcomeLabels, sourceRelationLabels, lawKindLabels, researchDraftSchema, type ResearchDraftInput, type ResearchRevisionView } from "./contracts";
 import { assertResearchReadable, loadResearch, presentResearch, researchTransaction } from "./service";
 
@@ -41,7 +42,7 @@ export function researchDraftSections(view: ResearchRevisionView): { title: stri
 export async function createResearchDraft(db: PrismaClient, actor: ContextActor, input: ResearchDraftInput) {
   const parsed = researchDraftSchema.parse(input);
   const requestHash = createHash("sha256").update(JSON.stringify({ kind: "RESEARCH_ANALYSIS", matterId: parsed.matterId,
-    researchRevisionId: parsed.researchRevisionId })).digest("hex");
+    researchRevisionId: parsed.researchRevisionId, contextInputs: parsed.contextInputs })).digest("hex");
   let ownedPath: string | null = null;
   try {
     return await researchTransaction(db, async tx => {
@@ -50,6 +51,7 @@ export async function createResearchDraft(db: PrismaClient, actor: ContextActor,
       const row = await loadResearch(tx, parsed.matterId, parsed.researchRevisionId);
       await assertResearchReadable(tx, access, row);
       const existing = await tx.document.findUnique({ where: { generationRequestKey: parsed.requestKey } });
+      const adopted = await assertContextInputSelections(tx, actor.id, parsed.matterId, parsed.contextInputs, !existing);
       if (existing) {
         if (existing.uploadedById !== actor.id || existing.generationRequestHash !== requestHash || existing.matterId !== parsed.matterId) {
           throw new ActionError("生成标识已用于其他内容，请重新打开研究");
@@ -81,6 +83,7 @@ export async function createResearchDraft(db: PrismaClient, actor: ContextActor,
         tags: ["研究分析稿"], uploadedById: actor.id, generationRequestKey: parsed.requestKey, generationRequestHash: requestHash,
       }, select: { id: true } });
       await tx.documentResearchSource.create({ data: { documentId: document.id, researchRevisionId: row.id } });
+      if (adopted.length) await tx.documentContextInput.createMany({ data: adopted.map(input => ({ documentId: document.id, ...input })) });
       await auditTx(tx, { userId: actor.id, action: "RESEARCH_DRAFT_CREATE", targetType: "Document", targetId: document.id,
         detail: { matterId: parsed.matterId, researchRevisionId: row.id, researchVersion: row.version } });
       return { documentId: document.id, fileName, replayed: false };

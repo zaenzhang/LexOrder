@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { emptyLawMetadata, emptyResearchContent, type ResearchRevisionView } from "@/server/research/contracts";
 
 const mock = vi.hoisted(() => ({ list: vi.fn(), read: vi.fn(), options: vi.fn(), history: vi.fn(), source: vi.fn(), preview: vi.fn(),
-  save: vi.fn(), check: vi.fn(), draft: vi.fn(), ask: vi.fn(), prompt: vi.fn() }));
+  save: vi.fn(), check: vi.fn(), draft: vi.fn(), ask: vi.fn(), prompt: vi.fn(), contextOptions: vi.fn(), contextChoice: vi.fn(), contextHistory: vi.fn() }));
+vi.mock("@/server/matters/context-actions", () => ({ getMatterContextInputOptions: mock.contextOptions, getMatterContextInputChoice: mock.contextChoice, getMatterContextHistory: mock.contextHistory }));
 vi.mock("@/server/research/actions", () => ({ getResearchList: mock.list, getResearch: mock.read, getResearchOptions: mock.options,
   getResearchHistory: mock.history, getResearchSource: mock.source, getResearchSourcePreview: mock.preview,
   saveResearchRevision: mock.save, checkResearchRevision: mock.check, formResearchDraft: mock.draft }));
@@ -29,6 +30,35 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("研究工作区的保存与来源连续性", () => {
+  it("出稿选择属于本次文书，失败重试保留固定输入及原请求，不写回研究", async () => {
+    const selection = { recordId: "cm00000000000000000000004", expectedCurrentRecordId: "cm00000000000000000000005", expectedConfirmedAt: null };
+    mock.contextOptions.mockResolvedValue({ choices: [{ selection, kind: "INSTRUCTION", version: 1, content: "合成选入的旧指示", sourceDescription: "合成来源", historical: true }], nextCursor: null });
+    mock.draft.mockRejectedValueOnce(new Error("合成出稿失败")).mockResolvedValueOnce({ documentId });
+    render(<ResearchWorkspace matterId={matterId} researchId={researchId} onSelectResearch={choose} onOpenDocument={openDocument} />);
+    fireEvent.click(await screen.findByRole("button", { name: "选择目标或指示" }));
+    fireEvent.click(await screen.findByRole("button", { name: "采用所显示的这版" }));
+    fireEvent.click(screen.getByRole("button", { name: "形成分析稿" }));
+    await screen.findByText("合成出稿失败");
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() => expect(openDocument).toHaveBeenCalledWith(documentId));
+    expect(mock.draft.mock.calls[0][0]).toEqual(mock.draft.mock.calls[1][0]);
+    expect(mock.draft.mock.calls[0][0]).toMatchObject({ contextInputs: [selection] });
+    expect(mock.save).not.toHaveBeenCalled();
+  });
+
+  it("出稿失败后另一次修改读取失败，通用重试不会错误地再次出稿", async () => {
+    mock.draft.mockRejectedValue(new Error("合成出稿失败"));
+    mock.options.mockRejectedValueOnce(new Error("合成修改入口读取失败"));
+    render(<ResearchWorkspace matterId={matterId} researchId={researchId} onSelectResearch={choose} onOpenDocument={openDocument} />);
+    fireEvent.click(await screen.findByRole("button", { name: "形成分析稿" }));
+    await screen.findByText("合成出稿失败");
+    fireEvent.click(screen.getByRole("button", { name: "修改研究" }));
+    await screen.findByText("合成修改入口读取失败");
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    await waitFor(() => expect(mock.read).toHaveBeenCalledTimes(2));
+    expect(mock.draft).toHaveBeenCalledTimes(1);
+  });
+
   it("保存失败保留草稿与同一次请求身份，重试成功定位具体研究", async () => {
     mock.save.mockRejectedValueOnce(new Error("合成响应中断")).mockResolvedValueOnce({ id: researchId, version: 1, replayed: true });
     render(<ResearchWorkspace matterId={matterId} onSelectResearch={choose} onOpenDocument={openDocument} />);

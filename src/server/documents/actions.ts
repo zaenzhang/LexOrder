@@ -23,6 +23,7 @@ import { encryptBuffer, sha256 } from "@/lib/storage/crypto";
 import { extractDocumentTextLayer, ocrStatusFor } from "@/lib/documents/text-extraction";
 import { revalidateMatter } from "@/server/matters/route";
 import { ingestMaterial, withdrawMaterial } from "./material-ingest";
+import { contextInputSelectionsSchema, type ContextInputSelection } from "@/lib/matters/context-inputs";
 import { ActionError } from "@/lib/action-error";
 import { assertDocumentDerivationAccess } from "./derivation-access";
 import { canReadDocument } from "@/lib/approvals/documents";
@@ -64,6 +65,12 @@ async function documentMutation<T>(user:RoleUser&{id:string},subject:{intakeId:s
 
 export async function uploadDocument(formData: FormData) {
   const session = await requireSession("documents.write");
+  const contextRaw = formData.get("contextInputs");
+  let contextInputs: ContextInputSelection[] = [];
+  if (contextRaw !== null) {
+    try { contextInputs = contextInputSelectionsSchema.parse(JSON.parse(z.string().max(20000).parse(contextRaw))); }
+    catch { throw new ActionError("采用的目标或指示无效，请重新选择"); }
+  }
 
   const matterIdRaw = formData.get("matterId");
   const intakeIdRaw = formData.get("intakeId");
@@ -168,6 +175,7 @@ export async function uploadDocument(formData: FormData) {
   const requestKey = formData.get("requestKey");
   const created = await ingestMaterial({
     userId: session.user.id,
+    contextInputs,
     requestKey: typeof requestKey === "string" && requestKey ? requestKey : undefined,
     bytes: enc ? enc.ciphertext : raw,
     document: {
@@ -431,6 +439,7 @@ export async function fileDocument(input: { documentId: string; expectedUpdatedA
  * 归档守卫沿用（归档案件不可更新版本）。
  */
 export async function uploadNewVersion(input: {
+  contextInputs?: ContextInputSelection[];
   documentId: string;
   file: File;
   category?: string;
@@ -476,6 +485,7 @@ export async function uploadNewVersion(input: {
   const enc = encrypted ? encryptBuffer(raw) : null;
   const created = await ingestMaterial({
     userId: session.user.id, priorDocumentId: prior.id, requestKey: input.requestKey, checkout,
+    contextInputs: input.contextInputs,
     bytes: enc ? enc.ciphertext : raw,
     document: {
       matterId: prior.matterId, intakeId: prior.intakeId, procedureId: prior.procedureId,
