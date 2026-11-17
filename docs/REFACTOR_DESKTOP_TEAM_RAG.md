@@ -697,6 +697,16 @@ uploadDocument采用唯一discriminated结果合同，成功返回实际id，确
 
 新批准archive/professional-history显式选择三个位置字段，并将已存SHA纳入原documentReferences一致性核验；旧冻结专业历史不回填。沿G06的固定抽取、原生PDF页、Office整份转换和同版下载性质，不声明Word原文DOM定位、完整OOXML或水印后字节与原SHA等同。除当前三列业务迁移外，不新建通用来源/导航/复核平台或依赖。
 
+### 6.18 本人客户跟进队列与准确办理合同（G01子范围，2026-11-17）
+
+计划§7.14.14发布后实施。ClientFollowUp仍为唯一责任和状态记录；不复制Task、不接WorkResponsibility或通用提醒/转交框架。当前账号/岗位及clients.read、clientVisibilityFilter和clientRelationshipFilter(read)在客户域查询内复核，之后限定本人assignee、OPEN和客户未删除并计算count/列表；财务主档可见不放开沟通正文。canClose另核当前write/关系，原客户详情管理办理资格不被队列本人范围修改。
+
+首页取同一合同前5条；完整列表在/clients/follow-ups，复用page/count/skip固定页长，dueAt/id排序。同一RepeatableRead事务内使用同一个observedAt和当前授权计算count/items，页码按当前total校准，零条仍第1页；今日用上海日界，逾期严格dueAt<observedAt，无跨请求固定快照承诺。URL保filter/page；followUp+client是确切目标和所见归属，独立精确读取先核实际客户当前权限，再核本人和原归属。合并变化要求刷新重开，不自动改绑草稿或披露新客户；终态可读但无保存动作。
+
+从原ClientRelationshipPanel提取真实共用结果Dialog，原客户详情和队列共用recordClientActivity/saveClientActivity；保dirty/pending/失败保稿/同请求键与迟到隔离，原客户锁、OPEN更新、结果/下一项和审计事务不变。队列内办理不经过客户第一页，成功/关闭清确切目标参数而保有效filter/page；失效末页才校准，行移除回稳定标题。客户档案独立链接及returnTo仅窄放行真实队列路径和支持参数；现单客户分页Hook不扩成新平台。保存和合并出口刷新新首页/队列消费者。
+
+本片无schema、迁移、新依赖、轮询或后台扫描器改动；原记录改期、责任转交、离岗检查和后台提醒继续按G01未完成范围追踪，不以“安排下次跟进”替代。
+
 ## 7. 参考项目如何进入 LexOrder
 
 沿用 [来源记录](RESEARCH_AND_DECISIONS.md)，按“观察行为 → 输入输出与规则 → LexOrder 设计 → 场景验收”吸收。实际复制代码另记固定提交、文件、依赖与来源；研究范围不按协议类型排除。
