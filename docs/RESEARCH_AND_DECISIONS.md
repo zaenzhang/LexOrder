@@ -1208,6 +1208,18 @@ B提出G06后续方案，C主审和两路只读复审重读parseMaterial、publi
 
 追加两个生产文件的方案有两个真实消费者，保parser原所有身份语义；将非空不支持值显示“未转换”，明确区分真实空格。复审核出原研究XLSX夹具为多格不可改标TABLE、研究页无iframe无需新增、处理状态页无固定引用不会产生TABLE，以及缺缓存/从格不能伪装真parser anchor。最终九文件合同覆盖临时七文件版本，具体状态/验证及未完成范围见计划 §7.16.11；本节是开工依据，不是已实现或浏览器通过。
 
+### 3.43 D03真实对象及稳定责任编辑器复核（2026-11-17）
+
+A交只读责任映射，C实读page单次getWorkBoard、tabs、NextActions、责任板及全局schedule/收案消费者。Deadline ID/updatedAt和WorkRow责任ID/revision不同，Hearing应补显式ID；原hideTasks只排Task，删整板会丢其他程序/终态和交接。两种确认、归档取消、单一编辑器及合并后空态不能混淆；两路复审核后采用四文件内的专用组合参数和同源Map。
+
+本轮实读固定[Frappe TaskArea.vue](https://github.com/frappe/crm/blob/3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952/frontend/src/components/Activities/TaskArea.vue)全文件，blob `c3ae185ce1f2b585c610d630d242d1c5cd2bcc4f`：同一对象行展示负责人/日期，并就近打开原对象modal及状态动作。只借鉴集中呈现，不复制Vue/AGPL或其删除/权限语义。LexOrder双身份/版本、原服务、可达折叠和固定历史来自当前业务约束，合同见计划 §7.16.12。
+
+### 3.44 本人跟进改期及确切审计记录的接续（2026-11-17）
+
+A提九文件终版，C主审及独立服务/UI复审核follow-ups DTO/URL、队列/精确读、relationship-service/access、merge和历史排序。现模型有毫秒updatedAt，完成/取消/合并共用授权锁与客户锁，可原记录CAS，不需结束旧跟进另造一条；理由应在确切原记录重开可见，故纳入同域只读审计分页，不扩全局历史聚合。
+
+A与C实际读上节固定TaskArea对象编辑/日期展示；该参考不证明后端并发，服务依据本项目锁序和Note原单调毫秒模式。复审强调本人边界、授权先receipt、未知提交同key、未改分钟保秒毫秒、规范模式身份及历史form外只读；实际merge后新clientId应读原历史、旧clientId拒绝。准确合同见计划 §7.16.13，此为开工依据，不是已运行/专业通过。
+
 ## 4. 可选法律服务 MCP 与来源
 
 核查日期 2026-11-16；以下为官方公开的接入信息，不是本项目已取得账号、权益或实测成功。机构目录可扩展，自定义远程 MCP 为未预置服务保留入口；不虚构“市面所有机构都提供官方 MCP”。

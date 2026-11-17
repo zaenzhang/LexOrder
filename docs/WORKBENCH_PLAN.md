@@ -719,7 +719,7 @@ W09.3 知识发布、B 结构化方案比较、E 期限重算深化、F 自动�
 
 | 角色 / 真实检出 | 当前准确子范围与状态 | 本批文件所有权及交接 |
 | --- | --- | --- |
-| A：用户指定客户/事项组；`/workspace/scratch/1fb3f0cf432f/lexorder-a`；main | **A1=G03 日期/类型/事项筛选与准确返回开发完成，C已复审/集成，见 §8.51；用户待验** | 采用本地小提交 `b05a532`，八生产+八测试与 §7.16.5一致。G01/F10/D08/G12、联系人/原件关系及后续责任语义仍未进入本批，下一编码先另合同 |
+| A：用户指定客户/事项组；`/workspace/scratch/1fb3f0cf432f/lexorder-a`；main | **A1=G03已集成，见 §8.51；A2=G01本人原跟进改期合同已审定，本次发布后实施** | A1采用 `b05a532`；A2九生产+六测试见 §7.16.13，无schema/公共授权变化。B2交还后另分配PG；转交/提醒、F10/D08/G12、联系人/原件关系及保全编辑不在本批 |
 | B：用户指定材料/研究组；`/workspace/scratch/36f32dac17c2/lexorder-b`；main | **B1=G10-1 已集成，见 §8.50；B2=G06-2 固定XLSX单格转换预览合同审定，随本次发布后实施** | B1采用 `34fcc5f`；B2准确九生产+七测试见 §7.16.11，取代临时提案早期七生产范围。四文档/schema/公共授权仍归C；G10其余、Word定位和完整OOXML未开工 |
 | C：本会话 `/root`；`/workspace/scratch/618136981e82/lexorder-c`；main | **C0 已以 `de4ca5a` 发布；C1=D02 代码与开发静态复审完成，见 §8.45；用户桌面待验** | C1 仅改 `src/app/moan-pages.css` 的 `.mo-dossier .dos-proc*`，本片结束。四主文档、共享合同与全局文件/main 仍由 C 独占；后续使用须按准确小批登记 |
 | C2：同一 C 检出/唯一写者 | **W12 已选交付材料移除已修复，代码/组件与静态复审完成，见 §8.46；用户待验** | 仅 `src/components/deliveries/delivery-panel.tsx`、`src/tests/components/delivery-panel.test.tsx`；合同见 §7.16.4，本片结束。无 schema/公共授权/数据库/运行进程变更 |
@@ -727,6 +727,7 @@ W09.3 知识发布、B 结构化方案比较、E 期限重算深化、F 自动�
 | C4：同一 C 检出/唯一写者 | **D06/D07 欢迎区重复入口与邮件文案子范围代码/组件及静态完成，见 §8.48；用户待验** | 首页、两份旧冲突弹窗文件删除及既有首页mock清理；合同见 §7.16.8，本片结束；不把D06/D07总号关闭 |
 | C5：同一 C 检出/唯一写者 | **本事项保全创建后的默认事项恢复已修复，代码/组件及静态完成，见 §8.49；用户待验** | 唯一生产文件的reset及新专用组件回归见 §7.16.9，本片结束。编辑接线因解除关联/责任读权合同未齐，另列未开工 |
 | C6：同一 C 检出/唯一写者 | **普通完整卷宗服务链与精确获批归档真实HTTP成功已验证，见 §8.52；用户/专业待验** | 唯一代码文件 `src/tests/server/m3-http-contracts.integration.test.ts`，合同见 §7.16.10；无生产改动，最终2用例通过，Next/PG正常停止。旧三条例外链未重建 |
+| C7：同一 C 检出/唯一写者 | **D03事项页日程与责任呈现合同已审定，本次发布后实施** | 四生产+三可改测试见 §7.16.12；复用同一次getWorkBoard/原编辑器，不改服务/schema/公共授权，不占B2数据库时段 |
 
 C 内部 `c_d02_plan_review`、`c_m3_acceptance_review` 及后者的归档只读审查均无源码/文档写权，不占据 A/B 角色。`/workspace/LexOrder`、`/workspace/lexorder-case-audit`、历史 `lexorder-s10` 保留原成果，不用作新的并行写入检出。A/B 的临时交接可在各自检出忽略提交的 `.runtime/` 提供方案/patch 与 base SHA；C 读取后把正式合同和证据写回本账本，不另建并行主计划。每个检出始终一名写者；同一运行进程或隔离数据库必须另行登记当次 owner。
 
@@ -1460,6 +1461,52 @@ B先交实际parser→已发布快照→固定来源→Office route→四消费�
 | 未动范围与用户验收 | 不改source-links、无位置的material-processing-status、schema/迁移、公共read-release/授权、全局壳及四文档。实际浏览器滚动/高亮/换行、失败呈现、返回草稿由用户验；Word TEXT定位、完整OOXML/页版式、模型/OCR/MCP仍未启动，不作人工M3前置 |
 
 两次追加审查纠正已纳入：两个真实消费者共享转换而非复制语义；公式缓存类型不能扩展；保原空白与UNSUPPORTED的身份贡献；不支持的非空格不能悄悄显示空白；测试不能仅由两端同helper互证。此合同下无已知开工阻断，代码/运行/浏览器完成仍须后续分别登记。
+
+#### 7.16.12 C7：事项页期限/庭期与责任合并呈现（D03 子范围）
+
+A已交Deadline/Hearing/WorkResponsibility身份、两种版本/确认及主办交接的只读映射；C主审及界面/服务两路交叉复审沿page→tabs→NextActions/责任板核对。以下合同无剩余已知开工阻断，先发布再实施；不扩全局首页/schedule数据或重建责任链。
+
+| 冻结项 | 准确合同 |
+| --- | --- |
+| 四生产文件 | `src/app/(app)/matters/[id]/page.tsx`；`src/app/(app)/matters/[id]/_components/matter-detail-tabs.tsx`；`src/app/(app)/matters/[id]/_components/procedure-workflow-panel.tsx`；`src/components/matters/work-responsibility-panel.tsx`。无新增生产文件/全局CSS/公共组件框架 |
+| 单次读取接线 | page只读原同一次getWorkBoard，必填workBoard数据经tabs交workflow，删除responsibilityNode双入口。保原返回形状含null；组合render函数只在client workflow创建，不从Server跨RSC传普通函数，不新发责任查询 |
+| 最小接口 | 责任板导出WorkBoardData、ScheduleResponsibilityTarget和renderer类型；可选schedule={targets,render}只供事项组合。target为Deadline/Hearing显式targetId，Deadline另带hasDeadlineAdjuster。全局日程/收案消费者不传schedule，原任务/紧急项/交接保持 |
+| 同源Map | Panel只以targets与同次data.items的OPEN记录按kind+targetId匹配；同一Map既返回责任摘要/动作又按work.id抑制板内副本。Deadline沿原ID，Hearing补显式hearingId，不拆key、不按标题/日期匹配。无匹配返回null，只读匹配仍返回真实摘要；其他程序/终态/Task/Urgent/Memo/waiting不合并 |
+| 折叠含义 | targets取实际传给NextActions的全部期限/庭期，带计数及明确展开按钮的折叠组是该唯一可达列表；收起不恢复副本，不做DOM登记/render中setState。保原scope=all及原展开行为 |
+| 复用摘要/动作 | 同文件普通render函数提取原责任人/停用/承接/待交接状态、reason和动作，仍闭包用原openWork/run/busy/submit，不复制表单。日程行不重复标题/日期；责任区放.what或紧凑.body内独立换行区，沿flex-wrap，不挤入span.ops或省略号区 |
+| 双身份/动作分工 | 日期按钮明确“确认日期/调整日期”，仍用Deadline.id+expectedUpdatedAt；承接/交接/办结/取消仍用work.id+revision+必要reason。匹配Deadline删除旧toggleDeadlineCompleted简化完成，仅原changeWork办结；未匹配期限保旧服务行为。adjustDeadline与责任RESCHEDULE审计/原因并非等价，不作等价声明 |
+| 唯一改期入口 | 同一predicate判canManage、deadlineId、at、deadlineUpdatedAt齐全，驱动原调整按钮及hasDeadlineAdjuster；该入口可达才省该匹配Deadline的责任RESCHEDULE，否则沿原责任资格保留；Hearing不受此标记影响。pending禁用不改变入口身份 |
+| 稳定编辑器 | Panel只按matter.id区分实例，不随程序/环节/展开/版本重挂；唯一原work/handover/urgent Dialog留在责任section固定位置。openWork固定打开时Item/版本/日期；刷新/换程序不换旧草稿或自动加revision，失败保输入 |
+| 当前可用性 | 责任写按钮沿原data.canWrite，不借canWriteTasks补权；旧work编辑器当前对象不再可读或写资格已撤时禁提交并提示，不复制服务授权或换成当前revision。data.matters已知ARCHIVED时只留OPEN的CANCEL、不提供REOPEN；原服务最终核权，不能因无日程编辑而丢取消出口 |
+| 回焦/null | work弹窗优先回原仍可见按钮，已移除则回boardHeading，不聚焦hidden/inert。data=null且可读日程仍经schedule.render显示NextActions；无日程资格不传schedule但保合法责任/应急交接。终态及固定交接快照不补造逐次历史，不增DECLINE入口 |
+| 准确空态 | 剩余items空且matched非空显示“其他责任事项为空，期限与庭期责任见上方对应记录。”；不误报全范围无待办、不删整板/主办交接/终态开关 |
+| 三可改测试 | `src/tests/app/procedure-workflow-navigation.test.tsx`扩真实组合及动作替身；`src/tests/app/matter-editor-focus.test.tsx`只补必填workBoard=null fixture；`src/tests/app/task-workflow.test.tsx`补无schedule的收案Urgent/交接接线并保全局板。另运行已有`src/tests/app/deadline-due.test.tsx`，不机械改写 |
+| 必要验证 | 同名同刻不同ID/kind、两程序切换、折叠唯一可达、双确认/准确payload及不调旧toggle；旧版本/失败保稿/换程序不重挂/当前撤权禁提交；null/只读/无日程/归档CANCEL、准确空态/固定快照。导航内调整stub只证明准确入参，真实AdjustDeadline表单提交由已有deadline-due证明。四文件定点组件、受影响lint/类型/diff及实码复审，无PG/浏览器任务 |
+
+本片开发与用户桌面结果分记；用户另验实际滚动、键盘、折叠和返回草稿。不关闭整个D03，不混入保全编辑或更改公共授权。
+
+#### 7.16.13 A2：本人同一待跟进原记录有原因改期（G01 子范围）
+
+A在同步正式main `6d3a552`的干净独立检出提交九文件终版，C主审及服务/UI两路复审核原客户锁、毫秒版本、精确队列/URL/结果Dialog和审计。下列合同无剩余已知开工阻断，发布后才编码；不把完成/取消原项再建下一项当改期，无新表/迁移/公共授权或后台提醒。
+
+| 冻结项 | 准确合同 |
+| --- | --- |
+| 九生产文件 | `src/lib/clients/follow-ups.ts`；`src/server/clients/follow-up-queue.ts`；`src/server/clients/relationship-service.ts`；`src/server/clients/relationship-actions.ts`；`src/components/clients/personal-follow-up-queue.tsx`；新增`src/components/clients/client-follow-up-reschedule-dialog.tsx`；`src/app/(app)/clients/follow-ups/page.tsx`；`src/server/clients/history-service.ts`；`src/components/clients/client-activity-dialog.tsx` |
+| 严格输入/资格 | clientId、followUpId、精确expectedUpdatedAt、带时区dueAt、trim后1—1000字reason、UUID requestKey；拒额外负责人/状态/来源等字段。沿原1900—2200及上海转换，不加未来only；DTO带真实updatedAt。Action先clients.write，事务liveRelationshipWriter沿72606101复核账号/岗位，lockClientRelationship锁客户核沟通读写；目标真实clientId、本人assignee及当前可办理均须成立，不把管理岗可完成他人规则扩成他人改期 |
+| 原对象CAS | 新请求须OPEN、毫秒expectedUpdatedAt相同、dueAt真变；nextUpdatedAt=max(Date.now(),旧毫秒+1)。updateMany同时含id/clientId/本人/OPEN/旧updatedAt并恰1行，仅改dueAt/updatedAt；标题、状态、负责人、来源/结果、创建/关闭字段保持，不生成沟通或另一跟进 |
+| 窄审计重放 | 当前资格/目标通过、客户锁内查actor+CLIENT_FOLLOWUP_RESCHEDULE+ClientFollowUp+原ID+requestKey；规范ISO/trim后逐字段核请求和前后日期/版本，不增hash/请求平台。完全同请求且当前仍为该结果可重放、不重复审计；同键异内容拒绝；已保存但又变化/结束明确告知重读，不覆写或称旧结果为当前成功 |
+| 事务/并发 | 更新与auditTx同事务，失败整体回滚；与现完成/取消/merge同一授权锁→客户锁次序。当前撤权、合并目标变化、结束/旧版本拒绝；receipt不替代当前授权，不改公共审计/权限 |
+| 精确读取和草稿 | 本人队列行就近“改期”，重新getPersonalFollowUp核原对象/资格，显示客户/跟进/负责人/当前时间/状态，字段仅新时间/原因。精确dueAt/updatedAt/对应分钟显示值单独作基线；控件未实改不能保存，填理由不截断原秒毫秒。pending禁退、dirty放弃确认、普通失败保稿/同key，目标/模式/序号隔离迟到 |
+| 冲突/未知提交 | 字段编辑/历史展开/props刷新不自动换key掩盖未知提交。主动“重新读取并核对”成功后才更新基线与新请求身份，保日期/原因供再次明确保存，不自动重发；若新安排已等于草稿则不造改期。撤权/终态只读，不用缓存继续写 |
+| URL完整身份 | 仅mode=reschedule，须与合法followUp/client同现；重复/未知/缺目标拒绝。无mode规范为原结果入口，原取消仍由结果编辑器status区分、不新建取消URL。initial identity、closed target、Server载荷/迟到/URL恢复均含clientId+followUpId+规范mode，不能只改Dialog key；前后退/新props不替换正在编辑稿 |
+| 原查询返回 | 关闭/成功清followUp/client/mode，保filter/page；成功沿原服务重读并夹有效末页，行消失回稳定标题。客户returnTo仍只filter/page，不改白名单/首页入口。FOLLOW_UP事件仍原createdAt/ID/source，摘要改“当前安排”含日期时间，不把改后日期冒充创建时约定 |
+| 确切历史组件 | 新文件内同一窄只读组件用于改期Dialog及ActivityDialog的verifyPersonalTarget且精确成功分支；放原form兄弟节点，按钮type=button。不改原结果/取消保存、key、草稿或读取attempt；终态本人可读，客户详情管理分支不接入。展开/翻页/重试不重挂父表单，目标变化/精确重读或失败清旧历史并丢迟到 |
+| 历史授权/分页 | 每页20+1，RepeatableRead内先核当前clients.read、客户读取交集、本人/真实目标，再核上一末auditId属于同action/type/target，按createdAt/id严格倒序。只投影前后dueAt、原因、操作者名称/未记录与时间，不返detail/requestKey/IP；坏JSON明确失败，不静默跳过补造。各页重核授权，失败与空分开，不增通用分页平台 |
+| 合并后的历史 | 按当前followUp.clientId授权同followUpId，不按audit.detail旧clientId授权或过滤。真实改期→merge后新clientId读原历史、旧clientId拒绝必须加入PG断言；UI不偷偷换客户续写，重新从队列取得新客户后才能打开，旧响应不得回填 |
+| 六测试文件 | `src/tests/server/client-follow-up-queue.integration.test.ts`；`src/tests/app/client-follow-up-queue.test.tsx`；新增`src/tests/app/client-follow-up-reschedule-dialog.test.tsx`；`src/tests/lib/client-navigation.test.ts`；`src/tests/lib/client-relationship.test.ts`；`src/tests/server/client-history.integration.test.ts`（只扩FOLLOW_UP受影响例） |
+| 必要验证/时段 | 原ID/关系/状态不变、一条审计、同版本并发仅一成功、毫秒推进、精确重放/异内容/随后变化、非本人含管理岗/撤权/终态/合并及审计回滚；21条同刻分页/错cursor/只读终态/合并后历史。UI模式/秒毫秒/同key/主动重读/失败草稿焦点，先填结果稿再历史展开/翻页/重试不保存且原key不变。先静态/纯组件，窄PG等B2正常交还后C明确分配，不全量或迁移 |
+
+本片不含转派/承接/退回/撤回、离岗/后台提醒、客户原件/联系人、F10/D08/G12或保全编辑。PG是实际服务/Action调用、会话受控，不称HTTP/浏览器；用户另验本人队列筛选/第2页改期后同查询有效页、确切链接重开、并发拒绝及原记录历史。专业与G01其余范围仍保留。
 
 ## 8. 交接：完成范围、证据与未覆盖项
 

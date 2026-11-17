@@ -753,6 +753,18 @@ B2由现materialPresentation增加TABLE请求类型，readMaterialSource仅传�
 
 为两个真实消费者抽取原XLSX值转文本纯函数，parser仅等价调用，不改变版本、限额、coverage/unit或anchor生成；预览不导入整套parser。保空白、undefined、公式缓存类型和异常传播，不执行公式，不以cell.text隐藏不支持值。四消费者明确TABLE/CONVERTED/NATIVE/NONE，source-links和无固定位置的状态列表不需修改。准确九生产/七测试及串行PG边界见计划 §7.16.11；共享schema、授权与运行平台不变。
 
+### 6.25 事项日程与责任的单次读取组合（2026-11-17）
+
+C7将原同一次getWorkBoard数据穿过page/tabs，组合函数只在client workflow创建，遵守本地Next Server/Client文档的可序列化边界。责任板拥有唯一编辑器和打开时Item/旧revision；同一OPEN kind+targetId Map既生成内联摘要/动作，又按真实work.id排除副本。无schedule参数的全局日程/收案用法保持，不新增DTO/查询/provider。
+
+期限ID/updatedAt与责任ID/revision分别保留；原调整可达才省责任改期，匹配后的办结只经changeWork。当前资格/已知归档只收窄界面，不更改公共授权；无匹配或不可读不能推断写权。四生产/三可改测试、稳定挂载、折叠/null合同见计划 §7.16.12。
+
+### 6.26 本人跟进改期的现有锁与毫秒版本（2026-11-17）
+
+A2复用ClientFollowUp TIMESTAMP(3) updatedAt显式单调毫秒CAS；沿liveRelationshipWriter的72606101→客户行锁，与完成/取消/合并同序。原对象只更新dueAt/updatedAt并同事务auditTx；窄重放按当前合法本人/动作/目标/key，已再次变化不能重报旧成功，不增请求表或hash平台。
+
+按当前客户关系/本人精确资格读取改期审计，anchor只确定位置，各页仍核权；合并后保原followUpId历史，不用旧detail.clientId授权。专用Dialog与旧结果Dialog只共享窄只读历史，模式/目标/版本/请求身份隔离，分钟呈现不截秒毫秒。准确九生产/六测试见计划 §7.16.13，无schema/公共授权/提醒平台变更。
+
 ## 7. 参考项目如何进入 LexOrder
 
 沿用 [来源记录](RESEARCH_AND_DECISIONS.md)，按“观察行为 → 输入输出与规则 → LexOrder 设计 → 场景验收”吸收。实际复制代码另记固定提交、文件、依赖与来源；研究范围不按协议类型排除。
