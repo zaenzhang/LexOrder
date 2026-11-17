@@ -645,11 +645,21 @@ prepare从同次templateMatterInputs生成真实主体ID/顺序和原值期望�
 
 ### 6.12 全局任务推进摘要（G02，2026-11-17）
 
-对应计划§7.14.8的审定合同，尚未记为实现。复用Task、TaskWaiting、TaskDependency及WorkResponsibility。任务正文读取规则沿assertTaskMatterAccess：当前账号/岗位、schedule.read、自定义matters.read及真实事项范围；首页查询还与原matterReadVisibility交集，授权发生在take/count之前。责任板原应急/拟接收行可见不等于正文可读，摘要只对另行获准Task批取，不向无权者返回等待对象/成果或前置标题/ID。
+对应计划§7.14.8的合同已实现，本批开发证据见计划§8.38，浏览器及专业验收独立保留。复用Task、TaskWaiting、TaskDependency及WorkResponsibility。任务正文读取规则沿assertTaskMatterAccess：当前账号/岗位、schedule.read、自定义matters.read及真实事项范围；首页查询还与原matterReadVisibility交集，授权发生在take/count之前。责任板原应急/拟接收行可见不等于正文可读，摘要只对另行获准Task批取，不向无权者返回等待对象/成果或前置标题/ID。
 
 新增的summary仅属于首页和责任板返回值，不扩共用readWorkRows/WorkRow或冻结快照。当前有效等待与直接前置责任状态可重叠，只有DONE满足；跨案、缺责任以匿名异常表示，不补历史或装成无阻塞。现有TaskDetailDialog、完成守卫、责任版本/事务/审计保留；完整筛选放schedule现有责任集合，不改日历窗口，不复制成新的状态字段或模型。
 
-首页保持五条预览，真实task深链复用现路由，责任总览锚点不假称全为本人。筛选/显示是纯读取，批量只取当前可见可选项，详情草稿不因筛选重挂；Task普通/批量、等待/依赖与责任变更出口失效实际首页/。沿Next本地Forms/Server Action、page和revalidatePath合同，复用现有Input/Select/Badge/Dialog，无新增依赖、schema或迁移。
+首页保持五条预览，真实task深链复用现路由，责任总览锚点不假称全为本人。筛选/显示是纯读取，批量只取当前可见可选项，详情草稿不因筛选重挂；Task普通/批量、等待/依赖与责任变更出口失效实际首页/。读取waiting同时取真实待收成果；筛选交互更新observedAt并与标签共用到期判断，保留服务器已判时点，无轮询。旧无责任任务不强开要求责任记录的详情。沿Next本地Forms/Server Action、page和revalidatePath合同，复用现有Input/Select/Badge/Dialog，无新增依赖、schema或迁移。
+
+### 6.13 三条有界续查合同（G07，2026-11-17）
+
+计划§7.14.9已审定、认领，尚未实现。仅复用server/pagination-cursor加密原语，各服务独立校验domain/user/规范化查询/分组及排序键，当前授权每页重验，不新建分页框架、全量读取或DB模型。排序追加真实id，以键值继续，不要求被删除的cursor实体仍存在；当前分页不是跨请求冻结快照。
+
+搜索保留五组首屏与单组继续，材料候选有界、逐件授权/验证真实发布文本，游标只越过实际检查过的候选，不能因预取200而跳过20条显示之后的未消费候选。过滤为空仍可继续；只称已显示数量，不泄露未授权候选ID/时间/计数。S08来源reader、返回位置及F01精度保留。继续失败遮蔽该组旧正文/来源入口但保留查询/位置身份供重试，恢复仅使用当前重新授权的投影，不用message文本识别权限。
+
+复核依据页独立于整张DocumentReview读取，reviewAccess＋canRespond控制同案枚举，canReadDocument逐件生效；按createdAt/id，所选exact Document单独当前核验，不以不在当前页当无权、不换同族最新版。原草稿/requestId/事务保存守卫保留，不扩后续版本选择器或G08。
+
+归档读取沿原APPROVED＋matterReadVisibility where按archivedAt/id继续，同where计ArchiveRecord数；URL保query/cursor，明确包含补充归档。listArchivePageData的ALL台账入口、借阅及exact archiveId导出保持各自资格。无schema/迁移，不启动整套归档打包、恢复或维护专项。
 
 ## 7. 参考项目如何进入 LexOrder
 

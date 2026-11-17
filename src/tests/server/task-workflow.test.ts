@@ -6,7 +6,7 @@ const { db, resolveRoleUser, auditTx, matterVisibilityFilter } = vi.hoisted(() =
   db: {
     $queryRaw: vi.fn(),
     user: { findUnique: vi.fn(), findMany: vi.fn() },
-    matter: { findFirst: vi.fn() },
+    matter: { findFirst: vi.fn(), findMany: vi.fn() },
     task: { findUnique: vi.fn(), findUniqueOrThrow: vi.fn(), findMany: vi.fn(), update: vi.fn() },
     taskDependency: { findMany: vi.fn(), createMany: vi.fn(), deleteMany: vi.fn() },
     taskWaiting: { findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
@@ -29,6 +29,7 @@ import {
   cancelTaskWaitingTx,
   finishTaskWaitingTx,
   readTaskWorkflowTx,
+  readTaskProgressSummariesTx,
   readTaskWorkspaceTx,
   rescheduleTaskWaitingTx,
   saveTaskDependenciesTx,
@@ -61,6 +62,17 @@ beforeEach(() => {
   db.taskWaiting.findUnique.mockResolvedValue(null);
   db.taskWaiting.findFirst.mockResolvedValue(null);
   db.$queryRaw.mockResolvedValue([{ found: false }]);
+});
+
+describe("G02 摘要读取失败语义", () => {
+  it("当前岗位无权不查询等待正文；普通数据库失败继续抛出而非空摘要", async () => {
+    resolveRoleUser.mockResolvedValueOnce({ enabled: false, role: "CUSTOM" });
+    expect(await readTaskProgressSummariesTx(tx, userId, [{ taskId, matterId }])).toEqual(new Map([[taskId, { availability: "UNAVAILABLE" }]]));
+    expect(db.matter.findMany).not.toHaveBeenCalled();
+    expect(db.task.findMany).not.toHaveBeenCalled();
+    db.matter.findMany.mockRejectedValueOnce(new Error("synthetic database unavailable"));
+    await expect(readTaskProgressSummariesTx(tx, userId, [{ taskId, matterId }])).rejects.toThrow("synthetic database unavailable");
+  });
 });
 
 describe("任务前置的服务规则", () => {
@@ -205,7 +217,7 @@ describe("事项级任务读取", () => {
     db.task.findMany.mockResolvedValue([{ ...task(), title: "历史待核任务", assigneeId: userId, stage: { name: "举证", procedure: { matterId, type: "FIRST_INSTANCE", customLabel: null } }, responsibility: null }]);
     const workspace = await readTaskWorkspaceTx(tx, userId, { matterId, includeClosed: true });
     expect(workspace.tasks).toEqual([]);
-    expect(workspace.untrackedTasks).toEqual([{ id: taskId, title: "历史待核任务", stageName: "举证", procedureTitle: "一审", dueAt: null, completed: false, assigneeName: "经办" }]);
+    expect(workspace.untrackedTasks).toEqual([{ id: taskId, title: "历史待核任务", stageId: null, stageName: "举证", procedureTitle: "一审", dueAt: null, completed: false, assigneeName: "经办" }]);
   });
 
   it("只有任务读取权时返回只读；团队只读不能取代当前事项关联", async () => {

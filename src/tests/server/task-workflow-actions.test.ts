@@ -1,13 +1,16 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { db, getTaskForChange, changeWorkTx, approvalTransaction } = vi.hoisted(() => {
+const { db, getTaskForChange, changeWorkTx, approvalTransaction, saveTaskDependenciesTx } = vi.hoisted(() => {
   const db = { task: { update: vi.fn() }, matterStage: { findFirst: vi.fn() }, workResponsibility: { update: vi.fn() } };
-  return { db, getTaskForChange: vi.fn(), changeWorkTx: vi.fn(), approvalTransaction: vi.fn(async (fn: (value: typeof db) => Promise<unknown>) => fn(db)) };
+  return { db, getTaskForChange: vi.fn(), changeWorkTx: vi.fn(), saveTaskDependenciesTx: vi.fn(), approvalTransaction: vi.fn(async (fn: (value: typeof db) => Promise<unknown>) => fn(db)) };
 });
 vi.mock("@/lib/auth/session", () => ({ requireSession: vi.fn(async () => ({ user: { id: "cuser00000000000000000001" } })) }));
 vi.mock("@/lib/approvals/service", () => ({ approvalTransaction }));
-vi.mock("@/server/tasks/workflow-service", () => ({ getTaskForChange, assertTaskMatterAccess: vi.fn() }));
+vi.mock("@/server/tasks/workflow-service", () => ({ getTaskForChange, assertTaskMatterAccess: vi.fn(), saveTaskDependenciesTx }));
+vi.mock("@/lib/prisma", () => ({ prisma: db }));
+vi.mock("@/server/reminders/urgent", () => ({ scanAdditionalWorkReminders: vi.fn() }));
+vi.mock("@/server/reminders/schedule", () => ({ refreshScheduleReminderAfterSave: vi.fn() }));
 vi.mock("@/server/reminders/responsibility", () => ({ changeWorkTx }));
 vi.mock("@/server/audit", () => ({ auditTx: vi.fn() }));
 vi.mock("@/server/intakes/workflow", () => ({ assertLiveAssignees: vi.fn() }));
@@ -16,6 +19,9 @@ vi.mock("@/server/matters/route", () => ({ revalidateMatter: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { completeTasksBatch, toggleTaskCompleted, updateTask } from "@/server/tasks/actions";
+import { saveTaskDependencies } from "@/server/tasks/workflow-actions";
+import { changeWork } from "@/server/reminders/work-actions";
+import { revalidatePath } from "next/cache";
 
 const taskId = "ctask00000000000000000001";
 const nextTaskId = "ctask00000000000000000002";
@@ -35,6 +41,23 @@ beforeEach(() => {
 });
 
 describe("单条与批量办结接统一责任服务", () => {
+  it("G02 任务、依赖及责任变更都刷新实际首页；批量出口不遗漏", async () => {
+    await toggleTaskCompleted(taskId);
+    expect(revalidatePath).toHaveBeenCalledWith("/");
+    vi.mocked(revalidatePath).mockClear();
+    await completeTasksBatch({ ids: [taskId], reason: "真实处理结果" });
+    expect(revalidatePath).toHaveBeenCalledWith("/");
+    vi.mocked(revalidatePath).mockClear();
+    saveTaskDependenciesTx.mockResolvedValue({ matterId });
+    await saveTaskDependencies({ taskId, revision: 7, prerequisiteIds: [], reason: "确认无需前置" });
+    expect(revalidatePath).toHaveBeenCalledWith("/");
+    vi.mocked(revalidatePath).mockClear();
+    changeWorkTx.mockResolvedValue({ kind: "Task", targetId: taskId, matterId });
+    await changeWork({ id: `work_${taskId}`, revision: 7, action: "COMPLETE", reason: "核对完成" });
+    expect(revalidatePath).toHaveBeenCalledWith("/");
+    expect(revalidatePath).not.toHaveBeenCalledWith("/dashboard");
+  });
+
   it("Task.completed 即使为 true，只要责任仍 OPEN 就必须走核心完成检查", async () => {
     await toggleTaskCompleted(taskId);
     expect(approvalTransaction).toHaveBeenCalledOnce();

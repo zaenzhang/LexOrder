@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { ActionError } from "@/lib/action-error";
 import { procedureTypeLabel } from "@/lib/enums";
-import { matterAssociationFilter, matterVisibilityFilter } from "@/lib/permissions";
+import { matterAssociationFilter, matterReadVisibilityFilter, matterVisibilityFilter } from "@/lib/permissions";
 import { hasCustomPermission } from "@/lib/roles/catalog";
 import { resolveRoleUser } from "@/lib/roles/service";
 import {
@@ -11,17 +11,18 @@ import {
   taskWaitingRescheduleInput,
   taskWaitingStartInput,
   taskWorkspaceInput,
+  summarizeTaskProgress,
+  type TaskProgressSummary,
   type TaskWorkflowDetail,
   type TaskWorkflowItem,
   type TaskWorkflowWorkspace
 } from "@/lib/tasks/workflow";
 import { auditTx } from "@/server/audit";
 
-/** Preserve existing matter business reads; only current members can manage tasks. */
-export async function assertTaskMatterAccess(
+/** One current actor and matter scope for task details and their global read projections. */
+async function taskAccessScope(
   db: Prisma.TransactionClient,
   userId: string,
-  matterId: string,
   access: "read" | "write"
 ) {
   const user = await db.user.findUnique({ where: { id: userId }, select: { active: true, role: true } });
@@ -37,14 +38,103 @@ export async function assertTaskMatterAccess(
   const filter = access === "read" && actor.role !== "CUSTOM" && actor.role !== "FINANCE"
     ? matterVisibilityFilter(userId, actor.role, actor.rolePermissions)
     : matterAssociationFilter(userId);
+  return { actor, where: { deletedAt: null, ...filter } satisfies Prisma.MatterWhereInput };
+}
+
+/** Preserve existing matter business reads; only current members can manage tasks. */
+export async function assertTaskMatterAccess(
+  db: Prisma.TransactionClient,
+  userId: string,
+  matterId: string,
+  access: "read" | "write"
+) {
+  const { actor, where } = await taskAccessScope(db, userId, access);
   const matter = await db.matter.findFirst({
-    where: { id: matterId, deletedAt: null, ...filter },
+    where: { id: matterId, ...where },
     select: { id: true, internalCode: true, status: true, ownerId: true, members: { select: { userId: true } } }
   });
   if (!matter) throw new ActionError("事项不存在或无权处理");
   if (access === "write" && matter.status === "ARCHIVED") throw new ActionError("事项已归档，禁止修改任务");
   const associated = matter.ownerId === userId || matter.members.some(member => member.userId === userId);
   return { matter, canWrite: associated && matter.status !== "ARCHIVED" && hasCustomPermission(actor, "schedule.write") };
+}
+
+const taskProgressSelect = {
+  id: true,
+  matterId: true,
+  stage: { select: { procedure: { select: { matterId: true } } } },
+  responsibility: { select: { state: true } },
+  waitings: { where: { endedAt: null }, take: 2, select: { waitingFor: true, expectedResult: true, nextCheckAt: true } },
+  prerequisites: { select: { prerequisite: { select: { matterId: true, responsibility: { select: { state: true } } } } } }
+} satisfies Prisma.TaskSelect;
+
+function progressOf(task: Prisma.TaskGetPayload<{ select: typeof taskProgressSelect }>, now: Date) {
+  return summarizeTaskProgress({
+    matterId: task.matterId,
+    stageMatterId: task.stage?.procedure.matterId ?? null,
+    responsibility: task.responsibility,
+    waitings: task.waitings,
+    prerequisites: task.prerequisites.map(({ prerequisite }) => ({ matterId: prerequisite.matterId, state: prerequisite.responsibility?.state ?? null }))
+  }, now);
+}
+
+/** Only enrich rows already visible in the responsibility board; that visibility alone grants no task content. */
+export async function readTaskProgressSummariesTx(
+  db: Prisma.TransactionClient,
+  userId: string,
+  candidates: { taskId: string; matterId: string | null }[],
+  now = new Date()
+): Promise<Map<string, TaskProgressSummary>> {
+  const summaries = new Map<string, TaskProgressSummary>(candidates.map(c => [c.taskId, { availability: "UNAVAILABLE" }]));
+  if (!candidates.length) return summaries;
+  let access;
+  try { access = await taskAccessScope(db, userId, "read"); }
+  catch (error) { if (error instanceof ActionError) return summaries; throw error; }
+  const matters = await db.matter.findMany({
+    where: { AND: [access.where, { id: { in: [...new Set(candidates.flatMap(c => c.matterId ? [c.matterId] : []))] } }] },
+    select: { id: true }
+  });
+  const readableMatterIds = new Set(matters.map(m => m.id));
+  const readable = candidates.filter(c => c.matterId && readableMatterIds.has(c.matterId));
+  if (!readable.length) return summaries;
+  const tasks = await db.task.findMany({
+    where: { id: { in: readable.map(c => c.taskId) }, matterId: { in: [...readableMatterIds] } },
+    select: taskProgressSelect
+  });
+  const tasksById = new Map(tasks.map(task => [task.id, task]));
+  for (const candidate of readable) {
+    const task = tasksById.get(candidate.taskId);
+    summaries.set(candidate.taskId, task?.matterId === candidate.matterId ? progressOf(task, now) : { availability: "REVIEW" });
+  }
+  return summaries;
+}
+
+/** Authorization and current responsibility are part of both count and take, never a filter over five rows. */
+export async function readPersonalTaskProgressTx(db: Prisma.TransactionClient, userId: string, now = new Date()) {
+  let access;
+  try { access = await taskAccessScope(db, userId, "read"); }
+  catch (error) { if (error instanceof ActionError) return { available: false, tasks: [], total: 0 }; throw error; }
+  const where = {
+    matter: { AND: [access.where, matterReadVisibilityFilter(userId, access.actor.role, access.actor.rolePermissions)] },
+    OR: [
+      { responsibility: { is: { assigneeId: userId, state: "OPEN" } } },
+      { responsibility: { is: null }, assigneeId: userId, completed: false }
+    ]
+  } satisfies Prisma.TaskWhereInput;
+  const [tasks, total] = await Promise.all([
+    db.task.findMany({
+      where,
+      orderBy: [{ dueAt: { sort: "asc", nulls: "last" } }, { priority: "desc" }, { id: "asc" }],
+      take: 5,
+      select: { ...taskProgressSelect, title: true, dueAt: true, priority: true, matter: { select: { id: true, title: true, internalCode: true } } }
+    }),
+    db.task.count({ where })
+  ]);
+  return { available: true, total, tasks: tasks.map(task => ({
+    id: task.id, title: task.title, dueAt: task.dueAt, priority: task.priority,
+    matterId: task.matter.id, matterTitle: task.matter.title, matterCode: task.matter.internalCode,
+    overdue: Boolean(task.dueAt && task.dueAt.getTime() < now.getTime()), hasResponsibility: Boolean(task.responsibility), progress: progressOf(task, now)
+  })) };
 }
 
 /** Called only inside approvalTransaction, which also serializes permission changes. */

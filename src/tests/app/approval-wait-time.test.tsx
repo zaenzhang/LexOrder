@@ -13,7 +13,7 @@ describe("待我处理的审批等待标签", () => {
         { ...row, id: "unknown", title: "未知时间申请", waitDays: null },
         { ...row, id: "today", title: "今日申请", waitDays: 0 },
         { ...row, id: "waiting", title: "等待申请", waitDays: 2 },
-      ], approvalTotal: 3, tasks: [], taskTotal: 0,
+      ], approvalTotal: 3, tasks: [], taskTotal: 0, tasksAvailable: true,
     };
     render(<WorkQueueCard queue={queue} alerts={[]} />);
     const unknown = screen.getByRole("link", { name: /未知时间申请/ });

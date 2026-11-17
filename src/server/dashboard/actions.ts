@@ -12,6 +12,7 @@ import { matterFinanceVisibilityFilter, matterReadVisibilityFilter, intakeReadVi
 import { matterCategoryColor, matterCategoryLabel, matterCategoryShort, procedureTypeLabel } from "@/lib/enums";
 import { shDayKey, shDaysFromToday, shParts as shPartsOf } from "@/lib/ui/sh-time";
 import { matterHref } from "@/lib/matters/route";
+import { readPersonalTaskProgressTx } from "@/server/tasks/workflow-service";
 
 // ============ Types ============
 
@@ -473,8 +474,9 @@ export async function getDashboardHeroData(): Promise<HeroData> {
 export type WorkQueue = {
   approvals: { id: string; action: string; title: string; requester: string; matter: string | null; waitDays: number | null; task: string | null }[];
   approvalTotal: number;
-  tasks: { id: string; title: string; dueAt: Date | null; priority: number; matterTitle: string; matterCode: string; matterId: string; overdue: boolean }[];
+  tasks: Awaited<ReturnType<typeof readPersonalTaskProgressTx>>["tasks"];
   taskTotal: number;
+  tasksAvailable: boolean;
 };
 
 /** 待我处理：审批复用统一审批工作台口径；任务为指派给本人且未完成、所在案件本人可读 */
@@ -482,19 +484,11 @@ export async function getDashboardWorkQueue(): Promise<WorkQueue> {
   const session = await requireSession("personal");
   const { listApprovalWorkspace } = await import("@/server/approval-permissions/inbox");
   const approvalsPromise = listApprovalWorkspace({ tab: "pending" }).catch(() => null);
-  const visFilter = matterReadVisibilityFilter(session.user.id, session.user.role, session.user.rolePermissions);
-  const taskWhere = { assigneeId: session.user.id, completed: false, matter: { deletedAt: null, ...visFilter } };
-  const [ws, tasks, taskTotal] = await Promise.all([
+  const now = new Date();
+  const [ws, taskQueue] = await Promise.all([
     approvalsPromise,
-    prisma.task.findMany({
-      where: taskWhere,
-      orderBy: [{ dueAt: { sort: "asc", nulls: "last" } }, { priority: "desc" }],
-      take: 5,
-      select: { id: true, title: true, dueAt: true, priority: true, matter: { select: { id: true, title: true, internalCode: true } } }
-    }),
-    prisma.task.count({ where: taskWhere })
+    prisma.$transaction(db => readPersonalTaskProgressTx(db, session.user.id, now), { isolationLevel: "RepeatableRead" })
   ]);
-  const now = Date.now();
   return {
     approvals: (ws?.rows ?? []).slice(0, 5).map((r) => ({
       id: r.id,
@@ -502,21 +496,13 @@ export async function getDashboardWorkQueue(): Promise<WorkQueue> {
       title: r.title,
       requester: r.requester,
       matter: r.matter,
-      waitDays: r.submittedAt ? Math.max(0, Math.floor((now - new Date(r.submittedAt).getTime()) / 86_400_000)) : null,
+      waitDays: r.submittedAt ? Math.max(0, Math.floor((now.getTime() - new Date(r.submittedAt).getTime()) / 86_400_000)) : null,
       task: r.task
     })),
     approvalTotal: ws?.counts.pending ?? 0,
-    tasks: tasks.map((t) => ({
-      id: t.id,
-      title: t.title,
-      dueAt: t.dueAt,
-      priority: t.priority,
-      matterTitle: t.matter.title,
-      matterCode: t.matter.internalCode,
-      matterId: t.matter.id,
-      overdue: Boolean(t.dueAt && t.dueAt.getTime() < now)
-    })),
-    taskTotal
+    tasks: taskQueue.tasks,
+    taskTotal: taskQueue.total,
+    tasksAvailable: taskQueue.available
   };
 }
 

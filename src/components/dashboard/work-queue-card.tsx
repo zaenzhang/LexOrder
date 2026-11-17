@@ -8,7 +8,9 @@ import { AlertTriangle, ListChecks, SquareCheck, Stamp } from "lucide-react";
 import { ACTION_LABELS } from "@/lib/approvals/rules";
 import { approvalHref } from "@/lib/approvals/workspace";
 import { matterHref } from "@/lib/matters/route";
-import { cn } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
+import { taskProgressLabels } from "@/lib/tasks/workflow";
+import { Badge } from "@/components/ui/badge";
 import type { WorkQueue } from "@/server/dashboard/actions";
 import type { AlertItem } from "./alerts-list";
 import { shParts } from "@/lib/ui/sh-time";
@@ -35,7 +37,7 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
         <div className="segmented" style={{ padding: 2 }} role="tablist">
           {items.map(([k, label, n]) => (
             <button key={k} type="button" role="tab" aria-selected={seg === k} className={cn("seg", seg === k && "active")} style={{ padding: "4px 11px", fontSize: 11.5 }} onClick={() => setSeg(k)}>
-              {label} <span className="count">{n}</span>
+              {label} <span className="count">{k === "tasks" && !queue.tasksAvailable ? "—" : n}</span>
             </button>
           ))}
         </div>
@@ -70,11 +72,13 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
         ) : null}
 
         {seg === "tasks" ? (
-          queue.tasks.length === 0 ? (
+          !queue.tasksAvailable ? (
+            <div className="empty mo-empty-compact"><div className="mo-empty-title">当前资格不能读取任务详情</div></div>
+          ) : queue.tasks.length === 0 ? (
             <div className="empty mo-empty-compact"><div className="mo-empty-title">暂无指派给你的未完成任务</div></div>
           ) : (
             queue.tasks.map((t) => (
-              <Link key={t.id} href={matterHref({ internalCode: t.matterCode })} className="todo-item">
+              <Link key={t.id} href={matterHref({ internalCode: t.matterCode }, `?view=work&workPane=tasks${t.hasResponsibility ? `&task=${encodeURIComponent(t.id)}` : ""}`)} className="todo-item">
                 <span className={cn("type-ic", t.overdue ? "t-red" : "t-teal")} aria-hidden>
                   <ListChecks strokeWidth={2} />
                 </span>
@@ -87,6 +91,11 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
                     {t.dueAt ? (<><span className="todo-sep" /><span>{fmt(t.dueAt)} 截止</span></>) : null}
                     {t.priority >= 2 ? (<><span className="todo-sep" /><span>紧急</span></>) : null}
                   </div>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {taskProgressLabels(t.progress).map(label => <Badge key={label} variant="secondary" className="whitespace-normal">{label}</Badge>)}
+                  </div>
+                  {t.progress.availability === "AVAILABLE" && t.progress.waiting ? <div className="mt-1 text-xs text-muted-foreground"><p className="line-clamp-2 break-words">待收成果：{t.progress.waiting.expectedResult}</p><p>检查时点：{formatDateTime(t.progress.waiting.nextCheckAt)}</p></div> : null}
+                  {!t.hasResponsibility ? <div className="mt-1 text-xs text-muted-foreground">查看案内原任务记录</div> : null}
                 </div>
                 <span className={cn("due-pill", t.overdue ? "d-red" : t.priority >= 2 ? "d-amber" : undefined)}>{t.overdue ? "已逾期" : t.dueAt ? fmt(t.dueAt) : "无期限"}</span>
               </Link>
@@ -116,10 +125,10 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
 
       <div className="panel-foot" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span className="t-xs t-mute">
-          {seg === "approvals" ? `共 ${queue.approvalTotal} 件审批 · ${queue.taskTotal} 项任务` : seg === "tasks" ? `共 ${queue.taskTotal} 项任务，逾期任务优先` : "保全到期 · 法院短信"}
+          {seg === "approvals" ? `共 ${queue.approvalTotal} 件审批${queue.tasksAvailable ? ` · ${queue.taskTotal} 项任务` : ""}` : seg === "tasks" ? queue.tasksAvailable ? `本人共 ${queue.taskTotal} 项任务，逾期任务优先` : "任务详情当前不可读取" : "保全到期 · 法院短信"}
         </span>
-        <Link href={seg === "approvals" ? "/approvals" : seg === "tasks" ? "/schedule?view=list" : "/inbox"} className="t-sm" style={{ color: "var(--teal-deep)", fontWeight: 550 }}>
-          {seg === "approvals" ? "进入审批工作台 →" : seg === "tasks" ? "查看日程 →" : "进入法院短信 →"}
+        <Link href={seg === "approvals" ? "/approvals" : seg === "tasks" ? "/schedule#work-responsibilities" : "/inbox"} className="t-sm" style={{ color: "var(--teal-deep)", fontWeight: 550 }}>
+          {seg === "approvals" ? "进入审批工作台 →" : seg === "tasks" ? "打开任务责任总览 →" : "进入法院短信 →"}
         </Link>
       </div>
     </div>

@@ -26,7 +26,7 @@ import {
 async function refreshTasks(matterId: string) {
   await revalidateMatter(matterId);
   revalidatePath("/schedule");
-  revalidatePath("/dashboard");
+  revalidatePath("/");
 }
 
 export async function getTaskWorkspace(input: z.input<typeof taskWorkspaceInput>) {

@@ -40,7 +40,7 @@ async function assertTaskStage(db: Prisma.TransactionClient, matterId: string, s
 async function refreshTasks(matterId: string) {
   await revalidateMatter(matterId);
   revalidatePath("/schedule");
-  revalidatePath("/dashboard");
+  revalidatePath("/");
 }
 
 export async function createTask(input: TaskCreateInput) {
@@ -164,6 +164,6 @@ export async function completeTasksBatch(input: { ids: string[]; reason: string 
   }
   for (const matterId of changedMatters) await revalidateMatter(matterId);
   revalidatePath("/schedule");
-  revalidatePath("/dashboard");
+  revalidatePath("/");
   return { ok: true, results };
 }

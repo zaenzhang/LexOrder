@@ -26,7 +26,7 @@ const matterId = "cmatter000000000000000001", procedureId = "cprocedure000000000
 const procedures = [{ id: procedureId, label: "合成程序" }];
 const original = { id: "cdeadline000000000000001", title: "合成期限", dueAt: new Date("2027-02-05T17:00:03.456+08:00"), duePrecision: "DATETIME" as const, updatedAt: new Date("2026-11-17T01:00:00Z") };
 type Board = NonNullable<React.ComponentProps<typeof WorkResponsibilityPanel>["data"]>;
-const work = (): Board["items"][number] => ({ id: "cwork000000000000000001", targetId: original.id, kind: "Deadline", title: original.title, dueAt: original.dueAt, duePrecision: original.duePrecision, matterId, intakeId: null, assigneeId: "actor", name: "合成经办", active: true, proposedAssigneeId: null, proposedName: null, acceptedAt: null, state: "OPEN", revision: 2, reason: null, taskHref: null });
+const work = (): Board["items"][number] => ({ id: "cwork000000000000000001", targetId: original.id, kind: "Deadline", title: original.title, dueAt: original.dueAt, duePrecision: original.duePrecision, matterId, intakeId: null, assigneeId: "actor", name: "合成经办", active: true, proposedAssigneeId: null, proposedName: null, acceptedAt: null, state: "OPEN", revision: 2, reason: null, taskHref: null, taskProgress: null });
 const board = (): Board => ({ currentUserId: "actor", emergency: false, canWrite: true, canTransfer: false, items: [work()], people: [], matters: [], intakes: [], handovers: [], intakeHandovers: [] });
 const descriptors = ["scrollIntoView", "hasPointerCapture", "setPointerCapture", "releasePointerCapture"].map(name => [name, Object.getOwnPropertyDescriptor(HTMLElement.prototype, name)] as const);
 beforeEach(() => {

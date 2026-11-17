@@ -1,11 +1,12 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mock = vi.hoisted(() => ({ approvals: vi.fn(), tasks: vi.fn(), count: vi.fn() }));
-vi.mock("@/lib/prisma", () => ({ prisma: { task: { findMany: mock.tasks, count: mock.count } } }));
+const mock = vi.hoisted(() => ({ approvals: vi.fn(), readTasks: vi.fn(), tx: {} }));
+vi.mock("@/lib/prisma", () => ({ prisma: { $transaction: async (fn: (db: object) => Promise<unknown>) => fn(mock.tx) } }));
 vi.mock("@/lib/auth/session", () => ({ requireSession: async () => ({ user: { id: "reviewer", role: "LAWYER" } }) }));
 vi.mock("@/lib/permissions", () => ({ matterReadVisibilityFilter: () => ({ ownerId: "reviewer" }), customMatterFilter: vi.fn(), matterFinanceVisibilityFilter: vi.fn(), intakeReadVisibilityFilter: vi.fn() }));
 vi.mock("@/server/approval-permissions/inbox", () => ({ listApprovalWorkspace: mock.approvals }));
+vi.mock("@/server/tasks/workflow-service", () => ({ readPersonalTaskProgressTx: mock.readTasks }));
 vi.mock("@/server/reminders/responsibility", () => ({ closedHearingIds: vi.fn() }));
 vi.mock("@/server/finance/facts", () => ({ getFinanceFacts: vi.fn(), periodReceipts: vi.fn(), sumAmounts: vi.fn(), shMonthStart: vi.fn(), financeTrend: vi.fn() }));
 
@@ -15,8 +16,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-11-17T10:00:00Z"));
-  mock.tasks.mockResolvedValue([]);
-  mock.count.mockResolvedValue(0);
+  mock.readTasks.mockResolvedValue({ available: true, tasks: [], total: 0 });
 });
 afterEach(() => { vi.useRealTimers(); });
 
@@ -34,6 +34,14 @@ describe("工作台审批等待摘要", () => {
     ]);
     expect(queue.approvalTotal).toBe(3);
     expect(mock.approvals).toHaveBeenCalledWith({ tab: "pending" });
-    expect(mock.tasks.mock.calls[0][0].where).toMatchObject({ assigneeId: "reviewer", matter: { ownerId: "reviewer", deletedAt: null } });
+    expect(mock.readTasks).toHaveBeenCalledWith(mock.tx, "reviewer", new Date("2026-11-17T10:00:00Z"));
+    expect(queue.tasksAvailable).toBe(true);
+  });
+
+  it("G02 当前任务资格不可用时独立审批仍保留，不把未知任务数当空待办", async () => {
+    mock.readTasks.mockResolvedValue({ available: false, tasks: [], total: 0 });
+    mock.approvals.mockResolvedValue({ rows: [{ id: "approval", action: "INTAKE_APPROVE", title: "独立审批", requester: "申请人", matter: null, task: "approve", submittedAt: null }], counts: { pending: 1 } });
+    const queue = await getDashboardWorkQueue();
+    expect(queue).toMatchObject({ tasksAvailable: false, tasks: [], approvalTotal: 1, approvals: [{ id: "approval", waitDays: null }] });
   });
 });
