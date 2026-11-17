@@ -1130,6 +1130,18 @@ LexOrder继续在当前工作台处理审批，成功条仅提供经当前授权
 
 三轮审查纠正“第一程序按order/name找”、全案unassigned误入口、收案附件投影当整案资格、可选读取异常让已成功转案显示失败或收案页404，以及旧toast回调错过新审批草稿。最后UI复核发现teamReadOnly还包含缺写权的合法只读经办，故两种详情分支都按接续自身读取资格展示；无收案资格者不能被提示去点无权重试链接。必要失败信息保留，链接点击/确认后使用当前状态，returnTo不替换。计划以d2fbc40先发布后实施。实码复审曾发现新增材料资格处理误删原案件概况链接，已恢复并补断言；概况与材料资格分开。最终3文件24个不同用例首次全部通过，含真实PG4个，类型/lint及三方定点复审收口，见计划§8.42。实际送审/转换、冻结元数据与当前数据库资格已验证；转换Action自身迟到仅为静态守卫审查，不把链接确认竞态当另一条实测。未验证原件bytes、HTTP、浏览器或律师专业验收。
 
+### 3.35 人工复核的固定位置与前版未决上下文（G08，2026-11-17）
+
+用户任务是在提出问题、回应修订和打开新稿时就近核对原文及既有未决意见。首查实际contracts/service/Panel和两个消费者确认：location/revisionLocation为文字，basis只有确切Document，原件统一download inline；意见只按当前exact documentId读取。旧意见未丢失，但V2缺少就近前版未决提示。G07已解决依据查找续页，G06已有诚实呈现；本片复用这些成果，不重复开发检索或viewer。
+
+root与context分别实际完整读取Counsel OS固定提交[c4f40f1](https://github.com/eigenlegal/counsel-os/tree/c4f40f1ffd40146531bcaa7f43e6877a733f92ca)的[DocumentRound.tsx](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/ui/src/workspace/DocumentRound.tsx)、[document-rounds.ts](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/src/workspace/document-rounds.ts)、[citation-location.ts](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/src/workspace/citation-location.ts)，含尾空行35/59/39行。采用真实保存版本ID、基线缺失不补造、覆盖限制明确和精确位置不猜测；UI“无段落差异”不等于完整文书相等。后端函数自身未核DB/当前ACL，不能作为LexOrder权限证明；不引入其差异/归因引擎、Bun worker、阅读轨迹或新比较流程。其ACCEPTED/REVERTED是文本保留分类，不映射为本项目人工回应/核对/已解决；未复制或运行参考代码。
+
+LexOrder选用三处可选固定位置共用一个小合同：问题原文、依据原件和实际修订，文档身份沿原FK；复用prepareSource与真实PDF页/run/anchor/SHA，不从旧文字推断，不存全文或平行来源。独立审批通过复核域确切位置读取，不放宽原全局documents.read，也不枚举整案。结构化位置可用时免重复手写；未解析、非matter或缺SHA保留原人工文字和原件出口，选中位置不等于律师已阅读或已核对。
+
+新稿显示当前可读同案同family较低版本的未决摘要，以独立只读视图查看准确旧意见/历史，保当前审批对象、意见选择、过滤、草稿和requestId。最新RESPONSE才决定是否实际关联当前修订；不复制、重绑旧意见或用最后CHECK/任意历史回应猜关系。原件/预览沿G06准确性质，仍不做Word DOM跳转或完整OOXML比较；不新增全部意见关闭的批准门禁。
+
+多轮审查已纠正：漏掉依据位置与归档快照消费；复用Picker却不给真实页数/原件标识；独立审批误走需要documents.read的全局Action；无位置字段默认null改变旧成功请求指纹；重新解析后重放旧请求被当前run/pageCount错误解释；把旧版可读误当可打开旧审批；前版预览调用当前select清稿。root合并context数据/权限及business两个消费者/草稿意见后，形成计划§7.14.13和架构§6.17；当前仅认领及审定方案，实际代码/API/数据库/组件结果另记，不构成浏览器或专业验收。
+
 ## 4. 可选法律服务 MCP 与来源
 
 核查日期 2026-11-16；以下为官方公开的接入信息，不是本项目已取得账号、权益或实测成功。机构目录可扩展，自定义远程 MCP 为未预置服务保留入口；不虚构“市面所有机构都提供官方 MCP”。

@@ -685,6 +685,18 @@ uploadDocument采用唯一discriminated结果合同，成功返回实际id，确
 
 可选读取局部隔离，失败不改变已完成转换、不触发收案主查询404、不伪装空态或开放未经授权目标；原事务/原审计错误不一并吞掉。审批界面保存确切成功结果，链接使用最新dialogState并在放弃确认后重核busy/选择身份，既有returnTo与工作台刷新保持。只有另外核实当前收案读取资格才提供其重试链接，否则显示有权经办可稍后查看，保原我已处理入口。持久入口沿收案详情重读，不建通用导航服务、分类写入、兼容旧标签读取、schema/迁移或历史回填。
 
+### 6.17 人工复核固定位置和前版未决合同（G08，2026-11-17）
+
+计划§7.14.13发布后实施。现DocumentReviewIssue/Event继续作为唯一意见和处理历史；Issue增加position/basisPosition、Event增加revisionPosition三个nullable Json，无默认或历史回填。文档身份分别沿documentId/basisDocumentId/revisionDocumentId，只保存服务器准备的{documentSha256,location,parseRunId,anchorId}；location复用现sourceLocationSchema，run/anchor成对，明确PDF页可为空run/anchor。shape/依据FK存在/RESPONSE及修订FK存在通过本次业务迁移CHECK；现Issue to_jsonb排除version/state的固定守卫与Event全不可变守卫直接覆盖新增列，不修改既有迁移。
+
+复核私有薄helper按reviewAccess、位置角色和实际目标核资格，在原approvalTransaction调用prepareSource，复用确切Document FOR SHARE、当前canReadDocument、服务器现存SHA、PDF已知页和固定run/anchor校验；内部CONTEXT不落Evidence关系或新表。位置输入不接受客户端hash/任意location。无位置的新字段在指纹规范化时省略，不改变已保存无位置请求；实际输入改变须冲突。同键成功重放先核当前资格和请求身份，并检验已存固定来源的当前读取，不重新按最新解析代次/页数准备或改写；保原版本锁、expectedVersion及同事务审计。
+
+位置选择沿requireSession的现approval用途、reviewAccess及确切subject/basis/revision，独立审批资格不扩同案列表。当前选择页只读一个已核Document；ReviewDocumentOption的pageCount/isPdf/hasIdentity来自真实选取，非matter或无可靠SHA只保原文字/原件路径。现MaterialSourceLocationPicker只补窄loader注入，原事实/研究调用保持原权限。保存后读取只接issue/event/slot，目标和固定来源来自记录，不能由客户端另换；旧run沿现published snapshot/readMaterialSource，失权或身份变化返回不可用。无选位置不要求OCR、AI或解析；回应有修订时文字或有效位置至少一项，其他原校验保留。
+
+前版摘要及只读内容在复核域绑定当前Document与真正同案同family较低版本，每次逐件当前鉴权，保basis/preceding RESPONSE来源裁剪，不输出不可读前版的名称、数量或内容。只纳OPEN/WAITING_CHECK；关联本版只用最高version的RESPONSE，CHECK不替代其修订关系。复用意见读取/历史呈现，不调用旧审批详情或复制新意见；源选择与旧意见预览均不修改当前draft/requestId/审批对象。独立读状态和请求序号保护关闭、换文书及迟到回复；原批准与交付继续独立，不加全关闭或解析位置可用的批准门禁。
+
+新批准archive/professional-history显式选择三个位置字段，并将已存SHA纳入原documentReferences一致性核验；旧冻结专业历史不回填。沿G06的固定抽取、原生PDF页、Office整份转换和同版下载性质，不声明Word原文DOM定位、完整OOXML或水印后字节与原SHA等同。除当前三列业务迁移外，不新建通用来源/导航/复核平台或依赖。
+
 ## 7. 参考项目如何进入 LexOrder
 
 沿用 [来源记录](RESEARCH_AND_DECISIONS.md)，按“观察行为 → 输入输出与规则 → LexOrder 设计 → 场景验收”吸收。实际复制代码另记固定提交、文件、依赖与来源；研究范围不按协议类型排除。
