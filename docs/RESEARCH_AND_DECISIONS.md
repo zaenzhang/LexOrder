@@ -16,6 +16,8 @@
 
 研究采用“观察到的行为 → 输入输出与规则 → LexOrder 设计 → 场景验证”。来源事实、产品推论和已运行结果分别标明。动态页面不自动等于固定版本能力；新增依赖固定版本和完整性，实际采用源码时登记文件与许可。招聘页面状态按核查当日记录，后续实现时复核需要更新的来源。
 
+**最近一次业务对照：** [§3.24](#324-业务与参考项目静态对照审查2026-11-17) 以 LexOrder `89d3245` 为业务源码基线，沿模型、服务、实际入口与失败接续对照十个固定参考项目的指定模块。分别登记当前缺陷、日常接续差距、可选 AI 问题和后置能力；本轮仅静态审查，没有实施修复或运行验收。收尾同步 `a887859` 的文档范围调整，该提交未改业务源码。
+
 Server M2 业务预览已完成，最终实现与实际业务证据见[实施计划 §8.9](WORKBENCH_PLAN.md#89-m2-最终收口账本2026-11-16)；初批材料/上下文、客户连续记录/人工日期分别保留于 §8.4、§8.6。[§8.3](WORKBENCH_PLAN.md#83-m1-当前验证与交接2026-11-16) 保留 M1 历史证据：Personal 共享根应用曾构建通过，后续新工作区初始化报 `M1_INITIALIZATION_COMMAND_FAILED` 后依用户指令停止验证；没有 Windows 产物。Server-only 服务脚本实跑两项 `NOT_CONFIGURED`、退出码 2，未调用 Personal；无真实模型凭据或 RAGFlow 实例时不记联调通过。
 
 ## 1. 实际业务基线
@@ -449,6 +451,264 @@ M3 原六项业务关闭条件与律师专业验收保留；M4 已整体延期�
 - 三 agent 交叉核对发现旧文档在阶段顺序、RQ15/RQ19、W01/W02/W13/W16、AC15、发行清单及运行说明中还保留维护前置；本次在 AGENTS 和四份主文档同步纠正。已有代码、历史测试和未验证事实保留，不把延期写为完成。
 
 随后按用户要求，固定 `89d32453cfcaab380e62220c7d25aa88637fd878` 核对案件/客户、研究来源、模板/复核、任务/期限及交付/归档的实际入口和保存链，并交叉核对材料版本族、Note 编辑、研究锚点、客户指示采用与动态定位缺口。目标/指示的直接关系属于架构 §6.8 保留的窄业务承诺，不等于已暂缓的 B 完整自动变化分析。结果统一记入[计划 §8.24](WORKBENCH_PLAN.md#824-维护延期后的业务余项核对2026-11-17)，区分部分完成、可选未贯通、已有待验收及明确暂缓；不另立维护任务或平行清单。本次未修改业务代码、重跑测试或做浏览器/律师专业验收。
+
+### 3.24 业务与参考项目静态对照审查（2026-11-17）
+
+#### 审查结论、基线和边界
+
+**结论：LexOrder 已有可用的业务对象和较完整的法律业务守卫；与参考项目的主要差距，集中在日常操作的连续性、现有能力是否真正进入界面，以及少数入口的规则不一致。不能用“缺模块”概括，更不宜再建一套客户、任务、材料、事实或审阅系统。** 本轮同时发现了会使法院来件确认整批回滚、将未创建事项显示为已采纳、绕过当前承接复核等确定或触发条件明确的问题，应先于新增平台处理。
+
+- **代码基线：** [LexOrder `89d32453cfcaab380e62220c7d25aa88637fd878`](https://github.com/zaenzhang/LexOrder/tree/89d32453cfcaab380e62220c7d25aa88637fd878)。开始审查时已获取远端，工作树干净，HEAD 与 `origin/main` 相同。收尾获取并合入了后续[纯文档提交 `a887859`](https://github.com/zaenzhang/LexOrder/commit/a887859339811797875361a043f4f53d69d7f325)，核对确认它未改业务源码、schema 或迁移；保留其维护延期决定及业务余项记录，再补入本次对照。下文源文件行号仍指 `89d3245`，不把本次文档提交算成被审查业务版本。
+- **方法：** 主审与三个只读分工分别检查客户/工作推进、材料/文书/复核/交付、事实/研究/检索/AI；主审另查财务、归档、来件和当前迁移，并交叉核对高优先级问题。沿“数据结构→服务→真实调用入口→UI→失败/继续路径”判断；读取已有测试以辨别覆盖盲区。
+- **证据性质：** 本轮没有运行应用、浏览器、数据库、测试或第三方项目，没有修改业务代码。SQL 列错配等由当前 schema、迁移及事务链静态确认；时区等条件性问题明确列出触发条件。不是全仓安全审计、运行验收、法律规则适用性结论或上游质量排名。
+- **范围：** 只评价当前 Server 业务。按用户现行决定，维护/升级/恢复、Personal/Windows、知识发布、B 结构化方案比较、E 期限版本化重算深化、F 自动客户简报、通用访谈继续暂缓，不因本报告恢复为交付门禁。AI/OCR/RAGFlow/MCP 按需配置；未配置不算核心业务失败。前文各批次有关 M4/恢复的记录保留其历史时点，不能覆盖这次范围边界。
+- **优先级含义：** P1＝已保留业务中的办理阻断、错误成功或关键规则绕过；P2＝已存在流程的定位、接续、覆盖范围或效率问题；“候选”＝需按真实业务价值选择的增强。以下是审查建议，未自动修改实施排期、指定 owner 或增加验收门禁。
+
+#### 本轮实际阅读的参考模块
+
+参考均使用项目此前登记的固定提交重新读取相关源码，不声称是 2026-11-17 的各项目最新版。仅从本轮确实读到的实现提取行为；没有以 README 功能清单替代实现证据。
+
+| 参考项目 / 固定提交 | 本轮实际源码与调用范围 | 对照价值与采用边界 |
+| --- | --- | --- |
+| LawLink `4736aa100515bb15f47443cdb6b0ae65745e5fff` | [schema](https://github.com/lawflow-boop/LawLink/blob/4736aa100515bb15f47443cdb6b0ae65745e5fff/prisma/schema.prisma)、[来件确认](https://github.com/lawflow-boop/LawLink/blob/4736aa100515bb15f47443cdb6b0ae65745e5fff/src/server/sms/confirm-actions.ts)、[财务登记](https://github.com/lawflow-boop/LawLink/blob/4736aa100515bb15f47443cdb6b0ae65745e5fff/src/server/finance/ledger-registration.ts)、账务更正、冲突复核、审批资格、用章、归档查询与导出 | 法律业务基线已大量继承；继承也会保留缺陷。下述来件两项、已签署登记绕过及归档列表上限不能归为“上游已做好而我们没移植” |
+| Frappe CRM `3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952` | [活动聚合](https://github.com/frappe/crm/blob/3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952/crm/api/activities.py)、[活动 UI](https://github.com/frappe/crm/blob/3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952/frontend/src/components/Activities/Activities.vue)、[全局任务](https://github.com/frappe/crm/blob/3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952/frontend/src/pages/Tasks.vue)、TaskArea、CRM Task 字段、视图筛选、Lead 转化 | 客户关联行动可进入全局待办；沟通原件与历史筛选。复用 ClientActivity/ClientFollowUp，不迁入另一套 CRM 或销售对象 |
+| ERPNext `19964b09a0045c014bb2f9ab66cd8703eb3722df` | [Task 服务](https://github.com/frappe/erpnext/blob/19964b09a0045c014bb2f9ab66cd8703eb3722df/erpnext/projects/doctype/task/task.py)、同目录 task.js：依赖、环检测、完成检查、日期安排 | 本项目轻量同案依赖已落地；保留“前置取消不等于完成”，不复制其完整排程系统 |
+| j-lawyer `f523d141327e5c74269dd9c71b54ae1c05a415a3` | [打开文档](https://github.com/jlawyerorg/j-lawyer-org/blob/f523d141327e5c74269dd9c71b54ae1c05a415a3/j-lawyer-client/src/main/java/com/jdimension/jlawyer/client/utils/CaseUtils.java#L843)、[变更监测](https://github.com/jlawyerorg/j-lawyer-org/blob/f523d141327e5c74269dd9c71b54ae1c05a415a3/j-lawyer-client/src/main/java/com/jdimension/jlawyer/client/launcher/DocumentObserver.java#L779)、[保存回传](https://github.com/jlawyerorg/j-lawyer-org/blob/f523d141327e5c74269dd9c71b54ae1c05a415a3/j-lawyer-client/src/main/java/com/jdimension/jlawyer/client/launcher/CaseDocumentStore.java#L709)、ObservedDocument、DocumentMonitorEntry、模板字段 UI；[无待办案件查询](https://github.com/jlawyerorg/j-lawyer-org/blob/f523d141327e5c74269dd9c71b54ae1c05a415a3/j-lawyer-server/j-lawyer-server-ejb/src/main/java/com/jdimension/jlawyer/services/ArchiveFileService.java#L4167)及客户端调用 | 连续编辑是打开、变化、回传、状态可见的完整任务；无下一步案件可主动找出。保留 LexOrder 不可变版本，不照搬覆盖原件行为 |
+| Paperless-ngx `4610171a94e5932e85a80e480032e397cdb6f309` | [多文件上传服务](https://github.com/paperless-ngx/paperless-ngx/blob/4610171a94e5932e85a80e480032e397cdb6f309/src-ui/src/app/services/upload-documents.service.ts#L21)、[逐件状态托盘](https://github.com/paperless-ngx/paperless-ngx/blob/4610171a94e5932e85a80e480032e397cdb6f309/src-ui/src/app/components/common/upload-status-tray/upload-status-tray.component.html#L21)、consumer 摄入及重复件处理 | 多选、逐件结果、失败接续、成功打开目标；不复制其删除重复来件的处理到法律来源链 |
+| Kosmos `c6454fd5488c0d231e2b4756846f690c679586ca` | [Highlight 模型](https://github.com/Kosmos-Law/kosmos/blob/c6454fd5488c0d231e2b4756846f690c679586ca/apps/case/models.py#L248)、[事实来源查询/绑定](https://github.com/Kosmos-Law/kosmos/blob/c6454fd5488c0d231e2b4756846f690c679586ca/apps/case/facts/views.py#L505)、[事实行原文入口](https://github.com/Kosmos-Law/kosmos/blob/c6454fd5488c0d231e2b4756846f690c679586ca/templates/case/facts/fact-row.html#L19)及访问控制 | 事实与原文具体位置就近操作；不另建事实库，不从源码推定阅读器实测效果 |
+| ANQI `25efcf7f2a3329f9ecdc092b3ced0e17a685c83a` | [候选身份](https://github.com/zj-ai-lab/anqi/blob/25efcf7f2a3329f9ecdc092b3ced0e17a685c83a/src/lib/candidate-facts.js#L19)、[重跑继承决定](https://github.com/zj-ai-lab/anqi/blob/25efcf7f2a3329f9ecdc092b3ced0e17a685c83a/src/lib/legalrag-bridge.js#L358)、[接受/忽略/恢复](https://github.com/zj-ai-lab/anqi/blob/25efcf7f2a3329f9ecdc092b3ced0e17a685c83a/src/routes/legalrag.js#L236)、[真实 UI 调用](https://github.com/zj-ai-lab/anqi/blob/25efcf7f2a3329f9ecdc092b3ced0e17a685c83a/public/js/case.js#L2158) | 程序事件/收费候选按逻辑身份处理，复用已有对象与保留多来源；不是任意自然语言事实自动同一认定 |
+| Counsel OS `c4f40f1ffd40146531bcaa7f43e6877a733f92ca` | [真实工具入口](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/src/workspace/chat-tools.ts#L317)、context-preparation、[精确引用](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/src/workspace/citation-location.ts#L3)、DocumentReader、[固定版本比较](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/src/workspace/document-rounds.ts#L9)、docx/rounds、[比较 UI](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/ui/src/workspace/DocumentRound.tsx#L8) | 有界可续读、已读范围内引用、取得法源后留存修订、两/三版 DOCX 比较及覆盖警示；不等于支持中国法库或完整 Word 排版/修订语义 |
+| docassemble `36d7bd4d27324a3cde2ea92ebd5afe074cdcfe2d` | [DOCX 实际示例](https://github.com/jhpyle/docassemble/blob/36d7bd4d27324a3cde2ea92ebd5afe074cdcfe2d/docassemble_base/docassemble/base/data/questions/examples/docx-template.yml#L47)：可选字段与文书确认 | 本轮仅重读该示例，未重读全解释器；借鉴字段必填边界，不恢复通用访谈 |
+| new-litigation-visualization `16c480c3947e78ba49623423ea0486277f5fe99d` | [check_claims.py](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-trial-confrontation-master/scripts/check_claims.py#L47)、时间线 casefile.schema.json | 逐主张材料、回应与缺口的机械检查；是技能脚本，不当作成熟 Web 产品，更不照搬硬编码举证责任或浮点金额算法 |
+
+Twenty、Cherry Studio、AppFlowy、AnythingLLM 和 RAGFlow 的完整产品实现不是本轮重读对象；此前研究仍保留原阅读边界。以上仅比较业务行为，未复制第三方实质源码，也未据此形成新的许可采用决定。
+
+#### 已具备的基础，后续不得重复开发
+
+| 业务 | 当前代码已经做到 | 本轮主要差距 |
+| --- | --- | --- |
+| 客户与收案 | [客户历史](../src/server/clients/history-service.ts#L165)聚合沟通、联系人、指示、交付、到账、跟进、收案、案件和笔记，连续游标且逐来源鉴权；[转案](../src/server/intakes/actions.ts#L700)保留身份、客户、当事人、成员、收费草稿、材料、紧急事项和继承复核 | 跟进未进入全局工作，原始沟通资料和旧记录定位不足；转案后环节归类接续不清 |
+| 任务、等待与责任 | [同案依赖与等待](../src/server/tasks/workflow-service.ts#L189)有环检测、完成前置校验、等待结果/改期；[到期等待提醒](../src/server/reminders/task-waiting.ts#L8)已有；[交接](../src/server/matters/handover.ts#L22)由接收者承接后生效 | 案件内知道等待，全局总览未表达；无下一步案件与案情理解型交接仍是候选 |
+| 材料与来源 | [新版本摄入](../src/server/documents/material-ingest.ts#L149)保留不可变版本；[处理状态](../src/app/(app)/matters/[id]/_components/material-processing-status.tsx#L75)有失败、未识别范围、继续操作；[来源校验](../src/server/evidence/source-links.ts#L77)固定版本/hash/解析/锚点 | 单件上传、编辑回传未接入、Office 定位和部分调用者未消费锚点 |
+| 事实、争点与研究 | 多来源支持/反驳/背景、日期明确/区间/未知、修订历史及核对失效；[研究服务](../src/server/research/service.ts#L106)固定争点输入、保留修订，已有规则、例外、反方、结论、未决；[生成成果](../src/server/research/draft.ts#L41)实际产出关联研究的 DOCX | 事实重复呈现，研究普通入口选不到已有片段，检索采用信息需要手工衔接 |
+| 人工复核与交付 | [人工复核](../src/server/document-reviews/service.ts#L129)包含作者接受/部分接受/拒绝、具体新版本关联、合格审核人复核；[交付](../src/server/deliveries/service.ts#L55)固定文档版本/hash，区分导出、发送、收悉、回复和内容确认 | 依据选择窗口、原文位置和上版未决意见接续不足；人工发送是当前设计，不等于没有交付功能 |
+| 财务、审批、归档 | [账务登记/确认](../src/server/finance/ledger-registration.ts#L51)区分待确认与到账；既有更正/核销/退款和资格守卫；[归档导出](../src/server/archive/export.ts)核对批准快照和原件 | 发现已签署登记的准入不一致及归档总览范围问题，不据此宣称整个财务/归档缺失或已全面验证 |
+| 检索与可选 AI | 已有授权数据库正文检索；[元典类案保存](../src/server/yuandian/save-case.ts#L44)保留链接、裁判日期、保存时间并入案；[AI 审阅](../src/server/ai/review-document.ts#L116)有文档 hash、实际分段及部分覆盖披露 | 正文结果跳转和续查不足；RAG 适配并非普通案件查询入口；启用 AI 后仍缺后续段续审与逐项来源 |
+
+#### 一、确定或触发条件明确的业务缺陷
+
+##### S01｜P1｜来件首次确认开庭/期限，会在当前标准 schema 下整批回滚
+
+**场景：**来件已经匹配有效案件/程序，责任人有效，尚未生成同类事项；律师单项“采用”或“全部确认”。
+
+[确认服务](../src/server/sms/confirm-actions.ts#L189)在新建 Hearing/Deadline 后，又手写 `WorkResponsibility` INSERT（第 199、214 行），使用 `workKind`、`targetId`、`matterId`、`updatedAt`。但[当前 schema](../prisma/schema.prisma#L3030)及[基线建表](../prisma/migrations/0_init/migration.sql#L1707)使用 `taskId/deadlineId/hearingId`，没有上述四列；[responsibilityReady](../src/server/reminders/responsibility.ts#L10)只查表存在，标准数据库会进入错误分支。SQL 报列不存在后，外层第 92 行开始的 Serializable 事务整体回滚，包括新事项、触发器责任/通知以及本批此前的修改，不能写成“事项已建立但责任漏建”。
+
+现行[责任触发器](../prisma/migrations/20260921000005_restore_db_guards/migration.sql#L26)已经按程序责任人、有效人员及具体目标外键创建责任与承接通知，并接到 Hearing/Deadline 的 AFTER INSERT。**最小方向是删除重复错误写入、继续使用已有责任创建机制**；补兼容列仍无法满足真实目标外键约束，另手写正确 FK 又可能与触发器唯一记录冲突。
+
+[现有测试](../src/tests/server/sms-confirm-suggestions.test.ts#L34)将 `responsibilityReady` mock 为 false，绕开此分支；本轮只读测试，未运行。该确认文件与固定 LawLink 参考版本逐字相同，上游 schema 同样使用具体三外键，属于继承缺陷，不能归因于最近 M2/M3 模型变更。结论适用于仓库 schema/迁移一致的数据库，未检查在线数据库。
+
+##### S02｜P1｜按整条来件去重，会把另一真实事件标为已采纳却不建立
+
+[分析服务](../src/server/sms/analysis.ts#L229)允许一条来件产生多个具体事件建议；[确认服务](../src/server/sms/confirm-actions.ts#L192)却只要 `generatedHearingId` 或 `generatedDeadlineId` 非空就直接返回，不比较本条建议的日期、标题、来源或目标身份。外层第 104 行仍标记 ACCEPTED，第 143 行按输入条数报成功，UI 显示“已确认应用 N 项”。
+
+**触发条件必须分开：**全新来件首次批量创建先被 S01 阻断，不能声称当前标准库正常“建第一项、吞第二项”；但已有生成记录的来件当前已可触发。现有[人工生成入口](../src/server/sms/actions.ts#L410)能正确创建事项并写 generated ID；[收件箱](../src/app/(app)/inbox/_components/inbox-view.tsx#L458)在已处理页签仍可展示/采用其余建议。此时早退发生在错误 SQL 之前，另一真实事项可被标为已采纳而没有创建或明确关联。修复 S01 后，同批不同事件仍会暴露同一去重缺陷。
+
+ANQI 对照的是事件 type/date、必要文书提示等逻辑身份，并保存 `accepted_entity_id`、区分新建与关联已有；不是按整条上传记录去重。**最小方向：每条建议保存实际目标，区分“新建/关联已有/未应用”，不同事件分别办理；同事件多来源可明确复用。** 此项同样已在固定 LawLink 中存在。
+
+##### S03｜P1，受 S01 遮住的新建分支｜识别到的案号没有传给事件的程序选择
+
+[analysis.ts 第 206 行](../src/server/sms/analysis.ts#L206)用案号匹配程序，但匹配结果只用于 FIELD_CHANGE；第 230 行的事件 payload 没有程序 ID。[确认第 193、208、224 行](../src/server/sms/confirm-actions.ts#L224)另取排序第一的 ENGAGED 程序。
+
+例如同案有一审、二审两个代理程序，文书案号指向二审，当前事件选择仍指向第一个代理程序，责任触发器也将沿该程序选择负责人。**由于 S01，新建路径当前先回滚；这里是该阻断修复后仍会保留的确定选择错误，未声称已观察到错误事项持久化。** 最小方向是将案号匹配结果变成待核对程序选择；无唯一匹配时由人选定，不按列表顺序代替业务归属，也不推进已暂缓的期限重算体系。
+
+##### S04｜P2｜隐藏的 DOC_TYPE 待确认项挡住自动整理完成
+
+[分析第 184 行](../src/server/sms/analysis.ts#L180)创建 DOC_TYPE 建议，默认 PENDING；[UI 第 458 行](../src/app/(app)/inbox/_components/inbox-view.tsx#L458)将它隐藏，“全部确认”也不包含它；[完成判断第 131 行](../src/server/sms/confirm-actions.ts#L131)却统计全部 PENDING。因此处理完所有可见建议后，自动 ORGANIZED 仍可能无法收口。
+
+这不是彻底无法结束：[人工标记已处理](../src/server/sms/actions.ts#L516)出口存在，有待审文件时另受去向说明要求约束。差距是分类元数据、人工决定集合和完成条件不一致。最小方向为统一这些集合或明确将已写入的分类元数据排除在待决定项外；真实未决事项继续保留。
+
+##### S05｜P1｜直接登记“已签署合同”跳过当前主体/范围复核
+
+[registerBillingTx 第 22 行](../src/server/finance/ledger-registration.ts#L22)允许携 `signedAt` 直接插入 ACTIVE 和分期应收；同文件 `signBillingTx` 第 45 行在草稿确认签署前却调用 `assertMatterReviewCurrent`，注释明确“原合同签署＝委托范围正式承接”。[动作包装](../src/server/finance/ledger-actions.ts#L71)、[账务访问检查](../src/server/finance/ledger-access.ts#L11)只提供会话、现行资格、案件及归档检查，没有补上这项复核；当前迁移也没有 Billing INSERT 对应守卫。[登记 UI](../src/app/(app)/finance/reconciliation/_components/registration-workspace.tsx#L34)默认“已签署”，真实用户可走这条路径。
+
+**影响是同一正式承接状态因入口不同接受了不同业务前置条件，不是对合同法律效力的判断。** 固定 LawLink 参考也有该不一致。最小方向是统一生效入口的现行复核；若业务明确允许补录已经发生的签署事实，应保留该性质及待复核约束，不能用与新承接不可区分的 ACTIVE 绕过规则。无需改造整套账务或收款模型。
+
+##### S06｜P2｜自定义 DOCX 循环/可选块的字段准备与渲染语义不一致
+
+例：`{{#plaintiffs}}{{name}}{{/plaintiffs}}`。[提取变量](../src/lib/template-engine.ts#L366)会把它平铺成 `name, plaintiffs`，实际上下文却是 `plaintiffs[].name`；[上传](../src/server/document-templates/actions.ts#L254)保存自动提取与手填变量的并集，用户无法删去误提取的根 `name`。[准备/生成](../src/server/document-templates/actions.ts#L97)都按根路径核对缺值，`detectMissing` 第 335 行又把空数组视作缺失，数组字段同时被设为只读。
+
+后果包括：已有多个原告姓名仍被要求填无关根字段；可选第三人列表为空却无法完成准备；填根字段与实际循环输出不一致。真正 Docxtemplater 渲染仍按循环 scope 取值。**限定自动抽取的自定义循环/可选块，不能泛化为所有内置模板坏了**，内置模板有人工控制的变量清单。docassemble 本轮示例区分可选字段，j-lawyer 的字段核对也不等于“所有空值必须填”。修复现行轻量模板的作用域/条件判断即可，不恢复通用访谈。
+
+##### S07｜P2｜案件列表写着可按案号/当事人搜索，查询却遗漏这些关联
+
+[UI 第 206 行](../src/app/(app)/matters/_components/matters-view-v4.tsx#L206)提示“按名称、案号、当事人搜索”；[查询第 130 行](../src/server/matters/actions.ts#L130)实际 OR 只有 `title/internalCode/primaryClient.name`。程序法院案号、对方、第三人和非主要客户未纳入搜索。其中法院案号与对方/第三人又被同一查询读取供列表使用，却未参与搜索条件。
+
+律师拿着被告名称或法院案号查询可能得到无结果，除非恰好也写在标题里。已有权限过滤、分页、URL 筛选和返回保持应保留；补真实关联字段即可，不需要新搜索平台。
+
+##### S08｜P2｜材料命中返回了锚点，点击却只进案件首页
+
+[检索服务](../src/server/search/actions.ts#L178)返回 `documentVersion/parseRunId/anchorId/sourceLocation/pageNo`，但 `href` 只到 Matter 或 Intake；[搜索界面](../src/components/layout/search-dialog.tsx#L258)只执行 `go(item.href)`。第 328 行仍提示“材料正文支持按页定位”。
+
+因此命中 PDF 第 20 页后，用户还要找材料、打开、再定位。Kosmos 的原文动作与 Counsel 的精确引用可作为对照；本项目自身已有原文来源能力。最小方向为文档命中直接携固定版本和位置打开原文，“去案件”保留为独立动作，复用原授权与读取链。
+
+##### S09｜P2｜事实时间线与事实列表完整渲染了同一批内容两遍
+
+[FactsWorkspace 第 28 行](../src/app/(app)/matters/[id]/_components/facts-workspace.tsx#L28)先传全部 items 给 EvidenceTimeline，第 30 行又逐条渲染 EvidencePoints；[Timeline](../src/app/(app)/matters/[id]/_components/evidence-timeline.tsx#L15)已经分别对有日期/未知日期项渲染完整 EvidencePoints。重复的是标题、正文、来源及编辑操作，而第二套才有“以此争点开始研究”。
+
+这是可由组件树直接确认的重复，不是纯审美意见。保留一套主呈现，或做明确的时间/类型切换，并把研究动作放在同一事实组件。现有多来源、反证、历史、日期能力无需重写。
+
+##### S10｜P2，条件性｜按业务日期筛选依赖宿主机时区
+
+[matters/page.tsx 第 61 行](../src/app/(app)/matters/page.tsx#L61)用 `new Date(year, month-1, day, ...)` 生成日期边界，再过滤 DateTime 类型的 `Matter.intakeDate/Intake.receivedAt`。系统业务口径明确为上海时间，但构造函数使用宿主机时区。
+
+**若 Server 运行在 UTC**，所选“11月17日”对应上海时间 17日08:00 到18日07:59:59，漏掉当日前八小时并多取次日前八小时；若恰好部署为 Asia/Shanghai 则不触发。这里是静态时区推导，未读取在线配置或运行复现。复用[已有业务日期边界](../src/lib/clients/relationship.ts#L28)即可，不涉及已暂缓的 E 期限深化。
+
+#### 二、与参考模块相比，日常办理还存在的接续差距
+
+以下多为已有对象/服务没有被完整消费，不能一律当作数据错误，也没有自动纳入近期开发。
+
+##### G01｜客户跟进能记录，但未进入全局待办，也缺原记录上的改期/转交
+
+**场景：**尚未成案的客户答应周五补件，助理记录后希望主办回电；经办休假又需要转交。当前[跟进服务](../src/server/clients/relationship-service.ts#L54)有截止时间、责任人、完成/取消和审计，但创建时固定 `assigneeId=user.id`；[输入](../src/lib/clients/relationship.ts#L20)没有选负责人，UI 明示由本人负责。未找到同记录的改期/重分派动作。
+
+[日程](../src/server/schedule/query.ts#L56)、[全局工作队列](../src/server/dashboard/actions.ts#L471)和[离岗责任检查](../src/server/reminders/offboarding.ts#L3)不消费 ClientFollowUp。跟进在有权限的客户详情、连续历史及相关案件摘要仍可读取；[关闭资格](../src/server/clients/relationship-access.ts#L31)允许本人、PRINCIPAL_LAWYER 或具备 `clients.write=ALL` 的自定义角色，在满足客户读写资格时处理。跨客户办理仍需分别进入这些入口核对，缺少统一到期与责任人队列。结束旧项并新增下一项会通过结果活动保留接续关联，但不能作为同一跟进的改期或责任转交记录。
+
+Frappe CRM 将关联 Lead/Deal 的 CRM Task 同时纳入全局列表、负责人/日期编辑及来源跳转。适合本项目的增量是在既有总览/提醒读取 ClientFollowUp，并为原记录提供有原因的改期与转交；不要复制成另一条 Task，也不直接搬用 CRM 的任意改派替代本项目承接语义。
+
+##### G02｜案件内可见等待/前置，全局工作总览仍笼统显示“办理中”
+
+[任务服务](../src/server/tasks/workflow-service.ts#L108)已经给案件页面返回 activeWaiting/prerequisites，完成守卫第 293 行也会拦截；[全局队列](../src/server/dashboard/actions.ts#L463)和[WorkRow](../src/server/reminders/responsibility.ts#L11)没有这些摘要，[责任面板](../src/components/matters/work-responsibility-panel.tsx#L27)仍按 OPEN 统一展示办理中及办结动作。
+
+因此跨二十个案件浏览工作时，列表不能直接区分可推进、等答复、前置未完成和待检查事项；需要另开现有任务详情核对，直接点击办结则会在服务校验时收到阻断原因。服务守卫并未被绕过。参考 Frappe 的实际状态视图和 ERPNext 完成校验，复用现有关系给总览补摘要/筛选即可；不增加平行任务状态机。
+
+##### G03｜客户连续历史已贯通，沟通原件与历史精确定位仍弱
+
+[ClientActivity](../prisma/schema.prisma#L672)与[写入服务](../src/server/clients/relationship-service.ts#L39)保存渠道、摘要、发生时间、作者，没有原始 Document/附件及实际沟通联系人关系。MatterContext 可引用活动摘要，但摘要本身不足以回看客户原话及附件。Frappe 的 activities.py 实际聚合邮件发收人、附件和送达状态；本项目 EMAIL 枚举不能据此当作邮箱已接通。
+
+另一方面，[历史请求](../src/lib/clients/history.ts#L6)只有 clientId/cursor，[历史 UI](../src/app/(app)/clients/[id]/_components/client-history-panel.tsx#L9)有连续分页但没有日期/类型/案件筛选，若干来源只跳客户分区或案件根页。追查半年前的指示还要逐页找。
+
+适合的增量是人工关联既有原件/联系人、增加日期/类型/案件筛选和具体来源跳转。完整邮件/WhatsApp 双向同步和通用视图引擎不是本轮要求；客户身份和连续历史不重建。
+
+##### G04｜材料逐件处理已有接续，接件 UI 仍一次一份
+
+[案件上传入口](../src/app/(app)/matters/[id]/_components/procedure-workflow-panel.tsx#L2410)用 `File|null`，FormData 只有一个 file，input 无 multiple 且读取 `files[0]`。客户一次给三十份材料时需重复开窗、选择和提交。[待上传接续](../src/app/(app)/matters/[id]/_components/pending-material-uploads.tsx#L15)及[处理状态](../src/app/(app)/matters/[id]/_components/material-processing-status.tsx#L38)已存在，不能说没有逐件状态/重试。
+
+Paperless 的上传服务遍历文件集合，每份保留进度、taskId、失败原因和成功对象链接。优先增量为多选、共同归属默认值、逐件调整/结果/重试，调用现有单件摄入服务；无需第二套摄入平台，也不以 WebSocket 为前置。
+
+##### G05｜连续编辑已有安全取件/新版本接口，普通用户链路仍停在手动下载再上传
+
+[checkout](../src/app/api/desktop/checkout/route.ts#L13)、[受控取件](../src/app/api/desktop/file/route.ts#L14)、[uploadNewVersion](../src/server/documents/actions.ts#L433)及摄入服务已经能绑定用户、旧版本、短时令牌并拒绝过时基线。全 src/tools/scripts 的调用检索未发现实际 UI/连接器消费 checkout；[材料详情](../src/components/documents/document-detail.tsx#L95)真实操作仍是下载、手动上传新稿。
+
+j-lawyer 则从模板/案卷打开文件，经 CaseUtils、DocumentObserver、CaseDocumentStore 到可见保存状态形成完整链。**差距是从“有 API”到“律师连续改稿可用”的产品接续。** 若选择推进，应选一种可用的编辑回传方式，仍生成不可变新版本，明确保存失败/版本冲突；不能照搬覆盖原件，也不等于恢复 Personal 或建通用同步系统。
+
+##### G06｜Word/表格来源身份已保留，但原文预览还不能准确跳到该位置
+
+[parse-material](../src/server/rag/parse-material.ts#L63)把 Word raw text 按约4000字符形成 TEXT 锚点，诚实说明不是原 DOCX 段落身份；Excel 已有真实表/行/列。[来源视图](../src/server/documents/material-processing.ts#L48)可表达提取位置，PDF 可加页码，但 Office originalUrl 指向整份 preview；[预览路由](../src/app/api/documents/[id]/preview/route.ts#L87)转换 HTML 没有对应锚点 DOM。
+
+Counsel 区分阅读视图与保存的精确文本，并验证引用在已读范围内。适合先补的是现有抽取片段/表格坐标的精确打开与预览性质说明；完整 OOXML 段落/修订/布局映射继续单独后置，不假称普通转换保真。
+
+##### G07｜三个固定窗口缺少继续查找；影响分别是检索、依据选择和归档总览
+
+| 入口与证据 | 确认的范围 | 业务影响与准确边界 |
+| --- | --- | --- |
+| [全局搜索](../src/server/search/actions.ts#L58)、[UI](../src/components/layout/search-dialog.tsx#L109) | 最新200候选，最终每组最多20条，返回无 cursor/hasMore/total | 常见词命中很多材料时不能续查；显示数量只是返回数组长度。不是证明任意查询都漏件，更不是要求向量库。保留最终权限过滤，补范围提示/稳定续查 |
+| [人工复核来源](../src/server/document-reviews/service.ts#L84)、[选择器](../src/components/document-reviews/document-review-panel.tsx#L100) | 取最新101条，仅前100条进入鉴权选项；有“最近100份”说明，但无查找/继续加载 | 同案早期合同可能有权却选不到。创建服务本来允许任意有权同案材料，缺口在选择器；不能泛化到[交付选择器](../src/server/deliveries/service.ts#L249)，后者是全量 |
+| [归档总览查询](../src/server/archive/actions.ts#L584)、[页面](../src/app/(app)/archive/page.tsx#L22) | 最近200条已批准 ArchiveRecord，无参数/总计/分页；`items.length` 显示“已归档 N 件” | 200条记录不等于200个案件，补充归档可多条；旧记录不能从此总览续查。数据仍保留，有权限者可经已归档案件列表/具体链接访问，不能称档案丢失。固定 LawLink 查询已有同一上限 |
+
+这些是有界查询缺少后续入口/口径的问题。最小增量为各自现有权限范围内的查询、分页和正确计数；不要一律改成无界全量，也不要为此替换全部列表框架。参考的价值在于对象选取和返回路径明确，不宣称所有上游列表均无窗口限制。
+
+##### G08｜人工复核的原文位置和跨版本未决问题没有接续到新稿
+
+[人工复核合同](../src/server/document-reviews/contracts.ts#L6)的 location/revisionLocation 是文字，basis 为单个 documentId，没有复用 parseRun/anchor；[面板](../src/components/document-reviews/document-review-panel.tsx#L29)链接统一 download inline，无具体页/片段。正文与复核还分在不同 Tab，核对者需来回寻找。
+
+再看版本：[问题查询](../src/server/document-reviews/service.ts#L54)只按 exact documentId，[版本清单](../src/server/documents/detail-actions.ts#L44)不带前版未决意见/已关联修订摘要。V1 的问题仍保存且可回看，但进入 V2 时没有就近提示，容易重复查找或漏掉上下文。
+
+优先复用现有原文选择/预览，在 V2 显示可打开的前版未决摘要；不复制或重绑旧意见。**这是信息接续缺口，不据此自行增加“所有意见关闭才能批准”的门禁。** 作者解释、部分采纳、独立批准与交付各有语义。Counsel 的版本比较仅支持“明确上下文和来源”的参考，未证明它实现了本项目完整人工复核流程。
+
+##### G09｜研究后端已支持片段来源，普通研究 UI 造不出该数据
+
+[研究合同](../src/server/research/contracts.ts#L51)复用支持 parseRunId/anchorId 的 sourceInputSchema；[研究来源编辑器](../src/components/research/research-source-editor.tsx#L15)只选择 documentId/relation/PDF页及法源元数据，提交不含锚点。虽然能显示“固定原文片段”，普通新增路径并没有片段选择。
+
+同项目[事实来源选择器](../src/app/(app)/matters/[id]/_components/evidence-panel.tsx#L280)已有 listMaterialSources、分页和锚点提交。对照 Kosmos 高亮绑定/Counsel 精确引文，最小方向是复用这段已有能力到研究页面，保留同一授权与固定身份。没有理由再建研究专属来源模型或先部署 RAG。
+
+##### G10｜类案能够入案，查询→采用→研究修订仍需要重复手工衔接
+
+必须先确认：[元典保存服务](../src/server/yuandian/save-case.ts#L44)及[查询面板](../src/app/(app)/matters/[id]/_components/case-search-panel.tsx#L108)已将关键词/语义类案保存为本案 Markdown，含案号、法院、裁判日期、原链接、保存时间及当次返回内容；研究可选这些材料。不能写“全部法库结果只能抄录”或“没有来源留存”。保存返回片段也不等于另行取得并核实完整裁判文书；本服务没有自动取回全文的步骤。
+
+真实差距是本次查询参数/provider/结果采用没有直接形成研究 queryLog；[研究来源](../src/components/research/research-source-editor.tsx#L35)默认 MATERIAL，法源身份、效力时点及取得方式仍需手填；法规结果、[管理员 MCP 预览](../src/server/legal/mcp-actions.ts#L81)未形成普通研究的直接采用入口。
+
+Counsel 的工具把取得公共法源、保存修订、实际读取、引用分开。适合先接已有元典保存到“加入当前研究待核实来源”，保留查询、网址、取得时间及摘要/全文性质；人工核实不自动变 CHECKED。其美国法源工具不证明中国法库适配，MCP/RAG 也不是本项前置。
+
+##### G11｜收案转案保留了材料，但真实环节归类没有续接
+
+[转化第 812 行](../src/server/intakes/actions.ts#L812)建程序；第 860 行注释称归入首环节，实际只写 matterId/procedureId 和旧“阶段:xx”标签，没有 stageId。程序物化环节不回填材料；[当前材料呈现](../src/app/(app)/matters/[id]/_components/procedure-workflow-panel.tsx#L2938)只按真实 stageId 匹配。
+
+**材料仍能在全案/程序未归属区域找到，未丢失；不能把所有材料自动认成“代理授权”。** 差距是转换后没有清楚的分类续接，旧注释又与现行实现不符。可提供“本次收案材料归类”入口，只给明确类型建议目标；若产品决定保持未归属，则把该路径明确。不要恢复旧标签兼容或伪造归属。
+
+##### G12｜同文件候选决定已记住，跨来件的同一事件仍缺明确复用/忽略/恢复
+
+[analysis.ts 第 239 行](../src/server/sms/analysis.ts#L239)按 smsId/fileId/kind/fieldKey/suggestedValue 去重，包含被拒绝项，因此“同文件重跑无条件复活”是误报。但[SmsSuggestion](../prisma/schema.prisma#L2282)没有案件级逻辑事件与多来源集合，同一事件从另一文件/来件提取时无法继承已有决定。
+
+ANQI 的 candidate-facts、accept/decline/reopen 及真实 UI 区分新建/关联已有、显示多个来源，支持忽略原因和恢复。此项与 S02 相反：同一消息内去重过粗，跨消息又不认识同一事件。可先仅针对明确程序事件提供复用和多来源，不自动语义合并全部事实；有疑问继续待人工决定。更完整候选管理是业务候选，不把通用 AI 记忆平台列为前置。
+
+##### G13｜材料主列表没有按已有版本族收拢，历史稿与当前稿逐行混排
+
+此项接续[计划 §8.24](WORKBENCH_PLAN.md#824-维护延期后的业务余项核对2026-11-17)，本轮再沿实际入口复核。[案件查询](../src/app/(app)/matters/[id]/page.tsx#L94)读取全部未撤回版本，并保留 familyId/isLatest；[procDocs 投影](../src/app/(app)/matters/[id]/_components/matter-detail-tabs.tsx#L401)却丢掉这两个字段，只传 version。[材料主列表](../src/app/(app)/matters/[id]/_components/procedure-workflow-panel.tsx#L2497)按每条 Document 计数和 map，没有按版本族形成主入口，材料行仅对 v>1 显示版本数字，没有当前/历史标志。
+
+例如同一诉状修改五次，主列表会呈现五条材料，而已有[材料详情](../src/components/documents/document-detail.tsx#L106)本来就支持版本切换。差距是列表没有消费已建立的版本身份；这也直接对应现有需求 §9.3，而非本轮引入新文档模型。可用真实 familyId 形成“一族一个主入口、详情看各版”，保留具体版本选择与权限，不按同名猜版本，也不把找到的历史稿自动冒充当前稿。参考项目的材料主对象/历史入口组织可借鉴，但不声称 j-lawyer 或 Paperless 使用与本项目完全相同的不可变版本族。
+
+##### G14｜办案沟通/研判记录可新增和展示，已有 Note 编辑服务没有接到入口
+
+同样接续计划 §8.24。[ProgressDialog](../src/app/(app)/matters/[id]/_components/progress-dialog.tsx#L44)不接已有 Note，每次初始化清空，仅调用 createNote；[记录投影和列表](../src/app/(app)/matters/[id]/_components/procedure-workflow-panel.tsx#L1734)没有保留供编辑使用的 Note/authorId，LogRow 的现有操作接的是旧备忘/快递，沟通及研判记录仍为展示。全 src 对 `updateNote` 的检索只找到[服务定义](../src/server/notes/actions.ts#L61)，没有调用方。
+
+用户记错沟通日期、联系人或研判内容时，主入口缺少对这条记录的更正动作；不能以“后端已有函数”认定编辑体验完成。现有接口限制本人记录并检查案件写入资格，可在原记录上接编辑模式，同时核对该保存链的现行权限、归档、所见版本和审计，不重建沟通系统，也不能将新建一条记录当作已经编辑旧条。
+
+##### G15｜目标/客户指示的修订尚未与实际采用成果形成直接关系
+
+当前[目标/指示记录](../prisma/schema.prisma#L3261)已有系列、版本、更正/替代、来源与人工确认；[研究](../src/server/research/service.ts#L75)已固定争点输入并提示争点/材料变化；[研究出稿](../src/server/research/draft.ts#L60)已经建立具体研究修订→分析稿关系；[模板快照](../src/server/document-templates/actions.ts#L161)也保存实际字段值、程序/当事人选择及模板身份。因此不能说没有版本、没有成果溯源或没有变化提示。
+
+缺口是没有明确选入“这份研究/文书实际采用哪一版 GOAL/INSTRUCTION”。`MatterContextRecord.sourceDocumentId` 是指示从哪里取得，不代表哪些成果采用了该指示；手工把指示抄进模板字段，保存的是值，也不会自动知道其指示修订身份。于是客户将指示 V1 更正为 V2 后，系统能展示指示历史，却不能只沿真实采用关系指出哪些研究/稿件需重新核对。
+
+Counsel 的[reference-impact](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/src/workspace/reference-impact.ts#L15)、[实际存储调用](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/src/workspace/store.ts#L1173)和[读取入口](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/src/workspace/http.ts#L259)沿显式固定引用比较新旧版本，同时记录无关系及截断范围。可借鉴的是“确实采用的修订→变化后提示核对”，不是它与本项目完全相同的客户指示模型。最小范围是实际采用时选定修订、只提示这些直接关系；没有关系就说明未检查，不按同案/文本相似推断，不改写历史批准/交付，不强制先有客户决定，不恢复 B 比较、自动评分或全案多跳平台。
+
+#### 三、仅在已启用 AI 审阅时存在的两项接续问题
+
+##### O01｜P2｜长文诚实显示部分覆盖，但再审仍重复开头，无法继续未审后文
+
+[prepareReviewSegments](../src/lib/ai/review-coverage.ts#L26)每次从0开始，只保留前6段，每段约6000字符；[审阅输入](../src/server/ai/review-record-service.ts#L11)只有 matterId/documentId，没有后续位置。[批量审阅](../src/server/ai/batch-review-matter.ts#L74)只跳过 COMPLETE，因此 PARTIAL 长文下次仍重复同一前缀。
+
+例如约6万字符的材料，前约3.6万字符被选入，后文不能通过再次调用这项功能续到。[覆盖汇总](../src/lib/ai/review-coverage.ts#L41)如实记录未发送范围，问题是不能续读，不能描述为伪装全文完成。Counsel 的 `counsel_read_record` 接受 start/length、记录实际 ranges、返回 nextStart，说明有预算限制也能有继续入口。最小方向为同一固定版本续审未送出范围、失败只重试相应段、合并实际覆盖；换版本不沿用旧偏移。
+
+##### O02｜P2｜锚点覆盖预览与实际审阅输入分离，风险条目不能逐项回到依据
+
+[覆盖预览](../src/server/ai/input-coverage-service.ts#L149)有锚点与区间，但第194/197/210行明确 PREVIEW、NOT_SENT、离线预览；[实际审阅](../src/server/ai/review-document.ts#L34)另行提取 PDF/DOCX 裸文本并分段。[ReviewItem](../src/lib/ai/review-parser.ts#L6)只有 type/severity/title/detail；保存产物虽有文档 hash 和实际覆盖，缺每条问题的精确引文/位置。
+
+所以“违约责任不对称”等风险不能直接点回模型依据段。这里没有否定文档级溯源，也没有把离线预览误称真实发送。对照 Counsel 在真实已读 ranges 内核验引文的做法，适合让实际输入复用固定解析来源、记录实际送入片段，并对逐项引文服务端核验，再复用已有原文预览；不要求先造通用 AiRun 平台。
+
+当前 `createRagFlowAdapter/retrieveScopedEvidence` 的主要消费者仍为验证脚本和测试，未形成普通案件 RAG 查询入口；MCP 是管理员配置/预览。产品内真实数据库正文搜索、元典关键词/语义类案等仍然存在。上述差异只用于准确说明实现状态，不把可选服务未部署算作核心交付失败。
+
+#### 四、确有参考价值，但本次不自动恢复排期的能力
+
+| 候选 | 现状和参考证据 | 适合的边界 |
+| --- | --- | --- |
+| C01：主动找出“在办却没有下一步”的案件 | 当前总览从已有 Task/期限/开庭形成；j-lawyer `getAllWithMissingCalendarEntries` 及客户端实际查出没有未办日历项的未归档案 | 可在案件列表增加“待安排下一步”筛选；只提示律师安排，不自动制造法定期限或恢复复杂排程。保留 W14 候选 |
+| C02：接收人快速理解案情的交接摘要 | [当前交接快照](../src/server/matters/handover.ts#L8)固定责任工作、程序、待确认账务/开票/用章/保全，但未汇总目标指示、未决争点、研究/复核/交付上下文 | 现有责任接收机制不重建；以后可加受权摘要与原记录入口。Frappe 只有活动组织可参考，未证明有完整法律交接包；具体方案属本项目判断 |
+| C03：逐主张/要件的回应与材料缺口 | [研究修订](../prisma/schema.prisma#L3322)已有规则、例外、反方、结论、未决等文本；NLV 脚本把 obtained/not_obtained、空回应原因、金额构成机械检查 | 复杂诉讼确有需求时才在现有研究加小型对照，不把尚未收到答辩状当无异议；不照搬硬编码法律责任，不恢复 B 方案比较或新门禁 |
+| C04：Word 两/三版轮次比较与批注归因 | 本项目目前为版本列表/分别预览；Counsel 真实 `counsel_compare_document_rounds` 工具读取固定 sent/returned/可选 baseline，有限尺寸/时限、段落差异/作者/批注及 UI | 不是已验证独立 REST 接口，也不等于完整 Word 等价比较，页眉/脚注/布局等有覆盖边界。继续后置，先补 G05/G08 的日常接续 |
+
+#### 五、按业务收益安排的处理顺序与定点复验场景
+
+| 顺序 | 建议范围 | 为什么优先 / 以后实施时要验证什么 |
+| --- | --- | --- |
+| 第一组：现有办理的正确性 | S01、S02、S03、S05，再 S04/S06 | 标准 schema 下首次采纳开庭/期限；已有 generated ID 后采纳另一个真实事件；同来件不同事件与重复同事件；多程序正确归属；直接已签署与草稿确认的同一复核条件；隐藏建议完成口径；循环/空可选块字段与实际 DOCX 一致 |
+| 第二组：把已有能力接到实际入口 | S07/S08/S09/S10、G02/G07/G09/G13/G14 | 被告/法院案号查案；材料命中直接到固定版本/位置；事实只呈现一次且同处研究；UTC 部署下上海日期边界；全局等待/依赖摘要；窗口外材料/归档可续查；研究可选择已有原文片段；版本族主入口和已有 Note 编辑可达 |
+| 第三组：减少重复劳动并补实际采用关系 | G01/G03/G04/G05/G06/G08/G10/G11/G15，G12按来件使用量 | 跟进到期/转交、旧客户指示定位、三十文件中一件失败仍能继续、编辑回传版本冲突、前版未决问题可回看、检索结果成为待核实研究来源、转案未归属材料可主动分类；仅对明确采用的目标/指示修订提示成果待核对 |
+| 条件组 | O01/O02 | 仅在使用 AI 时：长文第二次真正进入后续范围；失败仅补相应段；引文确实来自实际送入且仍获准的固定来源。未配置不阻断普通业务 |
+| 后置候选 | C01—C04 与既有暂缓项 | 不指定本期 owner，不预建模型，不因参考项目存在就恢复排期或门禁 |
+
+上述是未来实施的定点场景，**本轮未执行这些验证**。读到的已有成功测试不能覆盖所有真实分支：来件责任检查被 mock false；自定义模板测试未覆盖循环作用域/可选空数组；函数/契约能处理锚点、checkout 或任意材料，也不能证明普通页面已提供调用。后续应围绕实际触发点补证据，无需为了本次文档审查重跑全仓测试。
+
+**本次交付仅为研究记录及计划中的审查账目，业务代码、schema、迁移和原验证结果均未改动。** 核心判断是先消除真实入口的错误，再贯通已经有的数据和动作；需要新增的专业能力按日常频率与案件价值分别选择。
 
 ## 4. 可选法律服务 MCP 与来源
 
