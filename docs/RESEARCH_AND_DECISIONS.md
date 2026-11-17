@@ -1190,6 +1190,12 @@ C实际读首页、Topbar、旧ConflictSearchButton/ConflictDialog、完整confl
 
 沿本轮已重读的固定 Frappe Lead 1—230行，采用单一对象动作区与有条件显示原则，不移植源码、其销售动作或权限。LexOrder的“去欢迎区重复入口、保原顶部资格和真实日程统计、管理提示仅说邮件”的选择来自实际消费者/服务事实；不以相同href判断所有日程入口均冗余。开发验证只看受影响首页组合、引用和静态，浏览器另由用户验，合同见计划 §7.16.8。
 
+### 3.41 普通归档与成功HTTP证据的实际源码核对（2026-11-17）
+
+C及两路只读审查实际核m3-business-chain、m3-http-contracts、archive-m3、checklists/snapshot、uploadDocument、任务/程序、closeMatter/saveClosure、archiveMatter/approve、render/export与真实archive route。确认原三条业务链使用明确缺项例外，HTTP只证明归档拒绝；生产正常清单、收尾、独立核准、冻结ZIP主体已经存在。最小接续是在旧HTTP文件新增独立普通用例，前段服务证据与最终真实GET分层，不复制生产系统或再铺一套测试DSL。
+
+源码核出的必要细节包括同名内置模板findFirst无排序、saveArchivePolicy需独立配置资格、七必交不可用不适用代替、archiveMatter返回archiveNo而非ID、批准含两条内容不同的审计，以及直接build不写ARCHIVE_EXPORT。模板/制度/密钥/真实会话与清理边界已纳入计划 §7.16.10。沿现有归档研究与原代码，不宣称新增外部法务研究或真人专业通过；本节是审定依据，不是测试已完成证据。
+
 ## 4. 可选法律服务 MCP 与来源
 
 核查日期 2026-11-16；以下为官方公开的接入信息，不是本项目已取得账号、权益或实测成功。机构目录可扩展，自定义远程 MCP 为未预置服务保留入口；不虚构“市面所有机构都提供官方 MCP”。

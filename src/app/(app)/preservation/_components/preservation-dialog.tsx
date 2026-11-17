@@ -80,7 +80,7 @@ export function PreservationCaseDialog({
 
   function reset() {
     if (!isEdit) {
-      setMatterId(""); setType("LITIGATION"); setCourt(""); setRulingNumber("");
+      setMatterId(initialMatterId ?? ""); setType("LITIGATION"); setCourt(""); setRulingNumber("");
       setOwnerId(""); setNote(""); setTarget(""); setPropertyType("BANK_DEPOSIT");
       setPropertyDetail(""); setAmount(""); setStartDate(""); setExpiryDate("");
     }

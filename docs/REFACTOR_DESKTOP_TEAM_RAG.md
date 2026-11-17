@@ -735,6 +735,12 @@ C3仅在 `MatterPreservationContent` 按 `cases.length` 与既有 `canManage` �
 
 C4只改变首页组合和邮件提示。保留Topbar按 `intakes.create` 的 `/conflicts` 入口，完整页仍调用原 `runCheckAndSave`；首页旧弹窗在唯一引用删除后连同wrapper删除，不建立第二套入口。`canEnterAdminWorkspace`、`isEmailConfigured`、后台页面与所有dashboard查询都不改，邮件未配置不能推导webhook状态。近期日历/焦点/期限/开庭各自对象与链接保持；本片无schema、公共授权或运行环境变化，准确文件及验证见计划 §7.16.8。
 
+### 6.23 普通归档成功的证据运行边界（2026-11-17）
+
+C6只扩现有HTTP集成测试：同一真实隔离PG/local加密存储下，Vitest以显式合成actor调用原上传、完成、结案、归档/独立批准及buildArchiveZip服务；独立Next进程用真实NextAuth读取精确archiveId。两个进程启动前固定相同库、目录、加密密钥及loopback origin，不能拿测试自动生成的随机密钥替代共享密钥，也不能让run.mjs先测后启Next的顺序冒充live HTTP。
+
+归档制度和同名内置模板临时配置必须精确记录/恢复；只在C获数据库独占时段执行，保不可变历史与所有被批准快照引用的文件。无生产/schema/授权或运行平台变更；完整合同及审计、文件名、manifest、字节证据见计划 §7.16.10。
+
 ## 7. 参考项目如何进入 LexOrder
 
 沿用 [来源记录](RESEARCH_AND_DECISIONS.md)，按“观察行为 → 输入输出与规则 → LexOrder 设计 → 场景验收”吸收。实际复制代码另记固定提交、文件、依赖与来源；研究范围不按协议类型排除。

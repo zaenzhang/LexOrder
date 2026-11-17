@@ -725,7 +725,8 @@ W09.3 知识发布、B 结构化方案比较、E 期限重算深化、F 自动�
 | C2：同一 C 检出/唯一写者 | **W12 已选交付材料移除已修复，代码/组件与静态复审完成，见 §8.46；用户待验** | 仅 `src/components/deliveries/delivery-panel.tsx`、`src/tests/components/delivery-panel.test.tsx`；合同见 §7.16.4，本片结束。无 schema/公共授权/数据库/运行进程变更 |
 | C3：同一 C 检出/唯一写者 | **D05 空事项级保全子范围代码/静态复审完成，见 §8.47；用户待验** | 唯一生产文件 `src/app/(app)/matters/[id]/_components/procedure-workflow-panel.tsx` 的 `MatterPreservationContent`，合同见 §7.16.7；本片结束，不把 D05 总号关闭 |
 | C4：同一 C 检出/唯一写者 | **D06/D07 欢迎区重复入口与邮件文案子范围代码/组件及静态完成，见 §8.48；用户待验** | 首页、两份旧冲突弹窗文件删除及既有首页mock清理；合同见 §7.16.8，本片结束；不把D06/D07总号关闭 |
-| C5：同一 C 检出/唯一写者 | **本事项保全创建成功后的默认事项恢复已审定，随 C4 发布合同后实施** | 唯一生产文件 `src/app/(app)/preservation/_components/preservation-dialog.tsx` 的reset；新专用组件回归见 §7.16.9。编辑接线因解除关联/责任读权合同未齐，另列未开工，不改服务/schema/授权 |
+| C5：同一 C 检出/唯一写者 | **本事项保全创建后的默认事项恢复已修复，代码/组件及静态完成，见 §8.49；用户待验** | 唯一生产文件的reset及新专用组件回归见 §7.16.9，本片结束。编辑接线因解除关联/责任读权合同未齐，另列未开工 |
+| C6：同一 C 检出/唯一写者 | **普通完整卷宗与精确获批归档HTTP成功的证据合同已审定，发布后按集成/运行次序实施** | 唯一代码文件 `src/tests/server/m3-http-contracts.integration.test.ts`，见 §7.16.10；不改生产/原三条例外链。先顺序处理已交A/B小批；PG等A明确停止交还后由C独占 |
 
 C 内部 `c_d02_plan_review`、`c_m3_acceptance_review` 及后者的归档只读审查均无源码/文档写权，不占据 A/B 角色。`/workspace/LexOrder`、`/workspace/lexorder-case-audit`、历史 `lexorder-s10` 保留原成果，不用作新的并行写入检出。A/B 的临时交接可在各自检出忽略提交的 `.runtime/` 提供方案/patch 与 base SHA；C 读取后把正式合同和证据写回本账本，不另建并行主计划。每个检出始终一名写者；同一运行进程或隔离数据库必须另行登记当次 owner。
 
@@ -1414,6 +1415,29 @@ C3核原Dialog时确认事项入口的常驻表单在创建成功后reset清空�
 本批在编码前重读三个真实消费者、create/update服务及schema；独立复核确认单行reset不受其他缺陷阻断，不把它冒称每次打开或跨事项props同步。先发布合同后实施。
 
 **后续已确认、尚未认领的保全编辑合同：** CaseCard编辑当前仍调create，未传原ID；需接原update且保不可见担保/申请日期/提醒与原财产。现update只要收到matterId/ownerId就作废PENDING提醒，未来仅实际变化才传这两字段；原始payload测试不能被Zod剥离未知first字段掩盖。更重要的是当前list/access只允许关联本人事项或无事项且owner为本人，schema却允许matterId/ownerId双空；解除关联可能造成记录无人可见。A/C需先明确未关联保全的实际负责人和当前读权，不能自动代填、改权限或以隐藏入口避开需求；跨案更新目前只刷新原案也须准确处理。此合同未齐，不将编辑/解除关联完整链记为已修或已验。
+
+#### 7.16.10 C6：必交齐全的普通归档及精确记录HTTP成功
+
+C及两路只读审查已沿现有HTTP/服务测试、上传、任务/程序、结案/收尾、制度、归档/审批、manifest/ZIP和真实route核对。只在现有HTTP测试文件新增一个独立it，一次提供真实PG服务链与最终HTTP成功，不复制两份归档链、不重建W12。先发布合同；集成A/B期间暂停本片代码写入，数据库等登记时段交C后再运行。
+
+| 阶段 | 现有入口、精确预期及边界 |
+| --- | --- |
+| 唯一文件 | `src/tests/server/m3-http-contracts.integration.test.ts`。复用现有makeUser/actorFor/httpClient、真实Prisma/storage、Docx/Packer/PizZip；不新建测试框架，不改生产/schema/授权或旧三条例外服务链 |
+| 独立身份 | 新建专用合成经办LAWYER、配置LAWYER+SUPER_ADMIN、不同CUSTOM审批人及ARCHIVE_APPROVE组。不得复用旧HTTP用例已撤材料/停用的人；审批资格不代替导出所需完整读权/下载/财务资格 |
+| 会话证据 | Vitest沿原显式合成actor与next/cache替身，补requireWorkspaceConfiguration并检查SUPER_ADMIN；Next是独立真实认证/Prisma/存储进程。前段服务动作不是HTTP证据，最后用真实CSRF+密码登录，不造JWT/cookie |
+| 制度/模板 | 真实FirmFile制度明文/hash经saveArchivePolicy生效；记录原archivePolicy是否存在及JSON。记录两种同名enabled内置模板ID并临停，再用真实BUILTIN_TEMPLATES构建可读DOCX。仅本it安装，afterAll精确恢复；不seed/迁移/重建环境 |
+| 完整材料 | 民商事七必交分别有独立用途及实质内容的合成DOCX：retainer_contract、power_of_attorney、pleading、evidence_catalog、judgment、closing_form、case_summary；证据目录另附一份独立合成证据原件，共8份手工材料。不能把同一分析稿改名充数、不能预置APPROVED；专业审核仍待真人 |
+| 真实上传 | 经uploadDocument(FormData)传真实File、matterId、category、sourceOrigin、archiveChecklistItemId、encrypted=true和独立requestKey；断言ok与返回ID，保存原输入Buffer/hash，确认存储为真实加密字节。原件解析worker不启动 |
+| 普通收束 | createTask→toggleTaskCompleted使同一责任DONE；addProcedure→读当前updatedAt→updateProcedure(CONCLUDED)；随后closeMatter产生CLOSED/MATTER_CLOSED真实小结，再saveClosure并assertClosureReady非null。没有的财务/票据是本合成场景空集合，不冒称结清真实账款 |
+| 准备/提交 | getArchivePrepData核七必交、真实docsByItem及刚写的existingSummary；七必交全ATTACHED，五可选逐项NOT_APPLICABLE并说明场景原因，四manualChecks确认工程包范围/原件去向/零财务事实/实际顺序页码。archiveMatter(forceWithMissing:false)须missingItems=[]、PENDING_REVIEW、无frozenManifest/审批人，事项仍CLOSED |
+| 独立批准 | 用matterId+返回archiveNo读本次ArchiveRecord ID；不同合格人逐项requiredArchiveVerificationIds审批且exceptionApproved:false，才APPROVED/ARCHIVED并冻结manifest。定位含核验/制度/exception字段的事务内批准审计，不错断同action总数=1（当前另有摘要审计） |
+| 服务ZIP | buildArchiveZip(exact archiveId,owner.actor)解包，manifest深等批准快照，核八份输入原件字节、ID/版本/hash/顺序及两份真实生成的封皮/目录DOCX标识；不把直接build当真实HTTP或导出登记 |
+| 真实HTTP | 同owner真实登录请求 `/api/archive/<matterId>/export?archiveId=<archive.id>`，须200、application/zip、真实Content-Length及本次文件名。独立对照冻结快照/已知输入字节，不仅与前次ZIP互比；当前route没有no-store合同，不套其他route断言 |
+| 精确记录/审计 | 直接build后ARCHIVE_EXPORT为0，唯一成功GET后为1，核真实登录人、ArchiveRecord ID、matterId/archiveNo及收到ZIP的size/checksum；同案显式不存在archiveId须404，不退回最新批准记录、不新增导出审计。不对GET发明requestKey幂等 |
+| 退出/清理 | 恢复原制度JSON/原enabled模板ID；关闭本轮模板、停用合成人/角色/组、软删本轮事项/客户，只关闭本次document.parse未成功job并清lease。保不可变审计、原件、制度和获批快照所引文件，不unlink归档来源 |
+| 必要运行 | A交还后C独占既有_test库，同一运行生命周期正常start→独立Next就绪→定点Vitest→正常stop；两进程同DATABASE_URL、APP_STORAGE_DIR、实际共享密钥、SERVER/local和loopback origin。原run.mjs verify先测后启动Next，不能假称已有HTTP环境。只运行该HTTP文件两个用例、确认未skip，记录实际Next代码版本；不全量构建/浏览器/部署 |
+
+审查已纠正：复用旧HTTP数据会沿用撤权对象；新增程序实际名addProcedure；archiveMatter不直接返回ID；普通链不能用必交不适用或例外核准；同名模板需明确隔离；密钥不可让Vitest自行随机；批准审计有两条不同内容；route的记录ID与matterId不能互换。此证据合同下无生产实现开工阻断。完整M3仍须诉讼/仲裁真实格式包、无程序路径、用户桌面及真人专业结果，不因本it通过关闭原六项。
 
 ## 8. 交接：完成范围、证据与未覆盖项
 
@@ -2120,6 +2144,14 @@ followUp+client独立准确读取，不依赖首页前五或当前页；按真�
 全仓代码/测试引用检查无旧组件残留；独立差异复审无阻断。原 `dashboard-deadlines.test.tsx` **6/6** 通过，保期限焦点、开庭预览、无期限导航和准确午夜语义；该测试mock邮件为已配置，不冒称覆盖未配置提示，条件未改由diff核。首页及测试ESLint、`tsc --noEmit --incremental false`、`git diff --check` 通过。无PG/真实HTTP/浏览器或SMTP建设；D06/D07本子范围开发完成，用户桌面仍待验。
 
 阶段再次核主线/相关分支及三检出，A/B没有已交完成批次，C未写其文件；普通完整归档成功链只作下一合同的只读细化。C5只认领已审定的默认事项恢复；编辑接线因关联/责任合同未齐仍未开工，不混成C3已修成果。
+
+### 8.49 C5：同事项保全连续新建（2026-11-17）
+
+合同以 `ec7cba5` 先行发布。生产仅将成功后的reset从清空matterId改为 `initialMatterId ?? ""`，保原!isEdit条件、其他字段reset、原create、取消/失败路径与用户显式选择；无props同步effect。编辑原对象与解除关联责任问题没有混入，仍按 §7.16.9 后续合同追踪。
+
+新增真实Dialog回归保持同一实例，以成功保存→关闭→重开→再保存证明两次均提交当前事项；Action替身实际通过caseCreateSchema。旧代码第二次matterId为null而失败，修后1/1通过；未用卸载重挂掩盖问题，也未拿双空无权记录当完整成功。类型检查纠正Testing Library不支持的exact选项后重跑定点组件及类型通过；受影响ESLint、diff检查通过，独立实际差异复审无阻断。开发证据限组件/静态，用户桌面待验。
+
+结束检查main/旧报告分支及A/B交接。B1已交本地 `34fcc5f`（base `1ab0855`）和完整patch，C已开始两路只读复审，尚未应用/发布；A1已正式接到下一数据库独占时段。C6普通归档证据先随本次发布合同，不在A占库时运行；收到小批按账本顺序集成，不把计划或他组本地提交记为正式main。
 
 ## 9. 继续工作时的约束
 
