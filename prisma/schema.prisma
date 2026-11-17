@@ -3462,8 +3462,10 @@ model DocumentReviewIssue {
   document Document @relation("ManualReviewDocument", fields: [documentId], references: [id], onDelete: Restrict)
   title String
   location String?
+  position Json?
   basis String
   basisDocumentId String?
+  basisPosition Json?
   basisDocument Document? @relation("ManualReviewBasis", fields: [basisDocumentId], references: [id], onDelete: Restrict)
   createdById String
   createdBy User @relation("ManualReviewAuthor", fields: [createdById], references: [id], onDelete: Restrict)
@@ -3487,6 +3489,7 @@ model DocumentReviewEvent {
   revisionDocumentId String?
   revisionDocument Document? @relation("ManualReviewRevision", fields: [revisionDocumentId], references: [id], onDelete: Restrict)
   revisionLocation String?
+  revisionPosition Json?
   resolved Boolean?
   actorId String
   actor User @relation("ManualReviewActor", fields: [actorId], references: [id], onDelete: Restrict)

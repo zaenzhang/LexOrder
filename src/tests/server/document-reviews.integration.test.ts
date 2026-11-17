@@ -140,7 +140,8 @@ describe.skipIf(!databaseUrl)("具体文书人工审校：真实 PG", () => {
     documentIds.push(...candidates.map(row => row.id));
     const first = await readDocumentReviewSourcePage(f.owner.id, { documentId: f.original.id, query: " G07- ", selectedId: old.id });
     expect(first.items).toHaveLength(20); expect(first.items.some(row => row.id === old.id)).toBe(false);
-    expect(first.selected).toEqual({ id: old.id, document: { id: old.id, name: old.name, version: 2 } });
+    expect(first.selected).toEqual({ id: old.id, document: { id: old.id, name: old.name, version: 2,
+      pageCount: null, isPdf: true, hasIdentity: true } });
     const seen = first.items.map(row => row.id); let cursor = first.nextCursor;
     while (cursor) {
       const next = await readDocumentReviewSourcePage(f.owner.id, { documentId: f.original.id, query: "G07-", cursor, selectedId: old.id });

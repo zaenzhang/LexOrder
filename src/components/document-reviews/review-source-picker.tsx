@@ -11,10 +11,11 @@ import type { ReviewDocumentOption } from "@/server/document-reviews/contracts";
 type Props = {
   documentId: string; initialOptions: ReviewDocumentOption[]; initialNextCursor: string | null;
   value: string; disabled: boolean; onChange: (value: string) => void;
+  onSelectedDocument: (document: ReviewDocumentOption | null) => void;
 };
 
 /** Looking up source options never changes the review draft or its save identity. */
-export function ReviewSourcePicker({ documentId, initialOptions, initialNextCursor, value, disabled, onChange }: Props) {
+export function ReviewSourcePicker({ documentId, initialOptions, initialNextCursor, value, disabled, onChange, onSelectedDocument }: Props) {
   const id = useId();
   const [query, setQuery] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
@@ -53,6 +54,8 @@ export function ReviewSourcePicker({ documentId, initialOptions, initialNextCurs
 
   const choices = [...new Map([...(selected ? [selected] : []), ...options].map(option => [option.id, option])).values()];
   const selectedReadable = value === "none" || choices.some(option => option.id === value);
+  const selectedDocument = choices.find(option => option.id === value) ?? null;
+  useEffect(() => { onSelectedDocument(selectedDocument); }, [onSelectedDocument, selectedDocument]);
   return <div className="flex flex-col gap-2">
     <Label htmlFor={`${id}-choice`}>关联依据材料（可选）</Label>
     <Select value={value} disabled={disabled || loading} onValueChange={next => {

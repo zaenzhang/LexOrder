@@ -100,12 +100,12 @@ export async function prepareSource(userId: string, matterId: string, input: Sou
   };
 }
 
-export async function resolveReference(userId: string, matterId: string, reference: SourceReference): Promise<EvidenceSourceResult> {
-  const reader = await sourceReader(userId, matterId, [reference]);
+export async function resolveReference(userId: string, matterId: string, reference: SourceReference, db: Prisma.TransactionClient = prisma): Promise<EvidenceSourceResult> {
+  const reader = await sourceReader(userId, matterId, [reference], db);
   const document = reader.documentFor(reference);
   if (!document) return { status: "UNAVAILABLE" };
   if (reference.parseRunId && reference.anchorId) {
-    const result = await readMaterialSource(userId, { documentId: reference.documentId, runId: reference.parseRunId, anchorId: reference.anchorId });
+    const result = await readMaterialSource(userId, { documentId: reference.documentId, runId: reference.parseRunId, anchorId: reference.anchorId }, db);
     if (result.status !== "AVAILABLE" || result.document.sha256 !== reference.documentSha256 ||
       JSON.stringify(sourceLocationSchema.parse(result.anchor.location)) !== JSON.stringify(reference.location)) return { status: "UNAVAILABLE" };
     return { status: "AVAILABLE", documentName: document.name, documentVersion: document.version,

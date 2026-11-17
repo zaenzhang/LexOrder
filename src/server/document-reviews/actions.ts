@@ -5,8 +5,10 @@ import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { revalidateMatter } from "@/server/matters/route";
-import { createReviewIssueSchema, respondReviewIssueSchema, checkReviewIssueSchema, reviewSourcePageSchema } from "./contracts";
-import { readDocumentReview, readDocumentReviewSourcePage, createDocumentReviewIssue, respondDocumentReviewIssue, checkDocumentReviewIssue } from "./service";
+import { createReviewIssueSchema, respondReviewIssueSchema, checkReviewIssueSchema, reviewSourcePageSchema,
+  reviewPositionOptionsSchema, reviewPositionPreviewSchema, savedReviewPositionSchema, previousReviewIssueSchema } from "./contracts";
+import { readDocumentReview, readDocumentReviewSourcePage, createDocumentReviewIssue, respondDocumentReviewIssue, checkDocumentReviewIssue,
+  readReviewPositionOptions, previewReviewPosition, readSavedReviewPosition, readPreviousReviewIssue } from "./service";
 
 async function refresh(documentId: string) {
   const document = await prisma.document.findUnique({ where: { id: documentId }, select: { matterId: true } });
@@ -20,6 +22,22 @@ export async function getDocumentReview(documentId: string) {
 export async function getDocumentReviewSourcePage(input: z.input<typeof reviewSourcePageSchema>) {
   const session = await requireSession("approval");
   return readDocumentReviewSourcePage(session.user.id, input);
+}
+export async function getDocumentReviewPositionOptions(input: z.input<typeof reviewPositionOptionsSchema>) {
+  const session = await requireSession("approval");
+  return readReviewPositionOptions(session.user.id, input);
+}
+export async function previewDocumentReviewPosition(input: z.input<typeof reviewPositionPreviewSchema>) {
+  const session = await requireSession("approval");
+  return previewReviewPosition(session.user.id, input);
+}
+export async function getSavedDocumentReviewPosition(input: z.input<typeof savedReviewPositionSchema>) {
+  const session = await requireSession("approval");
+  return readSavedReviewPosition(session.user.id, input);
+}
+export async function getPreviousDocumentReviewIssue(input: z.input<typeof previousReviewIssueSchema>) {
+  const session = await requireSession("approval");
+  return readPreviousReviewIssue(session.user.id, input);
 }
 export async function createReviewIssue(input: z.input<typeof createReviewIssueSchema>) {
   const session = await requireSession("approval");

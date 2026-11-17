@@ -17,6 +17,7 @@ vi.mock("@/lib/prisma", async () => {
 import { prisma as db } from "@/lib/prisma";
 import { buildArchiveProfessionalHistory, assertArchiveProfessionalHistoryAccess, type ArchiveProfessionalHistory } from "@/server/archive/professional-history";
 import { saveMatterContext } from "@/server/matters/context-service";
+import { createDocumentReviewIssue, respondDocumentReviewIssue } from "@/server/document-reviews/service";
 
 const users: string[] = [], matters: string[] = [], documents: string[] = [];
 const stamp = new Date("2026-07-02T03:04:05.000Z");
@@ -167,5 +168,35 @@ describe.skipIf(!config.url)("M3 归档专业历史：真实 PostgreSQL", () => 
     await db.document.update({ where: { id: f.basis.id }, data: { sha256: f.basis.sha256 } });
     await db.user.update({ where: { id: f.user.id }, data: { active: false } });
     await expect(assertArchiveProfessionalHistoryAccess(db, f.user.id, frozen)).rejects.toThrow(/无权/);
+  });
+
+  it("新专业历史保存三处固定位置和当时 SHA，来源变化拒绝新建及读取而不改旧快照", async () => {
+    const f = await fixture();
+    async function pdf(name: string, fingerprint: string, familyId: string | null = null, version = 1) {
+      const row = await db.document.create({ data: { name, matterId: f.matter.id, uploadedById: f.user.id,
+        path: `synthetic/${randomUUID()}.pdf`, mimeType: "application/pdf", pageCount: 3, tags: [], sha256: fingerprint,
+        familyId, version, status: "APPROVED" } }); documents.push(row.id); return row;
+    }
+    const output = await pdf("合成固定位置原稿.pdf", "b".repeat(64));
+    await db.document.update({ where: { id: output.id }, data: { familyId: output.id, isLatest: false } });
+    const basis = await pdf("合成固定依据.pdf", "c".repeat(64));
+    const revision = await pdf("合成固定修订.pdf", "d".repeat(64), output.id, 2);
+    const saved = await createDocumentReviewIssue(f.user.id, { requestId: randomUUID(), documentId: output.id,
+      title: "合成三处固定位置", location: null, basis: "逐项核对", basisDocumentId: basis.id,
+      position: { page: 1 }, basisPosition: { page: 2 } });
+    await respondDocumentReviewIssue(f.user.id, { requestId: randomUUID(), issueId: saved.id, expectedVersion: 1,
+      disposition: "PARTIAL", note: "已完成部分修订", revisionDocumentId: revision.id, revisionLocation: null, revisionPosition: { page: 3 } });
+    const frozen = await buildArchiveProfessionalHistory(db, f.matter.id, [output.id]);
+    expect(frozen.reviews).toHaveLength(1);
+    expect(frozen.reviews[0]).toMatchObject({ position: { documentSha256: output.sha256, location: { kind: "PAGE", page: 1 } },
+      basisPosition: { documentSha256: basis.sha256, location: { kind: "PAGE", page: 2 } },
+      events: [{ revisionPosition: { documentSha256: revision.sha256, location: { kind: "PAGE", page: 3 } } }] });
+    for (const source of [output, basis, revision]) expect(frozen.documentReferences.find(row => row.documentId === source.id)?.documentSha256).toBe(source.sha256);
+    await assertArchiveProfessionalHistoryAccess(db, f.user.id, frozen);
+    const original = JSON.stringify(frozen);
+    await db.document.update({ where: { id: basis.id }, data: { sha256: "e".repeat(64) } });
+    await expect(buildArchiveProfessionalHistory(db, f.matter.id, [output.id])).rejects.toThrow(/版本|来源/);
+    await expect(assertArchiveProfessionalHistoryAccess(db, f.user.id, frozen)).rejects.toThrow(/版本已变化/);
+    expect(JSON.stringify(frozen)).toBe(original);
   });
 });

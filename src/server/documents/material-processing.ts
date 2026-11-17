@@ -245,27 +245,27 @@ export async function processMaterialJob(payload: Record<string, unknown>, lease
 
 export async function readMaterialSource(userId: string, input: MaterialSourceInput, db: Prisma.TransactionClient = prisma): Promise<MaterialSourceResult> {
   const doc = await db.document.findUnique({ where: { id: input.documentId } });
-  if (!doc || doc.deletedAt || !await canReadDocument(userId, doc)) return { status: "UNAVAILABLE" };
+  if (!doc || doc.deletedAt || !await canReadDocument(userId, doc, db)) return { status: "UNAVAILABLE" };
   const run = await db.documentParseRun.findFirst({ where: { id: input.runId, documentId: doc.id } });
   if (!run) return { status: "UNAVAILABLE" };
   const snapshot = publishedMaterialSnapshot(run, doc);
   const anchor = snapshot?.anchors.find(item => item.anchorId === input.anchorId);
   if (!snapshot || !anchor || !doc.sha256) return { status: "UNAVAILABLE" };
   const current = await db.document.findFirst({ where: { id: doc.id, deletedAt: null, sha256: doc.sha256, matterId: doc.matterId } });
-  if (!current || !await canReadDocument(userId, current)) return { status: "UNAVAILABLE" };
+  if (!current || !await canReadDocument(userId, current, db)) return { status: "UNAVAILABLE" };
   return { status: "AVAILABLE", document: { id: doc.id, name: doc.name, version: doc.version, sha256: doc.sha256, mimeType: doc.mimeType },
     run: { id: run.id, generation: run.generation, parserVersion: run.parserVersion, isCurrent: current.parseGeneration === run.generation },
     anchor, coverage: snapshot.coverage, locationLabel: materialLocationLabel(anchor.location), ...materialPresentation(doc, anchor.location) };
 }
 
-export async function readMaterialSources(userId: string, input: { matterId: string; documentIds: string[]; offset?: number; limit?: number }): Promise<MaterialSourceListResult> {
+export async function readMaterialSources(userId: string, input: { matterId: string; documentIds: string[]; offset?: number; limit?: number }, db: Prisma.TransactionClient = prisma): Promise<MaterialSourceListResult> {
   if (!input.documentIds.length) return { items: [], nextOffset: null };
-  const docs = await prisma.document.findMany({ where: { id: { in: [...new Set(input.documentIds)] }, matterId: input.matterId, deletedAt: null }, orderBy: { id: "asc" }, include: { parseRuns: { where: { finishedAt: { not: null }, state: { in: ["READY", "PARTIAL"] } }, orderBy: { generation: "desc" }, take: 1 } } });
+  const docs = await db.document.findMany({ where: { id: { in: [...new Set(input.documentIds)] }, matterId: input.matterId, deletedAt: null }, orderBy: { id: "asc" }, include: { parseRuns: { where: { finishedAt: { not: null }, state: { in: ["READY", "PARTIAL"] } }, orderBy: { generation: "desc" }, take: 1 } } });
   const items: MaterialSourceListItem[] = [];
   const offset = input.offset ?? 0;
   const limit = input.limit ?? 40;
   for (const doc of docs) {
-    if (!await canReadDocument(userId, doc)) continue;
+    if (!await canReadDocument(userId, doc, db)) continue;
     const run = doc.parseRuns[0];
     if (!run || run.generation !== doc.parseGeneration) continue;
     const snapshot = publishedMaterialSnapshot(run, doc);

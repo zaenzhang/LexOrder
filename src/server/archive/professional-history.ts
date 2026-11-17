@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { ActionError } from "@/lib/action-error";
 import { assertDocumentDerivationAccess } from "@/server/documents/derivation-access";
 import { readResearchIssueSnapshot } from "@/server/research/issue-snapshot";
+import { reviewPositionSchema } from "@/server/document-reviews/contracts";
 
 type ReferenceRole = "RESEARCH_OUTPUT" | "RESEARCH_SOURCE" | "ISSUE_SOURCE" | "REVIEW_DOCUMENT" |
   "REVIEW_BASIS" | "REVIEW_REVISION" | "DELIVERY_ITEM" | "DELIVERY_PROOF" | "CONTEXT_OUTPUT" | "CONTEXT_SOURCE";
@@ -32,10 +33,10 @@ export async function buildArchiveProfessionalHistory(db: Prisma.TransactionClie
       } }),
     db.documentReviewIssue.findMany({ where: { documentId: { in: selected }, document: { matterId } },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: {
-        id: true, documentId: true, title: true, location: true, basis: true, basisDocumentId: true,
+        id: true, documentId: true, title: true, location: true, position: true, basis: true, basisDocumentId: true, basisPosition: true,
         createdBy: { select: personSelect }, createdAt: true, version: true, state: true,
         events: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: {
-          id: true, kind: true, disposition: true, note: true, revisionDocumentId: true, revisionLocation: true,
+          id: true, kind: true, disposition: true, note: true, revisionDocumentId: true, revisionLocation: true, revisionPosition: true,
           resolved: true, actor: { select: personSelect }, createdAt: true, version: true,
         } },
       } }),
@@ -79,9 +80,15 @@ export async function buildArchiveProfessionalHistory(db: Prisma.TransactionClie
     }
   }
   for (const row of reviews) {
-    addReference(row.documentId, "REVIEW_DOCUMENT");
-    if (row.basisDocumentId) addReference(row.basisDocumentId, "REVIEW_BASIS");
-    for (const event of row.events) if (event.revisionDocumentId) addReference(event.revisionDocumentId, "REVIEW_REVISION");
+    const fixedHash = (position: Prisma.JsonValue | null) => {
+      if (position === null) return null;
+      const parsed = reviewPositionSchema.safeParse(position);
+      if (!parsed.success) throw new ActionError("人工复核的固定原文位置不完整，请先核对原记录");
+      return parsed.data.documentSha256;
+    };
+    addReference(row.documentId, "REVIEW_DOCUMENT", fixedHash(row.position));
+    if (row.basisDocumentId) addReference(row.basisDocumentId, "REVIEW_BASIS", fixedHash(row.basisPosition));
+    for (const event of row.events) if (event.revisionDocumentId) addReference(event.revisionDocumentId, "REVIEW_REVISION", fixedHash(event.revisionPosition));
   }
   for (const row of deliveries) {
     row.items.forEach(item => addReference(item.documentId, "DELIVERY_ITEM", item.documentSha256, item.documentVersion));

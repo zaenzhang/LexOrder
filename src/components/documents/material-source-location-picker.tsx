@@ -11,11 +11,12 @@ import type { EvidenceDocumentOption } from "@/server/evidence/contracts";
 
 type Position = Awaited<ReturnType<typeof listMaterialSources>>["items"][number];
 export type MaterialSourceLocation = { page: string; position: Position | null };
+export type MaterialSourceLocationLoader = typeof listMaterialSources;
 
-/** Shared only by fact and research source entry; each selected document mounts its own picker. */
-export function MaterialSourceLocationPicker({ matterId, document, value, onChange, disabled }: {
+/** Each source entry mounts a picker for its exact document and supplies its own authorized loader when needed. */
+export function MaterialSourceLocationPicker({ matterId, document, value, onChange, disabled, loadSources = listMaterialSources }: {
   matterId: string; document: EvidenceDocumentOption; value: MaterialSourceLocation;
-  onChange(value: MaterialSourceLocation): void; disabled: boolean;
+  onChange(value: MaterialSourceLocation): void; disabled: boolean; loadSources?: MaterialSourceLocationLoader;
 }) {
   const id = useId();
   const active = useRef(false);
@@ -36,7 +37,7 @@ export function MaterialSourceLocationPicker({ matterId, document, value, onChan
     const request = ++sequence.current;
     loadingRef.current = true; setLoading(true); setError("");
     try {
-      const result = await listMaterialSources({ matterId, documentIds: [document.id], limit: 20,
+      const result = await loadSources({ matterId, documentIds: [document.id], limit: 20,
         ...(more && nextOffset !== null ? { offset: nextOffset } : {}) });
       if (!active.current || sequence.current !== request) return;
       setChoices(previous => more ? [...(previous ?? []), ...result.items] : result.items);
