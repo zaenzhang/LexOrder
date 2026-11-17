@@ -12,13 +12,13 @@ const actions = vi.hoisted(() => ({
   getTaskWorkspace: vi.fn(), getTaskWorkflow: vi.fn(), createTask: vi.fn(), updateTask: vi.fn(),
   startTaskWaiting: vi.fn(), finishTaskWaiting: vi.fn(), rescheduleTaskWaiting: vi.fn(), saveTaskDependencies: vi.fn(), changeWork: vi.fn(),
   completeTasksBatch: vi.fn(), requestHandover: vi.fn(), decideHandover: vi.fn(), refreshHandover: vi.fn(), createUrgent: vi.fn(),
-  refresh: vi.fn(), confirm: vi.fn(), success: vi.fn(), error: vi.fn()
+  refresh: vi.fn(), confirm: vi.fn(), success: vi.fn(), error: vi.fn(), intakeHandover: vi.fn()
 }));
 
 vi.mock("@/server/tasks/workflow-actions", () => actions);
 vi.mock("@/server/tasks/actions", () => ({ createTask: actions.createTask, updateTask: actions.updateTask, completeTasksBatch: actions.completeTasksBatch }));
 vi.mock("@/server/reminders/work-actions", () => actions);
-vi.mock("@/components/matters/intake-handover-panel", () => ({ IntakeHandoverPanel: () => null }));
+vi.mock("@/components/matters/intake-handover-panel", () => ({ IntakeHandoverPanel: (props: { data: unknown; intakeId?: string }) => { actions.intakeHandover(props); return null; } }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: actions.refresh }) }));
 vi.mock("sonner", () => ({ toast: { success: actions.success, error: actions.error } }));
 vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: actions.confirm }));
@@ -235,6 +235,35 @@ function boardItem(index: number, progress = clearProgress()): Board["items"][nu
 function board(items: Board["items"]): Board {
   return { currentUserId: userId, emergency: false, canWrite: true, canTransfer: false, people: detail().people, items, matters: [], intakes: [], handovers: [], intakeHandovers: [] };
 }
+
+it("收案未传schedule时保紧急事项原责任ID、固定交接接线及登记入口", async () => {
+  const intakeId = "cintake000000000000000001";
+  const urgent: Board["items"][number] = { ...boardItem(1), id: "urgent-record", targetId: "urgent-record", kind: "Urgent", title: "收案待核来件", matterId: null, intakeId, taskProgress: null, revision: 3 };
+  const data = board([urgent, { ...urgent, id: "urgent-closed", targetId: "urgent-closed", title: "收案已取消事项", state: "CANCELLED" }]);
+  data.intakeHandovers = [{ id: "intake-handover", intakeId, title: "收案固定交接", fromName: "原经办", toName: "接收人", initiatedById: userId, toUserId: userId,
+    status: "ACCEPTED", emergency: false, reason: "合成已接收交接", revision: 1, snapshot: { urgent: [{ id: urgent.targetId, title: urgent.title, dueAt: stamp }] } }];
+  actions.changeWork.mockResolvedValue({ ok: true }); actions.createUrgent.mockResolvedValue({ ok: true });
+  render(<WorkResponsibilityPanel data={data} intakeId={intakeId} />);
+  expect(actions.intakeHandover).toHaveBeenLastCalledWith({ data, intakeId });
+  expect(screen.getByText("收案紧急事项 · 收案待核来件")).toBeVisible();
+  expect(screen.queryByText("收案紧急事项 · 收案已取消事项")).not.toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "期限与庭期" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("checkbox", { name: /选择 收案/ })).not.toBeInTheDocument();
+  const finish = screen.getByRole("button", { name: "办结" });
+  fireEvent.click(finish);
+  fireEvent.change(screen.getByLabelText("依据、处理原因及通知情况"), { target: { value: "已核对收案紧急来件" } });
+  fireEvent.click(screen.getByRole("button", { name: "保存并留痕" }));
+  await waitFor(() => expect(actions.changeWork).toHaveBeenCalledWith({ id: urgent.id, revision: 3, action: "COMPLETE", reason: "已核对收案紧急来件", assigneeId: undefined }));
+  await waitFor(() => expect(finish).toHaveFocus());
+  fireEvent.click(screen.getByRole("checkbox", { name: "显示已办结和已取消事项" }));
+  expect(screen.getByText("收案紧急事项 · 收案已取消事项")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "登记紧急事项" }));
+  fireEvent.change(screen.getByLabelText("事项", { exact: true }), { target: { value: "新的收案来件" } });
+  fireEvent.change(screen.getByLabelText("依据、处理原因及通知情况"), { target: { value: "合成来件需核对" } });
+  fireEvent.click(screen.getByRole("button", { name: "保存并留痕" }));
+  await waitFor(() => expect(actions.createUrgent).toHaveBeenCalledWith(expect.objectContaining({ intakeId, title: "新的收案来件", kind: "DEADLINE", assigneeId: userId, basis: "合成来件需核对" })));
+  expect(actions.completeTasksBatch).not.toHaveBeenCalled();
+});
 async function filterTasks(label: string) {
   const trigger = screen.getByRole("combobox", { name: "任务推进筛选" });
   trigger.focus(); fireEvent.keyDown(trigger, { key: "Enter" });

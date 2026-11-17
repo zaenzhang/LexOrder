@@ -61,6 +61,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { TaskWorkPanel } from "@/components/matters/task-work-panel";
+import { WorkResponsibilityPanel, type WorkBoardData, type ScheduleResponsibilityTarget, type RenderScheduleResponsibility } from "@/components/matters/work-responsibility-panel";
 import { updateDossierLocation, type DossierView, type WorkPane } from "@/lib/matters/dossier-location";
 import { createProcedureStage, deleteProcedureMemo, ensureProcedureStage, removeProcedureStage, toggleDeadlineCompleted, toggleProcedureMemo } from "@/server/procedures/actions";
 import { deleteExpress } from "@/server/express/actions";
@@ -715,7 +716,7 @@ export function ProcedureWorkflowPanel({
   view,
   onViewChange,
   viewCounts,
-  archiveNode, responsibilityNode,
+  archiveNode, workBoard,
   archiveRailTop,
   expresses,
   onAddLedger,
@@ -751,7 +752,7 @@ export function ProcedureWorkflowPanel({
   onViewChange: (view: DossierView) => void;
   viewCounts?: Partial<Record<DossierView, number>>;
   archiveNode: React.ReactNode;
-  responsibilityNode?: React.ReactNode;
+  workBoard: WorkBoardData;
   /** 案件档案侧栏顶部（承办团队） */
   archiveRailTop?: React.ReactNode;
   /** 快递记录（并入经办记录） */
@@ -812,6 +813,9 @@ export function ProcedureWorkflowPanel({
   const selectedStage = requestedStage !== null ? stages.find(stage => stage.key === requestedStage) ?? null : null;
   const effectiveScope: "all" | "stage" = selectedStage ? "stage" : "all";
   const actions = useMemo(() => (procedure ? [procedure] : allProcedures).flatMap(item => buildActionItems(item)), [procedure, allProcedures]);
+  const scheduleTargets = actions.flatMap<ScheduleResponsibilityTarget>(item => item.kind === "deadline" && item.deadlineId
+    ? [{ kind: "Deadline", targetId: item.deadlineId, hasDeadlineAdjuster: canAdjustActionDeadline(item, Boolean(canWriteTasks)) }]
+    : item.kind === "hearing" && item.hearingId ? [{ kind: "Hearing", targetId: item.hearingId }] : []);
   const logItems = useMemo(() => buildLogItems({ procedures: allProcedures, notes, events: timelineEvents, users, expresses: expresses ?? [] }), [allProcedures, notes, timelineEvents, users, expresses]);
 
   useEffect(() => {
@@ -1001,7 +1005,7 @@ export function ProcedureWorkflowPanel({
                     procedure: stageId ? allProcedures.find(item => item.stages.some(stage => stage.id === stageId))?.id ?? null : null,
                     stage: stageId ? `stage-${stageId}` : null, task })}
                 /> : null}
-                {canReadSchedule ? <NextActions
+                <WorkResponsibilityPanel key={matter.id} data={workBoard} matterId={matter.id} hideTasks schedule={canReadSchedule ? { targets: scheduleTargets, render: renderResponsibility => <NextActions
                   initiallyExpanded
                   expandRequest={expandRequest}
                   actions={actions}
@@ -1012,8 +1016,8 @@ export function ProcedureWorkflowPanel({
                   waiting={waiting ?? []}
                   onAddDeadline={canWriteTasks && procedure ? () => setDeadlineTarget(procedure) : undefined}
                   onAddHearing={canWriteTasks && procedure && onAddLedger ? () => onAddLedger("hearing") : undefined}
-                /> : null}
-                {responsibilityNode}
+                  renderResponsibility={renderResponsibility}
+                /> } : undefined} />
 
               </div>
             </TabsContent>
@@ -1339,6 +1343,7 @@ type ActionItem = {
   priority: number;
   deadlineId?: string;
   deadlineUpdatedAt?: Date;
+  hearingId?: string;
   duePrecision?: DeadlineDuePrecision | null;
   overdue: boolean;
   memoId?: string;
@@ -1373,6 +1378,7 @@ function buildActionItems(procedure: WorkflowProcedure | null): ActionItem[] {
     items.push({
       key: `h-${hearing.id}`,
       kind: "hearing",
+      hearingId: hearing.id,
       overdue: days < 0,
       title: hearing.title,
       at: hearing.startsAt,
@@ -1420,6 +1426,10 @@ function actionWhen(item: ActionItem) {
   return { tone, main, sub };
 }
 
+function canAdjustActionDeadline(item: ActionItem, canManage: boolean) {
+  return Boolean(canManage && item.kind === "deadline" && item.deadlineId && item.at && item.deadlineUpdatedAt);
+}
+
 function NextActions({
   sectionRef,
   initiallyExpanded = false,
@@ -1432,7 +1442,8 @@ function NextActions({
   canManage,
   waiting,
   onAddDeadline,
-  onAddHearing
+  onAddHearing,
+  renderResponsibility
 }: {
   sectionRef?: React.Ref<HTMLElement>;
   initiallyExpanded?: boolean;
@@ -1447,6 +1458,7 @@ function NextActions({
   waiting: WaitingItem[];
   onAddDeadline?: () => void;
   onAddHearing?: () => void;
+  renderResponsibility: RenderScheduleResponsibility;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -1485,6 +1497,8 @@ function NextActions({
 
   const row = (item: ActionItem, other = false) => {
     const when = actionWhen(item);
+    const responsibility = item.kind === "deadline" && item.deadlineId ? renderResponsibility("Deadline", item.deadlineId)
+      : item.kind === "hearing" && item.hearingId ? renderResponsibility("Hearing", item.hearingId) : null;
     if (compact) {
       const kindMeta =
         item.kind === "deadline"
@@ -1516,21 +1530,22 @@ function NextActions({
                 ) : null}
                 {canManage && item.kind === "deadline" && item.deadlineId ? (
                   <>
-                    {item.pendingConfirm ? (
+                    {item.pendingConfirm && item.deadlineUpdatedAt ? (
                       <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => run(() => confirmDeadline({ id: item.deadlineId!, expectedUpdatedAt: item.deadlineUpdatedAt! }), "期限已确认")}>
-                        确认
+                        确认日期
                       </button>
                     ) : null}
-                    <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => item.at && setAdjusting({ id: item.deadlineId!, title: item.title, dueAt: item.at, duePrecision: item.duePrecision ?? null, updatedAt: item.deadlineUpdatedAt! })}>
-                      调整
-                    </button>
-                    <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => completeDeadline(item)}>
+                    {canAdjustActionDeadline(item, canManage) ? <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => setAdjusting({ id: item.deadlineId!, title: item.title, dueAt: item.at!, duePrecision: item.duePrecision ?? null, updatedAt: item.deadlineUpdatedAt! })}>
+                      调整日期
+                    </button> : null}
+                    {responsibility === null ? <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => completeDeadline(item)}>
                       完成
-                    </button>
+                    </button> : null}
                   </>
                 ) : null}
               </span>
             </div>
+            {responsibility}
           </div>
         </div>
       );
@@ -1551,6 +1566,7 @@ function NextActions({
             {item.pendingConfirm ? <span className="badge b-amber" style={{ fontSize: 10 }}>期限待确认</span> : null}
           </div>
           <div className="d">{[scope === "all" ? item.stageName : null, item.meta || null].filter(Boolean).join(" · ") || " "}</div>
+          {responsibility}
         </div>
         <div className="op">
           {canManage && item.kind === "memo" && item.memoId ? (
@@ -1573,17 +1589,17 @@ function NextActions({
           ) : null}
           {canManage && item.kind === "deadline" && item.deadlineId ? (
             <>
-              {item.pendingConfirm ? (
+              {item.pendingConfirm && item.deadlineUpdatedAt ? (
                 <button type="button" className="btn btn-secondary btn-sm" disabled={pending} onClick={() => run(() => confirmDeadline({ id: item.deadlineId!, expectedUpdatedAt: item.deadlineUpdatedAt! }), "期限已确认")}>
-                  确认
+                  确认日期
                 </button>
               ) : null}
-              <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => item.at && setAdjusting({ id: item.deadlineId!, title: item.title, dueAt: item.at, duePrecision: item.duePrecision ?? null, updatedAt: item.deadlineUpdatedAt! })}>
-                调整
-              </button>
-              <button type="button" className="btn btn-secondary btn-sm" disabled={pending} onClick={() => completeDeadline(item)}>
+              {canAdjustActionDeadline(item, canManage) ? <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => setAdjusting({ id: item.deadlineId!, title: item.title, dueAt: item.at!, duePrecision: item.duePrecision ?? null, updatedAt: item.deadlineUpdatedAt! })}>
+                调整日期
+              </button> : null}
+              {responsibility === null ? <button type="button" className="btn btn-secondary btn-sm" disabled={pending} onClick={() => completeDeadline(item)}>
                 完成
-              </button>
+              </button> : null}
             </>
           ) : null}
         </div>

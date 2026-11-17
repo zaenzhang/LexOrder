@@ -2,7 +2,6 @@ import { listPreservationCases } from "@/server/preservations/actions-v2";
 import {getClosureBoard} from "@/server/archive/closure-actions";
 import {MatterClosurePanel} from "@/components/matters/closure-panel";
 import {getWorkBoard} from "@/server/reminders/work-actions";
-import {WorkResponsibilityPanel} from "@/components/matters/work-responsibility-panel";
 import {readMatterReview} from "@/server/conflicts/matter-review";
 import {MatterConflictReview} from "./_components/conflict-review";
 import { hasCustomPermission } from "@/lib/roles/catalog";
@@ -219,7 +218,7 @@ export default async function MatterDetailPage({ params, searchParams }: PagePro
       {/* 墨案 04 页面骨架由 MatterDetailTabs 统一承载：
           上下文头 → 信号条 → 程序链卡 → 三栏工作区（环节导航 / 工作区 / 辅助栏） */}
       <MatterDetailTabs
-        responsibilityNode={<WorkResponsibilityPanel data={await getWorkBoard({matterId:matter.id})} matterId={matter.id} hideTasks/>}
+        workBoard={await getWorkBoard({matterId:matter.id})}
         closureNode={<MatterClosurePanel matterId={matter.id} data={allowed("archive.read")?await getClosureBoard(matter.id):null}/>}
         conflictNode={<MatterConflictReview matterId={matter.id} data={conflictReview} canWrite={canAssociateThisMatter&&matter.status!=="ARCHIVED"}/>}
         matter={matter}

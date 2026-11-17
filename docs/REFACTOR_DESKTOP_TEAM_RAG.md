@@ -761,6 +761,8 @@ C7将原同一次getWorkBoard数据穿过page/tabs，组合函数只在client wo
 
 期限ID/updatedAt与责任ID/revision分别保留；原调整可达才省责任改期，匹配后的办结只经changeWork。当前资格/已知归档只收窄界面，不更改公共授权；无匹配或不可读不能推断写权。四生产/三可改测试、稳定挂载、折叠/null合同见计划 §7.16.12。
 
+C7已实现同次读取与唯一客户端编辑器，原responsibilityNode入口删除，没有双路径兼容。71个不同定点组件用例已有通过证据，最终类型/lint/diff通过；测试fixture与Urgent真实单一ID的更正见计划 §8.54。无服务/数据库变化，浏览器与专业证据不由组件替代。
+
 ### 6.26 本人跟进改期的现有锁与毫秒版本（2026-11-17）
 
 A2复用ClientFollowUp TIMESTAMP(3) updatedAt显式单调毫秒CAS；沿liveRelationshipWriter的72606101→客户行锁，与完成/取消/合并同序。原对象只更新dueAt/updatedAt并同事务auditTx；窄重放按当前合法本人/动作/目标/key，已再次变化不能重报旧成功，不增请求表或hash平台。

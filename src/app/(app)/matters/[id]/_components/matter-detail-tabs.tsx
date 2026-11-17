@@ -26,6 +26,7 @@ import { MatterArchive, TeamRailCard } from "./matter-archive";
 import { FinancePanel } from "./finance-panel";
 import { ImportantItemDialog } from "./procedure-content";
 import { ProcedureWorkflowPanel, MatterPreservationContent } from "./procedure-workflow-panel";
+import type { WorkBoardData } from "@/components/matters/work-responsibility-panel";
 import { updateDossierLocation, type DossierView } from "@/lib/matters/dossier-location";
 import { matterHref } from "@/lib/matters/route";
 import { matterListReturnHref } from "@/lib/matters/list-location";
@@ -198,7 +199,7 @@ export function MatterDetailTabs({
   briefNode,
   contextNode,
   notes,
-  reviewNode, responsibilityNode, closureNode, conflictNode,
+  reviewNode, workBoard, closureNode, conflictNode,
   capabilities = { aiReview: false, caseSearch: false }
 }: {
   matter: MatterPayload;
@@ -243,7 +244,7 @@ export function MatterDetailTabs({
   notes: WorkflowNote[];
   /** AI 审查总览（服务端渲染节点），归入「信息总览」 */
   reviewNode?: React.ReactNode;
-  responsibilityNode?: React.ReactNode;
+  workBoard: WorkBoardData;
   closureNode?: React.ReactNode;
   conflictNode?: React.ReactNode;
   /** 外部能力是否已配置：AI 文书审查 / 元典类案检索（未配置不显示入口） */
@@ -634,7 +635,7 @@ export function MatterDetailTabs({
 
       {/* ③ 页签 */}
       <ProcedureWorkflowPanel
-        responsibilityNode={responsibilityNode}
+        workBoard={workBoard}
         apiRef={workflowApi}
         matter={{ id: matter.id, internalCode: matter.internalCode, title: matter.title, category: matter.category }}
         procedure={currentProcedure}

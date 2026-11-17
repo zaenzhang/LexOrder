@@ -1216,6 +1216,8 @@ A交只读责任映射，C实读page单次getWorkBoard、tabs、NextActions、�
 
 本轮实读固定[Frappe TaskArea.vue](https://github.com/frappe/crm/blob/3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952/frontend/src/components/Activities/TaskArea.vue)全文件，blob `c3ae185ce1f2b585c610d630d242d1c5cd2bcc4f`：同一对象行展示负责人/日期，并就近打开原对象modal及状态动作。只借鉴集中呈现，不复制Vue/AGPL或其删除/权限语义。LexOrder双身份/版本、原服务、可达折叠和固定历史来自当前业务约束，合同见计划 §7.16.12。
 
+C7实施后两路实码复审核同源匹配、归档取消、当前资格、稳定草稿与normal/compact正文位置。新增长串摘要加现有min-w-0/break-words；合成Urgent夹具按真实readWorkRows的id===targetId更正，不把Deadline/Hearing双身份外推给紧急项。最终四文件71个不同组件用例的证据与类型纠正见计划 §8.54；真实浏览器/专业仍未验。
+
 ### 3.44 本人跟进改期及确切审计记录的接续（2026-11-17）
 
 A提九文件终版，C主审及独立服务/UI复审核follow-ups DTO/URL、队列/精确读、relationship-service/access、merge和历史排序。现模型有毫秒updatedAt，完成/取消/合并共用授权锁与客户锁，可原记录CAS，不需结束旧跟进另造一条；理由应在确切原记录重开可见，故纳入同域只读审计分页，不扩全局历史聚合。

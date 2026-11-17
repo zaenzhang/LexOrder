@@ -50,6 +50,7 @@ const matter: Props["matter"] = {
   customValues: {}, deletedAt: null, createdAt: date, updatedAt: date,
 };
 const props: Props = {
+  workBoard: null,
   matter, finance: { billings: [], entries: [], plans: [], contractDocuments: [], stats: {
     outstanding: 0, allocated: 0, clientFunds: 0, contractAmount: 0, receivable: 0, received: 0,
     pendingReceived: 0, refund: 0, cost: 0, commission: 0, invoiced: 0,
