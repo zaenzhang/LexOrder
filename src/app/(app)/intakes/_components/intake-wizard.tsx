@@ -37,7 +37,7 @@ import {
 } from "@/lib/enums";
 import { agencyOptionsForProcedure, isAgencyAllowedForProcedure, isNationalAgency } from "@/lib/china-regions";
 import { proceduresByCategory, suggestHandlingAgency } from "@/lib/procedures-by-category";
-import { buildIntakeConflictQueries } from "@/lib/approvals/intake-detail";
+import { buildIntakeConflictQueries, conflictPartyRoleLabel } from "@/lib/approvals/intake-detail";
 import { intakeCreateSchema, type IntakeCreateInput } from "@/server/intakes/schemas";
 import { saveIntakeRevision } from "@/server/intakes/revision-actions";
 import { createIntake, resubmitIntake } from "@/server/intakes/actions";
@@ -180,6 +180,7 @@ export function IntakeWizard({
 
   const methods = useForm<z.input<typeof intakeCreateSchema>, unknown, IntakeCreateInput>({
     resolver: zodResolver(intakeCreateSchema),
+    mode: "onChange",
     defaultValues: { ...freshDefaults(), ownerUserId: actor?.id ?? "", ...editing?.values }
   });
   const { register, control, handleSubmit, getValues, setValue, reset, trigger, formState: { errors } } = methods;
@@ -270,7 +271,7 @@ export function IntakeWizard({
   // 标题自动生成：委托方 与 对方 + 案由；用户手改后不再覆盖
   const [titleTouched, setTitleTouched] = useState(Boolean(editing));
   const [causeName, setCauseName] = useState("");
-  const watchedParties = watch("parties");
+  const watchedParties = watch<IntakeCreateInput["parties"]>("parties");
   const watchedTitle = watch("title");
   const watchedCauseFree = watch("causeFreeText");
   useEffect(() => {
@@ -439,18 +440,23 @@ export function IntakeWizard({
     startTransition(() => performSubmit(payload));
   }
 
+  const STEP_FIELDS: FieldPath<z.input<typeof intakeCreateSchema>>[][] = [
+    ["title", "category", "firstProcedureType", "causeId", "causeFreeText", "receivedAt", "firstAgency", "jurisdiction", "claimAmount", "claimDescription", "barFiling", "counterclaim", "businessType", "serviceScope", "deliverables", "counselType", "serviceStart", "serviceEnd", ...(kind === "counsel" ? ["contactPhone" as const] : [])],
+    ["parties", "ourStanding", "clientId", "clientName", "clientType", "clientIdType", "clientIdNumber", "clientAddress", "clientLegalRep", "contactName", ...(kind !== "counsel" ? ["contactPhone" as const] : [])],
+    ["feeType", "feeAmount", "contingencyTerms", "feeSchedule", "feeNote", "ownerUserId", "coUserIds"],
+    ["description"]
+  ];
+  const stepForField = (path: string) => {
+    const field = path.split(".")[0] as FieldPath<z.input<typeof intakeCreateSchema>>;
+    const fieldStep = STEP_FIELDS.findIndex((fields) => fields.includes(field));
+    return fieldStep < 0 ? 0 : fieldStep;
+  };
+
   function onInvalid(formErrors: FieldErrors<z.input<typeof intakeCreateSchema>>) {
     const keys = Object.keys(formErrors);
-    const stepOf = (k: string) => (k === "parties" || k === "ourStanding" || k.startsWith("client") || k.startsWith("contact") ? 1 : k.startsWith("fee") || k === "contingencyTerms" || k.includes("UserId") || k === "coUserIds" ? 2 : 0);
-    if (keys.length) setStep(Math.min(...keys.map(stepOf)));
-    toast.warning("请补全必填项", { description: firstFormErrorMessage(formErrors) ?? "请检查表单中的红色提示" });
+    if (keys.length) setStep(Math.min(...keys.map(stepForField)));
+    toast.warning("请检查表单内容", { description: firstFormErrorMessage(formErrors) ?? "请检查表单中的红色提示" });
   }
-
-  const STEP_FIELDS: FieldPath<z.input<typeof intakeCreateSchema>>[][] = [
-    ["title", "category", "firstProcedureType", "causeId", "firstAgency", "jurisdiction", "claimAmount", "claimDescription", "serviceStart", "serviceEnd"],
-    ["parties", "ourStanding"],
-    ["feeType", "feeAmount", "contingencyTerms", "feeSchedule", "ownerUserId", "coUserIds"]
-  ];
 
   async function next() {
     if (step === 1) {
@@ -462,7 +468,7 @@ export function IntakeWizard({
     }
     const ok = await trigger(STEP_FIELDS[step], { shouldFocus: true });
     if (ok) setStep((s) => Math.min(s + 1, STEPS.length - 1));
-    else toast.warning("本步还有必填项未完成", { description: firstFormErrorMessage(methods.formState.errors) ?? "请按红色提示补全" });
+    else toast.warning("本步还有信息需要检查", { description: firstFormErrorMessage(methods.formState.errors) ?? "请按红色提示修正" });
   }
 
   function handleFiles(list: FileList | null) {
@@ -568,16 +574,19 @@ export function IntakeWizard({
   const clientIndex = 0;
   const otherParties = parties.map((p, idx) => ({ p, idx })).filter(({ idx }) => idx !== clientIndex);
   const errCount = Object.keys(errors).length;
-  const pendingNotes = [
-    !party0Name.trim() ? "委托方" : null,
-    kind === "litigation" && !ourStanding ? "我方诉讼地位" : null,
-    !feeType ? "收费方式" : null,
-    !ownerUserId ? "主办律师" : null
-  ].filter(Boolean) as string[];
+  // 与 resolver 使用同一份完整原始输入，保留 CLIENT_PARTY；这里只读问题，不写回 schema 转换后的值。
+  const validation = intakeCreateSchema.safeParse(watchedValues);
+  const pendingFields = new Set(validation.success ? [] : validation.error.issues.map((issue) => issue.path.join(".")));
+  // schema 的 min(1) 接受纯空白；保留 next / onSubmit 已有的委托方姓名守卫。
+  if (!party0Name.trim()) pendingFields.add("parties.0.name");
+  const pendingCount = [...pendingFields].filter((path) => step === STEPS.length - 1 || stepForField(path) === step).length;
+  const otherPartyNames = (watchedParties ?? []).filter((party) => party.role !== "CLIENT_PARTY").map((party) => `${conflictPartyRoleLabel[party.role]}：${party.name || "未填写"}`).join("\n");
+  const feeAmount = watch<number | undefined>("feeAmount");
+  const formatAmount = (amount: unknown) => typeof amount === "number" && Number.isFinite(amount) ? `¥${amount.toLocaleString("zh-CN")}` : "未填写";
 
-  const standingSelect = (value: string | undefined, options: LitigationStanding[], onChange: (v: LitigationStanding) => void) => (
+  const standingSelect = (value: string | undefined, options: LitigationStanding[], onChange: (v: LitigationStanding) => void, ariaLabel = "诉讼地位") => (
     <ChoiceField
-      ariaLabel="诉讼地位"
+      ariaLabel={ariaLabel}
       placeholder="选择诉讼地位"
       threshold={0}
       options={(options.length ? options : (Object.keys(litigationStandingLabel) as LitigationStanding[])).map((s) => ({ value: s, label: litigationStandingLabel[s] }))}
@@ -624,7 +633,7 @@ export function IntakeWizard({
                 <div role="alert" className="match-banner" style={{ background: "var(--red-bg)", borderColor: "var(--red-line)" }}>
                   <AlertTriangle style={{ color: "var(--red)" }} />
                   <div className="match-body">
-                    <div className="match-title" style={{ color: "var(--red)" }}>尚有必填信息未完成</div>
+                    <div className="match-title" style={{ color: "var(--red)" }}>尚有信息需要检查</div>
                     <div className="match-desc" style={{ color: "var(--red)" }}>{firstFormErrorMessage(errors) ?? "请检查表单中的红色提示"}</div>
                   </div>
                 </div>
@@ -653,11 +662,14 @@ export function IntakeWizard({
                     <div className="frow">
                       <div className="fitem">
                         <label className="flabel">案件类别<span className="star">*</span></label>
-                        <ChoiceField ariaLabel="案件类别" options={CATEGORIES.map((c) => ({ value: c, label: matterCategoryLabel[c] }))} value={category} onChange={(c) => setValue("category", c)} />
+                        <ChoiceField ariaLabel="案件类别" options={CATEGORIES.map((c) => ({ value: c, label: matterCategoryLabel[c] }))} value={category} onChange={(c) => {
+                          setValue("category", c, { shouldDirty: true });
+                          if (errors.ourStanding || errors.parties) void trigger(["ourStanding", "parties"]);
+                        }} />
                       </div>
                       {kind === "litigation" ? (
                         <div className="fitem">
-                            <label className="flabel">代理程序<span className="star">*</span></label>
+                            <label className="flabel">代理程序</label>
                             <ChoiceField ariaLabel="代理程序" placeholder="选择代理程序" invalid={Boolean(errors.firstProcedureType)} options={procedureOptions.map((p) => ({ value: p, label: procedureTypeLabel[p] }))} value={firstProcedureType} onChange={handleProcedureChange} />
                             {errors.firstProcedureType?.message ? <div className="mt-1 text-[11px] text-[var(--red)]">{errors.firstProcedureType.message}</div> : null}
                           </div>
@@ -668,7 +680,7 @@ export function IntakeWizard({
                       <>
                         <div className="frow">
                           <div className="fitem">
-                            <label className="flabel">案由<span className="star">*</span></label>
+                            <label className="flabel">案由</label>
                             <div className="flex gap-2">
                               <div className="min-w-0 flex-1">
                                 <CauseCombobox category={category} procedureType={firstProcedureType} value={watch("causeId") || ""} disabled={!firstProcedureType} placeholder={firstProcedureType ? "点击选择案由" : "请先选择代理程序"} onChange={(id, name) => { setValue("causeId", id, { shouldDirty: true }); setCauseName(name); }} />
@@ -681,7 +693,7 @@ export function IntakeWizard({
                             {causeName ? <div className="t-xs t-mute" style={{ marginTop: 5 }}>已选：{causeName}</div> : watchedCauseFree ? <div className="t-xs t-mute" style={{ marginTop: 5 }}>识别案由：{watchedCauseFree}（请选择规范案由）</div> : null}
                           </div>
                           <div className="fitem" style={{ maxWidth: 180 }}>
-                            <label className="flabel">收案日期<span className="star">*</span></label>
+                            <label className="flabel">收案日期</label>
                             <input type="date" className="finput font-mono" value={dateInput(receivedAt)} onChange={(e) => setValue("receivedAt", e.target.value ? new Date(e.target.value) : undefined, { shouldDirty: true })} />
                           </div>
                         </div>
@@ -749,7 +761,7 @@ export function IntakeWizard({
                             <input type="number" inputMode="decimal" step="0.01" placeholder="0.00" className="finput font-mono" {...register("claimAmount", { setValueAs: (v) => (v === "" ? undefined : Number(v)) })} />
                           </div>
                           <div className="fitem" style={{ maxWidth: 160 }}>
-                            <label className="flabel">收案日期<span className="star">*</span></label>
+                            <label className="flabel">收案日期</label>
                             <input type="date" className="finput font-mono" value={dateInput(receivedAt)} onChange={(e) => setValue("receivedAt", e.target.value ? new Date(e.target.value) : undefined, { shouldDirty: true })} />
                           </div>
                         </div>
@@ -784,7 +796,7 @@ export function IntakeWizard({
                             <ChoiceField ariaLabel="顾问类型" placeholder="选择顾问类型" options={COUNSEL_TYPES.map((t) => ({ value: t, label: t }))} value={watch<string | undefined>("counselType")} onChange={(t) => setValue("counselType", t, { shouldDirty: true })} />
                           </div>
                           <div className="fitem" style={{ maxWidth: 160 }}>
-                            <label className="flabel">收案日期<span className="star">*</span></label>
+                            <label className="flabel">收案日期</label>
                             <input type="date" className="finput font-mono" value={dateInput(receivedAt)} onChange={(e) => setValue("receivedAt", e.target.value ? new Date(e.target.value) : undefined, { shouldDirty: true })} />
                           </div>
                         </div>
@@ -880,12 +892,19 @@ export function IntakeWizard({
                         }}
                       />
                     </div>
+                    {kind === "litigation" ? (
+                      <div className="fitem mb-3">
+                        <label className="flabel">委托方诉讼地位<span className="star">*</span></label>
+                        {standingSelect(ourStanding, ourStandingOptions, (v) => setValue("ourStanding", v, { shouldDirty: true, shouldValidate: true }), "委托方诉讼地位")}
+                        {errors.ourStanding?.message ? <div className="mt-1 text-[11px] text-[var(--red)]">{errors.ourStanding.message}</div> : null}
+                      </div>
+                    ) : null}
                     {parties[clientIndex] ? (
                       <PartyCard
                         key={parties[clientIndex].id}
                         index={clientIndex}
                         fieldPrefix="parties"
-                        showStanding={kind === "litigation"}
+                        showStanding={false}
                         removable={false}
                         onRemove={() => undefined}
                         errors={errors as never}
@@ -893,12 +912,9 @@ export function IntakeWizard({
                         defaultExpanded={!clientId}
                         roleSlot={<span className="badge b-teal" style={{ fontSize: 10 }}>{clientLabel}</span>}
                         badge={clientId ? <span className="badge b-teal" style={{ fontSize: 10 }}>已关联档案</span> : null}
-                        standingLabel={ourStanding ? litigationStandingLabel[ourStanding] : null}
-                        standingSlot={standingSelect(ourStanding, ourStandingOptions, (v) => setValue("ourStanding", v, { shouldDirty: true, shouldValidate: true }))}
                         nameSlot={<input className="finput" value={party0Name} readOnly aria-readonly title="请在上方客户选择框中修改" />}
                       />
                     ) : null}
-                    {errors.ourStanding?.message ? <div className="mt-1 text-[11px] text-[var(--red)]">{errors.ourStanding.message}</div> : null}
                   </div>
                 </div>
 
@@ -985,7 +1001,7 @@ export function IntakeWizard({
                     {feeType ? (
                       <div className="frow">
                         <div className="fitem" style={{ maxWidth: 220 }}>
-                          <label className="flabel">{feeType === "TIMED" ? "小时费率（元/时）" : feeType === "CONTINGENCY" ? "基础办案费（元）" : "总金额（元）"}<span className="star">*</span></label>
+                          <label className="flabel">{feeType === "TIMED" ? "小时费率（元/时）" : feeType === "CONTINGENCY" ? "基础办案费（元）" : "总金额（元）"}</label>
                           <input type="number" inputMode="decimal" step="0.01" placeholder="0.00" className="finput font-mono" {...register("feeAmount", { setValueAs: (v) => (v === "" ? undefined : Number(v)) })} />
                           {errors.feeAmount?.message ? <div className="mt-1 text-[11px] text-[var(--red)]">{errors.feeAmount.message}</div> : null}
                         </div>
@@ -998,7 +1014,7 @@ export function IntakeWizard({
                     {feeType === "CONTINGENCY" ? (
                       <div className="frow">
                         <div className="fitem">
-                          <label className="flabel">风险代理收费方式<span className="star">*</span></label>
+                          <label className="flabel">风险代理收费方式</label>
                           <textarea rows={3} className="finput !h-auto py-2.5 leading-[1.7]" placeholder="详细描述风险代理收费方式 / 触发条件 / 计提比例" {...register("contingencyTerms")} />
                           {errors.contingencyTerms?.message ? <div className="mt-1 text-[11px] text-[var(--red)]">{errors.contingencyTerms.message}</div> : null}
                         </div>
@@ -1022,7 +1038,7 @@ export function IntakeWizard({
                   <div className="fsec-body">
                     <div className="frow" style={{ marginBottom: 0 }}>
                       <div className="fitem">
-                        <label className="flabel">主办律师<span className="star">*</span></label>
+                        <label className="flabel">主办律师</label>
                         <Select value={ownerUserId ?? ""} onValueChange={(v) => setValue("ownerUserId", v, { shouldDirty: true })}>
                           <SelectTrigger className="h-9"><SelectValue placeholder="选择主办律师" /></SelectTrigger>
                           <SelectContent>{colleagues.map((u) => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
@@ -1084,6 +1100,7 @@ export function IntakeWizard({
                   <div className="fsec-head"><span className="t">补充说明</span></div>
                   <div className="fsec-body">
                     <textarea rows={4} className="finput !h-auto py-2.5 leading-[1.7]" placeholder="客户来源、核心诉求、注意事项…" {...register("description")} />
+                    {errors.description?.message ? <div className="mt-1 text-[11px] text-[var(--red)]">{errors.description.message}</div> : null}
                   </div>
                 </div>
 
@@ -1096,14 +1113,16 @@ export function IntakeWizard({
                         ["案件类别", matterCategoryLabel[category]],
                         ...(kind === "litigation" ? [["代理程序", firstProcedureType ? procedureTypeLabel[firstProcedureType] : "未选择"], ["我方地位", ourStanding ? litigationStandingLabel[ourStanding] : "未选择"]] : []),
                         [clientLabel, party0Name || "未填写"],
-                        ["其他当事人", `${otherParties.length} 个`],
-                        ["收费", feeType ? `${feeTypeLabel[feeType]}${watch("feeAmount") ? ` · ¥${Number(watch("feeAmount")).toLocaleString("zh-CN")}` : ""}` : "未选择"],
+                        ["其他当事人", otherPartyNames || "无"],
+                        ...(kind !== "counsel" ? [[kind === "project" ? "项目金额" : "标的额", formatAmount(watch("claimAmount"))]] : []),
+                        ...(watch("claimDescription") ? [["标的描述", watch<string>("claimDescription")]] : []),
+                        ["收费约定", `${feeType ? feeTypeLabel[feeType] : "未选择"}${typeof feeAmount === "number" && Number.isFinite(feeAmount) ? ` · ${formatAmount(feeAmount)}` : ""}`],
                         ["主办律师", colleagues.find((u) => u.id === ownerUserId)?.name ?? "未选择"],
                         ["附件", `${contracts.length} 份`]
                       ].map(([k, v]) => (
-                        <div key={k} className="flex items-baseline gap-3 border-b border-[var(--bd-hair)] py-2">
+                        <div key={k} className={cn("flex items-baseline gap-3 border-b border-[var(--bd-hair)] py-2", (k === nameLabel || k === clientLabel || k === "其他当事人" || k === "标的描述") && "col-span-2")}>
                           <dt className="w-[72px] shrink-0 text-[12px] text-[var(--t-muted)]">{k}</dt>
-                          <dd className="min-w-0 truncate text-[12.75px] font-[550]">{v}</dd>
+                          <dd className="min-w-0 whitespace-pre-wrap break-words text-[12.75px] font-[550]">{v}</dd>
                         </div>
                       ))}
                     </dl>
@@ -1114,7 +1133,7 @@ export function IntakeWizard({
 
             <div className="id-foot">
               <span className="t-xs t-mute">
-                第 {step + 1} / {STEPS.length} 步{pendingNotes.length ? ` · ${pendingNotes.length} 项待完成：${pendingNotes.join("、")}` : ""}
+                第 {step + 1} / {STEPS.length} 步{pendingCount ? ` · ${step === STEPS.length - 1 ? "全部" : "本步"} ${pendingCount} 项待检查` : ""}
               </span>
               <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
                 <span className="ai-note hidden whitespace-nowrap lg:flex">
