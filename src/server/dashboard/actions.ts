@@ -461,7 +461,7 @@ export async function getDashboardHeroData(): Promise<HeroData> {
 // ============ 墨案 02：待我处理 / 逾期未回款 / 客户来源 ============
 
 export type WorkQueue = {
-  approvals: { id: string; action: string; title: string; requester: string; matter: string | null; waitDays: number; task: string | null }[];
+  approvals: { id: string; action: string; title: string; requester: string; matter: string | null; waitDays: number | null; task: string | null }[];
   approvalTotal: number;
   tasks: { id: string; title: string; dueAt: Date | null; priority: number; matterTitle: string; matterCode: string; matterId: string; overdue: boolean }[];
   taskTotal: number;
@@ -492,7 +492,7 @@ export async function getDashboardWorkQueue(): Promise<WorkQueue> {
       title: r.title,
       requester: r.requester,
       matter: r.matter,
-      waitDays: Math.max(0, Math.floor((now - new Date(r.submittedAt).getTime()) / 86_400_000)),
+      waitDays: r.submittedAt ? Math.max(0, Math.floor((now - new Date(r.submittedAt).getTime()) / 86_400_000)) : null,
       task: r.task
     })),
     approvalTotal: ws?.counts.pending ?? 0,

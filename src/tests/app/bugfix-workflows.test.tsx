@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 const { approve, detail, error, success, refresh } = vi.hoisted(() => ({
   approve: vi.fn(), detail: vi.fn(), error: vi.fn(), success: vi.fn(), refresh: vi.fn()
 }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push: vi.fn(), replace: vi.fn() }), useSearchParams: () => new URLSearchParams() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push: vi.fn(), replace: vi.fn() }), useSearchParams: () => new URLSearchParams(window.location.search) }));
 vi.mock("sonner", () => ({ toast: { error, success } }));
 vi.mock("@/server/approval-permissions/inbox", () => ({ getApprovalDetail: detail }));
 vi.mock("@/app/(app)/approvals/approval-create-menu", () => ({ ApprovalCreateMenu: () => null }));
@@ -25,12 +25,20 @@ function workspace(task: "approve" | "issue" | null = null): Awaited<ReturnType<
 }
 beforeEach(() => {
   vi.resetAllMocks();
+  window.history.replaceState(null, "", "/approvals");
   detail.mockResolvedValue({ fields: [{ label: "开票抬头", value: "测试申请" }], attachments: [], history: [], task: "approve", status: "PENDING", title: "测试申请", requester: "申请人", submittedAt: new Date() });
   approve.mockResolvedValue({ ok: true });
 });
 afterEach(cleanup);
 
 describe("缺陷修复界面流程", () => {
+  it("审批列表缺少真实提交时间时显示未知，不显示虚假的等待天数", () => {
+    const data = workspace("approve");
+    render(<ApprovalInbox data={{ ...data, rows: [{ ...data.rows[0], action: "INTAKE_APPROVE", submittedAt: null }] }} />);
+    expect(screen.getByText(/提交时间未记录/)).toBeVisible();
+    expect(screen.queryByText(/已等待|NaN|1970/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "查看并处理" })).toBeVisible();
+  });
   it("已处理详情展示历史意见且不出现处理表单或审批按钮", async () => {
     detail.mockResolvedValue({ fields: [], attachments: [], task: null, status: "ISSUED", title: "测试申请", history: [{ id: "history", label: "审批通过", userName: "审批人", at: new Date(), note: "已核对合同" }] });
     render(<ApprovalInbox data={workspace()} />);
@@ -54,6 +62,7 @@ describe("缺陷修复界面流程", () => {
   });
   it("通知深链接可以打开不在当前待办页的已处理申请", async () => {
     detail.mockResolvedValue({ fields: [], attachments: [], history: [], task: null, status: "ISSUED", title: "历史申请" });
+    window.history.replaceState(null, "", "/approvals?type=INVOICE_APPROVE&id=invoice-history");
     render(<ApprovalInbox data={{ ...workspace(), rows: [], total: 0 }} initialSelection={{ id: "invoice-history", action: "INVOICE_APPROVE" }} />);
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     expect(detail).toHaveBeenCalledWith({ id: "invoice-history", action: "INVOICE_APPROVE" });

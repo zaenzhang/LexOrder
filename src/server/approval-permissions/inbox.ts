@@ -49,11 +49,15 @@ export async function listApprovalWorkspace(input: Record<string, unknown> = {})
     if (query.status && row.status !== query.status) return false;
     if (query.q && !`${row.title} ${row.requester} ${row.matter}`.toLocaleLowerCase().includes(query.q.trim().toLocaleLowerCase())) return false;
     const date = query.tab === "processed" ? row.processedAt ?? row.submittedAt : row.submittedAt;
+    if (!date) return !query.start && !query.end;
     const day = date.toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
     return (!query.start || day >= query.start) && (!query.end || day <= query.end);
   }).sort((a, b) => {
-    if (query.tab === "pending") return a.row.submittedAt.getTime() - b.row.submittedAt.getTime();
-    return (query.tab === "processed" ? b.row.processedAt?.getTime() ?? 0 : b.row.submittedAt.getTime()) - (query.tab === "processed" ? a.row.processedAt?.getTime() ?? 0 : a.row.submittedAt.getTime());
+    const aDate = query.tab === "processed" ? a.row.processedAt ?? a.row.submittedAt : a.row.submittedAt;
+    const bDate = query.tab === "processed" ? b.row.processedAt ?? b.row.submittedAt : b.row.submittedAt;
+    if (!aDate) return bDate ? 1 : 0;
+    if (!bDate) return -1;
+    return query.tab === "pending" ? aDate.getTime() - bDate.getTime() : bDate.getTime() - aDate.getTime();
   });
   const pageSize = 20;
   const page = Math.min(query.page, Math.max(1, Math.ceil(rows.length / pageSize)));

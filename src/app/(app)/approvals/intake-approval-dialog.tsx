@@ -43,7 +43,7 @@ export function IntakeApprovalDialog({ detail, intakeDetail, note, onNoteChange,
   const blocking = latest?.hits.filter(h => h.severity === "BLOCKING").length ?? 0;
   const riskTitle = !latest ? "尚未检索，请核查利益冲突" : !latest.coversCurrentParties ? "检索范围待补充，请核查当前当事人" : blocking ? `冲突命中 BLOCKING × ${blocking} 待结论` : hitCount ? `检索命中 ${hitCount} 条，待人工核查` : null;
   const feeLabel = fields.some(field => field.label === "基础办案费（元）") ? "基础办案费（元）" : "收费金额（元）";
-  const waited = Math.max(0, Math.floor((Date.now() - new Date(detail.submittedAt).getTime()) / 86_400_000));
+  const waited = detail.submittedAt ? Math.max(0, Math.floor((Date.now() - new Date(detail.submittedAt).getTime()) / 86_400_000)) : null;
   const coLead = value("共同承办律师");
 
   return (
@@ -51,7 +51,7 @@ export function IntakeApprovalDialog({ detail, intakeDetail, note, onNoteChange,
       title={detail.title}
       eyebrow="收案审批"
       status={<span className={`badge ${detail.task ? "b-amber" : detail.status === "REJECTED" ? "b-outline-red" : "b-green"}`}><span className="bdot" />{APPROVAL_STATUS_LABELS[detail.status] ?? "状态待核实"}</span>}
-      description={<><span>申请人 {detail.requester}</span><span>· 提交于 {dateText(detail.submittedAt)}</span>{detail.task ? <span>· 已等待 {waited} 天</span> : null}{returnControl}</>}
+      description={<><span>申请人 {detail.requester}</span><span>· {detail.submittedAt ? `提交于 ${dateText(detail.submittedAt)}` : "提交时间未记录"}</span>{detail.task && waited !== null ? <span>· 已等待 {waited} 天</span> : null}{returnControl}</>}
       summary={<>
         <ReviewSummaryItem k="案件类别" v={[value("案件类别"), value("首个程序 / 审级")].filter(v => v !== "未填写").join(" · ") || "未填写"} />
         <ReviewSummaryItem k="委托方" v={value("委托方") !== "未填写" ? value("委托方") : value("姓名 / 名称")} />
@@ -71,7 +71,7 @@ export function IntakeApprovalDialog({ detail, intakeDetail, note, onNoteChange,
       ]}
       sidebarTitle={detail.task ? "审批" : "申请进度"}
       sidebar={detail.task ? <>
-        <ReviewStatusLine tone="amber" title="等待你的审批" desc={`你有本事项的收案审批授权 · 已等待 ${waited} 天`} />
+        <ReviewStatusLine tone="amber" title="等待你的审批" desc={`你有本事项的收案审批授权${waited !== null ? ` · 已等待 ${waited} 天` : ""}`} />
         <label htmlFor="intake-approval-note" className="op-label">审批意见</label>
         <textarea id="intake-approval-note" className="op-area" aria-label="审批意见或驳回原因" placeholder="请记录核查意见；驳回或退回补正时必填" value={note} onChange={event => onNoteChange(event.target.value)} maxLength={500} disabled={pending} />
         <div className="t-xs t-faint mt-1 text-right font-mono">{note.length} / 500</div>

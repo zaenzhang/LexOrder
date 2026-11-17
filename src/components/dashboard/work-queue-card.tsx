@@ -47,7 +47,7 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
             <div className="empty mo-empty-compact"><div className="empty-ic"><SquareCheck /></div><div className="mo-empty-title">暂无待你审批的申请</div></div>
           ) : (
             queue.approvals.map((a) => {
-              const urgent = a.waitDays >= 2;
+              const urgent = a.waitDays !== null && a.waitDays >= 2;
               return (
                 <Link key={a.action + a.id} href={approvalHref(a.action as ApprovalAction, a.id)} className="todo-item">
                   <span className={cn("type-ic", urgent ? "t-red" : "t-bronze")} aria-hidden>
@@ -62,7 +62,7 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
                       <span>{a.task === "issue" ? "待开票" : a.task === "stamp" ? "待盖章回填" : "待审批"}</span>
                     </div>
                   </div>
-                  <span className={cn("due-pill", urgent && "d-red")}>{a.waitDays > 0 ? `等待 ${a.waitDays} 天` : "今日"}</span>
+                  <span className={cn("due-pill", urgent && "d-red")}>{a.waitDays === null ? "提交时间未记录" : a.waitDays > 0 ? `等待 ${a.waitDays} 天` : "今日"}</span>
                 </Link>
               );
             })

@@ -54,7 +54,7 @@ export default async function DashboardPage() {
 
   const focus = hero.focus;
   const focusHref = focus?.href ?? "/schedule";
-  const urgentApprovals = queue.approvals.filter((a) => a.waitDays >= 2).length;
+  const urgentApprovals = queue.approvals.filter((a) => a.waitDays !== null && a.waitDays >= 2).length;
   const todoCount = hero.todayDeadlineCount + queue.tasks.filter((t) => t.overdue).length;
 
   // 只列最近 3 条：与右侧「待我处理」卡高度对齐，更多进完整日历（2026-09-19 用户确认）

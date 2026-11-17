@@ -276,7 +276,7 @@ export function ConflictSection({
           )}
 
           {/* 结论 */}
-          {canEditConclusion && (
+          {canEditConclusion ? (
             <div className="rounded-md border border-border bg-background p-3">
               <div className="mb-2 flex items-center gap-2">
                 <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
@@ -318,7 +318,12 @@ export function ConflictSection({
                 </Button>
               </div>
             </div>
-          )}
+          ) : latestCheck.note ? (
+            <div className="rounded-md border border-border bg-background p-3">
+              <h3 className="mb-1 text-[13px] font-medium">结论说明</h3>
+              <p className="whitespace-pre-wrap text-[12px] text-muted-foreground">{latestCheck.note}</p>
+            </div>
+          ) : null}
         </div>
       )}
       </div>

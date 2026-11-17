@@ -21,8 +21,21 @@ function Harness({ detail = base, onDecision = vi.fn() }: { detail?: Detail; onD
   return <Dialog open><IntakeApprovalDialog detail={detail} intakeDetail={intakeDetail} note={note} onNoteChange={setNote} pending={false} onDecision={onDecision} onResubmit={vi.fn()} /></Dialog>;
 }
 const tab = (name: RegExp) => fireEvent.mouseDown(screen.getByRole("tab", { name }), { button: 0, ctrlKey: false });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 describe("立案审批分区审阅", () => {
+  it("按实际送审时间展示提交时刻和等待天数", () => {
+    vi.spyOn(Date, "now").mockReturnValue(new Date("2026-09-08T10:00:00Z").getTime());
+    render(<Harness />);
+    expect(screen.getByText(/提交于 2026-09-06 18:00/)).toBeVisible();
+    expect(screen.getAllByText(/已等待 2 天/)).toHaveLength(2);
+  });
+  it("没有真实送审时间时明确未记录，不显示虚假等待天数", () => {
+    render(<Harness detail={{ ...base, submittedAt: null }} />);
+    expect(screen.getByText(/提交时间未记录/)).toBeVisible();
+    expect(screen.queryByText(/已等待/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/1970|NaN/)).not.toBeInTheDocument();
+    expect(screen.getByText("等待你的审批")).toBeVisible();
+  });
   it("切换风险、附件与历史仍保留审批意见，附件权限继续逐件生效", () => {
     render(<Harness />);
     fireEvent.change(screen.getByRole("textbox", { name: "审批意见或驳回原因" }), { target: { value: "需要核实代理关系" } });

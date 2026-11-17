@@ -25,6 +25,51 @@ beforeEach(() => {
   canApprove.mockResolvedValue(false);
 });
 describe("统一审批工作台的历史与权限", () => {
+  it("收案提交时间取最新送审轮次，重新送审后不沿用收案日或第一轮", async () => {
+    session.user.id = "applicant";
+    const intake = { id: "intake", title: "合成收案", status: "PENDING_CONFIRMATION", receivedAt: new Date("2026-08-01T00:00:00Z"), createdById: "applicant", createdBy: { name: "申请人" }, ownerUserId: "lead", matter: null };
+    db.intake.findMany.mockResolvedValue([{ ...intake, revisions: [{ submittedAt: at }] }]);
+    expect((await listApprovalWorkspace({ tab: "mine" })).rows[0].submittedAt).toEqual(at);
+    expect(db.intake.findMany.mock.calls[0][0].select.revisions).toEqual({ orderBy: { round: "desc" }, take: 1, select: { submittedAt: true } });
+
+    db.intake.findMany.mockResolvedValue([{ ...intake, revisions: [{ submittedAt: later }] }]);
+    expect((await listApprovalWorkspace({ tab: "mine", start: "2026-09-02", end: "2026-09-02" })).rows[0].submittedAt).toEqual(later);
+    expect((await listApprovalWorkspace({ tab: "mine", end: "2026-09-01" })).rows).toEqual([]);
+  });
+  it("缺失送审轮次保持未知，筛选不补造日期，正反排序均置于末尾", async () => {
+    const intake = { title: "合成收案", status: "PENDING_CONFIRMATION", receivedAt: later, createdById: "applicant", createdBy: { name: "申请人" }, ownerUserId: "lead", matter: null };
+    db.intake.findMany.mockResolvedValue([
+      { ...intake, id: "unknown", revisions: [] },
+      { ...intake, id: "later", revisions: [{ submittedAt: later }] },
+      { ...intake, id: "earlier", revisions: [{ submittedAt: at }] },
+    ]);
+    canApprove.mockResolvedValue(true);
+    const pending = await listApprovalWorkspace();
+    expect(pending.rows.map(row => row.id)).toEqual(["earlier", "later", "unknown"]);
+    expect(pending.rows[2].submittedAt).toBeNull();
+
+    session.user.id = "applicant";
+    canApprove.mockResolvedValue(false);
+    expect((await listApprovalWorkspace({ tab: "mine" })).rows.map(row => row.id)).toEqual(["later", "earlier", "unknown"]);
+    expect((await listApprovalWorkspace({ tab: "mine", start: "2026-09-02" })).rows.map(row => row.id)).toEqual(["later"]);
+    expect((await listApprovalWorkspace({ tab: "mine", end: "2026-09-01" })).rows.map(row => row.id)).toEqual(["earlier"]);
+    expect((await requireApprovalRecord(session.user, { action: "INTAKE_APPROVE", id: "unknown" })).row.submittedAt).toBeNull();
+  });
+  it("我已处理仍按本人实际处理时刻筛选和排序，不用最新送审或后续他人处理时间替代", async () => {
+    const intake = { title: "合成收案", status: "CONVERTED", createdById: "applicant", createdBy: { name: "申请人" }, ownerUserId: "lead", matter: null };
+    db.intake.findMany.mockResolvedValue([
+      { ...intake, id: "older-own", revisions: [{ submittedAt: new Date("2026-09-03T02:00:00Z") }] },
+      { ...intake, id: "newer-own", revisions: [] },
+    ]);
+    db.auditLog.findMany.mockResolvedValue([
+      { ...event("INTAKE_NEEDS_REVISION", "reviewer", at), targetId: "older-own", targetType: "Intake" },
+      { ...event("INTAKE_APPROVE", "reviewer", later), targetId: "newer-own", targetType: "Intake" },
+      { ...event("INTAKE_APPROVE", "another", new Date("2026-09-04T02:00:00Z")), targetId: "older-own", targetType: "Intake" },
+    ]);
+    expect((await listApprovalWorkspace({ tab: "processed" })).rows.map(row => row.id)).toEqual(["newer-own", "older-own"]);
+    const filtered = await listApprovalWorkspace({ tab: "processed", start: "2026-09-02", end: "2026-09-02" });
+    expect(filtered.rows).toMatchObject([{ id: "newer-own", submittedAt: null, processedAt: later }]);
+  });
   it("曾审批人撤权后仍能查到自己的批准记录，不因随后由其他人开票而消失", async () => {
     db.invoiceRequest.findMany.mockResolvedValue([invoice]);
     db.auditLog.findMany.mockResolvedValue([event("INVOICE_APPROVED", "reviewer", at, { note: "原审批意见" }), event("INVOICE_ISSUED", "issuer", later, { note: "后续开票" })]);

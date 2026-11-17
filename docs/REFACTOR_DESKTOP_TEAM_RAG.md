@@ -602,6 +602,12 @@ S05复用registerBillingTx已有assertLedgerWrite和Serializable；仅当signedA
 
 普通读取、预览/下载、送审和交付沿documentDerivationReadable及上下文当前来源资格；保留同一已访问文档集合，避免新关系形成循环读取。具体审批附件正文沿原明确授权，原指示、预算和原材料另核，不能用整案contextAccess误拒合法独立审批人，也不能借正文资格下发原指示。真实来源撤回仍阻断受影响派生正文/导出，不设置来源失败fallback。
 
+#### 独立收案与审批回显
+
+F03/F05/F06复用现有IntakeRevision送审轮次与审批授权/状态链：最新round的submittedAt可以为缺历史的null，读模型和真实消费方共同保持未知语义，不新增字段、投影或历史回填；已处理日期沿本人实际decision。页面编辑资格与后端冻结一致，原核查note继续只读展示。实现与验证见计划§8.32。
+
+F04/D01/D04的向导使用现有intakeCreateSchema及包含CLIENT_PARTY的原始RHF输入，问题按完整字段路径去重并映射真实步骤；派生完成度和确认摘要不建立同步影子状态，不修改共享身份schema的可选规则。F09以现有getCauseById读取已有ID的显示名称，异步结果按请求ID隔离，名称读取不触发onChange；选择范围沿causeScopeForSelection。后两阶段的实施状态以计划§7.14.5为准。
+
 ## 7. 参考项目如何进入 LexOrder
 
 沿用 [来源记录](RESEARCH_AND_DECISIONS.md)，按“观察行为 → 输入输出与规则 → LexOrder 设计 → 场景验收”吸收。实际复制代码另记固定提交、文件、依赖与来源；研究范围不按协议类型排除。

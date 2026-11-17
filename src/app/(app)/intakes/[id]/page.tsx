@@ -158,7 +158,7 @@ export default async function IntakeDetailPage({ params }: PageProps) {
     };
   }
 
-  const canApprove = intake.status !== "CONVERTED" && intake.status !== "DECLINED";
+  const showApprovalLink = intake.status === "PENDING_CONFIRMATION" || intake.status === "NEEDS_REVISION";
   const statusTone = intake.status === "CONVERTED" ? "b-teal" : intake.status === "DECLINED" ? "b-red" : "b-amber";
 
   return (
@@ -177,8 +177,8 @@ export default async function IntakeDetailPage({ params }: PageProps) {
           </span>
         }
         actions={
-          canApprove ? (
-            <IntakeActions intakeId={intake.id} status={intake.status} canApprove={!!session?.user && await canApproveItem(session.user.id, "INTAKE_APPROVE", intake.id)} canResubmit={session?.user.id === intake.createdById || session?.user.id === intake.ownerUserId} />
+          showApprovalLink ? (
+            <IntakeActions intakeId={intake.id} status={intake.status} canApprove={intake.status === "PENDING_CONFIRMATION" && !!session?.user && await canApproveItem(session.user.id, "INTAKE_APPROVE", intake.id)} canResubmit={isEditor && intake.status === "NEEDS_REVISION"} />
           ) : null
         }
       />
@@ -214,7 +214,7 @@ export default async function IntakeDetailPage({ params }: PageProps) {
             queries={buildIntakeConflictQueries(intake, decryptIdNumber)}
             latestCheck={latestCheck}
             canRunCheck={isEditor && (!workflowEnabled || ["INTAKE","NEEDS_REVISION"].includes(intake.status))}
-            canEditConclusion={isEditor && ["INTAKE","NEEDS_REVISION","PENDING_CONFIRMATION"].includes(intake.status)}
+            canEditConclusion={isEditor && ["INTAKE","NEEDS_REVISION"].includes(intake.status)}
           />
         </div>
 

@@ -40,7 +40,7 @@ export const APPROVAL_EVENTS: Record<string, { action: ApprovalAction; label: st
 export type ApprovalHistoryEntry = { id: string; label: string; userId: string | null; userName: string; at: Date; note: string | null; decision: boolean; legacy?: boolean };
 export type ApprovalWorkspaceRow = {
   id: string; action: ApprovalAction; title: string; requester: string; matter: string;
-  status: string; submittedAt: Date; processedAt: Date | null; processor: string | null;
+  status: string; submittedAt: Date | null; processedAt: Date | null; processor: string | null;
   task: "approve" | "issue" | "stamp" | "terminate" | null;
 };
 export function canonicalApprovalAction(action: ApprovalAction): ApprovalAction { return action === "SEAL_STAMP" ? "SEAL_APPROVE" : action; }

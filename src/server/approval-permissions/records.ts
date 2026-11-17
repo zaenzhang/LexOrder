@@ -15,7 +15,7 @@ export async function loadApprovalRecords(filter?: { action: ApprovalAction; id:
   const action = filter ? canonicalApprovalAction(filter.action) : null;
   const whereId = filter ? { id: filter.id } : {};
   const [intakes, documents, archives, invoices, seals, logs] = await Promise.all([
-    !action || action === "INTAKE_APPROVE" ? prisma.intake.findMany({ where: { ...whereId, status: { not: "INTAKE" } }, select: { id: true, title: true, status: true, receivedAt: true, ownerUserId: true, createdById: true, createdBy: { select: { name: true } }, matter: { select: { title: true } } } }) : [],
+    !action || action === "INTAKE_APPROVE" ? prisma.intake.findMany({ where: { ...whereId, status: { not: "INTAKE" } }, select: { id: true, title: true, status: true, revisions: { orderBy: { round: "desc" }, take: 1, select: { submittedAt: true } }, ownerUserId: true, createdById: true, createdBy: { select: { name: true } }, matter: { select: { title: true } } } }) : [],
     !action || action === "DOCUMENT_APPROVE" ? prisma.document.findMany({ where: { ...whereId, deletedAt: null }, select: { id: true, name: true, status: true, createdAt: true, updatedAt: true, uploadedById: true, uploadedBy: { select: { name: true } }, approvedById: true, approvedBy: { select: { name: true } }, approvedAt: true, reviewedById: true, reviewedBy: { select: { name: true } }, reviewedAt: true, matter: { select: { title: true } } } }) : [],
     !action || action === "ARCHIVE_APPROVE" ? prisma.archiveRecord.findMany({ where: whereId, select: { id: true, archiveNo: true, status: true, archivedAt: true, archivedBy: true, archivedById: true, reviewedById: true, reviewedAt: true, reviewNote: true, matter: { select: { title: true } } } }) : [],
     !action || action === "INVOICE_APPROVE" ? prisma.invoiceRequest.findMany({ where: whereId, select: { id: true, buyerName: true, title: true, amount: true, status: true, requestedAt: true, requestedById: true, requestedBy: { select: { name: true } }, processedById: true, processedBy: { select: { name: true } }, processedAt: true, processNote: true, matter: { select: { title: true } } } }) : [],
@@ -60,7 +60,7 @@ export async function loadApprovalRecords(filter?: { action: ApprovalAction; id:
   function fallback(id: string, label: string, userId: string | null, at: Date | null, userName?: string | null, note?: string | null): ApprovalHistoryEntry[] {
     return userId && at ? [{ id: `legacy-${id}-${label}`, label, userId, userName: userName ?? "历史处理人（姓名未记录）", at, note: note ?? null, decision: true, legacy: true }] : [];
   }
-  for (const r of intakes) add({ id: r.id, action: "INTAKE_APPROVE", title: r.title, status: r.status === "PENDING_CONFIRMATION" ? "PENDING" : r.status, submittedAt: r.receivedAt, intakeOwnerId: r.ownerUserId, requesterId: r.createdById, requester: r.createdBy.name, matter: r.matter?.title ?? r.title });
+  for (const r of intakes) add({ id: r.id, action: "INTAKE_APPROVE", title: r.title, status: r.status === "PENDING_CONFIRMATION" ? "PENDING" : r.status, submittedAt: r.revisions[0]?.submittedAt ?? null, intakeOwnerId: r.ownerUserId, requesterId: r.createdById, requester: r.createdBy.name, matter: r.matter?.title ?? r.title });
   for (const r of documents) {
     const history = historyMap.get(`DOCUMENT_APPROVE:${r.id}`) ?? [];
     if (r.status !== "PENDING_REVIEW" && !r.approvedAt && !r.reviewedAt && !history.length) continue;

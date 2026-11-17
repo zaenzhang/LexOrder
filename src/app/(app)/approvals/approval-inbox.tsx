@@ -285,8 +285,8 @@ export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data
           <div className="min-w-0 flex-1">
             <div className="rt truncate">{r.title}</div>
             <div className="rm truncate">
-              申请人 {r.requester}{r.matter ? ` · ${r.matter}` : ""} · {dateText(r.submittedAt)}
-              {r.task && r.status === "PENDING" && waitDays(r.submittedAt) >= 1 ? ` · 已等待 ${waitDays(r.submittedAt)} 天` : ""}
+              申请人 {r.requester}{r.matter ? ` · ${r.matter}` : ""} · {r.submittedAt ? dateText(r.submittedAt) : "提交时间未记录"}
+              {r.task && r.status === "PENDING" && r.submittedAt && waitDays(r.submittedAt) >= 1 ? ` · 已等待 ${waitDays(r.submittedAt)} 天` : ""}
               {r.processor ? ` · 最近处理 ${r.processor} ${dateText(r.processedAt)}` : ""}
             </div>
           </div>
@@ -308,7 +308,7 @@ export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data
       title={detail?.title ?? "申请详情"}
       eyebrow={selected ? ACTION_LABELS[selected.action] : "审批申请"}
       status={detail ? <span className={`badge ${detail.task ? "b-amber" : detail.status === "REJECTED" ? "b-outline-red" : detail.status === "PENDING" ? "b-amber" : "b-green"}`}><span className="bdot" />{APPROVAL_STATUS_LABELS[detail.status] ?? "状态待核实"}</span> : <span className="badge b-slate">加载中</span>}
-      description={<><span>申请人 {detail?.requester ?? "—"}</span><span>· 提交于 {dateText(detail?.submittedAt ?? null)}</span>{detail?.task && detail.submittedAt ? <span>· 已等待 {waitDays(detail.submittedAt)} 天</span> : null}
+      description={<><span>申请人 {detail?.requester ?? "—"}</span><span>· {detail?.submittedAt ? `提交于 ${dateText(detail.submittedAt)}` : "提交时间未记录"}</span>{detail?.task && detail.submittedAt ? <span>· 已等待 {waitDays(detail.submittedAt)} 天</span> : null}
         {returnControl}</>}
       summary={detail && selected && <ApprovalReviewSummary detail={detail} action={selected.action} />}
       alert={alert}
