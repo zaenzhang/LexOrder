@@ -4,10 +4,11 @@ import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';i
 import {Prisma,PrismaClient} from '@prisma/client';
 import {intakeState,submitIntakeTx,withdrawIntakeTx,assertIntakeConvertible,assertIntakeDocumentChange,assertFreshIntakeCheck} from '../src/server/intakes/workflow';
 import {runMatterReviewTx,decideMatterReviewTx,readMatterReview} from '../src/server/conflicts/matter-review';
+import {resolveRoleUser} from '../src/lib/roles/service';
 import {runConflictCheck} from '../src/server/conflicts/algorithm';
 import {readIntakeRounds} from '../src/server/intakes/revision-history';
 const init=createPrismaClient(process.env.DATABASE_URL),database=process.env.WORKFLOW_TRIAL_DATABASE??'lawlink_workflow_trial_20260919_ef1a255e',prefix=`intakes-${randomUUID().slice(0,8)}`;let db:PrismaClient;let stage='connect';const results:string[]=[];let users:string[]=[];
-const tx=<T>(f:(t:Prisma.TransactionClient)=>Promise<T>)=>db.$transaction(f,{isolationLevel:'Serializable',timeout:20000});
+const tx=<T>(f:(t:Prisma.TransactionClient)=>Promise<T>,isolationLevel:Prisma.TransactionIsolationLevel='Serializable')=>db.$transaction(f,{isolationLevel,timeout:20000});
 const bad=async(name:string,fn:()=>Promise<unknown>,pattern:RegExp)=>{await assert.rejects(fn,pattern);results.push(name);};
 async function main(){assert.match(database,/^lawlink_workflow_trial_\d{8}_[a-f0-9]{8}$/);const url=new URL(process.env.DATABASE_URL!);assert.notEqual(url.pathname,`/${database}`);url.pathname=`/${database}`;db=createPrismaClient(url.toString());assert.equal((await db.$queryRaw<{name:string}[]>`SELECT current_database() AS name`)[0].name,database);
  const people=await Promise.all(['owner','approver','stranger'].map(role=>db.user.create({data:{name:prefix+role,email:`${prefix}-${role}@example.invalid`,passwordHash:'NO-LOGIN',role:'LAWYER'}})));users=people.map(u=>u.id);const [owner,approver,stranger]=users;
@@ -27,9 +28,11 @@ async function main(){assert.match(database,/^lawlink_workflow_trial_\d{8}_[a-f0
  const other=await db.matter.create({data:{title:prefix+'后出现冲突',internalCode:prefix+'other',ownerId:stranger,parties:{create:{role:'OPPOSING_PARTY',name:prefix+'委托方',partyType:'COMPANY'}}}});await bad('检索后新入库命中阻止送审',()=>tx(t=>submitIntakeTx(t,owner,intake.id)),/新的或变化/);
  const newCheck=await check();await tx(t=>submitIntakeTx(t,owner,intake.id));await bad('命中未复核不得转案',()=>tx(t=>assertIntakeConvertible(t,intake.id)),/尚未确认/);await db.conflictCheck.update({where:{id:newCheck.id},data:{conclusion:'DIFFERENT',note:'核对为同名不同主体',decidedById:owner,decidedAt:new Date()}});await tx(t=>assertIntakeConvertible(t,intake.id));results.push('完整复核意见可通过转案门槛');
  stage='matter-review';const m=await db.matter.create({data:{title:prefix,internalCode:prefix,ownerId:owner,parties:{create:{role:'CLIENT_PARTY',name:prefix+'委托方',partyType:'COMPANY'}}}});
- await bad('无关人员不能运行案件复核',()=>tx(t=>runMatterReviewTx(t,stranger,m.id)),/本案经办/);
- const review=await tx(t=>runMatterReviewTx(t,owner,m.id));assert.equal((await readMatterReview(db,m.id))?.needsReview,true);await tx(t=>decideMatterReviewTx(t,owner,m.id,review.id,'DIFFERENT','核对为不同主体'));assert.equal((await readMatterReview(db,m.id))?.needsReview,false);results.push('案件命中经人工复核后可消除待复核提示');
- await db.party.create({data:{matterId:m.id,role:'THIRD_PARTY',name:prefix+'法院新增第三人'}});assert.equal((await readMatterReview(db,m.id))?.needsReview,true);await bad('新增主体不能沿用旧结论',()=>tx(t=>decideMatterReviewTx(t,owner,m.id,review.id,'DIFFERENT','沿用')),/范围已变化/);results.push('新增法院主体可记录并触发复核');
+ const ownerActor={id:owner,...await resolveRoleUser(owner,people[0].role,db)},strangerActor={id:stranger,...await resolveRoleUser(stranger,people[2].role,db)};
+ await bad('无关人员不能运行案件复核',()=>tx(t=>runMatterReviewTx(t,strangerActor,m.id),'ReadCommitted'),/无权处理/);
+ const review=await tx(t=>runMatterReviewTx(t,ownerActor,m.id),'ReadCommitted');assert.equal((await readMatterReview(db,m.id))?.needsReview,true);await tx(t=>decideMatterReviewTx(t,ownerActor,m.id,review.id,null,'DIFFERENT','核对为不同主体'),'ReadCommitted');assert.equal((await readMatterReview(db,m.id))?.needsReview,false);results.push('案件命中经人工复核后可消除待复核提示');
+ const decidedAt=(await db.conflictCheck.findUniqueOrThrow({where:{id:review.id}})).decidedAt;
+ await db.party.create({data:{matterId:m.id,role:'THIRD_PARTY',name:prefix+'法院新增第三人'}});assert.equal((await readMatterReview(db,m.id))?.needsReview,true);await bad('新增主体不能沿用旧结论',()=>tx(t=>decideMatterReviewTx(t,ownerActor,m.id,review.id,decidedAt,'DIFFERENT','沿用'),'ReadCommitted'),/范围已变化/);results.push('新增法院主体可记录并触发复核');
  const foreign=await db.conflictCheck.findMany({where:{hits:{some:{targetId:other.id}}}});assert(foreign.length>0);
  const output=join(tmpdir(),`${prefix}.json`);writeFileSync(output,JSON.stringify({database,results},null,2));console.log(`PASS: ${results.length} intake and conflict checks; ${output}`);
 }

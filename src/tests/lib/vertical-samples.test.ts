@@ -26,6 +26,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/archive/guard", () => ({ assertDocumentWritable: vi.fn(), assertMatterWritable: vi.fn() }));
 vi.mock("@/lib/permissions", () => ({ assertCanAccessMatter: vi.fn(), assertCanModifyMatter: vi.fn(), assertCanHandleMatter: vi.fn() }));
 vi.mock("@/server/reminders/schedule", () => ({ refreshScheduleReminderAfterSave: vi.fn(), retireScheduleReminders: vi.fn() }));
+vi.mock("@/server/matters/write-access", () => ({ lockWritableMatters: vi.fn() }));
 vi.mock("@/server/matters/route", () => ({ revalidateMatter: vi.fn() }));
 vi.mock("@/server/documents/material-ingest", () => ({ ingestMaterial: mocks.ingest, withdrawMaterial: vi.fn() }));
 vi.mock("@/lib/storage/crypto", () => ({ encryptBuffer: mocks.encrypt, sha256: mocks.hash }));
@@ -42,6 +43,7 @@ function priorDocument() {
     tags: ["合成"], archiveChecklistItemId: null };
 }
 let prior: ReturnType<typeof priorDocument>;
+const deadlineUpdatedAt = new Date("2026-11-01T00:00:00Z");
 let confirmed = false;
 const bytes = new Uint8Array([1, 2, 3]);
 const file = () => new File([bytes], "合成合同-v2.pdf", { type: "application/pdf" });
@@ -56,7 +58,7 @@ beforeEach(() => {
   mocks.encrypt.mockReturnValue({ ciphertext: Buffer.from("synthetic cipher"), iv: Buffer.from("iv"), authTag: Buffer.from("tag"), algorithm: "aes-256-gcm" });
   mocks.db.deadline.findUnique.mockImplementation(async () => ({
     id: "cidl000000000000000000001", confirmStatus: confirmed ? "CONFIRMED" : "PENDING",
-    procedure: { matterId: "m1" }, sourceRuleId: "r1", dueAt: new Date(),
+    procedure: { matterId: "m1" }, sourceRuleId: "r1", dueAt: new Date(), updatedAt: deadlineUpdatedAt,
   }));
   mocks.db.deadline.updateMany.mockImplementation(async () => { confirmed = true; return { count: 1 }; });
   mocks.db.$transaction.mockImplementation(async (work: (tx: unknown) => Promise<unknown>) => work(mocks.db));
@@ -112,9 +114,9 @@ describe("纵向样例 A：上传版本边界", () => {
 
 describe("纵向样例 B：确认与队列接续", () => {
   it("待确认期限确认后固定；重复确认被拒", async () => {
-    expect(await confirmDeadline({ id: "cidl000000000000000000001" })).toEqual({ ok: true });
+    expect(await confirmDeadline({ id: "cidl000000000000000000001", expectedUpdatedAt: deadlineUpdatedAt })).toEqual({ ok: true });
     expect(confirmed).toBe(true);
-    await expect(confirmDeadline({ id: "cidl000000000000000000001" })).rejects.toThrow("该期限已确认");
+    await expect(confirmDeadline({ id: "cidl000000000000000000001", expectedUpdatedAt: deadlineUpdatedAt })).rejects.toThrow("该期限已确认");
   });
 
   it("失败返回退避重试，重新领取使用新 token，旧执行与重复完成不计成功", async () => {

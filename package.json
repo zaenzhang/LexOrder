@@ -73,6 +73,7 @@
     "sonner": "^1.7.4",
     "tailwind-merge": "^2.5.4",
     "tailwindcss-animate": "^1.0.7",
+    "tar-stream": "2.2.0",
     "tsx": "^4.23.15",
     "undici": "8.12.4",
     "unpdf": "^1.6.2",

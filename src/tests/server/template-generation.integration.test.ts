@@ -1,5 +1,7 @@
 // @vitest-environment node
 import { randomUUID } from "node:crypto";
+import PizZip from "pizzip";
+import { decryptBuffer, sha256 } from "@/lib/storage/crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TemplatePreparation } from "@/lib/template-render-fields";
 
@@ -99,6 +101,14 @@ describe.skipIf(!databaseUrl)("模板字段核对与生成：真实 PG", () => {
     const doc = await db.document.findUniqueOrThrow({ where: { id: saved.documentId } });
     expect(doc).toMatchObject({ status: "DRAFT", approvedById: null, procedureId: f.secondProcedure.id });
     expect(doc.familyId).toBeTruthy();
+    const ciphertext = mocks.files.get(doc.path)!;
+    const actualBytes = decryptBuffer(ciphertext, doc.iv!, doc.authTag!);
+    expect(actualBytes.length).toBe(doc.size);
+    expect(sha256(actualBytes)).toBe(doc.sha256);
+    const actualBody = new PizZip(actualBytes).file("word/document.xml")!.asText();
+    for (const value of ["仅本稿委托人电话", "SYNTHETIC-ID", "合成法定代表人", "合成对方二", "仅本稿对方电话", "合成二审法院"]) expect(actualBody).toContain(value);
+    expect(actualBody).not.toContain("{{");
+    for (const wrongValue of ["合成对方一", "对方一原电话", "合成一审法院", "主档原电话"]) expect(actualBody).not.toContain(wrongValue);
     expect(doc.templateContextSnapshot).toMatchObject({ selection: preparation.selection,
       context: { client: { phone: "仅本稿委托人电话" }, opposing: { name: "合成对方二", phone: "仅本稿对方电话" }, proceeding: { court: "合成二审法院" } },
       templateSource: { documentId: f.blob.id, sha256: f.blob.sha256 } });

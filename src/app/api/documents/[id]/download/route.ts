@@ -2,7 +2,7 @@ import { canReadDocument } from "@/lib/approvals/documents";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { audit } from "@/server/audit";
+import { releaseDocumentRead } from "@/server/documents/read-release";
 import { storage } from "@/lib/storage";
 import { decryptBuffer } from "@/lib/storage/crypto";
 import { normalizeUploadedFilename } from "@/lib/filename";
@@ -73,13 +73,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
   }
 
-  await audit({
-    userId: session.user.id,
-    action: "DOCUMENT_DOWNLOAD",
-    targetType: "Document",
-    targetId: doc.id,
-    detail: { matterId: doc.matterId, intakeId: doc.intakeId, name: doc.name, watermarked }
-  });
+  const release = await releaseDocumentRead(session.user.id, doc.id, { action: "DOCUMENT_DOWNLOAD", watermarked });
+  if (!release.ok) return NextResponse.json({ error: release.error }, { status: release.status });
 
   const arrayBuffer = outBuf.buffer.slice(outBuf.byteOffset, outBuf.byteOffset + outBuf.byteLength) as ArrayBuffer;
   const filename = normalizeUploadedFilename(doc.name);
@@ -104,6 +99,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       "Content-Length": String(outBuf.byteLength),
       "Content-Disposition": `${disposition}; filename*=UTF-8''${encodeURIComponent(filename)}`,
       "X-Content-Type-Options": "nosniff",
+      "Cache-Control": "private, no-store",
       ...(watermarked ? { "X-Watermarked": "1" } : {})
     }
   });

@@ -1,6 +1,6 @@
 # LexOrder 架构、部署发布与审查方案
 
-更新与核验日期：2026-11-16。
+更新与核验日期：2026-11-17；各历史批次的证明边界保留原时点。
 
 **现行决策：Server 是当前唯一交付目标，继续现有 Next.js / TypeScript / Prisma / PostgreSQL 与 LawLink 页面。Personal 直接搁置，无自动恢复排期，不构成开发、验收或发布门禁。默认内置处理与检索；RAGFlow、生成 AI、OCR、嵌入/重排、法律数据库/MCP 都是独立可选配置，缺配置或故障不阻止启动、认证和普通业务。性能只观察，全面 Rust 重写不在范围。**
 
@@ -481,7 +481,7 @@ W01.2/W04.1 首批在 `src/lib/workbench/` 建立不依赖 Prisma/Next 请求上
 
 ### 6.8 M3 最小持久关系与执行边界
 
-本节对应[计划 §7.11](WORKBENCH_PLAN.md#711-m3-详细执行计划与审查2026-11-16)和[需求 §9.4](PRODUCT_REQUIREMENTS_ACCEPTANCE.md#94-m3-专业工作与实际交付的操作规格)，是本轮已落地代码的最小技术边界；完成与未验范围见[计划 §8.21](WORKBENCH_PLAN.md#821-当前主线的-m3-接续执行2026-11-16)。仅在真实业务切片所需处增加模型与 SQL，不建立通用成果平台或投影服务。现有 Document、EvidenceItem、MatterContextRecord、Task、WorkResponsibility、Deadline、ClientActivity/FollowUp、FirmFile 继续是各自权威对象。
+本节对应[计划 §7.11](WORKBENCH_PLAN.md#711-m3-详细执行计划与审查2026-11-16)和[需求 §9.4](PRODUCT_REQUIREMENTS_ACCEPTANCE.md#94-m3-专业工作与实际交付的操作规格)，是本轮已落地代码的最小技术边界；前批证据见 §8.21，当前 API 与静态接续及未验范围见[计划 §8.22](WORKBENCH_PLAN.md#822-api-与静态接续验证2026-11-17)。仅在真实业务切片所需处增加模型与 SQL，不建立通用成果平台或投影服务。现有 Document、EvidenceItem、MatterContextRecord、Task、WorkResponsibility、Deadline、ClientActivity/FollowUp、FirmFile 继续是各自权威对象。
 
 #### 数据归属与必要新增
 
@@ -503,6 +503,9 @@ W09.3 的知识候选/审核/发布/撤回表、B 比较矩阵、E 规则/日历
 
 #### 权限、版本与写入
 
+- 动态冲突普通检索只写 `PENDING`；明确决定和正式收案批准继承分别以同一 ConflictCheck、匹配决定人的现有审计为依据。旧自动 DIFFERENT 不回填，读取与程序准入共用当前范围/新增命中检查；当前未通过时入口仍可达。两个冲突写动作使用 ReadCommitted 与原授权/事项锁；保存决定核 nullable `expectedDecidedAt`，原决定字段进入变更审计。期限确认/调整使用 `expectedUpdatedAt`，锁后复读当前账号、事项关系/归档、期限归属与原日期；提醒失效及审计同事务，不新增期限重算模型。
+- 材料下载/Office 预览在处理完成后调用 [read-release](../src/server/documents/read-release.ts)：事务外先读 sessionVersion 基线，再由唯一真实 NextAuth 会话链验证请求；随后取得原授权锁，在 ReadCommitted 的同一连接上复核 active/sessionVersion、当前 Document 及 `canReadDocument` 的实际来源/附件资格，通过后严格 `auditTx`。该顺序避免单连接池内再调用全局会话查询造成自等，也拒绝校验或等待锁期间的会话撤销。事务提交是本次读取的授权边界，不承诺追回已经返回的字节；普通读取不重算原件 hash。
+- 固定交付 POST 的 Origin 与受信 `NEXTAUTH_URL` 的 HTTP/HTTPS origin 精确比较，配置缺失/非法返回 503，不匹配返回 403；不信任 Host/转发头，也不把 NextRequest 规范化后的 loopback URL 当作浏览器原始 origin。下载成功响应明确 `private, no-store`；Office 预览与固定交付沿既有同策略。真实 Next HTTP、路由/服务 PG 测试和浏览器证据分开登记。
 - 研究/方案入口沿现有事项读取/主办协办管理边界；读取正文、引用、历史和导出继续逐来源核资格。生成或修改 Document 继续使用既有 documents.write 及事项守卫。费用字段使用原财务裁剪；隐藏按钮不能代替服务端校验。
 - 人工复核按动作授权：提出问题可由有目标文书读取权的本事项办理人员，或当前具体 Document 的合格 DOCUMENT_APPROVE 人员执行；作者回应、关联修订及改正文仍需原办理/文书写入资格，记录真实人。核对处理沿该文书现行复核/审批资格及本人例外，问题处理不执行批准。原 /approvals 直达同一 Document/问题面板，不绕经无权访问的事项页。
 - 普通研究、分析/简报、OPTION/DECISION 及其历史、MatterBrief/客户聚合按实际来源复核当前资格；含不可读来源的派生正文不从缓存继续输出，允许获准的占位及补救。现有单来源 sourceView 或普通 visibility 不足以授权新增研究/费用关系；不靠段落猜测删改正文，不做全文污点或跨案多跳。
@@ -754,12 +757,14 @@ npm run build
 
 ### 11.5 备份、恢复与密钥
 
-[备份任务](../src/server/cron/jobs/backup-database.ts)和 `npm run backup:now` 调用 [scripts/backup.sh](../scripts/backup.sh)，生成 PostgreSQL custom dump、存在的本地原件目录归档和 manifest。运行需要 Bash、与服务端兼容的 `pg_dump`、可写持久目录；`BACKUP_DIR` 和 `BACKUP_KEEP` 管理输出和保留数量。手动命令是显式备份请求，不受 `BACKUP_CRON_ENABLED=false` 的自动任务开关限制。
+[备份任务](../src/server/cron/jobs/backup-database.ts)和 `npm run backup:now` 继续调用 [backup.sh](../scripts/backup.sh)；它与 [restore.sh](../scripts/restore.sh) 是 [local-backup.mjs](../scripts/local-backup.mjs) 的薄入口。配置沿现有 `@next/env` 加载，显式进程环境优先，不将 `.env` 当 shell 执行。备份需要 Node、Bash、兼容服务端的 `pg_dump`；恢复另需 `pg_restore`、`psql`，启用整体加密时还需 OpenSSL。归档解析使用原依赖树已有的 tar-stream 2.2.0，现明确登记为直接依赖；没有升级其他依赖。
 
-`BACKUP_PASSPHRASE` 可加密备份产物，未配置时产生未整体加密的备份；它与文件主密钥用途不同。脚本不自动打包 `STORAGE_ENCRYPTION_KEY`、完整私有配置或 S3 对象，需独立保存原密钥、必要配置和实际对象存储副本。Compose 的 `backups` 命名卷仍与主机同在，不能当作异地副本；原件目录缺失时脚本会跳过，不能仅凭退出成功判定备份完整。
+现行单一格式为 `lexorder-local-backup-v1`，只支持 `STORAGE_PROVIDER=local`。同时生成 custom dump、本地原件相对路径归档及 manifest；缺原件、缺件或异常不发布成功目录。manifest 记录实际文件名、大小、SHA256、布尔加密状态及固定加密参数、原主密钥指纹和独立配置要求；不保存秘密值。整体加密使用 `BACKUP_PASSPHRASE`，与文件主密钥分开；未配置时产物不作整体加密，未显式设置 `BACKUP_ALLOW_PLAINTEXT=true` 时提示。成功目录仍为 `YYYYMMDD_HHMMSS`，沿 `BACKUP_DIR/BACKUP_KEEP` 管理；隐藏的失败/处理中目录不计成功备份。手动命令不受自动任务开关 `BACKUP_CRON_ENABLED=false` 限制。
 
-恢复时以隔离实例核对版本、目标库、备份 manifest、原件路径及密钥，先验证数据/权限，再开放业务和检索。数据库和文件需要同一一致性时点，备份期间应停止相关写入或使用已验证的一致性方案。已有新写入后的回退另行处理数据，不能直接覆盖旧备份抹去新增事实。
+恢复只接受此现行格式，不猜测或转换旧包。先配置隔离空数据库、显式 `APP_STORAGE_DIR`、原 `STORAGE_ENCRYPTION_KEY`、必要 `NEXTAUTH_SECRET/NEXTAUTH_URL`，停止目标 Web/worker。脚本核对清单及主密钥，在复制到私有暂存目录时逐件校验一次；明文及加密分支均只消费已固定的暂存副本，等待确认时源目录变化不会替换输入。解包只接受安全的相对文件/目录，拒绝链接、特殊文件、重复成员及路径逃逸；原件按精确的新目标目录发布，不沿旧 basename 落到别处。非空数据库、非空或链接目标明确拒绝，不清库覆盖。
 
-当前 [restore.sh](../scripts/restore.sh) 仍使用旧 `STORAGE_PATH` 变量、只直接读取未加密的 dump/tar 文件，并会跳过缺失文件；使用前须核对实际 `APP_STORAGE_DIR` 与归档结构、处理解密，并在隔离目标验证。它尚不能作为完整的一键恢复保证。本轮只保留并核对说明，成功备份/恢复、对象存储恢复及将来的 RAGFlow 状态恢复仍需 W13 验收，不能用备份失败路径测试代替。
+预检、解密、解包和目标检查完成后，输入 `YES` 确认停机与配置事实，再用 `pg_restore --single-transaction --exit-on-error --no-owner` 恢复。数据库成功后才发布原件；如原件发布失败，返回失败、保留私有暂存并要求实例继续停止，不承诺数据库与文件系统之间的原子事务。最终还须验证实际解密、当前权限、旧引用/批准快照及业务读取，才开放检索与业务。
+
+**一致性及本批证明边界：** cron 尚不自动停止业务和 worker；生成 dump/原件包不等于二者来自同一一致性时点，源实例仍需受控停写或经过实测的一致性方案。完整私有配置、原主密钥和 S3 对象不自动打包，须独立保存；主密钥指纹按原 base64 配置字符串计算，不能擅自改变表示而破坏现有盲索引。Compose 的同主机备份卷不等于异地副本；`.runtime/` 已从 Docker 构建上下文排除。计划 §8.22 的 27 项 CLI 边界测试实际执行文件系统、归档和 OpenSSL，但 PostgreSQL 命令使用明确替身；当前缺 Docker/Podman 与 PostgreSQL 客户端，未实测容器产物或真实数据库恢复，不能据此关闭 W13/M4。已有新写入后的回退仍须另行处理新增数据，不覆盖历史事实。
 
 `STORAGE_ENCRYPTION_KEY` 同时关系到附件、证件号密文与盲索引；只换环境变量或派生域会破坏现有数据读取/检索。当前没有已完成的自动密钥轮换工具，轮换需要明确的旧数据解密/重加密、盲索引重建、恢复副本与一致性验证方案。实际启用向量检索或 RAGFlow 时，恢复还须核对文档版本、解析/嵌入指纹、索引代次和服务端绑定；先恢复当前授权，索引按固定配置重建。

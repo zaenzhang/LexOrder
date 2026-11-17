@@ -217,7 +217,7 @@ export default async function MatterDetailPage({ params, searchParams }: PagePro
       <MatterDetailTabs
         responsibilityNode={<WorkResponsibilityPanel data={await getWorkBoard({matterId:matter.id})} matterId={matter.id} hideTasks/>}
         closureNode={<MatterClosurePanel matterId={matter.id} data={allowed("archive.read")?await getClosureBoard(matter.id):null}/>}
-        conflictNode={<MatterConflictReview matterId={matter.id} data={conflictReview} canWrite={allowed("matters.write")&&matter.status!=="ARCHIVED"}/>}
+        conflictNode={<MatterConflictReview matterId={matter.id} data={conflictReview} canWrite={canAssociateThisMatter&&matter.status!=="ARCHIVED"}/>}
         matter={matter}
         finance={finance}
         userOptions={[

@@ -207,10 +207,10 @@ function ImportantItemsCard({
   }
 
   // v1.x P0-8: 待确认期限的确认（起算事实与规则结果就此固定）
-  function handleConfirmDeadline(id: string) {
+  function handleConfirmDeadline(deadline: DeadlineRowItem) {
     startTransition(async () => {
       try {
-        await confirmDeadline({ id });
+        await confirmDeadline({ id: deadline.id, expectedUpdatedAt: deadline.updatedAt });
         toast.success("期限已确认");
       } catch (err) {
         toast.error("确认失败", { description: actionErrorMessage(err) });
@@ -338,7 +338,7 @@ function ImportantItemsCard({
                 }
                 onConfirm={
                   entry.type === "deadline"
-                    ? () => handleConfirmDeadline(entry.item.id)
+                    ? () => handleConfirmDeadline(entry.item)
                     : undefined
                 }
                 onAdjust={
@@ -364,7 +364,7 @@ function ImportantItemsCard({
                 multiProc={multiProc}
                 onToggle={() => handleToggle(d.id)}
                 onDelete={() => handleDeleteDeadline(d.id)}
-                onConfirm={() => handleConfirmDeadline(d.id)}
+                onConfirm={() => handleConfirmDeadline(d)}
                 onAdjust={() => handleAdjustDeadline(d)}
                 pending={isPending}
                 canManage={canManage}
@@ -410,7 +410,7 @@ function ImportantItemsCard({
 }
 
 /** v1.x P0-8: 人工调整到期日（写已调整 + 留痕；规则重算不再覆盖）——日期控件 + 必填原因 */
-export function AdjustDeadlineDialog({ deadline, onClose }: { deadline: { id: string; title: string; dueAt: Date }; onClose: () => void }) {
+export function AdjustDeadlineDialog({ deadline, onClose }: { deadline: { id: string; title: string; dueAt: Date; updatedAt: Date }; onClose: () => void }) {
   const [date, setDate] = useState(formatIsoDate(deadline.dueAt));
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -424,7 +424,7 @@ export function AdjustDeadlineDialog({ deadline, onClose }: { deadline: { id: st
     setError(null);
     startTransition(async () => {
       try {
-        await adjustDeadline({ id: deadline.id, dueAt, reason: reason.trim() });
+        await adjustDeadline({ id: deadline.id, expectedUpdatedAt: deadline.updatedAt, dueAt, reason: reason.trim() });
         toast.success("期限已调整");
         onClose();
       } catch (err) {

@@ -2,7 +2,7 @@ import { canReadDocument } from "@/lib/approvals/documents";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { audit } from "@/server/audit";
+import { releaseDocumentRead } from "@/server/documents/read-release";
 import { storage } from "@/lib/storage";
 import { decryptBuffer } from "@/lib/storage/crypto";
 import { officePreviewKind } from "@/lib/storage/mime-ext";
@@ -120,13 +120,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     return NextResponse.json({ error: "文档转换失败，请下载查看" }, { status: 500 });
   }
 
-  await audit({
-    userId: session.user.id,
-    action: "DOCUMENT_PREVIEW",
-    targetType: "Document",
-    targetId: doc.id,
-    detail: { matterId: doc.matterId, name: doc.name, kind }
-  });
+  const release = await releaseDocumentRead(session.user.id, doc.id, { action: "DOCUMENT_PREVIEW", kind });
+  if (!release.ok) return NextResponse.json({ error: release.error }, { status: release.status });
 
   return new NextResponse(html, {
     status: 200,

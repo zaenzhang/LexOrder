@@ -8,7 +8,17 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (request.headers.get("origin") !== new URL(request.url).origin) {
+  // NextRequest normalizes loopback URLs to localhost; it is not the browser's
+  // original origin. Use the configured Server entry, never forwarded host input.
+  let applicationOrigin: string;
+  try {
+    const configured = new URL(process.env.NEXTAUTH_URL ?? "");
+    if (!["http:", "https:"].includes(configured.protocol)) throw new Error("Invalid application origin");
+    applicationOrigin = configured.origin;
+  } catch {
+    return NextResponse.json({ error: "服务入口地址未正确配置，请联系管理员" }, { status: 503 });
+  }
+  if (request.headers.get("origin") !== applicationOrigin) {
     return NextResponse.json({ error: "请从当前工作台发起导出" }, { status: 403 });
   }
   const session = await getSession();

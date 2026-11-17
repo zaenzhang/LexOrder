@@ -133,6 +133,7 @@ type WorkflowStageSource = {
 
 type WorkflowDeadline = {
   id: string;
+  updatedAt: Date;
   title: string;
   category: DeadlineCategory;
   dueAt: Date;
@@ -1332,6 +1333,7 @@ type ActionItem = {
   meta: string;
   priority: number;
   deadlineId?: string;
+  deadlineUpdatedAt?: Date;
   memoId?: string;
   pendingConfirm?: boolean;
 };
@@ -1353,6 +1355,7 @@ function buildActionItems(procedure: WorkflowProcedure | null): ActionItem[] {
       meta: [procedureLabel, deadline.basis].filter(Boolean).join(" · "),
       priority: 2,
       deadlineId: deadline.id,
+      deadlineUpdatedAt: deadline.updatedAt,
       pendingConfirm: deadline.confirmStatus === "PENDING"
     });
   }
@@ -1443,7 +1446,7 @@ function NextActions({
     setShowLater(true);
     setShowOthers(true);
   }, [expandRequest]);
-  const [adjusting, setAdjusting] = useState<{ id: string; title: string; dueAt: Date } | null>(null);
+  const [adjusting, setAdjusting] = useState<{ id: string; title: string; dueAt: Date; updatedAt: Date } | null>(null);
   const inScope = scope === "stage" && selectedStage ? actions.filter((i) => i.stageKey === selectedStage.key) : actions;
   const overdue = inScope.filter((i) => i.days !== null && i.days < 0);
   const soon = inScope.filter((i) => i.days !== null && i.days >= 0 && i.days <= 7);
@@ -1503,11 +1506,11 @@ function NextActions({
                 {canManage && item.kind === "deadline" && item.deadlineId ? (
                   <>
                     {item.pendingConfirm ? (
-                      <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => run(() => confirmDeadline({ id: item.deadlineId! }), "期限已确认")}>
+                      <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => run(() => confirmDeadline({ id: item.deadlineId!, expectedUpdatedAt: item.deadlineUpdatedAt! }), "期限已确认")}>
                         确认
                       </button>
                     ) : null}
-                    <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => item.at && setAdjusting({ id: item.deadlineId!, title: item.title, dueAt: item.at })}>
+                    <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => item.at && setAdjusting({ id: item.deadlineId!, title: item.title, dueAt: item.at, updatedAt: item.deadlineUpdatedAt! })}>
                       调整
                     </button>
                     <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => completeDeadline(item)}>
@@ -1560,11 +1563,11 @@ function NextActions({
           {canManage && item.kind === "deadline" && item.deadlineId ? (
             <>
               {item.pendingConfirm ? (
-                <button type="button" className="btn btn-secondary btn-sm" disabled={pending} onClick={() => run(() => confirmDeadline({ id: item.deadlineId! }), "期限已确认")}>
+                <button type="button" className="btn btn-secondary btn-sm" disabled={pending} onClick={() => run(() => confirmDeadline({ id: item.deadlineId!, expectedUpdatedAt: item.deadlineUpdatedAt! }), "期限已确认")}>
                   确认
                 </button>
               ) : null}
-              <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => item.at && setAdjusting({ id: item.deadlineId!, title: item.title, dueAt: item.at })}>
+              <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => item.at && setAdjusting({ id: item.deadlineId!, title: item.title, dueAt: item.at, updatedAt: item.deadlineUpdatedAt! })}>
                 调整
               </button>
               <button type="button" className="btn btn-secondary btn-sm" disabled={pending} onClick={() => completeDeadline(item)}>

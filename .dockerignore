@@ -4,6 +4,7 @@
 
 node_modules
 .npm-cache
+.runtime/
 
 .next
 .next-dev

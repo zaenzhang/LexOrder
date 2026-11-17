@@ -40,7 +40,7 @@ export function MatterConflictReview({ matterId, data, canWrite }: { matterId: s
         <span className="badge b-amber" style={{ fontSize: 10 }}>待复核</span>
       </div>
       <div className="panel-body space-y-2">
-        <p className="t-xs t-mute">主体或代理范围已变化；复核通过前，新增程序、委托合同与补充协议无法办理。</p>
+        <p className="t-xs t-mute">{data.reviewReason}</p>
         {canWrite ? (
           <button disabled={busy} className="btn btn-secondary btn-sm w-full" onClick={() => void run(() => runMatterReview(matterId))}>
             按当前主体重新检索
@@ -48,8 +48,8 @@ export function MatterConflictReview({ matterId, data, canWrite }: { matterId: s
         ) : null}
         {data.checks.map((c) => (
           <article key={c.id} className="border-t pt-2 text-xs">
-            <b>{formatDateTime(c.checkedAt)} · {conflictConclusionLabel[c.conclusion]}{!c.current ? ' · 主体或范围已变化' : ''}</b>
-            <p className="t-mute">{c.note} {c.decidedBy}</p>
+            <b>{formatDateTime(c.checkedAt)} · {c.conclusion === 'DIFFERENT' && !c.decisionRecorded ? '待人工核对' : conflictConclusionLabel[c.conclusion]}{!c.current ? ' · 主体或范围已变化' : ''}</b>
+            <p className="t-mute">{c.note} {c.conclusion !== 'DIFFERENT' || c.decisionRecorded ? c.decidedBy : null}</p>
             {c.hits.map((h) => (
               <p key={h.id} className="t-mute">{h.reason} · {h.matchedValue}</p>
             ))}
@@ -60,7 +60,7 @@ export function MatterConflictReview({ matterId, data, canWrite }: { matterId: s
             <Textarea aria-label="冲突复核理由" placeholder="排除冲突的依据，或存在冲突后的处理措施" value={note} onChange={(e) => setNote(e.target.value)} rows={3} />
             <div className="flex flex-wrap gap-2">
               {(['DIFFERENT', 'SAME_SUBJECT', 'NEED_INFO'] as const).map((conclusion) => (
-                <button key={conclusion} disabled={busy || !note.trim()} className="btn btn-secondary btn-sm" onClick={() => void run(() => decideMatterReview({ matterId, checkId: latest.id, conclusion, note }))}>
+                <button key={conclusion} disabled={busy || !note.trim()} className="btn btn-secondary btn-sm" onClick={() => void run(() => decideMatterReview({ matterId, checkId: latest.id, expectedDecidedAt: latest.decidedAt, conclusion, note }))}>
                   {conflictConclusionLabel[conclusion]}
                 </button>
               ))}

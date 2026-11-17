@@ -2,15 +2,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import PizZip from "pizzip";
 
-const { findDocument, readFile, canRead, session } = vi.hoisted(() => ({
-  findDocument: vi.fn(), readFile: vi.fn(), canRead: vi.fn(),
+const { findDocument, readFile, canRead, release, session } = vi.hoisted(() => ({
+  findDocument: vi.fn(), readFile: vi.fn(), canRead: vi.fn(), release: vi.fn(),
   session: { user: { id: "cpreview00000000000000001", role: "LAWYER", systemRole: "NONE", avatar: null, runtimeMode: "SERVER" as const } }
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: { document: { findFirst: findDocument } } }));
 vi.mock("@/lib/auth/session", () => ({ getSession: vi.fn(async () => session) }));
 vi.mock("@/lib/approvals/documents", () => ({ canReadDocument: canRead }));
 vi.mock("@/lib/storage", () => ({ storage: { readFile } }));
-vi.mock("@/server/audit", () => ({ audit: vi.fn() }));
+vi.mock("@/server/documents/read-release", () => ({ releaseDocumentRead: release }));
 
 import { GET } from "@/app/api/documents/[id]/preview/route";
 
@@ -28,6 +28,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   findDocument.mockResolvedValue({ id: "doc", name: "测试.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", path: "fixture.docx", encrypted: false, uploadedById: session.user.id, matterId: "matter", intakeId: null });
   canRead.mockResolvedValue(true);
+  release.mockResolvedValue({ ok: true });
   readFile.mockResolvedValue(untrustedDocx());
 });
 
