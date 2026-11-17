@@ -1222,6 +1222,12 @@ A提九文件终版，C主审及独立服务/UI复审核follow-ups DTO/URL、队
 
 A与C实际读上节固定TaskArea对象编辑/日期展示；该参考不证明后端并发，服务依据本项目锁序和Note原单调毫秒模式。复审强调本人边界、授权先receipt、未知提交同key、未改分钟保秒毫秒、规范模式身份及历史form外只读；实际merge后新clientId应读原历史、旧clientId拒绝。准确合同见计划 §7.16.13，此为开工依据，不是已运行/专业通过。
 
+### 3.45 M3真实格式连续证据的源码核对（2026-11-17）
+
+B以旧workbench工作包陈述为人工预期提出两格式包；C与两路只读复审核当前m3-business-chain、template-generation、真实parser及upload/material-ingest/research-draft/review服务。旧三类链源/修订是TXT、模板真DOCX为独立测试，不能据此继承实际DOCX/XLSX/PDF连续证据；本片是既有业务验收接续，不引入外部产品或新的生产设计。
+
+开工审查纠正三处：createResearchDraft没有自动enqueue，需原retry入口后真实解析；仅有审批附件资格不能据此核读BASIS原件，须本案真实读权与独立批准身份；upload提交后仍有document.ingest-reconcile待办，清理不能只照搬旧parse-only。模板没有researchRevisionId，继续作为与分析稿并列的既有链，禁止补造关联；PDF缺OCR页诚实PENDING、Word抽取只用TEXT。准确两文件、权限/生命周期及等待PG合同见计划 §7.16.14，尚不代表已实现或专业通过。
+
 ## 4. 可选法律服务 MCP 与来源
 
 核查日期 2026-11-16；以下为官方公开的接入信息，不是本项目已取得账号、权益或实测成功。机构目录可扩展，自定义远程 MCP 为未预置服务保留入口；不虚构“市面所有机构都提供官方 MCP”。

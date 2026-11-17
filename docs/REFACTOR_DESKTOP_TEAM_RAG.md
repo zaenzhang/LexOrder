@@ -767,6 +767,12 @@ A2复用ClientFollowUp TIMESTAMP(3) updatedAt显式单调毫秒CAS；沿liveRela
 
 按当前客户关系/本人精确资格读取改期审计，anchor只确定位置，各页仍核权；合并后保原followUpId历史，不用旧detail.clientId授权。专用Dialog与旧结果Dialog只共享窄只读历史，模式/目标/版本/请求身份隔离，分钟呈现不截秒毫秒。准确九生产/六测试见计划 §7.16.13，无schema/公共授权/提醒平台变更。
 
+### 6.27 真实格式工作包复用现有领域链（2026-11-17）
+
+B3仅在两个新测试文件串联既有上传/处理、要点/研究、模板、复核和批准；不增加业务模型。上传/模板/新版本自带解析入队，研究分析稿当前没有该入队，须显式调用现有retryMaterialProcessing后取得真实SUBJECT位置。R1研究来源与模板字段快照各沿原关系，不制造模板到研究的新绑定；复核BASIS须具备当前本案原件读权。
+
+仅领取本轮确切任务的受控租约，显式受控的session/cache/storage与真实格式bytes、加解密、授权事务/审计/PG分开记证。收尾同时限定本轮ingest-reconcile与parse任务，不改共享配置、不运行通用worker；临时fixture生命期不能跨进程或清理后用于交付归档。详细合同见计划 §7.16.14，PG等待A2交还后由C分配。
+
 ## 7. 参考项目如何进入 LexOrder
 
 沿用 [来源记录](RESEARCH_AND_DECISIONS.md)，按“观察行为 → 输入输出与规则 → LexOrder 设计 → 场景验收”吸收。实际复制代码另记固定提交、文件、依赖与来源；研究范围不按协议类型排除。

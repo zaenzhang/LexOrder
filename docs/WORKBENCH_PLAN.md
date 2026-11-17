@@ -720,7 +720,7 @@ W09.3 知识发布、B 结构化方案比较、E 期限重算深化、F 自动�
 | 角色 / 真实检出 | 当前准确子范围与状态 | 本批文件所有权及交接 |
 | --- | --- | --- |
 | A：用户指定客户/事项组；`/workspace/scratch/1fb3f0cf432f/lexorder-a`；main | **A1=G03已集成，见 §8.51；A2=G01本人原跟进改期合同已审定，本次发布后实施** | A1采用 `b05a532`；A2九生产+六测试见 §7.16.13，无schema/公共授权变化。B2交还后另分配PG；转交/提醒、F10/D08/G12、联系人/原件关系及保全编辑不在本批 |
-| B：用户指定材料/研究组；`/workspace/scratch/36f32dac17c2/lexorder-b`；main | **B1=G10-1、B2=G06-2 已集成，见 §8.50/§8.53** | B1采用 `34fcc5f`；B2采用 `2cfa07b`，九生产+七测试按 §7.16.11。G05本地工作副本、M3真实格式两包仍仅候选提案，待C准确认领发布；Word定位和完整OOXML未开工 |
+| B：用户指定材料/研究组；`/workspace/scratch/36f32dac17c2/lexorder-b`；main | **B1/B2已集成；B3=M3真实格式两包合同已审定，本次发布后实施** | B1采用 `34fcc5f`、B2采用 `2cfa07b`；B3仅两新测试文件见 §7.16.14，PG须A2交还后C另分配。G05本地工作副本保持候选未开工，Word定位和完整OOXML未启动 |
 | C：本会话 `/root`；`/workspace/scratch/618136981e82/lexorder-c`；main | **C0 已以 `de4ca5a` 发布；C1=D02 代码与开发静态复审完成，见 §8.45；用户桌面待验** | C1 仅改 `src/app/moan-pages.css` 的 `.mo-dossier .dos-proc*`，本片结束。四主文档、共享合同与全局文件/main 仍由 C 独占；后续使用须按准确小批登记 |
 | C2：同一 C 检出/唯一写者 | **W12 已选交付材料移除已修复，代码/组件与静态复审完成，见 §8.46；用户待验** | 仅 `src/components/deliveries/delivery-panel.tsx`、`src/tests/components/delivery-panel.test.tsx`；合同见 §7.16.4，本片结束。无 schema/公共授权/数据库/运行进程变更 |
 | C3：同一 C 检出/唯一写者 | **D05 空事项级保全子范围代码/静态复审完成，见 §8.47；用户待验** | 唯一生产文件 `src/app/(app)/matters/[id]/_components/procedure-workflow-panel.tsx` 的 `MatterPreservationContent`，合同见 §7.16.7；本片结束，不把 D05 总号关闭 |
@@ -1507,6 +1507,26 @@ A在同步正式main `6d3a552`的干净独立检出提交九文件终版，C主�
 | 必要验证/时段 | 原ID/关系/状态不变、一条审计、同版本并发仅一成功、毫秒推进、精确重放/异内容/随后变化、非本人含管理岗/撤权/终态/合并及审计回滚；21条同刻分页/错cursor/只读终态/合并后历史。UI模式/秒毫秒/同key/主动重读/失败草稿焦点，先填结果稿再历史展开/翻页/重试不保存且原key不变。先静态/纯组件，窄PG等B2正常交还后C明确分配，不全量或迁移 |
 
 本片不含转派/承接/退回/撤回、离岗/后台提醒、客户原件/联系人、F10/D08/G12或保全编辑。PG是实际服务/Action调用、会话受控，不称HTTP/浏览器；用户另验本人队列筛选/第2页改期后同查询有效页、确切链接重开、并发拒绝及原记录历史。专业与G01其余范围仍保留。
+
+#### 7.16.14 B3：两类真实格式工作包到文书复核（M3 工程证据增量）
+
+B提交细化提案，C已核当前 `f4e19e6` 的实际上传/解析、研究出稿、模板和复核接口，两个独立只读方向补正后无已知开工阻断。旧三类服务链已有明确缺项例外归档；C6另有普通完整卷宗及精确归档HTTP成功。本片只填真实格式及实际来源到稿件复核的证据缺口，不重建已实现M3，也不继承为用户或专业通过。
+
+| 冻结项 | 准确范围与验证 |
+| --- | --- |
+| 文件/owner | B唯一写者，原独立main检出；仅新增 `src/tests/fixtures/m3-format-work-packages.ts`、`src/tests/server/m3-material-research-review.integration.test.ts`。不改旧workbench工作包、旧m3-business-chain、template-generation或C6 HTTP，不改生产/schema/公共授权/依赖；实际发现生产缺口先交C |
+| 生成器 | 复用旧工作包的合成材料陈述和人工expected，仅消费文本与期望；明确SERVER，不采用其默认Personal、虚拟scope/binding/ID/anchor。用现有docx/ExcelJS/pdf-lib生成真实bytes；不造数据库身份/解析/批准。两包均provenance=SYNTHETIC、professionalReview=PENDING |
+| 两包差异 | 诉讼合同120000、付款XLSX V1=40000/V2=50000且10000无凭证，数量签收/质量异议分开；仲裁合同60000/首期30000、台账30000与邮件35000矛盾、真实DOCX纪要V2补安全整改及未签验收。未知付款条件/最终金额/仲裁协议和期限不假定已核实，不生成财务到账确认 |
+| 真实格式/覆盖 | DOCX含普通表格，位置只标实际抽取TEXT；XLSX用真实sheet/row/column，含无缓存公式并保UNSUPPORTED；PDF真三页，第1支持、第2实际图片且无任何文字层（含页眉页码）/未启OCR为PENDING、无anchor，整份PARTIAL/总页数3，第3反证仍PAGE3，不把空白页冒称图片、不压缩页序。不加字体/格式依赖，实际内容与人工预期逐项对应 |
+| 上传/处理 | `uploadDocument(FormData)`与`uploadNewVersion`实际原件、同族新版、原自动队列；仅对本轮确切run/job设置受控租约，再真实processMaterialJob/completeJob，调用getMaterialProcessingStatuses/listMaterialSources/getMaterialSource核SHA、ID、run/anchor/coverage及旧版可读。不开通用worker，不领取他人job、不手写发布快照 |
+| 事实/争点 | createEvidenceItem/addEvidenceSource/confirmEvidenceItem走真实revision返回；FACT只记材料载明等可核记录事实，客户交付/验收/付款说法保CLAIM；ISSUE及SUPPORTS/REBUTS/CONTEXT分别登记，原件陈述不当专业事实真值。真实research options选择争点，save/read/source读核原固定来源及未知法源状态，不调用模型/OCR/法库/MCP |
+| 研究链 | R1保存→createResearchDraft真实DOCX与DocumentResearchSource→另存R2后旧稿仍绑R1。当前createResearchDraft不自动入解析队列，作者须经retryMaterialProcessing按实际parseGeneration发起，再处理确切run后才取得SUBJECT锚点；不以textContent/MANUAL冒充已发布解析 |
+| 模板并列链 | prepareTemplate/renderTemplate核实际所选主体/程序/字段、模板原件SHA和snapshot；单稿补填不回写主档，解密DOCX无未解析变量。模板原有自动入队，不重复触发；其接口无researchRevisionId，不宣称模板自动采用研究稿，不补造DocumentResearchSource关系 |
+| 复核与独立批准 | 作者与复核人不同；复核人有真实本案LAWYER成员读权（如CO_LEAD）和独立DOCUMENT_APPROVE资格，不能复用旧仅审批附件CUSTOM来伪装BASIS可读。实际解析SUBJECT/BASIS/REVISION位置，回应核对后重新读取已保存位置；错引/金额矛盾/遗漏分别提问题、作者回应、回传真DOCX V2并解析；问题关闭不自动批准，独立approveDocument后才批准。新稿不借旧批准，旧研究/稿件/意见不改绑，修订继承原研究来源 |
+| 生命周期 | 会话/缓存及存储适配层可明确受控，真实bytes/加解密/业务/PG保真，不冒称HTTP或实际磁盘。afterAll只按本轮user/requestKey/intent及parseRun找到自己的document.ingest:*和document.parse:*未成功job清lease退役，再软删/停用本轮主体、模板/组，保审计/引用/修订历史；不使用旧parse-only收尾，不改全局制度或归档模板 |
+| 验证/接续 | 仅新集成文件的诉讼、仲裁两场景，两个新文件lint/合并类型/diff；不重跑无变化的B1/G08/模板权限矩阵。A2交还后C明确分配独占PG，no-file-parallelism，不提前占库。C未来可在自己同一fixture生命期复用生成器接交付/普通归档，不接afterAll已失效ID或跨进程内存原件；持续用户样本须另认领保留 |
+
+本片只补M3第1/3项的工程连续证据；原六项标准不删减，JPEG/CSV及来件矩阵、无程序桌面、人工简报/真实发送与回复、完整普通归档接续、真实浏览器与真人专业判定各自保留。G05、Personal、M4与全部明确延期范围不因此启动。
 
 ## 8. 交接：完成范围、证据与未覆盖项
 
