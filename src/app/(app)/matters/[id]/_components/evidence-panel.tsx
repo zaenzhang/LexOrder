@@ -127,9 +127,9 @@ function SourceButton({ itemId, revision, source }: { itemId: string; revision?:
         {preview?.text ? <div className="space-y-2"><p className="text-sm font-medium">已固定的抽取片段</p>
           <blockquote className="whitespace-pre-wrap break-words border-l-2 pl-3 text-sm">{preview.text}</blockquote></div> : null}
         {preview?.previewKind === "CONVERTED" && <p className="text-sm text-muted-foreground">转换预览打开整份文件，未按引用位置跳转。</p>}
-        {preview?.previewUrl ? <iframe title={preview.previewKind === "CONVERTED" ? "整份转换预览" : "文件预览"} src={preview.previewUrl} className="h-[55vh] w-full rounded border" /> : null}
+        {preview?.previewUrl ? <iframe title={preview.previewKind === "TABLE" ? "单元格转换预览" : preview.previewKind === "CONVERTED" ? "整份转换预览" : "文件预览"} src={preview.previewUrl} className="h-[55vh] w-full rounded border" /> : null}
         <DialogFooter>
-          {preview?.previewUrl ? <Button asChild variant="outline"><a href={preview.previewUrl} target="_blank" rel="noopener noreferrer">{preview.previewKind === "CONVERTED" ? "另页查看转换预览" : "另页查看预览"}</a></Button> : null}
+          {preview?.previewUrl ? <Button asChild variant="outline"><a href={preview.previewUrl} target="_blank" rel="noopener noreferrer">{preview.previewKind === "TABLE" ? "查看单元格转换预览" : preview.previewKind === "CONVERTED" ? "另页查看转换预览" : "另页查看预览"}</a></Button> : null}
           {preview ? <Button asChild variant="outline"><a href={preview.downloadUrl} target="_blank" rel="noopener noreferrer">下载此版本</a></Button> : null}
           <Button variant="outline" onClick={() => setPreview(null)}>返回要点</Button>
         </DialogFooter>

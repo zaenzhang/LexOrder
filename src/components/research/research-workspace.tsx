@@ -231,7 +231,7 @@ export function ResearchWorkspace({ matterId, researchId = null, issueId = null,
       {sourceError ? <p role="alert" className="text-sm text-destructive">{sourceError}</p> : !source ? <p role="status">正在读取来源…</p> : source.status === "UNAVAILABLE" ? <p role="alert">来源已变化或无权读取，请返回研究核对。</p> : <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3"><span className="text-sm">V{source.documentVersion} · {source.locationLabel}{source.historicalParse ? " · 历史解析位置" : ""}</span>
           <div className="flex flex-wrap gap-2">
-            {source.previewUrl ? <Button variant="outline" size="sm" asChild><a href={source.previewUrl} target="_blank" rel="noopener noreferrer">{source.previewKind === "CONVERTED" ? "查看整份转换预览" : "查看预览"}</a></Button> : null}
+            {source.previewUrl ? <Button variant="outline" size="sm" asChild><a href={source.previewUrl} target="_blank" rel="noopener noreferrer">{source.previewKind === "TABLE" ? "查看单元格转换预览" : source.previewKind === "CONVERTED" ? "查看整份转换预览" : "查看预览"}</a></Button> : null}
             <Button variant="outline" size="sm" asChild><a href={source.downloadUrl} target="_blank" rel="noopener noreferrer">下载此版本</a></Button>
           </div>
         </div>

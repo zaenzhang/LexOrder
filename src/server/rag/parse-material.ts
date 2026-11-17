@@ -3,6 +3,7 @@ import mammoth from "mammoth";
 import ExcelJS from "exceljs";
 import { getDocumentProxy } from "unpdf";
 import { sourceVersionSchema, type ProcessingCoverage, type SourceAnchor, type SourceVersion } from "@/lib/workbench/contracts";
+import { xlsxCellText } from "@/lib/documents/xlsx-cell-text";
 import { ServiceFailure } from "./service-transport";
 
 export interface OcrInput { bytes: Uint8Array; mimeType: string; page?: number }
@@ -72,17 +73,7 @@ export async function parseMaterial(input: {
         sheet.eachRow((row, rowNumber) => row.eachCell((cell, column) => {
           if (cell.isMerged && cell.master.address !== cell.address) return;
           if (units.length >= 10_000) throw new ServiceFailure("UNSUPPORTED");
-          const value = cell.value;
-          let text: string | undefined;
-          if (value instanceof Date) text = value.toISOString();
-          else if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") text = String(value);
-          else if (value && typeof value === "object") {
-            if ("formula" in value || "sharedFormula" in value) {
-              // Cached values are not recalculated here. Missing/error cache is unprocessed.
-              if (["string", "number", "boolean"].includes(typeof value.result)) text = String(value.result);
-            } else if ("richText" in value) text = value.richText.map(run => run.text).join("");
-            else if ("text" in value) text = value.text;
-          }
+          const text = xlsxCellText(cell.value);
           if (text !== undefined) addText(text, { kind: "TABLE", sheet: sheet.name,
             rowStart: rowNumber, rowEnd: rowNumber, columnStart: column, columnEnd: column });
           else units.push({ status: "UNSUPPORTED" });

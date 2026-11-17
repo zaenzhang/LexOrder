@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DocumentParseRun, Prisma } from "@prisma/client";
 import type { SourceAnchor, ProcessingCoverage } from "@/lib/workbench/contracts";
+import { materialPresentation } from "@/lib/documents/presentation";
 
 const { db, canRead, leaseCheck } = vi.hoisted(() => ({
   db: { document: { findUnique: vi.fn(), findFirst: vi.fn(), findMany: vi.fn() }, documentParseRun: { findFirst: vi.fn() }, $transaction: vi.fn() },
@@ -47,6 +48,15 @@ describe("Server 材料来源边界", () => {
     { name: "合成原件.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       location: { kind: "TABLE", sheet: "费用表", rowStart: 3, rowEnd: 3, columnStart: 2, columnEnd: 4 } as const,
       previewKind: "CONVERTED", previewUrl: "/api/documents/doc/preview" },
+    { name: "合成固定表格.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      location: { kind: "TABLE", sheet: "费用表", rowStart: 8, rowEnd: 8, columnStart: 3, columnEnd: 3 } as const,
+      previewKind: "TABLE", previewUrl: "/api/documents/doc/preview?runId=run-1&anchorId=anchor-1#material-source" },
+    { name: "合成旧表格.xls", mimeType: "application/vnd.ms-excel",
+      location: { kind: "TABLE", sheet: "费用表", rowStart: 8, rowEnd: 8, columnStart: 3, columnEnd: 3 } as const,
+      previewKind: "CONVERTED", previewUrl: "/api/documents/doc/preview" },
+    { name: "合成未知类型.xlsx", mimeType: "application/octet-stream",
+      location: { kind: "TABLE", sheet: "费用表", rowStart: 8, rowEnd: 8, columnStart: 3, columnEnd: 3 } as const,
+      previewKind: "CONVERTED", previewUrl: "/api/documents/doc/preview" },
     { name: "合成原件.bin", mimeType: "application/octet-stream", location: { kind: "TEXT", start: 0, end: 4 } as const,
       previewKind: "NONE", previewUrl: null },
   ])("来源展示保留 $name 的确切原文位置，预览与同版下载分开", async scenario => {
@@ -58,6 +68,18 @@ describe("Server 材料来源边界", () => {
     expect(result).toMatchObject({ status: "AVAILABLE", document: { id: doc.id, version: 1, sha256: doc.sha256 },
       run: { id: run.id, isCurrent: false }, anchor: { anchorId: anchor.anchorId, text: anchor.text, location: scenario.location },
       previewKind: scenario.previewKind, previewUrl: scenario.previewUrl, downloadUrl: "/api/documents/doc/download" });
+  });
+  it("固定预览只编码已有身份；无固定run/anchor、多行范围或冲突类型仍是整份", () => {
+    const sheet = { id: "doc with/slash", name: "合成原件.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
+    const location = { kind: "TABLE" as const, sheet: "费用表", rowStart: 8, rowEnd: 8, columnStart: 3, columnEnd: 3 };
+    const fixed = { runId: "old/run & 1", anchorId: "old#anchor?" };
+    expect(materialPresentation(sheet, location, fixed)).toEqual({ previewKind: "TABLE",
+      previewUrl: "/api/documents/doc%20with%2Fslash/preview?runId=old%2Frun%20%26%201&anchorId=old%23anchor%3F#material-source",
+      downloadUrl: "/api/documents/doc%20with%2Fslash/download" });
+    expect(materialPresentation(sheet, location).previewKind).toBe("CONVERTED");
+    expect(materialPresentation(sheet, location, { ...fixed, anchorId: "" }).previewKind).toBe("CONVERTED");
+    expect(materialPresentation(sheet, { ...location, rowEnd: 9 }, fixed).previewKind).toBe("CONVERTED");
+    expect(materialPresentation({ ...sheet, name: "冲突.docx" }, location, fixed).previewKind).toBe("CONVERTED");
   });
   it("读取期间撤回后不返回已经取得的历史正文", async () => {
     db.document.findFirst.mockResolvedValue(null);

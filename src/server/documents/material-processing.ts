@@ -255,7 +255,8 @@ export async function readMaterialSource(userId: string, input: MaterialSourceIn
   if (!current || !await canReadDocument(userId, current, db)) return { status: "UNAVAILABLE" };
   return { status: "AVAILABLE", document: { id: doc.id, name: doc.name, version: doc.version, sha256: doc.sha256, mimeType: doc.mimeType },
     run: { id: run.id, generation: run.generation, parserVersion: run.parserVersion, isCurrent: current.parseGeneration === run.generation },
-    anchor, coverage: snapshot.coverage, locationLabel: materialLocationLabel(anchor.location), ...materialPresentation(doc, anchor.location) };
+    anchor, coverage: snapshot.coverage, locationLabel: materialLocationLabel(anchor.location),
+    ...materialPresentation(doc, anchor.location, { runId: run.id, anchorId: anchor.anchorId }) };
 }
 
 export async function readMaterialSources(userId: string, input: { matterId: string; documentIds: string[]; offset?: number; limit?: number }, db: Prisma.TransactionClient = prisma): Promise<MaterialSourceListResult> {

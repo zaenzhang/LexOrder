@@ -188,6 +188,28 @@ describe("人工新建请求重试", () => {
 });
 
 describe("证据要点组件交互", () => {
+  it("固定单格转换和同版下载保留未保存要点，关闭回到原来源", async () => {
+    item.sources[0] = { ...item.sources[0], documentName: "合成旧表.xlsx", locationLabel: "明细 · 第 8 行，第 3 列", hasAnchor: true };
+    const id = item.sources[0].documentId, url = `/api/documents/${id}/preview?runId=old-run&anchorId=old%2Fcell#material-source`;
+    mocks.resolve.mockResolvedValue({ status: "AVAILABLE", documentName: "合成旧表.xlsx", documentVersion: 1,
+      locationLabel: item.sources[0].locationLabel, previewKind: "TABLE", previewUrl: url,
+      downloadUrl: `/api/documents/${id}/download`, text: " 固定\n单格 ", legacy: false, historicalParse: true });
+    render(<EvidencePoints items={[item]} />);
+    fireEvent.click(screen.getByRole("button", { name: "查看与编辑要点：合成要点" }));
+    const input = await screen.findByLabelText("内容"); fireEvent.change(input, { target: { value: "保留单格核对中的事实草稿" } });
+    const trigger = within(screen.getByRole("dialog")).getByRole("button", { name: /支持 · 合成旧表/ }); fireEvent.click(trigger);
+    const dialog = await screen.findByRole("dialog", { name: "合成旧表.xlsx" });
+    expect(dialog.querySelector("blockquote")?.textContent).toBe(" 固定\n单格 ");
+    expect(within(dialog).getByText("显示引用时保留的解析版本。")).toBeInTheDocument();
+    expect(within(dialog).getByTitle("单元格转换预览")).toHaveAttribute("src", url);
+    expect(within(dialog).getByRole("link", { name: "查看单元格转换预览" })).toHaveAttribute("href", url);
+    expect(within(dialog).getByRole("link", { name: "下载此版本" })).toHaveAttribute("href", `/api/documents/${id}/download`);
+    expect(dialog).not.toHaveTextContent("未按引用位置跳转");
+    fireEvent.click(within(dialog).getByRole("button", { name: "返回要点" }));
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(input).toHaveValue("保留单格核对中的事实草稿"); expect(mocks.update).not.toHaveBeenCalled(); expect(mocks.confirm).not.toHaveBeenCalled();
+  });
+
   it("转换来源保留固定长片段与历史位置，下载和返回不丢编辑草稿", async () => {
     item.sources[0] = { ...item.sources[0], documentName: "合成旧合同.docx", locationLabel: "抽取文本第 1—4000 字符", hasAnchor: true };
     const text = "合成原文".repeat(1000), id = item.sources[0].documentId;

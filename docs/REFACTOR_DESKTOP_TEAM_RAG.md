@@ -753,6 +753,8 @@ B2由现materialPresentation增加TABLE请求类型，readMaterialSource仅传�
 
 为两个真实消费者抽取原XLSX值转文本纯函数，parser仅等价调用，不改变版本、限额、coverage/unit或anchor生成；预览不导入整套parser。保空白、undefined、公式缓存类型和异常传播，不执行公式，不以cell.text隐藏不支持值。四消费者明确TABLE/CONVERTED/NATIVE/NONE，source-links和无固定位置的状态列表不需修改。准确九生产/七测试及串行PG边界见计划 §7.16.11；共享schema、授权与运行平台不变。
 
+B2已按该合同集成，最终真实PG8项由C复验通过，见计划 §8.53。真实OOXML证明ExcelJS4.4.0的公式0/false缓存不会进入cell.value的result，原解析器仍记UNSUPPORTED；本次共用formatter保持此既有语义，不能以普通0/false单元格成功推论公式缓存已支持。服务级读取和GET handler验证不替代真实HTTP与浏览器定位。
+
 ### 6.25 事项日程与责任的单次读取组合（2026-11-17）
 
 C7将原同一次getWorkBoard数据穿过page/tabs，组合函数只在client workflow创建，遵守本地Next Server/Client文档的可序列化边界。责任板拥有唯一编辑器和打开时Item/旧revision；同一OPEN kind+targetId Map既生成内联摘要/动作，又按真实work.id排除副本。无schedule参数的全局日程/收案用法保持，不新增DTO/查询/provider。

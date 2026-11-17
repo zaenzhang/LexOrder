@@ -83,6 +83,7 @@ describe("研究工作区的保存与来源连续性", () => {
     fireEvent.click(await screen.findByRole("button", { name: "采用所显示的这版" }));
     fireEvent.click(screen.getByRole("button", { name: "形成分析稿" }));
     await screen.findByText("合成出稿失败");
+    await waitFor(() => expect(screen.getByRole("button", { name: "重试" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "重试" }));
     await waitFor(() => expect(openDocument).toHaveBeenCalledWith(documentId));
     expect(mock.draft.mock.calls[0][0]).toEqual(mock.draft.mock.calls[1][0]);
@@ -183,6 +184,42 @@ describe("研究工作区的保存与来源连续性", () => {
     const dialog = await screen.findByRole("dialog", { name: "研究修订" });
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("合成历史读取失败");
     expect(within(dialog).getByRole("button", { name: "重试" })).toBeInTheDocument();
+  });
+
+  it.each(["编辑态", "已保存态"] as const)("%s的固定单格只给另页转换，保留原来源请求及研究内容", async mode => {
+    const original = view(), runId = "cm00000000000000000000010", sourceId = "cm00000000000000000000005";
+    const sourceInput = { documentId, relation: "REBUTS" as const, parseRunId: runId, anchorId: "old/cell", lawMetadata: emptyLawMetadata() };
+    const name = "合成固定单格.xlsx", locationLabel = "明细 · 第 8 行，第 3 列";
+    const url = `/api/documents/${documentId}/preview?runId=${runId}&anchorId=old%2Fcell#material-source`;
+    original.content!.sources = [sourceInput];
+    original.sources = [{ ...sourceInput, id: sourceId, documentName: name, version: 2, locationLabel, changed: false }];
+    mock.read.mockResolvedValue(original);
+    mock.options.mockResolvedValue({ documents: [{ id: documentId, name, version: 2, pageCount: null, isPdf: false, hasIdentity: true }], savedCaseDocumentIds: [], issues: [] });
+    const response = { status: "AVAILABLE", documentName: name, documentVersion: 2, locationLabel, previewKind: "TABLE",
+      previewUrl: url, downloadUrl: `/api/documents/${documentId}/download`, text: " 固定\n单格 ", legacy: false, historicalParse: true };
+    mock.source.mockResolvedValue(response); mock.preview.mockResolvedValue(response);
+    render(<ResearchWorkspace matterId={matterId} researchId={researchId} onSelectResearch={choose} onOpenDocument={openDocument} />);
+    await screen.findByRole("button", { name: "修改研究" });
+    if (mode === "编辑态") {
+      fireEvent.click(screen.getByRole("button", { name: "修改研究" }));
+      await waitFor(() => expect(screen.getByRole("button", { name: "保存新修订" })).toBeEnabled());
+      fireEvent.change(screen.getByLabelText("研究问题"), { target: { value: "保留单格核对中的研究草稿" } });
+    }
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "依据与阅读" }), { button: 0 });
+    fireEvent.click(await screen.findByRole("button", { name: "查看原文" }));
+    const dialog = await screen.findByRole("dialog", { name });
+    expect(within(dialog).getByText("固定 单格").textContent).toBe(" 固定\n单格 ");
+    expect(within(dialog).getByText(/明细.*历史解析位置/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("link", { name: "查看单元格转换预览" })).toHaveAttribute("href", url);
+    expect(within(dialog).getByRole("link", { name: "下载此版本" })).toHaveAttribute("href", `/api/documents/${documentId}/download`);
+    expect(dialog.querySelector("iframe")).toBeNull(); expect(dialog).not.toHaveTextContent("未按引用位置跳转");
+    if (mode === "编辑态") { expect(mock.preview).toHaveBeenCalledWith(matterId, sourceInput); expect(mock.source).not.toHaveBeenCalled(); }
+    else { expect(mock.source).toHaveBeenCalledWith(matterId, original.id, sourceId); expect(mock.preview).not.toHaveBeenCalled(); }
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "问题与范围" }), { button: 0 });
+    expect(screen.getByLabelText("研究问题")).toHaveValue(mode === "编辑态" ? "保留单格核对中的研究草稿" : original.content!.question);
+    expect(mock.save).not.toHaveBeenCalled();
   });
 
   it("显式争点失效时不替用户换成另一争点", async () => {

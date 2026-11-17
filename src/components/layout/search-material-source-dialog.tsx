@@ -43,11 +43,11 @@ export function SearchMaterialSourceDialog({ input, onClose, onReturnFocus }: {
         <div className="space-y-2"><p className="text-sm font-medium">已固定的抽取片段</p>
           <blockquote className="whitespace-pre-wrap break-words border-l-2 pl-3 text-sm">{source.anchor.text}</blockquote></div>
         {source.previewKind === "CONVERTED" && <p className="text-sm text-muted-foreground">转换预览打开整份文件，未按引用位置跳转。</p>}
-        {source.previewUrl ? <iframe title={source.previewKind === "CONVERTED" ? "整份转换预览" : "文件预览"} src={source.previewUrl} className="h-[55vh] w-full rounded border" /> : null}
+        {source.previewUrl ? <iframe title={source.previewKind === "TABLE" ? "单元格转换预览" : source.previewKind === "CONVERTED" ? "整份转换预览" : "文件预览"} src={source.previewUrl} className="h-[55vh] w-full rounded border" /> : null}
       </> : null}
       <DialogFooter>
         {error || result?.status === "UNAVAILABLE" ? <Button variant="outline" onClick={() => setAttempt(value => value + 1)}>重新读取来源</Button> : null}
-        {source?.previewUrl ? <Button asChild variant="outline"><a href={source.previewUrl} target="_blank" rel="noopener noreferrer">{source.previewKind === "CONVERTED" ? "另页查看转换预览" : "另页查看预览"}</a></Button> : null}
+        {source?.previewUrl ? <Button asChild variant="outline"><a href={source.previewUrl} target="_blank" rel="noopener noreferrer">{source.previewKind === "TABLE" ? "查看单元格转换预览" : source.previewKind === "CONVERTED" ? "另页查看转换预览" : "另页查看预览"}</a></Button> : null}
         {source ? <Button asChild variant="outline"><a href={source.downloadUrl} target="_blank" rel="noopener noreferrer">下载此版本</a></Button> : null}
         <Button variant="outline" onClick={onClose}>返回搜索结果</Button>
       </DialogFooter>

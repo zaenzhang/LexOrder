@@ -25,6 +25,45 @@ function source(text: string): EvidenceSourceResult {
 }
 
 describe("复核固定位置的只读呈现和窄来源选择", () => {
+  it("已存TABLE复核严格沿issue/event/slot读取，返回焦点不转换成最新位置", async () => {
+    const url = "/api/documents/fixed-old/preview?runId=old-run&anchorId=old%2Fcell#material-source";
+    mocks.saved.mockResolvedValue({ ...source("固定单格原文"), documentName: "合成固定表.xlsx", locationLabel: "明细 · 第 8 行，第 3 列", previewKind: "TABLE", previewUrl: url });
+    const input = { issueId: "issue-one", eventId: "event-two", slot: "REVISION" as const };
+    render(<ReviewPositionSourceButton target={{ kind: "SAVED", input }}>查看固定修订</ReviewPositionSourceButton>);
+    const trigger = screen.getByRole("button", { name: "查看固定修订" }); fireEvent.click(trigger);
+    expect(await screen.findByText("固定单格原文")).toBeInTheDocument();
+    expect(screen.getByText("显示记录保留的历史解析位置。")).toBeInTheDocument();
+    expect(screen.getByTitle("单元格转换预览")).toHaveAttribute("src", url);
+    expect(screen.getByRole("link", { name: "查看单元格转换预览" })).toHaveAttribute("href", url);
+    expect(screen.getByRole("link", { name: "下载此版本" })).toHaveAttribute("href", "/api/documents/fixed-old/download");
+    expect(screen.queryByText(/未按引用位置跳转/)).not.toBeInTheDocument();
+    expect(mocks.saved).toHaveBeenCalledWith(input); expect(mocks.preview).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "返回复核内容" })); await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it.each(["SUBJECT", "BASIS", "REVISION"] as const)("真实位置编辑器的%s草稿预览保原run/anchor与所选材料", async slot => {
+    const document = { id: slot === "SUBJECT" ? "document-subject" : "fixed-old", name: "合成固定表.xlsx", version: 2, isPdf: false, pageCount: null, hasIdentity: true };
+    const position = { documentId: document.id, documentName: document.name, documentVersion: 2, documentSha256: "a".repeat(64),
+      runId: "csyntheticrun000000000000001", anchorId: "old/cell", location: { kind: "TABLE" as const, sheet: "明细", rowStart: 8, rowEnd: 8, columnStart: 3, columnEnd: 3 },
+      locationLabel: "明细 · 第 8 行，第 3 列", excerpt: "固定单格原文" };
+    const url = `/api/documents/${document.id}/preview?runId=${position.runId}&anchorId=old%2Fcell#material-source`;
+    mocks.preview.mockResolvedValue({ ...source("固定单格原文"), documentName: document.name, locationLabel: position.locationLabel,
+      previewKind: "TABLE", previewUrl: url, downloadUrl: `/api/documents/${document.id}/download` });
+    const onChange = vi.fn();
+    render(<ReviewPositionEditor documentId="document-subject" matterId="matter-one" slot={slot} document={document}
+      value={{ page: "", position }} onChange={onChange} disabled={false} />);
+    const trigger = screen.getByRole("button", { name: "查看所选位置" }); fireEvent.click(trigger);
+    await screen.findByRole("dialog", { name: document.name });
+    expect(screen.getByTitle("单元格转换预览")).toHaveAttribute("src", url);
+    expect(screen.getByRole("link", { name: "查看单元格转换预览" })).toHaveAttribute("href", url);
+    expect(screen.getByRole("link", { name: "下载此版本" })).toHaveAttribute("href", `/api/documents/${document.id}/download`);
+    expect(mocks.preview).toHaveBeenCalledWith({ documentId: "document-subject", slot, ...(slot !== "SUBJECT" ? { sourceDocumentId: document.id } : {}),
+      position: { parseRunId: position.runId, anchorId: position.anchorId } });
+    expect(mocks.saved).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "返回复核内容" })); await waitFor(() => expect(trigger).toHaveFocus());
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it("保存后仅传确切 issue/event/slot，分别显示历史片段、整份转换和同版下载，关闭恢复焦点", async () => {
     mocks.saved.mockResolvedValue(source("合成旧解析固定片段"));
     const input = { issueId: "issue-one", eventId: "event-two", slot: "REVISION" as const };

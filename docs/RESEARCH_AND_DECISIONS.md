@@ -1208,6 +1208,8 @@ B提出G06后续方案，C主审和两路只读复审重读parseMaterial、publi
 
 追加两个生产文件的方案有两个真实消费者，保parser原所有身份语义；将非空不支持值显示“未转换”，明确区分真实空格。复审核出原研究XLSX夹具为多格不可改标TABLE、研究页无iframe无需新增、处理状态页无固定引用不会产生TABLE，以及缺缓存/从格不能伪装真parser anchor。最终九文件合同覆盖临时七文件版本，具体状态/验证及未完成范围见计划 §7.16.11；本节是开工依据，不是已实现或浏览器通过。
 
+实施后B交 `2cfa07b`，C复核实际差异与16文件精确blob、两路复审及最终PG8项，结果见计划 §8.53。真实XLSX先经ExcelJS写出/重新读入、再实际parseMaterial，预期18-unit的文本/位置/顺序独立手写；据此纠正公式缓存0/false的假设：本地ExcelJS4.4.0 `FormulaValue._copyModel` 仅复制truthy字段，cell.result可见而cell.value缺result，原parser不产生锚点。保持原语义，不借预览追加解析修复或虚增覆盖；普通0/false和共享公式正例另有实际证据。浏览器/专业仍独立待验。
+
 ### 3.43 D03真实对象及稳定责任编辑器复核（2026-11-17）
 
 A交只读责任映射，C实读page单次getWorkBoard、tabs、NextActions、责任板及全局schedule/收案消费者。Deadline ID/updatedAt和WorkRow责任ID/revision不同，Hearing应补显式ID；原hideTasks只排Task，删整板会丢其他程序/终态和交接。两种确认、归档取消、单一编辑器及合并后空态不能混淆；两路复审核后采用四文件内的专用组合参数和同源Map。

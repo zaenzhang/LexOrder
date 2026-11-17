@@ -48,6 +48,29 @@ async function search() {
 }
 
 describe("材料搜索命中的固定来源与返回", () => {
+  it("固定单格用完整服务URL请求转换，返回保查询、命中焦点和历史片段", async () => {
+    const location = { kind: "TABLE" as const, sheet: "明细", rowStart: 8, rowEnd: 8, columnStart: 3, columnEnd: 3 };
+    const hit = { ...first, title: "合成命中甲.xlsx", anchorId: "old/cell", sourceLocation: location, pageNo: undefined };
+    const fixed = source(hit), url = `/api/documents/${hit.id}/preview?runId=run-old&anchorId=old%2Fcell#material-source`;
+    mock.search.mockResolvedValue(results([{ ...hit, href: url }]));
+    mock.source.mockResolvedValue({ ...fixed, document: { ...fixed.document, name: "合成单格.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+      anchor: { ...fixed.anchor, unit: 1, location, text: " 原样\n单格 " },
+      coverage: { unitKind: "SEGMENT", totalUnits: 1, units: [{ unit: 1, status: "READY" }] },
+      locationLabel: "明细 · 第 8 行，第 3 列", previewKind: "TABLE", previewUrl: url });
+    await search(); const trigger = screen.getByRole("option", { name: /合成命中甲/ }); fireEvent.click(trigger);
+    const dialog = await screen.findByRole("dialog", { name: "合成单格.xlsx" });
+    expect(dialog.querySelector("blockquote")?.textContent).toBe(" 原样\n单格 ");
+    expect(within(dialog).getByText("显示本次命中保留的解析版本。")).toBeInTheDocument();
+    expect(within(dialog).getByTitle("单元格转换预览")).toHaveAttribute("src", url);
+    expect(within(dialog).getByRole("link", { name: "查看单元格转换预览" })).toHaveAttribute("href", url);
+    expect(within(dialog).getByRole("link", { name: "下载此版本" })).toHaveAttribute("href", `/api/documents/${first.id}/download`);
+    expect(dialog).not.toHaveTextContent("未按引用位置跳转"); expect(dialog).not.toHaveTextContent("定位成功");
+    fireEvent.click(within(dialog).getByRole("button", { name: "返回搜索结果" }));
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(screen.getByLabelText("搜索关键词")).toHaveValue("命中"); expect(trigger).toHaveAttribute("aria-selected", "true");
+    expect(mock.source).toHaveBeenCalledWith({ documentId: hit.id, runId: hit.parseRunId, anchorId: hit.anchorId });
+  });
+
   it("Office 固定长片段与整份转换预览分开，未获转换成功回执也可下载同版并返回", async () => {
     const text = "合成原文".repeat(1000);
     const fixed = source();
