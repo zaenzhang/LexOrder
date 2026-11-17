@@ -1200,6 +1200,8 @@ C及两路只读审查实际核m3-business-chain、m3-http-contracts、archive-m
 
 源码核出的必要细节包括同名内置模板findFirst无排序、saveArchivePolicy需独立配置资格、七必交不可用不适用代替、archiveMatter返回archiveNo而非ID、批准含两条内容不同的审计，以及直接build不写ARCHIVE_EXPORT。模板/制度/密钥/真实会话与清理边界已纳入计划 §7.16.10。沿现有归档研究与原代码，不宣称新增外部法务研究或真人专业通过；本节是审定依据，不是测试已完成证据。
 
+后续实际运行C6补充了一个传输事实：route虽设置Content-Length，本地Next16.4.6的 `node_modules/next/dist/server/send-response.js` 在Node适配分支将该头与内容/传输编码头列为FORBIDDEN_HEADERS并跳过。首轮到HTTP200后才发现旧断言不成立；独立复审同意以实收字节/审计和固定ZIP内容为准，长度头仅真实存在且未内容编码时核对。未修改生产Next配置；最终2用例通过及用户/专业边界见计划 §8.52，不把源码推断冒称实测。
+
 ### 3.42 固定XLSX单格预览的实际调用链复审（2026-11-17）
 
 B提出G06后续方案，C主审和两路只读复审重读parseMaterial、publishedMaterialSnapshot、readMaterialSource、materialPresentation、Office route与四个实际来源消费者。现parser确实记录真实表名/行/列并跳过合并从格，值转文本逻辑内嵌；现route只转换整份且普通String不能保证Date/富文本/公式缓存与固定片段一致。选择严格单格、同文本证明并共用原formatter，是由当前代码约束得出的最小接续，不宣称新增Word/页版式映射。

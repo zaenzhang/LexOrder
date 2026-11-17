@@ -726,15 +726,15 @@ W09.3 知识发布、B 结构化方案比较、E 期限重算深化、F 自动�
 | C3：同一 C 检出/唯一写者 | **D05 空事项级保全子范围代码/静态复审完成，见 §8.47；用户待验** | 唯一生产文件 `src/app/(app)/matters/[id]/_components/procedure-workflow-panel.tsx` 的 `MatterPreservationContent`，合同见 §7.16.7；本片结束，不把 D05 总号关闭 |
 | C4：同一 C 检出/唯一写者 | **D06/D07 欢迎区重复入口与邮件文案子范围代码/组件及静态完成，见 §8.48；用户待验** | 首页、两份旧冲突弹窗文件删除及既有首页mock清理；合同见 §7.16.8，本片结束；不把D06/D07总号关闭 |
 | C5：同一 C 检出/唯一写者 | **本事项保全创建后的默认事项恢复已修复，代码/组件及静态完成，见 §8.49；用户待验** | 唯一生产文件的reset及新专用组件回归见 §7.16.9，本片结束。编辑接线因解除关联/责任读权合同未齐，另列未开工 |
-| C6：同一 C 检出/唯一写者 | **普通完整卷宗与精确获批归档HTTP成功的证据合同已审定，发布后按集成/运行次序实施** | 唯一代码文件 `src/tests/server/m3-http-contracts.integration.test.ts`，见 §7.16.10；不改生产/原三条例外链。先顺序处理已交A/B小批；PG等A明确停止交还后由C独占 |
+| C6：同一 C 检出/唯一写者 | **普通完整卷宗服务链与精确获批归档真实HTTP成功已验证，见 §8.52；用户/专业待验** | 唯一代码文件 `src/tests/server/m3-http-contracts.integration.test.ts`，合同见 §7.16.10；无生产改动，最终2用例通过，Next/PG正常停止。旧三条例外链未重建 |
 
 C 内部 `c_d02_plan_review`、`c_m3_acceptance_review` 及后者的归档只读审查均无源码/文档写权，不占据 A/B 角色。`/workspace/LexOrder`、`/workspace/lexorder-case-audit`、历史 `lexorder-s10` 保留原成果，不用作新的并行写入检出。A/B 的临时交接可在各自检出忽略提交的 `.runtime/` 提供方案/patch 与 base SHA；C 读取后把正式合同和证据写回本账本，不另建并行主计划。每个检出始终一名写者；同一运行进程或隔离数据库必须另行登记当次 owner。
 
 **首批数据库时段：** C0/C1/C2 均不占数据库。B1 优先取得既有合成 `_test` 库的串行运行权，B 准备好并在临时交接登记开始后可使用；随后明确停止并交还 C，C 再交 A1，最后由 C 做普通归档成功链。其余组等待，只能并行静态/纯组件检查。不得同时修改同库全局角色/制度/模板或 fixtures；不新建维护环境、不重置已有库、不无理由重复迁移。既有库连接和密钥仅在本机忽略文件传递，绝不写入公开文档。
 
-**当前运行交接：** B1→A1均已正常停止并明确交还，C逐次实查无PG监听/锁文件。现运行权归C，已对B最终版本族fixture补跑新集成8项全通过并正常停库；A/B不再占库。C后续普通归档HTTP沿本时段独占运行，期间A/B可做只读/静态，不并发更改库中配置/夹具。C3/C4/C5均未占数据库。
+**当前运行交接：** B1→A1均已正常停止并明确交还，C补B最终8项后完成C6真实HTTP两用例并正常停止Next/PG；实查锁文件不存在、两个loopback端口未监听。C6制度/模板已按捕获值恢复。现将下一必要窄PG时段交B2，B登记开始后独占运行，结束必须明确停库交还C；A/C期间不连接修改同库。C3/C4/C5均未占数据库。
 
-B2先在独立检出实施及做定点纯测试，不占C6运行时段。其必要窄PG验证须等C明确停止Next/PG并另行交接；不能把认领发布或进程暂时未监听当作自动取得数据库写权。
+B2先在独立检出实施及做定点纯测试；C6已结束并明确交接后，可按 §7.16.11做必要窄PG。不把未来其他认领发布或进程暂时未监听当作自动取得数据库写权。
 
 **本次开工核对：** 远端只有 `main@c456e4b` 和 `docs/round-issues-20261117@2874ab7`，旧报告分支已是 main 祖先、独有提交为 0，开放 PR 为 0。历史两个检出干净且旧成果已有后续主线记录；没有发现需要重复合并的业务。C 每阶段结束再次 fetch 和核对检出/账本；未推送外部会话状态仍明确未知。
 
@@ -1311,13 +1311,13 @@ AC 是贯穿多个 W 的验收场景；下表不将“已有定点证据”改�
 | 诉讼工作包 | 目标/指示、材料/反证、研究、分析稿、人工复核、等待、交付已有基础；`m3-business-chain` 有诉讼合成服务链 | A 交目标/真实指示和行动路径，B 交固定来源/研究/模板及复核路径，C 串人工简报→具体版本清单→导出→实际发送登记→独立回复→归档；用户逐页面验，专业人独立核支持/反证/法源/稿件结论 |
 | 仲裁工作包 | 同一业务对象和仲裁合成服务链已有，不另建仲裁系统 | 与诉讼分别登记实际仲裁对象、真实来源、人工预期和结果；共用代码不能替代另一包的业务/专业证据 |
 | 无程序事项 | 既有事项级 Task、等待/依赖及交付链支持无程序，已有服务证据 | A 验同一任务的责任/检查日/等待及实际返回；C 验不因无程序而无法准备、发送或归档。不得为跑通夹具强建程序 |
-| 普通完整卷宗 | 原归档守卫、固定制度/清单、审批、frozenManifest/ZIP 已有；历史链使用缺项说明和独立例外核准 | C 新证据须使用合成完整必需材料，经正常清单人工核准、提交、独立批准和精确 archiveId 的获批固定归档 ZIP 成功导出；不得沿旧例外核准冒称普通成功，不用当前文件补造旧包 |
+| 普通完整卷宗 | 原归档守卫、固定制度/清单、审批、frozenManifest/ZIP 已有；C6已补合成完整普通服务链和精确记录真实HTTP成功，见 §8.52 | 七必交/八原件、独立非例外批准和固定ZIP已核；用户页面与真人专业仍待验。历史三链继续是缺项例外，不用当前文件补造旧包 |
 
 证据分层如下，完成一层不替代另一层：
 
 1. **现有 API/服务基础**：复用 §8.19—§8.22、§8.31—§8.44 及对应测试。`m3-business-chain.integration.test.ts` 三场景只证明其实际服务链；它没有贯通普通模板、收案起点、完整期限与收费，不写成六项均已通过。
 2. **完整材料与预先期望**：`src/tests/fixtures/workbench-work-packages.ts` 的支持/矛盾/反证与 `professionalReview=PENDING` 保留；现生成脚本只复用业务样本部分，缺 JPEG/CSV、Word 表格、新旧原件及真实程序来件等按当前需求补准确资产。不得启动 Personal/RAG 原型验收或改成专业已确认。
-3. **普通归档成功**：先核当前清单/缺项、审批资格、文件版本与 ZIP 服务/路由，发布具体隔离验证范围及数据库 owner 后执行。历史 HTTP 归档/整案 ZIP 只有匿名/无权拒绝；本轮成功 API/HTTP 与用户页面证据分别补记。
+3. **普通归档成功**：C6按先发布合同/运行owner后验证的顺序，已取得完整必交服务链与归档成功HTTP，见 §8.52；旧整案export-bundle仍只有匿名/无权HTTP。用户页面和专业结论分别待验。
 4. **桌面与专业**：C 汇总可点击的页面顺序、对象/版本、失败接续和预期；用户验真实浏览器，真实专业复核人验内容。没有结果保待验，不回填通过、不以合成数据代替执业判断。
 
 M3 仍按 §7.11.9 原六项关闭。W12 主体不重建；Personal、窄屏、M4/W13/AC15、知识发布、自动简报、完整 OOXML、未启用外部能力及 M5/M6 候选均不进入本轮门禁。
@@ -1434,7 +1434,7 @@ C及两路只读审查已沿现有HTTP/服务测试、上传、任务/程序、�
 | 准备/提交 | getArchivePrepData核七必交、真实docsByItem及刚写的existingSummary；七必交全ATTACHED，五可选逐项NOT_APPLICABLE并说明场景原因，四manualChecks确认工程包范围/原件去向/零财务事实/实际顺序页码。archiveMatter(forceWithMissing:false)须missingItems=[]、PENDING_REVIEW、无frozenManifest/审批人，事项仍CLOSED |
 | 独立批准 | 用matterId+返回archiveNo读本次ArchiveRecord ID；不同合格人逐项requiredArchiveVerificationIds审批且exceptionApproved:false，才APPROVED/ARCHIVED并冻结manifest。定位含核验/制度/exception字段的事务内批准审计，不错断同action总数=1（当前另有摘要审计） |
 | 服务ZIP | buildArchiveZip(exact archiveId,owner.actor)解包，manifest深等批准快照，核八份输入原件字节、ID/版本/hash/顺序及两份真实生成的封皮/目录DOCX标识；不把直接build当真实HTTP或导出登记 |
-| 真实HTTP | 同owner真实登录请求 `/api/archive/<matterId>/export?archiveId=<archive.id>`，须200、application/zip、真实Content-Length及本次文件名。独立对照冻结快照/已知输入字节，不仅与前次ZIP互比；当前route没有no-store合同，不套其他route断言 |
+| 真实HTTP | 同owner真实登录请求 `/api/archive/<matterId>/export?archiveId=<archive.id>`，须200、application/zip及本次文件名；实收ZIP非空，独立对照冻结快照/已知输入字节与审计size/checksum。实际Next Node适配层过滤handler的Content-Length；仅在实收有该头且无内容编码时核其数值，记录真实传输头，不要求必有长度或chunked。当前route没有no-store合同，不套其他route断言 |
 | 精确记录/审计 | 直接build后ARCHIVE_EXPORT为0，唯一成功GET后为1，核真实登录人、ArchiveRecord ID、matterId/archiveNo及收到ZIP的size/checksum；同案显式不存在archiveId须404，不退回最新批准记录、不新增导出审计。不对GET发明requestKey幂等 |
 | 退出/清理 | 恢复原制度JSON/原enabled模板ID；关闭本轮模板、停用合成人/角色/组、软删本轮事项/客户，只关闭本次document.parse未成功job并清lease。保不可变审计、原件、制度和获批快照所引文件，不unlink归档来源 |
 | 必要运行 | A交还后C独占既有_test库，同一运行生命周期正常start→独立Next就绪→定点Vitest→正常stop；两进程同DATABASE_URL、APP_STORAGE_DIR、实际共享密钥、SERVER/local和loopback origin。原run.mjs verify先测后启动Next，不能假称已有HTTP环境。只运行该HTTP文件两个用例、确认未skip，记录实际Next代码版本；不全量构建/浏览器/部署 |
@@ -2196,6 +2196,20 @@ Workspace新增组件例证明绑定随保存入参提交；真正保存/重开�
 证据：A最终六份纯输入/游标/导航/组件 **85个不同用例**、两份真实PG **12项** 均通过，共 **97项**。测试覆盖23目标+410同日干扰、53候选、单端/上海界限、财务only/recipient-only、221隐藏交付续查、真实事件游标、撤权及旧指示返回；原3个组件mock重render问题修后复验通过，最终没有未重验fixture余额。A最终类型/lint/diff通过，C核日志与精确提交后在集成树再做无产物类型与差异检查通过；无冲突/查询语义修正，不机械重复97项或占库。
 
 这里的PG是真实数据库与业务服务，会话是明确合成边界；Next原生History/Link语义读本地文档，组件mock不能证明Ctrl/Cmd、新标签或真实桌面。浏览器/专业仍待用户，G03只关闭本次子范围。A/B均已交还运行权，C按已发布C6合同接普通完整卷宗成功HTTP；D03责任映射、未关联保全负责人及A/B下一片仍各自先审定，不顺手扩写。
+
+### 8.52 C6：普通完整卷宗与精确归档HTTP成功（2026-11-17）
+
+合同以 `74ec78d` 先发布，A1/B1集成后在正式 `29f1c86` 上只扩现有 `m3-http-contracts.integration.test.ts` 一个独立it；Next真实运行该基线生产代码，未改生产/schema/公共授权。主审和两路只读代码/清理复核无剩余阻断，最终受影响ESLint、无产物类型及diff检查通过。
+
+普通合成民商事包实际上传8份不同内容的有效DOCX，覆盖七必交，其中证据目录另附原件；经原uploadDocument保实际DRAFT/SELF_COLLECTED、独立版本/hash及真实加密存储。原任务完成→程序终结→closeMatter及MATTER_CLOSED→saveClosure非null后，真实准备页数据带回刚写小结/制度/逐项材料。必交全ATTACHED、五可选逐项有场景理由、四人工工程核验，`forceWithMissing:false`提交为PENDING_REVIEW、missingItems空且无冻结/审批人，事项仍CLOSED。
+
+不同CUSTOM身份通过真实ARCHIVE_APPROVE资格逐项核验，`exceptionApproved:false`才成为APPROVED/ARCHIVED及冻结manifest；审计定位含verificationIds/policy/exception的事务记录，未误要求同名action只有一条。服务ZIP和真实登录HTTP实收ZIP分别对照冻结manifest、8份已知输入字节与顺序/版本/hash、2份真实生成封皮/目录DOCX及12个包内文件。直接build不记ARCHIVE_EXPORT，成功GET后恰一条且actor/精确ArchiveRecord/matter/archiveNo/实收size/SHA相符；显式不存在archiveId返回404、无回退最新或新增导出审计。
+
+首轮旧HTTP用例通过，新用例走到真实200后因错误假设“handler的Content-Length一定传到网络”失败，之后断言当时未执行。实际读本地Next16.4.6 `server/send-response.js`，确认Node分支过滤Content-Length/Content-Encoding/Transfer-Encoding；没有改生产压缩配置，也未用identity假称修复。改为上述真实传输合同后，整份HTTP文件 **2个用例全部通过、0跳过**（最终20.75秒）。这是两个不同用例，不把重跑累计为新覆盖。
+
+Vitest前段仅会话/next缓存为显式合成边界，业务/PG/加密storage真实；Next独立loopback进程通过真实CSRF和密码登录，不造JWT/cookie。两个进程共享既有隔离_test库/存储/实际密钥，worker/cron未启动。精确恢复原制度JSON/键缺失状态与原同名enabled模板，关闭本轮未成功解析job、停用/软删本轮主体，保全部不可变审计和快照所引文件；Next和PG正常停止，锁文件及两端口复核为空。Next生成的next-env.d.ts改动已核后排除，本批仍唯一代码文件。
+
+本次补齐普通归档服务和成功HTTP工程证据；不代表浏览器、律师专业复核、整案export-bundle成功HTTP或完整M3六项关闭。诉讼/仲裁/无程序旧三条服务链仍保持明确缺项例外性质，真实格式工作包及用户页面结果继续汇合。阶段核main/旧报告分支、三检出和交接；B2合同已发布、尚无完成小提交交C，下一窄PG时段明确交B2，C转入D03只读细化。
 
 ## 9. 继续工作时的约束
 
