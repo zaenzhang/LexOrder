@@ -15,7 +15,8 @@ vi.mock("@/lib/prisma", async () => {
 });
 
 import { prisma as db } from "@/lib/prisma";
-import { readClientHistory } from "@/server/clients/history-service";
+import { readClientHistory, readClientHistoryMatters } from "@/server/clients/history-service";
+import { decodeClientCursor } from "@/server/clients/history-cursor";
 import { prepareDeliveryForActor, registerDeliveryEventForActor } from "@/server/deliveries/service";
 
 const users: string[] = [], clients: string[] = [], matters: string[] = [], documents: string[] = [], roles: string[] = [];
@@ -66,6 +67,7 @@ describe.skipIf(!config.url)("M3 交付进入客户历史：真实 PostgreSQL", 
     const exported = await db.deliveryEvent.create({ data: { deliveryId: saved.id, actorId: f.actor.id, requestKey: randomUUID(),
       requestFingerprint: fingerprint, kind: "EXPORTED", occurredAt: at } });
     await delivery(f, null);
+    await db.matter.update({ where: { id: f.matter.id }, data: { primaryClientId: f.related.id } });
     const page = await readClientHistory(db, f.actor, { clientId: f.client.id });
     const rows = page.items.filter(row => row.source === "DELIVERY");
     expect(rows).toHaveLength(3);
@@ -75,6 +77,10 @@ describe.skipIf(!config.url)("M3 交付进入客户历史：真实 PostgreSQL", 
     expect(item.meta).toContain("仅人工登记，未附凭据");
     expect(rows.find(row => row.id === exported.id)?.title).toBe("已导出：合成固定交付目的");
     expect(rows.find(row => row.id === saved.sent.id)?.title).toBe("已登记发送：合成固定交付目的");
+    const filtered = await readClientHistory(db, f.actor, { clientId: f.client.id, source: "DELIVERY", matterId: f.matter.id, from: "2026-07-02", to: "2026-07-02" });
+    expect(new Set(filtered.items.map(row => row.id))).toEqual(new Set(rows.map(row => row.id)));
+    expect(filtered.selectedMatter?.id).toBe(f.matter.id);
+    expect((await readClientHistoryMatters(db, f.actor, { clientId: f.client.id })).items.map(row => row.id)).toEqual([f.matter.id]);
     const other = await readClientHistory(db, f.actor, { clientId: f.related.id });
     expect(other.items.some(row => row.source === "DELIVERY")).toBe(false);
     expect(await db.clientActivity.count({ where: { clientId: f.client.id } })).toBe(0);
@@ -96,6 +102,9 @@ describe.skipIf(!config.url)("M3 交付进入客户历史：真实 PostgreSQL", 
       requestKey: randomUUID(), requestFingerprint: fingerprint, kind: "REPLIED" as const, occurredAt: at, note: "不可泄露的交付回复" })) });
     const older = await db.clientActivity.create({ data: { clientId: f.client.id, authorId: f.actor.id, channel: "PHONE",
       content: "更早的授权沟通", occurredAt: new Date("2026-05-01T00:00:00Z"), requestKey: randomUUID(), requestHash: fingerprint } });
+    await db.matter.update({ where: { id: f.matter.id }, data: { primaryClientId: f.related.id } });
+    const olderMatter = await db.matter.create({ data: { internalCode: `DELIVERY-HISTORY-${randomUUID()}`, title: "更早的可读候选事项",
+      primaryClientId: f.client.id, ownerId: f.actor.id, createdAt: new Date("2026-01-01T00:00:00Z") } }); matters.push(olderMatter.id);
     await db.document.update({ where: { id: source.id }, data: { deletedAt: new Date() } });
     const first = await readClientHistory(db, f.actor, { clientId: f.client.id });
     expect(first.items).toEqual([]); expect(first.nextCursor).toBeTruthy();
@@ -105,6 +114,17 @@ describe.skipIf(!config.url)("M3 交付进入客户历史：真实 PostgreSQL", 
     expect(next.items.some(row => row.id === older.id)).toBe(true); expect(next.nextCursor).toBeNull();
     expect(JSON.stringify(next)).not.toContain("不可泄露的交付回复");
     expect(next.items.some(row => row.source === "DELIVERY")).toBe(false);
+    const choices = await readClientHistoryMatters(db, f.actor, { clientId: f.client.id });
+    expect(choices.items).toEqual([]); expect(choices.nextCursor).toBeTruthy();
+    expect(Buffer.from(choices.nextCursor!, "base64url").toString("utf8")).not.toContain(saved.sent.id);
+    const position = decodeClientCursor(choices.nextCursor!, f.client.id, f.actor.id, "historyMatters")!;
+    expect(position.source).toBe("DELIVERY");
+    expect(await db.deliveryEvent.findUnique({ where: { id: position.id }, select: { deliveryId: true, occurredAt: true } }))
+      .toEqual({ deliveryId: saved.id, occurredAt: new Date(position.at) });
+    const choiceNext = await readClientHistoryMatters(db, f.actor, { clientId: f.client.id, cursor: choices.nextCursor! });
+    expect(choiceNext.items.map(row => row.id)).toEqual([olderMatter.id]); expect(choiceNext.nextCursor).toBeNull();
+    const filtered = await readClientHistory(db, f.actor, { clientId: f.client.id, source: "DELIVERY", matterId: f.matter.id });
+    expect(filtered.items).toEqual([]); expect(filtered.selectedMatter?.id).toBe(f.matter.id);
   });
 
   it("已发出的历史游标不保留撤销后的下载资格", async () => {
@@ -117,12 +137,15 @@ describe.skipIf(!config.url)("M3 交付进入客户历史：真实 PostgreSQL", 
     const f = await fixture("CUSTOM", role.id), saved = await delivery(f);
     await db.deliveryEvent.createMany({ data: Array.from({ length: 24 }, () => ({ deliveryId: saved.id, actorId: f.actor.id,
       requestKey: randomUUID(), requestFingerprint: fingerprint, kind: "REPLIED" as const, occurredAt: at, note: "撤权后不再读取的回复" })) });
+    await db.matter.update({ where: { id: f.matter.id }, data: { primaryClientId: f.related.id } });
+    expect((await readClientHistoryMatters(db, f.actor, { clientId: f.client.id })).items.map(row => row.id)).toEqual([f.matter.id]);
     const first = await readClientHistory(db, f.actor, { clientId: f.client.id });
     expect(first.items).toHaveLength(20); expect(first.nextCursor).toBeTruthy();
     await db.rolePermission.delete({ where: { roleId_permissionKey: { roleId: role.id, permissionKey: "documents.download" } } });
     const next = await readClientHistory(db, f.actor, { clientId: f.client.id, cursor: first.nextCursor! });
     expect(next.items.some(row => row.source === "DELIVERY")).toBe(false);
     expect(JSON.stringify(next)).not.toContain("撤权后不再读取的回复");
+    expect((await readClientHistoryMatters(db, f.actor, { clientId: f.client.id })).items).toEqual([]);
   });
 
   it("回复凭据撤回后客户历史不下发该事件正文，原无凭据发送事实仍可查", async () => {
@@ -131,11 +154,13 @@ describe.skipIf(!config.url)("M3 交付进入客户历史：真实 PostgreSQL", 
       matterId: f.matter.id, uploadedById: f.actor.id, sha256: fingerprint, tags: [] } }); documents.push(proof.id);
     const reply = await registerDeliveryEventForActor(f.actor.id, { deliveryId: saved.id, requestKey: randomUUID(), kind: "REPLIED",
       occurredAt: at.toISOString(), proofDocumentId: proof.id, note: "依赖被撤回凭据的客户原意" });
+    await db.matter.update({ where: { id: f.matter.id }, data: { primaryClientId: f.related.id } });
     expect((await readClientHistory(db, f.actor, { clientId: f.client.id })).items.some(row => row.id === reply.id)).toBe(true);
     await db.document.update({ where: { id: proof.id }, data: { deletedAt: new Date() } });
     const page = await readClientHistory(db, f.actor, { clientId: f.client.id });
     expect(page.items.some(row => row.id === reply.id)).toBe(false);
     expect(page.items.some(row => row.id === saved.sent.id)).toBe(true);
     expect(JSON.stringify(page)).not.toContain("依赖被撤回凭据的客户原意");
+    expect((await readClientHistoryMatters(db, f.actor, { clientId: f.client.id })).items.map(row => row.id)).toEqual([f.matter.id]);
   });
 });

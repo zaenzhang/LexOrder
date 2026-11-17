@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientHistoryItem } from "@/lib/clients/history";
 
 const mock = vi.hoisted(() => ({ history: vi.fn(), saveAi: vi.fn(), refresh: vi.fn(), scroll: vi.fn() }));
-vi.mock("@/server/clients/history-actions", () => ({ getClientHistoryPage: mock.history }));
+vi.mock("@/server/clients/history-actions", () => ({ getClientHistoryPage: mock.history, getClientHistoryMatterPage: vi.fn() }));
 vi.mock("@/server/settings/ai-actions", () => ({ saveAiSettingsAction: mock.saveAi, clearAiKeyAction: vi.fn(), testAiConnection: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mock.refresh }), useSearchParams: () => new URLSearchParams(window.location.search) }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
@@ -23,7 +23,7 @@ function customer(initialTab?: string) {
   return <ClientDetailTabs initialTab={initialTab} sections={{
     followups: <h2 id="client-relationship-title">合成沟通区域</h2>,
     matters: <p>合成关联案件</p>,
-    history: <ClientHistoryPanel clientId={clientId} initial={{ items: [activity], nextCursor: "next-page" }} />,
+    history: <ClientHistoryPanel clientId={clientId} initial={{ items: [activity], nextCursor: "next-page", selectedMatter: null }} />,
     profile: <h2 id="client-contacts">合成联系人区域</h2>
   }} />;
 }

@@ -30,7 +30,7 @@ const ymd = (d: Date | string | null | undefined) => (d ? new Date(d).toLocaleDa
 
 export default async function ClientDetailPage({ params, searchParams }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string | string[]; returnTo?: string | string[]; historyCursor?: string | string[]; rowId?: string | string[] }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { id } = await params;
   const query = await searchParams;
@@ -40,13 +40,13 @@ export default async function ClientDetailPage({ params, searchParams }: {
   const canReadFinance = hasCustomPermission(session.user, "finance.read");
   const canWrite = (await editableClientIds(session.user, [id])).includes(id);
   const canMerge = canWrite;
-  const historyLocation = clientHistoryLocationSchema.safeParse({ historyCursor: query.historyCursor, rowId: query.rowId });
+  const historyLocation = clientHistoryLocationSchema.safeParse(query);
   const [finance, insights, relationship, history] = await Promise.all([
     canReadFinance ? getClientFinanceSummary(id) : Promise.resolve(null),
     getClientInsights(id),
     getClientRelationship(id),
     historyLocation.success
-      ? getClientHistoryPage({ clientId: id, cursor: historyLocation.data.historyCursor })
+      ? getClientHistoryPage({ clientId: id, cursor: historyLocation.data.historyCursor, ...historyLocation.data.filters })
         .then(page => ({ page, error: "" })).catch(error => ({ page: null, error: error instanceof ActionError ? error.message : "客户动态读取失败，请重试" }))
       : Promise.resolve({ page: null, error: "客户动态位置无效，请重新打开客户动态" })
   ]);
@@ -113,7 +113,7 @@ export default async function ClientDetailPage({ params, searchParams }: {
           </div>,
           history: historyLocation.success
             ? <ClientHistoryPanel clientId={client.id} initial={history.page} initialError={history.error}
-              initialCursor={historyLocation.data.historyCursor} rowId={historyLocation.data.rowId} returnTo={query.returnTo} />
+              initialCursor={historyLocation.data.historyCursor} initialFilters={historyLocation.data.filters} rowId={historyLocation.data.rowId} returnTo={query.returnTo} />
             : <section className="card p-4 space-y-3"><p role="alert" className="text-sm text-destructive">{history.error}</p>
               <Link className="btn btn-secondary btn-sm" href={clientHistoryHref(client.id, { returnTo: query.returnTo })}>查看最新客户动态</Link></section>,
           profile: <div className="space-y-3.5">

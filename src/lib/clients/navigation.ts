@@ -33,14 +33,18 @@ export function clientListReturnHref(value: unknown): string {
   if (page !== null && (!/^[1-9]\d*$/.test(page) || !Number.isSafeInteger(Number(page)))) return "/clients";
   return clientListHref({ search: params.get("search") ?? undefined, type: type ?? undefined, page: page === null ? undefined : Number(page) });
 }
-import { clientHistoryLocationSchema, clientPageInputSchema } from "./history";
+import { clientHistoryLocationSchema, clientPageInputSchema, type ClientHistoryFilters } from "./history";
 
 
 /** This return link belongs only to a concrete context record in client history. */
-export function clientHistoryHref(clientId: string, input: { cursor?: string | null; rowId?: string | null; returnTo?: unknown } = {}) {
+export function clientHistoryHref(clientId: string, input: { cursor?: string | null; rowId?: string | null; returnTo?: unknown; filters?: ClientHistoryFilters } = {}) {
   const params = new URLSearchParams({ tab: "history" });
   if (input.cursor) params.set("historyCursor", input.cursor);
   if (input.rowId) params.set("rowId", input.rowId);
+  if (input.filters?.from) params.set("historyFrom", input.filters.from);
+  if (input.filters?.to) params.set("historyTo", input.filters.to);
+  if (input.filters?.source) params.set("historySource", input.filters.source);
+  if (input.filters?.matterId) params.set("historyMatterId", input.filters.matterId);
   const listReturn = clientListReturnHref(input.returnTo);
   if (listReturn !== "/clients") params.set("returnTo", listReturn);
   return `/clients/${encodeURIComponent(clientId)}?${params}`;
@@ -54,13 +58,10 @@ export function clientHistoryReturnHref(value: unknown): string | null {
   const clientId = path.startsWith("/clients/") ? path.slice("/clients/".length) : "";
   if (!clientPageInputSchema.shape.clientId.safeParse(clientId).success) return null;
   const params = new URLSearchParams(value.slice(queryAt + 1));
-  const allowed = new Set(["tab", "historyCursor", "rowId", "returnTo"]);
+  const allowed = new Set(["tab", "historyCursor", "rowId", "returnTo", "historyFrom", "historyTo", "historySource", "historyMatterId"]);
   for (const key of params.keys()) if (!allowed.has(key) || params.getAll(key).length !== 1) return null;
   if (params.get("tab") !== "history") return null;
-  const location = clientHistoryLocationSchema.safeParse({
-    historyCursor: params.has("historyCursor") ? params.get("historyCursor") : undefined,
-    rowId: params.has("rowId") ? params.get("rowId") : undefined,
-  });
+  const location = clientHistoryLocationSchema.safeParse(Object.fromEntries(params));
   if (!location.success) return null;
-  return clientHistoryHref(clientId, { cursor: location.data.historyCursor, rowId: location.data.rowId, returnTo: params.get("returnTo") });
+  return clientHistoryHref(clientId, { cursor: location.data.historyCursor, rowId: location.data.rowId, filters: location.data.filters, returnTo: params.get("returnTo") });
 }

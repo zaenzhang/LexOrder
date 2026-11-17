@@ -70,11 +70,16 @@ describe("具体指示返回客户历史", () => {
   const clientId = "cmtestclient00000000000001", rowId = "CONTEXT:cmtestrecord00000000000001";
   it("只转运原页游标与确切行，同时保留独立客户列表返回位置", () => {
     const list = clientListHref({ search: "合成 & 客户", type: "COMPANY", page: 3 });
-    const href = clientHistoryHref(clientId, { cursor: "opaque_cursor-2", rowId, returnTo: list });
+    const filters = { from: "2026-07-01", to: "2026-07-02", source: "CONTEXT" as const, matterId: "cmtestmatter00000000000001" };
+    const href = clientHistoryHref(clientId, { cursor: "opaque_cursor-2", rowId, returnTo: list, filters });
     const parsed = new URL(href, "https://example.test");
     expect(parsed.searchParams.get("historyCursor")).toBe("opaque_cursor-2");
     expect(parsed.searchParams.get("rowId")).toBe(rowId);
     expect(parsed.searchParams.get("returnTo")).toBe(list);
+    expect(parsed.searchParams.get("historyFrom")).toBe(filters.from);
+    expect(parsed.searchParams.get("historyTo")).toBe(filters.to);
+    expect(parsed.searchParams.get("historySource")).toBe(filters.source);
+    expect(parsed.searchParams.get("historyMatterId")).toBe(filters.matterId);
     expect(clientHistoryReturnHref(href)).toBe(href);
   });
   it.each([
@@ -85,6 +90,12 @@ describe("具体指示返回客户历史", () => {
     "/clients/cmtestclient00000000000001?tab=history&rowId=OTHER:cmtestrecord00000000000001",
     "/clients/cmtestclient00000000000001?tab=history&rowId=CONTEXT:invalid",
     "/clients/cmtestclient00000000000001?tab=history&next=%2Ffinance",
+    "/clients/cmtestclient00000000000001?tab=history&historyFrom=2026-02-29",
+    "/clients/cmtestclient00000000000001?tab=history&historyFrom=2026-07-03&historyTo=2026-07-02",
+    "/clients/cmtestclient00000000000001?tab=history&historySource=ALL",
+    "/clients/cmtestclient00000000000001?tab=history&historyMatterId=bad",
+    "/clients/cmtestclient00000000000001?tab=history&historySource=NOTE&historySource=CONTEXT",
+    "/clients/cmtestclient00000000000001?tab=history&historyFrom=2026-07-01&historyFrom=2026-07-02",
     "/clients/cmtestclient00000000000001?tab=history#outside",
   ])("错误返回位置整体拒绝，不丢弃坏游标后伪造首屏：%s", value => {
     expect(clientHistoryReturnHref(value)).toBeNull();

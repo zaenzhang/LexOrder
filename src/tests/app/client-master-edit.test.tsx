@@ -14,7 +14,7 @@ vi.mock("@/server/clients/actions", () => ({ listClients: mock.list, getClientBy
 vi.mock("@/server/clients/master-access", () => ({ editableClientIds: mock.editableIds }));
 vi.mock("@/server/clients/insights", () => ({ getClientInsights: mock.insights }));
 vi.mock("@/server/clients/relationship-actions", () => ({ getClientRelationship: mock.relationship, recordClientActivity: vi.fn(), getClientCommunicationPage: vi.fn(), getClientFollowUpPage: vi.fn() }));
-vi.mock("@/server/clients/history-actions", () => ({ getClientHistoryPage: mock.history, getClientMatterPage: vi.fn() }));
+vi.mock("@/server/clients/history-actions", () => ({ getClientHistoryPage: mock.history, getClientMatterPage: vi.fn(), getClientHistoryMatterPage: vi.fn() }));
 vi.mock("@/server/clients/dedup", () => ({ mergeClientsByCode: vi.fn() }));
 vi.mock("@/server/yuandian/enterprise", () => ({ searchEnterpriseCandidates: vi.fn(), getEnterpriseDetail: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mock.refresh, replace: vi.fn() }), useSearchParams: () => new URLSearchParams(window.location.search), notFound: () => { throw new Error("not found"); } }));
@@ -56,7 +56,7 @@ beforeEach(() => {
   mock.finance.mockResolvedValue(null);
   mock.insights.mockResolvedValue({ matterPage: { items: [], total: 0, activeCount: 0, nextCursor: null }, suspects: [], source: null });
   mock.relationship.mockResolvedValue({ canWrite: true, activityCount: 0, openCount: 0, activities: [], followUps: [] });
-  mock.history.mockResolvedValue({ items: [], nextCursor: null });
+  mock.history.mockResolvedValue({ items: [], nextCursor: null, selectedMatter: null });
   vi.stubGlobal("ResizeObserver", class { observe = vi.fn(); unobserve = vi.fn(); disconnect = vi.fn(); });
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });

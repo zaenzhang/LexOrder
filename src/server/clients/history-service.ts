@@ -3,12 +3,12 @@ import { ActionError } from "@/lib/action-error";
 import { clientVisibilityFilter, customMatterFilter, intakeReadVisibilityFilter, matterFinanceVisibilityFilter, matterReadVisibilityFilter } from "@/lib/permissions";
 import { hasCustomPermission, type RoleUser } from "@/lib/roles/catalog";
 import { resolveRoleUser } from "@/lib/roles/service";
-import { clientPageInputSchema, CLIENT_HISTORY_PAGE_SIZE, CLIENT_MATTER_PAGE_SIZE, type ClientPageInput, type ClientMatterPage, type ClientHistoryItem, type ClientHistoryPage, type HistorySource } from "@/lib/clients/history";
+import { clientPageInputSchema, clientHistoryInputSchema, CLIENT_HISTORY_PAGE_SIZE, CLIENT_MATTER_PAGE_SIZE, type ClientPageInput, type ClientMatterPage, type ClientHistoryFilters, type ClientHistoryInput, type ClientHistoryItem, type ClientHistoryPage, type ClientHistoryMatter, type ClientHistoryMatterPage, type HistorySource } from "@/lib/clients/history";
 import { clientChannelLabels, type ClientRelationshipView, type ClientCommunicationPage, type ClientFollowUpPage } from "@/lib/clients/relationship";
 import { contextKindLabels } from "@/lib/matters/context";
 import { intakeStatusLabel, procedureTypeLabel } from "@/lib/enums";
 import { matterHref } from "@/lib/matters/route";
-import { shDayKey, shParts } from "@/lib/ui/sh-time";
+import { shDayBoundary, shDayKey, shParts } from "@/lib/ui/sh-time";
 import { readFinanceFacts } from "@/server/finance/facts";
 import { contextAccess, readContextRecordsForHistory } from "@/server/matters/context-service";
 import { assertDeliveryAuthority, assertDeliveryDocuments, deliveryDocumentSelect } from "@/server/deliveries/service";
@@ -162,51 +162,59 @@ function event(source: HistorySource, id: string, at: Date, recordedAt: Date, ti
   return { ...point, item: { ...point, key: `${source}:${id}`, recordedAt: recordedAt.toISOString(), title, meta, content, href, linkLabel } };
 }
 
-async function candidates(tx: Prisma.TransactionClient, access: Access, canRelationships: boolean, point: HistoryPosition | null) {
+async function candidates(tx: Prisma.TransactionClient, access: Access, canRelationships: boolean, point: HistoryPosition | null, filters: ClientHistoryFilters) {
   const { client, user } = access;
-  const matters = visibleMatters(access), canMatters = hasCustomPermission(user, "matters.read");
+  const matters: Prisma.MatterWhereInput = { AND: [visibleMatters(access), filters.matterId ? { id: filters.matterId } : {}] };
+  const canMatters = hasCustomPermission(user, "matters.read");
   const clientHref = `/clients/${client.id}`;
   const take = SCAN_CHUNK + 1;
+  const includes = (source: HistorySource) => !filters.source || filters.source === source;
+  const boundary = (field: "createdAt" | "occurredAt", source: HistorySource) => ({ AND: [
+    filters.from || filters.to ? { [field]: { ...(filters.from ? { gte: shDayBoundary(filters.from) } : {}),
+      ...(filters.to ? { lte: shDayBoundary(filters.to, true) } : {}) } } : {},
+    pageBoundary(field, point, source),
+  ] });
   const scheduleMatters: Prisma.MatterWhereInput = { AND: [matters, user.role === "CUSTOM"
     ? customMatterFilter(user.id, user.rolePermissions, "schedule.read", true) : {}] };
   const sources = await Promise.all([
-    canRelationships ? tx.clientActivity.findMany({ where: { clientId: client.id, ...pageBoundary("occurredAt", point, "CLIENT_ACTIVITY") },
+    includes("CLIENT_ACTIVITY") && canRelationships && !filters.matterId ? tx.clientActivity.findMany({ where: { clientId: client.id, ...boundary("occurredAt", "CLIENT_ACTIVITY") },
       take, orderBy: [{ occurredAt: "desc" }, { id: "desc" }], include: { author: { select: { name: true } }, closedFollowUp: { select: { title: true, status: true } } } })
       .then(rows => rows.map(row => event("CLIENT_ACTIVITY", row.id, row.occurredAt, row.createdAt,
         row.closedFollowUp ? `${row.closedFollowUp.status === "CANCELLED" ? "取消" : "完成"}跟进：${row.closedFollowUp.title}` : "客户沟通",
         `${clientChannelLabels[row.channel]} · ${row.author.name}`, row.content, `${clientHref}#client-relationship-title`, "沟通与跟进"))) : [],
-    tx.contact.findMany({ where: { clientId: client.id, ...pageBoundary("createdAt", point, "CONTACT") }, take, orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    includes("CONTACT") && !filters.matterId ? tx.contact.findMany({ where: { clientId: client.id, ...boundary("createdAt", "CONTACT") }, take, orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: { id: true, name: true, createdAt: true } })
-      .then(rows => rows.map(row => event("CONTACT", row.id, row.createdAt, row.createdAt, `新增联系人：${row.name}`, "客户档案维护", null, `${clientHref}#client-contacts`, "联系人"))),
-    canMatters ? tx.matterContextRecord.findMany({ where: { matter: matters, ...pageBoundary("occurredAt", point, "CONTEXT") },
+      .then(rows => rows.map(row => event("CONTACT", row.id, row.createdAt, row.createdAt, `新增联系人：${row.name}`, "客户档案维护", null, `${clientHref}#client-contacts`, "联系人"))) : [],
+    includes("CONTEXT") && canMatters ? tx.matterContextRecord.findMany({ where: { matter: matters, ...boundary("occurredAt", "CONTEXT") },
       take, orderBy: [{ occurredAt: "desc" }, { id: "desc" }], select: { id: true, matterId: true, occurredAt: true, matter: { select: matterSelect } } })
       .then(rows => rows.map(row => ({ source: "CONTEXT" as const, id: row.id, at: row.occurredAt.toISOString(), matterId: row.matterId,
         matterTitle: row.matter.title, href: matterHref(row.matter, `?${new URLSearchParams({ view: "archive", contextRecord: row.id })}`) }))) : [],
-    canMatters && hasCustomPermission(user, "documents.download") ? tx.deliveryEvent.findMany({ where: {
-      delivery: { recipientClientId: client.id, matter: { deletedAt: null,
+    includes("DELIVERY") && canMatters && hasCustomPermission(user, "documents.download") ? tx.deliveryEvent.findMany({ where: {
+      delivery: { recipientClientId: client.id, ...(filters.matterId ? { matterId: filters.matterId } : {}), matter: { deletedAt: null,
         AND: [matterReadVisibilityFilter(user.id, user.role, user.rolePermissions)] } },
-      ...pageBoundary("occurredAt", point, "DELIVERY") }, take,
+      ...boundary("occurredAt", "DELIVERY") }, take,
       orderBy: [{ occurredAt: "desc" }, { id: "desc" }], select: { id: true, deliveryId: true, occurredAt: true } })
       .then(rows => rows.map(row => ({ source: "DELIVERY" as const, id: row.id, at: row.occurredAt.toISOString(), deliveryId: row.deliveryId }))) : [],
-    hasCustomPermission(user, "finance.read") ? tx.feeEntry.findMany({ where: { type: "RECEIVED", confirmState: "CONFIRMED", matter: financeMatters(access),
-      ...pageBoundary("occurredAt", point, "FEE") }, take, orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
+    includes("FEE") && hasCustomPermission(user, "finance.read") ? tx.feeEntry.findMany({ where: { type: "RECEIVED", confirmState: "CONFIRMED", matter: financeMatters(access),
+      ...(filters.matterId ? { matterId: filters.matterId } : {}), ...boundary("occurredAt", "FEE") }, take, orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
       select: { id: true, amount: true, occurredAt: true, createdAt: true, recordedBy: { select: { name: true } }, matter: { select: matterSelect } } })
       .then(rows => rows.map(row => event("FEE", row.id, row.occurredAt, row.createdAt, `已确认到账 ¥${Number(row.amount).toLocaleString("zh-CN")}`,
         `${row.matter.title} · ${row.recordedBy.name}登记`, null, "/finance", "财务记录"))) : [],
-    canRelationships ? tx.clientFollowUp.findMany({ where: { clientId: client.id, ...pageBoundary("createdAt", point, "FOLLOW_UP") },
+    includes("FOLLOW_UP") && canRelationships && !filters.matterId ? tx.clientFollowUp.findMany({ where: { clientId: client.id, ...boundary("createdAt", "FOLLOW_UP") },
       take, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { id: true, title: true, dueAt: true, status: true, createdAt: true, createdBy: { select: { name: true } } } })
       .then(rows => rows.map(row => event("FOLLOW_UP", row.id, row.createdAt, row.createdAt, `安排跟进：${row.title}`,
         `${row.createdBy.name} · 约定 ${shDayKey(row.dueAt)} · ${{ OPEN: "待跟进", COMPLETED: "已完成", CANCELLED: "已取消" }[row.status]}`, null,
         `${clientHref}#client-relationship-title`, "沟通与跟进"))) : [],
-    canMatters ? tx.intake.findMany({ where: { clientId: client.id, AND: [intakeReadVisibilityFilter(user.id, user.role, user.rolePermissions), pageBoundary("createdAt", point, "INTAKE")] },
+    includes("INTAKE") && canMatters ? tx.intake.findMany({ where: { clientId: client.id, ...(filters.matterId ? { matter: { id: filters.matterId } } : {}),
+      AND: [intakeReadVisibilityFilter(user.id, user.role, user.rolePermissions), boundary("createdAt", "INTAKE")] },
       take, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { id: true, title: true, createdAt: true, status: true, createdBy: { select: { name: true } } } })
       .then(rows => rows.map(row => event("INTAKE", row.id, row.createdAt, row.createdAt, `新建收案：${row.title}`,
         `${row.createdBy.name} · ${intakeStatusLabel[row.status]}`, null, `/intakes/${row.id}`, "打开收案"))) : [],
-    canMatters ? tx.matter.findMany({ where: { AND: [matters, pageBoundary("createdAt", point, "MATTER")] }, take, orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    includes("MATTER") && canMatters ? tx.matter.findMany({ where: { AND: [matters, boundary("createdAt", "MATTER")] }, take, orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: { ...matterSelect, createdAt: true, owner: { select: { name: true } } } })
       .then(rows => rows.map(row => event("MATTER", row.id, row.createdAt, row.createdAt, `建立事项：${row.title}`,
         `${row.internalCode ?? ""} · 主办 ${row.owner?.name ?? "—"}`, null, matterHref(row), "打开事项"))) : [],
-    canMatters && hasCustomPermission(user, "schedule.read") ? tx.note.findMany({ where: { deletedAt: null, matter: scheduleMatters, ...pageBoundary("occurredAt", point, "NOTE") },
+    includes("NOTE") && canMatters && hasCustomPermission(user, "schedule.read") ? tx.note.findMany({ where: { deletedAt: null, matter: scheduleMatters, ...boundary("occurredAt", "NOTE") },
       take, orderBy: [{ occurredAt: "desc" }, { id: "desc" }], select: { id: true, channel: true, occurredAt: true, createdAt: true, content: true,
         author: { select: { name: true } }, matter: { select: matterSelect } } })
       .then(rows => rows.map(row => event("NOTE", row.id, row.occurredAt, row.createdAt, "事项沟通",
@@ -215,10 +223,9 @@ async function candidates(tx: Prisma.TransactionClient, access: Access, canRelat
   return (sources.flat() as Candidate[]).sort(compareHistoryPositions);
 }
 
-/** Read event bodies only after the concrete frozen material list passes current disclosure access. */
-async function deliveryHistoryItems(tx: Prisma.TransactionClient, access: Access, rows: Candidate[]) {
-  const result = new Map<string, ClientHistoryItem>();
-  if (!rows.length) return result;
+/** Both history and its matter picker must pass the same frozen list and proof access. */
+async function readableDeliveryEventIds(tx: Prisma.TransactionClient, access: Access, rows: Candidate[]) {
+  if (!rows.length) return [];
   const records = await tx.deliveryRecord.findMany({ where: {
     id: { in: [...new Set(rows.map(row => row.deliveryId!))] }, recipientClientId: access.client.id,
   }, select: { id: true, matterId: true, items: { include: { document: { select: deliveryDocumentSelect } } } } });
@@ -230,7 +237,7 @@ async function deliveryHistoryItems(tx: Prisma.TransactionClient, access: Access
       allowed.push(record.id);
     } catch (error) { if (!(error instanceof ActionError)) throw error; }
   }
-  if (!allowed.length) return result;
+  if (!allowed.length) return [];
   const eventReferences = await tx.deliveryEvent.findMany({ where: { id: { in: rows.map(row => row.id) }, deliveryId: { in: allowed } },
     select: { id: true, deliveryId: true, proofDocumentId: true } });
   const proofs = await tx.document.findMany({ where: { id: { in: eventReferences.flatMap(row => row.proofDocumentId ? [row.proofDocumentId] : []) } },
@@ -246,6 +253,13 @@ async function deliveryHistoryItems(tx: Prisma.TransactionClient, access: Access
     }
     allowedEvents.push(row.id);
   }
+  return allowedEvents;
+}
+
+/** Read event bodies only after the concrete frozen material list passes current disclosure access. */
+async function deliveryHistoryItems(tx: Prisma.TransactionClient, access: Access, rows: Candidate[]) {
+  const result = new Map<string, ClientHistoryItem>();
+  const allowedEvents = await readableDeliveryEventIds(tx, access, rows);
   if (!allowedEvents.length) return result;
   const events = await tx.deliveryEvent.findMany({ where: { id: { in: allowedEvents } },
     select: { id: true, deliveryId: true, kind: true, occurredAt: true, recordedAt: true, channel: true, note: true,
@@ -262,13 +276,76 @@ async function deliveryHistoryItems(tx: Prisma.TransactionClient, access: Access
   return result;
 }
 
-async function historyInTransaction(tx: Prisma.TransactionClient, access: Access, cursor?: string): Promise<ClientHistoryPage> {
+function financeHistoryMatters(access: Access): Prisma.MatterWhereInput {
+  return { AND: [financeMatters(access), { feeEntries: { some: { type: "RECEIVED", confirmState: "CONFIRMED" } } }] };
+}
+
+async function selectedHistoryMatter(tx: Prisma.TransactionClient, access: Access, matterId?: string): Promise<ClientHistoryMatter | null> {
+  if (!matterId) return null;
+  const { user } = access;
+  const readable: Prisma.MatterWhereInput[] = [];
+  if (hasCustomPermission(user, "matters.read")) readable.push(matterReadVisibilityFilter(user.id, user.role, user.rolePermissions));
+  if (hasCustomPermission(user, "finance.read")) readable.push(financeHistoryMatters(access));
+  if (!readable.length) return null;
+  // This title is not evidence that the matter belongs to this client or has a readable delivery.
+  return tx.matter.findFirst({ where: { id: matterId, deletedAt: null, OR: readable }, select: matterSelect });
+}
+
+export async function readClientHistoryMatters(db: PrismaClient, actor: ClientHistoryActor, input: ClientPageInput): Promise<ClientHistoryMatterPage> {
+  const data = clientPageInputSchema.parse(input);
+  return db.$transaction(async tx => {
+    const access = await clientHistoryAccess(tx, actor, data.clientId), { user, client } = access;
+    let point = decodeClientCursor(data.cursor, client.id, user.id, "historyMatters");
+    const canMatters = hasCustomPermission(user, "matters.read");
+    const readable: Prisma.MatterWhereInput[] = [];
+    if (canMatters) {
+      readable.push(visibleMatters(access));
+      readable.push({ deletedAt: null, AND: [matterReadVisibilityFilter(user.id, user.role, user.rolePermissions), {
+        intake: { clientId: client.id, AND: [intakeReadVisibilityFilter(user.id, user.role, user.rolePermissions)] },
+      }] });
+    }
+    if (hasCustomPermission(user, "finance.read")) readable.push(financeHistoryMatters(access));
+    const items: ClientHistoryMatter[] = [], seen = new Set<string>();
+    for (let scanned = 0; scanned < SCAN_BUDGET; scanned += SCAN_CHUNK) {
+      const [matters, deliveries] = await Promise.all([
+        readable.length ? tx.matter.findMany({ where: { AND: [{ OR: readable }, pageBoundary("createdAt", point, "MATTER")] },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: SCAN_CHUNK + 1, select: { ...matterSelect, createdAt: true } }) : [],
+        canMatters && hasCustomPermission(user, "documents.download") ? tx.deliveryEvent.findMany({ where: {
+          delivery: { recipientClientId: client.id, matter: { deletedAt: null, AND: [matterReadVisibilityFilter(user.id, user.role, user.rolePermissions)] } },
+          ...pageBoundary("occurredAt", point, "DELIVERY"),
+        }, orderBy: [{ occurredAt: "desc" }, { id: "desc" }], take: SCAN_CHUNK + 1, select: { id: true, deliveryId: true, occurredAt: true } }) : [],
+      ]);
+      const all: (Candidate & { matter?: ClientHistoryMatter })[] = [
+        ...matters.map(({ createdAt, ...matter }) => ({ source: "MATTER" as const, id: matter.id, at: createdAt.toISOString(), matter })),
+        ...deliveries.map(row => ({ source: "DELIVERY" as const, id: row.id, at: row.occurredAt.toISOString(), deliveryId: row.deliveryId })),
+      ].sort(compareHistoryPositions);
+      const batch = all.slice(0, SCAN_CHUNK), more = all.length > SCAN_CHUNK;
+      const allowedEvents = await readableDeliveryEventIds(tx, access, batch.filter(row => row.source === "DELIVERY"));
+      const deliveryMatters = allowedEvents.length ? await tx.deliveryEvent.findMany({ where: { id: { in: allowedEvents } },
+        select: { id: true, delivery: { select: { matter: { select: matterSelect } } } } }) : [];
+      const byEvent = new Map(deliveryMatters.map(row => [row.id, row.delivery.matter]));
+      for (let index = 0; index < batch.length; index++) {
+        const row = batch[index];
+        // Keep the actual scan event, even for duplicate or unreadable matters.
+        point = { at: row.at, source: row.source, id: row.id };
+        const matter = row.matter ?? byEvent.get(row.id);
+        if (matter && !seen.has(matter.id)) { seen.add(matter.id); items.push(matter); }
+        if (items.length === CLIENT_HISTORY_PAGE_SIZE) return { items,
+          nextCursor: more || index < batch.length - 1 ? encodeClientCursor(client.id, user.id, "historyMatters", point) : null };
+      }
+      if (!more) return { items, nextCursor: null };
+    }
+    return { items, nextCursor: point ? encodeClientCursor(client.id, user.id, "historyMatters", point) : null };
+  }, { timeout: 20_000 });
+}
+
+async function historyInTransaction(tx: Prisma.TransactionClient, access: Access, filters: ClientHistoryFilters, cursor?: string): Promise<ClientHistoryPage> {
   const { client, user } = access;
-  let point = decodeClientCursor(cursor, client.id, user.id, "history");
-  const rights = await relationshipRights(tx, access);
+  let point = decodeClientCursor(cursor, client.id, user.id, "history", filters);
+  const [rights, selectedMatter] = await Promise.all([relationshipRights(tx, access), selectedHistoryMatter(tx, access, filters.matterId)]);
   const items: ClientHistoryItem[] = [];
   for (let scanned = 0; scanned < SCAN_BUDGET; scanned += SCAN_CHUNK) {
-    const all = await candidates(tx, access, rights.canRead, point);
+    const all = await candidates(tx, access, rights.canRead, point, filters);
     const batch = all.slice(0, SCAN_CHUNK), more = all.length > SCAN_CHUNK;
     const groups = new Map<string, Candidate[]>();
     for (const row of batch.filter(row => row.source === "CONTEXT")) groups.set(row.matterId!, [...(groups.get(row.matterId!) ?? []), row]);
@@ -290,17 +367,17 @@ async function historyInTransaction(tx: Prisma.TransactionClient, access: Access
       point = { at: row.at, source: row.source, id: row.id };
       const item = row.source === "CONTEXT" ? contextItems.get(row.id) : row.source === "DELIVERY" ? deliveryItems.get(row.id) : row.item;
       if (item) items.push(item);
-      if (items.length === CLIENT_HISTORY_PAGE_SIZE) return { items,
-        nextCursor: more || index < batch.length - 1 ? encodeClientCursor(client.id, user.id, "history", point) : null };
+      if (items.length === CLIENT_HISTORY_PAGE_SIZE) return { items, selectedMatter,
+        nextCursor: more || index < batch.length - 1 ? encodeClientCursor(client.id, user.id, "history", point, filters) : null };
     }
-    if (!more) return { items, nextCursor: null };
+    if (!more) return { items, selectedMatter, nextCursor: null };
   }
   // The cursor is encrypted: hidden source timestamps/IDs never leave as readable JSON.
   // Even an empty scan page advances, so a long unavailable run cannot hide older records.
-  return { items, nextCursor: point ? encodeClientCursor(client.id, user.id, "history", point) : null };
+  return { items, selectedMatter, nextCursor: point ? encodeClientCursor(client.id, user.id, "history", point, filters) : null };
 }
 
-export async function readClientHistory(db: PrismaClient, actor: ClientHistoryActor, input: ClientPageInput): Promise<ClientHistoryPage> {
-  const data = clientPageInputSchema.parse(input);
-  return db.$transaction(async tx => historyInTransaction(tx, await clientHistoryAccess(tx, actor, data.clientId), data.cursor), { timeout: 20_000 });
+export async function readClientHistory(db: PrismaClient, actor: ClientHistoryActor, input: ClientHistoryInput): Promise<ClientHistoryPage> {
+  const { clientId, cursor, ...filters } = clientHistoryInputSchema.parse(input);
+  return db.$transaction(async tx => historyInTransaction(tx, await clientHistoryAccess(tx, actor, clientId), filters, cursor), { timeout: 20_000 });
 }

@@ -719,6 +719,8 @@ D02 只修 `src/app/moan-pages.css` 的既有 `.mo-dossier .dos-proc*`：卡片�
 
 A1 在客户域新增独立历史筛选输入及候选读取，复用九源、当前身份/每源资格、有界扫描和加密游标。日期过滤各源真实at并先于分页；history游标绑定规范from/to/source/matterId，候选用historyMatters独立kind，旧history合同明确拒绝而不fallback。selectedMatter只表示当前显式对象名称可读，不是关联证明；候选交付分支继续通过真实清单与凭据资格。URL映射及返回白名单在客户域维护，不改案件主壳、公共导航或分页Hook；具体字段/八文件/验收见计划§7.16.5。
 
+A1已按该合同由C逐批集成，冻结输入/游标/完整授权集合和稳定筛选栏均落实，97项实际证据及集成边界见计划 §8.51；没有共享schema、公共授权或分页Hook改动。
+
 B1 使用现有ResearchSource固定版本/SHA与ResearchRevision.queryLog JSON。ResearchQuery新增可选sourceDocumentId，自动采用必填，保存与sources交叉验证；普通人工记录无绑定仍为原人工语义，不回填历史，不加表/迁移或平行派生授权。候选读取只返回已准材料ID；读取具体MD独立核会话/当前研究资格/Document，异步存储读取后发布前再次核当前资格与原身份，不重复算hash。保存审计仅证明固定材料经过相应入口，不证明第三方响应真实性，缺审计保原手工路径。
 
 两种既有MD头按明确格式解析，正文不提取身份；超长/歧义自动输入在选择时明确处理，按实际source/query schema验证。自动query与source原子加入当前草稿，保存继续prepareSource事务及旧研究/稿件读取授权，不改derivation-access、read-release或全局壳。接口、六文件、时间/片段语义及边界见计划§7.16.6；schema/公共授权必要变更须先回C，不能以领域实现顺手扩写。
