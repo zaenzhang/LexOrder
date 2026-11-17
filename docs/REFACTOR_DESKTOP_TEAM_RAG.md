@@ -643,6 +643,14 @@ prepare从同次templateMatterInputs生成真实主体ID/顺序和原值期望�
 
 验证覆盖上述实际链：本次第19业务迁移已在隔离PG应用且schema一致，精度-only、当前权限/旧版本、真实责任类型、提醒与固定快照反例见计划§8.37；没有重跑全仓或启动升级恢复、延期重算。浏览器/专业验收与代码、API/组件、PG证据分别记账。
 
+### 6.12 全局任务推进摘要（G02，2026-11-17）
+
+对应计划§7.14.8的审定合同，尚未记为实现。复用Task、TaskWaiting、TaskDependency及WorkResponsibility。任务正文读取规则沿assertTaskMatterAccess：当前账号/岗位、schedule.read、自定义matters.read及真实事项范围；首页查询还与原matterReadVisibility交集，授权发生在take/count之前。责任板原应急/拟接收行可见不等于正文可读，摘要只对另行获准Task批取，不向无权者返回等待对象/成果或前置标题/ID。
+
+新增的summary仅属于首页和责任板返回值，不扩共用readWorkRows/WorkRow或冻结快照。当前有效等待与直接前置责任状态可重叠，只有DONE满足；跨案、缺责任以匿名异常表示，不补历史或装成无阻塞。现有TaskDetailDialog、完成守卫、责任版本/事务/审计保留；完整筛选放schedule现有责任集合，不改日历窗口，不复制成新的状态字段或模型。
+
+首页保持五条预览，真实task深链复用现路由，责任总览锚点不假称全为本人。筛选/显示是纯读取，批量只取当前可见可选项，详情草稿不因筛选重挂；Task普通/批量、等待/依赖与责任变更出口失效实际首页/。沿Next本地Forms/Server Action、page和revalidatePath合同，复用现有Input/Select/Badge/Dialog，无新增依赖、schema或迁移。
+
 ## 7. 参考项目如何进入 LexOrder
 
 沿用 [来源记录](RESEARCH_AND_DECISIONS.md)，按“观察行为 → 输入输出与规则 → LexOrder 设计 → 场景验收”吸收。实际复制代码另记固定提交、文件、依赖与来源；研究范围不按协议类型排除。
