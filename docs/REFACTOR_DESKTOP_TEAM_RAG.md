@@ -729,6 +729,10 @@ C3仅在 `MatterPreservationContent` 按 `cases.length` 与既有 `canManage` �
 
 本片不涉及API/schema、公共组件、全局样式或迁移。原创建、续封、解除的服务器当前资格与事项可写校验仍为业务边界；静态验证不替代用户实际桌面交互，文件和场景见计划 §7.16.7。
 
+### 6.22 工作台入口的现有授权与删除边界（2026-11-17）
+
+C4只改变首页组合和邮件提示。保留Topbar按 `intakes.create` 的 `/conflicts` 入口，完整页仍调用原 `runCheckAndSave`；首页旧弹窗在唯一引用删除后连同wrapper删除，不建立第二套入口。`canEnterAdminWorkspace`、`isEmailConfigured`、后台页面与所有dashboard查询都不改，邮件未配置不能推导webhook状态。近期日历/焦点/期限/开庭各自对象与链接保持；本片无schema、公共授权或运行环境变化，准确文件及验证见计划 §7.16.8。
+
 ## 7. 参考项目如何进入 LexOrder
 
 沿用 [来源记录](RESEARCH_AND_DECISIONS.md)，按“观察行为 → 输入输出与规则 → LexOrder 设计 → 场景验收”吸收。实际复制代码另记固定提交、文件、依赖与来源；研究范围不按协议类型排除。

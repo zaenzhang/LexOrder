@@ -2187,6 +2187,14 @@ export function MatterPreservationContent({
 
   return (
     <>
+    {cases.length === 0 ? (
+      canManage ? (
+        <Button type="button" variant="outline" size="sm" className="self-start" onClick={() => setCreateOpen(true)}>
+          <Plus />
+          新建保全
+        </Button>
+      ) : null
+    ) : (
     <div className="card">
       <div className="panel-head" style={{ borderBottom: "none", paddingBottom: 8 }}>
         <div className="ws-head min-w-0 flex-1">
@@ -2213,9 +2221,6 @@ export function MatterPreservationContent({
         </div>
       </div>
       <div className="panel-body" style={{ paddingTop: 4 }}>
-      {cases.length === 0 ? (
-        <EmptyState compact icon={Shield} title="本事项尚无财产保全记录" />
-      ) : (
         <div className="space-y-3">
           {cases.map((item) => (
             <div key={item.id} className="rounded-[10px] border border-[var(--bd-hair)] bg-card">
@@ -2287,11 +2292,9 @@ export function MatterPreservationContent({
             </div>
           ))}
         </div>
-      )}
-
       </div>
     </div>
-
+    )}
 
       <PreservationCaseDialog
         open={createOpen}

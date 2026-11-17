@@ -723,7 +723,8 @@ W09.3 知识发布、B 结构化方案比较、E 期限重算深化、F 自动�
 | B：用户指定材料/研究组；`/workspace/scratch/36f32dac17c2/lexorder-b`；main | **B1=G10-1 已保存类案采用及来源绑定已审定，发布本次合同后在独立检出单写实施** | 准确六个生产文件和定点测试见 §7.16.6。公共 schema/授权由 C 保留；新查询直接接续、真实法库联调、全文、AI/MCP、G05/G06 剩余未进入本批 |
 | C：本会话 `/root`；`/workspace/scratch/618136981e82/lexorder-c`；main | **C0 已以 `de4ca5a` 发布；C1=D02 代码与开发静态复审完成，见 §8.45；用户桌面待验** | C1 仅改 `src/app/moan-pages.css` 的 `.mo-dossier .dos-proc*`，本片结束。四主文档、共享合同与全局文件/main 仍由 C 独占；后续使用须按准确小批登记 |
 | C2：同一 C 检出/唯一写者 | **W12 已选交付材料移除已修复，代码/组件与静态复审完成，见 §8.46；用户待验** | 仅 `src/components/deliveries/delivery-panel.tsx`、`src/tests/components/delivery-panel.test.tsx`；合同见 §7.16.4，本片结束。无 schema/公共授权/数据库/运行进程变更 |
-| C3：同一 C 检出/唯一写者 | **D05 空事项级保全区块已审定，随 C2 发布合同后实施** | 唯一生产文件 `src/app/(app)/matters/[id]/_components/procedure-workflow-panel.tsx` 的 `MatterPreservationContent`，合同见 §7.16.7；有记录及原对话框/资格不变，不把 D05 总号关闭 |
+| C3：同一 C 检出/唯一写者 | **D05 空事项级保全子范围代码/静态复审完成，见 §8.47；用户待验** | 唯一生产文件 `src/app/(app)/matters/[id]/_components/procedure-workflow-panel.tsx` 的 `MatterPreservationContent`，合同见 §7.16.7；本片结束，不把 D05 总号关闭 |
+| C4：同一 C 检出/唯一写者 | **D06/D07 工作台提醒文案与重复入口已审定，随 C3 发布合同后实施** | 首页 `src/app/(app)/page.tsx`、两份失去全部消费者的旧冲突弹窗文件删除及既有首页测试mock清理，准确边界见 §7.16.8；不触碰 A/B 领域或公共资格 |
 
 C 内部 `c_d02_plan_review`、`c_m3_acceptance_review` 及后者的归档只读审查均无源码/文档写权，不占据 A/B 角色。`/workspace/LexOrder`、`/workspace/lexorder-case-audit`、历史 `lexorder-s10` 保留原成果，不用作新的并行写入检出。A/B 的临时交接可在各自检出忽略提交的 `.runtime/` 提供方案/patch 与 base SHA；C 读取后把正式合同和证据写回本账本，不另建并行主计划。每个检出始终一名写者；同一运行进程或隔离数据库必须另行登记当次 owner。
 
@@ -1380,6 +1381,20 @@ C 与独立只读审查者已读页面、调用者、`MatterPreservationContent`
 | 用户待验 | 新事项全案档案→紧凑入口→原表单首次默认当前案件→取消/失败保原行为；只读/归档空事项无空卡；有在保、全解除及仅空保全记录的事项仍可查看真实记录。浏览器结果另记 |
 
 参考本轮重读固定 Frappe Lead 的有条件对象区块与就近动作；收起空保全是 LexOrder 针对实际案件首页的设计判断，见研究 §3.39。两轮核对纠正了“首页”指代和“无在保即无记录”的风险，没有剩余开工阻断。原Dialog成功reset清空matterId、initialMatterId仅首次初始化，不能据本片声称每次重开默认案件；该既有创建接续问题另待准确小批。D05 的其他首屏占用、D03责任重复及D07其他空态仍按各自合同推进，不连带记完成。
+
+#### 7.16.8 C4：工作台欢迎区入口与邮件提醒文案（D06/D07 子范围）
+
+当前Topbar按 `intakes.create` 已有冲突预检→`/conflicts`；欢迎区又放独立弹窗入口，同时有泛用“进入日程”。近期日程卡已有“完整日历”，期限/开庭统计和真实焦点分别有业务意义，不能按相同href一并删除。首页邮件提示本已限后台可进入身份，问题是实现术语和把“邮件没配置”误写成所有外发均没配置。
+
+| 冻结项 | 精确行为与文件 |
+| --- | --- |
+| 主入口 | 删除首页欢迎区 `greet-actions` 的重复冲突预检和“进入日程”。保留Topbar原授权入口、完整冲突页面及收案正式核查，保留近期卡完整日历/焦点/独立期限和开庭统计，不改变查询或服务资格 |
+| 管理员提示 | 原 `canEnterAdminWorkspace && !isEmailConfigured()` 条件保持；改为“邮件提醒未启用，提醒仍可在站内查看。”与一个原 `/admin/reminders` 链接。只说明邮件，不声称webhook/全部通道失效；普通律师仍无该提示。配置详情继续由原后台承接，不启动SMTP/运维建设 |
+| 精确生产边界 | 改 `src/app/(app)/page.tsx`；全仓引用核实无其他消费者后删除 `src/components/dashboard/conflict-search-button.tsx` 和 `src/components/conflict-dialog.tsx`，不保留死弹窗或迁移其实现。Topbar、conflicts-view-v4、原runCheckAndSave及admin/reminders只读 |
+| 开发验证 | 仅清理 `src/tests/app/dashboard-deadlines.test.tsx` 的已删helper mock，复跑原首页组合用例以核期限/开庭/焦点仍各用其来源；受影响lint、类型、全仓引用和diff检查。不新增仅复述文案/分支的测试、不跑PG或浏览器 |
+| 用户待验 | 工作台只留顶部冲突预检→完整原页面；普通律师无技术提示，有后台资格且邮件未启用者见短提示并可进入原提醒页；近期日程完整入口、焦点案件与真实统计仍可操作 |
+
+根因和引用边界由C实际读取，独立复审核剩余入口与资格。现有Frappe固定Header/对象动作只提供组织原则，不提供本项目提醒状态；采用理由见研究 §3.40。D06 收案技术词、D07零数据图表/无财务权限占位与客户单页分页均未进入本片；后者文件仍归 A，不能混入当前G03。
 
 ## 8. 交接：完成范围、证据与未覆盖项
 
@@ -2070,6 +2085,14 @@ followUp+client独立准确读取，不依赖首页前五或当前页；按真�
 新增回归通过真实组件选两份需要声明的 DRAFT 附件、各自声明、从下方已选顺序行移除一份并保存；Action一次性替身调用真实 `prepareDeliverySchema`，断言剩余 ID/声明、只保存一次、打开固定详情且不调用丢响应找回。旧代码下先出现真实校验失败，修复后整份组件测试 **12/12** 通过。独立复审核发现原局部夹具继承 APPROVED 与 needsSourceDeclaration 不相容，已改为真实可能的 DRAFT 组合并复跑同文件通过。两文件 ESLint、`tsc --noEmit --incremental false`、`git diff --check` 均通过。
 
 本批没有数据库、真实HTTP或浏览器验证，用户桌面仍待验。结束时重新 fetch main/全部相关 heads，唯一旧报告分支独有提交仍为0；A/B已正式获 `1ab0855` 合同，未收到完成交接，不将其记为实现/已合入。C3仅发布上述准确合同，随后实施；无并发写入他人检出或占用数据库。
+
+### 8.47 C3：空事项级保全入口（2026-11-17）
+
+合同以 `67be10c` 先行发布。唯一生产差异为 `MatterPreservationContent`：空且可管时呈现现有Button的紧凑入口，空且不可管不占可见区块，有任一记录仍渲染完整原卡。`self-start` 避免纵向flex父级将按钮撑满；所有Hooks、创建Dialog与三个财产Dialog的同级位置保持，空→有记录不因本改动重挂创建表单。
+
+独立差异复审核过全部记录/解除历史、调用者范围、原资格与Dialog实例位置，无剩余阻断。单文件 ESLint、`tsc --noEmit --incremental false`、`git diff --check` 通过；既有测试没有直接覆盖该子组件，不为简单呈现新增镜像测试或运行数据库。用户桌面按 §7.16.7 待验，原创建成功后再次打开默认事项的既有问题仍单列待处理，未冒称修复。
+
+阶段检查当前main及相关分支/开放PR、A/B检出和临时交接；旧报告分支无独有提交、开放PR0。A/B在各自正式合同基线实施，当前可见改动未与C本片重叠、未交完成提交；不读取成已完成。下一片C4只先发布合同，发布后开工。
 
 ## 9. 继续工作时的约束
 
