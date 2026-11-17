@@ -485,7 +485,7 @@ W01.2/W04.1 首批在 `src/lib/workbench/` 建立不依赖 Prisma/Next 请求上
 
 ### 6.8 M3 最小持久关系与执行边界
 
-本节对应[计划 §7.11](WORKBENCH_PLAN.md#711-m3-详细执行计划与审查2026-11-16)和[需求 §9.4](PRODUCT_REQUIREMENTS_ACCEPTANCE.md#94-m3-专业工作与实际交付的操作规格)，同时记录已实现合同和保留业务边界；未完成部分以[计划 §8.24](WORKBENCH_PLAN.md#824-维护延期后的业务余项核对2026-11-17)为准；前批证据见 §8.21，当前 API 与静态接续及未验范围见[计划 §8.22](WORKBENCH_PLAN.md#822-api-与静态接续验证2026-11-17)。仅在真实业务切片所需处增加模型与 SQL，不建立通用成果平台或投影服务。现有 Document、EvidenceItem、MatterContextRecord、Task、WorkResponsibility、Deadline、ClientActivity/FollowUp、FirmFile 继续是各自权威对象。
+本节对应[计划 §7.11](WORKBENCH_PLAN.md#711-m3-详细执行计划与审查2026-11-16)和[需求 §9.4](PRODUCT_REQUIREMENTS_ACCEPTANCE.md#94-m3-专业工作与实际交付的操作规格)，同时记录已实现合同和保留业务边界；原缺口核对见[计划 §8.24](WORKBENCH_PLAN.md#824-维护延期后的业务余项核对2026-11-17)，本轮执行以[计划 §7.14](WORKBENCH_PLAN.md#714-两份审查报告合并后的业务实施计划2026-11-17)为准；前批证据见 §8.21，当前 API 与静态接续及未验范围见[计划 §8.22](WORKBENCH_PLAN.md#822-api-与静态接续验证2026-11-17)。仅在真实业务切片所需处增加模型与 SQL，不建立通用成果平台或投影服务。现有 Document、EvidenceItem、MatterContextRecord、Task、WorkResponsibility、Deadline、ClientActivity/FollowUp、FirmFile 继续是各自权威对象。
 
 #### 数据归属与必要新增
 
@@ -565,6 +565,40 @@ W09.3/B/E/F 和 C 通用机制不分配 owner，不预建模型。迁移/权限/
 - 完整包在文件 I/O 前后和归档响应释放前核当前账号、岗位、关联、独立财务/归档权、每份材料及冻结来源。选件原件按已有校验读取一次；在办包同次读取后核 hash/大小，失败停止整个包，不写缺件占位文件。日常详情不重新扫描原件。
 
 这些实现使用现有 Prisma、Zod、文书生成/存储、审批和责任服务，以及 shadcn/Radix 组件，没有新增依赖。真实 PG、组件、页面、部署四层证据不互相替代；旧实例升级、发行镜像和整套恢复及其准备全部延期，不阻塞 M3 业务/API/静态工作；业务必要的数据库结构变更及隔离验证继续保留。
+
+### 6.9 两轮审查后的业务切片合同（2026-11-17）
+
+本节是计划 §7.14的实现前合同，未把设计标为已落库。使用当前Next 16.4/React 19.3/Prisma 7.10、既有服务与组件；开发前读实际安装包中的Next指南。角色、案件、来源、归档和审计规则沿既有边界，不创建通用候选、成果图谱、草稿或导航平台。
+
+#### 现有关系与入口
+
+| 切片 | 唯一权威身份及实现边界 |
+| --- | --- |
+| 材料族 | 复用Document.familyId/isLatest和已有版本族迁移；页面保留具体版本集合，逐件核实际canReadDocument后，范围先筛、族后分组，类别/来源按真实代表版本筛。null族单独成行；无可读当前版显示历史入口，不推断当前缺失原因，不读取正文或重复算hash；旧版要点不无标记归到新版 |
+| 收费附件 | 使用已有BillingAttachment的同案documentId集合，并逐件按当前文档资格读取；CONTRACT分类不作收费身份。与族分组是独立合同，不因共用主壳跳过独立验收 |
+| Note编辑 | Note.updatedAt作必填expectedUpdatedAt；真实事务按现有授权锁/案件锁→Note行锁，重验当前角色/作者/同案/未删除/未归档与所见版本，update及auditTx共同提交。内置岗位roleMutation不是事务，不沿用其事务外校验和audit。编辑不改作者、matterId和附件，不新增NoteRevision模型 |
+| 研究位置 | 复用listMaterialSources分页、SourceAnchor、现有来源预览与prepareSource；只传具体documentId、runId、anchorId或明确PDF页。组件只负责有实际两个调用方的位置选择；切文档以请求身份隔离迟到响应，失败/空结果分开，历史引用仍用旧run |
+| 指示精确回链 | 统一contextRecord参数，规范事项URL；复用readContextRecordsForHistory按确切ID读取，沿contextAccess/recordWhere/present，不在最近50条历史或前100条当前记录中猜目标。仅此客户动态路径传受控historyCursor和rowId以重开原页，游标继续核用户/客户签名，错误不给别页冒充成功；关闭只清自身参数，返回保留客户history页签。权限失效无正文、不换目标 |
+
+#### 来件与正式承接
+
+S01—S04沿同一确认链完成。现有SmsSuggestion.targetType/targetId可保存事件实际目标（Hearing或Deadline），FIELD_CHANGE仍按其真实程序对象解释；不为该用途新建通用候选表，不根据message级generated ID或旧ACCEPTED状态回填猜测的目标。输入必须包含建议ID/所见updatedAt，以及事件的明确程序和新建/关联选择；同一建议重放先核当前权限，仅同一决定及相同程序/目标输入返回原结果；改变程序、目标或反转决定明确冲突，不用旧成功冒充新请求。采用方式、所见输入与产物保存在现有payload及审计，不从目标现状反推新建或关联，不重复创建。用户明确关联已有事项时核类型、同案、程序及事件资料，歧义保留待决定，不按相同标题/日期自动合并。
+
+确认事务内锁定并复读来件、建议和目标，使用当前有效操作者/权限，保持来件现有PRINCIPAL_LAWYER全所办理口径，不误改成仅成员。当前授权、来件匹配案件、程序归属、归档状态、所见版本、目标写入、建议状态及auditTx在同一事务；不能在tx回调里调用实际使用全局Prisma的旧assertMatterWritable并宣称事务保护。新建Hearing/Deadline由现行责任触发器创建责任/通知，删除两段重复错误INSERT。不同事件分别建立，结果列出新建/关联/未应用，不能只返回输入条数。
+
+DOC_TYPE属于已保存分类信息，新增分析不生成无动作PENDING；旧分类记录不伪造人工决定，待处理查询按实际人工建议集合读取。ORGANIZED还须核对真实文件处置：待确认、失败或待人工取件不因没有PENDING建议被隐藏。文件转正I/O在业务事务后执行，失败明确呈现已应用建议与待继续文件，不诱导重新创建事件。
+
+S05复用registerBillingTx已有assertLedgerWrite和Serializable；仅当signedAt存在，在插入ACTIVE及应收前调用相同assertMatterReviewCurrent。草稿不新增签署前置；不引入能绕过正式承接规则的平行补录状态。
+
+#### 目标与指示的直接采用
+
+实际消费方限定为新的OPTION修订和新的Document版本，后者覆盖研究生成分析稿、模板草稿和人工上传简报；ResearchRevision不新增上下文输入表。来源先限实际GOAL/INSTRUCTION，不为未选择的预算/其他类型扩大范围，已有财务可见性和来源守卫继续执行。
+
+采用关系分别用DocumentContextInput(documentId, contextRecordId)与OptionContextInput(optionRecordId, contextRecordId)，以(targetId, contextRecordId)作复合主键、Restrict外键，不另加无消费者的id/matterId；必要SQL约束目标同案、两个context ID同series且采用时末版version不低于所选版、合法来源类型和OPTION目标，关系随新目标一次创建，不UPDATE/DELETE、不回填历史。每条关系只加currentRecordIdAtAdoption（当时series末版的Restrict外键）与adoptedConfirmedAt（nullable）。输入携recordId、expectedConfirmedAt和expectedCurrentRecordId，锁后核对；确认不递增version，旧记录自身未变也不代表系列未被更正。采用人/时间从同事务创建的目标authorId或uploadedById及createdAt取得，不重复存储。明确选择历史版时contextRecordId不同于采用时末版，只显示“采用历史版”；当前末版相对采用时末版再变化或所选记录的确认时点改变，才另提示“采用后发生变化，需重新核对”。两者可同时成立，不按日期猜测，不增加状态/确认表。
+
+输入数量有界、按确切ID去重；研究出稿、模板、OPTION与材料摄入的现有请求载荷/指纹均包含选择，material-ingest metadata不剥掉输入。新目标、输入关系和审计同事务；现行端点只在新目标创建时写关系，不给已存在目标补INSERT；失败不留孤立关系。当前幂等重放先核真实权限及原请求身份，已成功V1不因后来更正V2而重复创建或误称未保存。新版本必须明确显示沿用或调整哪些固定输入，不自动采用最新指示。无关系只表示未检查；没有影响状态表，读取按固定输入与当前实际状态显示差异，不改写正文、合同、批准和交付。
+
+普通读取、预览/下载、送审和交付沿documentDerivationReadable及上下文当前来源资格；保留同一已访问文档集合，避免新关系形成循环读取。具体审批附件正文沿原明确授权，原指示、预算和原材料另核，不能用整案contextAccess误拒合法独立审批人，也不能借正文资格下发原指示。真实来源撤回仍阻断受影响派生正文/导出，不设置来源失败fallback。
 
 ## 7. 参考项目如何进入 LexOrder
 
