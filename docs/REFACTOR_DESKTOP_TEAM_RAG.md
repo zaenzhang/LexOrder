@@ -745,6 +745,12 @@ C6只扩现有HTTP集成测试：同一真实隔离PG/local加密存储下，Vit
 
 归档制度和同名内置模板临时配置必须精确记录/恢复；只在C获数据库独占时段执行，保不可变历史与所有被批准快照引用的文件。无生产/schema/授权或运行平台变更；完整合同及审计、文件名、manifest、字节证据见计划 §7.16.10。
 
+### 6.24 固定XLSX单格预览的身份与文本边界（2026-11-17）
+
+B2由现materialPresentation增加TABLE请求类型，readMaterialSource仅传已验证run/anchor。预览route沿原具体Document当前授权及最终release，不改公共资格；读取领域服务保审批附件专用读权，不能绕到要求documents.read的Action。唯一目标来自已发布anchor而非客户端坐标或最新解析，SHA、表名、真实行列、非从格及逐字文本均相符才输出目标DOM；失败不降为成功整份预览。
+
+为两个真实消费者抽取原XLSX值转文本纯函数，parser仅等价调用，不改变版本、限额、coverage/unit或anchor生成；预览不导入整套parser。保空白、undefined、公式缓存类型和异常传播，不执行公式，不以cell.text隐藏不支持值。四消费者明确TABLE/CONVERTED/NATIVE/NONE，source-links和无固定位置的状态列表不需修改。准确九生产/七测试及串行PG边界见计划 §7.16.11；共享schema、授权与运行平台不变。
+
 ## 7. 参考项目如何进入 LexOrder
 
 沿用 [来源记录](RESEARCH_AND_DECISIONS.md)，按“观察行为 → 输入输出与规则 → LexOrder 设计 → 场景验收”吸收。实际复制代码另记固定提交、文件、依赖与来源；研究范围不按协议类型排除。

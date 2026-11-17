@@ -1200,6 +1200,12 @@ C及两路只读审查实际核m3-business-chain、m3-http-contracts、archive-m
 
 源码核出的必要细节包括同名内置模板findFirst无排序、saveArchivePolicy需独立配置资格、七必交不可用不适用代替、archiveMatter返回archiveNo而非ID、批准含两条内容不同的审计，以及直接build不写ARCHIVE_EXPORT。模板/制度/密钥/真实会话与清理边界已纳入计划 §7.16.10。沿现有归档研究与原代码，不宣称新增外部法务研究或真人专业通过；本节是审定依据，不是测试已完成证据。
 
+### 3.42 固定XLSX单格预览的实际调用链复审（2026-11-17）
+
+B提出G06后续方案，C主审和两路只读复审重读parseMaterial、publishedMaterialSnapshot、readMaterialSource、materialPresentation、Office route与四个实际来源消费者。现parser确实记录真实表名/行/列并跳过合并从格，值转文本逻辑内嵌；现route只转换整份且普通String不能保证Date/富文本/公式缓存与固定片段一致。选择严格单格、同文本证明并共用原formatter，是由当前代码约束得出的最小接续，不宣称新增Word/页版式映射。
+
+追加两个生产文件的方案有两个真实消费者，保parser原所有身份语义；将非空不支持值显示“未转换”，明确区分真实空格。复审核出原研究XLSX夹具为多格不可改标TABLE、研究页无iframe无需新增、处理状态页无固定引用不会产生TABLE，以及缺缓存/从格不能伪装真parser anchor。最终九文件合同覆盖临时七文件版本，具体状态/验证及未完成范围见计划 §7.16.11；本节是开工依据，不是已实现或浏览器通过。
+
 ## 4. 可选法律服务 MCP 与来源
 
 核查日期 2026-11-16；以下为官方公开的接入信息，不是本项目已取得账号、权益或实测成功。机构目录可扩展，自定义远程 MCP 为未预置服务保留入口；不虚构“市面所有机构都提供官方 MCP”。

@@ -720,7 +720,7 @@ W09.3 知识发布、B 结构化方案比较、E 期限重算深化、F 自动�
 | 角色 / 真实检出 | 当前准确子范围与状态 | 本批文件所有权及交接 |
 | --- | --- | --- |
 | A：用户指定客户/事项组；`/workspace/scratch/1fb3f0cf432f/lexorder-a`；main | **A1=G03 日期/类型/事项筛选与准确返回开发完成，C已复审/集成，见 §8.51；用户待验** | 采用本地小提交 `b05a532`，八生产+八测试与 §7.16.5一致。G01/F10/D08/G12、联系人/原件关系及后续责任语义仍未进入本批，下一编码先另合同 |
-| B：用户指定材料/研究组；`/workspace/scratch/36f32dac17c2/lexorder-b`；main | **B1=G10-1 开发完成，C已逐批复审/集成并补最终PG验证，见 §8.50；用户待验** | 采用本地小提交 `34fcc5f`，六生产+五测试与 §7.16.6一致。G10新查询直接接续、真实法库联调、全文、AI/MCP、G05/G06余项未在本批开工；下一批先另发布准确合同 |
+| B：用户指定材料/研究组；`/workspace/scratch/36f32dac17c2/lexorder-b`；main | **B1=G10-1 已集成，见 §8.50；B2=G06-2 固定XLSX单格转换预览合同审定，随本次发布后实施** | B1采用 `34fcc5f`；B2准确九生产+七测试见 §7.16.11，取代临时提案早期七生产范围。四文档/schema/公共授权仍归C；G10其余、Word定位和完整OOXML未开工 |
 | C：本会话 `/root`；`/workspace/scratch/618136981e82/lexorder-c`；main | **C0 已以 `de4ca5a` 发布；C1=D02 代码与开发静态复审完成，见 §8.45；用户桌面待验** | C1 仅改 `src/app/moan-pages.css` 的 `.mo-dossier .dos-proc*`，本片结束。四主文档、共享合同与全局文件/main 仍由 C 独占；后续使用须按准确小批登记 |
 | C2：同一 C 检出/唯一写者 | **W12 已选交付材料移除已修复，代码/组件与静态复审完成，见 §8.46；用户待验** | 仅 `src/components/deliveries/delivery-panel.tsx`、`src/tests/components/delivery-panel.test.tsx`；合同见 §7.16.4，本片结束。无 schema/公共授权/数据库/运行进程变更 |
 | C3：同一 C 检出/唯一写者 | **D05 空事项级保全子范围代码/静态复审完成，见 §8.47；用户待验** | 唯一生产文件 `src/app/(app)/matters/[id]/_components/procedure-workflow-panel.tsx` 的 `MatterPreservationContent`，合同见 §7.16.7；本片结束，不把 D05 总号关闭 |
@@ -733,6 +733,8 @@ C 内部 `c_d02_plan_review`、`c_m3_acceptance_review` 及后者的归档只读
 **首批数据库时段：** C0/C1/C2 均不占数据库。B1 优先取得既有合成 `_test` 库的串行运行权，B 准备好并在临时交接登记开始后可使用；随后明确停止并交还 C，C 再交 A1，最后由 C 做普通归档成功链。其余组等待，只能并行静态/纯组件检查。不得同时修改同库全局角色/制度/模板或 fixtures；不新建维护环境、不重置已有库、不无理由重复迁移。既有库连接和密钥仅在本机忽略文件传递，绝不写入公开文档。
 
 **当前运行交接：** B1→A1均已正常停止并明确交还，C逐次实查无PG监听/锁文件。现运行权归C，已对B最终版本族fixture补跑新集成8项全通过并正常停库；A/B不再占库。C后续普通归档HTTP沿本时段独占运行，期间A/B可做只读/静态，不并发更改库中配置/夹具。C3/C4/C5均未占数据库。
+
+B2先在独立检出实施及做定点纯测试，不占C6运行时段。其必要窄PG验证须等C明确停止Next/PG并另行交接；不能把认领发布或进程暂时未监听当作自动取得数据库写权。
 
 **本次开工核对：** 远端只有 `main@c456e4b` 和 `docs/round-issues-20261117@2874ab7`，旧报告分支已是 main 祖先、独有提交为 0，开放 PR 为 0。历史两个检出干净且旧成果已有后续主线记录；没有发现需要重复合并的业务。C 每阶段结束再次 fetch 和核对检出/账本；未推送外部会话状态仍明确未知。
 
@@ -1438,6 +1440,26 @@ C及两路只读审查已沿现有HTTP/服务测试、上传、任务/程序、�
 | 必要运行 | A交还后C独占既有_test库，同一运行生命周期正常start→独立Next就绪→定点Vitest→正常stop；两进程同DATABASE_URL、APP_STORAGE_DIR、实际共享密钥、SERVER/local和loopback origin。原run.mjs verify先测后启动Next，不能假称已有HTTP环境。只运行该HTTP文件两个用例、确认未skip，记录实际Next代码版本；不全量构建/浏览器/部署 |
 
 审查已纠正：复用旧HTTP数据会沿用撤权对象；新增程序实际名addProcedure；archiveMatter不直接返回ID；普通链不能用必交不适用或例外核准；同名模板需明确隔离；密钥不可让Vitest自行随机；批准审计有两条不同内容；route的记录ID与matterId不能互换。此证据合同下无生产实现开工阻断。完整M3仍须诉讼/仲裁真实格式包、无程序路径、用户桌面及真人专业结果，不因本it通过关闭原六项。
+
+#### 7.16.11 B2：固定XLSX单格转换预览（G06 子范围）
+
+B先交实际parser→已发布快照→固定来源→Office route→四消费者的细化方案，C主审及两路只读复审后冻结下表；发布后才编码。当前正式main `6e956ce`，A1/B1均已集成，C检出干净、旧报告分支无独有提交；B2不与C6唯一测试文件交叉。下列九生产文件是唯一现行范围，明确覆盖临时提案旧“七文件、parser不改、非目标用cell.text”的版本。
+
+| 部分 | 准确合同 |
+| --- | --- |
+| 九生产文件 | `src/lib/documents/presentation.ts`；新增 `src/lib/documents/xlsx-cell-text.ts`；`src/server/rag/parse-material.ts`；`src/server/documents/material-processing.ts`；`src/app/api/documents/[id]/preview/route.ts`；`src/components/layout/search-material-source-dialog.tsx`；`src/app/(app)/matters/[id]/_components/evidence-panel.tsx`；`src/components/research/research-workspace.tsx`；`src/components/document-reviews/review-position-source.tsx` |
+| 七测试文件 | 复用 `src/tests/server/document-preview-isolation.test.ts`、`src/tests/server/material-processing.test.ts`、`src/tests/components/search-dialog.test.tsx`、`src/tests/app/evidence-panel.test.tsx`、`src/tests/app/research-workspace.test.tsx`、`src/tests/app/document-review-position.test.tsx`、`src/tests/server/material-processing.integration.test.ts`；不新建测试DSL或机械helper镜像测试 |
+| 最小展示接口 | `previewKind`增加TABLE，只表示可以请求固定单格转换预览。`materialPresentation(document,location?,{runId,anchorId}?)`仅在严格XLSX MIME、xlsx转换类型、TABLE单行单列及完整固定身份时生成带编码runId/anchorId和`#material-source`的原preview URL。无引用、多格、DOCX、xls/不可靠MIME保持CONVERTED；PDF原生页码和同Document下载不变 |
+| 来源与资格 | `readMaterialSource`传已核准的原run/anchor，保合法旧run/旧版本。route沿真实session→具体Document→canReadDocument，成对非空不重复且各≤512的run/anchor；不接受客户端坐标，不转最新。调用领域`readMaterialSource`而非额外要求documents.read的Action，保具体审批附件资格，来源SHA须等于本次文件快照 |
+| 文本共享的等价边界 | 新纯`xlsxCellText`仅type import ExcelJS CellValue；原样提取parser的Date ISO、标量String、公式/共享公式缓存标量、richText原序、text分支。公式缓存Date/错误对象仍undefined，不执行或重算公式。保undefined/空串/空白串区别，parser仍由原addText判空并保存原文；合并从格跳过、UNSUPPORTED占位、unit/coverage、限额、异常传播、anchor和parser版本均不变 |
+| 精确目标证明 | ExcelJS真实sheet.name/rowNumber/columnNumber，非合并从格，HTML转义前原文本严格等于anchor.text；不trim/折叠/截断。全工作簿恰好一个目标才赋`id=material-source`，`:target`高亮并保换行。真正空格保持空；非空不支持值显示“未转换”，不以cell.text掩盖。目标undefined、缺格、从格或不符明确拒绝，不能退回整份HTML冒充成功 |
+| 状态/放行 | 400参数残缺/重复/空/超长；401无session或最终登录失效；403初始或最终资格拒绝；404无Document或固定来源UNAVAILABLE；409可用来源与文件SHA不一致或目标证明失败；415沿原Office不支持；422固定来源存在但非XLSX单格；500沿原存储/解密/转换失败。成功才沿原releaseDocumentRead及DOCUMENT_PREVIEW，保持CSP sandbox无脚本、private/no-store/nosniff；失败不记成功审计、不回退最新 |
+| 四入口展示 | TABLE明确“单元格转换预览/查看单元格转换预览”，CONVERTED继续“整份、未按引用位置跳转”，NATIVE/NONE保持。直接用服务URL，不由标签拼坐标；保固定片段、历史提示、同版下载和关闭后草稿/焦点。不能凭iframe load宣称定位成功；研究页仅保另页链接，不新增iframe |
+| 最小开发验证 | route测试真实ExcelJS字节经现parser取得真anchor；稀疏行列、多表同值、Date/富文本换行/缓存0与false/超链接文本/合并主格及拒绝边界，明确文本预期不得调用helper生成。至少核一次unit/location/text顺序与coverage，包含不支持缓存及合并从格。从格、无缓存/错误缓存不能产生真anchor；强制409的矛盾AVAILABLE替身须如实标明。原研究XLSX多格fixture仍CONVERTED，另加单格；四UI核准确URL/slot/返回草稿 |
+| 窄PG及证据层次 | C另交时段后，真实XLSX入队/解析发布、新代次后的旧run、只有具体审批附件资格可读本表而非无关表、撤权及无成功审计。直接GET handler不是真实HTTP；匿名handler401与实际proxy307分开。此批不另加HTTP文件，C6旧DOCX通过不算TABLE通过 |
+| 未动范围与用户验收 | 不改source-links、无位置的material-processing-status、schema/迁移、公共read-release/授权、全局壳及四文档。实际浏览器滚动/高亮/换行、失败呈现、返回草稿由用户验；Word TEXT定位、完整OOXML/页版式、模型/OCR/MCP仍未启动，不作人工M3前置 |
+
+两次追加审查纠正已纳入：两个真实消费者共享转换而非复制语义；公式缓存类型不能扩展；保原空白与UNSUPPORTED的身份贡献；不支持的非空格不能悄悄显示空白；测试不能仅由两端同helper互证。此合同下无已知开工阻断，代码/运行/浏览器完成仍须后续分别登记。
 
 ## 8. 交接：完成范围、证据与未覆盖项
 
