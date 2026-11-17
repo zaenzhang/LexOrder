@@ -1166,6 +1166,14 @@ C 以 `c456e4b` 实际读取 `.dos-proc*`、`matter-detail-tabs`、`procedure-st
 
 D02 随后按先行合同完成局部 CSS 与静态复审，实际证据见计划 §8.45。W12 复核另确认顺序列表移除材料残留来源声明的真实请求缺陷：现有 schema 正确拒绝不属于清单的声明，复选框取消已有正确处理。接续沿 §3.19 的固定版本/人工交付原则，只修当前草稿集合一致性，不引入新授权或状态；详细实施及真实schema回归合同见计划 §7.16.4。
 
+### 3.38 A1/B1 首批合同的事实与交叉审查（2026-11-17）
+
+A 按固定 Frappe CRM `3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952` 实读 Activities.vue、ViewControls.vue 和 crm/api/activities.py，采用对象内分类、筛选后重读与原行定位，不复制AGPL源码、销售对象、已加载集合本地过滤或增长page_length。当前LexOrder九源已有各自资格、20条页长和有界授权扫描；真正缺口是完整集合过滤及同条件返回。A内部三路与C独立复审纠正统一套事项权限、以六张事项卡充当全部候选、跟进误用dueAt、Native History更新后沿旧props等。Next本地Native History/useSearchParams/onNavigate文档已核，准确合同见计划§7.16.5。
+
+B 实读固定 Counsel OS `c4f40f1ffd40146531bcaa7f43e6877a733f92ca` 的 [DocumentReader.tsx](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/ui/src/workspace/DocumentReader.tsx) 全92行与 [chat-tools.ts](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/src/workspace/chat-tools.ts) 316—358的取得/保存/阅读分离，只采用固定来源和未读边界，不移植美国法源客户端或权限机制。本地Next use-server/use-client及Radix组件已读；无真实外部调用。B与C复核确认现有queryLog/lawMetadata能承接，自动query仍需sourceDocumentId关联到同研究来源，才不因移除来源失去原派生权限。
+
+C复读发现原save-case公开Action直接收客户端caseHit，审计只能证明“经元典保存入口”，不能证明元信息已由provider核真；audit吞错还意味着候选不是完整保存全集。正式合同因此保CASE/PENDING、未读/摘要、未知时点、无审计时手工选材；固定头歧义/超长不猜或静默截断，异步读完再次核当前资格。计划§7.16.6记录准确文件、schema交叉验证和失败出口。两组均先发布合同后编码，本段是审查依据，不是实现、浏览器或专业通过证明。
+
 ## 4. 可选法律服务 MCP 与来源
 
 核查日期 2026-11-16；以下为官方公开的接入信息，不是本项目已取得账号、权益或实测成功。机构目录可扩展，自定义远程 MCP 为未预置服务保留入口；不虚构“市面所有机构都提供官方 MCP”。

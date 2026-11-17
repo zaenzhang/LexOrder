@@ -715,16 +715,18 @@ W09.3 知识发布、B 结构化方案比较、E 期限重算深化、F 自动�
 
 #### 7.14.4 当前认领与跨分支协作（2026-11-17）
 
-**全计划三人执行登记（2026-11-17，基线 `c456e4b349f4792b460dfcf9727e6597ad3b1276`）：** 用户已把客户/事项执行交 A、材料/研究文书交 B，并指定本会话 C 为唯一主线集成人。C 已实查下列三个独立 main clone，初查均在上述基线且无未提交修改，不创建任务分支。A/B 是用户的外部会话，不是 C 的只读审查子代理；其会话工具身份和实时状态不可见，检出存在不冒充已收到本人确认。A/B 提交准确方案/文件清单后，由 C 审查并发布各自编码合同；下面的只读准备不等于已授权未审定的具体实现。
+**全计划三人执行登记（2026-11-17，初查基线 `c456e4b349f4792b460dfcf9727e6597ad3b1276`）：** 用户已把客户/事项执行交 A、材料/研究文书交 B，并指定本会话 C 为唯一主线集成人。C 已实查下列三个独立 main clone，初查均在上述基线且无未提交修改，不创建任务分支。A/B 是用户的外部会话，不是 C 的只读审查子代理；其会话工具身份和实时状态不可见。随后已实际读取 A/B 各自临时交接中的本人确认、准确方案和文件清单，C 交叉复审后发布下列合同；只读审查与发布后实施分别记账，角色归口不是无限文件写权。
 
 | 角色 / 真实检出 | 当前准确子范围与状态 | 本批文件所有权及交接 |
 | --- | --- | --- |
-| A：用户指定客户/事项组；`/workspace/scratch/1fb3f0cf432f/lexorder-a`；main | **已收到本人确认、G03 日期/类型/事项筛选及准确返回方案/文件清单，C 正在交叉复审；尚未编码** | 客户历史服务、领域组件、筛选/返回帮助函数及对应测试由 A 提交准确清单；C 发布最终合同后开工，不得修改四主文档、schema、公共授权或全局壳。G01/F10/D08/G12 尚未进入本批 |
-| B：用户指定材料/研究组；`/workspace/scratch/36f32dac17c2/lexorder-b`；main | **已收到本人确认及 G10-1 已保存类案采用的准确方案，C 已交叉复审并反馈纠正；等待最终合同发布，尚未编码** | 研究服务/编辑器/新选择组件及定点测试由 B 申请，公共 schema/授权交 C。真实法库联调、全文取得、AI/MCP、G05/G06 剩余均未自动进入本批 |
+| A：用户指定客户/事项组；`/workspace/scratch/1fb3f0cf432f/lexorder-a`；main | **A1=G03 日期/类型/事项筛选及准确返回已审定，发布本次合同后在独立检出单写实施** | 准确八个生产文件和定点测试见 §7.16.5。不得修改四主文档、schema、公共授权或全局壳；G01/F10/D08/G12 及联系人/原件关系未进入本批 |
+| B：用户指定材料/研究组；`/workspace/scratch/36f32dac17c2/lexorder-b`；main | **B1=G10-1 已保存类案采用及来源绑定已审定，发布本次合同后在独立检出单写实施** | 准确六个生产文件和定点测试见 §7.16.6。公共 schema/授权由 C 保留；新查询直接接续、真实法库联调、全文、AI/MCP、G05/G06 剩余未进入本批 |
 | C：本会话 `/root`；`/workspace/scratch/618136981e82/lexorder-c`；main | **C0 已以 `de4ca5a` 发布；C1=D02 代码与开发静态复审完成，见 §8.45；用户桌面待验** | C1 仅改 `src/app/moan-pages.css` 的 `.mo-dossier .dos-proc*`，本片结束。四主文档、共享合同与全局文件/main 仍由 C 独占；后续使用须按准确小批登记 |
 | C2：同一 C 检出/唯一写者 | **W12 已选交付材料移除的来源声明同步，审定合同随 C1 交付发布后实施** | 仅 `src/components/deliveries/delivery-panel.tsx`、`src/tests/components/delivery-panel.test.tsx`；合同见 §7.16.4。无 schema/公共授权/数据库/运行进程变更 |
 
-C 内部 `c_d02_plan_review`、`c_m3_acceptance_review` 及后者的归档只读审查均无源码/文档写权，不占据 A/B 角色。`/workspace/LexOrder`、`/workspace/lexorder-case-audit`、历史 `lexorder-s10` 保留原成果，不用作新的并行写入检出。A/B 的临时交接可在各自检出忽略提交的 `.runtime/` 提供方案/patch 与 base SHA；C 读取后把正式合同和证据写回本账本，不另建并行主计划。每个检出始终一名写者；同一运行进程或隔离数据库必须另行登记当次 owner，当前 C0/C1 不占数据库。
+C 内部 `c_d02_plan_review`、`c_m3_acceptance_review` 及后者的归档只读审查均无源码/文档写权，不占据 A/B 角色。`/workspace/LexOrder`、`/workspace/lexorder-case-audit`、历史 `lexorder-s10` 保留原成果，不用作新的并行写入检出。A/B 的临时交接可在各自检出忽略提交的 `.runtime/` 提供方案/patch 与 base SHA；C 读取后把正式合同和证据写回本账本，不另建并行主计划。每个检出始终一名写者；同一运行进程或隔离数据库必须另行登记当次 owner。
+
+**首批数据库时段：** C0/C1/C2 均不占数据库。B1 优先取得既有合成 `_test` 库的串行运行权，B 准备好并在临时交接登记开始后可使用；随后明确停止并交还 C，C 再交 A1，最后由 C 做普通归档成功链。其余组等待，只能并行静态/纯组件检查。不得同时修改同库全局角色/制度/模板或 fixtures；不新建维护环境、不重置已有库、不无理由重复迁移。既有库连接和密钥仅在本机忽略文件传递，绝不写入公开文档。
 
 **本次开工核对：** 远端只有 `main@c456e4b` 和 `docs/round-issues-20261117@2874ab7`，旧报告分支已是 main 祖先、独有提交为 0，开放 PR 为 0。历史两个检出干净且旧成果已有后续主线记录；没有发现需要重复合并的业务。C 每阶段结束再次 fetch 和核对检出/账本；未推送外部会话状态仍明确未知。
 
@@ -1325,6 +1327,43 @@ C 与 M3 只读审查者已分别读完整 `DeliveryPanel → prepareDelivery �
 | 验证边界 | 运行该组件文件和受影响lint/类型、diff检查；不跑PG或全量。用户另验移除/取消勾选、失败保稿、已保存清单不可改；静态/组件不代替真实浏览器 |
 
 首轮由 M3 审查沿实际数据流确认，C 复读服务schema和两处回调；独立复审纠正测试必须经过真实UI构造载荷并用真实schema，不只断言mock接收了filter结果，也不改变全套mock默认行为。无剩余开工阻断；先随 C1 完成记录发布该认领，发布后才修改这两个文件。
+
+#### 7.16.5 A1：客户动态完整集合筛选与准确返回
+
+A 已提交本人身份、准确文件及三路只读审查方案，C 实读九来源查询/授权/游标并另作独立交叉复审。当前仅有 clientId/cursor，没有日期/来源类型/事项过滤；原20条页长、40条扫描批、200条预算、加密游标及确切CONTEXT旧修订读取继续复用。基线为 `d359fdc`（较 A 提案的 `de4ca5a` 仅增加已审定 D02 与文档）。先发布本合同，A 同步后编码。
+
+| 冻结合同 | 实际边界 |
+| --- | --- |
+| 输入/日期 | 独立 ClientHistoryInput={clientId,cursor?,from?,to?,source?,matterId?}，不改变其他 ClientPageInput。from/to 为有效上海业务日界，可单端；无效/倒置/重复URL参数拒绝，不自动清筛选。服务端查询先筛选后扫描/分页，不只过滤当前20条 |
+| 九源真实语义 | CLIENT_ACTIVITY/CONTEXT/DELIVERY/FEE/NOTE 用 occurredAt；CONTACT/FOLLOW_UP/INTAKE/MATTER 用 createdAt，跟进 dueAt 不是该历史行日期。CLIENT_ACTIVITY/FOLLOW_UP 保 relationshipRights.canRead；INTAKE 保原 canMatters 与 intakeReadVisibilityFilter；其他资格按原源分别保持，不顶层增加 matters.read |
+| 事项条件 | CONTEXT/MATTER/NOTE 交原可见事项集合；FEE 交原 financeMatters 且 RECEIVED/CONFIRMED，不新加事项读门槛；DELIVERY 按 recipientClientId、真实 delivery.matterId 及原清单/凭据深资格，不强加主/共同客户关系。INTAKE 交真实 Intake.matter.id；无事项外键的客户沟通/联系人/跟进在显式事项过滤下不返回，不猜关系 |
+| 候选/当前名称 | 新客户域候选Action只回 id/title/internalCode 与不透明游标；复用有界 MATTER/DELIVERY 两流，候选不随日期/类型收窄，页内去重，跨页可重复。交付必须通过原逐事件/清单/凭据资格才披露关联；收案转成的事项同时核当前事项读资格。selectedMatter 在同次当前授权事务读取，仅表示显式事项标题可读，不证明客户关联，不反向补候选；撤权/删除保ID与主动清除，不缓存补名 |
+| 游标/返回 | history 游标绑定用户/客户/kind及规范四筛选标量，旧无筛选游标明确失效；不增加hash或旧fallback。候选用 historyMatters kind。URL为historyFrom/historyTo/historySource/historyMatterId，应用/清除保客户/tab/合法returnTo、清旧cursor/row。确切CONTEXT返回携同筛选、当前请求cursor及行ID，不带nextCursor |
+| 交互/草稿 | 现标题下日期/类型/事项/清除，沿现Popover/Select/Input。只重挂历史结果，不重挂客户其他页签或扩共享分页Hook；初始服务端filters与URL不匹配必须重读，即使cursor/row均空。失败不当空、迟到不覆盖、隐藏页签不抢焦点，所选名称只用匹配当前请求的成功payload |
+| 准确生产文件 | `src/lib/clients/history.ts`、`navigation.ts`；`src/server/clients/history-cursor.ts`、`history-service.ts`、`history-actions.ts`；`src/app/(app)/clients/[id]/page.tsx`、`_components/client-history-panel.tsx`、新增`_components/client-history-filters.tsx` |
+| 定点测试文件 | `src/tests/server/client-history.integration.test.ts`、`client-history-cursor.test.ts`、`delivery-history.integration.test.ts`；`src/tests/lib/client-navigation.test.ts`；`src/tests/app/client-history-location.test.tsx`、新增`client-history-filters.test.tsx`；仅受页面mock影响时同步`client-master-edit.test.tsx`/`client-settings-tabs.test.tsx` |
+| 必要验收 | 上海边界/非法区间、页外命中/同刻稳定分页、游标换条件拒绝、三类无事项关系、真实转案、finance-only/recipient-only/隐藏交付及撤权；第二页旧指示返回同条件/请求页/行、旧props换条件、失败/迟到/页外选择。受影响类型/lint与独占PG；浏览器/专业待用户 |
+
+先后纠正了统一套事项读权限、用六张卡/当前历史当候选集合、跟进日期误用dueAt、原生history更新后复用旧server props、清空条件或缓存补旧事项名等问题。C 复审补明 INTAKE/沟通/跟进原门槛；实施复审另核候选游标仍记录真实扫描事件而非matterId、查询OR与页界OR用AND组合、带筛选读取回调稳定、旧history与其他现行游标分别验证。在冻结边界内无剩余开工阻断。G03原件/联系人、G01、D07共享分页呈现及D03责任整合均不顺带编码；若需要额外文件先交 C 更新本合同。
+
+#### 7.16.6 B1：已有类案材料进入当前研究（G10-1）
+
+B 已提交本人确认、方案、固定参考与交叉复审，C 复读现有保存Action/审计、研究JSON合同、来源读取和后续稿件消费者，再由独立只读审查者核对。研究已有手工选材与 queryLog/lawMetadata，不新建模型。先发布本合同，B 同步正式main后编码。
+
+| 冻结合同 | 实际边界 |
+| --- | --- |
+| 入口/已知范围 | 既有ResearchEditor「依据与阅读」→采用已保存类案→现Dialog选本案确切Document版本、查看材料所载元信息与片段性质→明确加入当前草稿；不联网、不新查法库、不宣称取得全文 |
+| 识别能证明什么 | 当前可读、未撤回且有可靠原件标识的具体Document；审计action仅两种YUANDIAN_CASE_SAVE、targetType=Matter、targetId=当前matterId、detail.documentId精确匹配。审计只证明经过“元典保存入口”，原Action直接收客户端caseHit，故元信息仍待核实；文件名/tags/同族新版均不当依据。audit失败可漏记，没审计仍可走原手工选材，不冒称候选完整 |
+| 最小接口 | ResearchOptions增savedCaseDocumentIds；新增getSavedCaseResearchInput(matterId,documentId)返回已通过schema的source、query和必要展示值。候选不是授权票据，读原件前与异步读取后发布前分别核当前真实会话、事项研究写资格、文档与已有SHA；storage I/O不长期持锁，普通读取不重算hash，不改公共read-release或授权服务 |
+| MD/元信息 | 只读既有两种生成格式的固定头，严格单行/顺序/数量；正文不参与身份匹配，换行/重复/分隔符歧义拒绝自动填入或明确未知。材料所载保存时间与审计保存时间分开，均不作检索/取得日期；裁判日期只在说明，不填效力期，地区不自动成为法域。缺原查询只记录真实已保存材料阅读范围 |
+| 来源性质 | source固定CASE/PENDING/CONTEXT，不造PDF页/锚点；query有片段为SUMMARY/UNREAD，仅链接为LINK/NOT_OBTAINED，均无为NONE/NOT_OBTAINED，不自动READ/CHECKED/FULLTEXT。未知法域/权益/取得时点留空；不执行或抓取材料中的任意链接 |
+| 派生绑定 | ResearchQuery JSON增加可选sourceDocumentId，普通人工查询可无，本批自动采用必填；保存要求同ID仍在sources中。移除来源但保留自动查询时提示保留来源或自行移除查询，保草稿，不静默删除编辑过的query。updateQuery/保存/重开保绑定，原prepareSource固定SHA/授权及派生读取继续覆盖；无DB迁移 |
+| 合并/限额 | 用户确认时基于最新草稿检查重复、50来源/40查询，单次同时追加source+query。自动字段先过实际schema，超长/歧义字段就地说明，不静默截断案号/链接或填入必然无法保存的草稿；取消/换对象/关闭/只读/pending/迟到不清原正文、不追加旧响应 |
+| 准确生产文件 | `src/server/research/contracts.ts`、`actions.ts`、`service.ts`、新增`saved-case-source.ts`；`src/components/research/research-editor.tsx`、新增`research-saved-case-picker.tsx` |
+| 定点测试文件 | `src/tests/server/research.integration.test.ts`、按需`research-contracts.test.ts`、新增`saved-case-source.test.ts`/`saved-case-source.integration.test.ts`；`src/tests/app/research-workspace.test.tsx`、新增`research-saved-case-picker.test.tsx`。不机械创建未消费文件；追加生产文件先交 C |
+| 必要验收 | 精确保存审计/固定版；伪标签、越案、无审计、撤回/失权、读后撤权；头部歧义/未知/超长、时间和片段性质；来源被移除但query仍在时拒绝保稿，保存重开绑定保留，来源撤权后研究和分析稿沿原规则拒绝；弹窗限额/重复/取消/迟到。定点API/组件/类型/lint，PG按登记串行 |
+
+审查纠正已纳入：保存审计不证明第三方内容真实性；原审计吞错不回填；新增自动query不能脱离来源资格；固定头不能从正文搜索；不将保存时间/裁判日期填错业务时点；schema限长须在采用前处理。此冻结合同下无剩余开工阻断。schema/迁移、derivation-access、原保存Action、新查询/AI/MCP/全文、全局壳和四文档均不属 B1 写范围。G10总号仅能关闭本子范围，后续分支保留。
 
 ## 8. 交接：完成范围、证据与未覆盖项
 
