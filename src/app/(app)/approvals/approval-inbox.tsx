@@ -39,9 +39,11 @@ import { ARCHIVE_DOCUMENT_STATUS_LABELS } from "@/lib/archive/snapshot";
 import { formatDateTime } from "@/lib/utils";
 import { DocumentReviewPanel } from "@/components/document-reviews/document-review-panel";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
+import { IntakeMaterialContinuationView } from "@/components/intakes/material-continuation";
 
 type Data = Awaited<ReturnType<typeof listApprovalWorkspace>>;
 type Selection = { id: string; action: ApprovalAction };
+type ConversionResult = Awaited<ReturnType<typeof convertIntakeToMatter>> & { intakeId: string };
 const dateText = (date: Date | string | null) => date ? formatDateTime(date) : "—";
 
 export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data; initialSelection?: Selection; returnTo?: string }) {
@@ -50,6 +52,8 @@ export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data
   const [query, setQuery] = useState(data.query.q ?? "");
   const [selected, setSelected] = useState<Selection | null>(null);
   const [detail, setDetail] = useState<Awaited<ReturnType<typeof getApprovalDetail>> | null>(null);
+  const [conversionResult, setConversionResult] = useState<ConversionResult | null>(null);
+  const conversionResultRef = useRef<ConversionResult | null>(null);
   const [returnTarget, setReturnTarget] = useState<Awaited<ReturnType<typeof getApprovalDetail>>["returnTarget"]>(null);
   const [loading, setLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
@@ -165,6 +169,18 @@ export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data
       !await confirmDialog({ title: "放弃未保存的审批或复核内容？", confirmText: "放弃并离开", cancelText: "继续填写", initialFocus: "cancel" })) return;
     router.push(href);
   }
+  async function followConversion(event: React.MouseEvent<HTMLAnchorElement>, href: string, result: ConversionResult) {
+    event.preventDefault();
+    const current = dialogState.current;
+    const sequence = openSequence.current;
+    if (conversionResultRef.current !== result || current.pending || current.reviewBusy) return;
+    if ((current.reviewDirty || current.note || current.file || current.invoiceNo || current.verified || current.intakeDirty) &&
+      !await confirmDialog({ title: "放弃未保存的审批或复核内容？", confirmText: "放弃并离开", cancelText: "继续填写", initialFocus: "cancel" })) return;
+    const latest = dialogState.current;
+    if (conversionResultRef.current !== result || latest.pending || latest.reviewBusy || sequence !== openSequence.current ||
+      latest.selected?.id !== current.selected?.id || latest.selected?.action !== current.selected?.action) return;
+    router.push(href);
+  }
   const returnControl = returnTarget?.status === "AVAILABLE" && returnTarget.href
     ? <a href={returnTarget.href} onClick={event => void followReturn(event, returnTarget.href)}>返回案件</a>
     : returnTarget?.status === "UNAVAILABLE" ? <Link href="/matters" onClick={event => void followReturn(event, "/matters")}>案件列表</Link> : null;
@@ -174,6 +190,7 @@ export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data
     if (!selected || !detail?.task || detail.task==="terminate" || pending || reviewBusy) return;
     if (reviewDirty) { toast.error("请先保存复核内容，再处理审批"); return; }
     const r = selected;
+    const sequence = openSequence.current;
     if (decision === "approve" && (detail.task === "issue" || detail.task === "stamp") && !file) { toast.error(detail.task === "issue" ? "请上传电子发票" : "请上传盖章后的 PDF 扫描件"); return; }
     if (decision === "approve" && r.action === "INVOICE_APPROVE" && file && !invoiceNo.trim()) { toast.error("上传电子发票时必须填写发票号码"); return; }
     if (decision !== "approve" && !note.trim()) { toast.error("请填写原因"); return; }
@@ -182,7 +199,11 @@ export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data
         if (detail.task === "stamp") {
           const fd = new FormData(); fd.set("id", r.id); if (file) fd.set("stampedDoc", file); await stampSealRequest(fd);
         } else if (r.action === "INTAKE_APPROVE") {
-          if (decision === "approve") await convertIntakeToMatter(r.id, note);
+          if (decision === "approve") {
+            const converted = { ...await convertIntakeToMatter(r.id, note), intakeId: r.id };
+            conversionResultRef.current = converted;
+            setConversionResult(converted);
+          }
           else if (decision === "revision") await markIntakeNeedsRevision({ id: r.id, reason: note });
           else await declineIntake({ id: r.id, reason: note });
         } else if (r.action === "DOCUMENT_APPROVE") {
@@ -196,7 +217,8 @@ export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data
           if (decision === "approve") await approveSealRequest({ id: r.id, note }); else await rejectSealRequest({ id: r.id, reason: note });
         }
         toast.success("处理完成，可在“我已处理”中查阅");
-        finishDetail(); router.refresh();
+        if (openSequence.current === sequence && dialogState.current.selected?.id === r.id && dialogState.current.selected?.action === r.action) finishDetail();
+        router.refresh();
       } catch (e) {
         toast.error(e instanceof Error ? actionErrorMessage(e) : "处理失败");
         // 状态或权限已变化时重读详情，不能保留失效的处理按钮。
@@ -248,6 +270,12 @@ export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data
     />
     {returnTarget?.status === "AVAILABLE" && returnTarget.href && <a className="text-sm underline" href={returnTarget.href}>返回案件</a>}
     {returnTarget?.status === "UNAVAILABLE" && <Link className="text-sm underline" href="/matters">案件列表</Link>}
+
+    {conversionResult ? <section aria-label="转案结果" className="mb-3 space-y-2 rounded-md border p-3">
+      <p role="status" className="text-sm font-medium">案件已创建 · {conversionResult.internalCode}</p>
+      <IntakeMaterialContinuationView value={conversionResult.materialContinuation}
+        onFollow={(event, href) => void followConversion(event, href, conversionResult)} />
+    </section> : null}
 
     <Segmented
       className="mb-3"

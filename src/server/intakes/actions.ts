@@ -19,7 +19,7 @@ import { approvalTransaction, approvalAudit, assertApprovalItem, approvalContext
 import { revalidatePath } from "next/cache";
 import { Prisma, type ClientIdType, type ClientType, type LitigationStanding, type PartyType, type PartyRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { defaultStageNamesForProcedure } from "@/lib/procedure-stage-defaults";
+import { readIntakeMaterialContinuation } from "./material-continuation";
 import { requireSession } from "@/lib/auth/session";
 import { audit, auditTx } from "@/server/audit";
 import { intakeVisibilityFilter, intakeReadVisibilityFilter, teamIntakeFilter } from "@/lib/permissions";
@@ -279,14 +279,16 @@ export async function getIntakeById(id: string) {
     });
   }
   if (!intake) return null;
+  const materialContinuation = intake.status === "CONVERTED" && intake.matter
+    ? await readIntakeMaterialContinuation(session.user.id, intake.id, intake.matter.id) : null;
   const businessAccess = await prisma.intake.findFirst({
     where: { id, ...intakeVisibilityFilter(session.user.id, session.user.role, session.user.rolePermissions) }, select: { id: true }
   });
-  if (!businessAccess) return { ...intake, teamReadOnly: true,
+  if (!businessAccess) return { ...intake, materialContinuation, teamReadOnly: true,
     feeType: null, feeAmount: null, contingencyTerms: null, feeSchedule: null, feeNote: null,
     documents: [], conflictChecks: []
   };
-  return { ...intake, teamReadOnly: !hasCustomPermission(session.user, "matters.write"),
+  return { ...intake, materialContinuation, teamReadOnly: !hasCustomPermission(session.user, "matters.write"),
     ...(!hasCustomPermission(session.user, "finance.read") ? { feeType: null, feeAmount: null, contingencyTerms: null, feeSchedule: null, feeNote: null } : {}),
     ...(!hasCustomPermission(session.user, "documents.read") ? { documents: [] } : {})
   };
@@ -857,16 +859,13 @@ export async function convertIntakeToMatter(intakeId: string, note?: string) {
         });
     }
 
-    // 把 Intake 上传的合同回填 matterId（保留 intakeId 溯源），并归入首程序的第一个环节
-    // （2026-09-16 用户确认：委托代理合同等收案材料应直接出现在「代理授权 / 委托手续」环节，而不是只在总览可见）
+    // 保留收案原件身份和 intakeId 溯源；归入真实程序，未指定环节的材料仍保持未归属环节。
     if (intake.documents.length > 0) {
-      const firstStageName = defaultStageNamesForProcedure(firstProcedureType)[0] ?? null;
       await tx.document.updateMany({
         where: { intakeId: intake.id },
         data: {
           matterId: m.id,
-          procedureId: firstProcedure.id,
-          ...(firstStageName ? { tags: { push: `阶段:${firstStageName}` } } : {})
+          procedureId: firstProcedure.id
         }
       });
     }
@@ -888,7 +887,7 @@ export async function convertIntakeToMatter(intakeId: string, note?: string) {
 
     await transferIntakeUrgency(tx,intake.id,m.id);
     if(await intakeWorkflowReady(tx))await recordMatterReviewTx(tx,session.user.id,m.id,`承接收案审批已复核的主体与范围。${intake.conflictChecks[0]?.note??""}`);
-    return m;
+    return { ...m, procedureId: firstProcedure.id };
   });
 
   await audit({
@@ -903,5 +902,6 @@ export async function convertIntakeToMatter(intakeId: string, note?: string) {
   revalidatePath("/approvals");
   revalidatePath(`/intakes/${intake.id}`);
   revalidatePath("/matters");
-  return { ok: true, matterId: matter.id, internalCode };
+  const materialContinuation = await readIntakeMaterialContinuation(session.user.id, intake.id, matter.id);
+  return { ok: true, matterId: matter.id, internalCode, procedureId: matter.procedureId, materialContinuation };
 }

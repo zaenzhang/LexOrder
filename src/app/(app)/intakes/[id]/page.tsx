@@ -22,6 +22,7 @@ import {
 } from "@/lib/enums";
 import { ConflictSection } from "./_components/conflict-section";
 import { IntakeActions } from "./_components/intake-actions";
+import { IntakeMaterialContinuationView } from "@/components/intakes/material-continuation";
 import { matterHref } from "@/lib/matters/route";
 import { formatDate } from "@/lib/utils";
 
@@ -42,6 +43,7 @@ export default async function IntakeDetailPage({ params }: PageProps) {
         title={intake.title}
         sub={<>团队查看 · 收案信息 · <span className="badge b-white">{intakeStatusLabel[intake.status]}</span></>}
       />
+      {intake.materialContinuation ? <IntakeMaterialContinuationView value={intake.materialContinuation} /> : null}
       <Panel title="收案信息">
         <FieldGrid cols={3}>
           <FieldItem label="主办律师">{intake.ownerUser?.name ?? "尚未指定"}</FieldItem>
@@ -182,6 +184,8 @@ export default async function IntakeDetailPage({ params }: PageProps) {
           ) : null
         }
       />
+
+      {intake.materialContinuation ? <IntakeMaterialContinuationView value={intake.materialContinuation} /> : null}
 
       {workflowEnabled&&isEditor&&<RevisionControls id={id} status={intake.status}/>}
       <WorkResponsibilityPanel data={await getWorkBoard({intakeId:id})} intakeId={id}/>

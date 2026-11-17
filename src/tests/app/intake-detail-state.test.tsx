@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { IntakeStatus } from "@prisma/client";
+import type { IntakeMaterialContinuation } from "@/server/intakes/material-continuation";
 
 const mock = vi.hoisted(() => ({
   intake: vi.fn(), canApprove: vi.fn(), refresh: vi.fn(),
@@ -35,6 +36,7 @@ function intake(status: IntakeStatus) {
     id: "intake-state", title: "合成收案状态核查", status, category: "CIVIL_COMMERCIAL", teamReadOnly: false,
     receivedAt: new Date("2026-11-01T00:00:00Z"), createdById: "applicant", ownerUserId: "lead",
     ownerUser: { name: "合成主办" }, client: null, parties: [], matter: null, description: null,
+    materialContinuation: null as IntakeMaterialContinuation | null,
     declinedReason: null, firstAgency: null, cause: null, causeFreeText: null,
     conflictChecks: [{
       id: "check", conclusion: "DIFFERENT", note, checkedAt: new Date("2026-11-02T02:00:00Z"),
@@ -112,5 +114,49 @@ describe("收案详情按状态和身份提供入口", () => {
     expect(screen.queryByRole("button", { name: "复核并送审" })).not.toBeInTheDocument();
     expect(mock.canApprove).not.toHaveBeenCalled();
     expectReadonlyConclusion();
+  });
+
+  it.each([false, true])("G11 已转案详情在 teamReadOnly=%s 分支提供当前获准的真实未归属环节入口", async teamReadOnly => {
+    const href = "/matters/TEST-CONVERTED?view=work&workPane=materials&procedure=actual-procedure&stage=unassigned";
+    mock.intake.mockResolvedValue({ ...intake("CONVERTED"), teamReadOnly,
+      matter: { id: "converted-matter", internalCode: "TEST-CONVERTED" },
+      materialContinuation: { status: "AVAILABLE", intakeHref: "/intakes/intake-state", empty: false, unassigned: true,
+        targets: [{ href, label: "合成程序 · 未归属环节材料" }] } satisfies IntakeMaterialContinuation,
+    });
+    render(await IntakeDetailPage({ params: Promise.resolve({ id: "intake-state" }) }));
+    expect(screen.getByRole("link", { name: "合成程序 · 未归属环节材料" })).toHaveAttribute("href", href);
+    expect(screen.queryByRole("button", { name: "编辑收案资料" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "审批通过" })).not.toBeInTheDocument();
+  });
+
+  it("G11 无材料资格仍保原案件概况入口，不借它开放材料链接", async () => {
+    mock.intake.mockResolvedValue({ ...intake("CONVERTED"), matter: { id: "converted-matter", internalCode: "TEST-CONVERTED" },
+      materialContinuation: { status: "DENIED", intakeHref: "/intakes/intake-state" } satisfies IntakeMaterialContinuation });
+    render(await IntakeDetailPage({ params: Promise.resolve({ id: "intake-state" }) }));
+    expect(screen.getByRole("link", { name: /已转为案件 TEST-CONVERTED/ })).toHaveAttribute("href", "/matters/TEST-CONVERTED");
+    expect(screen.getByText(/当前没有案件材料读取资格/)).toBeVisible();
+    expect(screen.queryByRole("link", { name: /材料/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "重新读取收案详情" })).not.toBeInTheDocument();
+  });
+
+  it("G11 可选读取失败保留收案详情；只展示已验证的收案回程，失败不冒充空态", async () => {
+    mock.intake.mockResolvedValue({ ...intake("CONVERTED"), teamReadOnly: true,
+      materialContinuation: { status: "UNAVAILABLE", intakeHref: "/intakes/intake-state" } satisfies IntakeMaterialContinuation });
+    const view = render(await IntakeDetailPage({ params: Promise.resolve({ id: "intake-state" }) }));
+    expect(screen.getByRole("heading", { name: "合成收案状态核查" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "重新读取收案详情" })).toHaveAttribute("href", "/intakes/intake-state");
+    expect(screen.queryByText("本次收案当前没有可读材料。")).not.toBeInTheDocument();
+    mock.intake.mockResolvedValue({ ...intake("CONVERTED"), teamReadOnly: true,
+      materialContinuation: { status: "UNAVAILABLE", intakeHref: null } satisfies IntakeMaterialContinuation });
+    view.rerender(await IntakeDetailPage({ params: Promise.resolve({ id: "intake-state" }) }));
+    expect(screen.queryByRole("link", { name: "重新读取收案详情" })).not.toBeInTheDocument();
+    expect(screen.getByText(/有权经办可稍后从收案详情查看材料/)).toBeVisible();
+    mock.intake.mockResolvedValue({ ...intake("CONVERTED"), teamReadOnly: true,
+      materialContinuation: { status: "AVAILABLE", intakeHref: "/intakes/intake-state", empty: true, unassigned: false,
+        targets: [{ href: "/matters/TEST-CONVERTED?view=work&workPane=materials", label: "查看全案材料" }] } satisfies IntakeMaterialContinuation });
+    view.rerender(await IntakeDetailPage({ params: Promise.resolve({ id: "intake-state" }) }));
+    expect(screen.getByText("本次收案当前没有可读材料。")).toBeVisible();
+    expect(screen.queryByText(/材料接续暂不可用/)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "查看全案材料" })).toHaveAttribute("href", "/matters/TEST-CONVERTED?view=work&workPane=materials");
   });
 });

@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { getApprovalDetail, listApprovalWorkspace } from "@/server/approval-permissions/inbox";
 
-const mocks = vi.hoisted(() => ({ detail: vi.fn(), approve: vi.fn(), ask: vi.fn(), push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), params: "" }));
+const mocks = vi.hoisted(() => ({ detail: vi.fn(), approve: vi.fn(), convert: vi.fn(), ask: vi.fn(), push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), params: "" }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push, replace: mocks.replace, refresh: mocks.refresh }), useSearchParams: () => new URLSearchParams(mocks.params) }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: mocks.ask }));
@@ -11,7 +11,7 @@ vi.mock("@/app/(app)/approvals/approval-create-menu", () => ({ ApprovalCreateMen
 vi.mock("@/components/matters/execution-termination-panel", () => ({ ExecutionTerminationPanel: () => null }));
 vi.mock("@/app/(app)/approvals/invoice-recognition", () => ({ InvoiceRecognition: () => null }));
 vi.mock("@/server/invoices/actions", () => ({ approveInvoiceRequest: mocks.approve, rejectInvoiceRequest: vi.fn() }));
-vi.mock("@/server/intakes/actions", () => ({ convertIntakeToMatter: vi.fn(), declineIntake: vi.fn(), markIntakeNeedsRevision: vi.fn(), resubmitIntake: vi.fn() }));
+vi.mock("@/server/intakes/actions", () => ({ convertIntakeToMatter: mocks.convert, declineIntake: vi.fn(), markIntakeNeedsRevision: vi.fn(), resubmitIntake: vi.fn() }));
 vi.mock("@/server/documents/actions", () => ({ approveDocument: vi.fn(), rejectDocument: vi.fn(), submitDocumentForReview: vi.fn() }));
 vi.mock("@/server/archive/actions", () => ({ approveArchiveRecord: vi.fn(), rejectArchiveRecord: vi.fn() }));
 vi.mock("@/server/seals/actions", () => ({ approveSealRequest: vi.fn(), rejectSealRequest: vi.fn(), stampSealRequest: vi.fn(), cancelSealRequest: vi.fn(), listSealTypeConfigs: vi.fn() }));
@@ -32,6 +32,23 @@ function detail(title: string, href: string | null = returnA): Detail {
   return { title, status: "PENDING", requester: "合成申请人", submittedAt: new Date("2026-11-16T08:00:00Z"), task: "approve",
     fields: [], attachments: [], history: [], intakeDetail: null, archiveReview: null, sealType: null, canResubmit: false, canCancel: false,
     returnTarget: href === null ? { status: "UNAVAILABLE", href: null } : { status: "AVAILABLE", href } };
+}
+const intakeSelection = { id: "cintake000000000000000001", action: "INTAKE_APPROVE" as const };
+const materialHref = "/matters/TEST-CONVERTED?view=work&workPane=materials&procedure=actual-procedure&stage=unassigned";
+const converted = { ok: true, matterId: "cmatter000000000000000003", internalCode: "TEST-CONVERTED", procedureId: "actual-procedure",
+  materialContinuation: { status: "AVAILABLE", intakeHref: `/intakes/${intakeSelection.id}`, empty: false, unassigned: true,
+    targets: [{ href: materialHref, label: "合成程序 · 未归属环节材料" }] } };
+async function approveIntake() {
+  await screen.findByRole("dialog", { name: "合成收案 A" });
+  fireEvent.click(screen.getByRole("checkbox", { name: /已核对申请资料/ }));
+  fireEvent.click(screen.getByRole("checkbox", { name: /同意按申请登记/ }));
+  fireEvent.click(screen.getByRole("button", { name: "审批通过" }));
+}
+function prepareConversion(result = converted) {
+  mocks.params = new URLSearchParams({ type: intakeSelection.action, id: intakeSelection.id, returnTo: returnA }).toString();
+  window.history.replaceState(null, "", `/approvals?${mocks.params}`);
+  mocks.detail.mockResolvedValue({ ...detail("合成收案 A"), intakeDetail: { rounds: [], currentParties: [], sections: [], checks: [] } });
+  mocks.convert.mockResolvedValue(result);
 }
 beforeEach(() => {
   vi.resetAllMocks(); mocks.ask.mockResolvedValue(false);
@@ -142,5 +159,83 @@ describe("审批详情读取、轮次与返回案件", () => {
     await act(async () => { finish({ ok: true }); });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(screen.getByRole("link", { name: "返回案件" })).toHaveAttribute("href", returnA);
+  });
+
+  it("G11 转案成功留在工作台并保 returnTo；旧结果链接读取后来审批的最新草稿", async () => {
+    prepareConversion();
+    const view = render(<ApprovalInbox data={data} initialSelection={intakeSelection} returnTo={returnA} />);
+    await approveIntake();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByText("案件已创建 · TEST-CONVERTED")).toBeVisible();
+    expect(screen.getByRole("link", { name: "合成程序 · 未归属环节材料" })).toHaveAttribute("href", materialHref);
+    expect(screen.getByRole("link", { name: "返回案件" })).toHaveAttribute("href", returnA);
+    expect(mocks.push).not.toHaveBeenCalled();
+    mocks.params = new URLSearchParams({ type: second.action, id: second.id, returnTo: returnB }).toString();
+    mocks.detail.mockResolvedValue(detail("后续申请 B", returnB));
+    view.rerender(<ApprovalInbox data={data} initialSelection={second} returnTo={returnB} />);
+    fireEvent.change(await screen.findByRole("textbox", { name: "审批意见或驳回原因" }), { target: { value: "B 的尚未保存意见" } });
+    fireEvent.click(screen.getByText("合成程序 · 未归属环节材料", { selector: "a" }));
+    await waitFor(() => expect(mocks.ask).toHaveBeenCalledWith(expect.objectContaining({ initialFocus: "cancel" })));
+    expect(mocks.push).not.toHaveBeenCalled();
+    expect(screen.getByRole("textbox", { name: "审批意见或驳回原因" })).toHaveValue("B 的尚未保存意见");
+    mocks.ask.mockResolvedValueOnce(true);
+    fireEvent.click(screen.getByText("合成程序 · 未归属环节材料", { selector: "a" }));
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith(materialHref));
+  });
+
+  it("G11 结果链接等待放弃确认时若当前审批开始提交，不执行迟到导航", async () => {
+    prepareConversion();
+    const view = render(<ApprovalInbox data={data} initialSelection={intakeSelection} returnTo={returnA} />);
+    await approveIntake(); await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    mocks.params = new URLSearchParams({ type: second.action, id: second.id, returnTo: returnB }).toString();
+    mocks.detail.mockResolvedValue(detail("后续申请 B", returnB));
+    view.rerender(<ApprovalInbox data={data} initialSelection={second} returnTo={returnB} />);
+    fireEvent.change(await screen.findByRole("textbox", { name: "审批意见或驳回原因" }), { target: { value: "B 当前处理意见" } });
+    let confirm!: (accepted: boolean) => void, finish!: (value: { ok: true }) => void;
+    mocks.ask.mockImplementationOnce(() => new Promise(resolve => { confirm = resolve; }));
+    mocks.approve.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    fireEvent.click(screen.getByText("合成程序 · 未归属环节材料", { selector: "a" }));
+    await waitFor(() => expect(mocks.ask).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole("button", { name: "审批通过" }));
+    await waitFor(() => expect(mocks.approve).toHaveBeenCalledOnce());
+    await act(async () => confirm(true));
+    expect(mocks.push).not.toHaveBeenCalled();
+    expect(screen.getByRole("textbox", { name: "审批意见或驳回原因" })).toHaveValue("B 当前处理意见");
+    await act(async () => finish({ ok: true }));
+  });
+
+  it("G11 旧结果链接的放弃确认迟到时，不越过后来已经选择的另一申请", async () => {
+    prepareConversion();
+    const view = render(<ApprovalInbox data={data} initialSelection={intakeSelection} returnTo={returnA} />);
+    await approveIntake(); await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    mocks.params = new URLSearchParams({ type: second.action, id: second.id, returnTo: returnB }).toString();
+    mocks.detail.mockResolvedValue(detail("后续申请 B", returnB));
+    view.rerender(<ApprovalInbox data={data} initialSelection={second} returnTo={returnB} />);
+    fireEvent.change(await screen.findByRole("textbox", { name: "审批意见或驳回原因" }), { target: { value: "B 的意见" } });
+    let confirm!: (accepted: boolean) => void;
+    mocks.ask.mockImplementationOnce(() => new Promise(resolve => { confirm = resolve; }));
+    fireEvent.click(screen.getByText("合成程序 · 未归属环节材料", { selector: "a" }));
+    await waitFor(() => expect(mocks.ask).toHaveBeenCalledOnce());
+    mocks.ask.mockResolvedValueOnce(true);
+    mocks.params = new URLSearchParams({ type: first.action, id: first.id, returnTo: returnA }).toString();
+    mocks.detail.mockResolvedValue(detail("后来选择的申请 C", returnA));
+    view.rerender(<ApprovalInbox data={data} initialSelection={first} returnTo={returnA} />);
+    await screen.findByRole("dialog", { name: "后来选择的申请 C" });
+    fireEvent.change(screen.getByRole("textbox", { name: "审批意见或驳回原因" }), { target: { value: "C 的新草稿" } });
+    await act(async () => confirm(true));
+    expect(mocks.push).not.toHaveBeenCalled();
+    expect(screen.getByRole("textbox", { name: "审批意见或驳回原因" })).toHaveValue("C 的新草稿");
+  });
+
+  it("G11 材料接续失败仍显示创建成功，不猜收案重试链接，也不重读失效审批表单", async () => {
+    prepareConversion();
+    mocks.convert.mockResolvedValue({ ...converted, materialContinuation: { status: "UNAVAILABLE", intakeHref: null } });
+    render(<ApprovalInbox data={data} initialSelection={intakeSelection} returnTo={returnA} />);
+    await approveIntake();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByText("案件已创建 · TEST-CONVERTED")).toBeVisible();
+    expect(screen.getByText(/材料接续暂不可用.*有权经办/)).toBeVisible();
+    expect(screen.queryByRole("link", { name: /材料|重新读取收案/ })).not.toBeInTheDocument();
+    expect(mocks.convert).toHaveBeenCalledOnce(); expect(mocks.detail).toHaveBeenCalledOnce(); expect(mocks.push).not.toHaveBeenCalled();
   });
 });

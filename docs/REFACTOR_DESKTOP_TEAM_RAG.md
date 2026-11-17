@@ -679,9 +679,9 @@ uploadDocument采用唯一discriminated结果合同，成功返回实际id，确
 
 ### 6.16 收案转案材料接续合同（G11，2026-11-17）
 
-计划§7.14.12采用真实未归属接续，认领发布后实施。convertIntakeToMatter保留原审批资格、状态/并发事务、冲突、来源及审计，结果携带事务新建的实际procedureId；停止写无实际stageId语义的旧阶段标签，不修改历史标签/快照，不设默认环节或补造分类。
+计划§7.14.12以d2fbc40发布认领后实施，现已完成真实未归属接续，24个本阶段用例及静态证据见计划§8.42。convertIntakeToMatter保留原审批资格、状态/并发事务、冲突、来源及审计，结果携带事务新建的实际procedureId；停止写无实际stageId语义的旧阶段标签，不修改历史标签/快照，不设默认环节或补造分类。
 
-收案领域内私有可选读取复用现权限函数：从当前有效人员/岗位核matters.read/documents.read及hasMatterBusinessAccess，再读取同intakeId+matterId、未删除且逐件canReadDocument的真实材料关联；程序须同案，stageId=null才建立本程序未归属环节目标。现getIntakeById的旧附件投影不能直接当转案后材料授权或程序身份。teamReadOnly还包含缺matters.write的合法只读经办，因此私有接续投影与完整/只读页面均按自身读取资格控制，不新增写权。已通过案件资格但无合法具体目标时，可用准确标注的全案材料入口；无资格与空材料、读取失败分别表达。
+收案领域内私有可选读取复用现权限函数：从当前有效人员/岗位核matters.read/documents.read及hasMatterBusinessAccess，再读取同intakeId+matterId、未删除且逐件canReadDocument的真实材料关联；程序须同案，stageId=null才建立本程序未归属环节目标。现getIntakeById的旧附件投影不能直接当转案后材料授权或程序身份。teamReadOnly还包含缺matters.write的合法只读经办，因此私有接续投影与完整/只读页面均按自身读取资格控制，不新增写权。已通过案件资格但无合法具体目标时，可用准确标注的全案材料入口；无资格与空材料、读取失败分别表达；原案件概况链接继续保留，不被新增材料资格判断吞掉。
 
 可选读取局部隔离，失败不改变已完成转换、不触发收案主查询404、不伪装空态或开放未经授权目标；原事务/原审计错误不一并吞掉。审批界面保存确切成功结果，链接使用最新dialogState并在放弃确认后重核busy/选择身份，既有returnTo与工作台刷新保持。只有另外核实当前收案读取资格才提供其重试链接，否则显示有权经办可稍后查看，保原我已处理入口。持久入口沿收案详情重读，不建通用导航服务、分类写入、兼容旧标签读取、schema/迁移或历史回填。
 
