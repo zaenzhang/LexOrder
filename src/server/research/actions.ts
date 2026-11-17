@@ -6,6 +6,7 @@ import { requireSession } from "@/lib/auth/session";
 import { revalidateMatter } from "@/server/matters/route";
 import { checkResearch, listResearch, previewResearchSource, readResearch, readResearchHistory, readResearchOptions, readResearchSource, saveResearch } from "./service";
 import { createResearchDraft } from "./draft";
+import { readSavedCaseResearchInput } from "./saved-case-source";
 import { researchSourceInputSchema, type ResearchCheckInput, type ResearchDraftInput, type ResearchSaveInput, type ResearchSourceInput } from "./contracts";
 
 const id = z.string().cuid("事项或研究标识无效");
@@ -24,6 +25,10 @@ export async function getResearchHistory(matterId: string, researchId: string, b
 export async function getResearchOptions(matterId: string) {
   const { user } = await requireSession("matters.write");
   return readResearchOptions(prisma, user, id.parse(matterId));
+}
+export async function getSavedCaseResearchInput(matterId: string, documentId: string) {
+  const { user } = await requireSession("matters.write");
+  return readSavedCaseResearchInput(prisma, user, id.parse(matterId), id.parse(documentId));
 }
 export async function getResearchSource(matterId: string, researchId: string, sourceId: string) {
   const { user } = await requireSession("matters.read");

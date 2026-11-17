@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { shDayKey } from "@/lib/ui/sh-time";
 import { queryAccessLabels, queryOutcomeLabels, sourceRelationLabels, lawKindLabels, researchIssueSelectionKey, type ResearchContent, type ResearchOptions, type ResearchQuery, type ResearchRevisionView, type ResearchSourceInput } from "@/server/research/contracts";
 import { ResearchSourceEditor } from "./research-source-editor";
+import { ResearchSavedCasePicker } from "./research-saved-case-picker";
 
 export function ResearchEditor({ matterId, value, onChange, options, disabled, readOnly, saved, onOpenSource, onPreviewSource, onRefreshIssues }: {
   matterId: string;
@@ -20,6 +21,12 @@ export function ResearchEditor({ matterId, value, onChange, options, disabled, r
   const textarea = (key: "purpose" | "scope" | "rule" | "exceptions" | "supportingAnalysis" | "opposingAnalysis" | "conclusion" | "unresolved" | "nextSteps", label: string, rows = 4) =>
     <div className="space-y-1.5"><Label htmlFor={`research-${key}`}>{label}</Label><Textarea id={`research-${key}`} rows={rows} readOnly={readOnly} disabled={disabled} value={value[key]} onChange={event => update({ [key]: event.target.value })} /></div>;
   function updateQuery(index: number, patch: Partial<ResearchQuery>) { update({ queryLog: value.queryLog.map((row, i) => i === index ? { ...row, ...patch } : row) }); }
+  function querySourceLabel(documentId: string) {
+    const fixed = saved?.sources.find(source => source.documentId === documentId);
+    if (fixed) return `${fixed.documentName} · V${fixed.version}`;
+    const option = options?.documents.find(document => document.id === documentId);
+    return option ? `${option.name} · V${option.version}` : "已选具体来源";
+  }
   return <Tabs defaultValue="question" className="space-y-4">
     <TabsList><TabsTrigger value="question">问题与范围</TabsTrigger><TabsTrigger value="sources">依据与阅读</TabsTrigger><TabsTrigger value="analysis">论证与结论</TabsTrigger></TabsList>
     <TabsContent value="question" className="space-y-4">
@@ -46,7 +53,9 @@ export function ResearchEditor({ matterId, value, onChange, options, disabled, r
       {textarea("scope", "范围、时限与资料限制", 3)}
     </TabsContent>
     <TabsContent value="sources" className="space-y-6">
-      <section className="space-y-3"><h3 className="font-medium text-sm">选入原文</h3>
+      <section className="space-y-3"><div className="flex items-center justify-between gap-3"><h3 className="font-medium text-sm">选入原文</h3>
+        {!readOnly && options ? <ResearchSavedCasePicker key={matterId} matterId={matterId} options={options} value={value} onChange={onChange} disabled={disabled} /> : null}
+      </div>
         {readOnly ? saved?.sources.length ? saved.sources.map(source => <div key={source.id} className="rounded-md border p-3 space-y-1.5">
           <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-sm font-medium break-words">{source.documentName} · V{source.version}</p><p className="text-xs text-muted-foreground">{sourceRelationLabels[source.relation]} · {source.locationLabel}{source.changed ? " · 已有新版本，当前研究仍采用此版" : ""}</p></div>
             <Button variant="outline" size="sm" onClick={() => onOpenSource(source.id)} disabled={disabled}>查看原文</Button></div>
@@ -61,6 +70,11 @@ export function ResearchEditor({ matterId, value, onChange, options, disabled, r
       </section>
       <section className="space-y-3"><div className="flex items-center justify-between"><h3 className="font-medium text-sm">查询与阅读记录</h3>{!readOnly ? <Button size="sm" variant="outline" disabled={disabled || value.queryLog.length >= 40} onClick={() => update({ queryLog: [...value.queryLog, { query: "", location: "", access: "NONE", outcome: "NOT_OBTAINED", notes: "" }] })}>添加记录</Button> : null}</div>
         {value.queryLog.map((query, index) => <div key={index} className="rounded-md border p-3 space-y-3">
+          {query.sourceDocumentId ? <p className={`text-xs ${value.sources.some(source => source.documentId === query.sourceDocumentId) ? "text-muted-foreground" : "text-destructive"}`}>
+            {value.sources.some(source => source.documentId === query.sourceDocumentId)
+              ? `采用的固定材料：${querySourceLabel(query.sourceDocumentId)}`
+              : "此查询采用的材料已移出来源，请保留对应来源或移除此查询记录"}
+          </p> : null}
           <div className="space-y-1.5"><Label htmlFor={`query-${index}`}>查询词或阅读范围</Label><Input id={`query-${index}`} value={query.query} disabled={disabled} readOnly={readOnly} onChange={event => updateQuery(index, { query: event.target.value })} /></div>
           <div className="grid grid-cols-[1fr_9rem_11rem] gap-3">
             <div className="space-y-1.5"><Label htmlFor={`query-location-${index}`}>来源位置或链接</Label><Input id={`query-location-${index}`} value={query.location} disabled={disabled} readOnly={readOnly} onChange={event => updateQuery(index, { location: event.target.value })} /></div>

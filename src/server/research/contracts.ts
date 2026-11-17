@@ -13,11 +13,12 @@ export const queryOutcomeLabels = {
   READ: "已阅读", NOT_OBTAINED: "尚未取得", UNREAD: "已取得未读", NO_MATCH: "核查范围内未见",
   NO_ACCESS: "无权访问", FAILED: "查询失败",
 } as const;
-export const queryAccessLabels = { FULLTEXT: "全文", SUMMARY: "摘要", LINK: "仅链接", NONE: "无资料" } as const;
+export const queryAccessLabels = { FULLTEXT: "全文", SUMMARY: "摘要 / 片段", LINK: "仅链接", NONE: "无资料" } as const;
 export const lawKindLabels = { MATERIAL: "事项材料", STATUTE: "法规", CASE: "裁判", OTHER: "其他法源" } as const;
 export const sourceRelationLabels = { SUPPORTS: "支持依据", REBUTS: "反向依据", CONTEXT: "背景资料" } as const;
 
 export const researchQuerySchema = z.object({
+  sourceDocumentId: z.string().cuid().optional(),
   query: text(1000).min(1, "请填写查询或阅读范围"),
   location: text(2000),
   access: z.enum(["FULLTEXT", "SUMMARY", "LINK", "NONE"]),
@@ -71,6 +72,14 @@ export const researchContentSchema = z.object({
   conclusion: text(15000), unresolved: text(10000), nextSteps: text(5000),
   issueSelection: researchIssueSelectionSchema.nullable(),
   sources: z.array(researchSourceInputSchema).max(50),
+}).superRefine((value, ctx) => {
+  const sourceIds = new Set(value.sources.map(source => source.documentId));
+  value.queryLog.forEach((query, index) => {
+    if (query.sourceDocumentId && !sourceIds.has(query.sourceDocumentId)) {
+      ctx.addIssue({ code: "custom", path: ["queryLog", index, "sourceDocumentId"],
+        message: "此查询采用的材料已移出来源，请保留对应来源或移除此查询记录" });
+    }
+  });
 });
 export type ResearchContent = z.infer<typeof researchContentSchema>;
 export const researchSaveSchema = researchContentSchema.and(z.object({
@@ -106,8 +115,10 @@ export type ResearchListRow = Pick<ResearchRevisionView, "id" | "seriesId" | "ve
 export type ResearchList = { records: ResearchListRow[]; canWrite: boolean; nextCursor: string | null };
 export type ResearchOptions = {
   documents: EvidenceDocumentOption[];
+  savedCaseDocumentIds: string[];
   issues: { id: string; revision: number; title: string; selection: Extract<ResearchIssueSelection, { kind: "CURRENT" }> }[];
 };
+export type SavedCaseResearchInput = { source: ResearchSourceInput; query: ResearchQuery };
 export type ResearchSourceResult = EvidenceSourceResult;
 
 export function emptyResearchContent(): ResearchContent {

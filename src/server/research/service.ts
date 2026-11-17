@@ -7,6 +7,7 @@ import { contextAccess, type ContextAccess, type ContextActor } from "@/server/m
 import { prepareSource, readSourceSnapshot, readableDocumentOptions, resolveReference, sourceReader, sourceReferences } from "@/server/evidence/source-links";
 import { evidenceEventDateFromRecord } from "@/lib/evidence/event-date";
 import { readResearchIssueSnapshot, researchIssueSnapshotSchema, type ResearchIssueSnapshot } from "./issue-snapshot";
+import { savedCaseDocumentIds } from "./saved-case-source";
 import type { SourceReference } from "@/server/evidence/contracts";
 import {
   lawMetadataSchema, researchCheckSchema, researchQuerySchema, researchSaveSchema,
@@ -250,7 +251,8 @@ export async function readResearchOptions(db: PrismaClient, actor: ContextActor,
       if (issueSources.every(source => reader.documentFor(source))) issues.push({ id: item.id, revision: item.revision, title: item.title,
         selection: { kind: "CURRENT", issueId: item.id, revision: item.revision, confirmedAt: item.confirmedAt?.toISOString() ?? null } });
     }
-    return { documents: await readableDocumentOptions(actor.id, matterId), issues };
+    const documents = await readableDocumentOptions(actor.id, matterId);
+    return { documents, issues, savedCaseDocumentIds: await savedCaseDocumentIds(tx, matterId, documents) };
   }, { timeout: 20000 });
 }
 

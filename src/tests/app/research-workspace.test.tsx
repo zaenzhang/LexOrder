@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { emptyLawMetadata, emptyResearchContent, type ResearchRevisionView } from "@/server/research/contracts";
 
 const mock = vi.hoisted(() => ({ list: vi.fn(), read: vi.fn(), options: vi.fn(), history: vi.fn(), source: vi.fn(), preview: vi.fn(),
-  save: vi.fn(), check: vi.fn(), draft: vi.fn(), ask: vi.fn(), prompt: vi.fn(), contextOptions: vi.fn(), contextChoice: vi.fn(), contextHistory: vi.fn() }));
+  save: vi.fn(), check: vi.fn(), draft: vi.fn(), savedCase: vi.fn(), ask: vi.fn(), prompt: vi.fn(), contextOptions: vi.fn(), contextChoice: vi.fn(), contextHistory: vi.fn() }));
 vi.mock("@/server/matters/context-actions", () => ({ getMatterContextInputOptions: mock.contextOptions, getMatterContextInputChoice: mock.contextChoice, getMatterContextHistory: mock.contextHistory }));
 vi.mock("@/server/research/actions", () => ({ getResearchList: mock.list, getResearch: mock.read, getResearchOptions: mock.options,
-  getResearchHistory: mock.history, getResearchSource: mock.source, getResearchSourcePreview: mock.preview,
+  getSavedCaseResearchInput: mock.savedCase, getResearchHistory: mock.history, getResearchSource: mock.source, getResearchSourcePreview: mock.preview,
   saveResearchRevision: mock.save, checkResearchRevision: mock.check, formResearchDraft: mock.draft }));
 vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: mock.ask, promptDialog: mock.prompt }));
 vi.mock("@/server/documents/processing-actions", () => ({ listMaterialSources: vi.fn() }));
@@ -14,6 +14,13 @@ import { ResearchWorkspace } from "@/components/research/research-workspace";
 
 const matterId = "cm00000000000000000000001", researchId = "cm00000000000000000000002", documentId = "cm00000000000000000000003";
 const choose = vi.fn(), openDocument = vi.fn();
+const scrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
+async function selectOption(label: string, option: string) {
+  const trigger = screen.getByRole("combobox", { name: label });
+  fireEvent.keyDown(trigger, { key: "ArrowDown" });
+  fireEvent.keyDown(await screen.findByRole("option", { name: option }), { key: "Enter" });
+  await waitFor(() => expect(trigger).toHaveFocus());
+}
 function view(id = researchId, question = "合成旧法研究"): ResearchRevisionView {
   return { id, seriesId: "series", version: 1, current: true, createdAt: "2026-11-16T08:00:00Z", authorName: "合成律师",
     checkedAt: null, checkedByName: null, checkNote: null, readable: true, content: { ...emptyResearchContent(), question },
@@ -21,15 +28,52 @@ function view(id = researchId, question = "合成旧法研究"): ResearchRevisio
 }
 beforeEach(() => {
   vi.resetAllMocks();
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: vi.fn() });
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   mock.list.mockResolvedValue({ records: [], canWrite: true, nextCursor: null });
-  mock.options.mockResolvedValue({ documents: [], issues: [] });
+  mock.options.mockResolvedValue({ documents: [], savedCaseDocumentIds: [], issues: [] });
   mock.read.mockResolvedValue(view());
   mock.ask.mockResolvedValue(false);
   mock.history.mockResolvedValue({ records: [view()], nextVersion: null });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  if (scrollIntoView) Object.defineProperty(HTMLElement.prototype, "scrollIntoView", scrollIntoView);
+  else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+  vi.unstubAllGlobals();
+});
 
 describe("研究工作区的保存与来源连续性", () => {
+  it("从依据入口采用固定类案；移除来源后保留编辑过的记录并阻止保存，补回来源再提交同一绑定", async () => {
+    const name = "合成已保存类案.md", source = { documentId, page: null, relation: "CONTEXT", lawMetadata: { ...emptyLawMetadata(), kind: "CASE", title: "合成案名" } };
+    const query = { sourceDocumentId: documentId, query: "已保存类案片段（原查询未记录）", location: "https://example.invalid/case", access: "SUMMARY", outcome: "UNREAD", notes: "材料所载元信息，待核实" };
+    mock.options.mockResolvedValue({ documents: [{ id: documentId, name, version: 1, isPdf: false, pageCount: null, hasIdentity: true }], savedCaseDocumentIds: [documentId], issues: [] });
+    mock.savedCase.mockResolvedValue({ source, query });
+    mock.save.mockResolvedValue({ id: researchId, version: 1, replayed: false });
+    render(<ResearchWorkspace matterId={matterId} onSelectResearch={choose} onOpenDocument={openDocument} />);
+    fireEvent.click(await screen.findByRole("button", { name: "新建研究" }));
+    fireEvent.change(await screen.findByLabelText("研究问题"), { target: { value: "保留采用前的研究问题" } });
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "依据与阅读" }), { button: 0 });
+    fireEvent.click(screen.getByRole("button", { name: "采用已保存类案" }));
+    await selectOption("已保存类案材料", `${name} · V1`);
+    fireEvent.click(screen.getByRole("button", { name: "读取材料元信息" }));
+    await screen.findByText("合成案名");
+    fireEvent.click(screen.getByRole("button", { name: "加入研究" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("查询词或阅读范围"), { target: { value: "已手工核对的阅读范围" } });
+    fireEvent.change(screen.getByLabelText("发现、限制或失败原因"), { target: { value: "保留人工批注；全文仍待取得" } });
+    fireEvent.click(screen.getByRole("button", { name: "移除" }));
+    fireEvent.click(screen.getByRole("button", { name: "保存研究" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("请保留对应来源或移除此查询记录");
+    expect(mock.save).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("发现、限制或失败原因")).toHaveValue("保留人工批注；全文仍待取得");
+    await selectOption("选择研究来源材料", `${name} · V1`);
+    fireEvent.click(screen.getByRole("button", { name: "选入" }));
+    fireEvent.click(screen.getByRole("button", { name: "保存研究" }));
+    await waitFor(() => expect(mock.save).toHaveBeenCalledTimes(1));
+    expect(mock.save.mock.calls[0][0]).toMatchObject({ question: "保留采用前的研究问题", sources: [{ documentId }],
+      queryLog: [{ ...query, query: "已手工核对的阅读范围", notes: "保留人工批注；全文仍待取得" }] });
+  });
   it("出稿选择属于本次文书，失败重试保留固定输入及原请求，不写回研究", async () => {
     const selection = { recordId: "cm00000000000000000000004", expectedCurrentRecordId: "cm00000000000000000000005", expectedConfirmedAt: null };
     mock.contextOptions.mockResolvedValue({ choices: [{ selection, kind: "INSTRUCTION", version: 1, content: "合成选入的旧指示", sourceDescription: "合成来源", historical: true }], nextCursor: null });
@@ -52,6 +96,7 @@ describe("研究工作区的保存与来源连续性", () => {
     render(<ResearchWorkspace matterId={matterId} researchId={researchId} onSelectResearch={choose} onOpenDocument={openDocument} />);
     fireEvent.click(await screen.findByRole("button", { name: "形成分析稿" }));
     await screen.findByText("合成出稿失败");
+    await waitFor(() => expect(screen.getByRole("button", { name: "修改研究" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "修改研究" }));
     await screen.findByText("合成修改入口读取失败");
     fireEvent.click(screen.getByRole("button", { name: "重试" }));
@@ -106,7 +151,7 @@ describe("研究工作区的保存与来源连续性", () => {
     original.content!.sources = [{ documentId, relation: "REBUTS", ...(office ? { parseRunId: "cm00000000000000000000010", anchorId: "old-table" } : { page: 2 }), lawMetadata: emptyLawMetadata() }];
     original.sources = [{ ...original.content!.sources[0], id: "cm00000000000000000000005", documentName: name, version: 2, locationLabel, changed: false }];
     mock.read.mockResolvedValue(original);
-    mock.options.mockResolvedValue({ documents: [{ id: documentId, name, version: 2, pageCount: office ? null : 3, isPdf: !office, hasIdentity: true }], issues: [] });
+    mock.options.mockResolvedValue({ documents: [{ id: documentId, name, version: 2, pageCount: office ? null : 3, isPdf: !office, hasIdentity: true }], savedCaseDocumentIds: [], issues: [] });
     mock.preview.mockResolvedValue({ status: "AVAILABLE", documentName: name, documentVersion: 2, locationLabel,
       previewKind: office ? "CONVERTED" : "NATIVE", previewUrl, downloadUrl: `/api/documents/${documentId}/download`, text, legacy: false, historicalParse: office });
     render(<ResearchWorkspace matterId={matterId} researchId={researchId} onSelectResearch={choose} onOpenDocument={openDocument} />);
@@ -141,7 +186,7 @@ describe("研究工作区的保存与来源连续性", () => {
   });
 
   it("显式争点失效时不替用户换成另一争点", async () => {
-    mock.options.mockResolvedValue({ documents: [], issues: [{ id: "cm00000000000000000000006", revision: 1, title: "另一个争点",
+    mock.options.mockResolvedValue({ documents: [], savedCaseDocumentIds: [], issues: [{ id: "cm00000000000000000000006", revision: 1, title: "另一个争点",
       selection: { kind: "CURRENT", issueId: "cm00000000000000000000006", revision: 1, confirmedAt: null } }] });
     render(<ResearchWorkspace matterId={matterId} issueId="cm00000000000000000000008" onSelectResearch={choose} onOpenDocument={openDocument} />);
     expect(await screen.findByRole("alert")).toHaveTextContent("此争点已变化或无权读取");
@@ -151,8 +196,8 @@ describe("研究工作区的保存与来源连续性", () => {
   it("正常争点入口使用当前内容与核对时点；冲突后更新选项保留输入且不自动改绑", async () => {
     const issueId = "cm00000000000000000000006";
     const selection = { kind: "CURRENT", issueId, revision: 2, confirmedAt: null };
-    mock.options.mockResolvedValueOnce({ documents: [], issues: [{ id: issueId, revision: 2, title: "当前争点", selection }] })
-      .mockResolvedValueOnce({ documents: [], issues: [{ id: issueId, revision: 2, title: "当前争点", selection: { ...selection, confirmedAt: "2026-11-16T10:00:00.000Z" } }] });
+    mock.options.mockResolvedValueOnce({ documents: [], savedCaseDocumentIds: [], issues: [{ id: issueId, revision: 2, title: "当前争点", selection }] })
+      .mockResolvedValueOnce({ documents: [], savedCaseDocumentIds: [], issues: [{ id: issueId, revision: 2, title: "当前争点", selection: { ...selection, confirmedAt: "2026-11-16T10:00:00.000Z" } }] });
     mock.save.mockRejectedValue(new Error("争点内容或核对状态已变化，请更新争点选项并重新选择"));
     render(<ResearchWorkspace matterId={matterId} issueId={issueId} onSelectResearch={choose} onOpenDocument={openDocument} />);
     expect(await screen.findByLabelText("研究问题")).toHaveValue("当前争点");
@@ -172,7 +217,7 @@ describe("研究工作区的保存与来源连续性", () => {
     original.issue = { id: issueId, revisionId: null, revision: 1, title: "旧争点", content: "原始输入", confirmedAt: null,
       capturedAt: "2026-11-16T08:00:00.000Z", changed: true, confirmationChanged: false, sources: [] };
     mock.read.mockResolvedValue(original);
-    mock.options.mockResolvedValue({ documents: [], issues: [{ id: issueId, revision: 2, title: "新争点",
+    mock.options.mockResolvedValue({ documents: [], savedCaseDocumentIds: [], issues: [{ id: issueId, revision: 2, title: "新争点",
       selection: { kind: "CURRENT", issueId, revision: 2, confirmedAt: null } }] });
     mock.save.mockRejectedValue(new Error("合成保存中断"));
     render(<ResearchWorkspace matterId={matterId} researchId={researchId} onSelectResearch={choose} onOpenDocument={openDocument} />);

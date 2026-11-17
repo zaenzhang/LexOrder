@@ -723,6 +723,8 @@ B1 使用现有ResearchSource固定版本/SHA与ResearchRevision.queryLog JSON�
 
 两种既有MD头按明确格式解析，正文不提取身份；超长/歧义自动输入在选择时明确处理，按实际source/query schema验证。自动query与source原子加入当前草稿，保存继续prepareSource事务及旧研究/稿件读取授权，不改derivation-access、read-release或全局壳。接口、六文件、时间/片段语义及边界见计划§7.16.6；schema/公共授权必要变更须先回C，不能以领域实现顺手扩写。
 
+B1已依上述合同实现并由C逐批集成，实际字节/最终同族fixture的8项PG复验及证据边界见计划 §8.50；存储I/O外无授权长锁，读后会话版本与现有contextAccess/prepareSource复核保留，不新增并行授权层或迁移。
+
 ### 6.21 空事项级保全的呈现边界（2026-11-17）
 
 C3仅在 `MatterPreservationContent` 按 `cases.length` 与既有 `canManage` 选择完整卡/紧凑入口/无可见区块。`listPreservationCases({ matterId, status: "ALL" })`、全部目标与财产、原调用者范围及归档写守卫不变；`activeProperties` 仅用于在保和到期统计，不能作为隐藏历史的条件。Hooks和四种共享Dialog继续原生命周期，创建仍使用当前 `matterOption`、`initialMatterId`，不复制表单或在展示层补造新授权。
