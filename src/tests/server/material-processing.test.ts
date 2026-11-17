@@ -36,7 +36,28 @@ beforeEach(() => {
 describe("Server 材料来源边界", () => {
   it("历史引用仍返回旧代次文本，当前代次变化不会替换原文", async () => {
     const result = await readMaterialSource("owner", { documentId: doc.id, runId: run.id, anchorId: anchor.anchorId }, db as unknown as Prisma.TransactionClient);
-    expect(result).toMatchObject({ status: "AVAILABLE", run: { id: "run-1", isCurrent: false }, anchor: { text: "旧版原文" } });
+    expect(result).toMatchObject({ status: "AVAILABLE", run: { id: "run-1", isCurrent: false }, anchor: { text: "旧版原文" },
+      previewKind: "NATIVE", previewUrl: "/api/documents/doc/download?inline=1", downloadUrl: "/api/documents/doc/download" });
+  });
+  it.each([
+    { name: "合成原件.pdf", mimeType: "application/pdf", location: { kind: "PAGE", page: 1 } as const,
+      previewKind: "NATIVE", previewUrl: "/api/documents/doc/download?inline=1#page=1" },
+    { name: "合成原件.docx", mimeType: "application/octet-stream", location: { kind: "TEXT", start: 0, end: 4 } as const,
+      previewKind: "CONVERTED", previewUrl: "/api/documents/doc/preview" },
+    { name: "合成原件.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      location: { kind: "TABLE", sheet: "费用表", rowStart: 3, rowEnd: 3, columnStart: 2, columnEnd: 4 } as const,
+      previewKind: "CONVERTED", previewUrl: "/api/documents/doc/preview" },
+    { name: "合成原件.bin", mimeType: "application/octet-stream", location: { kind: "TEXT", start: 0, end: 4 } as const,
+      previewKind: "NONE", previewUrl: null },
+  ])("来源展示保留 $name 的确切原文位置，预览与同版下载分开", async scenario => {
+    const currentDocument = { ...doc, name: scenario.name, mimeType: scenario.mimeType };
+    db.document.findUnique.mockResolvedValue(currentDocument); db.document.findFirst.mockResolvedValue(currentDocument);
+    db.documentParseRun.findFirst.mockResolvedValue({ ...run, anchors: [{ ...anchor, location: scenario.location }],
+      coverage: { ...coverage, unitKind: scenario.location.kind === "PAGE" ? "PAGE" : "SEGMENT" } });
+    const result = await readMaterialSource("owner", { documentId: doc.id, runId: run.id, anchorId: anchor.anchorId });
+    expect(result).toMatchObject({ status: "AVAILABLE", document: { id: doc.id, version: 1, sha256: doc.sha256 },
+      run: { id: run.id, isCurrent: false }, anchor: { anchorId: anchor.anchorId, text: anchor.text, location: scenario.location },
+      previewKind: scenario.previewKind, previewUrl: scenario.previewUrl, downloadUrl: "/api/documents/doc/download" });
   });
   it("读取期间撤回后不返回已经取得的历史正文", async () => {
     db.document.findFirst.mockResolvedValue(null);

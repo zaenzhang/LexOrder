@@ -188,10 +188,33 @@ describe("人工新建请求重试", () => {
 });
 
 describe("证据要点组件交互", () => {
+  it("转换来源保留固定长片段与历史位置，下载和返回不丢编辑草稿", async () => {
+    item.sources[0] = { ...item.sources[0], documentName: "合成旧合同.docx", locationLabel: "抽取文本第 1—4000 字符", hasAnchor: true };
+    const text = "合成原文".repeat(1000), id = item.sources[0].documentId;
+    mocks.resolve.mockResolvedValue({ status: "AVAILABLE", documentName: "合成旧合同.docx", documentVersion: 1,
+      locationLabel: item.sources[0].locationLabel, previewKind: "CONVERTED", previewUrl: `/api/documents/${id}/preview`,
+      downloadUrl: `/api/documents/${id}/download`, text, legacy: false, historicalParse: true });
+    render(<EvidencePoints items={[item]} />);
+    fireEvent.click(screen.getByRole("button", { name: "查看与编辑要点：合成要点" }));
+    const input = await screen.findByLabelText("内容"); fireEvent.change(input, { target: { value: "保留事实更正草稿" } });
+    const detail = screen.getByRole("dialog");
+    const trigger = within(detail).getByRole("button", { name: /支持 · 合成旧合同/ });
+    fireEvent.click(trigger);
+    const source = await screen.findByRole("dialog", { name: "合成旧合同.docx" });
+    expect(within(source).getByText(text)).toBeInTheDocument();
+    expect(within(source).getByText("显示引用时保留的解析版本。")).toBeInTheDocument();
+    expect(within(source).getByText("转换预览打开整份文件，未按引用位置跳转。")).toBeInTheDocument();
+    expect(within(source).getByTitle("整份转换预览")).toHaveAttribute("src", `/api/documents/${id}/preview`);
+    expect(within(source).getByRole("link", { name: "下载此版本" })).toHaveAttribute("href", `/api/documents/${id}/download`);
+    fireEvent.click(within(source).getByRole("button", { name: "返回要点" }));
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(input).toHaveValue("保留事实更正草稿"); expect(mocks.update).not.toHaveBeenCalled();
+  });
+
   it.each(["materials", "timeline"] as const)("从 %s 打开来源后，Esc 和返回按钮均将焦点交回原来源", async view => {
     mocks.resolve.mockResolvedValue({ status: "AVAILABLE", documentName: "合成合同.pdf", documentVersion: 1,
-      locationLabel: "第 2 页", originalUrl: "/api/documents/cdocume000000000000000000001/download?inline=1#page=2",
-      previewable: false, text: "用于返回路径验收的合成原文", legacy: false, historicalParse: false });
+      locationLabel: "第 2 页", previewKind: "NATIVE", previewUrl: "/api/documents/cdocume000000000000000000001/download?inline=1#page=2",
+      downloadUrl: "/api/documents/cdocume000000000000000000001/download", text: "用于返回路径验收的合成原文", legacy: false, historicalParse: false });
     render(view === "timeline" ? <EvidenceTimeline items={[item]} /> : <EvidencePoints items={[item]} />);
     const source = screen.getByRole("button", { name: /支持 · 合成合同.pdf/ });
     source.focus();
@@ -217,8 +240,8 @@ describe("证据要点组件交互", () => {
     mocks.confirm.mockImplementation(async () => { item = { ...item, confirmedAt: date, confirmedByName: "合成确认人" }; return { ok: true, revision: 2 }; });
     mocks.history.mockResolvedValue({ items: [{ ...original, editedByName: "合成编辑人" }], nextBeforeRevision: null });
     mocks.resolve.mockResolvedValue({ status: "AVAILABLE", documentName: "合成反向材料.pdf", documentVersion: 1,
-      locationLabel: "第 1 页", originalUrl: "/api/documents/cdocume000000000000000000002/download?inline=1#page=1",
-      previewable: true, text: "合成反向原文", legacy: false, historicalParse: true });
+      locationLabel: "第 1 页", previewKind: "NATIVE", previewUrl: "/api/documents/cdocume000000000000000000002/download?inline=1#page=1",
+      downloadUrl: "/api/documents/cdocume000000000000000000002/download", text: "合成反向原文", legacy: false, historicalParse: true });
     render(<EvidencePoints items={[original]} />);
     fireEvent.click(screen.getByRole("button", { name: "查看与编辑要点：合成要点" }));
     await screen.findByLabelText("标题");

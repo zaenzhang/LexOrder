@@ -83,7 +83,8 @@ export function MaterialProcessingStatus({ matterId, documentIds, canManage = fa
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0"><span className="break-all font-medium">{row.documentName}</span><span className="ml-2 text-muted-foreground">{row.label}</span></div>
             <div className="flex shrink-0 items-center gap-2">
-              <a href={row.originalUrl} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm">查看原件</a>
+              {row.previewUrl ? <a href={row.previewUrl} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm">{row.previewKind === "CONVERTED" ? "转换预览" : "查看预览"}</a> : null}
+              <a href={row.downloadUrl} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm">下载此版本</a>
               {canManage && row.canRetry ? <button type="button" className="btn btn-ghost btn-sm" disabled={retrying !== null} onClick={() => startTransition(() => { void retry(row); })}>
                 {retrying === row.documentId ? "正在提交…" : row.state === "NOT_PROCESSED" ? "建立来源" : "重新处理"}
               </button> : null}

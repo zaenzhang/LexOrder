@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { MaterialPresentation } from "@/lib/documents/presentation";
 import { sourceLocationSchema } from "@/lib/workbench/contracts";
 import { evidenceEventDateSchema, type EvidenceEventDate } from "@/lib/evidence/event-date";
 
@@ -55,7 +56,7 @@ export type EvidenceRevisionView = {
   sources: EvidenceSourceView[]; restricted: boolean;
   eventDate: EvidenceEventDate | null;
 };
-export type EvidenceSourceResult = { status: "UNAVAILABLE" } | {
+export type EvidenceSourceResult = { status: "UNAVAILABLE" } | ({
   status: "AVAILABLE"; documentName: string; documentVersion: number; locationLabel: string;
-  originalUrl: string; previewable: boolean; text: string | null; legacy: boolean; historicalParse: boolean;
-};
+  text: string | null; legacy: boolean; historicalParse: boolean;
+} & MaterialPresentation);

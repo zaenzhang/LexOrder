@@ -30,9 +30,10 @@ function htmlShell(title: string, body: string): string {
   td, th { border: 1px solid #d4d4d4; padding: 4px 8px; vertical-align: top; }
   th { background: #f5f5f5; font-weight: 600; }
   .sheet-name { margin: 18px 0 6px; font-weight: 600; font-size: 14px; color: #444; }
+  .preview-note { padding-bottom: 12px; border-bottom: 1px solid #d4d4d4; color: #444; font-size: 13px; }
   p { margin: 0.4em 0; }
 </style></head>
-<body><div class="doc">${body}</div></body></html>`;
+<body><div class="doc"><p class="preview-note"><strong>整份转换预览</strong>：以下内容由所选文件转换，版式可能与原件不同，未按引用位置跳转。</p>${body}</div></body></html>`;
 }
 
 function escapeHtml(s: string): string {

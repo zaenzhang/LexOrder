@@ -2,7 +2,7 @@ import type { EvidenceSourceLink, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { canReadDocument } from "@/lib/approvals/documents";
 import { ActionError } from "@/lib/action-error";
-import { canPreview, officePreviewKind } from "@/lib/storage/mime-ext";
+import { materialPresentation } from "@/lib/documents/presentation";
 import { sourceAnchorSchema, sourceLocationSchema } from "@/lib/workbench/contracts";
 import { readMaterialSource } from "@/server/documents/material-processing";
 import { sourceReferenceSchema, type EvidenceDocumentOption, type EvidenceSourceResult, type EvidenceSourceView, type SourceInput, type SourceReference } from "./contracts";
@@ -41,13 +41,6 @@ export function locationLabel(location: SourceReference["location"]): string {
     case "IMAGE": return "图片选区";
     case "UNLOCATED": return "原件（暂无精确位置）";
   }
-}
-
-function originalUrl(document: SourceDocument, location: SourceReference["location"]): string {
-  const base = officePreviewKind(document.mimeType, document.name)
-    ? `/api/documents/${document.id}/preview`
-    : `/api/documents/${document.id}/download${canPreview(document.mimeType, document.name) ? "?inline=1" : ""}`;
-  return document.mimeType?.toLowerCase() === "application/pdf" && location.kind === "PAGE" ? `${base}#page=${location.page}` : base;
 }
 
 /** Request-local lookup only: no permission or source cache survives a request. */
@@ -116,12 +109,12 @@ export async function resolveReference(userId: string, matterId: string, referen
     if (result.status !== "AVAILABLE" || result.document.sha256 !== reference.documentSha256 ||
       JSON.stringify(sourceLocationSchema.parse(result.anchor.location)) !== JSON.stringify(reference.location)) return { status: "UNAVAILABLE" };
     return { status: "AVAILABLE", documentName: document.name, documentVersion: document.version,
-      locationLabel: result.locationLabel, originalUrl: result.originalUrl, previewable: canPreview(document.mimeType, document.name),
+      locationLabel: result.locationLabel, previewKind: result.previewKind, previewUrl: result.previewUrl, downloadUrl: result.downloadUrl,
       text: result.anchor.text, legacy: false, historicalParse: !result.run.isCurrent };
   }
   return { status: "AVAILABLE", documentName: document.name, documentVersion: document.version,
-    locationLabel: locationLabel(reference.location), originalUrl: originalUrl(document, reference.location),
-    previewable: canPreview(document.mimeType, document.name), text: null, legacy: reference.legacy, historicalParse: false };
+    locationLabel: locationLabel(reference.location), ...materialPresentation(document, reference.location),
+    text: null, legacy: reference.legacy, historicalParse: false };
 }
 
 export async function readableDocumentOptions(userId: string, matterId: string): Promise<EvidenceDocumentOption[]> {

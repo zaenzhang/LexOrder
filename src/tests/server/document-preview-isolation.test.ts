@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import PizZip from "pizzip";
+import ExcelJS from "exceljs";
 
 const { findDocument, readFile, canRead, release, session } = vi.hoisted(() => ({
   findDocument: vi.fn(), readFile: vi.fn(), canRead: vi.fn(), release: vi.fn(),
@@ -36,7 +37,9 @@ describe("Server 文档预览隔离", () => {
   it("真实转换保留的javascript链接位于无脚本、无同源权限的sandbox中", async () => {
     const response = await GET(new Request("http://localhost/api/documents/doc/preview"), { params: Promise.resolve({ id: "doc" }) });
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain('href="javascript:window.__lexorder_preview_probe=1"');
+    const html = await response.text();
+    expect(html).toContain('href="javascript:window.__lexorder_preview_probe=1"');
+    expect(html).toContain("整份转换预览"); expect(html).toContain("版式可能与原件不同，未按引用位置跳转");
     const directives = response.headers.get("Content-Security-Policy")!.split(";").map(value => value.trim());
     expect(directives).toContain("sandbox");
     expect(directives).toContain("script-src 'none'");
@@ -53,5 +56,37 @@ describe("Server 文档预览隔离", () => {
     const response = await GET(new Request("http://localhost/api/documents/doc/preview"), { params: Promise.resolve({ id: "doc" }) });
     expect(response.status).toBe(403);
     expect(readFile).not.toHaveBeenCalled();
+  });
+
+  it("真实表格转换同样标明整份预览，保留工作表与单元格内容", async () => {
+    const workbook = new ExcelJS.Workbook(); workbook.addWorksheet("合成费用表").addRow(["合成费用", 20]);
+    readFile.mockResolvedValue(Buffer.from(await workbook.xlsx.writeBuffer()));
+    findDocument.mockResolvedValue({ id: "sheet", name: "合成费用.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      path: "fixture.xlsx", encrypted: false, uploadedById: session.user.id, matterId: "matter", intakeId: null });
+    const response = await GET(new Request("http://localhost/api/documents/sheet/preview"), { params: Promise.resolve({ id: "sheet" }) });
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("整份转换预览"); expect(html).toContain("未按引用位置跳转");
+    expect(html).toContain("合成费用表"); expect(html).toContain("<td>合成费用</td><td>20</td>");
+    expect(release).toHaveBeenCalledWith(session.user.id, "sheet", { action: "DOCUMENT_PREVIEW", kind: "xlsx" });
+  });
+
+  it("转换类型不能冒充转换成功，损坏文档仍返回失败且不登记成功读取", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      readFile.mockResolvedValue(Buffer.from("synthetic invalid docx"));
+      const response = await GET(new Request("http://localhost/api/documents/doc/preview"), { params: Promise.resolve({ id: "doc" }) });
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({ error: "文档转换失败，请下载查看" });
+      expect(release).not.toHaveBeenCalled();
+    } finally { log.mockRestore(); }
+  });
+
+  it("转换完成后当前资格被拒，静态预览说明也不携正文返回", async () => {
+    release.mockResolvedValue({ ok: false, status: 403, error: "当前材料不可读取" });
+    const response = await GET(new Request("http://localhost/api/documents/doc/preview"), { params: Promise.resolve({ id: "doc" }) });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "当前材料不可读取" });
+    expect(readFile).toHaveBeenCalledTimes(1);
   });
 });

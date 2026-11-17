@@ -1108,7 +1108,15 @@ root实际读取material-processing、evidence/source-links及契约、三个来
 
 本轮root完整读取固定Counsel OS `c4f40f1ffd40146531bcaa7f43e6877a733f92ca` 的[DocumentReader.tsx](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/ui/src/workspace/DocumentReader.tsx)92行，核reading/saved模式、媒体类型优先及引用文本保持。只采用阅读呈现与实际引用文本分清，不复制Markdown/编辑器/agent框架，也不据此宣称上游证明了LexOrder Office精确映射；未运行参考产品或引入第三方源码。
 
-精简决定：仅统一真实消费的previewKind/previewUrl/downloadUrl，删闲置MaterialSourceListItem URL；研究已有EvidenceSourceResult，不造新来源服务。撤销“弹窗无限高”推断，现公共Dialog已有边界；保留原稿/焦点。处理状态同链误标须覆盖；download现可能对PDF/图像加水印，不承诺字节等存储SHA。CONVERTED只表示入口，保原失败语义与当前授权。认领/合同见计划§7.14.10、架构§6.14，当前无本子范围实现或通过证据；原文DOM精确跳转/完整OOXML映射继续保留未实现边界。
+精简决定已落实：只统一真实消费的previewKind/previewUrl/downloadUrl，删闲置MaterialSourceListItem URL；研究已有EvidenceSourceResult，不造新来源服务。撤销“弹窗无限高”推断，现公共Dialog已有边界；保留原稿/焦点。处理状态同链误标同步修正；download现可能对PDF/图像加水印，不承诺字节等存储SHA。CONVERTED只表示入口，保原失败语义与当前授权。认领/合同以`dd26036`先发布，见计划§7.14.10、架构§6.14；本次55个不同用例含PG2条及类型/lint通过，范围与夹具修正见计划§8.40。实际Mammoth/ExcelJS转换与受控来源/组件证据分开，未称浏览器或下载水印验收；原文DOM精确跳转/完整OOXML映射仍未实现。
+
+### 3.33 多文件接件与明确的失败出口（G04，2026-11-17）
+
+business首查实际uploadDocument/MaterialIngestIntent与现单文件入口，context二审归属和失败接续，business/root三审事务及5调用方，material再核实际消费者；计划§7.14.11/架构§6.15先发布认领，尚无实现/通过证据。root与business、material本轮分别读取固定Paperless-ngx `4610171a94e5932e85a80e480032e397cdb6f309` 的[upload-documents.service.ts](https://github.com/paperless-ngx/paperless-ngx/blob/4610171a94e5932e85a80e480032e397cdb6f309/src-ui/src/app/services/upload-documents.service.ts)及[upload-status-tray.component.html](https://github.com/paperless-ngx/paperless-ngx/blob/4610171a94e5932e85a80e480032e397cdb6f309/src-ui/src/app/components/common/upload-status-tray/upload-status-tray.component.html)完整文件：采用逐件状态、上传不等于处理、实际documentId打开；不复制按文件名存订阅、RxJS/WebSocket/Celery或全局托盘，不运行/引入参考源码。root读已安装Next错误处理文档的Server Functions段，确定预期业务错误采用显式返回，保未知异常脱敏。
+
+本项目实际差异：已有intent的摄入走resume而不重写bytes；最近20条未完成列表不足以核对三十件或丢失的成功响应；读取不到intent也不能排除旧请求尚在读文件。按此选择小的确切回执、已发身份冻结和真实关闭接续，不建立第二套摄入平台。approvalTransaction会翻译数据库异常，确定前置拒绝必须由准确代码阶段产生，不能靠普通ActionError或文字猜测；单一合同同步5调用方，不留新旧wrapper。storage失败迟到覆写关闭标记是同链实际缺陷，纳入最小修正。
+
+UI采用原工作区一个Dialog、逐件列表与当前行编辑，共同默认和逐件实际程序/ACTIVE环节/未归属分开；G15按行保版本。页面切换及卸载停未发，发送不抢行焦点。root核ensure实际revalidate及虚拟到真实stage key变化，只用返回ID接续自身物化，不按名称补归属。30份为测试样本而非新上限；浏览器/专业验收仍另记。
 
 ## 4. 可选法律服务 MCP 与来源
 

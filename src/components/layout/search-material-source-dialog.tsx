@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { canPreview } from "@/lib/storage/mime-ext";
 import { getMaterialSource } from "@/server/documents/processing-actions";
 import type { MaterialSourceInput, MaterialSourceResult } from "@/server/documents/material-processing";
 
@@ -29,7 +28,6 @@ export function SearchMaterialSourceDialog({ input, onClose, onReturnFocus }: {
     return () => { active = false; };
   }, [documentId, runId, anchorId, attempt]);
   const source = result?.status === "AVAILABLE" ? result : null;
-  const previewable = source && canPreview(source.document.mimeType, source.document.name);
   return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
     <DialogContent className="max-w-4xl" onCloseAutoFocus={event => { event.preventDefault(); onReturnFocus(); }}>
       <DialogHeader>
@@ -42,12 +40,15 @@ export function SearchMaterialSourceDialog({ input, onClose, onReturnFocus }: {
       {source ? <>
         {!source.run.isCurrent && <p className="text-sm text-muted-foreground">显示本次命中保留的解析版本。</p>}
         {source.coverage.units.some(unit => unit.status !== "READY") && <p className="text-sm text-muted-foreground">此材料仅部分内容已处理。</p>}
-        <blockquote className="whitespace-pre-wrap break-words border-l-2 pl-3 text-sm">{source.anchor.text}</blockquote>
-        {previewable ? <iframe title="命中位置原件" src={source.originalUrl} className="h-[55vh] w-full rounded border" /> : null}
+        <div className="space-y-2"><p className="text-sm font-medium">已固定的抽取片段</p>
+          <blockquote className="whitespace-pre-wrap break-words border-l-2 pl-3 text-sm">{source.anchor.text}</blockquote></div>
+        {source.previewKind === "CONVERTED" && <p className="text-sm text-muted-foreground">转换预览打开整份文件，未按引用位置跳转。</p>}
+        {source.previewUrl ? <iframe title={source.previewKind === "CONVERTED" ? "整份转换预览" : "文件预览"} src={source.previewUrl} className="h-[55vh] w-full rounded border" /> : null}
       </> : null}
       <DialogFooter>
         {error || result?.status === "UNAVAILABLE" ? <Button variant="outline" onClick={() => setAttempt(value => value + 1)}>重新读取来源</Button> : null}
-        {source ? <Button asChild variant="outline"><a href={source.originalUrl} target="_blank" rel="noopener noreferrer">{previewable ? "另页打开原件" : "下载原件"}</a></Button> : null}
+        {source?.previewUrl ? <Button asChild variant="outline"><a href={source.previewUrl} target="_blank" rel="noopener noreferrer">{source.previewKind === "CONVERTED" ? "另页查看转换预览" : "另页查看预览"}</a></Button> : null}
+        {source ? <Button asChild variant="outline"><a href={source.downloadUrl} target="_blank" rel="noopener noreferrer">下载此版本</a></Button> : null}
         <Button variant="outline" onClick={onClose}>返回搜索结果</Button>
       </DialogFooter>
     </DialogContent>

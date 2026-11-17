@@ -96,23 +96,34 @@ describe("研究工作区的保存与来源连续性", () => {
     expect(screen.getByLabelText("研究问题")).toHaveValue("新研究");
   });
 
-  it("草稿内查看来源并关闭，编辑内容和具体来源保持", async () => {
+  it.each(["PDF", "Office"] as const)("草稿内查看%s来源并关闭，编辑内容和具体来源保持", async format => {
+    const office = format === "Office";
+    const name = office ? "合成反向费用.xlsx" : "合成反向材料.pdf";
+    const locationLabel = office ? "费用表 · 第 3 行，第 2—4 列" : "第 2 页";
+    const text = office ? "合成表格原文".repeat(500) : "合成反向原文";
+    const previewUrl = `/api/documents/${documentId}/${office ? "preview" : "download?inline=1#page=2"}`;
     const original = view();
-    original.content!.sources = [{ documentId, relation: "REBUTS", page: 2, lawMetadata: emptyLawMetadata() }];
-    original.sources = [{ ...original.content!.sources[0], id: "cm00000000000000000000005", documentName: "合成反向材料.pdf", version: 2, locationLabel: "第 2 页", changed: false }];
+    original.content!.sources = [{ documentId, relation: "REBUTS", ...(office ? { parseRunId: "cm00000000000000000000010", anchorId: "old-table" } : { page: 2 }), lawMetadata: emptyLawMetadata() }];
+    original.sources = [{ ...original.content!.sources[0], id: "cm00000000000000000000005", documentName: name, version: 2, locationLabel, changed: false }];
     mock.read.mockResolvedValue(original);
-    mock.options.mockResolvedValue({ documents: [{ id: documentId, name: "合成反向材料.pdf", version: 2, pageCount: 3, isPdf: true, hasIdentity: true }], issues: [] });
-    mock.preview.mockResolvedValue({ status: "AVAILABLE", documentName: "合成反向材料.pdf", documentVersion: 2, locationLabel: "第 2 页",
-      originalUrl: `/api/documents/${documentId}/download?inline=1#page=2`, previewable: true, text: "合成反向原文", legacy: false, historicalParse: false });
+    mock.options.mockResolvedValue({ documents: [{ id: documentId, name, version: 2, pageCount: office ? null : 3, isPdf: !office, hasIdentity: true }], issues: [] });
+    mock.preview.mockResolvedValue({ status: "AVAILABLE", documentName: name, documentVersion: 2, locationLabel,
+      previewKind: office ? "CONVERTED" : "NATIVE", previewUrl, downloadUrl: `/api/documents/${documentId}/download`, text, legacy: false, historicalParse: office });
     render(<ResearchWorkspace matterId={matterId} researchId={researchId} onSelectResearch={choose} onOpenDocument={openDocument} />);
     fireEvent.click(await screen.findByRole("button", { name: "修改研究" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "保存新修订" })).toBeEnabled());
     fireEvent.change(screen.getByLabelText("研究问题"), { target: { value: "保留来源核对中的草稿" } });
     fireEvent.mouseDown(screen.getByRole("tab", { name: "依据与阅读" }), { button: 0 });
     fireEvent.click(await screen.findByRole("button", { name: "查看原文" }));
-    const dialog = await screen.findByRole("dialog", { name: "合成反向材料.pdf" });
-    expect(within(dialog).getByText("合成反向原文")).toBeInTheDocument();
-    expect(within(dialog).getByRole("link", { name: "打开原件" })).toHaveAttribute("href", `/api/documents/${documentId}/download?inline=1#page=2`);
+    const dialog = await screen.findByRole("dialog", { name });
+    expect(within(dialog).getByText(text)).toBeInTheDocument();
+    expect(within(dialog).getByRole("link", { name: office ? "查看整份转换预览" : "查看预览" })).toHaveAttribute("href", previewUrl);
+    expect(within(dialog).getByRole("link", { name: "下载此版本" })).toHaveAttribute("href", `/api/documents/${documentId}/download`);
+    expect(mock.preview).toHaveBeenCalledWith(matterId, original.content!.sources[0]);
+    if (office) {
+      expect(within(dialog).getByText("转换预览打开整份文件，未按引用位置跳转。")).toBeInTheDocument();
+      expect(within(dialog).getByText(/费用表.*历史解析位置/)).toBeInTheDocument();
+    }
     fireEvent.keyDown(dialog, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     fireEvent.mouseDown(screen.getByRole("tab", { name: "问题与范围" }), { button: 0 });

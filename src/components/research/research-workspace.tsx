@@ -229,8 +229,15 @@ export function ResearchWorkspace({ matterId, researchId = null, issueId = null,
     <Dialog open={sourceOpen} onOpenChange={open => { setSourceOpen(open); if (!open) sourceSequence.current++; }}><DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
       <DialogHeader><DialogTitle>{source?.status === "AVAILABLE" ? source.documentName : "研究来源"}</DialogTitle><DialogDescription>核对本次选入的具体原文版本。</DialogDescription></DialogHeader>
       {sourceError ? <p role="alert" className="text-sm text-destructive">{sourceError}</p> : !source ? <p role="status">正在读取来源…</p> : source.status === "UNAVAILABLE" ? <p role="alert">来源已变化或无权读取，请返回研究核对。</p> : <div className="space-y-3">
-        <div className="flex items-center justify-between gap-3"><span className="text-sm">V{source.documentVersion} · {source.locationLabel}{source.historicalParse ? " · 历史解析位置" : ""}</span><Button variant="outline" size="sm" asChild><a href={source.originalUrl} target="_blank" rel="noopener noreferrer">打开原件</a></Button></div>
-        {source.text ? <p className="whitespace-pre-wrap break-words rounded-md border p-3 text-sm">{source.text}</p> : <p className="text-sm text-muted-foreground">此引用定位到原件，未提供可显示的解析片段。</p>}
+        <div className="flex flex-wrap items-center justify-between gap-3"><span className="text-sm">V{source.documentVersion} · {source.locationLabel}{source.historicalParse ? " · 历史解析位置" : ""}</span>
+          <div className="flex flex-wrap gap-2">
+            {source.previewUrl ? <Button variant="outline" size="sm" asChild><a href={source.previewUrl} target="_blank" rel="noopener noreferrer">{source.previewKind === "CONVERTED" ? "查看整份转换预览" : "查看预览"}</a></Button> : null}
+            <Button variant="outline" size="sm" asChild><a href={source.downloadUrl} target="_blank" rel="noopener noreferrer">下载此版本</a></Button>
+          </div>
+        </div>
+        {source.previewKind === "CONVERTED" && <p className="text-sm text-muted-foreground">转换预览打开整份文件，未按引用位置跳转。</p>}
+        {source.text ? <div className="space-y-2"><p className="text-sm font-medium">已固定的抽取片段</p>
+          <p className="whitespace-pre-wrap break-words rounded-md border p-3 text-sm">{source.text}</p></div> : <p className="text-sm text-muted-foreground">此引用定位到原件，未提供可显示的解析片段。</p>}
       </div>}
     </DialogContent></Dialog>
     <Dialog open={historyOpen} onOpenChange={open => { setHistoryOpen(open); if (!open) historySequence.current++; }}><DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">

@@ -71,8 +71,8 @@ describe("Server 材料正文搜索", () => {
     ["合同.docx", "application/octet-stream", "preview"],
     ["合同.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "preview"],
     ["合同.xls", "application/vnd.ms-excel", "preview"],
-    ["合同.doc", "application/msword", "download?inline=1"],
-    ["合同.pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "download?inline=1"],
+    ["合同.doc", "application/msword", "download"],
+    ["合同.pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "download"],
     ["合同.txt", "text/plain", "download?inline=1"],
   ])("名称命中 %s 复用受控格式入口，不臆造锚点或物理页", async (name, mimeType, path) => {
     rows.candidates = [{ ...doc, name, mimeType, textContent: null }];

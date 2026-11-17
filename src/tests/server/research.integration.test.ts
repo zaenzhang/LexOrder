@@ -126,7 +126,7 @@ describe.skipIf(!config.url)("M3 研究修订、来源与分析稿 / PostgreSQL"
     // The editor calls this action, whose input schema rejects simultaneous page and anchor fields.
     const preview = await getResearchSourcePreview(f.matter.id, content.sources[0]);
     expect(preview).toMatchObject({ status: "AVAILABLE", text: originalText, locationLabel: "第 2 页",
-      historicalParse: true, originalUrl: `/api/documents/${f.document.id}/download?inline=1#page=2` });
+      historicalParse: true, previewKind: "NATIVE", previewUrl: `/api/documents/${f.document.id}/download?inline=1#page=2`, downloadUrl: `/api/documents/${f.document.id}/download` });
     expect(await readResearchSource(db, f.actor, f.matter.id, saved.id, originalSource.id)).toEqual(preview);
 
     const revised = await saveResearch(db, f.actor, input(f.matter.id, { ...content, supersedesId: saved.id,

@@ -141,11 +141,13 @@ describe.skipIf(!databaseUrl)("Server 证据：真实 PG 修订、来源权限�
     const added = await addEvidenceSource({ evidenceItemId: item.id, expectedRevision: 1, documentId: doc.id, relation: "REBUTS", parseRunId: run.id, anchorId });
     await confirmEvidenceItem({ evidenceItemId: item.id, expectedRevision: 2, confirm: true });
     await removeEvidenceSource({ evidenceItemId: item.id, expectedRevision: 2, sourceId: added.sourceId });
+    // Keep this metadata-only family fixture consistent with the single active latest version guard.
+    await db.document.update({ where: { id: doc.id }, data: { isLatest: false, parseGeneration: 2 } });
     await document(f, 2, doc.familyId!);
-    await db.document.update({ where: { id: doc.id }, data: { parseGeneration: 2 } });
     expect(await resolveEvidenceSource({ evidenceItemId: item.id, sourceId: added.sourceId })).toEqual({ status: "UNAVAILABLE" });
     expect(await resolveEvidenceSource({ evidenceItemId: item.id, sourceId: added.sourceId, revision: 2 })).toMatchObject({
-      status: "AVAILABLE", documentVersion: 1, text, historicalParse: true, originalUrl: expect.stringContaining(doc.id),
+      status: "AVAILABLE", documentVersion: 1, text, historicalParse: true, previewKind: "NATIVE",
+      previewUrl: `/api/documents/${doc.id}/download?inline=1`, downloadUrl: `/api/documents/${doc.id}/download`,
     });
     const history = (await listEvidenceRevisions({ evidenceItemId: item.id })).items.find(entry => entry.revision === 2)!;
     expect(history.confirmedAt).not.toBeNull();

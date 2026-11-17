@@ -16,7 +16,7 @@ type Positions = Awaited<ReturnType<typeof listMaterialSources>>;
 function position(document: EvidenceDocumentOption, runId: string, excerpt: string): Positions["items"][number] {
   return { documentId: document.id, documentName: document.name, documentVersion: document.version,
     documentSha256: "a".repeat(64), runId, anchorId: "synthetic-page-2", location: { kind: "PAGE", page: 2 },
-    locationLabel: "第 2 页", excerpt, originalUrl: `/api/documents/${document.id}/download?inline=1#page=2` };
+    locationLabel: "第 2 页", excerpt };
 }
 
 function PickerHarness({ onChange, initial = [] }: { onChange(value: ResearchSourceInput[]): void; initial?: ResearchSourceInput[] }) {

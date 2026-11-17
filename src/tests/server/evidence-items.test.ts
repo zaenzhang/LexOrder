@@ -339,7 +339,7 @@ describe("Server 人工证据成果及来源", () => {
     await removeEvidenceSource({ evidenceItemId: ITEM, expectedRevision: 2, sourceId: SOURCE_B });
     expect(state.revisions[1].sourceSnapshot).toHaveLength(2);
     expect(await resolveEvidenceSource({ evidenceItemId: ITEM, sourceId: SOURCE_B })).toEqual({ status: "UNAVAILABLE" });
-    expect(await resolveEvidenceSource({ evidenceItemId: ITEM, sourceId: SOURCE_B, revision: 2 })).toMatchObject({ status: "AVAILABLE", documentName: "合成反向材料.pdf", originalUrl: expect.stringContaining(DOC_B) });
+    expect(await resolveEvidenceSource({ evidenceItemId: ITEM, sourceId: SOURCE_B, revision: 2 })).toMatchObject({ status: "AVAILABLE", documentName: "合成反向材料.pdf", previewKind: "NATIVE", previewUrl: `/api/documents/${DOC_B}/download?inline=1#page=1`, downloadUrl: `/api/documents/${DOC_B}/download` });
   });
 
   it("rechecks revoked access for current content, historical content and source open; unlink cannot bypass it", async () => {
@@ -356,7 +356,7 @@ describe("Server 人工证据成果及来源", () => {
 
   it("keeps a new family version separate and refuses a changed hash on the referenced version", async () => {
     state.documents[1].version = 2;
-    expect(await resolveEvidenceSource({ evidenceItemId: ITEM, sourceId: SOURCE })).toMatchObject({ documentVersion: 1, originalUrl: `/api/documents/${DOC}/download?inline=1#page=2` });
+    expect(await resolveEvidenceSource({ evidenceItemId: ITEM, sourceId: SOURCE })).toMatchObject({ documentVersion: 1, previewKind: "NATIVE", previewUrl: `/api/documents/${DOC}/download?inline=1#page=2`, downloadUrl: `/api/documents/${DOC}/download` });
     state.documents[0].sha256 = "c".repeat(64);
     expect(await resolveEvidenceSource({ evidenceItemId: ITEM, sourceId: SOURCE })).toEqual({ status: "UNAVAILABLE" });
     expect((await listEvidenceItems(MATTER))[0]).toMatchObject({ restricted: true, content: "" });

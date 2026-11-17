@@ -19,14 +19,14 @@ function results(documents: SearchResultItem[] = [first]): GlobalSearchResult {
   return { documents, matters: [], clients: [], intakes: [], deadlines: [], documentsFailedCount: 0,
     nextCursorByGroup: { documents: null, matters: null, clients: null, intakes: null, deadlines: null } };
 }
-function source(hit = first): MaterialSourceResult {
+function source(hit = first): Extract<MaterialSourceResult, { status: "AVAILABLE" }> {
   return { status: "AVAILABLE", document: { id: hit.id, name: `核对后的${hit.title}`, version: hit.documentVersion!, sha256: "a".repeat(64), mimeType: "application/pdf" },
     run: { id: hit.parseRunId!, generation: 1, parserVersion: "synthetic", isCurrent: false },
     anchor: { anchorId: hit.anchorId!, parseGenerationId: hit.parseRunId!, unit: 20,
       source: { kind: "CASE_MATERIAL", documentId: hit.id, matterId: "matter-search", sha256: "a".repeat(64) },
       location: { kind: "PAGE", page: 20 }, text: `${hit.id} 的已授权固定原文` },
     coverage: { unitKind: "PAGE", totalUnits: 20, units: [{ unit: 20, status: "READY" }] }, locationLabel: "第 20 页",
-    originalUrl: `/api/documents/${hit.id}/download?inline=1#page=20` };
+    previewKind: "NATIVE", previewUrl: `/api/documents/${hit.id}/download?inline=1#page=20`, downloadUrl: `/api/documents/${hit.id}/download` };
 }
 const scrollDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
 beforeEach(() => {
@@ -48,6 +48,37 @@ async function search() {
 }
 
 describe("材料搜索命中的固定来源与返回", () => {
+  it("Office 固定长片段与整份转换预览分开，未获转换成功回执也可下载同版并返回", async () => {
+    const text = "合成原文".repeat(1000);
+    const fixed = source();
+    mock.source.mockResolvedValue({ ...fixed, document: { ...fixed.document, name: "合成旧合同.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+      locationLabel: "抽取文本第 1—4000 字符", anchor: { ...fixed.anchor, text, location: { kind: "TEXT", start: 0, end: text.length } },
+      previewKind: "CONVERTED", previewUrl: `/api/documents/${first.id}/preview` });
+    await search(); const trigger = screen.getByRole("option", { name: /合成命中甲/ }); fireEvent.click(trigger);
+    const dialog = await screen.findByRole("dialog", { name: "合成旧合同.docx" });
+    expect(within(dialog).getByText(text)).toBeInTheDocument();
+    expect(within(dialog).getByText("已固定的抽取片段")).toBeInTheDocument();
+    expect(within(dialog).getByText("转换预览打开整份文件，未按引用位置跳转。")).toBeInTheDocument();
+    expect(within(dialog).getByText("显示本次命中保留的解析版本。")).toBeInTheDocument();
+    const frame = within(dialog).getByTitle("整份转换预览");
+    expect(frame).toHaveAttribute("src", `/api/documents/${first.id}/preview`);
+    fireEvent.error(frame);
+    expect(within(dialog).getByRole("link", { name: "下载此版本" })).toHaveAttribute("href", `/api/documents/${first.id}/download`);
+    expect(within(dialog).getByRole("link", { name: "另页查看转换预览" })).toHaveAttribute("href", `/api/documents/${first.id}/preview`);
+    fireEvent.click(within(dialog).getByRole("button", { name: "返回搜索结果" }));
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(mock.source).toHaveBeenCalledWith({ documentId: first.id, runId: first.parseRunId, anchorId: first.anchorId });
+  });
+
+  it("不可预览来源只给确切版本下载，不制造iframe或另一份预览", async () => {
+    const fixed = source();
+    mock.source.mockResolvedValue({ ...fixed, document: { ...fixed.document, name: "合成旧资料.bin", mimeType: "application/octet-stream" }, previewKind: "NONE", previewUrl: null });
+    await search(); fireEvent.click(screen.getByRole("option", { name: /合成命中甲/ }));
+    const dialog = await screen.findByRole("dialog", { name: "合成旧资料.bin" });
+    expect(dialog.querySelector("iframe")).toBeNull();
+    expect(within(dialog).getAllByRole("link")).toHaveLength(1);
+    expect(within(dialog).getByRole("link", { name: "下载此版本" })).toHaveAttribute("href", `/api/documents/${first.id}/download`);
+  });
   it.each(["click", "Enter"] as const)("%s 都读取同一固定身份，旧解析合法保留且返回原搜索位置", async method => {
     await search();
     fireEvent.click(screen.getByRole("tab", { name: /^材料正文/ }));
@@ -61,8 +92,9 @@ describe("材料搜索命中的固定来源与返回", () => {
     expect(within(dialog).getByText("document-old 的已授权固定原文")).toBeInTheDocument();
     expect(within(dialog).getByText("显示本次命中保留的解析版本。")).toBeInTheDocument();
     expect(within(dialog).queryByText(first.snippet!)).not.toBeInTheDocument();
-    expect(within(dialog).getByTitle("命中位置原件")).toHaveAttribute("src", first.href);
-    expect(within(dialog).getByRole("link", { name: "另页打开原件" })).toHaveAttribute("href", first.href);
+    expect(within(dialog).getByTitle("文件预览")).toHaveAttribute("src", first.href);
+    expect(within(dialog).getByRole("link", { name: "另页查看预览" })).toHaveAttribute("href", first.href);
+    expect(within(dialog).getByRole("link", { name: "下载此版本" })).toHaveAttribute("href", `/api/documents/${first.id}/download`);
     fireEvent.keyDown(dialog, { key: "Enter" }); fireEvent.keyDown(dialog, { key: "Tab" });
     expect(mock.source).toHaveBeenCalledTimes(1);
     fireEvent.click(within(dialog).getByRole("button", { name: "返回搜索结果" }));
@@ -81,7 +113,7 @@ describe("材料搜索命中的固定来源与返回", () => {
     const alert = await within(dialog).findByRole("alert");
     expect(alert).toHaveTextContent(failure === "unavailable" ? "此来源当前不可用" : failure === "business" ? "合成来源资格已变化" : "来源读取失败，请重试");
     expect(dialog).not.toHaveTextContent("Prisma"); expect(dialog).not.toHaveTextContent("旧搜索缓存");
-    expect(within(dialog).queryByTitle("命中位置原件")).not.toBeInTheDocument();
+    expect(within(dialog).queryByTitle("文件预览")).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("link")).not.toBeInTheDocument(); expect(window.open).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole("button", { name: "重新读取来源" }));
     await screen.findByText("document-old 的已授权固定原文");

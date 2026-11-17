@@ -663,11 +663,19 @@ prepare从同次templateMatterInputs生成真实主体ID/顺序和原值期望�
 
 ### 6.14 固定来源与转换预览展示合同（G06子范围，2026-11-17）
 
-计划§7.14.10已审定、认领，尚未实现。本片只对既有已授权Document投影纯展示链接：previewKind为NATIVE/CONVERTED/NONE，previewUrl可null，downloadUrl指同版下载；不承载授权或解析状态。当前材料读取与evidence/source-links共用实际mime-ext判断，research沿EvidenceSourceResult，无新来源模型。仅真实PDF页码加预览hash，Office整份转换不伪造定位。
+计划§7.14.10以`dd26036`先发布认领，现已实现，验证见计划§8.40。纯`src/lib/documents/presentation.ts`只对既有已授权Document投影展示链接：previewKind为NATIVE/CONVERTED/NONE，previewUrl可null，downloadUrl指同版下载；不承载授权或解析状态。材料读取与evidence/source-links共用现mime-ext判断，research沿EvidenceSourceResult，无新来源模型。仅真实PDF页码加预览hash，Office整份转换不伪造定位。
 
 S08/G09的固定Document/run/anchor、旧run/SHA匹配、真实TEXT/TABLE位置及当前资格保持；UNAVAILABLE不带链接。删清旧originalUrl/previewable同义合同与未消费URL，各实际消费者同步；不为位置选择器新增入口，不扩DocumentDetail或公共Dialog。转换类型不是成功回执，下载沿既有水印/授权，原件存储与hash不改变。Office路由仅增加可信说明，releaseDocumentRead、CSP、no-store和错误响应不改变。
 
 范围明确为准确呈现与同版下载，原文DOM精确跳转/完整OOXML映射仍未实现；不借此启动编辑同步、重解析、schema/迁移或新预览平台。验证按实际受影响来源/转换/消费者，不将参考读取或组件检查写作浏览器通过。
+
+### 6.15 案件批量上传与单件摄入结果合同（G04，2026-11-17）
+
+计划§7.14.11已审定、认领，尚未实现。批次只在现案件上传Dialog维持本地文件/逐行草稿和结果，复用MaterialIngestIntent及现单文件摄入。openContext与row.target分开，实际procedureId/stageId来自同案真实对象；父工作区唯一入口使用原allProcedures/触发信号，虚拟当前环节仅按ensure真实返回ID接续，不能覆盖后来导航。已发payload/key固定，循环有当前范围与mount边界，不引入数据库批次或通用队列。
+
+uploadDocument采用唯一discriminated结果合同，成功返回实际id，确定预留前拒绝返回REJECTED_BEFORE_RESERVATION；5实际消费者同步，其他入口保原错误语义。领域内专用标记只在输入校验及预留事务回调内intent.create前产生，既有/竞争intent先走原恢复或冲突；approvalTransaction可把原生数据库错误转换为ActionError，不能由外层错误类型推定未写入。存储、提交、后处理/刷新和未知错误仍按可能已有真实结果处理，G15、当前资格、归属及原子写入守卫不迁出事务。
+
+回执按当前documents.write、经办、本人、事项和确切UUID读取现intent；当前可读已保存材料才返回对应id/版本，无原件路径/hash或额外存储检查。NOT_RESERVED只说明读取瞬间缺记录，不能证明旧请求已终止。客户端只有历次明确前置拒绝且无不确定请求才可纠正；曾有unknown则保持冻结，直至实际保存或真实关闭。关闭复用abandon，迟到storage失败须与成功/恢复路径一样保终态；不做新取消fence、自动补写bytes或换key重传。无schema/迁移、维护准备或持久前端队列。
 
 ## 7. 参考项目如何进入 LexOrder
 

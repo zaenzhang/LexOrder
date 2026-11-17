@@ -8,7 +8,7 @@ import { matterAssociationFilter } from "@/lib/permissions";
 import { hasCustomPermission, scopeFor } from "@/lib/roles/catalog";
 import { checkRoleMutation, resolveRoleUser } from "@/lib/roles/service";
 import { isArchiveFolderName } from "@/lib/archive/guard";
-import { officePreviewKind } from "@/lib/storage/mime-ext";
+import { materialPresentation, type MaterialPresentation } from "@/lib/documents/presentation";
 import { auditTx } from "@/server/audit";
 import { assertCurrentJobLease, type JobLease } from "@/server/cron/queue";
 import { processingCoverageSchema, sourceAnchorSchema, type ProcessingCoverage, type SourceAnchor } from "@/lib/workbench/contracts";
@@ -22,25 +22,24 @@ type SourceDocument = Pick<Document, "id" | "name" | "version" | "sha256" | "mim
 type SnapshotRun = Pick<DocumentParseRun, "id" | "documentId" | "generation" | "parserVersion" | "sourceSha256" | "state" | "anchors" | "coverage" | "finishedAt">;
 
 export interface MaterialSourceInput { documentId: string; runId: string; anchorId: string }
-export type MaterialSourceResult = {
+export type MaterialSourceResult = ({
   status: "AVAILABLE";
   document: { id: string; name: string; version: number; sha256: string; mimeType: string | null };
   run: { id: string; generation: number; parserVersion: string; isCurrent: boolean };
   anchor: SourceAnchor;
   coverage: ProcessingCoverage;
   locationLabel: string;
-  originalUrl: string;
-} | { status: "UNAVAILABLE" };
+} & MaterialPresentation) | { status: "UNAVAILABLE" };
 export interface MaterialSourceListItem {
   documentId: string; documentName: string; documentVersion: number; documentSha256: string;
   runId: string; anchorId: string; location: SourceAnchor["location"];
-  locationLabel: string; excerpt: string; originalUrl: string;
+  locationLabel: string; excerpt: string;
 }
 export interface MaterialSourceListResult { items: MaterialSourceListItem[]; nextOffset: number | null }
-export interface MaterialProcessingStatusItem {
+export interface MaterialProcessingStatusItem extends MaterialPresentation {
   documentId: string; documentName: string; generation: number; runId: string | null;
   state: DocumentParseState | "NOT_PROCESSED"; label: string; detail: string;
-  inProgress: boolean; canRetry: boolean; originalUrl: string;
+  inProgress: boolean; canRetry: boolean;
   coverage: { unitKind: ProcessingCoverage["unitKind"]; totalUnits: number | null; ready: number;
     pending: number[]; failed: number[]; unsupported: number[]; truncated: number[] } | null;
 }
@@ -54,12 +53,6 @@ export function materialLocationLabel(location: SourceAnchor["location"]): strin
     case "IMAGE": return "原图区域";
     case "UNLOCATED": return "位置尚未映射";
   }
-}
-
-export function materialOriginalUrl(doc: Pick<Document, "id" | "mimeType" | "name">, location?: SourceAnchor["location"]): string {
-  if (officePreviewKind(doc.mimeType, doc.name)) return `/api/documents/${encodeURIComponent(doc.id)}/preview`;
-  const page = doc.mimeType?.toLowerCase() === "application/pdf" && location?.kind === "PAGE" ? `#page=${location.page}` : "";
-  return `/api/documents/${encodeURIComponent(doc.id)}/download?inline=1${page}`;
 }
 
 /** Validate stored representations before using them as sources; this does not grant access. */
@@ -262,7 +255,7 @@ export async function readMaterialSource(userId: string, input: MaterialSourceIn
   if (!current || !await canReadDocument(userId, current)) return { status: "UNAVAILABLE" };
   return { status: "AVAILABLE", document: { id: doc.id, name: doc.name, version: doc.version, sha256: doc.sha256, mimeType: doc.mimeType },
     run: { id: run.id, generation: run.generation, parserVersion: run.parserVersion, isCurrent: current.parseGeneration === run.generation },
-    anchor, coverage: snapshot.coverage, locationLabel: materialLocationLabel(anchor.location), originalUrl: materialOriginalUrl(doc, anchor.location) };
+    anchor, coverage: snapshot.coverage, locationLabel: materialLocationLabel(anchor.location), ...materialPresentation(doc, anchor.location) };
 }
 
 export async function readMaterialSources(userId: string, input: { matterId: string; documentIds: string[]; offset?: number; limit?: number }): Promise<MaterialSourceListResult> {
@@ -279,7 +272,7 @@ export async function readMaterialSources(userId: string, input: { matterId: str
     if (!snapshot || !doc.sha256) continue;
     for (const anchor of snapshot.anchors) items.push({ documentId: doc.id, documentName: doc.name, documentVersion: doc.version,
       documentSha256: doc.sha256, runId: run.id, anchorId: anchor.anchorId, location: anchor.location,
-      locationLabel: materialLocationLabel(anchor.location), excerpt: anchor.text.slice(0, 240), originalUrl: materialOriginalUrl(doc, anchor.location) });
+      locationLabel: materialLocationLabel(anchor.location), excerpt: anchor.text.slice(0, 240) });
   }
   return { items: items.slice(offset, offset + limit), nextOffset: offset + limit < items.length ? offset + limit : null };
 }
@@ -312,7 +305,7 @@ export async function readMaterialProcessingStatuses(userId: string, input: { ma
     results.push({ documentId: doc.id, documentName: doc.name, generation: doc.parseGeneration, runId: run?.id ?? null, state,
       label: state === "PENDING" && run?.finishedAt ? "尚有未识别内容" : labels[state],
       detail: run?.errorCode ? details[run.errorCode] ?? "处理尚未完成，请查看原件。" : !doc.sha256 ? "原件校验信息缺失，请补传一个材料版本。" : "",
-      inProgress, canRetry, originalUrl: materialOriginalUrl(doc), coverage: coverage.success ? { unitKind: coverage.data.unitKind, totalUnits: coverage.data.totalUnits,
+      inProgress, canRetry, ...materialPresentation(doc), coverage: coverage.success ? { unitKind: coverage.data.unitKind, totalUnits: coverage.data.totalUnits,
         ready: unitNumbers("READY").length, pending: unitNumbers("PENDING"), failed: unitNumbers("FAILED"), unsupported: unitNumbers("UNSUPPORTED"), truncated: unitNumbers("TRUNCATED") } : null });
   }
   return results;

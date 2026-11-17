@@ -16,7 +16,8 @@ import { matterHref } from "@/lib/matters/route";
 import { customMatterFilter } from "@/lib/permissions";
 import { clientTypeLabel, deadlineCategoryLabel, intakeStatusLabel, matterStatusLabel } from "@/lib/enums";
 import type { DocumentSourceOrigin, Prisma } from "@prisma/client";
-import { materialOriginalUrl, materialTextProjection, publishedMaterialSnapshot } from "@/server/documents/material-processing";
+import { materialTextProjection, publishedMaterialSnapshot } from "@/server/documents/material-processing";
+import { materialPresentation } from "@/lib/documents/presentation";
 import type { SourceAnchor } from "@/lib/workbench/contracts";
 import { ActionError } from "@/lib/action-error";
 import { decodeSearchCursor, encodeSearchCursor, searchBoundary, searchGroups, searchPageSchema, searchQuerySchema, type SearchGroup, type SearchPosition } from "./cursor";
@@ -187,11 +188,12 @@ async function searchDocumentsAuthorized(
       doc.matter?.internalCode
       ?? (doc.intake ? `收案 · ${doc.intake.title}` : "");
     const matterLink = doc.matter ? matterHref(doc.matter) : doc.intake ? `/intakes/${doc.intake.id}` : undefined;
+    const presentation = materialPresentation(doc, anchor?.location ?? (pageNo ? { kind: "PAGE", page: pageNo } : undefined));
     results.push({
       id: doc.id,
       title: doc.name,
       subtitle: snippet ? `${contextLabel}${pageNo ? ` · 第 ${pageNo} 页` : ""} · 命中正文：…${snippet}…` : contextLabel,
-      href: materialOriginalUrl(doc, anchor?.location ?? (pageNo ? { kind: "PAGE", page: pageNo } : undefined)),
+      href: presentation.previewUrl ?? presentation.downloadUrl,
       type: "document" as const,
       snippet: snippet || undefined,
       pageNo,
