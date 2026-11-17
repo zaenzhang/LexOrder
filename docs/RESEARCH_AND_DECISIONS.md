@@ -1174,6 +1174,14 @@ B 实读固定 Counsel OS `c4f40f1ffd40146531bcaa7f43e6877a733f92ca` 的 [Docume
 
 C复读发现原save-case公开Action直接收客户端caseHit，审计只能证明“经元典保存入口”，不能证明元信息已由provider核真；audit吞错还意味着候选不是完整保存全集。正式合同因此保CASE/PENDING、未读/摘要、未知时点、无审计时手工选材；固定头歧义/超长不猜或静默截断，异步读完再次核当前资格。计划§7.16.6记录准确文件、schema交叉验证和失败出口。两组均先发布合同后编码，本段是审查依据，不是实现、浏览器或专业通过证明。
 
+### 3.39 空事项级保全的事实与呈现审查（2026-11-17）
+
+C 实读案件 page、matter-detail-tabs、MatterPreservationContent、原 PreservationCaseDialog 与 list/create 服务；只读审查者独立复核。旧12号截图对应的是案件全案档案，不是全局工作台。当前页面明确读所有保全状态，真实记录即使全解除也保留历史，因此收起条件必须是 `cases.length === 0`，不可用 activeProperties 代替。
+
+本轮重读固定 [Frappe Lead.vue 1—230 行](https://github.com/frappe/crm/blob/3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952/frontend/src/pages/Lead.vue)（blob `53afee59e53680211e8ee2b6aeaf380b5e9c91fb`）：对象动作按当前状态/资格出现，SLA 区块有实际状态才展示；只采用有依据的区块与动作组织，不复制 Vue/AGPL 源码，也不宣称有同等法律保全流程。LexOrder用原Button/原Dialog将无记录状态收为创建入口，是基于本次任务的设计判断。
+
+用户从当前案件进入同一表单，已有案件选项与取消/保存失败路径保持；有历史记录继续完整查看。C与独立复审纠正首页指代、全解除不能当空、Hooks/共享Dialog不能随分支丢失；没有剩余计划阻断。只改一个业务组件，开发静态和用户浏览器分别记账；合同见计划 §7.16.7、需求 §9.3.2、架构 §6.21。
+
 ## 4. 可选法律服务 MCP 与来源
 
 核查日期 2026-11-16；以下为官方公开的接入信息，不是本项目已取得账号、权益或实测成功。机构目录可扩展，自定义远程 MCP 为未预置服务保留入口；不虚构“市面所有机构都提供官方 MCP”。

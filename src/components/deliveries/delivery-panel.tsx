@@ -292,7 +292,9 @@ export function DeliveryPanel({ matterId, initialDeliveryId, initialEventId, ini
                 return <li key={id} className="flex items-center gap-2 text-sm"><span className="flex-1 break-words">{index + 1}. {document ? `${document.name} · 第 ${document.version} 版` : "材料当前不可读取"}</span>
                   <Button size="icon" variant="ghost" disabled={busy || index === 0} aria-label={`上移第 ${index + 1} 份材料`} onClick={() => reorder(index, -1)}><ArrowUp /></Button>
                   <Button size="icon" variant="ghost" disabled={busy || index === draft.documentIds.length - 1} aria-label={`下移第 ${index + 1} 份材料`} onClick={() => reorder(index, 1)}><ArrowDown /></Button>
-                  <Button size="sm" variant="ghost" disabled={busy} onClick={() => changeDraft({ documentIds: draft.documentIds.filter(item => item !== id) })}>移除</Button>
+                  <Button size="sm" variant="ghost" disabled={busy} onClick={() => changeDraft({
+                    documentIds: draft.documentIds.filter(item => item !== id), sourceDeclarations: draft.sourceDeclarations.filter(item => item.documentId !== id),
+                  })}>移除</Button>
                 </li>;
               })}</ol>}
             </fieldset>

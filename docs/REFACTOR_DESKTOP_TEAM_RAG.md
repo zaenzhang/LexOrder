@@ -723,6 +723,12 @@ B1 使用现有ResearchSource固定版本/SHA与ResearchRevision.queryLog JSON�
 
 两种既有MD头按明确格式解析，正文不提取身份；超长/歧义自动输入在选择时明确处理，按实际source/query schema验证。自动query与source原子加入当前草稿，保存继续prepareSource事务及旧研究/稿件读取授权，不改derivation-access、read-release或全局壳。接口、六文件、时间/片段语义及边界见计划§7.16.6；schema/公共授权必要变更须先回C，不能以领域实现顺手扩写。
 
+### 6.21 空事项级保全的呈现边界（2026-11-17）
+
+C3仅在 `MatterPreservationContent` 按 `cases.length` 与既有 `canManage` 选择完整卡/紧凑入口/无可见区块。`listPreservationCases({ matterId, status: "ALL" })`、全部目标与财产、原调用者范围及归档写守卫不变；`activeProperties` 仅用于在保和到期统计，不能作为隐藏历史的条件。Hooks和四种共享Dialog继续原生命周期，创建仍使用当前 `matterOption`、`initialMatterId`，不复制表单或在展示层补造新授权。
+
+本片不涉及API/schema、公共组件、全局样式或迁移。原创建、续封、解除的服务器当前资格与事项可写校验仍为业务边界；静态验证不替代用户实际桌面交互，文件和场景见计划 §7.16.7。
+
 ## 7. 参考项目如何进入 LexOrder
 
 沿用 [来源记录](RESEARCH_AND_DECISIONS.md)，按“观察行为 → 输入输出与规则 → LexOrder 设计 → 场景验收”吸收。实际复制代码另记固定提交、文件、依赖与来源；研究范围不按协议类型排除。

@@ -1,7 +1,7 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DeliveryPanel } from "@/components/deliveries/delivery-panel";
-import type { DeliveryDetail, DeliveryOptions } from "@/server/deliveries/contracts";
+import { prepareDeliverySchema, type DeliveryDetail, type DeliveryOptions } from "@/server/deliveries/contracts";
 
 const mocks = vi.hoisted(() => ({
   listDeliveryRecords: vi.fn(), getDeliveryOptions: vi.fn(), getDeliveryDetail: vi.fn(), prepareDelivery: vi.fn(),
@@ -47,6 +47,37 @@ async function enterPreparation() {
 }
 
 describe("交付面板", () => {
+  it("从顺序清单移除一份已声明材料后，剩余材料及其来源声明仍可真实校验保存", async () => {
+    const removedId = "cdocdelivery00000000000003";
+    mocks.getDeliveryOptions.mockResolvedValue({
+      ...options,
+      documents: [
+        { ...options.documents[0], status: "DRAFT", needsSourceDeclaration: true },
+        { id: removedId, name: "合成待移除附件", version: 1, status: "DRAFT", canDeliver: true, blockedReason: null, needsSourceDeclaration: true },
+      ],
+    } satisfies DeliveryOptions);
+    mocks.prepareDelivery.mockImplementationOnce(async input => {
+      prepareDeliverySchema.parse(input);
+      return { id: deliveryId };
+    });
+    const onLocationChange = vi.fn();
+    render(<DeliveryPanel matterId={matterId} onLocationChange={onLocationChange} />);
+    await enterPreparation();
+    fireEvent.change(screen.getByLabelText("确认 合成分析稿 第 1 版来源"), { target: { value: "EXTERNAL_ATTACHMENT" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: "选择 合成待移除附件 第 1 版" }));
+    fireEvent.change(screen.getByLabelText("确认 合成待移除附件 第 1 版来源"), { target: { value: "EXTERNAL_ATTACHMENT" } });
+    const selectedRow = screen.getByText("2. 合成待移除附件 · 第 1 版").closest("li")!;
+    fireEvent.click(within(selectedRow).getByRole("button", { name: "移除" }));
+    fireEvent.click(screen.getByRole("button", { name: "核对并保存清单" }));
+    await waitFor(() => expect(onLocationChange).toHaveBeenCalledWith(deliveryId));
+    expect(mocks.prepareDelivery).toHaveBeenCalledOnce();
+    expect(mocks.prepareDelivery.mock.calls[0][0]).toMatchObject({
+      documentIds: [oldId], sourceDeclarations: [{ documentId: oldId, kind: "EXTERNAL_ATTACHMENT" }],
+    });
+    expect(mocks.findDeliveryByRequest).not.toHaveBeenCalled();
+    expect(await screen.findByText("已有后续版本，本清单保留原版")).toBeInTheDocument();
+  });
+
   it("人工简报将明确选择交给真实保存入口，失败保留选择并以同一请求重试", async () => {
     const selection = { recordId: "cm00000000000000000000004", expectedCurrentRecordId: "cm00000000000000000000005", expectedConfirmedAt: null };
     mocks.contextOptions.mockResolvedValue({ choices: [{ selection, kind: "GOAL", version: 1, content: "合成简报旧目标", sourceDescription: "合成来源", historical: true }], nextCursor: null });
