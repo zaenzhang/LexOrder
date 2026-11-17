@@ -44,7 +44,7 @@ import { prepareTemplate, renderTemplate } from "@/server/document-templates/act
 import { saveMatterContext } from "@/server/matters/context-service";
 import { readContextInputChoice } from "@/server/matters/context-inputs";
 const users: string[] = [], matters: string[] = [], clients: string[] = [], templates: string[] = [], blobs: string[] = [];
-async function fixture() {
+async function fixture(custom?: { markup: string; variables: string[] }) {
   const user = await db.user.create({ data: { name: "合成起草律师", email: `${randomUUID()}@example.invalid`, passwordHash: "disabled-test-only", role: "LAWYER" } });
   users.push(user.id);
   mocks.session.mockResolvedValue({ user: { id: user.id, role: user.role }, expires: "2099-01-01" });
@@ -56,9 +56,9 @@ async function fixture() {
   const secondParty = await db.party.create({ data: { matterId: matter.id, role: "OPPOSING_PARTY", name: "合成对方二", phone: "对方二原电话", ordinal: 2 } });
   const firstProcedure = await db.matterProcedure.create({ data: { matterId: matter.id, type: "FIRST_INSTANCE", order: 1, handlingAgency: "合成一审法院" } });
   const secondProcedure = await db.matterProcedure.create({ data: { matterId: matter.id, type: "SECOND_INSTANCE", order: 2, handlingAgency: "合成二审法院" } });
-  const variables = ["client.phone", "client.idNumber", "client.legalRep", "opposing.name", "opposing.phone", "proceeding.court"];
-  const buffer = await pack([body(variables.map(path => `{{${path}}}`).join("；"))]);
-  const blob = await db.document.create({ data: { name: "合成模板.docx", path: `template-fixture/${randomUUID()}.docx`, uploadedById: user.id, tags: [], sha256: "b".repeat(64) } });
+  const variables = custom?.variables ?? ["client.phone", "client.idNumber", "client.legalRep", "opposing.name", "opposing.phone", "proceeding.court"];
+  const buffer = await pack([body(custom?.markup ?? variables.map(path => `{{${path}}}`).join("；"))]);
+  const blob = await db.document.create({ data: { name: "合成模板.docx", path: `template-fixture/${randomUUID()}.docx`, uploadedById: user.id, tags: [], sha256: sha256(buffer) } });
   blobs.push(blob.id); mocks.files.set(blob.path, buffer);
   const template = await db.documentTemplate.create({ data: { name: "合成主体核对模板", category: "LITIGATION", applicableCategories: [], variables, docxBlobId: blob.id, createdById: user.id } });
   templates.push(template.id);
@@ -66,7 +66,7 @@ async function fixture() {
 }
 function renderInput(preparation: TemplatePreparation, matterId: string) {
   return { requestKey: randomUUID(), matterId, templateId: preparation.templateId, templateUpdatedAt: preparation.templateUpdatedAt,
-    selection: preparation.selection, expectedValues: Object.fromEntries(preparation.fields.map(field => [field.path, field.value])),
+    selection: preparation.selection, expectedValues: preparation.expectedValues, expectedSubjects: preparation.expectedSubjects,
     overrides: { "client.phone": "仅本稿委托人电话", "opposing.phone": "仅本稿对方电话" }, reviewed: true as const, folderId: null };
 }
 async function chosenPreparation(f: Awaited<ReturnType<typeof fixture>>) {
@@ -118,7 +118,8 @@ describe.skipIf(!databaseUrl)("模板字段核对与生成：真实 PG", () => {
     const preparation = await chosenPreparation(f);
     expect(preparation.fields.find(field => field.path === "client.idNumber")?.value).toBe("SYNTHETIC-ID");
     expect(preparation.fields.find(field => field.path === "client.legalRep")?.value).toBe("合成法定代表人");
-    const input = renderInput(preparation, f.matter.id), saved = await renderTemplate(input);
+    const input = { ...renderInput(preparation, f.matter.id), expectedSubjects: { ...preparation.expectedSubjects, thirds: ["Party:unreviewed-extra"] } };
+    const saved = await renderTemplate(input);
     expect(await renderTemplate(input)).toEqual(saved);
     const doc = await db.document.findUniqueOrThrow({ where: { id: saved.documentId } });
     expect(doc).toMatchObject({ status: "DRAFT", approvedById: null, procedureId: f.secondProcedure.id });
@@ -134,6 +135,7 @@ describe.skipIf(!databaseUrl)("模板字段核对与生成：真实 PG", () => {
     expect(doc.templateContextSnapshot).toMatchObject({ selection: preparation.selection,
       context: { client: { phone: "仅本稿委托人电话" }, opposing: { name: "合成对方二", phone: "仅本稿对方电话" }, proceeding: { court: "合成二审法院" } },
       templateSource: { documentId: f.blob.id, sha256: f.blob.sha256 } });
+    expect(doc.templateContextSnapshot).not.toHaveProperty("subjects.thirds");
     expect(await db.client.findUniqueOrThrow({ where: { id: f.client.id } })).toEqual(f.client);
     expect(await db.party.findUniqueOrThrow({ where: { id: f.firstParty.id } })).toEqual(f.firstParty);
     expect(await db.party.findUniqueOrThrow({ where: { id: f.secondParty.id } })).toEqual(f.secondParty);
@@ -171,5 +173,48 @@ describe.skipIf(!databaseUrl)("模板字段核对与生成：真实 PG", () => {
     expect(await renderTemplate(input)).toMatchObject({ documentId: saved.id, fileName: saved.name });
     expect(await db.document.count({ where: { matterId: f.matter.id } })).toBe(1);
     expect(await db.auditLog.count({ where: { targetId: saved.id, action: "TEMPLATE_RENDER" } })).toBe(1);
+  });
+
+  it("存量错误变量索引不作门禁，真实两原告逐项补填与重核仅进入本稿", async () => {
+    const f = await fixture({ markup: "{{#plaintiffs}}{{name}}：{{phone}}；{{/plaintiffs}}{{#thirds}}{{name}}{{/thirds}}{{^thirds}}无第三人{{/thirds}}",
+      variables: ["plaintiffs", "name", "phone", "thirds", "unused.legacy"] });
+    const first = await db.party.create({ data: { matterId: f.matter.id, role: "CLIENT_PARTY", ordinal: 1, name: "合成原告甲", phone: "甲原电话" } });
+    const second = await db.party.create({ data: { matterId: f.matter.id, role: "CLIENT_PARTY", ordinal: 2, name: "合成原告乙" } });
+    const original = await prepareTemplate({ matterId: f.matter.id, templateId: f.template.id });
+    expect(original.fields.filter(field => field.missing).map(field => field.path)).toEqual(["plaintiffs.1.phone"]);
+    expect(original.fields.find(field => field.path === "plaintiffs.1.phone")?.subjectLabel).toBe("原告 2 · 合成原告乙");
+    expect(original.expectedSubjects.plaintiffs).toEqual([`Party:${first.id}`, `Party:${second.id}`]);
+    await expect(renderTemplate({ ...renderInput(original, f.matter.id), overrides: {} })).rejects.toThrow("请补全 1 个空白字段");
+    const overrides = { "plaintiffs.1.phone": "乙本稿电话" };
+    const reviewed = await prepareTemplate({ matterId: f.matter.id, templateId: f.template.id, selection: original.selection,
+      expectedSubjects: original.expectedSubjects, overrides });
+    expect(reviewed.fields.find(field => field.path === "plaintiffs.1.phone")).toMatchObject({ value: "乙本稿电话", missing: false });
+    expect(reviewed.expectedValues).toEqual(original.expectedValues);
+    const saved = await renderTemplate({ ...renderInput(reviewed, f.matter.id), overrides });
+    const doc = await db.document.findUniqueOrThrow({ where: { id: saved.documentId } });
+    const bodyXml = new PizZip(decryptBuffer(mocks.files.get(doc.path)!, doc.iv!, doc.authTag!)).file("word/document.xml")!.asText();
+    expect(bodyXml).toContain("合成原告甲：甲原电话；合成原告乙：乙本稿电话；无第三人");
+    expect((await db.party.findUniqueOrThrow({ where: { id: second.id } })).phone).toBeNull();
+    expect((await db.documentTemplate.findUniqueOrThrow({ where: { id: f.template.id } })).variables).toEqual(["plaintiffs", "name", "phone", "thirds", "unused.legacy"]);
+    expect(doc.templateContextSnapshot).toMatchObject({ subjects: { plaintiffs: [`Party:${first.id}`, `Party:${second.id}`], thirds: [] } });
+  });
+
+  it.each(["reorder", "replace"] as const)("同名同值成员 %s 也拒绝旧补填，不凭数组下标或显示名认人", async change => {
+    const f = await fixture({ markup: "{{#plaintiffs}}{{name}}：{{phone}}；{{/plaintiffs}}", variables: ["name", "phone", "plaintiffs"] });
+    const first = await db.party.create({ data: { matterId: f.matter.id, role: "CLIENT_PARTY", ordinal: 1, name: "合成同名主体", phone: "相同电话" } });
+    const second = await db.party.create({ data: { matterId: f.matter.id, role: "CLIENT_PARTY", ordinal: 2, name: "合成同名主体", phone: "相同电话" } });
+    const preparation = await prepareTemplate({ matterId: f.matter.id, templateId: f.template.id });
+    if (change === "reorder") {
+      await db.party.update({ where: { id: first.id }, data: { ordinal: 2 } });
+      await db.party.update({ where: { id: second.id }, data: { ordinal: 1 } });
+    } else {
+      await db.party.delete({ where: { id: first.id } });
+      await db.party.create({ data: { matterId: f.matter.id, role: "CLIENT_PARTY", ordinal: 1, name: "合成同名主体", phone: "相同电话" } });
+    }
+    const overrides = { "plaintiffs.0.phone": "仅原第一人补填" };
+    await expect(renderTemplate({ ...renderInput(preparation, f.matter.id), overrides })).rejects.toThrow("主体或顺序已变化");
+    await expect(prepareTemplate({ matterId: f.matter.id, templateId: f.template.id, selection: preparation.selection,
+      expectedSubjects: preparation.expectedSubjects, overrides })).rejects.toThrow("主体或顺序已变化");
+    expect(await db.document.count({ where: { matterId: f.matter.id } })).toBe(0);
   });
 });

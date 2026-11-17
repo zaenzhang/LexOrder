@@ -18,8 +18,8 @@ import { approvalTransaction } from "@/lib/approvals/service";
 import { checkRoleMutation } from "@/lib/roles/service";
 import { enqueueMaterialProcessing } from "@/server/documents/material-processing";
 import { decryptBuffer, encryptBuffer, sha256 } from "@/lib/storage/crypto";
-import { buildContext, templateMatterInputs, readTemplatePath, applyTemplateValues, renderDocxBuffer, detectMissing, extractDocxVariables, type RenderContext } from "@/lib/template-engine";
-import { missingTemplateTargets, type TemplatePreparation } from "@/lib/template-render-fields";
+import { buildContext, templateMatterInputs, templateSubjects, readTemplatePath, inspectTemplateFields, extractDocxVariables } from "@/lib/template-engine";
+import { missingTemplateTargets, type TemplatePreparation, type TemplateSubjects } from "@/lib/template-render-fields";
 import { suggestFolderByTemplateCategory } from "@/lib/default-folders";
 import {
   templateListFilterSchema,
@@ -95,13 +95,15 @@ export async function toggleTemplate(input: z.infer<typeof templateToggleSchema>
   return { ok: true };
 }
 
-function templateFields(variables: string[], context: RenderContext): TemplatePreparation["fields"] {
-  return variables.map(path => {
-    const value = readTemplatePath(context, path);
-    const editable = value === null || typeof value !== "object";
-    return { path, editable, value: value == null ? "" : editable ? String(value) : JSON.stringify(value),
-      missing: value == null || String(value).trim() === "" };
-  });
+function assertTemplateSubjects(expected: TemplateSubjects | undefined, current: TemplateSubjects) {
+  if (Object.entries(current).some(([key, ids]) => JSON.stringify(expected?.[key as keyof TemplateSubjects]) !== JSON.stringify(ids))) {
+    throw new ActionError("文书主体或顺序已变化，请重新选择模板或主体后核对；原补填仍保留，尚未生成文书");
+  }
+}
+
+async function templateBytes(blob: { path: string; encrypted: boolean; iv: string | null; authTag: string | null }) {
+  const raw = await storage.readFile(blob.path);
+  return blob.encrypted ? decryptBuffer(raw, blob.iv ?? "", blob.authTag ?? "") : raw;
 }
 
 async function templateWriteContext(db: Prisma.TransactionClient, user: Awaited<ReturnType<typeof requireSession>>["user"], matterId: string) {
@@ -129,9 +131,20 @@ export async function prepareTemplate(input: z.input<typeof templatePrepareSchem
   if (template.applicableCategories.length && !template.applicableCategories.includes(inputs.matter.category)) throw new ActionError("模板不适用于当前案件类别");
   const selection = data.selection ?? inputs.selection;
   const context = await buildContext({ matterId: data.matterId, userId: session.user.id, templateCategory: template.category, selection, matterInputs: inputs });
-  const variables = z.array(z.string().max(100)).max(100).parse(template.variables);
+  if (Object.keys(data.overrides).length) {
+    assertTemplateSubjects(data.expectedSubjects, templateSubjects(inputs, selection, Object.keys(data.overrides)));
+  }
+  const inspection = inspectTemplateFields(await templateBytes(template.docxBlob), context, data.overrides, template.category);
+  const expectedSubjects = templateSubjects(inputs, selection, [...inspection.fields.map(field => field.path), ...Object.keys(data.overrides)]);
+  const groupNames = { plaintiffs: "原告", defendants: "被告", thirds: "第三人" } as const;
+  const fields = inspection.fields.map(field => {
+    const match = /^(plaintiffs|defendants|thirds)\.(\d+)\./.exec(field.path);
+    if (!match) return field;
+    const name = readTemplatePath(inspection.context, `${match[1]}.${match[2]}.name`);
+    return { ...field, subjectLabel: `${groupNames[match[1] as keyof typeof groupNames]} ${Number(match[2]) + 1}${name ? ` · ${name}` : ""}` };
+  });
   return { templateId: template.id, templateUpdatedAt: template.updatedAt.toISOString(), templateSourceDocumentId: template.docxBlob.id,
-    selection, choices: inputs.choices, fields: templateFields(variables, context) };
+    selection, choices: inputs.choices, fields, expectedValues: inspection.expectedValues, expectedSubjects };
 }
 
 /** Generates one reviewed draft. Master records remain untouched on success, cancel, or failure. */
@@ -140,6 +153,7 @@ export async function renderTemplate(input: z.input<typeof templateRenderSchema>
   const data = templateRenderSchema.parse(input);
   const requestHash = createHash("sha256").update(JSON.stringify({ ...data,
     expectedValues: Object.fromEntries(Object.entries(data.expectedValues).sort()),
+    expectedSubjects: Object.fromEntries(Object.entries(data.expectedSubjects).sort()),
     overrides: Object.fromEntries(Object.entries(data.overrides).sort()),
   })).digest("hex");
   let writtenPath: string | null = null;
@@ -159,16 +173,21 @@ export async function renderTemplate(input: z.input<typeof templateRenderSchema>
       if (!template?.enabled || !template.docxBlob || template.docxBlob.deletedAt) throw new ActionError("模板不可用，请重新选择");
       if (template.updatedAt.toISOString() !== data.templateUpdatedAt) throw new ActionError("模板已变化，请重新加载并核对字段");
       if (template.applicableCategories.length && !template.applicableCategories.includes(matter.category)) throw new ActionError("模板不适用于当前案件类别");
-      const variables = z.array(z.string().max(100)).max(100).parse(template.variables);
       const inputs = await templateMatterInputs(data.matterId, template.category, db);
-      const unselected = missingTemplateTargets(variables, data.selection, inputs.choices);
-      if (unselected.length) throw new ActionError(`请先选择本次文书的${unselected.join("、")}`);
       const sourceContext = await buildContext({ matterId: data.matterId, userId: session.user.id, templateCategory: template.category, selection: data.selection, db, matterInputs: inputs });
-      if (templateFields(variables, sourceContext).some(field => data.expectedValues[field.path] !== field.value)) {
+      assertTemplateSubjects(data.expectedSubjects, templateSubjects(inputs, data.selection, Object.keys(data.overrides)));
+      const inspection = inspectTemplateFields(await templateBytes(template.docxBlob), sourceContext, data.overrides, template.category);
+      const paths = inspection.fields.map(field => field.path);
+      const unselected = missingTemplateTargets(paths, data.selection, inputs.choices);
+      if (unselected.length) throw new ActionError(`请先选择本次文书的${unselected.join("、")}`);
+      const currentSubjects = templateSubjects(inputs, data.selection, paths);
+      assertTemplateSubjects(data.expectedSubjects, currentSubjects);
+      if (Object.keys(data.expectedValues).length !== paths.length || paths.some(path => data.expectedValues[path] !== inspection.expectedValues[path])) {
         throw new ActionError("案件或主体资料已变化，请重新加载字段并核对，补填内容尚未保存");
       }
-      const context = applyTemplateValues(sourceContext, data.overrides, variables, template.category);
-      const missing = detectMissing(variables, context);
+      if (Object.keys(data.overrides).some(path => !Object.hasOwn(inspection.appliedOverrides, path))) throw new ActionError("补填字段当前未启用，请重新核对字段后生成");
+      const { context } = inspection;
+      const missing = inspection.fields.filter(field => field.missing);
       if (missing.length) throw new ActionError(`请补全 ${missing.length} 个空白字段后再生成`);
       let folderId = data.folderId;
       if (folderId) {
@@ -178,15 +197,13 @@ export async function renderTemplate(input: z.input<typeof templateRenderSchema>
         const name = suggestFolderByTemplateCategory(template.category, matter.category);
         if (name) folderId = (await db.documentFolder.findFirst({ where: { matterId: data.matterId, name }, select: { id: true } }))?.id ?? null;
       }
-      const raw = await storage.readFile(template.docxBlob.path);
-      const templateBuffer = template.docxBlob.encrypted ? decryptBuffer(raw, template.docxBlob.iv ?? "", template.docxBlob.authTag ?? "") : raw;
-      const rendered = renderDocxBuffer(templateBuffer, context);
+      const rendered = inspection.render();
       const encrypted = encryptBuffer(rendered);
       writtenPath = await storage.writeFile(`m_${data.matterId}`, encrypted.ciphertext);
       const fileName = `${template.name}_${matter.internalCode}_${shDayKey(new Date())}.docx`;
       const doc = await db.document.create({ data: {
         matterId: data.matterId, procedureId: data.selection.procedureId, folderId, templateId: template.id, familyId: randomUUID(),
-        templateContextSnapshot: { context, selection: data.selection, templateSource: { documentId: template.docxBlob.id, sha256: template.docxBlob.sha256 }, reviewedById: session.user.id, reviewedAt: new Date().toISOString() } as unknown as Prisma.InputJsonValue,
+        templateContextSnapshot: { context, selection: data.selection, subjects: currentSubjects, templateSource: { documentId: template.docxBlob.id, sha256: template.docxBlob.sha256 }, reviewedById: session.user.id, reviewedAt: new Date().toISOString() } as unknown as Prisma.InputJsonValue,
         generationRequestKey: data.requestKey, generationRequestHash: requestHash,
         name: fileName, category: "OTHER", status: "DRAFT", sourceOrigin: "TEAM_PRODUCED",
         path: writtenPath, mimeType: DOCX_MIME, size: rendered.length, sha256: sha256(rendered),
@@ -225,8 +242,7 @@ const uploadTemplateSchema = z.object({
   applicableCategories: z.array(z.enum([
     "CIVIL_COMMERCIAL", "LABOR_ARBITRATION", "COMMERCIAL_ARBITRATION", "CRIMINAL",
     "ADMINISTRATIVE", "NON_LITIGATION", "LEGAL_COUNSEL", "SPECIAL_PROJECT"
-  ])).default([]),
-  extraVariables: z.array(z.string().regex(/^[A-Za-z_$][\w$.]*$/, "变量须为点分路径，如 client.name")).default([])
+  ])).default([])
 });
 
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -234,7 +250,7 @@ const MAX_TEMPLATE_SIZE = 10 * 1024 * 1024;
 
 /**
  * 上传自定义 docx 模板。文件加密落 storage，元数据与 blob Document 同事务创建；
- * 变量清单自动提取（页眉页脚一并扫描），手工补充变量兜底拆分 run 漏检。
+ * 编译器生成变量索引（含拆分run、页眉页脚），实际字段在准备时按当前作用域核对。
  */
 export async function uploadDocumentTemplate(formData: FormData) {
   const session = await requireWorkspaceConfiguration();
@@ -242,8 +258,7 @@ export async function uploadDocumentTemplate(formData: FormData) {
     name: formData.get("name"),
     category: formData.get("category"),
     description: formData.get("description") || undefined,
-    applicableCategories: String(formData.get("applicableCategories") ?? "").split(",").map(s => s.trim()).filter(Boolean),
-    extraVariables: String(formData.get("extraVariables") ?? "").split(/[，,]/).map(s => s.trim()).filter(Boolean)
+    applicableCategories: String(formData.get("applicableCategories") ?? "").split(",").map(s => s.trim()).filter(Boolean)
   });
 
   const file = formData.get("file");
@@ -254,7 +269,7 @@ export async function uploadDocumentTemplate(formData: FormData) {
   const buffer = Buffer.from(await file.arrayBuffer());
   if (buffer.subarray(0, 2).toString("latin1") !== "PK") throw new ActionError("文件不是有效的 docx（ZIP 头缺失）");
 
-  const variables = [...new Set([...extractDocxVariables(buffer), ...data.extraVariables])].sort();
+  const variables = extractDocxVariables(buffer);
 
   const enc = encryptBuffer(buffer);
   const created = await prisma.$transaction(async tx => {

@@ -162,11 +162,10 @@ function UploadSheet({ open, onOpenChange, onDone }: { open: boolean; onOpenChan
   const [category, setCategory] = useState<Category>("LITIGATION");
   const [description, setDescription] = useState("");
   const [applicable, setApplicable] = useState<MatterCat[]>([]);
-  const [extraVariables, setExtraVariables] = useState("");
   const [file, setFile] = useState<File | null>(null);
 
   function reset() {
-    setName(""); setCategory("LITIGATION"); setDescription(""); setApplicable([]); setExtraVariables(""); setFile(null);
+    setName(""); setCategory("LITIGATION"); setDescription(""); setApplicable([]); setFile(null);
   }
 
   function submit(e: React.FormEvent) {
@@ -178,7 +177,6 @@ function UploadSheet({ open, onOpenChange, onDone }: { open: boolean; onOpenChan
     formData.set("category", category);
     formData.set("description", description.trim());
     formData.set("applicableCategories", applicable.join(","));
-    formData.set("extraVariables", extraVariables);
     formData.set("file", file);
     startTransition(async () => {
       try {
@@ -242,11 +240,6 @@ function UploadSheet({ open, onOpenChange, onDone }: { open: boolean; onOpenChan
             <div className="space-y-1.5">
               <Label className="text-xs">模板文件（.docx，≤10MB）<span className="text-destructive">*</span></Label>
               <Input type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={e => setFile(e.target.files?.[0] ?? null)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">补充变量（逗号分隔，可选）</Label>
-              <Input value={extraVariables} onChange={e => setExtraVariables(e.target.value)} placeholder="如：custom.claimPoint, custom.courtFee" className="font-mono text-xs" />
-              <p className="text-[11px] text-muted-foreground">自动提取漏检时手工补齐；变量须为点分路径。</p>
             </div>
             <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
               <div className="text-[11px] font-semibold text-muted-foreground">常用变量（生成时自动填充）</div>

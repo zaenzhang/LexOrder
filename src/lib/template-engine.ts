@@ -4,17 +4,18 @@
  * 流程：
  *   1. buildContext(matterId, userId, overrides?) 从 DB 拼装变量上下文
  *   2. renderDocxBuffer(templateBuffer, context) 用 docxtemplater 渲染
- *   3. 渲染前 detectMissing(variables, context) 找出未填写的变量，由 UI 弹窗补全
+ *   3. inspectTemplateFields 沿真实编译/求值作用域准备本稿字段
  *
  * 模板变量使用双大括号语法：{{firm.name}} / {{client.idNumber}}。
  */
 import PizZip from "pizzip";
-import Docxtemplater from "docxtemplater";
+import Docxtemplater, { type DXT } from "docxtemplater";
+import InspectModule from "docxtemplater/js/inspect-module";
 import { shParts, shDayKey } from "@/lib/ui/sh-time";
 import { prisma } from "./prisma";
 import { ActionError } from "@/lib/action-error";
 import type { Prisma, TemplateCategory } from "@prisma/client";
-import { type TemplateSelection } from "./template-render-fields";
+import { type TemplateField, type TemplateSelection, type TemplateSubjects, type TemplateSubjectKey } from "./template-render-fields";
 import { procedureTypeLabel } from "./enums";
 import { decryptIdNumber } from "./clients/id-number-crypto";
 
@@ -150,7 +151,7 @@ export async function templateMatterInputs(matterId: string, templateCategory?: 
       cause: { select: { name: true } },
       primaryClient: true,
       clientLinks: { include: { client: true }, orderBy: { addedAt: "asc" } },
-      parties: { orderBy: [{ role: "asc" }, { ordinal: "asc" }] },
+      parties: { orderBy: [{ role: "asc" }, { ordinal: "asc" }, { id: "asc" }] },
       procedures: { orderBy: { order: "asc" }, where: {
         engagement: "ENGAGED",
         ...(templateCategory === "EXECUTION" ? { type: { in: ["ENFORCEMENT", "ENFORCEMENT_OBJECTION"] as ("ENFORCEMENT" | "ENFORCEMENT_OBJECTION")[] } } : {}),
@@ -243,16 +244,18 @@ export function applyTemplateValues(context: RenderContext, overrides: Record<st
     if (variables && !variables.includes(path)) throw new ActionError("补填字段不属于当前模板，请重新核对");
     if (path.startsWith("execution.") && templateCategory !== "EXECUTION") throw new ActionError("当前模板不接受执行依据字段");
     const parts = path.split(".");
-    if (parts.some(part => !/^[A-Za-z_$][\w$]*$/.test(part) || ["__proto__", "constructor", "prototype"].includes(part))) throw new ActionError("模板字段路径无效");
+    if (!safeTemplatePath(path)) throw new ActionError("模板字段路径无效");
     const existing = readTemplatePath(context, path);
     if (existing !== null && typeof existing === "object") throw new ActionError("当事人列表须从实际案件主体选择，不能作为文本替换");
     let target: Record<string, unknown> = context;
     for (const part of parts.slice(0, -1)) {
+      if (Array.isArray(target) && (!/^(0|[1-9]\d*)$/.test(part) || !Object.hasOwn(target, part))) throw new ActionError("只能补填当前实际成员的字段");
       const node = target[part];
-      if (node === undefined) target[part] = {};
-      else if (!node || typeof node !== "object" || Array.isArray(node)) throw new ActionError("模板字段路径与现值不匹配");
+      if (node === undefined && !/^\d+$/.test(part)) target[part] = {};
+      else if (!node || typeof node !== "object") throw new ActionError("模板字段路径与现值不匹配");
       target = target[part] as Record<string, unknown>;
     }
+    if (Array.isArray(target) && (!/^(0|[1-9]\d*)$/.test(parts.at(-1)!) || !Object.hasOwn(target, parts.at(-1)!))) throw new ActionError("只能补填当前实际成员的字段");
     target[parts.at(-1)!] = value.trim();
   }
   return context;
@@ -299,10 +302,7 @@ function formatDocxError(err: unknown): string {
  *
  * 出错时抛出含具体 tag / 原因的中文异常，方便律师定位是哪个模板字段坏了。
  */
-export function renderDocxBuffer(
-  templateBuffer: Buffer,
-  context: RenderContext
-): Buffer {
+function compileDocx(templateBuffer: Buffer, options: DXT.ConstructorOptions = {}): Docxtemplater<PizZip> {
   let zip: PizZip;
   try {
     zip = new PizZip(templateBuffer);
@@ -310,37 +310,139 @@ export function renderDocxBuffer(
     throw new ActionError(`模板文件损坏，无法解压：${err instanceof Error ? err.message : String(err)}`);
   }
 
-  const doc = new Docxtemplater(zip, {
-    paragraphLoop: true,
-    linebreaks: true,
-    delimiters: { start: "{{", end: "}}" },
-    // 仅读取普通路径，不启用表达式求值或原型链访问。
-    parser: tag => ({ get: scope => readTemplatePath(scope, tag.trim()) }),
-    nullGetter: () => ""
-  });
-
   try {
-    doc.render(context as unknown as Record<string, unknown>);
+    return new Docxtemplater(zip, {
+      paragraphLoop: true, linebreaks: true, errorLogging: false,
+      delimiters: { start: "{{", end: "}}" },
+      // Ordinary paths only; the library's ScopeManager supplies loop and parent semantics.
+      parser: tag => ({ get: scope => readTemplatePath(scope, tag.trim()) }),
+      nullGetter: () => "", ...options,
+    });
   } catch (err) {
-    throw new ActionError(`模板渲染失败：\n${formatDocxError(err)}`);
+    throw new ActionError(`模板格式有误：\n${formatDocxError(err)}`);
   }
+}
 
+function renderDocx(doc: Docxtemplater<PizZip>, context: RenderContext) {
+  try { doc.render(context); }
+  catch (error) { throw new ActionError(`模板渲染失败：\n${formatDocxError(error)}`); }
+}
+
+/** Pure rendering also serves archive catalogs, whose optional cells may be empty. */
+export function renderDocxBuffer(templateBuffer: Buffer, context: RenderContext): Buffer {
+  const doc = compileDocx(templateBuffer);
+  renderDocx(doc, context);
   return doc.getZip().generate({ type: "nodebuffer" }) as Buffer;
 }
 
-/**
- * 检查上下文中哪些变量为空，返回缺失变量路径列表（UI 弹窗用）。
- * @param required 模板声明的变量清单（DocumentTemplate.variables）
- */
-export function detectMissing(required: string[], context: RenderContext): string[] {
-  const missing: string[] = [];
-  for (const path of required) {
-    const val = readTemplatePath(context, path);
-    if (val === undefined || val === null || String(val).trim() === "") {
-      missing.push(path);
+function safeTemplatePath(path: string): boolean {
+  return path.split(".").every((part, index) => (index > 0 && /^(0|[1-9]\d*)$/.test(part) || /^[A-Za-z_$][\w$]*$/.test(part))
+    && !["__proto__", "constructor", "prototype"].includes(part));
+}
+
+function templateTags(inspector: InspectModule): string[] {
+  const found = new Set<string>();
+  function collect(parts: DXT.Part[]) {
+    for (const part of parts) {
+      const path = part.value.trim();
+      if (path !== "." && !safeTemplatePath(path)) throw new ActionError(`模板字段路径无效：${path}`);
+      found.add(path);
+      if (part.subparsed) collect(part.subparsed);
     }
   }
-  return missing;
+  collect(inspector.getAllStructuredTags());
+  return [...found].sort();
+}
+
+/** Values used for concurrency checks; collection members are identified separately. */
+function originalFieldValue(value: unknown): string {
+  if (Array.isArray(value)) return JSON.stringify({ type: "array", length: value.length });
+  if (value !== null && typeof value === "object") return JSON.stringify({ type: "object" });
+  return JSON.stringify({ type: typeof value, value });
+}
+
+/**
+ * Observe the installed compiler's actual evaluation, including its own ScopeManager.
+ * Each pass receives a complete immutable input, so a later root placeholder's value
+ * also participates in earlier loops/fallbacks. There is no second loop interpreter.
+ * Hidden drafts are discarded from the final context; only the final pass can be saved.
+ */
+export function inspectTemplateFields(templateBuffer: Buffer, base: RenderContext,
+  overrides: Record<string, string> = {}, templateCategory?: TemplateCategory) {
+  function observe(context: RenderContext) {
+    const paths = new WeakMap<object, string>();
+    function index(value: unknown, path = "") {
+      if (!value || typeof value !== "object") return;
+      paths.set(value, path);
+      for (const [key, child] of Object.entries(value)) index(child, path ? `${path}.${key}` : key);
+    }
+    index(context);
+    const fields = new Map<string, TemplateField>();
+    const inspector = new InspectModule();
+    const doc = compileDocx(templateBuffer, { modules: [inspector], parser: tag => ({ get(scope: unknown, evaluation: DXT.ParserContext) {
+    const tagPath = tag.trim();
+    const value = readTemplatePath(scope, tagPath);
+    // Let ScopeManager finish its real parent lookup before selecting the storage path.
+    if (value == null && evaluation.num > 0) return value;
+    let owner = scope;
+    if (value == null) {
+      // A completely missing local scalar is filled on the real innermost object,
+      // unless an existing parent owns its first segment (e.g. client.phone).
+      const scopes = [...evaluation.scopeList].reverse().filter(item => item && typeof item === "object");
+      owner = scopes.find(item => Object.hasOwn(item, tagPath.split(".")[0])) ?? scopes[0] ?? context;
+    }
+    const prefix = owner && typeof owner === "object" ? paths.get(owner) : undefined;
+    if (prefix === undefined) throw new ActionError("模板字段没有可核对的实际主体");
+    const path = tagPath === "." ? prefix : prefix ? `${prefix}.${tagPath}` : tagPath;
+    const editable = !!path && safeTemplatePath(path) && (value == null || typeof value !== "object");
+    const controlsScope = evaluation.meta.part.module === "loop";
+    const prior = fields.get(path);
+    fields.set(path, { path, value: "", editable, required: editable && (!controlsScope || !!prior?.required),
+      missing: false, controlsScope: controlsScope || !!prior?.controlsScope });
+    return value;
+    } }) });
+    templateTags(inspector); // Current and already-installed templates use the same compiled nodes.
+    renderDocx(doc, context);
+    const absentControls = [...fields.values()].filter(field => field.controlsScope && readTemplatePath(base, field.path) == null);
+    for (const field of fields.values()) {
+      const value = readTemplatePath(context, field.path);
+      field.value = value == null ? "" : Array.isArray(value) ? `${value.length} 项` : typeof value === "object" ? "已关联对象" : String(value);
+      field.missing = field.required && !field.value.trim();
+      // Filling a previously absent object's child can activate its surrounding block.
+      field.controlsScope ||= absentControls.some(control => !!control.path && field.path.startsWith(`${control.path}.`));
+    }
+    return { fields, doc };
+  }
+  let context = applyTemplateValues(structuredClone(base), overrides, undefined, templateCategory);
+  let observed = observe(context);
+  const appliedOverrides = Object.fromEntries(Object.entries(overrides)
+    .filter(([path]) => observed.fields.get(path)?.editable).map(([path, value]) => [path, value.trim()]));
+  if (Object.keys(appliedOverrides).length !== Object.keys(overrides).length) {
+    context = applyTemplateValues(structuredClone(base), appliedOverrides, undefined, templateCategory);
+    observed = observe(context);
+    if (Object.keys(overrides).some(path => !!observed.fields.get(path)?.editable !== Object.hasOwn(appliedOverrides, path))) {
+      throw new ActionError("补填内容与模板条件相互影响，请调整模板条件后重新核对字段");
+    }
+  }
+  return { context, fields: [...observed.fields.values()], appliedOverrides,
+    expectedValues: Object.fromEntries([...observed.fields.keys()].map(path => [path, originalFieldValue(readTemplatePath(base, path))])),
+    render: () => observed.doc.getZip().generate({ type: "nodebuffer" }) as Buffer };
+}
+
+/** Exact identities from the very same query/order used by buildContext, not display names. */
+export function templateSubjects(inputs: Awaited<ReturnType<typeof templateMatterInputs>>, selection: TemplateSelection,
+  paths: string[]): TemplateSubjects {
+  const plaintiffs = inputs.matter.parties.filter(party => party.role === "CLIENT_PARTY");
+  const all: Required<TemplateSubjects> = {
+    client: selection.clientId ? [`Client:${selection.clientId}`] : [],
+    opposing: selection.opposingPartyId ? [`Party:${selection.opposingPartyId}`] : [],
+    third: selection.thirdPartyId ? [`Party:${selection.thirdPartyId}`] : [],
+    proceeding: selection.procedureId ? [`MatterProcedure:${selection.procedureId}`] : [],
+    plaintiffs: plaintiffs.length ? plaintiffs.map(party => `Party:${party.id}`) : selection.clientId ? [`Client:${selection.clientId}`] : [],
+    defendants: inputs.opposing.map(party => `Party:${party.id}`), thirds: inputs.thirds.map(party => `Party:${party.id}`),
+  };
+  return Object.fromEntries([...new Set(paths.map(path => path.split(".")[0]))]
+    .filter((key): key is TemplateSubjectKey => Object.hasOwn(all, key)).map(key => [key, all[key]]));
 }
 
 export function readTemplatePath(obj: unknown, path: string): unknown {
@@ -359,23 +461,11 @@ export function readTemplatePath(obj: unknown, path: string): unknown {
 }
 
 /**
- * 从 docx 模板提取 {{变量}} 清单（含页眉页脚；#开头的循环段标签计入）。
- * 先剥除 XML 标签再匹配，规避 Word 把占位符拆进多个 run 导致的漏检；
- * 极端拆分仍可能漏，上传表单允许手工补充变量兜底。
+ * Compile actual DOCX nodes (including split runs, headers and footers).
+ * This index is metadata; required fields come from inspectTemplateFields, never this flat list.
  */
 export function extractDocxVariables(buffer: Buffer): string[] {
-  const zip = new PizZip(buffer);
-  const found = new Set<string>();
-  const re = /\{\{\s*[#^]\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\}\}|\{\{\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\}\}/g;
-  for (const name of Object.keys(zip.files)) {
-    if (!/^word\/(document|header\d*|footer\d*)\.xml$/.test(name)) continue;
-    const entry = zip.file(name);
-    if (!entry) continue;
-    const text = entry.asText().replace(/<[^>]+>/g, "");
-    for (const m of text.matchAll(re)) {
-      const tag = m[1] ?? m[2];
-      if (tag) found.add(tag);
-    }
-  }
-  return [...found].sort();
+  const inspector = new InspectModule();
+  compileDocx(buffer, { modules: [inspector] });
+  return templateTags(inspector);
 }

@@ -40,10 +40,18 @@ export const templateSelectionSchema = z.object({
   procedureId: z.string().cuid().nullable(),
 }).strict();
 
+const subjectIds = z.array(z.string().max(100));
+export const templateSubjectsSchema = z.object({
+  client: subjectIds.optional(), opposing: subjectIds.optional(), third: subjectIds.optional(), proceeding: subjectIds.optional(),
+  plaintiffs: subjectIds.optional(), defendants: subjectIds.optional(), thirds: subjectIds.optional(),
+}).strict();
+
 export const templatePrepareSchema = z.object({
   matterId: z.string().cuid(),
   templateId: z.string().cuid(),
   selection: templateSelectionSchema.optional(),
+  overrides: z.record(z.string().max(200), z.string().max(2000)).optional().default({}),
+  expectedSubjects: templateSubjectsSchema.optional(),
 });
 
 /** Values are used only for this rendered version and its immutable input snapshot. */
@@ -55,7 +63,8 @@ export const templateRenderSchema = z.object({
   templateUpdatedAt: z.string().datetime(),
   selection: templateSelectionSchema,
   folderId: z.string().cuid().nullable(),
-  expectedValues: z.record(z.string().max(100), z.string().max(20000)),
-  overrides: z.record(z.string().max(100), z.string().max(2000)),
+  expectedValues: z.record(z.string().max(200), z.string().max(20000)),
+  expectedSubjects: templateSubjectsSchema,
+  overrides: z.record(z.string().max(200), z.string().max(2000)),
   reviewed: z.literal(true, { error: "请先核对本次文书字段" }),
 });

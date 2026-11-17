@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CaseSearchPanel } from "@/app/(app)/matters/[id]/_components/case-search-panel";
 import { TemplatePickerDialog } from "@/app/(app)/matters/[id]/_components/template-picker-dialog";
 import type { TemplateSummary } from "@/app/(app)/matters/[id]/_components/folder-types";
+import type { ContextInputSelection } from "@/lib/matters/context-inputs";
 
 const mocks = vi.hoisted(() => ({ local: vi.fn(), regulations: vi.fn(), render: vi.fn(), prepare: vi.fn(), confirm: vi.fn() }));
 vi.mock("@/server/yuandian/cases", () => ({ searchSimilarCases: vi.fn(), searchSimilarCasesByVector: vi.fn() }));
@@ -12,6 +13,9 @@ vi.mock("@/server/cncases/search", () => ({ searchLocalJudgmentsAction: mocks.lo
 vi.mock("@/server/yuandian/save-case", () => ({ saveCaseToMatter: vi.fn(), saveVectorCaseToMatter: vi.fn() }));
 vi.mock("@/server/document-templates/actions", () => ({ renderTemplate: mocks.render, prepareTemplate: mocks.prepare }));
 vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: mocks.confirm }));
+const adopted: ContextInputSelection = { recordId: "ccontext000000000000000000001", expectedCurrentRecordId: "ccontext000000000000000000001", expectedConfirmedAt: null };
+vi.mock("@/components/matters/context-input-picker", () => ({ ContextInputPicker: ({ value, onChange, disabled }: { value: ContextInputSelection[]; onChange(value: ContextInputSelection[]): void; disabled?: boolean }) =>
+  <button disabled={disabled} onClick={() => onChange([adopted])}>{value.length ? "已选合成目标" : "选择合成目标"}</button> }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), warning: vi.fn(), info: vi.fn(), error: vi.fn() } }));
 const matterId = "cmatter000000000000000000001";
 const templates: TemplateSummary[] = [
@@ -28,7 +32,8 @@ beforeEach(() => {
   mocks.confirm.mockResolvedValue(true);
   mocks.prepare.mockImplementation(async ({ templateId }: { templateId: string }) => ({ templateId, templateUpdatedAt: "2026-11-16T08:00:00.000Z", templateSourceDocumentId: "source",
     selection: { clientId: null, opposingPartyId: null, thirdPartyId: null, procedureId: null }, choices: { clients: [], opposing: [], thirds: [], procedures: [] },
-    fields: templates.find(template => template.id === templateId)!.variables.map(path => ({ path, value: path === "client.phone" ? "原电话" : "", editable: true, missing: path !== "client.phone" })) }));
+    expectedSubjects: {}, expectedValues: Object.fromEntries(templates.find(template => template.id === templateId)!.variables.map(path => [path, `原始值:${path}`])),
+    fields: templates.find(template => template.id === templateId)!.variables.map(path => ({ path, value: path === "client.phone" ? "原电话" : "", editable: true, required: true, controlsScope: false, missing: path !== "client.phone" })) }));
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
@@ -90,5 +95,66 @@ describe("二开界面适配（组件交互）", () => {
     expect(screen.getByRole("button", { name: "生成草稿并下载" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "执行验收模板" }));
     expect(await screen.findByLabelText("执行依据名称")).toHaveValue("");
+  });
+
+  it("同模板重新核对及失败保留本稿和G15，使用原值expectations；生成失败原请求可直接重试", async () => {
+    vi.spyOn(window, "open").mockReturnValue(null);
+    render(<PickerHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "诉讼验收模板" }));
+    fireEvent.change(await screen.findByLabelText("委托人电话"), { target: { value: "仅本稿电话" } });
+    fireEvent.click(screen.getByRole("button", { name: "选择合成目标" }));
+    const original = await mocks.prepare.mock.results[0].value;
+    mocks.prepare.mockRejectedValueOnce(new Error("合成核对暂时失败"));
+    fireEvent.click(screen.getByRole("button", { name: "重新核对字段" }));
+    await screen.findByText("合成核对暂时失败");
+    expect(screen.getByLabelText("委托人电话")).toHaveValue("仅本稿电话");
+    expect(screen.getByRole("button", { name: "已选合成目标" })).toBeInTheDocument();
+    expect(mocks.confirm).not.toHaveBeenCalled();
+    mocks.prepare.mockResolvedValueOnce({ ...original, fields: original.fields.map((field: { path: string }) => ({ ...field, value: "仅本稿电话", editable: true, required: true, controlsScope: false, missing: false })) });
+    fireEvent.click(screen.getByRole("button", { name: "重新核对字段" }));
+    await waitFor(() => expect(screen.getByRole("checkbox")).toBeEnabled());
+    expect(mocks.prepare).toHaveBeenLastCalledWith(expect.objectContaining({ overrides: { "client.phone": "仅本稿电话" }, expectedSubjects: {} }));
+    fireEvent.click(screen.getByRole("checkbox"));
+    mocks.render.mockRejectedValueOnce(new Error("合成回执未收到"));
+    fireEvent.click(screen.getByRole("button", { name: "生成草稿并下载" }));
+    await screen.findByText("合成回执未收到");
+    const request = mocks.render.mock.calls[0][0];
+    expect(request).toMatchObject({ overrides: { "client.phone": "仅本稿电话" }, expectedValues: { "client.phone": "原始值:client.phone" }, contextInputs: [adopted] });
+    expect(screen.getByLabelText("委托人电话")).toHaveValue("仅本稿电话");
+    fireEvent.click(screen.getByRole("button", { name: "生成草稿并下载" }));
+    await waitFor(() => expect(mocks.render).toHaveBeenCalledTimes(2));
+    expect(mocks.render.mock.calls[1][0]).toEqual(request);
+  });
+
+  it("明确重核条件才更新字段，隐藏补填可恢复但不提交；原有空白控制值不误锁核对", async () => {
+    vi.spyOn(window, "open").mockReturnValue(null);
+    mocks.prepare.mockImplementation(async ({ templateId, overrides = {} }: { templateId: string; overrides?: Record<string, string> }) => {
+      const show = overrides["custom.show"] ?? " 有条件 ";
+      return { templateId, templateUpdatedAt: "2026-11-16T08:00:00.000Z", templateSourceDocumentId: "source",
+        selection: { clientId: null, opposingPartyId: null, thirdPartyId: null, procedureId: null }, choices: { clients: [], opposing: [], thirds: [], procedures: [] }, expectedSubjects: {},
+        expectedValues: { "custom.show": "原条件", ...(show.trim() ? { "custom.detail": "原明细" } : {}) },
+        fields: [{ path: "custom.show", value: Object.hasOwn(overrides, "custom.show") ? show.trim() : show, editable: true, required: false, controlsScope: true, missing: false },
+          ...(show.trim() ? [{ path: "custom.detail", value: overrides["custom.detail"] ?? "原明细", editable: true, required: true, controlsScope: false, missing: false }] : [])] };
+    });
+    render(<PickerHarness />); fireEvent.click(screen.getByRole("button", { name: "诉讼验收模板" }));
+    await screen.findByLabelText("custom.show");
+    expect(screen.getByRole("checkbox")).toBeEnabled();
+    fireEvent.change(screen.getByLabelText("custom.detail"), { target: { value: "暂存明细" } });
+    fireEvent.change(screen.getByLabelText("custom.show"), { target: { value: "" } });
+    expect(mocks.prepare).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("checkbox")).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "重新核对字段" }));
+    await waitFor(() => expect(screen.queryByLabelText("custom.detail")).not.toBeInTheDocument());
+    expect(screen.getByRole("checkbox")).toBeEnabled();
+    fireEvent.change(screen.getByLabelText("custom.show"), { target: { value: "启用" } });
+    fireEvent.click(screen.getByRole("button", { name: "重新核对字段" }));
+    expect(await screen.findByLabelText("custom.detail")).toHaveValue("暂存明细");
+    fireEvent.change(screen.getByLabelText("custom.show"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "重新核对字段" }));
+    await waitFor(() => expect(screen.queryByLabelText("custom.detail")).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("checkbox")); fireEvent.click(screen.getByRole("button", { name: "生成草稿并下载" }));
+    await waitFor(() => expect(mocks.render).toHaveBeenCalled());
+    expect(mocks.render.mock.calls[0][0]).toMatchObject({ overrides: { "custom.show": "" }, expectedValues: { "custom.show": "原条件" } });
+    expect(mocks.confirm).not.toHaveBeenCalled();
   });
 });

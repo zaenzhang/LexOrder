@@ -1058,7 +1058,7 @@ G15交付后按用户约束先查agent、认领和全部分支，在`43bea7a`确
 | 从事实就近查看原文；Kosmos固定`c6454fd`的[fact-row.html全文](https://github.com/Kosmos-Law/kosmos/blob/c6454fd5488c0d231e2b4756846f690c679586ca/templates/case/facts/fact-row.html)，[facts/views.py](https://github.com/Kosmos-Law/kosmos/blob/c6454fd5488c0d231e2b4756846f690c679586ca/apps/case/facts/views.py)定点505—570 | 事实行就近列原件/高亮，来源操作按实际fact关系、当前matter资料处理。采用单套呈现和确切原文入口；不移植Django对象，不据局部代码推定完整授权或把未知日期强制成有日期 | LexOrder保留自己的EvidenceItem/来源/历史/权限，受限项只占位；同条不重复，研究动作在实际可写争点上 |
 | 打开确切引文；Counsel OS固定`c4f40f1`的[citation-location.ts全文](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/src/workspace/citation-location.ts) | 精确定位基于已读范围，歧义和未读不能猜位置。采用固定身份失败不换目标；不复制其引用算法或代理框架 | 搜索沿既有getMaterialSource核当前权限和原run，失效明确反馈、不把摘要当原文；原件独立打开且搜索可返回 |
 
-本地按已安装Next 16.4.6文档核对use-search-params及Server Action边界，沿用现有updateDossierLocation、Radix Dialog和来源服务。三轮计划纠正包括：保留Timeline过滤掉的受限占位、源弹层隔离父键盘、Office按实际支持格式分流、读取材料不新增案件写权门槛。没有运行参考项目、复制第三方源码或进行浏览器验收；独立原件另页、错误优先及保留搜索位置是本项目对当前断点的设计判断。S06/F01仍在分别审查，不以本节替代其合同。
+本地按已安装Next 16.4.6文档核对use-search-params及Server Action边界，沿用现有updateDossierLocation、Radix Dialog和来源服务。三轮计划纠正包括：保留Timeline过滤掉的受限占位、源弹层隔离父键盘、Office按实际支持格式分流、读取材料不新增案件写权门槛。没有运行参考项目、复制第三方源码或进行浏览器验收；独立原件另页、错误优先及保留搜索位置是本项目对当前断点的设计判断。S06/F01后续审定合同见§3.29，不以本节替代其独立范围。
 
 S08/S09实际交付反馈见计划§8.35：复用了原件URL和现有reader，保留受限占位；root定点复审另外纠正失败状态说明及内部错误原文。两名独立代码reviewer确认无剩余阻断，34条服务/组件验证不等于真实HTTP、浏览器或律师验收。
 
@@ -1073,7 +1073,9 @@ S06/F01在最新认领核对后分别由business/context核实际调用链，mat
 | 明确期限日期及人工调整；ANQI固定`25efcf7`的[deadline-core.js](https://github.com/zj-ai-lab/anqi/blob/25efcf7f2a3329f9ecdc092b3ced0e17a685c83a/src/lib/deadline-core.js)日期键/UTC算术/due_on片段，及[case.js](https://github.com/zj-ai-lab/anqi/blob/25efcf7f2a3329f9ecdc092b3ced0e17a685c83a/public/js/case.js)editDeadlineDueByDate | 采用明确日期、调整理由和人工保护，不宣称ANQI已有DATE/DATETIME精度；不迁入variants/级联重算。LexOrder历史无精度证据故nullable不回填，新写显式精度并贯通实际责任/通知/显示 |
 | 日历准确截止点；[RFC5545 §3.6.1](https://datatracker.ietf.org/doc/html/rfc5545#section-3.6.1)VEVENT日期与时点语义 | DATE-TIME无DTEND的事件在起始时点结束；沿现有ICS生成器明确表达截止点，避免默认增加一小时。不是新订阅/日历平台，UID及庭期原行为不改 |
 
-本地已核Next 16.4.6的Forms/Server Action文档与当前Prisma、Zod、RHF输入边界，复用现有Input/Select/Dialog。F01审查纠正旧NULL编辑被默认值升格、未改值秒毫秒丢失、同值精度变更遗漏触发器、混合ScheduleItem误分类及真实逾期查询；排除无调用的旧KPI函数，保留同日已发送提醒不重发。S06审查纠正只修新上传、重核清草稿和以补填值作原值比较。没有运行参考项目或移植第三方实质代码，不扩大维护/复杂期限重算/通用访谈范围。
+本地已核Next 16.4.6的Forms/Server Action文档与当前Prisma、Zod、RHF输入边界，复用现有Input/Select/Dialog。F01审查纠正旧NULL编辑被默认值升格、未改值秒毫秒丢失、同值精度变更遗漏触发器、混合ScheduleItem误分类及真实逾期查询；排除无调用的旧KPI函数，保留同日已发送提醒不重发。S06审查纠正只修新上传、重核清草稿和以补填值作原值比较。F01只读实施准备另确认案件页头逾期数和MatterStickyBar/nextUncompletedDeadline为实际消费者，补入同一精度合同，尚未记为实现。没有运行参考项目或移植第三方实质代码，不扩大维护/复杂期限重算/通用访谈范围。
+
+S06实码反馈见计划§8.36：直接观察官方ScopeManager而非另写循环解释器；交叉审查发现边求值边补填会使后置根字段/对象不能影响前方条件，已改为完整context的无mutation观察并用精确顺序反例验证。剔除隐藏输入后只允许一次重新观察，后续相互影响须明确调整模板；保留纯归档渲染边界。根空白误锁、反向条件文案及客户端额外主体快照也在本批修正。4文件31条通过（含旧组合中的3条非S06用例）、真实PG7例、最终类型/lint及三方实码复审均有本次证据；没有浏览器、HTTP或专业验收。
 
 ## 4. 可选法律服务 MCP 与来源
 

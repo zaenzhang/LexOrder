@@ -10,13 +10,28 @@ export const EMPTY_TEMPLATE_SELECTION: TemplateSelection = {
   clientId: null, opposingPartyId: null, thirdPartyId: null, procedureId: null,
 };
 
+export type TemplateSubjectKey = "client" | "opposing" | "third" | "proceeding" | "plaintiffs" | "defendants" | "thirds";
+export type TemplateSubjects = Partial<Record<TemplateSubjectKey, string[]>>;
+export type TemplateField = {
+  path: string;
+  value: string;
+  editable: boolean;
+  required: boolean;
+  missing: boolean;
+  controlsScope: boolean;
+  subjectLabel?: string;
+};
+
 export type TemplatePreparation = {
   templateId: string;
   templateUpdatedAt: string;
   templateSourceDocumentId: string;
   selection: TemplateSelection;
   choices: Record<"clients" | "opposing" | "thirds" | "procedures", { id: string; label: string }[]>;
-  fields: { path: string; value: string; editable: boolean; missing: boolean }[];
+  /** Original values and identities, never the user's effective draft text. */
+  expectedValues: Record<string, string>;
+  expectedSubjects: TemplateSubjects;
+  fields: TemplateField[];
 };
 
 /** A value for an existing subject must be tied to that subject before rendering. */
