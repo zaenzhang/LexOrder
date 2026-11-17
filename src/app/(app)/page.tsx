@@ -10,7 +10,6 @@ import { canEnterAdminWorkspace } from "@/lib/auth/system-role";
 import { hasCustomPermission } from "@/lib/roles/catalog";
 import { isEmailConfigured } from "@/lib/notifications/email";
 import { lunarDateLabel } from "@/lib/ui/lunar";
-import { ConflictSearchButton } from "@/components/dashboard/conflict-search-button";
 import { RevenueChart } from "@/components/dashboard/revenue-chart";
 import { CategoryChart } from "@/components/dashboard/category-chart";
 import { ClientSourceCard } from "@/components/dashboard/client-source-card";
@@ -64,13 +63,12 @@ export default async function DashboardPage() {
 
   return (
     <div className="mo-dash">
-      {/* 提醒外发通道缺口（第六轮体检 P1-4）：仅管理身份可见——只有他们能改配置；
-          律师看到了也无力处置，徒增噪音 */}
+      {/* 邮件配置提示只向可进入提醒维护的身份展示。 */}
       {session?.user && canEnterAdminWorkspace(session.user) && !isEmailConfigured() ? (
         <div className="card" style={{ borderColor: "var(--amber-line)", background: "var(--amber-bg)", display: "flex", alignItems: "center", gap: 10, padding: "10px 14px" }}>
           <TriangleAlert className="shrink-0" width={16} height={16} strokeWidth={1.8} style={{ color: "var(--amber)" }} />
           <span className="t-sm" style={{ flex: 1 }}>
-            提醒外发通道未配置：期限、开庭与保全提醒目前仅站内可见，律师不登录收不到。请在服务器 <span className="font-mono">.env</span> 配置 SMTP（<span className="font-mono">SMTP_HOST</span> / <span className="font-mono">MAIL_FROM</span>）后重启。
+            邮件提醒未启用，提醒仍可在站内查看。
           </span>
           <Link href="/admin/reminders" className="btn btn-ghost btn-sm shrink-0">提醒维护</Link>
         </div>
@@ -96,10 +94,6 @@ export default async function DashboardPage() {
             ) : null}
             ，待你审批的申请有 <b style={{ whiteSpace: "nowrap" }}>{queue.approvalTotal} 件</b>。
           </p>
-          <div className="greet-actions">
-            <ConflictSearchButton />
-            <Link href="/schedule" className="btn btn-ghost">进入日程</Link>
-          </div>
         </div>
 
         <Link href={focusHref} className="hero-focus no-underline">

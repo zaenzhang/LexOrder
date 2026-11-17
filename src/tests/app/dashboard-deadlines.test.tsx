@@ -5,7 +5,6 @@ import type { HeroData, ScheduleItem } from "@/server/dashboard/actions";
 const mock = vi.hoisted(() => ({ hero: vi.fn(), schedule: vi.fn(), queue: vi.fn() }));
 vi.mock("@/lib/auth/session", () => ({ getSession: async () => ({ user: { id: "dashboard-reviewer", role: "LAWYER" } }) }));
 vi.mock("@/lib/notifications/email", () => ({ isEmailConfigured: () => true }));
-vi.mock("@/components/dashboard/conflict-search-button", () => ({ ConflictSearchButton: () => null }));
 vi.mock("@/components/dashboard/revenue-chart", () => ({ RevenueChart: () => null }));
 vi.mock("@/components/dashboard/category-chart", () => ({ CategoryChart: () => null }));
 vi.mock("@/components/dashboard/client-source-card", () => ({ ClientSourceCard: () => null }));
