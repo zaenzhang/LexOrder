@@ -22,7 +22,8 @@ import { validateUploadedFile } from "@/lib/storage/file-validator";
 import { encryptBuffer, sha256 } from "@/lib/storage/crypto";
 import { extractDocumentTextLayer, ocrStatusFor } from "@/lib/documents/text-extraction";
 import { revalidateMatter } from "@/server/matters/route";
-import { ingestMaterial, withdrawMaterial } from "./material-ingest";
+import { ingestMaterial, withdrawMaterial, UploadRejectedBeforeReservation } from "./material-ingest";
+import type { UploadDocumentResult } from "@/lib/documents/upload-contract";
 import { contextInputSelectionsSchema, type ContextInputSelection } from "@/lib/matters/context-inputs";
 import { ActionError } from "@/lib/action-error";
 import { assertDocumentDerivationAccess } from "./derivation-access";
@@ -63,140 +64,150 @@ async function documentMutation<T>(user:RoleUser&{id:string},subject:{intakeId:s
  });
 }
 
-export async function uploadDocument(formData: FormData) {
+export async function uploadDocument(formData: FormData): Promise<UploadDocumentResult> {
   const session = await requireSession("documents.write");
-  const contextRaw = formData.get("contextInputs");
-  let contextInputs: ContextInputSelection[] = [];
-  if (contextRaw !== null) {
-    try { contextInputs = contextInputSelectionsSchema.parse(JSON.parse(z.string().max(20000).parse(contextRaw))); }
-    catch { throw new ActionError("采用的目标或指示无效，请重新选择"); }
-  }
+  let ingestStarted = false;
+  try {
+    const contextRaw = formData.get("contextInputs");
+    let contextInputs: ContextInputSelection[] = [];
+    if (contextRaw !== null) {
+      try { contextInputs = contextInputSelectionsSchema.parse(JSON.parse(z.string().max(20000).parse(contextRaw))); }
+      catch { throw new ActionError("采用的目标或指示无效，请重新选择"); }
+    }
 
-  const matterIdRaw = formData.get("matterId");
-  const intakeIdRaw = formData.get("intakeId");
-  const procedureId = formData.get("procedureId");
-  const folderIdRaw = formData.get("folderId");
-  const name = formData.get("name");
-  const category = formData.get("category");
-  const encrypted = formData.get("encrypted") === "true";
-  const tagsRaw = formData.get("tags");
-  const archiveChecklistItemIdRaw = formData.get("archiveChecklistItemId");
-  const stageIdRaw = formData.get("stageId");
-  const sourcePartyRaw = formData.get("sourceParty");
-  const sourceOriginRaw = formData.get("sourceOrigin");
-  const SOURCE_ORIGINS = ["CLIENT_PROVIDED", "COURT_SERVED", "AI_EXTRACTED", "SELF_COLLECTED", "TEAM_PRODUCED"] as const;
-  const sourceOrigin =
-    typeof sourceOriginRaw === "string" && (SOURCE_ORIGINS as readonly string[]).includes(sourceOriginRaw)
-      ? (sourceOriginRaw as (typeof SOURCE_ORIGINS)[number])
-      : null;
-  const file = formData.get("file");
+    const matterIdRaw = formData.get("matterId");
+    const intakeIdRaw = formData.get("intakeId");
+    const procedureId = formData.get("procedureId");
+    const folderIdRaw = formData.get("folderId");
+    const name = formData.get("name");
+    const category = formData.get("category");
+    const encrypted = formData.get("encrypted") === "true";
+    const tagsRaw = formData.get("tags");
+    const archiveChecklistItemIdRaw = formData.get("archiveChecklistItemId");
+    const stageIdRaw = formData.get("stageId");
+    const sourcePartyRaw = formData.get("sourceParty");
+    const sourceOriginRaw = formData.get("sourceOrigin");
+    const SOURCE_ORIGINS = ["CLIENT_PROVIDED", "COURT_SERVED", "AI_EXTRACTED", "SELF_COLLECTED", "TEAM_PRODUCED"] as const;
+    const sourceOrigin =
+      typeof sourceOriginRaw === "string" && (SOURCE_ORIGINS as readonly string[]).includes(sourceOriginRaw)
+        ? (sourceOriginRaw as (typeof SOURCE_ORIGINS)[number])
+        : null;
+    const file = formData.get("file");
 
-  if (!(file instanceof File)) throw new ActionError("缺少文件");
+    if (!(file instanceof File)) throw new ActionError("缺少文件");
 
-  const matterId = typeof matterIdRaw === "string" && matterIdRaw ? matterIdRaw : null;
-  const intakeId = typeof intakeIdRaw === "string" && intakeIdRaw ? intakeIdRaw : null;
-  if (!matterId && !intakeId) throw new ActionError("matterId 或 intakeId 至少需要一个");
+    const matterId = typeof matterIdRaw === "string" && matterIdRaw ? matterIdRaw : null;
+    const intakeId = typeof intakeIdRaw === "string" && intakeIdRaw ? intakeIdRaw : null;
+    if (!matterId && !intakeId) throw new ActionError("matterId 或 intakeId 至少需要一个");
 
-  if (typeof name !== "string" || !name.trim()) throw new ActionError("材料名称必填");
-  const parsedCategory = documentCategorySchema.parse(category || "OTHER");
-  const tags =
-    typeof tagsRaw === "string" && tagsRaw
-      ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean)
-      : [];
+    if (typeof name !== "string" || !name.trim()) throw new ActionError("材料名称必填");
+    const parsedCategory = documentCategorySchema.parse(category || "OTHER");
+    const tags =
+      typeof tagsRaw === "string" && tagsRaw
+        ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean)
+        : [];
 
-  const validated = validateUploadedFile(file, { purpose: "document", maxBytes: MAX_FILE_SIZE });
+    const validated = validateUploadedFile(file, { purpose: "document", maxBytes: MAX_FILE_SIZE });
 
-  const folderId = typeof folderIdRaw === "string" && folderIdRaw ? folderIdRaw : null;
-  const stageId = typeof stageIdRaw === "string" && stageIdRaw ? stageIdRaw : null;
+    const folderId = typeof folderIdRaw === "string" && folderIdRaw ? folderIdRaw : null;
+    const stageId = typeof stageIdRaw === "string" && stageIdRaw ? stageIdRaw : null;
 
-  // 校验归属对象存在
-  let folderName: string | null = null;
-  if (matterId) {
-    const matter = await prisma.matter.findUnique({
-      where: { id: matterId, deletedAt: null },
-      select: { id: true, status: true }
-    });
-    if (!matter) throw new ActionError("案件不存在");
-    // 上传属案件写入，统一走经办断言：合伙人全所、其余（含 managerAuthorized）须本案经办，
-    // 管理权只放大「可见」不放大写入（AGENTS 业务管理权决议）。
-    await assertCanHandleMatter(session.user, matterId);
-
-    if (folderId) {
-      const folder = await prisma.documentFolder.findUnique({
-        where: { id: folderId },
-        select: { matterId: true, name: true }
+    // 校验归属对象存在
+    let folderName: string | null = null;
+    if (matterId) {
+      const matter = await prisma.matter.findUnique({
+        where: { id: matterId, deletedAt: null },
+        select: { id: true, status: true }
       });
-      if (!folder || folder.matterId !== matterId) {
-        throw new ActionError("目标卷宗与案件不匹配");
-      }
-      folderName = folder.name;
-    }
+      if (!matter) throw new ActionError("案件不存在");
+      // 上传属案件写入，统一走经办断言：合伙人全所、其余（含 managerAuthorized）须本案经办，
+      // 管理权只放大「可见」不放大写入（AGENTS 业务管理权决议）。
+      await assertCanHandleMatter(session.user, matterId);
 
-    // v0.48: 归属环节必须属于本案件（且与 procedureId 一致时才可信）
-    if (stageId) {
-      const stage = await prisma.matterStage.findUnique({
-        where: { id: stageId },
-        select: { procedureId: true, procedure: { select: { matterId: true } } }
+      if (folderId) {
+        const folder = await prisma.documentFolder.findUnique({
+          where: { id: folderId },
+          select: { matterId: true, name: true }
+        });
+        if (!folder || folder.matterId !== matterId) {
+          throw new ActionError("目标卷宗与案件不匹配");
+        }
+        folderName = folder.name;
+      }
+
+      // v0.48: 归属环节必须属于本案件（且与 procedureId 一致时才可信）
+      if (stageId) {
+        const stage = await prisma.matterStage.findUnique({
+          where: { id: stageId },
+          select: { procedureId: true, procedure: { select: { matterId: true } } }
+        });
+        if (!stage || stage.procedure.matterId !== matterId) {
+          throw new ActionError("归属环节与案件不匹配");
+        }
+        if (typeof procedureId === "string" && procedureId && stage.procedureId !== procedureId) {
+          throw new ActionError("归属环节与程序不匹配");
+        }
+      }
+
+      // 归档后仅允许补传到 ARCHIVE 卷宗（结案 / 归档），由 guard 判定
+      await assertDocumentWritable(matterId, { kind: "upload", folderName });
+    }
+    if (intakeId) {
+      const intake = await prisma.intake.findUnique({
+        where: { id: intakeId },
+        select: { id: true, status: true, createdById: true, ownerUserId: true, coUserIds: true }
       });
-      if (!stage || stage.procedure.matterId !== matterId) {
-        throw new ActionError("归属环节与案件不匹配");
-      }
-      if (typeof procedureId === "string" && procedureId && stage.procedureId !== procedureId) {
-        throw new ActionError("归属环节与程序不匹配");
+      if (!intake) throw new ActionError("收案记录不存在");
+      if(!matterId&&await intakeWorkflowReady(prisma)) await approvalTransaction(db=>assertIntakeDocumentChange(db,session.user.id,intakeId));
+      if (intake.status === "DECLINED") throw new ActionError("已拒绝的收案不可上传材料");
+      const uid = session.user.id;
+      if (
+        session.user.role !== "PRINCIPAL_LAWYER" &&
+        intake.createdById !== uid &&
+        intake.ownerUserId !== uid &&
+        !intake.coUserIds.includes(uid)
+      ) {
+        throw new ActionError("无权向该收案上传材料");
       }
     }
 
-    // 归档后仅允许补传到 ARCHIVE 卷宗（结案 / 归档），由 guard 判定
-    await assertDocumentWritable(matterId, { kind: "upload", folderName });
-  }
-  if (intakeId) {
-    const intake = await prisma.intake.findUnique({
-      where: { id: intakeId },
-      select: { id: true, status: true, createdById: true, ownerUserId: true, coUserIds: true }
+    const raw = Buffer.from(await file.arrayBuffer());
+    const hash = sha256(raw);
+
+    const enc = encrypted ? encryptBuffer(raw) : null;
+    const requestKey = formData.get("requestKey");
+    ingestStarted = true;
+    const created = await ingestMaterial({
+      userId: session.user.id,
+      contextInputs,
+      requestKey: typeof requestKey === "string" && requestKey ? requestKey : undefined,
+      bytes: enc ? enc.ciphertext : raw,
+      document: {
+        matterId, intakeId,
+        procedureId: typeof procedureId === "string" && procedureId ? procedureId : null,
+        stageId: matterId ? stageId : null, folderId, name: name.trim(), category: parsedCategory,
+        sourceOrigin,
+        sourceParty: typeof sourcePartyRaw === "string" && sourcePartyRaw.trim() ? sourcePartyRaw.trim() : null,
+        mimeType: validated.mimeType, size: file.size, sha256: hash, encrypted,
+        algorithm: enc?.algorithm ?? null, iv: enc ? enc.iv.toString("base64") : null,
+        authTag: enc ? enc.authTag.toString("base64") : null, tags,
+        archiveChecklistItemId: typeof archiveChecklistItemIdRaw === "string" && archiveChecklistItemIdRaw ? archiveChecklistItemIdRaw : null,
+        uploadedById: session.user.id
+      }
     });
-    if (!intake) throw new ActionError("收案记录不存在");
-    if(!matterId&&await intakeWorkflowReady(prisma)) await approvalTransaction(db=>assertIntakeDocumentChange(db,session.user.id,intakeId));
-    if (intake.status === "DECLINED") throw new ActionError("已拒绝的收案不可上传材料");
-    const uid = session.user.id;
-    if (
-      session.user.role !== "PRINCIPAL_LAWYER" &&
-      intake.createdById !== uid &&
-      intake.ownerUserId !== uid &&
-      !intake.coUserIds.includes(uid)
-    ) {
-      throw new ActionError("无权向该收案上传材料");
+    // Intake uses its existing text path until its separate source ownership contract is implemented.
+    if (!matterId) await extractIntakeText(created.id, raw, validated.mimeType);
+
+    if (matterId) await revalidateMatter(matterId);
+    if (intakeId) revalidatePath(`/intakes/${intakeId}`);
+    return { ok: true, id: created.id };
+  } catch (error) {
+    if (error instanceof UploadRejectedBeforeReservation || (!ingestStarted && (error instanceof ActionError || error instanceof z.ZodError))) {
+      return { ok: false, code: "REJECTED_BEFORE_RESERVATION", message: error instanceof z.ZodError
+        ? error.issues.slice(0, 2).map(issue => issue.message).join("；") : error.message };
     }
+    throw error;
   }
-
-  const raw = Buffer.from(await file.arrayBuffer());
-  const hash = sha256(raw);
-
-  const enc = encrypted ? encryptBuffer(raw) : null;
-  const requestKey = formData.get("requestKey");
-  const created = await ingestMaterial({
-    userId: session.user.id,
-    contextInputs,
-    requestKey: typeof requestKey === "string" && requestKey ? requestKey : undefined,
-    bytes: enc ? enc.ciphertext : raw,
-    document: {
-      matterId, intakeId,
-      procedureId: typeof procedureId === "string" && procedureId ? procedureId : null,
-      stageId: matterId ? stageId : null, folderId, name: name.trim(), category: parsedCategory,
-      sourceOrigin,
-      sourceParty: typeof sourcePartyRaw === "string" && sourcePartyRaw.trim() ? sourcePartyRaw.trim() : null,
-      mimeType: validated.mimeType, size: file.size, sha256: hash, encrypted,
-      algorithm: enc?.algorithm ?? null, iv: enc ? enc.iv.toString("base64") : null,
-      authTag: enc ? enc.authTag.toString("base64") : null, tags,
-      archiveChecklistItemId: typeof archiveChecklistItemIdRaw === "string" && archiveChecklistItemIdRaw ? archiveChecklistItemIdRaw : null,
-      uploadedById: session.user.id
-    }
-  });
-  // Intake uses its existing text path until its separate source ownership contract is implemented.
-  if (!matterId) await extractIntakeText(created.id, raw, validated.mimeType);
-
-  if (matterId) await revalidateMatter(matterId);
-  if (intakeId) revalidatePath(`/intakes/${intakeId}`);
-  return { ok: true, id: created.id };
 }
 
 export async function deleteDocument(id: string) {

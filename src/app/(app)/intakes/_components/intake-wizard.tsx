@@ -364,7 +364,8 @@ export function IntakeWizard({
           fd.set("category", "CONTRACT");
           fd.set("encrypted", "true");
           fd.set("file", file);
-          await uploadDocument(fd);
+          const uploaded = await uploadDocument(fd);
+          if (!uploaded.ok) throw new Error(uploaded.message);
         }
       }
       // 冲突预检：自动携带收案全部主体发起检索（结果挂在收案上，审批时直接复核）

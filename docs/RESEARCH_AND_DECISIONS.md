@@ -706,7 +706,7 @@ Counsel 的[reference-impact](https://github.com/eigenlegal/counsel-os/blob/c4f4
 | --- | --- | --- |
 | 第一组：现有办理的正确性 | S01、S02、S03、S05，再 S04/S06 | 标准 schema 下首次采纳开庭/期限；已有 generated ID 后采纳另一个真实事件；同来件不同事件与重复同事件；多程序正确归属；直接已签署与草稿确认的同一复核条件；隐藏建议完成口径；循环/空可选块字段与实际 DOCX 一致 |
 | 第二组：把已有能力接到实际入口 | S07/S08/S09/S10、G02/G07/G09/G13/G14 | 被告/法院案号查案；材料命中直接到固定版本/位置；事实只呈现一次且同处研究；UTC 部署下上海日期边界；全局等待/依赖摘要；窗口外材料/归档可续查；研究可选择已有原文片段；版本族主入口和已有 Note 编辑可达 |
-| 第三组：减少重复劳动并补实际采用关系 | G01/G03/G04/G05/G06/G08/G10/G11/G15，G12按来件使用量 | 跟进到期/转交、旧客户指示定位、三十文件中一件失败仍能继续、编辑回传版本冲突、前版未决问题可回看、检索结果成为待核实研究来源、转案未归属材料可主动分类；仅对明确采用的目标/指示修订提示成果待核对 |
+| 第三组：减少重复劳动并补实际采用关系 | G01/G03/G04/G05/G06/G08/G10/G11/G15，G12按来件使用量 | 跟进到期/转交、旧客户指示定位、三十文件中一件失败仍能继续、编辑回传版本冲突、前版未决问题可回看、检索结果成为待核实研究来源、转案材料保持真实未归属并准确接续（G11采用范围见§3.34）；仅对明确采用的目标/指示修订提示成果待核对 |
 | 条件组 | O01/O02 | 仅在使用 AI 时：长文第二次真正进入后续范围；失败仅补相应段；引文确实来自实际送入且仍获准的固定来源。未配置不阻断普通业务 |
 | 后置候选 | C01—C04 与既有暂缓项 | 不指定本期 owner，不预建模型，不因参考项目存在就恢复排期或门禁 |
 
@@ -1112,11 +1112,23 @@ root实际读取material-processing、evidence/source-links及契约、三个来
 
 ### 3.33 多文件接件与明确的失败出口（G04，2026-11-17）
 
-business首查实际uploadDocument/MaterialIngestIntent与现单文件入口，context二审归属和失败接续，business/root三审事务及5调用方，material再核实际消费者；计划§7.14.11/架构§6.15先发布认领，尚无实现/通过证据。root与business、material本轮分别读取固定Paperless-ngx `4610171a94e5932e85a80e480032e397cdb6f309` 的[upload-documents.service.ts](https://github.com/paperless-ngx/paperless-ngx/blob/4610171a94e5932e85a80e480032e397cdb6f309/src-ui/src/app/services/upload-documents.service.ts)及[upload-status-tray.component.html](https://github.com/paperless-ngx/paperless-ngx/blob/4610171a94e5932e85a80e480032e397cdb6f309/src-ui/src/app/components/common/upload-status-tray/upload-status-tray.component.html)完整文件：采用逐件状态、上传不等于处理、实际documentId打开；不复制按文件名存订阅、RxJS/WebSocket/Celery或全局托盘，不运行/引入参考源码。root读已安装Next错误处理文档的Server Functions段，确定预期业务错误采用显式返回，保未知异常脱敏。
+business首查实际uploadDocument/MaterialIngestIntent与现单文件入口，context二审归属和失败接续，business/root三审事务及5调用方，material再核实际消费者；计划§7.14.11/架构§6.15以`62c254e`先发布认领，本片现已实现，实际验证见计划§8.41。root与business、material本轮分别读取固定Paperless-ngx `4610171a94e5932e85a80e480032e397cdb6f309` 的[upload-documents.service.ts](https://github.com/paperless-ngx/paperless-ngx/blob/4610171a94e5932e85a80e480032e397cdb6f309/src-ui/src/app/services/upload-documents.service.ts)及[upload-status-tray.component.html](https://github.com/paperless-ngx/paperless-ngx/blob/4610171a94e5932e85a80e480032e397cdb6f309/src-ui/src/app/components/common/upload-status-tray/upload-status-tray.component.html)完整文件：采用逐件状态、上传不等于处理、实际documentId打开；不复制按文件名存订阅、RxJS/WebSocket/Celery或全局托盘，不运行/引入参考源码。root读已安装Next错误处理文档的Server Functions段，确定预期业务错误采用显式返回，保未知异常脱敏。
 
 本项目实际差异：已有intent的摄入走resume而不重写bytes；最近20条未完成列表不足以核对三十件或丢失的成功响应；读取不到intent也不能排除旧请求尚在读文件。按此选择小的确切回执、已发身份冻结和真实关闭接续，不建立第二套摄入平台。approvalTransaction会翻译数据库异常，确定前置拒绝必须由准确代码阶段产生，不能靠普通ActionError或文字猜测；单一合同同步5调用方，不留新旧wrapper。storage失败迟到覆写关闭标记是同链实际缺陷，纳入最小修正。
 
 UI采用原工作区一个Dialog、逐件列表与当前行编辑，共同默认和逐件实际程序/ACTIVE环节/未归属分开；G15按行保版本。页面切换及卸载停未发，发送不抢行焦点。root核ensure实际revalidate及虚拟到真实stage key变化，只用返回ID接续自身物化，不按名称补归属。30份为测试样本而非新上限；浏览器/专业验收仍另记。
+
+G04实码反馈：五调用方统一结果、准确回执与关闭终态守卫均已接通，旧单文件UI删除。23个本轮不同用例全部通过，含真实PG6个；两处测试按钮定位修正、最后生命周期清理及受影响复验记录在计划§8.41。源码/组件/真实PG分别记账，未称五入口全部交互或浏览器验收。
+
+### 3.34 收案转换结果与真实未归属材料的接续（G11，2026-11-17）
+
+用户任务是审批转案后知道材料在哪里，之后从原收案再次进入。实际convertIntakeToMatter创建首程序并给原Document填matterId/procedureId，却只追加旧阶段标签、未写stageId；原审批调用丢弃转换结果，收案详情只连案件根页。现材料筛选按真实字段：选程序的unassigned筛!stageId，全案unassigned筛!procedureId，后者不会显示已转入程序的收案材料。材料未丢失；原G11已允许保持未归属并明确路径，本片据此采用准确接续，不增加分类写服务。
+
+固定参考[Frappe CRM 3509bd4](https://github.com/frappe/crm/tree/3509bd4d762224aa7e8ca1bc74d9a0ed2e38e952)：root实际读完frontend/src/components/Modals/ConvertToDealModal.vue全310行，material独立复读转换处理段150—185及相邻上下文；后端crm/fcrm/doctype/crm_lead/crm_lead.py只读create_deal 354—436、convert_to_deal/权限与锁545—605及相关上下文，未称读完整641行。参考UI用服务真实返回的_deal进入结果，失败留在当前交互；借鉴准确对象与明确成功接续，不采用强制跳转、ignore_permissions、任意字段映射、重复转化语义或销售框架，也不据此证明本项目材料资格。
+
+LexOrder继续在当前工作台处理审批，成功条仅提供经当前授权的可选入口；持久收案页按真实同收案/同案材料投影。采用现有当前岗位/业务访问与逐件材料授权；独立审批或历史附件资格不扩成整案。保IntakeRevision原件身份、版本、送审快照与冻结守卫，历史标签不回填；新转换删除误导标签写入与注释，未归属不冒称已分类。
+
+三轮审查纠正“第一程序按order/name找”、全案unassigned误入口、收案附件投影当整案资格、可选读取异常让已成功转案显示失败或收案页404，以及旧toast回调错过新审批草稿。最后UI复核发现teamReadOnly还包含缺写权的合法只读经办，故两种详情分支都按接续自身读取资格展示；无收案资格者不能被提示去点无权重试链接。必要失败信息保留，链接点击/确认后使用当前状态，returnTo不替换。实施/验证见计划§7.14.12及后续实际证据；本记录仅为已审计划，不构成浏览器或专业验收。
 
 ## 4. 可选法律服务 MCP 与来源
 

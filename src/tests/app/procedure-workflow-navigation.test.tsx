@@ -15,6 +15,9 @@ vi.mock("next/navigation", async () => {
   };
 });
 vi.mock("@/server/documents/actions", () => ({ uploadDocument: mock.upload }));
+vi.mock("@/server/documents/ingest-actions", () => ({ getMaterialUploadReceipt: vi.fn(), continueMaterialUpload: vi.fn(), closeMaterialUpload: vi.fn() }));
+vi.mock("@/components/matters/context-input-picker", () => ({ ContextInputPicker: () => null }));
+vi.mock("@/app/(app)/matters/[id]/_components/material-processing-status", () => ({ MaterialProcessingStatus: () => null }));
 vi.mock("@/server/tasks/actions", () => ({ createTask: vi.fn() }));
 vi.mock("@/components/matters/task-work-panel", () => ({
   TaskWorkPanel: ({ matterId, selectedTaskId, onTaskSelect, onTaskCreated }: { matterId: string; selectedTaskId: string | null; onTaskSelect: (id: string | null) => void; onTaskCreated: (id: string, stageId: string | null) => void }) => <section aria-label="事项任务">
@@ -144,6 +147,55 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
     expect(mock.refresh).toHaveBeenCalled();
   });
 
+  it("G04 虚拟环节建立触发真实 stages 父层刷新后，批次仍接续真实 ID 且只 ensure 一次", async () => {
+    let finish!: (value: { id: string; created: boolean }) => void;
+    mock.ensureStage.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    mock.upload.mockImplementation(async () => ({ ok: true, id: `saved-${mock.upload.mock.calls.length}` }));
+    const virtual = { ...procedure, stages: [] };
+    const view = render(<Harness initialView="work" canManage procedure={virtual} allProcedures={[virtual]} />);
+    const stageButton = within(screen.getByRole("navigation", { name: "办案范围" })).getAllByRole("button").find(button => button.title.includes("未记录进度"))!;
+    fireEvent.click(stageButton);
+    fireEvent.click(screen.getByRole("button", { name: "上传" }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/^文件 \*/), { target: { files: [new File(["甲"], "甲.txt", { type: "text/plain" }), new File(["乙"], "乙.txt", { type: "text/plain" })] } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "上传" }));
+    await waitFor(() => expect(mock.ensureStage).toHaveBeenCalledOnce());
+    const actual = { ...procedure, stages: [{ ...procedure.stages[0], id: "materialized-stage", name: mock.ensureStage.mock.calls[0][0].name }] };
+    // The real action revalidates before returning: server props may change while the old default URL remains.
+    view.rerender(<Harness initialView="work" canManage procedure={actual} allProcedures={[actual]} />);
+    expect(new URLSearchParams(window.location.search).get("stage")).toMatch(/^default-/);
+    await act(async () => finish({ id: "materialized-stage", created: true }));
+    await screen.findByText("2 份 · 已保存 2 份");
+    expect(new URLSearchParams(window.location.search).get("stage")).toBe("stage-materialized-stage");
+    expect(mock.ensureStage).toHaveBeenCalledOnce(); expect(mock.upload).toHaveBeenCalledTimes(2);
+    for (const [form] of mock.upload.mock.calls) expect((form as FormData).get("stageId")).toBe("materialized-stage");
+    expect(within(dialog).queryByText(/上传范围已变化/)).not.toBeInTheDocument();
+  });
+
+  it("G04 ensure 期间用户已切走时不抢回导航，保留返回的真实环节供显式接续", async () => {
+    let finish!: (value: { id: string; created: boolean }) => void;
+    mock.ensureStage.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    mock.upload.mockResolvedValue({ ok: true, id: "saved-returned" });
+    const virtual = { ...procedure, stages: [] };
+    const view = render(<Harness initialView="work" canManage procedure={virtual} allProcedures={[virtual]} />);
+    fireEvent.click(within(screen.getByRole("navigation", { name: "办案范围" })).getAllByRole("button").find(button => button.title.includes("未记录进度"))!);
+    fireEvent.click(screen.getByRole("button", { name: "上传" }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/^文件 \*/), { target: { files: [new File(["甲"], "甲.txt", { type: "text/plain" })] } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "上传" }));
+    await waitFor(() => expect(mock.ensureStage).toHaveBeenCalledOnce());
+    act(() => { window.history.replaceState(null, "", "/matters/matter-1?workPane=materials"); });
+    const actual = { ...procedure, stages: [{ ...procedure.stages[0], id: "materialized-stage", name: mock.ensureStage.mock.calls[0][0].name }] };
+    view.rerender(<Harness initialView="work" canManage procedure={actual} allProcedures={[actual]} />);
+    await act(async () => finish({ id: "materialized-stage", created: true }));
+    expect(new URLSearchParams(window.location.search).get("stage")).toBeNull(); expect(mock.upload).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "返回上传范围" }));
+    expect(new URLSearchParams(window.location.search).get("stage")).toBe("stage-materialized-stage");
+    expect(mock.upload).not.toHaveBeenCalled(); fireEvent.click(within(dialog).getByRole("button", { name: "继续上传" }));
+    await screen.findByText("1 份 · 已保存 1 份"); expect(mock.ensureStage).toHaveBeenCalledOnce();
+    expect((mock.upload.mock.calls[0][0] as FormData).get("stageId")).toBe("materialized-stage");
+  });
+
   it("具有案件维护资格但没有记录写入资格时，只保留获准的快递入口", async () => {
     window.history.replaceState(null, "", "/matters/matter-1?workPane=records");
     const onAddLedger = vi.fn();
@@ -219,11 +271,11 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
   it("无程序时材料空态和上传说明均指向事项，不虚构当前环节", () => {
     render(<Harness initialView="work" procedure={null} notes={[]} canManage />);
     expect(materialCard().getByText("本事项暂无材料")).toBeVisible();
-    expect(materialCard().getByText("文件将保存到当前事项。")).toBeVisible();
+    expect(materialCard().getByText("文件将保存到当前事项，可逐件选择程序和环节。")).toBeVisible();
     expect(screen.queryByText("本环节暂无材料")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "上传" }));
     const dialog = screen.getByRole("dialog", { name: "上传材料 · 事项材料" });
-    expect(within(dialog).getByText("文件将保存到当前事项。")).toBeVisible();
+    expect(within(dialog).getByText("逐件核对归属和来源，文件分别保存。")).toBeVisible();
     expect(mock.upload).not.toHaveBeenCalled();
   });
 
@@ -283,6 +335,7 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
     render(<Harness initialView="work" procedure={null} notes={[]} canManage />);
     fireEvent.click(screen.getByRole("button", { name: "上传" }));
     const dialog = screen.getByRole("dialog", { name: "上传材料 · 事项材料" });
+    fireEvent.change(within(dialog).getByLabelText(/^文件 \*/), { target: { files: [new File(["合成"], "草稿.txt", { type: "text/plain" })] } });
     fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "合成上传草稿" } });
     act(() => { window.history.replaceState(null, "", "/matters/matter-1?workPane=tasks"); });
     expect(screen.getByRole("dialog", { name: "上传材料 · 事项材料" })).toBe(dialog);
@@ -295,25 +348,25 @@ describe("事项工作区入口与材料范围（组件环境）", () => {
     render(<Harness initialView="work" canManage apiRef={apiRef} />);
     act(() => apiRef.current?.openUpload());
     const dialog = screen.getByRole("dialog", { name: "上传材料 · 合成当前环节" });
-    fireEvent.change(within(dialog).getByLabelText("文件 *"), { target: { files: [new File(["内容"], "材料.txt", { type: "text/plain" })] } });
+    fireEvent.change(within(dialog).getByLabelText(/^文件 \*/), { target: { files: [new File(["内容"], "材料.txt", { type: "text/plain" })] } });
     fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "保留的草稿" } });
     act(() => { window.history.replaceState(null, "", "/matters/matter-1?workPane=materials&stage=stage-stage-2"); });
-    expect(within(dialog).getByRole("alert")).toHaveTextContent("上传目标已变化");
-    expect(within(dialog).getByRole("button", { name: "上传" })).toBeDisabled();
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("上传范围已变化");
+    expect(within(dialog).getByRole("button", { name: "继续上传" })).toBeDisabled();
     expect(within(dialog).getByRole("textbox")).toHaveValue("保留的草稿");
     expect(mock.upload).not.toHaveBeenCalled();
     act(() => { window.history.replaceState(null, "", "/matters/matter-1?workPane=materials&stage=stage-stage-1"); });
-    expect(within(dialog).getByRole("button", { name: "上传" })).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: "继续上传" })).toBeEnabled();
   });
 
   it("真实环节材料空态保留准确归属说明", () => {
     window.history.replaceState(null, "", "/matters/matter-1?workPane=materials&stage=stage-stage-1");
     render(<Harness initialView="work" canManage />);
     expect(materialCard().getByText("本环节暂无材料")).toBeVisible();
-    expect(materialCard().getByText("文件将关联到当前程序，并自动归入本环节。")).toBeVisible();
+    expect(materialCard().getByText("文件默认关联到当前程序和环节，可逐件调整。")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "上传" }));
     const dialog = screen.getByRole("dialog", { name: "上传材料 · 合成当前环节" });
-    expect(within(dialog).getByText("文件将关联到当前程序，并自动归入本环节。")).toBeVisible();
+    expect(within(dialog).getByText("逐件核对归属和来源，文件分别保存。")).toBeVisible();
     expect(mock.upload).not.toHaveBeenCalled();
   });
 

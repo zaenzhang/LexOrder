@@ -1,11 +1,9 @@
 "use client";
 import { deadlineOverdue, deadlineRelative, formatDeadlineDue, type DeadlineDuePrecision } from "@/lib/deadline-due";
 
-import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { ContextInputPicker } from "@/components/matters/context-input-picker";
-import type { ContextInputSelection } from "@/lib/matters/context-inputs";
 import {
   Archive,
   BookOpen,
@@ -62,7 +60,6 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { uploadDocument } from "@/server/documents/actions";
 import { TaskWorkPanel } from "@/components/matters/task-work-panel";
 import { updateDossierLocation, type DossierView, type WorkPane } from "@/lib/matters/dossier-location";
 import { createProcedureStage, deleteProcedureMemo, ensureProcedureStage, removeProcedureStage, toggleDeadlineCompleted, toggleProcedureMemo } from "@/server/procedures/actions";
@@ -97,6 +94,7 @@ import {
   type UserOption
 } from "@/app/(app)/preservation/_components/preservation-types";
 import { TemplatePickerDialog } from "./template-picker-dialog";
+import { MaterialUploadDialog } from "./material-upload-dialog";
 import { AdjustDeadlineDialog } from "./procedure-content";
 import { confirmDeadline } from "@/server/deadlines/confirm";
 import { DocIcon, EmptyState, SourceChip } from "@/components/patterns/moan";
@@ -654,15 +652,6 @@ const STAGE_GUIDES: { keys: string[]; guide: StageGuide }[] = [
   }
 ];
 
-const DOCUMENT_CATEGORY_OPTIONS: DocumentCategory[] = [
-  "CONTRACT",
-  "PLEADING",
-  "EVIDENCE",
-  "PROCEDURE",
-  "JUDGMENT",
-  "OTHER"
-];
-const SOURCE_MATERIAL_CATEGORIES: DocumentCategory[] = ["PLEADING", "EVIDENCE"];
 const COURT_PROCEDURE_SOURCE = "法院程序文件";
 
 export type WorkflowNote = {
@@ -981,7 +970,6 @@ export function ProcedureWorkflowPanel({
               <div className="flex flex-col gap-4">
                 {!invalidStage && !invalidProcedure ? <>{materialsActions}
                 <MaterialsSection
-                  matterId={matter.id}
                   procedure={procedure}
                   documents={documents}
                   stage={effectiveScope === "stage" ? selectedStage : null}
@@ -1076,17 +1064,18 @@ export function ProcedureWorkflowPanel({
         </aside>
       </div>
 
-      {/* 环节操作条与页头「上传材料」共用：打开当前选中环节的上传弹窗 */}
-        <div hidden>
-          <StageMaterialsPanel
-            matterId={matter.id}
-            procedure={procedure}
-            stage={selectedStage}
-            documents={[]}
-            canManage={canWriteMaterials && !invalidStage && !invalidProcedure}
-            uploadSignal={uploadSignal}
-          />
-        </div>
+      <MaterialUploadDialog
+        current={{ matterId: matter.id, procedureId: procedure?.id ?? null, stageKey: requestedStage,
+          stageId: selectedStage?.id ?? null, stageName: selectedStage?.name ?? null,
+          title: selectedStage?.name ?? (procedure ? "程序材料" : "事项材料") }}
+        procedures={allProcedures.map(item => ({ id: item.id,
+          label: [item.customLabel ?? procedureTypeLabel[item.type], item.caseNumber].filter(Boolean).join(" · "),
+          sourceOptions: buildSourceOptions(item), stages: item.stages }))}
+        canWrite={canWriteMaterials}
+        scopeValid={!invalidStage && !invalidProcedure}
+        request={uploadSignal}
+        defaultCategory={defaultCategoryForStage(selectedStage?.name ?? "事项材料")}
+      />
 
       <TemplatePickerDialog
         open={templateOpen}
@@ -2056,8 +2045,7 @@ function ArchiveGlance({
 /* 材料：随环节范围展示（本环节带上传与来源筛选，全部环节按环节分组）   */
 /* ------------------------------------------------------------------ */
 
-function MaterialsSection({ matterId, procedure, documents, stage, unassignedOnly, canManage, onOpenTemplate, onRequestUpload }: {
-  matterId: string;
+function MaterialsSection({ procedure, documents, stage, unassignedOnly, canManage, onOpenTemplate, onRequestUpload }: {
   procedure: WorkflowProcedure | null;
   documents: WorkflowDocument[];
   stage: WorkflowStage | null;
@@ -2070,7 +2058,7 @@ function MaterialsSection({ matterId, procedure, documents, stage, unassignedOnl
     : unassignedOnly ? documents.filter(document => procedure ? !document.stageId : !document.procedureId) : documents;
   return <>
     <p className="text-sm text-muted-foreground">{stage ? `环节材料 · ${stage.name}` : procedure ? unassignedOnly ? "本程序 · 未归属环节材料" : "本程序 · 全部材料" : unassignedOnly ? "全案 · 未归属程序材料" : "全案 · 全部材料"}</p>
-    <StageMaterialsPanel matterId={matterId} procedure={procedure} stage={stage} documents={visible} canManage={canManage} onOpenTemplate={onOpenTemplate} onRequestUpload={onRequestUpload} />
+    <StageMaterialsPanel procedure={procedure} stage={stage} documents={visible} canManage={canManage} onOpenTemplate={onOpenTemplate} onRequestUpload={onRequestUpload} />
   </>;
 }
 
@@ -2399,159 +2387,26 @@ function PreservationPropertyRow({
 }
 
 function StageMaterialsPanel({
-  matterId,
   procedure,
   stage,
   documents,
   canManage,
   onOpenTemplate,
   onRequestUpload,
-  uploadSignal = 0,
   bare = false
 }: {
-  matterId: string;
   procedure: WorkflowProcedure | null;
   stage: WorkflowStage | null;
   documents: WorkflowDocument[];
   canManage: boolean;
   /** 嵌在环节页签内：不包卡片、不重复标题 */
   bare?: boolean;
-  /** v1.1 UI（方案 D）：模板生成收口到材料区的单一入口 */
   onOpenTemplate?: () => void;
   onRequestUpload?: () => void;
-  /** 页头「上传材料」递增信号：打开本环节上传弹窗 */
-  uploadSignal?: number;
 }) {
-  const router = useRouter();
-  const fieldId = useId();
-  const stageName = stage?.name ?? "事项材料";
-  const uploadScopeTitle = stage?.name ?? (procedure ? "程序材料" : "事项材料");
-  const uploadScopeDescription = procedure && stage ? "文件将关联到当前程序，并自动归入本环节。"
-    : procedure ? "文件将保存到当前程序，暂不归入具体环节。" : "文件将保存到当前事项。";
-  const fileRef = useRef<HTMLInputElement>(null);
-  const uploadRequest = useRef<{ signature: string; key: string } | null>(null);
-  const uploadBusy = useRef(false);
-  const confirmingClose = useRef(false);
-  const currentTarget = { matterId, procedureId: procedure?.id ?? null, stageKey: stage?.key ?? null, stageId: stage?.id ?? null, canManage };
-  const currentTargetRef = useRef(currentTarget);
-  useEffect(() => { currentTargetRef.current = currentTarget; });
-  const [uploadTarget, setUploadTarget] = useState<{
-    matterId: string; procedureId: string | null; stageKey: string | null; stageId: string | null;
-    stageName: string; title: string; description: string; sourceOptions: string[];
-  } | null>(null);
-  const [open, setOpen] = useState(false);
-  const [picked, setPicked] = useState<File | null>(null);
-  const [contextInputs, setContextInputs] = useState<ContextInputSelection[]>([]);
-  const [customName, setCustomName] = useState("");
-  const [sourceParty, setSourceParty] = useState("");
-  const [sourceOrigin, setSourceOrigin] = useState<DocumentSourceOrigin | "">("");
+  const uploadScopeDescription = procedure && stage ? "文件默认关联到当前程序和环节，可逐件调整。"
+    : procedure ? "文件默认保存到当前程序，可逐件调整归属。" : "文件将保存到当前事项，可逐件选择程序和环节。";
   const [originFilter, setOriginFilter] = useState<DocumentSourceOrigin | "ALL">("ALL");
-  const [category, setCategory] = useState<DocumentCategory>(defaultCategoryForStage(stageName));
-  const [isPending, startTransition] = useTransition();
-  const sourceOptions = useMemo(() => procedure ? buildSourceOptions(procedure) : [], [procedure]);
-
-  function clearUpload() {
-    setContextInputs([]);
-    setOpen(false);
-    setPicked(null);
-    setCustomName("");
-    setSourceParty("");
-    setSourceOrigin("");
-    setUploadTarget(null);
-    uploadRequest.current = null;
-    if (fileRef.current) fileRef.current.value = "";
-  }
-
-  async function closeUpload() {
-    if (uploadBusy.current || isPending || confirmingClose.current) return;
-    const dirty = Boolean(picked || customName || sourceParty || sourceOrigin || contextInputs.length || category !== defaultCategoryForStage(uploadTarget?.stageName ?? stageName));
-    confirmingClose.current = true;
-    try {
-      if (dirty && !await confirmDialog({ title: "放弃未上传的材料？", confirmText: "放弃上传", cancelText: "继续编辑", initialFocus: "cancel" })) return;
-      clearUpload();
-    } finally { confirmingClose.current = false; }
-  }
-
-  function targetIsCurrent(target: NonNullable<typeof uploadTarget>) {
-    const current = currentTargetRef.current;
-    return current.canManage && current.matterId === target.matterId && current.procedureId === target.procedureId &&
-      (current.stageKey === target.stageKey || (target.stageId !== null && current.stageId === target.stageId));
-  }
-
-  function openUploadDialog() {
-    if (!canManage) return;
-    if (open) { toast.info("请先处理已打开的上传草稿"); return; }
-    setContextInputs([]);
-    setUploadTarget({ matterId, procedureId: procedure?.id ?? null, stageKey: stage?.key ?? null, stageId: stage?.id ?? null,
-      stageName, title: uploadScopeTitle, description: uploadScopeDescription, sourceOptions });
-    setCategory(defaultCategoryForStage(stageName));
-    setSourceParty("");
-    setSourceOrigin("");
-    setPicked(null);
-    uploadRequest.current = null;
-    setCustomName("");
-    if (fileRef.current) fileRef.current.value = "";
-    setOpen(true);
-  }
-
-  function submitUpload() {
-    if (uploadBusy.current) return;
-    const target = uploadTarget;
-    if (!target || !targetIsCurrent(target)) {
-      toast.error("上传目标已变化，请返回原程序和环节核对草稿");
-      return;
-    }
-    if (!picked) {
-      toast.warning("请先选择文件");
-      return;
-    }
-    uploadBusy.current = true;
-    startTransition(async () => {
-      try {
-        let submissionTarget = target;
-        // v0.48: 材料按外键归属环节；虚拟环节先物化拿到真实 stageId
-        let stageId = submissionTarget.stageId;
-        if (submissionTarget.procedureId && submissionTarget.stageKey && !stageId) {
-          const ensured = await ensureProcedureStage({
-            procedureId: submissionTarget.procedureId,
-            name: submissionTarget.stageName,
-            description: "",
-            insertPosition: "END"
-          });
-          stageId = ensured.id;
-          submissionTarget = { ...submissionTarget, stageId };
-          setUploadTarget(submissionTarget);
-        }
-        if (!targetIsCurrent(submissionTarget)) throw new Error("上传目标已变化，请返回原程序和环节核对草稿");
-        const fd = new FormData();
-        fd.set("matterId", submissionTarget.matterId);
-        if (submissionTarget.procedureId) fd.set("procedureId", submissionTarget.procedureId);
-        if (stageId) fd.set("stageId", stageId);
-        fd.set("file", picked);
-        fd.set("category", category);
-        fd.set("name", customName.trim() || picked.name);
-        fd.set("contextInputs", JSON.stringify(contextInputs));
-        fd.set("tags", submissionTarget.stageKey ? stageMaterialTag(submissionTarget.stageName) : "");
-        if (SOURCE_MATERIAL_CATEGORIES.includes(category) && sourceParty) {
-          fd.set("sourceParty", sourceParty);
-        }
-        if (sourceOrigin) fd.set("sourceOrigin", sourceOrigin);
-        const signature = JSON.stringify([picked.name, picked.size, picked.lastModified, customName.trim(), category, sourceParty, sourceOrigin, stageId, contextInputs]);
-        if (uploadRequest.current?.signature !== signature) uploadRequest.current = { signature, key: crypto.randomUUID() };
-        fd.set("requestKey", uploadRequest.current.key);
-        await uploadDocument(fd);
-        toast.success("材料已保存，等待处理");
-        clearUpload();
-        router.refresh();
-      } catch (err) {
-        toast.error("上传失败", { description: actionErrorMessage(err) });
-        router.refresh();
-      } finally { uploadBusy.current = false; }
-    });
-  }
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (uploadSignal > 0 && canManage) openUploadDialog(); }, [uploadSignal]);
 
   const familyRows = materialFamilyRows(documents);
   const representatives = familyRows.map(row => row.document);
@@ -2603,7 +2458,7 @@ function StageMaterialsPanel({
             </button>
           ) : null}
           {canManage ? (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={onRequestUpload ?? openUploadDialog}>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={onRequestUpload}>
               <Upload />
               上传
             </button>
@@ -2643,107 +2498,6 @@ function StageMaterialsPanel({
         shownRows.map(({ document, versionCount }) => <DocRow key={document.id} doc={document} versionCount={versionCount} />)
       )}
 
-      <Dialog open={open} onOpenChange={next => { if (!next) void closeUpload(); }}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>上传材料 · {uploadTarget?.title ?? uploadScopeTitle}</DialogTitle>
-            <DialogDescription className="text-xs">
-              {uploadTarget?.description ?? uploadScopeDescription}
-            </DialogDescription>
-          </DialogHeader>
-          <fieldset disabled={isPending} className="space-y-3">
-            {uploadTarget && (!canManage || matterId !== uploadTarget.matterId || (procedure?.id ?? null) !== uploadTarget.procedureId || ((stage?.key ?? null) !== uploadTarget.stageKey && (uploadTarget.stageId === null || stage?.id !== uploadTarget.stageId))) ? <p role="alert" className="text-sm text-destructive">上传目标已变化，请返回原程序和环节核对草稿。</p> : null}
-            <div className="space-y-1.5">
-              <Label className="text-xs">材料类别 *</Label>
-              <Select value={category} onValueChange={(value) => setCategory(value as DocumentCategory)}>
-                <SelectTrigger className="h-10 bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DOCUMENT_CATEGORY_OPTIONS.map((item) => (
-                    <SelectItem key={item} value={item}>
-                      {documentCategoryLabel[item]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">材料来源</Label>
-              <Select value={sourceOrigin || "__none__"} onValueChange={(value) => setSourceOrigin(value === "__none__" ? "" : (value as DocumentSourceOrigin))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="选择材料来源" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">不标注</SelectItem>
-                  {(Object.keys(documentSourceChip) as DocumentSourceOrigin[]).map((origin) => (
-                    <SelectItem key={origin} value={origin}>
-                      {documentSourceChip[origin].label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {SOURCE_MATERIAL_CATEGORIES.includes(category) && (uploadTarget?.sourceOptions ?? sourceOptions).length > 0 && (
-              <div className="space-y-1.5">
-                <Label className="text-xs">归属/来源（可选）</Label>
-                <Select
-                  value={sourceParty || "__none__"}
-                  onValueChange={(value) => setSourceParty(value === "__none__" ? "" : value)}
-                >
-                  <SelectTrigger className="h-10 bg-background">
-                    <SelectValue placeholder="选择归属/来源" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">不标注</SelectItem>
-                    {(uploadTarget?.sourceOptions ?? sourceOptions).map((item) => (
-                      <SelectItem key={item} value={item}>
-                        {item}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            <div className="space-y-1.5">
-              <Label className="text-xs" htmlFor={`${fieldId}-file`}>文件 *</Label>
-              <Input
-                id={`${fieldId}-file`}
-                ref={fileRef}
-                type="file"
-                onChange={(event) => { uploadRequest.current = null; setPicked(event.target.files?.[0] ?? null); }}
-              />
-              {picked && (
-                <p className="text-[10px] text-muted-foreground">
-                  已选 {picked.name}（{(picked.size / 1024).toFixed(0)} KB）
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">显示名（可选）</Label>
-              <Input
-                value={customName}
-                onChange={(event) => setCustomName(event.target.value)}
-                placeholder={uploadTarget?.stageKey ? `${uploadTarget.stageName}材料` : uploadTarget?.title ?? uploadScopeTitle}
-              />
-            </div>
-            {uploadTarget && <ContextInputPicker matterId={uploadTarget.matterId} value={contextInputs} onChange={setContextInputs} disabled={isPending} />}
-          </fieldset>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => void closeUpload()} disabled={isPending}>
-              取消
-            </Button>
-            <Button onClick={submitUpload} disabled={isPending || !picked || !uploadTarget || !canManage || matterId !== uploadTarget.matterId || (procedure?.id ?? null) !== uploadTarget.procedureId || ((stage?.key ?? null) !== uploadTarget.stageKey && (uploadTarget.stageId === null || stage?.id !== uploadTarget.stageId))} className="gap-1.5">
-              {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              上传
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
@@ -2991,10 +2745,6 @@ function shortDay(date: Date): string {
 function stageGuideFor(stageName: string) {
   return STAGE_GUIDES.find((item) => item.keys.some((key) => stageName.includes(key)))?.guide ??
     DEFAULT_STAGE_GUIDE;
-}
-
-function stageMaterialTag(stageName: string) {
-  return `阶段:${stageName}`;
 }
 
 function documentMatchesStage(

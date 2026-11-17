@@ -50,6 +50,18 @@ describe("补充归档材料入口", () => {
     expect(screen.getByLabelText("结案小结 *")).toHaveValue("正在填写的补充小结");
   });
 
+  it("G04 typed 上传前置拒绝不加入归档清单，也不误作列表刷新失败", async () => {
+    upload.mockResolvedValueOnce({ ok: false, code: "REJECTED_BEFORE_RESERVATION", message: "本次归档材料未通过核对" });
+    render(<ArchiveWizardDialog matterId={MATTER} open onOpenChange={vi.fn()} />);
+    await selectFile();
+    await screen.findByText("本次归档材料未通过核对");
+    expect(prep).toHaveBeenCalledOnce();
+    expect(screen.queryByText("已关联 1 份")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "刷新材料" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("结案小结 *")).toHaveValue("原结案小结");
+    expect(submit).not.toHaveBeenCalled();
+  });
+
   it("加载失败留在当前操作，提供真实重试入口", async () => {
     const onOpenChange = vi.fn();
     prep.mockRejectedValueOnce(new Error("暂时无法读取归档资料")).mockResolvedValue(data());

@@ -193,6 +193,7 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
       fd.set("encrypted", "false");
       fd.set("file", file);
       const uploaded = await uploadDocument(fd);
+      if (!uploaded.ok) throw new Error(uploaded.message);
       if (version !== prepVersion.current) return;
       setAvailableDocuments((current) => [...current, { id: uploaded.id, name: String(fd.get("name")), category: inferCategory(item.id), mimeType: file.type || null, size: file.size, folderName: archiveFolder?.name ?? null }]);
       setAssignments((current) => ({ ...current, [item.id]: [...new Set([...(current[item.id] ?? []), uploaded.id])] }));

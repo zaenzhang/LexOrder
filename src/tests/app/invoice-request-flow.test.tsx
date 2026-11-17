@@ -35,7 +35,7 @@ beforeEach(() => {
   context.mockImplementation(async (id: string) => data(id));
   search.mockResolvedValue([{ id: MATTER, internalCode: "TEST-001", title: "合成案件一" }, { id: SECOND, internalCode: "TEST-002", title: "合成案件二" }]);
   prepare.mockResolvedValue(undefined); create.mockResolvedValue({ id: "cinvoice000000000000001", status: "PENDING" });
-  upload.mockResolvedValue({ id: "cuploaded00000000000001" });
+  upload.mockResolvedValue({ ok: true, id: "cuploaded00000000000001" });
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 async function choose(label: string, option: string) {
@@ -98,7 +98,7 @@ describe("开票申请恢复与上下文", () => {
   });
   it("第二个附件失败只续传失败项；申请响应丢失重试保留提交键及成功附件 ID", async () => {
     const firstDoc = "cuploaded00000000000001", secondDoc = "cuploaded00000000000002";
-    upload.mockResolvedValueOnce({ id: firstDoc }).mockRejectedValueOnce(new Error("第二份暂时上传失败")).mockResolvedValueOnce({ id: secondDoc });
+    upload.mockResolvedValueOnce({ ok: true, id: firstDoc }).mockResolvedValueOnce({ ok: false, code: "REJECTED_BEFORE_RESERVATION", message: "第二份暂时上传失败" }).mockResolvedValueOnce({ ok: true, id: secondDoc });
     create.mockRejectedValueOnce(new Error("申请响应中断")).mockResolvedValue({ id: "cinvoice000000000000001", status: "APPROVED" });
     render(<InvoiceRequestSheet matterId={MATTER} open onOpenChange={vi.fn()} />);
     await fillBase();

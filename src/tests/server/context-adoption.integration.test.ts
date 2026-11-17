@@ -131,6 +131,7 @@ describe.skipIf(!config.url)("G15 实际采用入口、当前授权与不可变�
     form.set("file", new File(["%PDF-1.4\nsynthetic"], "合成上传.pdf", { type: "application/pdf" }));
     form.set("requestKey", key); form.set("contextInputs", JSON.stringify([selection]));
     const saved = await uploadDocument(form);
+    if (!saved.ok) throw new Error(saved.message);
     expect(await db.documentContextInput.findFirst({ where: { documentId: saved.id } })).toMatchObject({ contextRecordId: goal.id, currentRecordIdAtAdoption: goal.id, adoptedConfirmedAt: null });
     // This is still an unapproved single-version upload with no other references.
     await expect(assertDocumentCanBePurged(db, saved.id)).rejects.toThrow("须保留原件");

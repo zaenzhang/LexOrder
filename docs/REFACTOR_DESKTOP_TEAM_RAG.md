@@ -671,11 +671,19 @@ S08/G09的固定Document/run/anchor、旧run/SHA匹配、真实TEXT/TABLE位置�
 
 ### 6.15 案件批量上传与单件摄入结果合同（G04，2026-11-17）
 
-计划§7.14.11已审定、认领，尚未实现。批次只在现案件上传Dialog维持本地文件/逐行草稿和结果，复用MaterialIngestIntent及现单文件摄入。openContext与row.target分开，实际procedureId/stageId来自同案真实对象；父工作区唯一入口使用原allProcedures/触发信号，虚拟当前环节仅按ensure真实返回ID接续，不能覆盖后来导航。已发payload/key固定，循环有当前范围与mount边界，不引入数据库批次或通用队列。
+计划§7.14.11以`62c254e`先发布认领，现已实现，验证见计划§8.41。批次只在现案件上传Dialog维持本地文件/逐行草稿和结果，复用MaterialIngestIntent及现单文件摄入。openContext与row.target分开，实际procedureId/stageId来自同案真实对象；父工作区唯一入口使用原allProcedures/触发信号，虚拟当前环节仅按ensure真实返回ID接续，不能覆盖后来导航。已发payload/key固定，循环有当前范围与mount边界，不引入数据库批次或通用队列。
 
 uploadDocument采用唯一discriminated结果合同，成功返回实际id，确定预留前拒绝返回REJECTED_BEFORE_RESERVATION；5实际消费者同步，其他入口保原错误语义。领域内专用标记只在输入校验及预留事务回调内intent.create前产生，既有/竞争intent先走原恢复或冲突；approvalTransaction可把原生数据库错误转换为ActionError，不能由外层错误类型推定未写入。存储、提交、后处理/刷新和未知错误仍按可能已有真实结果处理，G15、当前资格、归属及原子写入守卫不迁出事务。
 
 回执按当前documents.write、经办、本人、事项和确切UUID读取现intent；当前可读已保存材料才返回对应id/版本，无原件路径/hash或额外存储检查。NOT_RESERVED只说明读取瞬间缺记录，不能证明旧请求已终止。客户端只有历次明确前置拒绝且无不确定请求才可纠正；曾有unknown则保持冻结，直至实际保存或真实关闭。关闭复用abandon，迟到storage失败须与成功/恢复路径一样保终态；不做新取消fence、自动补写bytes或换key重传。无schema/迁移、维护准备或持久前端队列。
+
+### 6.16 收案转案材料接续合同（G11，2026-11-17）
+
+计划§7.14.12采用真实未归属接续，认领发布后实施。convertIntakeToMatter保留原审批资格、状态/并发事务、冲突、来源及审计，结果携带事务新建的实际procedureId；停止写无实际stageId语义的旧阶段标签，不修改历史标签/快照，不设默认环节或补造分类。
+
+收案领域内私有可选读取复用现权限函数：从当前有效人员/岗位核matters.read/documents.read及hasMatterBusinessAccess，再读取同intakeId+matterId、未删除且逐件canReadDocument的真实材料关联；程序须同案，stageId=null才建立本程序未归属环节目标。现getIntakeById的旧附件投影不能直接当转案后材料授权或程序身份。teamReadOnly还包含缺matters.write的合法只读经办，因此私有接续投影与完整/只读页面均按自身读取资格控制，不新增写权。已通过案件资格但无合法具体目标时，可用准确标注的全案材料入口；无资格与空材料、读取失败分别表达。
+
+可选读取局部隔离，失败不改变已完成转换、不触发收案主查询404、不伪装空态或开放未经授权目标；原事务/原审计错误不一并吞掉。审批界面保存确切成功结果，链接使用最新dialogState并在放弃确认后重核busy/选择身份，既有returnTo与工作台刷新保持。只有另外核实当前收案读取资格才提供其重试链接，否则显示有权经办可稍后查看，保原我已处理入口。持久入口沿收案详情重读，不建通用导航服务、分类写入、兼容旧标签读取、schema/迁移或历史回填。
 
 ## 7. 参考项目如何进入 LexOrder
 

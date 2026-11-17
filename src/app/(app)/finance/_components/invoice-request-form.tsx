@@ -141,6 +141,7 @@ export function InvoiceRequestForm({ matterId: fixedMatterId, onOpenChange, canC
       form.set("category", "OTHER"); form.set("encrypted", "true"); form.set("tags", "开票依据"); form.set("file", item.file);
       try {
         const document = await uploadDocument(form);
+        if (!document.ok) throw new Error(document.message);
         ids.push(document.id);
         if (version === contextVersion.current) setAttachments(current => current.map(value => value.key === item.key ? { ...value, documentId: document.id, status: "saved", error: undefined } : value));
       } catch (error) {

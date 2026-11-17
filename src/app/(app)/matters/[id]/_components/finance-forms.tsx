@@ -91,7 +91,8 @@ export function AddBillingSheet({
           fd.set("encrypted", "true");
           fd.set("tags", `合同,${values.title}`);
           fd.set("file", contractFile);
-          await uploadDocument(fd);
+          const uploaded = await uploadDocument(fd);
+          if (!uploaded.ok) throw new Error(uploaded.message);
           toast.success("合同已创建，附件已加密入库");
         } else {
           toast.success("合同已创建");

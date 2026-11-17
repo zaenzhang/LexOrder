@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { UserRole } from "@prisma/client";
+import type { Prisma, UserRole } from "@prisma/client";
 
 const syntheticStorage = vi.hoisted(() => ({
   objects: new Map<string, Buffer>(), write: vi.fn(), read: vi.fn(), remove: vi.fn(),
@@ -26,7 +26,10 @@ import { requireSession } from "@/lib/auth/session";
 import { removeProcedureStage } from "@/server/procedures/actions";
 import { completeJob } from "@/server/cron/queue";
 import { intakeState } from "@/server/intakes/workflow";
-import { ingestMaterial, resumeMaterialIngest, withdrawMaterial, type MaterialDocumentInput } from "@/server/documents/material-ingest";
+import { ingestMaterial, resumeMaterialIngest, withdrawMaterial, UploadRejectedBeforeReservation, type MaterialDocumentInput } from "@/server/documents/material-ingest";
+import { uploadDocument } from "@/server/documents/actions";
+import { getMaterialUploadReceipt, listPendingMaterialUploads, closeMaterialUpload } from "@/server/documents/ingest-actions";
+import { ActionError } from "@/lib/action-error";
 import { canReadDocument } from "@/lib/approvals/documents";
 import { assertDocumentDerivationAccess } from "@/server/documents/derivation-access";
 
@@ -48,6 +51,17 @@ function request(f: Awaited<ReturnType<typeof fixture>>, document = f.document) 
   intentIds.push(requestKey);
   return { userId: f.user.id, document, bytes: f.bytes, requestKey };
 }
+function signIn(f: Awaited<ReturnType<typeof fixture>>) {
+  vi.mocked(requireSession).mockResolvedValue({ user: { id: f.user.id, role: f.user.role, runtimeMode: "SERVER" }, expires: "2099-01-01" } as Awaited<ReturnType<typeof requireSession>>);
+}
+function uploadForm(f: Awaited<ReturnType<typeof fixture>>, key: string, extra: Record<string, string> = {}) {
+  const form = new FormData();
+  form.set("matterId", f.matter.id); form.set("requestKey", key); form.set("name", "合成批次原件.txt"); form.set("category", "EVIDENCE");
+  form.set("file", new File([new Uint8Array(f.bytes)], "同名原件.txt", { type: "text/plain" }));
+  for (const [name, value] of Object.entries(extra)) form.set(name, value);
+  return form;
+}
+function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
 async function claimIntent(intentId: string) {
   const leaseToken = randomUUID();
   const job = await db.jobQueue.update({ where: { dedupeKey: `document.ingest:${intentId}` },
@@ -92,6 +106,137 @@ describe.skipIf(!databaseUrl)("Server 原件摄入：真实 PG 恢复与幂等�
     await db.$disconnect();
     syntheticStorage.objects.clear();
   });
+
+  it("G04 公开上传明确前置拒绝不预留；修正同键后保留逐件程序/环节/未归属和独立文件身份", async () => {
+    const f = await fixture(); signIn(f);
+    const a = await db.matterProcedure.create({ data: { matterId: f.matter.id, type: "FIRST_INSTANCE", order: 0 } });
+    const b = await db.matterProcedure.create({ data: { matterId: f.matter.id, type: "SECOND_INSTANCE", order: 1 } });
+    const hidden = await db.matterStage.create({ data: { procedureId: a.id, name: "合成隐藏环节", order: 0, status: "HIDDEN" } });
+    const active = await db.matterStage.create({ data: { procedureId: b.id, name: "合成实际环节", order: 0 } });
+    const key = request(f).requestKey;
+    expect(await uploadDocument(uploadForm(f, key, { name: "" }))).toMatchObject({ ok: false, code: "REJECTED_BEFORE_RESERVATION" });
+    expect(await uploadDocument(uploadForm(f, key, { procedureId: a.id, stageId: hidden.id }))).toMatchObject({ ok: false, code: "REJECTED_BEFORE_RESERVATION", message: expect.stringContaining("环节") });
+    const missing = `c${randomUUID().replaceAll("-", "")}`;
+    expect(await uploadDocument(uploadForm(f, key, { contextInputs: JSON.stringify([{ recordId: missing, expectedCurrentRecordId: missing, expectedConfirmedAt: null }]) })))
+      .toMatchObject({ ok: false, code: "REJECTED_BEFORE_RESERVATION" });
+    expect(await db.materialIngestIntent.findUnique({ where: { id: key } })).toBeNull();
+    expect(await db.jobQueue.findUnique({ where: { dedupeKey: `document.ingest:${key}` } })).toBeNull();
+    expect(syntheticStorage.write).not.toHaveBeenCalled();
+    const first = await uploadDocument(uploadForm(f, key, { procedureId: a.id }));
+    const second = await uploadDocument(uploadForm(f, request(f).requestKey, { procedureId: b.id, stageId: active.id }));
+    const third = await uploadDocument(uploadForm(f, request(f).requestKey));
+    if (!first.ok || !second.ok || !third.ok) throw new Error("合成成功输入未保存");
+    expect(new Set([first.id, second.id, third.id]).size).toBe(3);
+    expect(await db.document.findUniqueOrThrow({ where: { id: first.id } })).toMatchObject({ procedureId: a.id, stageId: null });
+    expect(await db.document.findUniqueOrThrow({ where: { id: second.id } })).toMatchObject({ procedureId: b.id, stageId: active.id });
+    expect(await db.document.findUniqueOrThrow({ where: { id: third.id } })).toMatchObject({ procedureId: null, stageId: null });
+    expect(await db.document.count({ where: { matterId: f.matter.id, name: "合成批次原件.txt" } })).toBe(3);
+  }, 30_000);
+
+  it("G04 同键真实并发预留冲突及已有请求异载不会误报可纠正，原请求只保存一份", async () => {
+    const f = await fixture(); signIn(f); const key = request(f).requestKey;
+    const locked = deferred<void>(), unlock = deferred<void>(), finishStorage = deferred<void>();
+    const lock = db.$transaction(async tx => {
+      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(72606101)`; locked.resolve(); await unlock.promise;
+    }, { timeout: 20000 });
+    await locked.promise;
+    syntheticStorage.write.mockImplementationOnce(async (path: string, bytes: Buffer) => {
+      syntheticStorage.objects.set(path, Buffer.from(bytes)); await finishStorage.promise;
+    });
+    const calls = ["竞争甲.txt", "竞争乙.txt"].map(name => uploadDocument(uploadForm(f, key, { name }))
+      .then(value => ({ value, error: null }), error => ({ value: null, error })));
+    let waiting = 0;
+    try {
+      for (let i = 0; i < 200 && waiting < 2; i++) {
+        const [row] = await db.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM pg_locks WHERE locktype='advisory' AND NOT granted AND objid=72606101`;
+        waiting = row.count; if (waiting < 2) await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(waiting).toBeGreaterThanOrEqual(2); // Both real requests observed no intent before their reservation transaction.
+    } finally { unlock.resolve(); }
+    await lock;
+    try {
+      const rejected = await Promise.race(calls);
+      expect(rejected.value).toBeNull(); expect(rejected.error).toBeInstanceOf(ActionError);
+      expect(rejected.error).not.toBeInstanceOf(UploadRejectedBeforeReservation);
+      expect(rejected.error.message).toContain("其他内容");
+    } finally { finishStorage.resolve(); }
+    const outcomes = await Promise.all(calls);
+    const saved = outcomes.find(row => row.value?.ok)?.value;
+    if (!saved?.ok) throw new Error("并发原请求未保存");
+    const doc = await db.document.findUniqueOrThrow({ where: { id: saved.id } });
+    expect(await uploadDocument(uploadForm(f, key, { name: doc.name }))).toEqual(saved);
+    await expect(uploadDocument(uploadForm(f, key, { name: "另一个输入.txt" }))).rejects.toThrow("其他内容");
+    expect(await db.document.count({ where: { matterId: f.matter.id } })).toBe(1);
+    expect(syntheticStorage.write).toHaveBeenCalledOnce();
+    expect(await db.auditLog.count({ where: { userId: f.user.id, action: "DOCUMENT_UPLOAD", targetId: saved.id } })).toBe(1);
+  }, 30_000);
+
+  it("G04 已预留失败保持原输入；精确回执可核对最新 20 条外的本次上传且不读取存储", async () => {
+    const f = await fixture(); signIn(f); const key = request(f).requestKey;
+    syntheticStorage.write.mockRejectedValueOnce(new Error("synthetic write failed"));
+    await expect(uploadDocument(uploadForm(f, key))).rejects.toThrow("原件");
+    const failed = await db.materialIngestIntent.findUniqueOrThrow({ where: { id: key } });
+    expect(failed).toMatchObject({ state: "FAILED", errorCode: "STORAGE_WRITE_FAILED", documentId: null });
+    const newer = Array.from({ length: 21 }, (_, index) => {
+      const id = randomUUID(); intentIds.push(id);
+      return { id, requestedById: f.user.id, matterId: f.matter.id, storagePath: `synthetic-pending/${id}`, sourceSha256: failed.sourceSha256,
+        size: failed.size, metadata: failed.metadata as Prisma.InputJsonValue, state: "FAILED" as const, errorCode: "STORAGE_WRITE_FAILED", createdAt: new Date(failed.createdAt.getTime() + index + 1) };
+    });
+    await db.materialIngestIntent.createMany({ data: newer });
+    const list = await listPendingMaterialUploads(f.matter.id);
+    expect(list.items).toHaveLength(20); expect(list.hasMore).toBe(true); expect(list.items.map(row => row.id)).not.toContain(key);
+    const reads = syntheticStorage.read.mock.calls.length;
+    expect(await getMaterialUploadReceipt({ matterId: f.matter.id, requestKey: key })).toMatchObject({ status: "INCOMPLETE", waiting: false });
+    expect(syntheticStorage.read).toHaveBeenCalledTimes(reads);
+    await expect(uploadDocument(uploadForm(f, key))).rejects.toThrow("未找到完整原件");
+    expect(syntheticStorage.write).toHaveBeenCalledOnce();
+    expect(await db.document.count({ where: { matterId: f.matter.id } })).toBe(0);
+    expect(await getMaterialUploadReceipt({ matterId: f.matter.id, requestKey: randomUUID() })).toEqual({ status: "NOT_RESERVED" });
+  }, 30_000);
+
+  it("G04 精确回执限定当前岗位/经办/本人及事项，COMMITTED 无当前原件资格只确认保存", async () => {
+    const f = await fixture(), other = await fixture(); signIn(f); const key = request(f).requestKey;
+    const saved = await uploadDocument(uploadForm(f, key)); if (!saved.ok) throw new Error("合成上传失败");
+    expect(await getMaterialUploadReceipt({ matterId: f.matter.id, requestKey: key })).toEqual({ status: "COMMITTED", document: { id: saved.id, name: "合成批次原件.txt", version: 1 } });
+    await db.matterMember.create({ data: { matterId: f.matter.id, userId: other.user.id, role: "ASSISTANT" } });
+    signIn(other);
+    expect(await getMaterialUploadReceipt({ matterId: f.matter.id, requestKey: key })).toEqual({ status: "NOT_RESERVED" });
+    signIn(f); await db.matterMember.create({ data: { matterId: other.matter.id, userId: f.user.id, role: "ASSISTANT" } });
+    expect(await getMaterialUploadReceipt({ matterId: other.matter.id, requestKey: key })).toEqual({ status: "NOT_RESERVED" });
+    const name = `g04-write-only-${randomUUID()}`;
+    const role = await db.roleDefinition.create({ data: { name, normalizedName: name, permissions: { create: [{ permissionKey: "documents.write", scope: "OWN" }] } } }); roleIds.push(role.id);
+    // Keep the simulated session stale: both receipt and original access must resolve current database authority.
+    await db.user.update({ where: { id: f.user.id }, data: { role: "CUSTOM", roleDefinitionId: role.id } });
+    expect(await getMaterialUploadReceipt({ matterId: f.matter.id, requestKey: key })).toEqual({ status: "COMMITTED", document: null });
+    await db.roleDefinition.update({ where: { id: role.id }, data: { active: false } });
+    await expect(getMaterialUploadReceipt({ matterId: f.matter.id, requestKey: key })).rejects.toThrow("无权核对");
+    await db.roleDefinition.update({ where: { id: role.id }, data: { active: true } });
+    await db.matter.update({ where: { id: f.matter.id }, data: { ownerId: other.user.id } });
+    await expect(getMaterialUploadReceipt({ matterId: f.matter.id, requestKey: key })).rejects.toThrow("无权核对");
+    expect(syntheticStorage.read).not.toHaveBeenCalled();
+  }, 30_000);
+
+  it("G04 真实关闭后迟到 storage 失败不能重开终态或登记材料", async () => {
+    const f = await fixture(); signIn(f); const key = request(f).requestKey;
+    const entered = deferred<void>(), release = deferred<void>();
+    syntheticStorage.write.mockImplementationOnce(async () => { entered.resolve(); await release.promise; throw new Error("synthetic late storage failure"); });
+    const attempt = uploadDocument(uploadForm(f, key)).then(value => ({ value, error: null }), error => ({ value: null, error }));
+    await entered.promise;
+    const intent = await db.materialIngestIntent.findUniqueOrThrow({ where: { id: key } });
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Math.max(Date.now(), intent.createdAt.getTime()) + 121_000);
+    try { await closeMaterialUpload(key); }
+    finally { clock.mockRestore(); release.resolve(); }
+    const result = await attempt; expect(result.value).toBeNull(); expect(result.error).toBeInstanceOf(ActionError);
+    expect(result.error).not.toBeInstanceOf(UploadRejectedBeforeReservation);
+    expect(await db.materialIngestIntent.findUniqueOrThrow({ where: { id: key } })).toMatchObject({ state: "FAILED", errorCode: "UPLOAD_ABANDONED", documentId: null });
+    expect(await getMaterialUploadReceipt({ matterId: f.matter.id, requestKey: key })).toEqual({ status: "CLOSED" });
+    expect(await db.jobQueue.findUniqueOrThrow({ where: { dedupeKey: `document.ingest:${key}` } })).toMatchObject({ status: "DEAD" });
+    expect(await db.document.count({ where: { matterId: f.matter.id } })).toBe(0);
+    expect(await db.documentParseRun.count({ where: { requestedById: f.user.id } })).toBe(0);
+    expect(await db.auditLog.count({ where: { userId: f.user.id, action: "DOCUMENT_UPLOAD_ABANDON", targetId: key } })).toBe(1);
+    await expect(uploadDocument(uploadForm(f, key))).rejects.toThrow("已关闭");
+    expect(syntheticStorage.write).toHaveBeenCalledOnce();
+  }, 30_000);
 
   it("已预留原件的环节被移除时保留环节与上传，新上传不能再绑定隐藏环节", async () => {
     const f = await fixture();

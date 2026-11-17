@@ -38,6 +38,15 @@ const metadataSchema = z.object({ document: documentInput, priorDocumentId: null
   contextInputs: contextInputSelectionsSchema.optional().default([]),
   checkout: z.object({ jti: z.string(), baselineVersion: z.number().int() }).nullable().default(null) });
 
+/** Only explicit validation before this invocation creates an intent may carry this marker. */
+export class UploadRejectedBeforeReservation extends ActionError {}
+
+function rejectBeforeReservation(error: unknown): never {
+  if (error instanceof ActionError) throw new UploadRejectedBeforeReservation(error.message);
+  if (error instanceof z.ZodError) throw new UploadRejectedBeforeReservation(error.issues.slice(0, 2).map(issue => issue.message).join("；"));
+  throw error;
+}
+
 function sameUpload(left: z.output<typeof metadataSchema>, right: z.output<typeof metadataSchema>) {
   // A browser retry encrypts the same original with a fresh IV. Business identity,
   // including the encryption policy, must still be exactly the reserved request.
@@ -99,10 +108,13 @@ async function assertUploadAuthority(tx: Prisma.TransactionClient, userId: strin
 /** The intent is durable before file I/O; originals use a reserved non-overwriting key. */
 export async function ingestMaterial(input: { userId: string; document: MaterialDocumentInput; bytes: Buffer;
   priorDocumentId?: string; requestKey?: string; checkout?: { jti: string; baselineVersion: number } | null; contextInputs?: ContextInputSelection[] }) {
-  const data = documentInput.parse(input.document);
-  const id = input.requestKey ? z.uuid().parse(input.requestKey) : randomUUID();
   const priorDocumentId = input.priorDocumentId ?? null;
-  const metadata = metadataSchema.parse({ document: data, priorDocumentId, checkout: input.checkout ?? null, contextInputs: input.contextInputs });
+  let data: z.output<typeof documentInput>, id: string, metadata: z.output<typeof metadataSchema>;
+  try {
+    data = documentInput.parse(input.document);
+    id = input.requestKey ? z.uuid().parse(input.requestKey) : randomUUID();
+    metadata = metadataSchema.parse({ document: data, priorDocumentId, checkout: input.checkout ?? null, contextInputs: input.contextInputs });
+  } catch (error) { rejectBeforeReservation(error); }
   const existing = await prisma.materialIngestIntent.findUnique({ where: { id } });
   if (existing) {
     const previous = metadataSchema.parse(existing.metadata);
@@ -111,11 +123,15 @@ export async function ingestMaterial(input: { userId: string; document: Material
   }
   const storagePath = `${data.matterId ? `m_${data.matterId}` : `i_${data.intakeId}`}/${new Date().toISOString().slice(0, 7).replace("-", "")}/${id}.bin`;
   try { await approvalTransaction(async tx => {
-    await assertUploadAuthority(tx, input.userId, data, priorDocumentId, true);
-    if (priorDocumentId && input.contextInputs === undefined && await tx.documentContextInput.count({ where: { documentId: priorDocumentId } })) {
-      throw new ActionError("请明确沿用或调整原稿采用的目标和指示，再保存新版本");
-    }
-    await assertContextInputSelections(tx, input.userId, data.matterId, metadata.contextInputs);
+    // Mark inside the callback: approvalTransaction also translates database failures
+    // into ordinary ActionError, which must never imply that no intent was reserved.
+    try {
+      await assertUploadAuthority(tx, input.userId, data, priorDocumentId, true);
+      if (priorDocumentId && input.contextInputs === undefined && await tx.documentContextInput.count({ where: { documentId: priorDocumentId } })) {
+        throw new ActionError("请明确沿用或调整原稿采用的目标和指示，再保存新版本");
+      }
+      await assertContextInputSelections(tx, input.userId, data.matterId, metadata.contextInputs);
+    } catch (error) { rejectBeforeReservation(error); }
     await tx.materialIngestIntent.create({ data: { id, storagePath, requestedById: input.userId,
       matterId: data.matterId, intakeId: data.matterId ? null : data.intakeId, priorDocumentId,
       sourceSha256: data.sha256, size: data.size, metadata: metadata as Prisma.InputJsonValue } });
@@ -123,7 +139,10 @@ export async function ingestMaterial(input: { userId: string; document: Material
       dedupeKey: `document.ingest:${id}`, runAt: new Date(Date.now() + 120_000), maxAttempts: 3 } });
   }, Prisma.TransactionIsolationLevel.ReadCommitted); } catch (error) {
     const raced = await prisma.materialIngestIntent.findUnique({ where: { id } });
-    if (raced?.requestedById === input.userId && sameUpload(metadataSchema.parse(raced.metadata), metadata)) return resumeMaterialIngest(id, input.userId);
+    if (raced) {
+      if (raced.requestedById === input.userId && sameUpload(metadataSchema.parse(raced.metadata), metadata)) return resumeMaterialIngest(id, input.userId);
+      throw new ActionError("上传请求标识已用于其他内容，请核对原上传");
+    }
     throw error;
   }
   try {
@@ -131,7 +150,8 @@ export async function ingestMaterial(input: { userId: string; document: Material
     await prisma.materialIngestIntent.updateMany({ where: { id, state: { not: "COMMITTED" }, documentId: null,
       OR: [{ errorCode: null }, { errorCode: { not: "UPLOAD_ABANDONED" } }] }, data: { state: "STORED", errorCode: null } });
   } catch {
-    await prisma.materialIngestIntent.updateMany({ where: { id, state: { not: "COMMITTED" } }, data: { state: "FAILED", errorCode: "STORAGE_WRITE_FAILED" } });
+    await prisma.materialIngestIntent.updateMany({ where: { id, state: { not: "COMMITTED" }, documentId: null,
+      OR: [{ errorCode: null }, { errorCode: { not: "UPLOAD_ABANDONED" } }] }, data: { state: "FAILED", errorCode: "STORAGE_WRITE_FAILED" } });
     throw new ActionError("原件保存未完成，可在材料区查看未完成上传并重试");
   }
   return commitStoredIngest(id, input.userId);
