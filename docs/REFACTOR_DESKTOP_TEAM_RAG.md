@@ -614,6 +614,14 @@ F03/F05/F06复用现有IntakeRevision送审轮次与审批授权/状态链：最
 
 F04/D01/D04的向导使用现有intakeCreateSchema及包含CLIENT_PARTY的原始RHF输入，问题按完整字段路径去重并映射真实步骤；派生完成度和确认摘要不建立同步影子状态，不修改共享身份schema的可选规则。类别切换在用户事件内定点重校验已有诉讼地位/当事人错误。F09以现有getCauseById读取已有ID的显示名称，异步结果按请求ID隔离，名称读取不触发onChange；选择范围沿causeScopeForSelection。A/B/C实现与开发证据均见计划§8.32，浏览器与专业验收独立保留。
 
+### 6.10 材料搜索定位与事实单套呈现合同（2026-11-17）
+
+S08/S09的已审计划见实施§7.14.6；此处是实施合同，实际验证另记。当前SearchResultItem已含Document.id/version、parseRunId、anchorId及SourceAnchor.location，不新增材料读模型、位置表或接口。搜索服务在现有逐件canReadDocument后生成具体原件href，matterLink仅表示真实归属；原件URL复用material-processing现有构造，Office按officePreviewKind、其他可预览格式按download?inline=1，只有真实PDF/PAGE加页码，DOCX/TEXT不造物理页。
+
+有完整解析身份时，SearchDialog以documentId/runId/anchorId调用getMaterialSource，沿现有documents.read及readMaterialSource当前授权/来源检查；正文、位置、原件入口与历史解析标记仅取本次结果。不可用或失败不回退最新代次或旧snippet，关闭/新请求废弃迟到响应。无锚点原件在另页打开，搜索保持query/scope/sel/scroll；源弹层打开时隔离底层Enter/Tab，关闭按命中入口恢复焦点。不借需要案件写权的研究Action，也不为跳转普通读取重算原件hash。
+
+FactsWorkspace删除第二套逐项列表，EvidenceTimeline保留日期和时间未明分组；EvidencePoints接可选onResearch，仅父canAdd且实际ISSUE、非受限时显示。groupEvidenceTimeline原本排除受限项，调用者须在不泄露日期/正文的单独占位区保留它们一次；读取错误优先于列表。现有SourceButton、EvidenceDetailDialog/历史、来源当前资格及研究forceMount草稿不变。本阶段无schema、迁移或新运行依赖；F01精度与S06模板是后续已认领业务，另行审定其必要改动。
+
 ## 7. 参考项目如何进入 LexOrder
 
 沿用 [来源记录](RESEARCH_AND_DECISIONS.md)，按“观察行为 → 输入输出与规则 → LexOrder 设计 → 场景验收”吸收。实际复制代码另记固定提交、文件、依赖与来源；研究范围不按协议类型排除。

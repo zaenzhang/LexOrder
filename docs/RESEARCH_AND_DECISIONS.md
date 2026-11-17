@@ -1049,6 +1049,17 @@ PDF和DOCX已渲染并逐页检查，各为1页。本轮实际在产品内只上
 
 编码前按当前安装的Next 16.4.6文档核对Server/Client与表单边界；组件复审参考React派生状态和effect依赖原则，只应用到本批状态一致性，不扩成性能专项。复用现有依赖及组件，无新增模型/迁移/依赖或整套UI改版。浏览器与律师专业验收由用户接续；mock服务、jsdom和静态复审分别记账，旧截图不作为新代码已验收的证明。
 
+### 3.28 搜索具体来源与事实呈现的接续取舍（2026-11-17）
+
+G15交付后按用户约束先查agent、认领和全部分支，在`43bea7a`确认S08/S09仍有实际断点。材料搜索已有精确返回值，丢失发生在入口；事实区实际两次渲染同一items。G09来源选择器和G03指示回链分别解决其他对象，不据已交付代码误关这两项。计划与状态统一见实施§7.14.4/§7.14.6。
+
+| 用户任务与本次实际阅读 | 采用及不采用理由 | 失败出口与验收 |
+| --- | --- | --- |
+| 从事实就近查看原文；Kosmos固定`c6454fd`的[fact-row.html全文](https://github.com/Kosmos-Law/kosmos/blob/c6454fd5488c0d231e2b4756846f690c679586ca/templates/case/facts/fact-row.html)，[facts/views.py](https://github.com/Kosmos-Law/kosmos/blob/c6454fd5488c0d231e2b4756846f690c679586ca/apps/case/facts/views.py)定点505—570 | 事实行就近列原件/高亮，来源操作按实际fact关系、当前matter资料处理。采用单套呈现和确切原文入口；不移植Django对象，不据局部代码推定完整授权或把未知日期强制成有日期 | LexOrder保留自己的EvidenceItem/来源/历史/权限，受限项只占位；同条不重复，研究动作在实际可写争点上 |
+| 打开确切引文；Counsel OS固定`c4f40f1`的[citation-location.ts全文](https://github.com/eigenlegal/counsel-os/blob/c4f40f1ffd40146531bcaa7f43e6877a733f92ca/runtime/src/workspace/citation-location.ts) | 精确定位基于已读范围，歧义和未读不能猜位置。采用固定身份失败不换目标；不复制其引用算法或代理框架 | 搜索沿既有getMaterialSource核当前权限和原run，失效明确反馈、不把摘要当原文；原件独立打开且搜索可返回 |
+
+本地按已安装Next 16.4.6文档核对use-search-params及Server Action边界，沿用现有updateDossierLocation、Radix Dialog和来源服务。三轮计划纠正包括：保留Timeline过滤掉的受限占位、源弹层隔离父键盘、Office按实际支持格式分流、读取材料不新增案件写权门槛。没有运行参考项目、复制第三方源码或进行浏览器验收；独立原件另页、错误优先及保留搜索位置是本项目对当前断点的设计判断。S06/F01仍在分别审查，不以本节替代其合同。
+
 ## 4. 可选法律服务 MCP 与来源
 
 核查日期 2026-11-16；以下为官方公开的接入信息，不是本项目已取得账号、权益或实测成功。机构目录可扩展，自定义远程 MCP 为未预置服务保留入口；不虚构“市面所有机构都提供官方 MCP”。
