@@ -112,7 +112,7 @@ describe("缺陷修复界面流程", () => {
     expect(screen.getByRole("tab", { name: "资料与核验" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("checkbox", { name: "核验清单项：委托手续" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "核准缺项或不适用例外" })).toBeChecked();
-    expect(screen.getByRole("textbox")).toHaveValue("已核对例外理由");
+    expect(screen.getByRole("textbox", { name: "审批意见或驳回原因" })).toHaveValue("已核对例外理由");
     expect(submit).toBeEnabled();
     fireEvent.click(submit);
     await waitFor(() => expect(approveArchiveRecord).toHaveBeenCalledWith({ archiveId: "invoice-test", note: "已核对例外理由", verificationIds: ["item:one", "document:doc", "manual:review"], exceptionApproved: true }));

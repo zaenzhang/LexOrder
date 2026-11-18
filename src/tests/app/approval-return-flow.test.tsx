@@ -202,9 +202,10 @@ describe("审批详情读取、轮次与返回案件", () => {
     mocks.params = new URLSearchParams({ type: first.action, id: first.id, returnTo: returnB }).toString();
     rerender(<ApprovalInbox data={data} initialSelection={first} returnTo={returnB} />);
     await waitFor(() => expect(mocks.detail).toHaveBeenCalledTimes(2));
-    expect(await screen.findByRole("link", { name: "案件列表" })).toHaveAttribute("href", "/matters");
-    expect(screen.queryByRole("link", { name: "返回案件" })).not.toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "审批意见或驳回原因" })).toHaveValue("保留当前意见");
+    const dialog = within(screen.getByRole("dialog", { name: "申请 A" }));
+    expect(await dialog.findByRole("link", { name: "案件列表" })).toHaveAttribute("href", "/matters");
+    expect(dialog.queryByRole("link", { name: "返回案件" })).not.toBeInTheDocument();
+    expect(dialog.getByRole("textbox", { name: "审批意见或驳回原因" })).toHaveValue("保留当前意见");
   });
 
   it("处理未决时阻止关闭和 URL 换对象；完成后保留返回案件入口", async () => {
