@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>律序 · 案件文书预览</title>
+<style>
+:root{color-scheme:light;--navy:#10283b;--ink:#172934;--muted:#5a6b73;--teal:#007b7d;--pale:#e3f0ee;--line:#dce6e3;--bg:#eff3f1;--white:#fff;--amber:#935700;--red:#aa302b;font-family:"Noto Sans CJK SC","Microsoft YaHei",system-ui,sans-serif}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-size:14px}button,input,select,textarea{font:inherit}button{cursor:pointer;color:inherit}button:disabled{cursor:default;opacity:.48}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #4fa6a5;outline-offset:2px}h1,h2,h3,p{margin:0}button,abbr{border:0}
+.app{display:grid;grid-template-columns:198px minmax(0,1fr);min-height:100vh}.nav{display:flex;flex-direction:column;position:sticky;top:0;height:100vh;background:#fff;border-right:1px solid var(--line);padding:13px 11px}.brand{display:flex;gap:11px;align-items:center;padding:4px 5px 21px}.mark{background:#122d40;color:#79d5ca;width:33px;height:33px;border-radius:9px;display:grid;place-items:center}.mark svg{width:22px;height:22px}.brand strong{color:var(--navy);display:block;font-weight:760}.brand small,.dim{color:var(--muted)}.ico{width:16px;height:16px;flex:none}.nav-item{width:100%;display:flex;gap:10px;align-items:center;text-align:left;padding:9px 10px;border-radius:7px;margin:2px 0;background:transparent;color:#4c5d66}.nav-item.current{background:#e0eeec;color:#00595c;font-weight:700}.nav-item[data-action]:hover{background:#f0f5f4}.nav-item.current:hover{background:#d8ebe8}.profile{margin-top:auto;border-top:1px solid var(--line);padding:13px 5px 3px;display:flex;align-items:center;gap:9px}.avatar{width:29px;height:29px;border-radius:100%;background:#e1efed;color:#005e61;display:grid;place-items:center;font-weight:700}
+.main{min-width:0}.top{min-height:53px;padding:8px 23px;background:#f8faf9;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:8px}.top-title,.top-actions{display:flex;align-items:center;gap:10px}.top-title{font-size:13px;color:var(--muted)}.pill{display:inline-flex;align-items:center;gap:6px;border-radius:20px;padding:3px 8px;font-size:11px;font-weight:650;white-space:nowrap;background:#edf2f2;color:#4d6268}.pill.teal{background:#dff0eb;color:#086761}.pill.warn{background:#fff1d5;color:var(--amber)}.pill.danger{background:#fbeae7;color:var(--red)}.dot{width:6px;height:6px;background:currentColor;border-radius:50%}.content{max-width:1530px;margin:auto;padding:21px 24px 58px}.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:7px 10px;min-height:32px;border-radius:7px;background:#fff;border:1px solid #cddbd8;font-weight:650;font-size:13px;white-space:nowrap}.btn:hover{border-color:var(--teal);color:#005a5c}.btn.primary{background:var(--teal);border-color:var(--teal);color:#fff}.btn.primary:hover{background:#006568}.btn.quiet{border-color:transparent;background:transparent}.btn.subtle{background:#e4f1ef;border-color:#cce3df;color:#006466}.btn.sm{min-height:29px;padding:5px 8px;font-size:12px}
+.hero{background:linear-gradient(150deg,#10293d,#0b1e31);border-radius:15px;color:#fff;padding:21px 24px 18px}.breadcrumb{color:#acbdc9;font-size:12px;display:flex;align-items:center;gap:8px}.heading-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:6px 0 12px}.heading-row h1{font-size:27px;line-height:1.3;letter-spacing:.005em}.hero-meta{display:flex;align-items:center;gap:11px;color:#c5d3dc;font-size:12px}.hero-meta strong{color:#fff}.hero .pill{background:#254454;color:#c4f3e8}
+.programs{display:flex;gap:9px;margin:11px 0 14px}.proc{flex:1;text-align:left;min-height:57px;padding:9px 12px;background:#fff;border:1px solid var(--line);border-radius:10px;display:grid;gap:4px}.proc:hover{border-color:#80b5ad}.proc.chosen{border-color:var(--teal);box-shadow:inset 0 2px var(--teal);background:#f9fdfc}.proc-title{display:flex;align-items:center;gap:7px;font-weight:740}.proc .dim{font-size:11px}.case-tabs{display:flex;gap:6px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:4px;width:max-content;max-width:100%;margin-bottom:14px}.case-tabs span,.case-tabs button{border-radius:6px;padding:7px 10px;font-weight:650;font-size:13px;white-space:nowrap}.case-tabs .on{background:var(--navy);color:#fff}.case-tabs .unavailable{color:#596a74}
+.work{display:grid;grid-template-columns:173px minmax(0,1fr);gap:12px}.panel{background:#fff;border:1px solid var(--line);border-radius:11px;overflow:hidden}.section-head{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:10px;align-items:center}.section-head h2{font-size:15px}.stages{align-self:start}.stage-buttons{padding:7px}.stage{width:100%;background:none;text-align:left;border-radius:7px;padding:9px 9px;display:flex;align-items:center;gap:9px}.stage[aria-current="true"]{background:#eaf4f2;color:#006669;font-weight:700;box-shadow:inset 2px 0 var(--teal)}.stage:hover{background:#edf5f3}.step-dot{width:11px;height:11px;border:2px solid #9bb1ae;border-radius:100%;flex:none}.stage[aria-current="true"] .step-dot{border-color:var(--teal);background:var(--teal);box-shadow:inset 0 0 0 2px #fff}.files-head{padding:13px 14px 10px}.scope{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:7px}.files-head h2{font-size:18px}.head-buttons{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.heading-tools{display:flex;align-items:center;justify-content:space-between;gap:12px}.file-list{border-top:1px solid var(--line)}.file-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:11px;padding:12px 14px;border-bottom:1px solid #edf1f0;min-height:64px}.file-row:last-child{border-bottom:0}.file-row.emphasis{background:#f6fbfa}.file-letter{width:31px;height:34px;border:1px solid #d8e7f5;border-radius:6px;background:#eaf2fb;color:#265b9b;display:grid;place-items:center;font-size:11px;font-weight:800}.file-letter.pdf{background:#fbeeea;border-color:#f5ddd7;color:#a4473c}.file-name{background:none;padding:0;font-weight:720;text-align:left;text-decoration-color:transparent;text-underline-offset:3px}.file-name:hover{color:#00676b;text-decoration:underline}.file-sub{color:var(--muted);font-size:11px;margin-top:4px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}.row-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.row-actions .btn{min-height:27px}.file-sub .pill{font-size:10px}.empty{padding:29px 15px;color:var(--muted);text-align:center}.callout{background:#f2f8f6;border:1px solid #d6e7e3;border-radius:8px;margin:12px 14px;padding:10px 12px;font-size:12px;color:#315a5b;display:flex;align-items:center;justify-content:space-between;gap:10px}.callout.warn{background:#fff6e7;border-color:#f1dca9;color:#7b4b00}
+.page-title{margin:4px 0 15px;font-size:27px}.doc-tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:10px}.doc-tab{color:var(--muted);background:none;font-weight:700;padding:11px 14px;border-bottom:2px solid transparent}.doc-tab.current{color:#006e70;border-color:#007b7d}.view-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}.view-title h1{font-size:26px}.small-info{font-size:12px;color:var(--muted);margin:2px 0}.template-row{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:12px;align-items:center;padding:15px 16px;border-top:1px solid var(--line)}.template-row:first-child{border-top:0}.statebar{position:fixed;bottom:0;left:198px;right:0;background:#f8faf9;border-top:1px solid var(--line);padding:8px 24px;font-size:12px;color:#4b656c;display:flex;justify-content:space-between;gap:12px}.status-link{background:none;color:#00696c;font-weight:650;padding:0}.status-link:hover{text-decoration:underline}
+dialog{width:min(590px,calc(100% - 26px));max-height:calc(100dvh - 32px);border:1px solid #ceded9;border-radius:15px;padding:0;background:white;color:var(--ink);box-shadow:0 25px 70px #071d3760}dialog::backdrop{background:#0f233a62}.dialog-head{padding:16px 19px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.dialog-head h2{font-size:18px}.dialog-body{padding:17px 19px;display:grid;gap:12px}.dialog-body textarea{width:100%;min-height:150px;border:1px solid #cddcd8;border-radius:8px;padding:10px;line-height:1.7;color:var(--ink);resize:vertical}.dialog-body input,.dialog-body select{width:100%;padding:8px 10px;border:1px solid #cddcd8;border-radius:7px;background:white;color:var(--ink)}.field{display:grid;gap:5px;font-size:13px}.dialog-footer{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap;padding:11px 19px;border-top:1px solid var(--line)}.version-line{display:grid;grid-template-columns:35px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}.version-line:last-child{border-bottom:0}.dialog-tip{padding:9px 10px;background:#edf5f2;border-radius:6px;color:#345557;font-size:12px;line-height:1.5}.dialog-tip.warn{background:#fff1d5;color:#794800}.toast{position:fixed;bottom:50px;right:17px;z-index:5;width:min(350px,calc(100vw - 35px));padding:11px 14px;border:1px solid #b3d3cd;border-radius:9px;background:#fff;color:#165a59;box-shadow:0 7px 20px #17383a25}
+@media(max-width:860px){.app{grid-template-columns:61px minmax(0,1fr)}.nav{padding-inline:6px}.brand{justify-content:center;padding-inline:0}.brand-text,.nav-item span,.profile-text{display:none}.nav-item{justify-content:center}.profile{justify-content:center}.statebar{left:61px}.content{padding-inline:14px}.top{padding-inline:14px}.file-row{gap:7px;padding-inline:10px}.work{grid-template-columns:144px minmax(0,1fr)}}
+@media(max-width:590px){.app{display:block}.nav{height:auto;position:static;display:flex;flex-direction:row;align-items:center;gap:2px;overflow:auto;padding:4px 7px}.brand{padding:3px 4px}.mark{width:27px;height:27px}.nav-item{width:auto;padding:8px}.nav-item[data-action] span{display:inline}.nav-item:not([data-action]),.profile{display:none}.statebar{left:0;padding-inline:11px}.content{padding:12px 10px 47px}.hero{padding:16px}.heading-row h1{font-size:21px}.programs{overflow:auto}.proc{min-width:108px}.work{display:block}.stages{margin-bottom:9px}.stages .section-head{display:none}.stage-buttons{display:flex;overflow:auto}.stage{white-space:nowrap;width:auto;font-size:12px}.case-tabs{overflow:auto}.case-tabs span{padding:5px 6px;font-size:11px}.heading-tools{align-items:flex-start}.head-buttons{justify-content:flex-end}.file-row{grid-template-columns:28px minmax(0,1fr)}.row-actions{grid-column:2}.template-row{grid-template-columns:28px minmax(0,1fr)}.template-row .row-actions{grid-column:2}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<dialog id="modal" aria-labelledby="modal-title"></dialog>
+<div id="toast" class="toast" role="status" hidden></div>
+<script>
+'use strict';
+const app=document.querySelector('#app');
+const dialog=document.querySelector('#modal');
+const notice=document.querySelector('#toast');
+const code='QA-2026-001';
+const matter='软件著作权纠纷';
+const suite={
+  supreme:{label:'最高法院审查',caseNo:'18-956',status:'办理中',stages:['审查准备','判决分析','结案交接']},
+  appeal:{label:'二审',caseNo:'17-1118, 17-1202',status:'已终结',stages:['上诉审理','判决送达']},
+  all:{label:'全案',caseNo:'全部程序与事项级内容',status:'',stages:['全部材料','未归属材料']}
+};
+const templates=[
+  {id:'memo',name:'判决分析备忘录',category:'办案分析',access:'律所模板',text:'一、裁判要旨\n\n二、适用范围\n\n三、待核对事项'},
+  {id:'brief',name:'客户办案简报',category:'客户沟通',access:'内置模板',text:'一、本期进展\n\n二、待确认事项\n\n三、下一步安排'},
+  {id:'index',name:'证据目录',category:'证据整理',access:'内置模板',text:'一、证据名称\n\n二、来源与拟证明内容'}
+];
+const initialDocs=[
+  {id:'memo-file',name:'判决分析备忘录.docx',proc:'supreme',stage:'判决分析',kind:'docx',version:4,sync:'synced',history:[{v:4,by:'李安',date:'11-18 09:42',note:'补充裁判要旨'},{v:3,by:'李安',date:'11-18 09:26',note:'核对合理使用要素'},{v:2,by:'赵宁',date:'11-17 15:10',note:'补充二审裁判路径'}],body:'一、裁判要旨\n最高法院裁判认为，本案中的接口声明复制构成合理使用。\n\n二、待核对\n区分裁判适用的具体范围和一般结论。',template:'判决分析备忘录'},
+  {id:'supreme-pdf',name:'最高法院裁判原件.pdf',proc:'supreme',stage:'判决分析',kind:'pdf',version:1,sync:'source',history:[{v:1,by:'李安',date:'11-17 16:20',note:'登记公开裁判原件'}],body:'Google LLC v. Oracle America, Inc. · No. 18–956\n美国联邦最高法院 · 2021 年 4 月 5 日\n\n当前证据要点引用此原件第 1 页。'},
+  {id:'brief-file',name:'客户办案简报.docx',proc:'supreme',stage:'判决分析',kind:'docx',version:3,localBase:2,sync:'conflict',history:[{v:3,by:'赵宁',date:'11-18 09:30',note:'更新送达和回复信息'},{v:2,by:'李安',date:'11-17 15:40',note:'初步整理业务进展'}],body:'我的草稿 · 仍待核对客户反馈。',latestBody:'共享版本 · 赵宁已更新送达和回复信息。',template:'客户办案简报'},
+  {id:'appeal-pdf',name:'联邦巡回上诉法院裁判原件.pdf',proc:'appeal',stage:'判决送达',kind:'pdf',version:1,sync:'source',history:[{v:1,by:'李安',date:'11-17 16:02',note:'登记公开裁判原件'}],body:'Oracle America, Inc. v. Google LLC\n美国联邦巡回上诉法院 · 2018 年 3 月 27 日'}
+];
+function stored(){
+  try{return JSON.parse(localStorage.getItem('lexorder-case-docs-review-1'))||initialDocs;}catch{return initialDocs;}
+}
+const state={view:'case',tab:'templates',proc:'supreme',stage:'判决分析',online:true,docs:stored()};
+const persist=()=>{try{localStorage.setItem('lexorder-case-docs-review-1',JSON.stringify(state.docs));}catch{}};
+const byId=id=>state.docs.find(doc=>doc.id===id);
+const safe=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+const ICONS={
+  home:'<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"/><path d="M9 21v-7h6v7"/>',
+  folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
+  file:'<path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM14 3v6h5"/><path d="M9 13h6m-6 4h6"/>',
+  check:'<circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.2 2.4 4.8-5"/>',
+  calendar:'<rect x="4" y="6" width="16" height="15" rx="2"/><path d="M8 3v6m8-6v6M4 11h16"/>',
+  users:'<circle cx="9" cy="8" r="3"/><path d="M3 20v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2m2-15a3 3 0 0 1 0 6m4 9v-2a4 4 0 0 0-4-4"/>',
+  money:'<circle cx="12" cy="12" r="9"/><path d="m9 8 3 4 3-4m-6 5h6m-6 3h6m-3-4v6"/>',
+  cloud:'<path d="M6 18a4 4 0 0 1-1-7.9 7 7 0 0 1 13-1A4.5 4.5 0 0 1 18.5 18Z"/>',
+  external:'<path d="M13 4h7v7m0-7-9 9m7 0v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  close:'<path d="m6 6 12 12M18 6 6 18"/>',
+  back:'<path d="m15 6-6 6 6 6"/>'
+};
+function icon(key){return '<svg class="ico" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+ICONS[key]+'</svg>';}
+function btn(label,action,{id='',style='',glyph='',title=''}={}){
+  return '<button type="button" class="btn '+style+'" data-action="'+action+'" data-id="'+safe(id)+'"'+(title?' title="'+safe(title)+'"':'')+'>'+(glyph?icon(glyph):'')+safe(label)+'</button>';
+}
+function chip(label,cls='',withDot=false){
+  return '<span class="pill '+cls+'">'+(withDot?'<span class="dot"></span>':'')+safe(label)+'</span>';
+}
+const statusFor={
+  synced:['已回传','teal'],pending:['待回传','warn'],conflict:['版本冲突','danger'],source:['原件','']
+};
+function docState(doc){
+  const [label,theme]=statusFor[doc.sync];
+  return chip(label,theme,doc.sync!=='source');
+}
+function navItem(label,glyph,view){
+  const inside=state.view===view?' current':'';
+  const inner=icon(glyph)+'<span>'+label+'</span>';
+  if(!view)return '<div class="nav-item">'+inner+'</div>';
+  return '<button class="nav-item'+inside+'" data-action="nav" data-id="'+view+'" aria-label="'+label+'">'+inner+'</button>';
+}
+function shell(contents){
+  return '<div class="app"><aside class="nav"><div class="brand"><div class="mark">'+icon('file')+'</div><div class="brand-text"><strong>律序 · LexOrder</strong><small>律师工作台</small></div></div>'+
+    navItem('工作台','home')+navItem('案件','folder','case')+navItem('文书','file','docs')+navItem('审批','check')+navItem('日程','calendar')+navItem('客户','users')+navItem('财务','money')+
+    '<div class="profile"><span class="avatar">李</span><div class="profile-text"><strong>李安</strong><div class="dim">办案律师</div></div></div></aside>'+
+    '<div class="main"><header class="top"><div class="top-title">律序桌面版</div><div class="top-actions">'+chip(state.online?'已连接':'断网演示',state.online?'teal':'warn',true)+btn('同步设置','settings',{style:'sm'})+'</div></header><main class="content">'+contents+'</main></div></div>'+
+    '<footer class="statebar"><button class="status-link" data-action="tab" data-id="sync">'+icon('cloud')+' 同步记录</button><span>交互预览 · 模拟数据</span></footer>';
+}
+function fileRow(doc){
+  const action=doc.kind==='pdf'?'preview':'edit';
+  const title=doc.kind==='pdf'?'打开裁判原件':'在本机编辑';
+  return '<div class="file-row'+(doc.id==='memo-file'?' emphasis':'')+'"><span class="file-letter '+doc.kind+'">'+(doc.kind==='pdf'?'PDF':'W')+'</span><div><button class="file-name" data-action="'+action+'" data-id="'+safe(doc.id)+'" title="'+title+'">'+safe(doc.name)+'</button><div class="file-sub">'+(doc.template?safe('模板 · '+doc.template):'法院公开裁判')+chip('V'+doc.version)+docState(doc)+'</div></div><div class="row-actions">'+btn(doc.kind==='pdf'?'预览':'本地编辑',action,{id:doc.id,style:'sm subtle',glyph:doc.kind==='pdf'?'file':'external'})+btn('版本','versions',{id:doc.id,style:'sm quiet'})+'</div></div>';
+}
+function scopePaths(){
+  return '<div class="scope"><span>'+matter+'</span><span aria-hidden="true">›</span><span>'+suite[state.proc].label+'</span><span aria-hidden="true">›</span><strong>'+state.stage+'</strong></div>';
+}
+function casePane(){
+  const active=suite[state.proc];
+  const visible=state.docs.filter(doc=>state.proc==='all'?(state.stage!=='未归属材料'||!doc.proc):(doc.proc===state.proc&&doc.stage===state.stage));
+  const programs=['all','appeal','supreme'].map(id=>{
+    const proc=suite[id];
+    return '<button data-action="proc" data-id="'+id+'" class="proc '+(id===state.proc?'chosen':'')+'" aria-pressed="'+(id===state.proc)+'"><span class="proc-title">'+proc.label+(proc.status?chip(proc.status,id==='supreme'?'teal':''):'')+'</span><span class="dim">'+proc.caseNo+'</span></button>';
+  }).join('');
+  const stages=active.stages.map(name=>'<button class="stage" data-action="stage" data-id="'+name+'" aria-current="'+(name===state.stage)+'"><span class="step-dot"></span>'+name+'</button>').join('');
+  return '<section class="hero"><div class="breadcrumb">'+icon('back')+' 案件列表 <span>'+code+'</span><span>民商诉讼</span></div><div class="heading-row"><h1>'+matter+'</h1></div><div class="hero-meta"><span>委托方</span><strong>模拟委托方</strong>'+chip('办理中','teal')+'</div></section>'+
+    '<div class="programs" aria-label="程序范围">'+programs+'</div><div class="case-tabs"><span class="unavailable">档案与摘要</span><span class="on">办案与材料</span><span class="unavailable">委托与财务</span><span class="unavailable">审批用印</span></div>'+
+    '<div class="work"><aside class="panel stages"><div class="section-head"><h2>程序环节</h2></div><div class="stage-buttons">'+stages+'</div></aside><section class="panel"><div class="files-head">'+scopePaths()+'<div class="heading-tools"><h2>材料 '+chip(visible.length)+'</h2><div class="head-buttons">'+btn('文书模板','tab',{id:'templates',style:'sm quiet'})+btn('从模板生成','choose-template',{style:'sm',glyph:'plus'})+'</div></div></div><div class="file-list">'+(visible.length?visible.map(fileRow).join(''):'<p class="empty">当前环节暂无材料</p>')+'</div></section></div>';
+}
+function templatesPane(){
+  return '<div class="section-head"><h2>模板库</h2>'+btn('管理模板','manage-templates',{style:'sm'})+'</div>'+
+    templates.map(t=>'<div class="template-row"><span class="file-letter">W</span><div><button class="file-name" data-action="template-info" data-id="'+t.id+'">'+t.name+'</button><div class="file-sub">'+t.category+' · '+t.access+'</div></div><div class="row-actions">'+btn('在案件中使用','generate-dialog',{id:t.id,style:'sm subtle'})+btn('预览模板','template-info',{id:t.id,style:'sm quiet'})+'</div></div>').join('');
+}
+function syncPane(){
+  const docs=state.docs.filter(doc=>doc.kind==='docx');
+  return '<div class="section-head"><h2>改稿回传</h2>'+btn('同步设置','settings',{style:'sm'})+'</div>'+docs.map(doc=>
+    '<div class="template-row"><span class="file-letter">W</span><div><button class="file-name" data-action="locate" data-id="'+safe(doc.id)+'">'+safe(doc.name)+'</button><div class="file-sub">'+suite[doc.proc].label+' · '+doc.stage+' · V'+doc.version+docState(doc)+'</div></div><div class="row-actions">'+(doc.sync==='conflict'?btn('查看冲突','edit',{id:doc.id,style:'sm subtle'}):doc.sync==='pending'?btn('重试回传','retry',{id:doc.id,style:'sm subtle'}):'')+btn('回到案件材料','locate',{id:doc.id,style:'sm quiet'})+'</div></div>').join('');
+}
+function docsPane(){
+  const tabs=[['templates','文书模板'],['recent','最近编辑'],['sync','同步记录']];
+  const body=state.tab==='templates'?templatesPane():state.tab==='sync'?syncPane():'<div class="section-head"><h2>最近工作稿</h2></div>'+state.docs.filter(doc=>doc.kind==='docx').map(fileRow).join('');
+  return '<div class="view-title"><h1>文书</h1>'+btn('回到案件','nav',{id:'case',style:'sm'})+'</div><div class="doc-tabs" aria-label="文书分区">'+tabs.map(([id,label])=>'<button class="doc-tab '+(id===state.tab?'current':'')+'" aria-pressed="'+(id===state.tab)+'" data-action="tab" data-id="'+id+'">'+label+'</button>').join('')+'</div><section class="panel">'+body+'</section>';
+}
+function render(){app.innerHTML=shell(state.view==='case'?casePane():docsPane());}
+function show(title,note,body,footer){
+  if(dialog.open)dialog.close();
+  dialog.innerHTML='<div class="dialog-head"><div><h2 id="modal-title">'+safe(title)+'</h2><p class="small-info">'+safe(note)+'</p></div><button class="btn quiet sm" data-action="close" aria-label="关闭">'+icon('close')+'</button></div><div class="dialog-body">'+body+'</div><div class="dialog-footer">'+footer+'</div>';
+  dialog.showModal();
+}
+function announce(message){
+  notice.textContent=message;
+  notice.hidden=false;
+  clearTimeout(announce.timer);
+  announce.timer=setTimeout(()=>{notice.hidden=true;},3400);
+}
+function selectCase(doc){state.view='case';state.proc=doc.proc;state.stage=doc.stage;render();}
+function openEdit(doc){
+  if(doc.sync==='conflict'){
+    show(doc.name,'版本冲突 · 我的工作稿基于 V'+doc.localBase+'，律序已有 V'+doc.version,
+      '<div class="dialog-tip warn">两份稿都已保留。打开律序最新版核对，或继续查看本地工作稿。</div><label class="field">我的工作稿<textarea readonly>'+safe(doc.body)+'</textarea></label>',
+      btn('打开最新版','latest',{id:doc.id})+btn('保留我的稿件','keep',{id:doc.id,style:'primary'}));
+    return;
+  }
+  show(doc.name,'模拟本机 Word · '+suite[doc.proc].label+' · '+doc.stage+' · V'+doc.version,
+    '<div class="field"><label for="draft-text">工作稿</label><textarea id="draft-text" spellcheck="false">'+safe(doc.body)+'</textarea></div><div class="dialog-tip">保存后会回到案件的同一条材料。'+(state.online?'当前已连接。':'当前断网，先保留工作稿。')+'</div>',
+    btn('取消','close')+btn('保存工作稿','save',{id:doc.id,style:'primary'}));
+}
+function openVersions(doc){
+  const entries=doc.history.map(entry=>'<div class="version-line">'+chip('V'+entry.v,entry.v===doc.version?'teal':'')+'<div><strong>'+safe(entry.note)+'</strong><div class="small-info">'+safe(entry.by)+' · '+safe(entry.date)+'</div></div><span class="small-info">'+(entry.v===doc.version?'当前版':'历史版')+'</span></div>');
+  show(doc.name,'版本记录 · '+suite[doc.proc].label+' · '+doc.stage,entries.join(''),
+    btn('回到案件材料','locate',{id:doc.id}));
+}
+const scheduled=new Set();
+function publish(id){
+  const doc=byId(id);
+  if(!doc||!state.online||doc.sync!=='pending'||scheduled.has(id))return;
+  scheduled.add(id);
+  setTimeout(()=>{
+    scheduled.delete(id);
+    if(!state.online||doc.sync!=='pending')return;
+    doc.version++;
+    doc.sync='synced';
+    doc.history.unshift({v:doc.version,by:'李安',date:'刚刚',note:'本机保存后回传'});
+    persist();render();announce('已回传 V'+doc.version+' · 仍关联 '+doc.stage);
+  },550);
+}
+function settings(){
+  show('同步设置','预览可切换在线与断网',
+    '<div class="dialog-tip">第三方云盘可接作工作稿同步。此处用模拟状态演示回传、重试和冲突。</div><p>当前连接 '+chip(state.online?'在线':'断网',state.online?'teal':'warn',true)+'</p>',
+    btn('关闭','close')+btn(state.online?'模拟断网':'恢复网络','network',{style:'primary'}));
+}
+function templateInfo(t){
+  show(t.name,t.access+' · '+t.category,'<label class="field">模板内容<textarea readonly>'+safe(t.text)+'</textarea></label>',
+    btn('关闭','close')+btn('在案件中使用','generate-dialog',{id:t.id,style:'primary'}));
+}
+function chooseTemplate(){
+  show('从模板生成',matter+' · '+suite[state.proc].label+' · '+state.stage,
+    templates.map(t=>btn(t.name,'generate-dialog',{id:t.id,glyph:'file'})).join(''),btn('关闭','close'));
+}
+function generateDialog(t){
+  if(state.proc==='all'){
+    show('选择归属环节',matter,'<p class="dialog-tip">先在案件材料中选择一个程序和环节，即可从模板生成。</p>',btn('回到案件','case-and-close',{style:'primary'}));
+    return;
+  }
+  show('生成文书 · '+t.name,'归属 '+matter+' · '+suite[state.proc].label+' · '+state.stage,
+    '<label class="field">工作稿名称<input id="generate-name" value="'+safe(t.name)+'"></label><div class="field"><label for="generate-body">待填字段 · 办理要点</label><textarea id="generate-body">'+safe(t.text)+'</textarea></div>',
+    btn('取消','close')+btn('生成并打开','generate',{id:t.id,style:'primary'}));
+}
+function dispatch(action,id){
+  const doc=byId(id);
+  const template=templates.find(t=>t.id===id);
+  switch(action){
+    case 'nav':state.view=id;render();break;
+    case 'tab':state.view='docs';state.tab=id;render();break;
+    case 'proc':state.proc=id;state.stage=id==='supreme'?'判决分析':suite[id].stages.at(-1);if(id==='all')state.stage='全部材料';render();break;
+    case 'stage':state.stage=id;render();break;
+    case 'edit':if(doc)openEdit(doc);break;
+    case 'versions':if(doc)openVersions(doc);break;
+    case 'preview':if(doc)show(doc.name,'原件 · V'+doc.version,
+      '<p class="dialog-tip">'+safe(doc.body).replace(/\n/g,'<br>')+'</p>',
+      btn('关闭','close')+btn('版本记录','versions',{id}));break;
+    case 'latest':if(doc)show(doc.name,'律序最新版 · V'+doc.version,
+      '<label class="field">共享稿<textarea readonly>'+safe(doc.latestBody)+'</textarea></label>',
+      btn('关闭','close')+btn('查看我的稿件','edit',{id}));break;
+    case 'keep':dialog.close();announce('本地工作稿已保留，可从同步记录查看冲突。');break;
+    case 'save':if(doc){
+      const text=document.querySelector('#draft-text').value;
+      dialog.close();
+      if(text===doc.body){announce('内容未发生变化');break;}
+      doc.body=text;doc.sync='pending';persist();selectCase(doc);
+      announce(state.online?'修改已保存，正在回传到原材料。':'已保存到本机，恢复网络后回传。');
+      publish(id);
+    }break;
+    case 'locate':if(doc){if(dialog.open)dialog.close();selectCase(doc);}break;
+    case 'settings':settings();break;
+    case 'network':state.online=!state.online;dialog.close();render();announce(state.online?'网络已恢复，开始回传待同步稿件。':'已模拟断网。');state.docs.forEach(doc=>publish(doc.id));break;
+    case 'retry':if(!state.online)announce('当前断网，请恢复网络后重试。');else publish(id);break;
+    case 'choose-template':chooseTemplate();break;
+    case 'manage-templates':show('管理模板','文书 · 文书模板',
+      '<p class="dialog-tip">模板新增、替换源文件和停用由有权限的管理员操作。当前账户可浏览模板和在案件内生成草稿。</p>',
+      btn('返回模板库','close'));break;
+    case 'case-and-close':dialog.close();state.view='case';render();break;
+    case 'template-info':if(template)templateInfo(template);break;
+    case 'generate-dialog':if(template)generateDialog(template);break;
+    case 'generate':if(template){
+      const name=document.querySelector('#generate-name').value.trim()||template.name;
+      const text=document.querySelector('#generate-body').value;
+      const created={id:'t-'+Date.now(),name:/\.docx$/i.test(name)?name:name+'.docx',proc:state.proc,
+        stage:state.stage,kind:'docx',version:1,sync:state.online?'synced':'pending',template:template.name,
+        history:[{v:1,by:'李安',date:'刚刚',note:'从模板生成'}],body:text};
+      state.docs.unshift(created);persist();selectCase(created);openEdit(created);
+    }break;
+    case 'close':dialog.close();break;
+  }
+}
+document.addEventListener('click',event=>{
+  const button=event.target.closest('button[data-action]');
+  if(button)dispatch(button.dataset.action,button.dataset.id);
+});
+render();
+state.docs.forEach(doc=>publish(doc.id));
+</script>
+</body>
+</html>

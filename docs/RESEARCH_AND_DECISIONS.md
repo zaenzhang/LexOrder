@@ -603,7 +603,15 @@ Paperless 的上传服务遍历文件集合，每份保留进度、taskId、失�
 
 [checkout](../src/app/api/desktop/checkout/route.ts#L13)、[受控取件](../src/app/api/desktop/file/route.ts#L14)、[uploadNewVersion](../src/server/documents/actions.ts#L433)及摄入服务已经能绑定用户、旧版本、短时令牌并拒绝过时基线。全 src/tools/scripts 的调用检索未发现实际 UI/连接器消费 checkout；[材料详情](../src/components/documents/document-detail.tsx#L95)真实操作仍是下载、手动上传新稿。
 
-j-lawyer 则从模板/案卷打开文件，经 CaseUtils、DocumentObserver、CaseDocumentStore 到可见保存状态形成完整链。**差距是从“有 API”到“律师连续改稿可用”的产品接续。** 若选择推进，应选一种可用的编辑回传方式，仍生成不可变新版本，明确保存失败/版本冲突；不能照搬覆盖原件，也不等于恢复 Personal 或建通用同步系统。
+当前[模板入口](../src/components/layout/admin-shell.tsx#L58)位于后台，案件[模板弹窗](<../src/app/(app)/matters/[id]/_components/template-picker-dialog.tsx#L102>)生成后发起下载，[生成服务](../src/server/document-templates/actions.ts#L205)已写案件和程序，尚未写入环节。真实浏览器演练中，同一草稿手动回传三次形成 V1–V4，每次回到正文。通用上传同一文件会产生第二条同名材料。修正证据页码需先移除再新增关联，旧修订仍打开原页。见[计划 §8.55](WORKBENCH_PLAN.md#855-案件流程演练与文书交互预览2026-11-18)。
+
+| 参考与证据 | 采用的业务行为 |
+| --- | --- |
+| j-lawyer 开源，[2.0 发布说明](https://www.j-lawyer.org/?p=4575)的「生成并打开」，固定源码见上方项目阅读记录 | 从案卷就地生成并打开，按文件身份监测保存并回传。LexOrder 回传为新版本，同一材料的历史仍可查 |
+| Clio 商业产品，[Desktop App 文件操作](https://help.clio.com/hc/en-us/articles/57010524503451-Work-with-Files-and-Folders-in-Clio-Desktop-App) | 用本机编辑器照常保存，由桌面端把修改回传到案件的同一份文档。依据为产品行为 |
+| Nextcloud 开源客户端，[冲突文档](https://docs.nextcloud.com/server/stable/user_manual/en/desktop/conflicts.html) | 本地和服务端出现并行修改时保留本机副本，提示用户主动处理。参考此行为设计失败出口 |
+
+用户已认可沿用现有工作台的[案件内编辑预览](PRODUCT_REQUIREMENTS_ACCEPTANCE.md#949-案件内的文书模板与连续编辑g052026-11-18)。新版本回传、通用上传辨识和证据引用修正各自保留范围。
 
 ##### G06｜Word/表格来源身份已保留，但原文预览还不能准确跳到该位置
 
