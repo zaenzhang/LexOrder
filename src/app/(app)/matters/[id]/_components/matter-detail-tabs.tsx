@@ -1,21 +1,23 @@
 "use client";
 
+import { MatterListBack } from "./matter-list-back";
+
 import { Card as SemiCard, Tag as SemiTag } from "@/components/patterns/semi-surfaces";
-import { statusTagColor } from "@/lib/ui/moan-tones";
+import { statusTagColor } from "@/lib/ui/status-tones";
 import { Button as SemiButton } from "@douyinfe/semi-ui";
 import { deadlineOverdue, deadlineRelative, formatDeadlineDue } from "@/lib/deadline-due";
 import Link from "next/link";
 import { hasCustomPermission, type RoleGrant } from "@/lib/roles/catalog";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Notification, Toast } from "@douyinfe/semi-ui";
+import { List, Notification, Toast } from "@douyinfe/semi-ui";
 import type { ClientType, Prisma } from "@prisma/client";
-import { Archive, ChevronLeft, Clock3, FileSignature, Gavel, Pencil, Plus, Upload, X } from "lucide-react";
+import { IconArchive as Archive, IconClock as Clock3, IconEdit as FileSignature, IconVerify as Gavel, IconEdit as Pencil, IconPlus as Plus } from "@douyinfe/semi-icons";
 import { CaseSearchPanel } from "./case-search-panel";
 import { DocumentReviewDialog } from "./document-review-dialog";
 import { DocActionsContext } from "./doc-actions-context";
 import { WorkspaceDialog, DrawerContent, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
-import { matterStatusTone } from "@/lib/ui/moan-tones";
+import { matterStatusTone } from "@/lib/ui/status-tones";
 import { useTopbarAction } from "@/components/layout/topbar-action";
 import { ProgressDialog } from "./progress-dialog";
 import {
@@ -26,16 +28,14 @@ import {
   feeTypeLabel
 } from "@/lib/enums";
 import { cn } from "@/lib/utils";
-import { contactRoleLabels } from "./info-panel";
 import { MatterArchive, TeamRailCard } from "./matter-archive";
 import { MatterBriefSection } from "./matter-brief-section";
 import { FinancePanel } from "./finance-panel";
 import { ImportantItemDialog } from "./procedure-content";
 import { ProcedureWorkflowPanel, MatterPreservationContent } from "./procedure-workflow-panel";
 import type { WorkBoardData } from "@/components/matters/work-responsibility-panel";
-import { updateDossierLocation, type DossierView } from "@/lib/matters/dossier-location";
+import { openDossierDeadline, updateDossierLocation, type DossierView } from "@/lib/matters/dossier-location";
 import { matterHref } from "@/lib/matters/route";
-import { matterListReturnHref } from "@/lib/matters/list-location";
 import { FactsWorkspace } from "./facts-workspace";
 import { DeliveryPanel } from "@/components/deliveries/delivery-panel";
 import { DocumentDetail } from "@/components/documents/document-detail";
@@ -246,12 +246,11 @@ export function MatterDetailTabs({
   const requestedView = searchParams.get("view");
   const view: DossierView = requestedView === "work" || requestedView === "money" || requestedView === "seal" ? requestedView : "archive";
   const setView = (nextView: DossierView) => updateDossierLocation({ view: nextView });
-  const setSelectedProcId = (procedure: string | null) => updateDossierLocation({ procedure, stage: null, task: null });
+  const setSelectedProcId = (procedure: string | null) => updateDossierLocation({ procedure, stage: null, task: null, deadline: null });
   const [addProcOpen, setAddProcOpen] = useState(false);
   const [matterEditorOpen, setMatterEditorOpen] = useState(false);
   const [matterEditorSection, setMatterEditorSection] = useState<MatterEditorSection>("matter");
   const matterEditorTrigger = useRef<HTMLElement | null>(null);
-  const moreTrigger = useRef<HTMLButtonElement>(null);
   const matterHeading = useRef<HTMLHeadingElement>(null);
   const [ledgerAdd, setLedgerAdd] = useState<"express" | "hearing" | "deadline" | null>(null);
   const [caseSearchOpen, setCaseSearchOpen] = useState(false);
@@ -384,11 +383,7 @@ export function MatterDetailTabs({
   // 已归档案件只读：不再提供添加记录、上传材料与新增程序入口
   const canWriteRecords = canWriteSchedule;
 
-  // 顶栏主操作 = 添加记录（＋记录 · 沟通）
-  useTopbarAction(
-    canWriteRecords ? { label: "记录办案进展", onClick: () => setProgress({ mode: "record", stage: workflowApi.current?.currentStageName ?? undefined, stageNames: workflowApi.current?.stageNames ?? [] }) } : null,
-    [canWriteRecords]
-  );
+  useTopbarAction("none");
 
   const canReadMaterials = allowed("documents.read");
   const canReadFinance = allowed("finance.read");
@@ -438,12 +433,6 @@ export function MatterDetailTabs({
   const restricted = Boolean((matter as { teamAccessRestricted?: boolean }).teamAccessRestricted);
   const procLabel = (p: ProcedureItem) => p.customLabel ?? procedureTypeLabel[p.type] ?? p.type;
 
-  // 页头「···」菜单只留页面级编辑入口；页签切换（财务/用印）、类案检索、安排开庭与新增程序
-  // 均在各自常驻位置有入口，不在此重复（2026-09-20 用户确认收敛）
-  const moreItems = [
-    ...(canOpenUnifiedEditor ? [{ key: "edit", label: "编辑案件与团队", icon: Pencil, onSelect: () => openMatterEditor("matter", moreTrigger.current) }] : [])
-  ];
-
   const archiveBadge = matter.status === "ARCHIVED"
     ? { color: "amber", text: "已归档" } as const
     : latestArchive?.status === "PENDING_REVIEW"
@@ -479,15 +468,11 @@ export function MatterDetailTabs({
     <DocActionsContext.Provider value={docActions}>
     <div className="mo-matter mo-dossier">
       {/* ① 案卷头 */}
-      <section className="dos-head" aria-label="案卷头">
-        <SemiCard bodyStyle={{ padding: 0 }}>
+      <div className="mb-2"><MatterListBack listQuery={searchParams.get("list")} /></div>
+      <section className="dos-head dossier-identity" aria-label="案卷头">
         <div className="dos-head-top">
           <div className="min-w-0 flex-1">
             <div className="dos-eyebrow">
-              <Link href={matterListReturnHref(searchParams.get("list")) ?? "/matters"} className="ctx-back no-underline">
-                <ChevronLeft className="h-3.5 w-3.5" />
-                案件列表
-              </Link>
               <span className="code">{matter.internalCode}</span>
               {matter.firmCaseNo ? <span className="code">所内 {matter.firmCaseNo}</span> : null}
               <span>{[matterCategoryLabel[matter.category], matter.cause?.name ?? matter.causeFreeText].filter(Boolean).join(" · ")}</span>
@@ -499,7 +484,7 @@ export function MatterDetailTabs({
                   <span className="k">委托方</span>
                   <span className="v">{ours.map((p) => p.name).join("、") || matter.primaryClient?.name || "—"}</span>
                   <span className="k">{matter.category === "CRIMINAL" ? "办案机关" : "对方"}</span>
-                  <span className="v">{matter.category === "CRIMINAL" ? currentProcedure?.handlingAgency || "—" : opposing.map((p) => p.name).join("、") || "—"}</span>
+                  <span className="v">{matter.category === "CRIMINAL" ? engagedProcedures.find(p => p.handlingAgency)?.handlingAgency || "—" : opposing.map((p) => p.name).join("、") || "—"}</span>
                 </>
               ) : (
                 <>
@@ -511,120 +496,52 @@ export function MatterDetailTabs({
               )}
             </div>
             <div className="ctx-badges">
-              {isArchived && archiveBadge ? null : (
-                <SemiTag size="small" color={statusTagColor(matterStatusTone(matter.status))}>
-
-                  {matterStatusLabel[matter.status]}
-                </SemiTag>
-              )}
               {overdueCount > 0 ? <SemiTag size="small" color="red">{overdueCount} 项逾期</SemiTag> : null}
               {nearestExpiry !== null ? <SemiTag size="small" color="amber">保全 {nearestExpiry < 0 ? "已过期" : `${nearestExpiry} 天后到期`}</SemiTag> : null}
               {money(matter.claimAmount) ? <SemiTag size="small" color="grey">{categoryKind === "litigation" ? "标的" : "金额"} <span className="mono">{money(matter.claimAmount)}</span></SemiTag> : null}
               {matter.intakeDate ? <SemiTag size="small" color="grey">收案 <span className="mono">{formatShortDate(matter.intakeDate)}</span></SemiTag> : null}
-              {archiveBadge ? (
+              {archiveBadge && !isArchived ? (
                 <SemiTag size="small" color={archiveBadge.color}>
-                  <Archive className="h-3 w-3" />
+                  <Archive aria-hidden size="small" />
                   {archiveBadge.text}
                 </SemiTag>
               ) : null}
               {restricted ? <SemiTag size="small" color="grey"><span title="受限事项不进入团队汇总视图">受限事项</span></SemiTag> : null}
             </div>
           </div>
-          <div className="ctx-actions">
-            {canWriteMaterials ? (
-              <SemiButton htmlType="button" theme="outline" type="tertiary" disabled={invalidProcedure} onClick={() => workflowApi.current?.openUpload()}>
-                <Upload />
-                上传材料
-              </SemiButton>
-            ) : null}
-            <LifecycleActions
-              matterId={matter.id}
-              status={matter.status}
-              canArchive={canLeadThisMatter && allowed("archive.submit")}
-              canChangeStatus={Boolean(currentUserRole && canLeadThisMatter)}
-              canExportBundle={currentUserRole !== "FINANCE" && allowed("matters.export") && allowed("matters.read") && allowed("finance.read") && allowed("documents.download")}
-              extraItems={moreItems}
-              moreTriggerRef={moreTrigger}
-            />
+          <div className="dos-head-aside">
+            <div className="ctx-actions" role="group" aria-label="案件操作">
+              {canWriteRecords ? (
+                <SemiButton htmlType="button" theme="solid" icon={<Plus aria-hidden />} onClick={() => setProgress({
+                  mode: "record",
+                  stage: workflowApi.current?.currentStageName ?? undefined,
+                  stageNames: workflowApi.current?.stageNames ?? []
+                })}>记录办案进展</SemiButton>
+              ) : null}
+              {canOpenUnifiedEditor ? (
+                <SemiButton htmlType="button" theme="outline" type="tertiary" icon={<Pencil aria-hidden />}
+                  onClick={event => openMatterEditor("matter", event.currentTarget)}>编辑案件与团队</SemiButton>
+              ) : null}
+              <LifecycleActions
+                matterId={matter.id}
+                status={matter.status}
+                canArchive={canLeadThisMatter && allowed("archive.submit")}
+                canChangeStatus={Boolean(currentUserRole && canLeadThisMatter)}
+                canExportBundle={currentUserRole !== "FINANCE" && allowed("matters.export") && allowed("matters.read") && allowed("finance.read") && allowed("documents.download")}
+              />
+            </div>
+            <div className="dos-head-status">
+              <span>案件状态</span>
+              <SemiTag size="large" color={statusTagColor(matterStatusTone(matter.status))}>
+                {isArchived ? "已归档（只读）" : matterStatusLabel[matter.status]}
+              </SemiTag>
+            </div>
           </div>
         </div>
-        </SemiCard>
       </section>
 
       {/* 吸顶摘要：标题滚出视野后常驻案件身份与下一节点 */}
-      <MatterStickyBar title={matter.title} caseNumber={currentProcedure?.caseNumber ?? null} procedures={engagedProcedures} />
-
-      {/* ② 程序栏：每个程序一张卡片，点击切换，全页共用 */}
-      <section className="dos-procs" aria-label="程序">
-        <div className="dos-procs-h">
-          <span className="t">程序</span>
-        </div>
-        <div className="dos-procs-list" role="tablist" aria-label="案件范围">
-          <div className={cn("dos-proc", selectedProcId === null && searchParams.get("stage") !== "unassigned" && "on")}>
-            <SemiButton theme="borderless" type="tertiary" size="small" contentClassName="flex w-full min-w-0 flex-col items-stretch text-left" htmlType="button" role="tab" aria-selected={selectedProcId === null && searchParams.get("stage") !== "unassigned"} className="dos-proc-main" onClick={() => setSelectedProcId(null)}>
-              <span className="top"><span className="nm">全案</span><SemiTag size="small" color="grey">{matterStatusLabel[matter.status]}</SemiTag></span>
-              <span className="ag">全部程序与事项级内容</span>
-            </SemiButton>
-          </div>
-          <div className={cn("dos-proc", selectedProcId === null && searchParams.get("stage") === "unassigned" && "on")}>
-            <SemiButton theme="borderless" type="tertiary" size="small" contentClassName="flex w-full min-w-0 flex-col items-stretch text-left" htmlType="button" role="tab" aria-selected={selectedProcId === null && searchParams.get("stage") === "unassigned"} className="dos-proc-main" onClick={() => updateDossierLocation({ procedure: null, stage: "unassigned", task: null, view: "work" })}>
-              <span className="nm">未归属</span><span className="ag">事项材料与事项级任务</span>
-            </SemiButton>
-          </div>
-          {engagedProcedures.map((procedure) => {
-            const active = currentProcedure?.id === procedure.id;
-            const label = procLabel(procedure);
-            const labels = contactRoleLabels(procedure.type);
-            return (
-              <div key={procedure.id} className={cn("dos-proc", active && "on")}>
-                <SemiButton theme="borderless" type="tertiary" size="small" contentClassName="flex w-full min-w-0 flex-col items-stretch text-left" htmlType="button" role="tab" aria-selected={active} className="dos-proc-main" onClick={() => setSelectedProcId(procedure.id)}>
-                  <span className="top">
-                    <span className="nm">{label}{procedure.engagement === "INFORMATIONAL" ? " · 仅信息" : ""}</span>
-                    <SemiTag size="small" color={procedure.status === "CONCLUDED" ? "grey" : procedure.status === "IN_PROGRESS" ? "teal" : "grey"}>
-                      {procedureStateLabel(procedure)}
-                    </SemiTag>
-                  </span>
-                  {categoryKind === "litigation" ? (
-                    <>
-                      <span className="no">{procedure.caseNumber || "案号未登记"}</span>
-                      <span className="ag">
-                        {[procedure.handlingAgency, procedure.presidingJudge ? `${labels.lead} ${procedure.presidingJudge}` : null].filter(Boolean).join(" · ") || "受理机构未登记"}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="ag">{procedure.stages.filter((st) => st.status !== "HIDDEN").length} 个环节 · 已完成 {procedure.stages.filter((st) => st.status !== "HIDDEN" && st.completedAt).length}</span>
-                      <span className="ag">{procedure.acceptedAt ? `开始 ${formatShortDate(procedure.acceptedAt)}` : "\u00a0"}</span>
-                    </>
-                  )}
-                </SemiButton>
-                {canLeadThisMatter && canWriteSchedule ? (
-                  <SemiButton theme="borderless" type="tertiary" size="small" contentClassName="flex min-w-0 items-center gap-2"
-                    htmlType="button"
-                    className="dos-proc-del"
-                    title="删除此程序"
-                    aria-label={`删除程序 ${label}`}
-                    onClick={async () => {
-                      if (await confirmDialog({ title: `删除程序「${label}」？`, description: deleteProcedureWarning(procedure, label).replace(/^确定删除程序「[^」]*」？\s*/, ""), confirmText: "删除程序", danger: true })) handleDeleteProcedure(procedure.id);
-                    }}
-                  >
-                    <X className="h-3 w-3" />
-                  </SemiButton>
-                ) : null}
-                {canWriteSchedule && active ? <ProcedureStatusActions procedure={procedure} label={label} /> : null}
-              </div>
-            );
-          })}
-          {canWriteSchedule ? (
-            <SemiButton theme="borderless" type="tertiary" size="small" contentClassName="flex min-w-0 items-center gap-2" htmlType="button" className="dos-proc add" onClick={() => setAddProcOpen(true)}>
-              <Plus className="h-4 w-4" />
-              <span>新增程序</span>
-              <span className="t-xs t-mute">类型、案号分别登记</span>
-            </SemiButton>
-          ) : null}
-          {engagedProcedures.length === 0 && !canWriteSchedule ? <span className="t-xs t-mute">暂无程序</span> : null}
-        </div>
-      </section>
+      <MatterStickyBar title={matter.title} procedures={engagedProcedures} />
 
       {latestArchive && latestArchive.status !== "APPROVED" ? (
         <div style={{ margin: "14px 0 0" }}>
@@ -635,7 +552,7 @@ export function MatterDetailTabs({
         </div>
       ) : null}
 
-      {invalidProcedure ? <p role="alert" className="mt-3 text-sm text-destructive">指定程序不可用。<SemiButton theme="borderless" type="primary" size="small" htmlType="button" className="ml-2" onClick={() => updateDossierLocation({ procedure: null, stage: null })}>重新选择程序</SemiButton></p> : null}
+      {invalidProcedure && (view === "archive" || view === "work" && (workPane === "materials" || workPane === "tasks")) ? <p role="alert" className="mt-3 text-sm text-destructive">指定程序不可用。<SemiButton theme="borderless" type="primary" size="small" htmlType="button" className="ml-2" onClick={() => updateDossierLocation({ procedure: null, stage: null, task: null, deadline: null })}>重新选择程序</SemiButton></p> : null}
 
       {/* ③ 页签 */}
       <ProcedureWorkflowPanel
@@ -654,7 +571,7 @@ export function MatterDetailTabs({
         canWriteTasks={canWriteSchedule}
         canWriteMaterials={canWriteMaterials}
         canReadSchedule={allowed("schedule.read")}
-        allProcedures={matter.procedures}
+        allProcedures={engagedProcedures}
         invalidProcedure={invalidProcedure}
         notes={notes}
         timelineEvents={matter.timelineEvents}
@@ -669,10 +586,47 @@ export function MatterDetailTabs({
             <MatterBriefSection
               matterId={matter.id}
               refreshKey={materialRefreshKey}
-              onOpenTask={task => updateDossierLocation({ view: "work", workPane: "tasks", procedure: null, stage: null, task })}
+              onOpenTask={task => updateDossierLocation({ view: "work", workPane: "tasks", procedure: null, stage: null, task, deadline: null })}
+              getProcedureLabel={id => { const procedure = engagedProcedures.find(item => item.id === id); return procedure ? procLabel(procedure) : undefined; }}
+              onOpenDeadline={openDossierDeadline}
               onCreateTask={canWriteSchedule && allowed("schedule.read") ? () => workflowApi.current?.openAddTask() : undefined}
             />
           </div>
+          <section className="card dossier-procedure-register" aria-labelledby="dossier-procedure-heading">
+            <header className="dossier-section-heading">
+              <h2 id="dossier-procedure-heading">程序档案 <span className="dossier-count">{engagedProcedures.length}</span></h2>
+              <div className="flex items-center gap-2">
+                {engagedProcedures.length > 0 ? <SemiButton htmlType="button" theme="borderless" disabled={!currentProcedure} onClick={() => setSelectedProcId(null)}>查看全案档案</SemiButton> : null}
+                {canWriteSchedule ? <SemiButton htmlType="button" theme="outline" icon={<Plus aria-hidden />} onClick={() => setAddProcOpen(true)}>新增程序</SemiButton> : null}
+              </div>
+            </header>
+            {engagedProcedures.length === 0 ? <p className="px-5 py-5 text-sm text-muted-foreground">本事项暂无程序。</p> :
+              <List dataSource={engagedProcedures} renderItem={(procedure: ProcedureItem) => {
+                const label = procLabel(procedure);
+                return <List.Item key={procedure.id}>
+                  <div className="flex w-full flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <SemiButton htmlType="button" theme={currentProcedure?.id === procedure.id ? "light" : "borderless"} aria-pressed={currentProcedure?.id === procedure.id}
+                          onClick={() => setSelectedProcId(procedure.id)}>{label}</SemiButton>
+                        <SemiTag color={procedure.status === "IN_PROGRESS" ? "teal" : "grey"}>{procedureStateLabel(procedure)}</SemiTag>
+                        {procedure.engagement === "INFORMATIONAL" ? <SemiTag color="grey">仅信息</SemiTag> : null}
+                      </div>
+                      {procedure.caseNumber || procedure.handlingAgency ? <p className="break-words text-sm text-muted-foreground">
+                        {[procedure.caseNumber, procedure.handlingAgency].filter(Boolean).join(" · ")}
+                      </p> : null}
+                    </div>
+                    {canWriteSchedule ? <div className="flex flex-wrap items-center gap-2">
+                      <ProcedureStatusActions procedure={procedure} label={label} />
+                      {canLeadThisMatter ? <SemiButton htmlType="button" theme="borderless" type="tertiary" aria-label={`删除程序 ${label}`}
+                        onClick={async () => {
+                          if (await confirmDialog({ title: `删除程序「${label}」？`, description: deleteProcedureWarning(procedure, label).replace(/^确定删除程序「[^」]*」？\s*/, ""), confirmText: "删除程序", danger: true })) handleDeleteProcedure(procedure.id);
+                        }}>删除</SemiButton> : null}
+                    </div> : null}
+                  </div>
+                </List.Item>;
+              }} />}
+          </section>
           {!invalidProcedure && !currentProcedure && (preservationCases.length > 0 || canAssociateThisMatter) ? <MatterPreservationContent matter={{ id: matter.id, internalCode: matter.internalCode, title: matter.title, category: matter.category }} cases={preservationCases} users={colleagues} canManage={canAssociateThisMatter && !isArchived} /> : null}
           <MatterArchive
             matter={matter}
@@ -705,7 +659,7 @@ export function MatterDetailTabs({
               key={`${matter.id}:${currentProcedure?.id ?? "unassigned"}`}
               matterId={matter.id}
               documents={procDocs.map(document => ({ id: document.id, name: document.name, version: document.version }))}
-              scopeLabel={currentProcedure ? `${procLabel(currentProcedure)}及未归属材料 · 不限环节` : "当前事项材料"}
+              scopeLabel={currentProcedure ? `${procLabel(currentProcedure)} · 全部环节` : "当前事项材料"}
               canManage={canAssociateThisMatter && !isArchived && allowed("documents.write")}
               refreshKey={materialRefreshKey}
             /> : null}
@@ -715,12 +669,14 @@ export function MatterDetailTabs({
         materialsExtra={materials?.reviewSummary && canReadMaterials ? <ReviewSummaryCard summary={materials.reviewSummary} matterId={matter.id} /> : null}
         onCaseSearch={capabilities.caseSearch && allowed("matters.write") ? () => setCaseSearchOpen(true) : undefined}
         financeNode={
-          <div className="dos-main">
+          <section className="dos-main dossier-finance" aria-label="委托与财务">
             {!canReadFinance ? <p role="status" className="text-sm text-muted-foreground">当前角色无权读取财务。</p>
               : !finance ? <DetailSectionStatus label="财务" {...financeSection} />
               : <>
-                <Link href={`/finance/reconciliation?${new URLSearchParams({ matterId: matter.id, returnTo: matterReturnTo })}`} className="btn btn-secondary btn-sm w-fit">应收与收款分配</Link>
-                <FinanceHero stats={finance.stats} />
+                <FinanceHero stats={finance.stats} action={
+                  <Link href={`/finance/reconciliation?${new URLSearchParams({ matterId: matter.id, returnTo: matterReturnTo })}`} className="workspace-action-link">应收与收款分配</Link>
+                } />
+                <FinancePanel matterId={matter.id} finance={finance} userOptions={userOptions} canRequestInvoice={canAssociateThisMatter} hideStats />
                 {finance.intakeFees ? (
                   <SemiCard title="收案收费约定">
                     <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
@@ -743,9 +699,8 @@ export function MatterDetailTabs({
                   contractDocuments={finance.contractDocuments}
                   canManage={canAssociateThisMatter && !isArchived}
                 />
-                <FinancePanel matterId={matter.id} finance={finance} userOptions={userOptions} canRequestInvoice={canAssociateThisMatter} hideStats />
               </>}
-          </div>
+          </section>
         }
         sealNode={
           <ApprovalsPanel matterId={matter.id} matterTitle={matter.title} sealContracts={sealContracts} canRequest={canAssociateThisMatter && allowed("seals.request")} returnTo={matterReturnTo} />
@@ -933,13 +888,13 @@ function BillingsCard({ matterId, billings, contractDocuments, canManage, contra
     <section className="card">
       <div className="panel-head">
         <div className="panel-title">
-          <FileSignature className="ic" strokeWidth={1.8} />
+          <FileSignature aria-hidden className="ic" />
           合同与补充协议
           <SemiTag size="small" color="grey" style={{ marginLeft: 2 }}>{billings.length}</SemiTag>
         </div>
         {canManage ? (
           <SemiButton htmlType="button" theme="outline" type="tertiary" onClick={() => setAddOpen(true)}>
-            <Plus />
+            <Plus aria-hidden />
             合同 / 补充协议
           </SemiButton>
         ) : null}
@@ -980,7 +935,7 @@ function BillingsCard({ matterId, billings, contractDocuments, canManage, contra
 }
 
 /** 委托与财务：收费概览（大号数字 + 回款进度） */
-function FinanceHero({ stats }: { stats: FinancePayload["stats"] }) {
+function FinanceHero({ stats, action }: { stats: FinancePayload["stats"]; action: React.ReactNode }) {
   const outstanding = stats.outstanding;
   const base = stats.receivable;
   const received = base > 0 ? Math.min(100, Math.round((stats.allocated / base) * 100)) : 0;
@@ -995,15 +950,19 @@ function FinanceHero({ stats }: { stats: FinancePayload["stats"] }) {
     ...(stats.cost > 0 ? [["支出", stats.cost, "red"] as [string, number, string]] : [])
   ];
   return (
-    <section className="card dos-fin-hero" aria-label="收费概览">
-      <div className="dos-fin-cells">
+    <section className="card dos-fin-hero" aria-labelledby="dossier-finance-heading">
+      <header className="dossier-section-heading">
+        <h2 id="dossier-finance-heading">收费概览</h2>
+        {action}
+      </header>
+      <dl className="dos-fin-cells">
         {cells.map(([k, v, tone]) => (
           <div key={k} className={cn("dos-fin-cell", tone)}>
-            <span className="k">{k}</span>
-            <span className="v">{money(v)}</span>
+            <dt className="k">{k}</dt>
+            <dd className="v">{money(v)}</dd>
           </div>
         ))}
-      </div>
+      </dl>
       {base > 0 ? (
         <div className="dos-fin-bar">
           <div className="track" aria-hidden>
@@ -1042,11 +1001,9 @@ function nextUpcomingHearing(procedures: ProcedureItem[]) {
 
 function MatterStickyBar({
   title,
-  caseNumber,
   procedures
 }: {
   title: string;
-  caseNumber: string | null;
   procedures: ProcedureItem[];
 }) {
   // 标题区自带期限/开庭卡片；摘要条只在标题滚出视野后以 fixed 形式出现，
@@ -1089,19 +1046,14 @@ function MatterStickyBar({
       {pinned && rect && (
         <div className="fixed top-[58px] z-10" style={{ left: rect.left, width: rect.width }}>
           <div className="flex items-center gap-2.5 rounded-[10px] border border-[var(--semi-color-border)] bg-[var(--bg-glass)] px-3 py-1.5 shadow-[var(--sh-hover)] backdrop-blur-xl">
-            <span className="min-w-0 truncate text-[13px] font-semibold" title={title}>
+            <span className="min-w-0 truncate text-sm font-semibold" title={title}>
               {title}
             </span>
-            {caseNumber && (
-              <span className="hidden shrink-0 font-mono text-[11px] text-muted-foreground tabular md:inline">
-                {caseNumber}
-              </span>
-            )}
-            <span className="ml-auto flex shrink-0 items-center gap-2 text-[11px]" aria-label="全案节点">
+            <span className="ml-auto flex shrink-0 items-center gap-2 text-xs" aria-label="全案节点">
               <SemiTag size="small" color="grey">全案</SemiTag>
               {deadline ? (
                 <span className={cn("inline-flex items-center gap-1", deadlineTone)}>
-                  <Clock3 className="h-3 w-3" />
+                  <Clock3 aria-hidden size="small" />
                   <span className="max-w-[160px] truncate">{deadline.title}</span>
                   <span className="font-mono tabular">
                     {formatDeadlineDue(deadline.dueAt, deadline.duePrecision)} · {deadlineText}
@@ -1112,7 +1064,7 @@ function MatterStickyBar({
               )}
               {hearing && (
                 <span className="inline-flex items-center gap-1 text-muted-foreground">
-                  <Gavel className="h-3 w-3" />
+                  <Gavel aria-hidden size="small" />
                   <span className="font-mono tabular">
                     开庭 {formatMonthDay(hearing.startsAt)}{" "}
                     {shTime(hearing.startsAt)}

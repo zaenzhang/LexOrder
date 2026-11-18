@@ -2,6 +2,22 @@ import { z } from "zod";
 import { MatterCategory } from "@prisma/client";
 import { matterHref } from "./route";
 
+export type MattersTab = "intake" | "active" | "archived" | "revision" | "all";
+export type MatterSortBy = "hearing" | "intakeDate" | "claimAmount" | "archivedAt";
+
+export function defaultSortByForTab(tab: MattersTab): MatterSortBy {
+  if (tab === "active") return "hearing";
+  if (tab === "archived") return "archivedAt";
+  return "intakeDate";
+}
+
+export function supportsSortBy(tab: MattersTab, sortBy: MatterSortBy) {
+  if (sortBy === "hearing") return tab === "active" || tab === "all";
+  if (sortBy === "archivedAt") return tab === "archived";
+  if (sortBy === "claimAmount") return tab !== "archived";
+  return true;
+}
+
 const listFilters = z.strictObject({
   tab: z.enum(["intake", "active", "archived", "revision", "all"]).optional(),
   scope: z.enum(["all", "mine", "team"]).optional(),
@@ -24,7 +40,6 @@ export function matterListReturnHref(listQuery: string | null): string | null {
   const parsed = listFilters.safeParse(Object.fromEntries(params));
   if (!parsed.success) return null;
   const { tab = "active", sortBy, status } = parsed.data;
-  if ((sortBy === "hearing" && tab !== "active" && tab !== "all") || (sortBy === "archivedAt" && tab !== "archived") ||
-    (sortBy === "claimAmount" && tab === "archived") || (status && tab !== "all")) return null;
+  if ((sortBy && !supportsSortBy(tab, sortBy)) || (status && tab !== "all")) return null;
   return `/matters${params.size ? `?${params}` : ""}`;
 }

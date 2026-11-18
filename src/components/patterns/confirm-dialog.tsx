@@ -50,6 +50,15 @@ export function confirmDialog(opts: ConfirmOptions): Promise<boolean> {
   return new Promise((resolve) => push({ kind: "confirm", opts, resolve }));
 }
 
+export function confirmDiscardChanges(): Promise<boolean> {
+  return confirmDialog({
+    title: "放弃未保存的修改？",
+    confirmText: "放弃修改",
+    cancelText: "继续编辑",
+    initialFocus: "cancel",
+  });
+}
+
 export function promptDialog(opts: PromptOptions): Promise<string | null> {
   return new Promise((resolve) => push({ kind: "prompt", opts, resolve }));
 }

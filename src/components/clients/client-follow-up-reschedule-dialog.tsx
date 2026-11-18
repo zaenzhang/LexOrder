@@ -3,7 +3,7 @@
 import { Button, Input, TextArea, Toast } from "@douyinfe/semi-ui";
 
 import { useCallback, useEffect, useRef, useState, useTransition, type FormEvent, type RefObject } from "react";
-import { Check } from "lucide-react";
+import { IconTick as Check } from "@douyinfe/semi-icons";
 import { WorkspaceDialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -122,7 +122,7 @@ export function ClientFollowUpRescheduleDialog({ clientId, followUpId, onClose, 
       finally { saving.current = false; }
     });
   }
-  return <WorkspaceDialog open onOpenChange={open => { if (!open) void requestClose(); }}>
+  return <WorkspaceDialog dismissOnBackdrop open onOpenChange={open => { if (!open) void requestClose(); }}>
     <DialogContent ref={editorContent} className="max-h-[90dvh] overflow-y-auto sm:max-w-[560px]" onCloseAutoFocus={event => {
       event.preventDefault();
       const origin = trigger.current;
@@ -140,7 +140,7 @@ export function ClientFollowUpRescheduleDialog({ clientId, followUpId, onClose, 
         </fieldset>
         {!changedTime && <p className="text-xs text-muted-foreground">请选择与当前安排不同的跟进时间。</p>}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-        <DialogFooter><Button htmlType="button" type="tertiary" theme="outline" disabled={pending} onClick={() => void requestClose()}>返回</Button><Button htmlType="submit" theme="solid" icon={<Check size={16} />} loading={pending} disabled={pending || !changedTime || !activeDraft.reason.trim()}>保存改期</Button></DialogFooter>
+        <DialogFooter><Button htmlType="button" type="tertiary" theme="outline" disabled={pending} onClick={() => void requestClose()}>返回</Button><Button htmlType="submit" theme="solid" icon={<Check aria-hidden size="default" />} loading={pending} disabled={pending || !changedTime || !activeDraft.reason.trim()}>保存改期</Button></DialogFooter>
       </form>}
       <div className="flex flex-wrap gap-2"><Button htmlType="button" type="tertiary" theme="outline" disabled={pending || !current} onClick={() => void readTarget(true)}>重新读取并核对</Button>{!mayEdit && <Button htmlType="button" type="tertiary" theme="outline" disabled={pending} onClick={() => void requestClose()}>返回列表</Button>}</div>
       {value && <PersonalFollowUpRescheduleHistory key={`${identity}:${current.revision}:${value.updatedAt}`} target={{ clientId, followUpId }} />}

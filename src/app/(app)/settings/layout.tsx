@@ -1,4 +1,4 @@
-import { PageHeader } from "@/components/patterns/moan";
+import { PageHeader } from "@/components/patterns/workspace-surfaces";
 import { isPersonalMode } from "@/lib/runtime/mode";
 
 export default async function SettingsLayout({

@@ -3,7 +3,7 @@
 import { FocusButton } from "@/components/patterns/focus-button";
 import { Button, Input, Popover } from "@douyinfe/semi-ui";
 import { useState, useEffect, useMemo, useRef, useId, useTransition } from "react";
-import { ChevronRight, ChevronsUpDown, Loader2 } from "lucide-react";
+import { IconChevronRight as ChevronRight, IconChevronUpDown as ChevronsUpDown, IconLoading as Loader2 } from "@douyinfe/semi-icons";
 import type { MatterCategory, ProcedureType } from "@prisma/client";
 import { getCauseById, searchCauses, type CauseSearchResult } from "@/server/causes/actions";
 import { causeScopeForSelection } from "@/lib/cause-scope";
@@ -197,7 +197,7 @@ export function CauseCombobox({
 
         {isPending ? (
           <div className="flex w-[240px] items-center justify-center py-10 text-xs text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <Loader2 aria-hidden size="small" spin />
             <span className="ml-2">加载案由库...</span>
           </div>
         ) : searchMatched ? (
@@ -212,10 +212,10 @@ export function CauseCombobox({
                   htmlType="button"
                   onClick={() => pickNode(n)}
                   title={n.name}
-                  className="flex min-h-8 w-full items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-muted hover:text-foreground"
+                  className="flex min-h-8 w-full items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted hover:text-foreground"
                 >
                   <span className="truncate">{n.name}</span>
-                  <span className="shrink-0 text-[10.5px] text-muted-foreground">
+                  <span className="shrink-0 text-xs text-muted-foreground">
                     {n.l2Name ?? ""}
                   </span>
                 </Button>
@@ -270,7 +270,7 @@ export function CauseCombobox({
           onKeyDown={event => { if (event.key === "ArrowDown" && !open) { event.preventDefault(); handleOpen(true); } }}
         >
           <span className={cn("truncate", !(value && displayName) && "text-muted-foreground")}>{displayText}</span>
-          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden />
+          <ChevronsUpDown size="default" className="shrink-0 opacity-50" aria-hidden />
         </FocusButton>
       </Popover>
     </div>
@@ -294,12 +294,12 @@ function Column({
 }) {
   return (
     <div className="flex max-h-[360px] w-[176px] flex-col">
-      <div className="border-b border-border bg-muted/30 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+      <div className="border-b border-border bg-muted/30 px-2 py-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
         {title}
       </div>
       <div className="flex-1 overflow-y-auto p-1">
         {items.length === 0 ? (
-          <p className="px-2 py-3 text-[11px] text-muted-foreground/60">{empty}</p>
+          <p className="px-2 py-3 text-xs text-muted-foreground/60">{empty}</p>
         ) : (
           items.map((n) => {
             const branching = hasChildren(n);
@@ -311,12 +311,12 @@ function Column({
                 onClick={() => onPick(n)}
                 title={n.name}
                 className={cn(
-                  "flex min-h-8 w-full items-center justify-between gap-1 rounded-sm px-2 py-1.5 text-left text-[13px] transition-colors",
+                  "flex min-h-8 w-full items-center justify-between gap-1 rounded-sm px-2 py-1.5 text-left text-sm transition-colors",
                   isActive ? "bg-accent text-primary" : "hover:bg-muted hover:text-foreground"
                 )}
               >
                 <span className="truncate">{n.name}</span>
-                <ChevronRight
+                <ChevronRight aria-hidden
                   className={cn(
                     "h-3 w-3 shrink-0 text-muted-foreground/50",
                     isActive && "text-primary",

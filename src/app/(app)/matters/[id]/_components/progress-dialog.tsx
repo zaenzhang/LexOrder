@@ -4,7 +4,7 @@ import { ChoiceField } from "@/components/patterns/choice-field";
 import { useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Select, Button, Input, TextArea, Toast } from "@douyinfe/semi-ui";
-import { Loader2 } from "lucide-react";
+import { IconLoading as Loader2 } from "@douyinfe/semi-icons";
 import { createNote, updateNote, type NoteCreateInput } from "@/server/notes/actions";
 import { WorkspaceDialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { FormDialogBody, FormDialogContent } from "@/components/patterns/form-dialog";
@@ -100,7 +100,7 @@ export function ProgressDialog({ open, onOpenChange, matterId, initialMode = "re
     });
   }
 
-  return <WorkspaceDialog open={open} onOpenChange={next => { if (!next) void close(); }}>
+  return <WorkspaceDialog dismissOnBackdrop open={open} onOpenChange={next => { if (!next) void close(); }}>
     <FormDialogContent className="sm:max-w-[560px]" onCloseAutoFocus={event => {
       event.preventDefault();
       const target = returnTarget?.isConnected && !returnTarget.closest("[hidden]") ? returnTarget : document.querySelector<HTMLElement>('[aria-label="记录"]');
@@ -138,7 +138,7 @@ export function ProgressDialog({ open, onOpenChange, matterId, initialMode = "re
       </FormDialogBody>
       <DialogFooter>
         <Button onClick={() => void close()} disabled={pending} htmlType="button" type="tertiary" theme="outline">取消</Button>
-        <Button onClick={submit} disabled={pending || !canWrite} htmlType="button" theme="solid">{pending ? <Loader2 className="animate-spin" /> : null}保存</Button>
+        <Button onClick={submit} disabled={pending || !canWrite} htmlType="button" theme="solid">{pending ? <Loader2 aria-hidden spin /> : null}保存</Button>
       </DialogFooter>
     </FormDialogContent>
   </WorkspaceDialog>;

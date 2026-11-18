@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, BellRing, BookOpenCheck, Bot, Building2, FileUp, KeyRound, Layers, ListChecks, Package, ScrollText, ShieldCheck, Users } from "lucide-react";
+import { IconArrowRight as ArrowRight, IconBell as BellRing, IconFavoriteList as BookOpenCheck, IconAIWandLevel1 as Bot, IconApartment as Building2, IconUpload as FileUp, IconKey as KeyRound, IconLayers as Layers, IconCheckList as ListChecks, IconBox as Package, IconArticle as ScrollText, IconShieldStroked as ShieldCheck, IconUserGroup as Users } from "@douyinfe/semi-icons";
 
 import { getSession } from "@/lib/auth/session";
 import { isSystemAdmin } from "@/lib/auth/system-role";
-import { PageHeader } from "@/components/patterns/moan";
+import { PageHeader } from "@/components/patterns/workspace-surfaces";
 import { isPersonalWorkspaceConfigurationPath } from "@/lib/runtime/workspace-navigation";
 
 const adminGroups = [
@@ -80,7 +80,7 @@ export default async function AdminHomePage() {
         {visibleGroups.map((group) => (
           <section key={group.title} className="card p-4">
             <h2 className="text-[15px] font-semibold">{group.title}</h2>
-            {!personal && <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{group.description}</p>}
+            {!personal && <p className="mt-1 text-xs leading-5 text-muted-foreground">{group.description}</p>}
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               {group.items.map((item) => (
                 <ManagementCard key={item.href} {...item} />
@@ -112,12 +112,12 @@ function ManagementCard({
       href={href}
       className="group flex min-h-16 items-start gap-3 rounded-lg border border-border bg-background/60 p-3 transition-[background-color,border-color,transform] duration-150 [transition-timing-function:var(--ease-out)] hover:border-primary/25 hover:bg-primary/[0.035] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 motion-reduce:transform-none"
     >
-      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" strokeWidth={1.8} />
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
       <span className="min-w-0 flex-1">
-        <span className="block text-[13px] font-medium">{label}</span>
-        {description ? <span className="mt-1 block text-[11.5px] leading-5 text-muted-foreground">{description}</span> : null}
+        <span className="block text-sm font-medium">{label}</span>
+        {description ? <span className="mt-1 block text-xs leading-5 text-muted-foreground">{description}</span> : null}
       </span>
-      <ArrowRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5 motion-reduce:transform-none" />
+      <ArrowRight aria-hidden size="small" className="mt-0.5 shrink-0 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5 motion-reduce:transform-none" />
     </Link>
   );
 }

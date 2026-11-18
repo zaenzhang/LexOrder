@@ -5,7 +5,7 @@ import { Button } from "@douyinfe/semi-ui";
 
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarClock, Check, MessageSquare, Plus, X } from "lucide-react";
+import { IconCalendarClock as CalendarClock, IconTick as Check, IconComment as MessageSquare, IconPlus as Plus, IconClose as X } from "@douyinfe/semi-icons";
 import { clientChannelLabels, type ClientRelationshipView, type ClientCommunicationPage, type ClientFollowUpPage } from "@/lib/clients/relationship";
 import { shDayKey, shTime } from "@/lib/ui/sh-time";
 import { getClientCommunicationPage, getClientFollowUpPage } from "@/server/clients/relationship-actions";
@@ -40,13 +40,13 @@ export function ClientRelationshipPanel({ clientId, view }: { clientId: string; 
   return (
     <section className="card min-w-0 overflow-hidden" aria-labelledby="client-relationship-title">
       <div className="panel-head flex-wrap gap-2">
-        <h2 ref={sectionTitle} tabIndex={-1} id="client-relationship-title" className="panel-title"><MessageSquare className="ic" strokeWidth={1.8} />沟通与跟进</h2>
-        {view?.canWrite && activities?.canWrite && followUps?.canWrite ? <Button htmlType="button" theme="outline" type="tertiary" size="small" icon={<Plus size={14} />} onClick={event => begin({ status: "COMPLETED" }, event.currentTarget)}>记录沟通</Button> : null}
+        <h2 ref={sectionTitle} tabIndex={-1} id="client-relationship-title" className="panel-title"><MessageSquare aria-hidden className="ic" />沟通与跟进</h2>
+        {view?.canWrite && activities?.canWrite && followUps?.canWrite ? <Button htmlType="button" theme="outline" type="tertiary" size="small" icon={<Plus aria-hidden size="default" />} onClick={event => begin({ status: "COMPLETED" }, event.currentTarget)}>记录沟通</Button> : null}
       </div>
       {!view ? <div className="panel-body t-sm t-mute">沟通记录仅向客户经办人员及获授权的管理人员开放。</div> : (
         <div className="panel-body grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
           <div className="min-w-0">
-            <h3 className="mb-2 flex items-center gap-2 text-sm font-medium"><CalendarClock className="h-4 w-4" />待跟进 {followUps ? <SemiTag size="small" color="grey">{followUps.total}</SemiTag> : null}</h3>
+            <h3 className="mb-2 flex items-center gap-2 text-sm font-medium"><CalendarClock aria-hidden size="default" />待跟进 {followUps ? <SemiTag size="small" color="grey">{followUps.total}</SemiTag> : null}</h3>
             {followUps?.items.length === 0 ? <p className="t-sm t-mute py-2">本页暂无待跟进。</p> : <ul className="space-y-2">
               {followUps?.items.map(item => <li key={item.id} className="flex flex-wrap items-start gap-2 rounded-lg border border-[var(--semi-color-border)] p-3">
                 <div className="min-w-0 flex-1 basis-48">
@@ -57,8 +57,8 @@ export function ClientRelationshipPanel({ clientId, view }: { clientId: string; 
                   </div>
                 </div>
                 {item.canClose ? <div className="flex flex-wrap gap-1">
-                  <Button htmlType="button" theme="outline" type="tertiary" size="small" icon={<Check size={14} />} aria-label={`录入结果：${item.title}`} onClick={event => begin({ id: item.id, title: item.title, status: "COMPLETED" }, event.currentTarget)}>录入结果</Button>
-                  <Button htmlType="button" theme="borderless" type="tertiary" size="small" icon={<X size={14} />} aria-label={`取消跟进：${item.title}`} onClick={event => begin({ id: item.id, title: item.title, status: "CANCELLED" }, event.currentTarget)}>取消</Button>
+                  <Button htmlType="button" theme="outline" type="tertiary" size="small" icon={<Check aria-hidden size="default" />} aria-label={`录入结果：${item.title}`} onClick={event => begin({ id: item.id, title: item.title, status: "COMPLETED" }, event.currentTarget)}>录入结果</Button>
+                  <Button htmlType="button" theme="borderless" type="tertiary" size="small" icon={<X aria-hidden size="default" />} aria-label={`取消跟进：${item.title}`} onClick={event => begin({ id: item.id, title: item.title, status: "CANCELLED" }, event.currentTarget)}>取消</Button>
                 </div> : null}
               </li>)}
             </ul>}

@@ -5,8 +5,8 @@ import { Button as SemiButton } from "@douyinfe/semi-ui";
 import { useId, useState, useTransition } from "react";
 import { Select, Button, Input, Notification, Toast } from "@douyinfe/semi-ui";
 import type { CustomFieldDef } from "@prisma/client";
-import { Pencil, ListChecks } from "lucide-react";
-import { FieldGrid, FieldItem } from "@/components/patterns/moan";
+import { IconEdit as Pencil, IconCheckList as ListChecks } from "@douyinfe/semi-icons";
+import { FieldGrid, FieldItem } from "@/components/patterns/workspace-surfaces";
 import { useRouter } from "next/navigation";
 import {
   WorkspaceDialog,
@@ -44,7 +44,7 @@ export function CustomFieldsPanel({
     return (
       <>
         <SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={() => setEditOpen(true)}>
-          <Pencil />
+          <Pencil aria-hidden />
           编辑自定义信息
         </SemiButton>
         <EditDialog key={editOpen ? "open" : "closed"} open={editOpen} onClose={() => setEditOpen(false)} matterId={matterId} defs={defs} values={values} />
@@ -56,12 +56,12 @@ export function CustomFieldsPanel({
     <section className="card">
       <div className="panel-head">
         <div className="panel-title">
-          <ListChecks className="ic" strokeWidth={1.8} />
+          <ListChecks aria-hidden className="ic" />
           自定义信息
         </div>
         {canEdit && (
           <SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={() => setEditOpen(true)}>
-            <Pencil />
+            <Pencil aria-hidden />
             编辑
           </SemiButton>
         )}

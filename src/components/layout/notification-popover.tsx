@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Bell } from "lucide-react";
+import { IconBell as Bell } from "@douyinfe/semi-icons";
 import { Badge, Button, Popover, Spin, Tag } from "@douyinfe/semi-ui";
 import {
   getNotifications,
@@ -215,7 +215,7 @@ export function NotificationPopover() {
       </section>
     }>
     <Button htmlType="button" theme="light" type="tertiary" aria-label={loadError ? "通知（读取失败）" : unread > 0 ? `通知（${unread} 条未读）` : "通知"}
-      icon={unread > 0 ? <Badge dot><Bell size={18} /></Badge> : <Bell size={18} />} />
+      icon={unread > 0 ? <Badge dot><Bell aria-hidden size="default" /></Badge> : <Bell aria-hidden size="default" />} />
   </Popover>;
 }
 

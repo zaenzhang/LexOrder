@@ -21,7 +21,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const personalActor = isPersonalMode() ? (await getSession())?.user ?? null : undefined;
   return (
     <html lang="zh-CN">
-      <body className="min-h-screen bg-background font-sans text-foreground antialiased">
+      <body className="lexorder-theme min-h-screen bg-background font-sans text-foreground antialiased">
         <Providers personalActor={personalActor}>{children}</Providers>
       </body>
     </html>

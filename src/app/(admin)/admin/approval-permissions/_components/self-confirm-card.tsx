@@ -7,7 +7,7 @@
 import { Checkbox } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { IconLoading as Loader2, IconShieldStroked as ShieldCheck } from "@douyinfe/semi-icons";
 import { saveSelfConfirmListAdmin } from "@/server/approval-permissions/self-confirm-actions";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -45,10 +45,10 @@ export function SelfConfirmCard({ initialActions }: { initialActions: string[] }
   return (
     <div className="card p-4">
       <div className="flex items-center gap-2 text-sm font-medium">
-        <ShieldCheck className="h-4 w-4 text-primary" />
+        <ShieldCheck aria-hidden size="default" className="text-primary" />
         自确认清单（低影响动作）
       </div>
-      <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">
         命中清单的提交动作由申请人自我确认即完成原审批环节，审计动作标记为「自确认」。
         归档、开票、盖章回填与法定代表人章由服务端硬排除，永远走完整审批，不可在此配置。
       </p>
@@ -64,11 +64,11 @@ export function SelfConfirmCard({ initialActions }: { initialActions: string[] }
         ))}
       </div>
       {pending && (
-        <div className="mt-2 flex items-center gap-1.5 text-[12px] text-muted-foreground">
-          <Loader2 className="h-3 w-3 animate-spin" /> 保存中…
+        <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Loader2 aria-hidden size="small" spin /> 保存中…
         </div>
       )}
-      {error && <div className="mt-2 text-[12.5px] text-destructive">{error}</div>}
+      {error && <div className="mt-2 text-sm text-destructive">{error}</div>}
     </div>
   );
 }

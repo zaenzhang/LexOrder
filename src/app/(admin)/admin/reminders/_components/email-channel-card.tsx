@@ -3,7 +3,7 @@
  * 摘要（email-digest）投递结果。只读——SMTP 经环境变量配置（.env），不在
  * 界面修改；未配置时给出持续可见的缺口警示与配置指引。
  */
-import { Mail } from "lucide-react";
+import { IconMail as Mail } from "@douyinfe/semi-icons";
 import type { ReminderEmailLastResult } from "@/server/settings/email-last-result";
 
 function formatTime(iso: string) {
@@ -31,7 +31,7 @@ export function EmailChannelCard({
     <div className="card">
       <div className="panel-head">
         <div className="panel-title" style={{ fontSize: 13 }}>
-          <Mail className="ic" strokeWidth={1.8} />
+          <Mail aria-hidden className="ic" />
           邮件通道（个人摘要）
         </div>
         <span className="t-xs t-mute">

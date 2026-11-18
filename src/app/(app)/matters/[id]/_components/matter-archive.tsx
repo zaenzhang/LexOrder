@@ -8,9 +8,9 @@ import { Button as SemiButton } from "@douyinfe/semi-ui";
  * 基本信息 → 当事人完整卡片 → 本程序信息 → 委托与收费 → 承办团队 → 自定义字段。
  */
 import Link from "next/link";
-import { FileText, Landmark, Pencil, UserRound, Users, Wallet } from "lucide-react";
-import { FieldGrid, FieldItem, InitialAvatar } from "@/components/patterns/moan";
-import { avatarTone } from "@/lib/ui/moan-tones";
+import { IconArticle as FileText, IconApartment as Landmark, IconEdit as Pencil, IconUser as UserRound, IconUserGroup as Users, IconCoinMoney as Wallet } from "@douyinfe/semi-icons";
+import { FieldGrid, FieldItem, InitialAvatar } from "@/components/patterns/workspace-surfaces";
+import { avatarTone } from "@/lib/ui/status-tones";
 import { litigationStandingLabel, matterCategoryKind, matterCategoryLabel, partyTypeLabel, procedureTypeLabel } from "@/lib/enums";
 import { clientIdTypeLabel } from "@/lib/clients/person-id";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
@@ -39,7 +39,7 @@ function Group({ icon: Icon, title, hint, action, children }: { icon: typeof Fil
   return (
     <section className="dos-group" aria-label={title}>
       <div className="dos-group-h">
-        <Icon className="ic" strokeWidth={1.9} />
+        <Icon className="ic" />
         <span className="t">{title}</span>
         {hint ? <span className="h">{hint}</span> : null}
         {action ? <span className="a">{action}</span> : null}
@@ -102,7 +102,7 @@ function PartyBlock({ party, standings, clientHref }: { party: PartyRow; standin
             </span>
           )}
           {clientHref ? (
-            <Link href={clientHref} className="link-inline text-[11px]">
+            <Link href={clientHref} className="link-inline text-xs">
               客户档案
             </Link>
           ) : null}
@@ -170,7 +170,7 @@ export function MatterArchive({
   const procLabel = currentProcedure ? currentProcedure.customLabel ?? procedureTypeLabel[currentProcedure.type] : null;
   const editButton = (section: "matter" | "procedure" | "parties", label: string) => (
     <SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={() => onEdit(section)}>
-      <Pencil />
+      <Pencil aria-hidden />
       {label}
     </SemiButton>
   );
@@ -196,7 +196,7 @@ export function MatterArchive({
       <section className="card dos-vs" aria-label="当事人">
         <div className="panel-head">
           <div className="panel-title">
-            <UserRound className="ic" strokeWidth={1.8} />
+            <UserRound aria-hidden className="ic" />
             当事人
             <span className="t-xs t-mute" style={{ fontWeight: 400 }}>
               共 {parties.length} 方{procLabel ? ` · ${procLabel}` : ""}
@@ -275,7 +275,7 @@ export function MatterArchive({
                   {currentProcedure.presidingJudge?.trim() ? (
                     <span>
                       {currentProcedure.presidingJudge}
-                      {currentProcedure.presidingJudgeContact ? <span className="ml-2 font-mono text-[12px] font-normal text-[var(--semi-color-text-1)]">{currentProcedure.presidingJudgeContact}</span> : null}
+                      {currentProcedure.presidingJudgeContact ? <span className="ml-2 font-mono text-xs font-normal text-[var(--semi-color-text-1)]">{currentProcedure.presidingJudgeContact}</span> : null}
                     </span>
                   ) : null}
                 </FieldItem>
@@ -283,7 +283,7 @@ export function MatterArchive({
                   {currentProcedure.judgeAssistant?.trim() ? (
                     <span>
                       {currentProcedure.judgeAssistant}
-                      {currentProcedure.judgeAssistantContact ? <span className="ml-2 font-mono text-[12px] font-normal text-[var(--semi-color-text-1)]">{currentProcedure.judgeAssistantContact}</span> : null}
+                      {currentProcedure.judgeAssistantContact ? <span className="ml-2 font-mono text-xs font-normal text-[var(--semi-color-text-1)]">{currentProcedure.judgeAssistantContact}</span> : null}
                     </span>
                   ) : null}
                 </FieldItem>
@@ -343,7 +343,7 @@ export function TeamRailCard({ matter, canManage, onManage }: { matter: MatterPa
   return (
     <div className="card">
       <div className="rail-sec-head">
-        <Users className="h-[15px] w-[15px] text-[var(--semi-color-text-2)]" strokeWidth={1.8} />
+        <Users aria-hidden className="h-[15px] w-[15px] text-[var(--semi-color-text-2)]" />
         承办团队
         {canManage ? (
           <SemiButton theme="borderless" type="primary" size="small" htmlType="button" onClick={onManage}>

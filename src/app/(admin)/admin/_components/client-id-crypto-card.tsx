@@ -5,7 +5,7 @@
  */
 import { Button } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
-import { KeyRound, Loader2 } from "lucide-react";
+import { IconKey as KeyRound, IconLoading as Loader2 } from "@douyinfe/semi-icons";
 import { backfillClientIdEncryption } from "@/server/clients/backfill-crypto";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -23,13 +23,13 @@ export function ClientIdCryptoCard({ initialStats }: { initialStats: Stats }) {
       <div className="flex items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-sm font-medium">
-            <KeyRound className="h-4 w-4 text-primary" />
+            <KeyRound aria-hidden size="default" className="text-primary" />
             证件号加密迁移
           </div>
-          <div className="mt-1 text-[12px] text-muted-foreground">
+          <div className="mt-1 text-xs text-muted-foreground">
             将存量客户证件号转为加密存储并建立盲索引（等值查重不受影响）。重复主体的行会跳过并计数，请走客户合并流程处理。
           </div>
-          <div className="mt-1.5 text-[12px] text-muted-foreground">
+          <div className="mt-1.5 text-xs text-muted-foreground">
             客户总数 {stats.total} · 已加密 {stats.sealed} · 待迁移 {stats.pending}
           </div>
         </div>
@@ -49,18 +49,18 @@ export function ClientIdCryptoCard({ initialStats }: { initialStats: Stats }) {
           disabled={pending || stats.pending === 0}
           className="shrink-0"
         >
-          {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          {pending && <Loader2 aria-hidden size="small" spin />}
           {stats.pending > 0 ? "迁移一批（50）" : "无待迁移"}
         </Button>
       </div>
       {lastRun && (
-        <div className="mt-2 text-[12px] text-muted-foreground">
+        <div className="mt-2 text-xs text-muted-foreground">
           上次执行：扫描 {lastRun.scanned} · 加密 {lastRun.sealed}
           {lastRun.skippedDuplicate > 0 ? ` · 跳过重复 ${lastRun.skippedDuplicate}（待合并）` : ""}
           {lastRun.remaining > 0 ? ` · 剩余 ${lastRun.remaining} 可继续` : " · 已全部处理"}
         </div>
       )}
-      {error && <div className="mt-2 text-[12.5px] text-destructive">{error}</div>}
+      {error && <div className="mt-2 text-sm text-destructive">{error}</div>}
     </div>
   );
 }

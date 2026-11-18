@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { Button } from "@douyinfe/semi-ui";
 import Link from "next/link";
-import { Megaphone, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { IconHorn as Megaphone, IconChevronLeft as ChevronLeft, IconChevronRight as ChevronRight, IconClose as X } from "@douyinfe/semi-icons";
 
 type Banner = {
   id: string;
@@ -30,7 +30,7 @@ export function AnnouncementBanner({ banners }: { banners: Banner[] }) {
   return (
     <div className="border-b border-[var(--semi-color-warning-light-active)] bg-[var(--semi-color-warning-light-default)] text-[var(--semi-color-warning)]">
       <div className="mx-auto flex max-w-[1440px] items-center gap-3 px-4 py-2 sm:px-6">
-        <Megaphone className="h-4 w-4 shrink-0" strokeWidth={1.8} />
+        <Megaphone aria-hidden size="default" className="shrink-0" />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
             <Link
@@ -56,7 +56,7 @@ export function AnnouncementBanner({ banners }: { banners: Banner[] }) {
               size="small"
               onClick={() => setIdx((i) => (i - 1 + visible.length) % visible.length)}
               aria-label="上一条公告"
-              icon={<ChevronLeft size={14} aria-hidden />}
+              icon={<ChevronLeft size="default" aria-hidden />}
             />
             <span className="font-mono">
               {Math.min(idx, visible.length - 1) + 1}/{visible.length}
@@ -68,7 +68,7 @@ export function AnnouncementBanner({ banners }: { banners: Banner[] }) {
               size="small"
               onClick={() => setIdx((i) => (i + 1) % visible.length)}
               aria-label="下一条公告"
-              icon={<ChevronRight size={14} aria-hidden />}
+              icon={<ChevronRight size="default" aria-hidden />}
             />
           </div>
         )}
@@ -79,7 +79,7 @@ export function AnnouncementBanner({ banners }: { banners: Banner[] }) {
           size="small"
           onClick={() => setDismissed((prev) => [...prev, current.id])}
           aria-label="关闭当前公告"
-          icon={<X size={14} aria-hidden />}
+          icon={<X size="default" aria-hidden />}
         />
       </div>
     </div>

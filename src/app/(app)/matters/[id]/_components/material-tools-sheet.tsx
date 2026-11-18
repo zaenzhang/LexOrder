@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ClipboardCheck, FileCog } from "lucide-react";
+import { IconCheckList as ClipboardCheck, IconSetting as FileCog } from "@douyinfe/semi-icons";
 import { Button, Tabs, TabPane } from "@douyinfe/semi-ui";
 import { WorkspaceDialog, DrawerContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { InputCoverageSection } from "./input-coverage-section";
@@ -39,10 +39,10 @@ export function MaterialToolsSheet({ matterId, documents, scopeLabel, canManage,
       if (!nextOpen) setCoverageVisited(false);
     }}>
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="small" type="tertiary" icon={<FileCog size={14} aria-hidden />} aria-haspopup="dialog" onClick={(event) => openTool("processing", event.currentTarget)}>
+        <Button size="small" type="tertiary" icon={<FileCog size="default" aria-hidden />} aria-haspopup="dialog" onClick={(event) => openTool("processing", event.currentTarget)}>
           处理状态
         </Button>
-        <Button size="small" type="tertiary" icon={<ClipboardCheck size={14} aria-hidden />} aria-haspopup="dialog" onClick={(event) => openTool("coverage", event.currentTarget)}>
+        <Button size="small" type="tertiary" icon={<ClipboardCheck size="default" aria-hidden />} aria-haspopup="dialog" onClick={(event) => openTool("coverage", event.currentTarget)}>
           读取检查
         </Button>
       </div>

@@ -1,15 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import {
-  Search,
-  Loader2,
-  ExternalLink,
-  Scale,
-  CircleAlert,
-  BookmarkPlus,
-  Check
-} from "lucide-react";
+import { IconSearch as Search, IconLoading as Loader2, IconExternalOpen as ExternalLink, IconVerify as Scale, IconAlertCircle as CircleAlert, IconBookmark as BookmarkPlus, IconTick as Check } from "@douyinfe/semi-icons";
 import { Select, Button, Input, Notification, Tabs, TextArea, Toast } from "@douyinfe/semi-ui";
 import type { MatterCategory } from "@prisma/client";
 import {
@@ -223,10 +215,10 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="flex items-center gap-2 text-base">
-            <Scale className="h-4 w-4 text-primary" strokeWidth={1.8} />
+            <Scale aria-hidden size="default" className="text-primary" />
             类案检索
           </h3>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
+          <p className="mt-0.5 text-xs text-muted-foreground">
             连接已配置的数据源；接口费用以服务商实际计费为准
           </p>
         </div>
@@ -242,7 +234,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
       <div className="space-y-3 card p-4">
         {mode === "cncases" && (
           <div>
-            <label htmlFor="case-local-query" className="text-[11px]">裁判文书关键词（自建服务）</label>
+            <label htmlFor="case-local-query" className="text-xs">裁判文书关键词（自建服务）</label>
             <Input
               id="case-local-query"
               value={cncasesQuery}
@@ -256,7 +248,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
         {mode === "regulation" && (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <label htmlFor="case-regulation-keyword" className="text-[11px]">法规内容关键词</label>
+              <label htmlFor="case-regulation-keyword" className="text-xs">法规内容关键词</label>
               <Input
                 id="case-regulation-keyword"
                 value={regKeyword}
@@ -266,7 +258,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
               />
             </div>
             <div>
-              <label htmlFor="case-regulation-title" className="text-[11px]">法规名称（可选）</label>
+              <label htmlFor="case-regulation-title" className="text-xs">法规名称（可选）</label>
               <Input
                 id="case-regulation-title"
                 value={regFgmc}
@@ -280,7 +272,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
         {mode === "regulation" && (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <label htmlFor="case-regulation-level" className="text-[11px]">效力级别（可选）</label>
+              <label htmlFor="case-regulation-level" className="text-xs">效力级别（可选）</label>
               <Select<string>
                 id="case-regulation-level" aria-label="效力级别（可选）"
                 value={regXljb}
@@ -298,7 +290,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
               </Select>
             </div>
             <div>
-              <label htmlFor="case-regulation-status" className="text-[11px]">时效性（可选）</label>
+              <label htmlFor="case-regulation-status" className="text-xs">时效性（可选）</label>
               <Select<string>
                 id="case-regulation-status" aria-label="时效性（可选）"
                 value={regSxx}
@@ -330,7 +322,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
         {(mode === "keyword" || mode === "vector") && (<>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div>
-            <label className="text-[11px]">
+            <label className="text-xs">
               {mode === "vector" ? "案由过滤（可选）" : "案由（多个用 / 逗号分隔）"}
             </label>
             <Input
@@ -342,7 +334,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
           </div>
           {mode === "keyword" && (
             <div>
-              <label className="text-[11px]">全文关键词（以空格分隔，需同时包含）</label>
+              <label className="text-xs">全文关键词（以空格分隔，需同时包含）</label>
               <Input
                 value={qw}
                 onChange={inputValue => setQw(inputValue)}
@@ -354,7 +346,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
         </div>
 
         <div>
-          <label className="text-[11px]">
+          <label className="text-xs">
             {mode === "vector" ? "省份过滤（取第一个，语义接口单值）" : "省级法院（多选）"}
           </label>
           <div className="mt-1.5 flex flex-wrap gap-1">
@@ -364,7 +356,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
                 htmlType="button"
                 onClick={() => toggleProvince(p)}
                 className={cn(
-                  "rounded-full border px-2 py-0.5 text-[11px] transition-colors",
+                  "rounded-full border px-2 py-0.5 text-xs transition-colors",
                   provinces.includes(p)
                     ? "border-primary bg-primary/15 text-primary"
                     : "border-border bg-background text-muted-foreground hover:border-input hover:bg-muted hover:text-foreground"
@@ -378,7 +370,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <div>
-            <label className="text-[11px]">文书种类</label>
+            <label className="text-xs">文书种类</label>
             <div className="mt-1.5 flex flex-wrap gap-1">
               {WSZL_OPTIONS.map((w) => (
                 <Button theme="outline" type="primary" size="small"
@@ -386,7 +378,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
                   htmlType="button"
                   onClick={() => toggleWszl(w)}
                   className={cn(
-                    "rounded-full border px-2 py-0.5 text-[11px]",
+                    "rounded-full border px-2 py-0.5 text-xs",
                     wszl.includes(w)
                       ? "border-primary bg-primary/15 text-primary"
                       : "border-border bg-background text-muted-foreground hover:border-input hover:bg-muted hover:text-foreground"
@@ -398,20 +390,20 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
             </div>
           </div>
           <div>
-            <label className="text-[11px]">裁判日期</label>
+            <label className="text-xs">裁判日期</label>
             <div className="mt-1 flex items-center gap-1.5">
               <Input
                 type="date"
                 value={jaStart}
                 onChange={inputValue => setJaStart(inputValue)}
-                className="h-9 text-[12px]"
+                className="h-9 text-xs"
               />
               <span className="text-muted-foreground">~</span>
               <Input
                 type="date"
                 value={jaEnd}
                 onChange={inputValue => setJaEnd(inputValue)}
-                className="h-9 text-[12px]"
+                className="h-9 text-xs"
               />
             </div>
           </div>
@@ -420,7 +412,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
 
         </>)}
           <div>
-            <label className="text-[11px]">返回条数（1-50）</label>
+            <label className="text-xs">返回条数（1-50）</label>
             <Input
               type="number"
               min={1}
@@ -433,7 +425,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
 
         <div className="flex items-center justify-end pt-1">
           <Button onClick={handleSearch} disabled={pending} className="gap-1.5" theme="solid">
-            {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+            {pending ? <Loader2 aria-hidden size="small" spin /> : <Search aria-hidden size="small" />}
             {mode === "regulation" ? "检索法规" : mode === "cncases" ? "检索文书" : "检索类案"}
           </Button>
         </div>
@@ -441,15 +433,15 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
 
       {/* 结果区 */}
       {error && (
-        <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-[12px] text-destructive">
-          <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+          <CircleAlert aria-hidden size="small" className="mt-0.5 shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
       {keywordResult && (
         <div className="space-y-2">
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             命中 <span className="font-mono text-foreground">{keywordResult.total}</span> 条，
             已返回 <span className="font-mono text-foreground">{keywordResult.items.length}</span> 条，
             本次扣 <span className="font-mono text-foreground">{keywordResult.pointsCharged}</span> 积分
@@ -460,19 +452,19 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 overflow-hidden">
                     <div className="text-sm font-medium leading-snug">{c.title}</div>
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                       <span className="font-mono">{c.ah}</span>
                       <span>·</span>
                       <span>{c.jbdw}</span>
                       <span>·</span>
                       <span>{c.cprq}</span>
-                      <span className="rounded border border-border bg-muted/30 px-1 py-0.5 text-[10px]">
+                      <span className="rounded border border-border bg-muted/30 px-1 py-0.5 text-xs">
                         {c.wszl}
                       </span>
                       {c.ay.map((y) => (
                         <span
                           key={y}
-                          className="rounded border border-primary/30 bg-primary/5 px-1 py-0.5 text-[10px] text-primary"
+                          className="rounded border border-primary/30 bg-primary/5 px-1 py-0.5 text-xs text-primary"
                         >
                           {y}
                         </span>
@@ -481,8 +473,8 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
                   </div>
                   <div className="shrink-0 flex items-center gap-1.5">
                     {savedIds.has(c.id) ? (
-                      <span className="inline-flex items-center gap-1 rounded-md border border-[var(--semi-color-success-light-active)] bg-[var(--semi-color-success-light-default)] px-2 py-1 text-[11px] text-[var(--semi-color-success)]">
-                        <Check className="h-3 w-3" />
+                      <span className="inline-flex items-center gap-1 rounded-md border border-[var(--semi-color-success-light-active)] bg-[var(--semi-color-success-light-default)] px-2 py-1 text-xs text-[var(--semi-color-success)]">
+                        <Check aria-hidden size="small" />
                         已存
                       </span>
                     ) : (
@@ -490,13 +482,13 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
                         htmlType="button"
                         onClick={() => handleSave(c)}
                         disabled={savingId === c.id}
-                        className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[11px] text-foreground hover:bg-popover hover:text-primary disabled:opacity-50"
+                        className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground hover:bg-popover hover:text-primary disabled:opacity-50"
                         title="作为类案存档保存到本案件资料"
                       >
                         {savingId === c.id ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <Loader2 aria-hidden size="small" spin />
                         ) : (
-                          <BookmarkPlus className="h-3 w-3" />
+                          <BookmarkPlus aria-hidden size="small" />
                         )}
                         存档
                       </Button>
@@ -505,15 +497,15 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
                       href={c.detailUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[11px] text-primary hover:bg-popover"
+                      className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs text-primary hover:bg-popover"
                     >
                       全文
-                      <ExternalLink className="h-3 w-3" />
+                      <ExternalLink aria-hidden size="small" />
                     </a>
                   </div>
                 </div>
                 {c.content && (
-                  <p className="mt-2 line-clamp-4 whitespace-pre-line text-[12px] leading-relaxed text-foreground/75">
+                  <p className="mt-2 line-clamp-4 whitespace-pre-line text-xs leading-relaxed text-foreground/75">
                     {c.content}
                   </p>
                 )}
@@ -525,7 +517,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
 
       {vectorResult && (
         <div className="space-y-2">
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             语义检索返回 <span className="font-mono text-foreground">{vectorResult.items.length}</span> 条（按相似度评分排序），
             本次扣 <span className="font-mono text-foreground">{vectorResult.pointsCharged}</span> 积分
           </p>
@@ -536,11 +528,11 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
                   <div className="flex-1 overflow-hidden">
                     <div className="flex items-baseline gap-2">
                       <span className="text-sm font-medium leading-snug">{c.title}</span>
-                      <span className="shrink-0 rounded border border-[var(--semi-color-secondary-light-active)] bg-[var(--semi-color-secondary-light-default)] px-1 py-0.5 text-[10px] text-[var(--semi-color-secondary)]">
+                      <span className="shrink-0 rounded border border-[var(--semi-color-secondary-light-active)] bg-[var(--semi-color-secondary-light-default)] px-1 py-0.5 text-xs text-[var(--semi-color-secondary)]">
                         相似度 {c.score.toFixed(2)}
                       </span>
                     </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                       {c.ah && <span className="font-mono">{c.ah}</span>}
                       {c.jbdw && (
                         <>
@@ -550,13 +542,13 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
                       )}
                       <span>·</span>
                       <span>{c.jaDate ? formatJaDate(c.jaDate) : c.jand}</span>
-                      <span className="rounded border border-border bg-muted/30 px-1 py-0.5 text-[10px]">
+                      <span className="rounded border border-border bg-muted/30 px-1 py-0.5 text-xs">
                         {c.wszl}
                       </span>
                       {(c.anyou ?? []).map((y) => (
                         <span
                           key={y}
-                          className="rounded border border-primary/30 bg-primary/5 px-1 py-0.5 text-[10px] text-primary"
+                          className="rounded border border-primary/30 bg-primary/5 px-1 py-0.5 text-xs text-primary"
                         >
                           {y}
                         </span>
@@ -565,8 +557,8 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
                   </div>
                   <div className="shrink-0 flex items-center gap-1.5">
                     {savedIds.has(c.scid) ? (
-                      <span className="inline-flex items-center gap-1 rounded-md border border-[var(--semi-color-success-light-active)] bg-[var(--semi-color-success-light-default)] px-2 py-1 text-[11px] text-[var(--semi-color-success)]">
-                        <Check className="h-3 w-3" />
+                      <span className="inline-flex items-center gap-1 rounded-md border border-[var(--semi-color-success-light-active)] bg-[var(--semi-color-success-light-default)] px-2 py-1 text-xs text-[var(--semi-color-success)]">
+                        <Check aria-hidden size="small" />
                         已存
                       </span>
                     ) : (
@@ -574,13 +566,13 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
                         htmlType="button"
                         onClick={() => handleSaveVector(c)}
                         disabled={savingId === c.scid}
-                        className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[11px] text-foreground hover:bg-popover hover:text-primary disabled:opacity-50"
+                        className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground hover:bg-popover hover:text-primary disabled:opacity-50"
                         title="作为类案存档保存到本案件资料"
                       >
                         {savingId === c.scid ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <Loader2 aria-hidden size="small" spin />
                         ) : (
-                          <BookmarkPlus className="h-3 w-3" />
+                          <BookmarkPlus aria-hidden size="small" />
                         )}
                         存档
                       </Button>
@@ -589,15 +581,15 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
                       href={c.detailUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[11px] text-primary hover:bg-popover"
+                      className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs text-primary hover:bg-popover"
                     >
                       全文
-                      <ExternalLink className="h-3 w-3" />
+                      <ExternalLink aria-hidden size="small" />
                     </a>
                   </div>
                 </div>
                 {c.content && (
-                  <p className="mt-2 line-clamp-5 whitespace-pre-line text-[12px] leading-relaxed text-foreground/75">
+                  <p className="mt-2 line-clamp-5 whitespace-pre-line text-xs leading-relaxed text-foreground/75">
                     {c.content}
                   </p>
                 )}
@@ -609,14 +601,14 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
 
       {cncasesResult && (
         <div className="space-y-2">
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             本地裁判文书命中{" "}
             <span className="font-mono text-foreground">{cncasesResult.total}</span> 条，已返回{" "}
             <span className="font-mono text-foreground">{cncasesResult.items.length}</span> 条
           </p>
           {cncasesResult.message && (
-            <div className="flex items-start gap-2 rounded-md border border-amber-300/40 bg-amber-500/10 p-3 text-[12px] text-amber-700">
-              <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <div className="flex items-start gap-2 rounded-md border border-[var(--semi-color-warning-light-active)] bg-[var(--semi-color-warning-light-default)] p-3 text-xs text-[var(--semi-color-warning)]">
+              <CircleAlert aria-hidden size="small" className="mt-0.5 shrink-0" />
               <span>{cncasesResult.message}</span>
             </div>
           )}
@@ -627,17 +619,17 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
                   <div className="flex-1 overflow-hidden">
                     <div className="text-sm font-medium leading-snug">{c.title}</div>
                     {c.meta && (
-                      <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">{c.meta}</p>
+                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{c.meta}</p>
                     )}
                   </div>
                   {c.href && <a
                     href={c.href}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[11px] text-primary hover:bg-popover"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs text-primary hover:bg-popover"
                   >
                     查看原文
-                    <ExternalLink className="h-3 w-3" />
+                    <ExternalLink aria-hidden size="small" />
                   </a>}
                 </div>
               </li>
@@ -648,7 +640,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
 
       {regResult && (
         <div className="space-y-2">
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             法规命中 <span className="font-mono text-foreground">{regResult.total}</span> 条，已返回{" "}
             <span className="font-mono text-foreground">{regResult.items.length}</span> 条
           </p>
@@ -657,16 +649,16 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
               <li key={`${r.fgmc}-${i}`} className="rounded-lg border border-border bg-card p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="text-sm font-medium leading-snug">{r.fgmc}</div>
-                  {r.detailUrl && <a href={r.detailUrl} target="_blank" rel="noreferrer" className="shrink-0 text-[11px] text-primary">查看原文 <ExternalLink className="inline h-3 w-3" /></a>}
+                  {r.detailUrl && <a href={r.detailUrl} target="_blank" rel="noreferrer" className="shrink-0 text-xs text-primary">查看原文 <ExternalLink aria-hidden size="small" className="inline" /></a>}
                 </div>
-                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   {r.xljb_1 && (
-                    <span className="rounded border border-primary/30 bg-primary/5 px-1 py-0.5 text-[10px] text-primary">
+                    <span className="rounded border border-primary/30 bg-primary/5 px-1 py-0.5 text-xs text-primary">
                       {r.xljb_1}
                     </span>
                   )}
                   {r.sxx && (
-                    <span className="rounded border border-border bg-muted/30 px-1 py-0.5 text-[10px]">
+                    <span className="rounded border border-border bg-muted/30 px-1 py-0.5 text-xs">
                       {r.sxx}
                     </span>
                   )}
@@ -675,7 +667,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
                   {r.fbbm && <span>· {r.fbbm}</span>}
                 </div>
                 {r.content && (
-                  <p className="mt-2 line-clamp-4 whitespace-pre-line text-[12px] leading-relaxed text-foreground/75">
+                  <p className="mt-2 line-clamp-4 whitespace-pre-line text-xs leading-relaxed text-foreground/75">
                     摘要片段：{r.content}
                   </p>
                 )}

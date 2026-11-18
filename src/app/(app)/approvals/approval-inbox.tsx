@@ -1,6 +1,6 @@
 "use client";
 import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
-import { statusTagColor, type MoanTone } from "@/lib/ui/moan-tones";
+import { statusTagColor, type StatusTone } from "@/lib/ui/status-tones";
 import { FileInput } from "@/components/patterns/file-input";
 import { Pagination, Tabs, Select, Button, Checkbox, Input, TextArea, Notification, Toast } from "@douyinfe/semi-ui";
 import {ExecutionTerminationPanel} from "@/components/matters/execution-termination-panel";
@@ -8,12 +8,12 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { ApprovalAction } from "@prisma/client";
-import { AlertTriangle, BookOpenCheck, ChevronRight, Clock3, FileCheck2, FileText, Paperclip, History, Search, ShieldCheck } from "lucide-react";
+import { IconAlertTriangle as AlertTriangle, IconFavoriteList as BookOpenCheck, IconChevronRight as ChevronRight, IconClock as Clock3, IconTestScore as FileCheck2, IconArticle as FileText, IconPaperclip as Paperclip, IconHistory as History, IconSearch as Search, IconShieldStroked as ShieldCheck } from "@douyinfe/semi-icons";
 import { ACTION_LABELS } from "@/lib/approvals/rules";
 import { actionErrorMessage } from "@/lib/action-error";
 
-/* 墨案 07：审批列表案卷脊——执行环节 teal、待审批琥珀、已批准绿、驳回红、归档金线 */
-const ACTION_TONE: Record<string, MoanTone> = {
+/* 审批事项类型的状态色。 */
+const ACTION_TONE: Record<string, StatusTone> = {
   INTAKE_APPROVE: "amber",
   DOCUMENT_APPROVE: "violet",
   ARCHIVE_APPROVE: "bronze",
@@ -31,7 +31,7 @@ import { approveSealRequest, rejectSealRequest, stampSealRequest, cancelSealRequ
 
 import { WorkspaceDialog } from "@/components/patterns/workspace-dialog";
 import { ReviewDialogContent, ReviewEmpty, ReviewFields, ReviewFileRow, ReviewHistory, ReviewSection, ReviewStatusLine } from "@/components/patterns/review-dialog";
-import { PageHeader } from "@/components/patterns/moan";
+import { PageHeader } from "@/components/patterns/workspace-surfaces";
 
 import { ApprovalReviewSummary, approvalAlert } from "./approval-review-summary";
 
@@ -248,14 +248,14 @@ export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data
     && detail.archiveReview.verificationIds.every((id) => verified.has(id))
     && (!detail.archiveReview.hasExceptions || (exceptionApproved && !!note.trim())));
 
-  /* 墨案 07：状态徽章（执行环节 teal，批准绿，驳回红仅终态） */
-  function rowStatus(r: Data["rows"][number]): { color: "teal" | "grey" | "green" | "red"; text: string; spine: string } {
-    if (r.task === "issue") return { color: "teal", text: "待开票", spine: "teal" };
-    if (r.task === "stamp") return { color: "teal", text: "待盖章回填", spine: "teal" };
-    if (r.status === "PENDING") return { color: "grey", text: "待审批", spine: ACTION_TONE[r.action] === "bronze" ? "bronze" : "amber" };
-    if (r.status === "APPROVED") return { color: "green", text: "已批准", spine: "green" };
-    if (r.status === "REJECTED") return { color: "red", text: "已驳回", spine: "red" };
-    return { color: "grey", text: APPROVAL_STATUS_LABELS[r.status] ?? "状态待核实", spine: "slate" };
+  /* 审批进度标签。 */
+  function rowStatus(r: Data["rows"][number]): { color: "teal" | "grey" | "green" | "red"; text: string } {
+    if (r.task === "issue") return { color: "teal", text: "待开票" };
+    if (r.task === "stamp") return { color: "teal", text: "待盖章回填" };
+    if (r.status === "PENDING") return { color: "grey", text: "待审批" };
+    if (r.status === "APPROVED") return { color: "green", text: "已批准" };
+    if (r.status === "REJECTED") return { color: "red", text: "已驳回" };
+    return { color: "grey", text: APPROVAL_STATUS_LABELS[r.status] ?? "状态待核实" };
   }
   const rowActionLabel = (r: Data["rows"][number]) => r.task === "issue" ? "查看并开票" : r.task === "stamp" ? "查看并回填" : r.task ? "查看并处理" : "查看记录";
   const waitDays = (d: Date | string) => Math.max(0, Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000));
@@ -285,7 +285,7 @@ export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data
     />
 
     <form className="mb-3 flex flex-wrap items-center gap-2" onSubmit={e => { e.preventDefault(); navigate({ q: query.trim() }); }}>
-      <Input aria-label="搜索审批" value={query} onChange={setQuery} placeholder="搜索申请、申请人或案件" prefix={<Search size={16} />} style={{ width: 260 }} />
+      <Input aria-label="搜索审批" value={query} onChange={setQuery} placeholder="搜索申请、申请人或案件" prefix={<Search aria-hidden size="default" />} style={{ width: 260 }} />
       <Select<string>
         value={data.query.type ?? "all"}
         optionList={[{ value: "all", label: "全部" }, ...actionOptions]}
@@ -323,7 +323,7 @@ export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data
       {data.rows.map(r => {
         const st = rowStatus(r);
         const actionText = ACTION_LABELS[r.action].replace("审批", "").replace("申请", "");
-        return <div key={r.action + r.id} role="presentation" onClick={() => !pending && open(r)} className="mo-list-row mo-spine cursor-pointer" data-spine={st.spine}>
+        return <div key={r.action + r.id} role="presentation" onClick={() => !pending && open(r)} className="mo-list-row cursor-pointer">
           <SemiTag size="small" color={statusTagColor(ACTION_TONE[r.action] ?? "slate")} className="shrink-0 justify-center" style={{ width: 52 }}>{actionText}</SemiTag>
           <div className="min-w-0 flex-1">
             <div className="rt truncate">{r.title}</div>
@@ -336,17 +336,17 @@ export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data
           <SemiTag size="small" className="shrink-0" color={st.color}>{st.text}</SemiTag>
           <Button htmlType="button" disabled={pending} onClick={(e) => { e.stopPropagation(); open(r); }} className="shrink-0" size="small" theme="borderless" type="tertiary">
             {rowActionLabel(r)}
-            <ChevronRight />
+            <ChevronRight aria-hidden />
           </Button>
         </div>;
       })}
-      {!data.rows.length && <div className="empty"><div className="empty-ic"><History /></div><div className="mo-empty-title">暂无符合条件的{WORKSPACE_TABS[data.query.tab]}记录</div><div className="mo-empty-desc">可切换记录范围，或调整筛选条件。</div></div>}
+      {!data.rows.length && <div className="empty"><div className="empty-ic"><History aria-hidden /></div><div className="mo-empty-title">暂无符合条件的{WORKSPACE_TABS[data.query.tab]}记录</div><div className="mo-empty-desc">可切换记录范围，或调整筛选条件。</div></div>}
       <div className="border-t border-[var(--semi-color-border)]">
         <div className="flex flex-wrap items-center justify-between gap-3 p-3"><span className="text-sm text-muted-foreground">共 {data.total} 条 · 第 {data.page} / {totalPages} 页</span><Pagination currentPage={data.page} pageSize={data.pageSize} total={data.total} showSizeChanger={false} hideOnSinglePage onPageChange={page => navigate({ page: String(page) })} /></div>
       </div>
     </div>
 
-    <WorkspaceDialog open={!!selected} onOpenChange={value => { if (!value) void closeDetail(); }}>{detail?.intakeDetail ? <IntakeApprovalDialog key={selected?.id} detail={detail} intakeDetail={detail.intakeDetail} note={note} onNoteChange={setNote} pending={pending} onDecision={process} onResubmit={() => applicantAction("resubmit")} returnControl={returnControl} onDirtyChange={setIntakeDirty} /> : <ReviewDialogContent
+    <WorkspaceDialog open={!!selected} dismissOnBackdrop onOpenChange={value => { if (!value) void closeDetail(); }}>{detail?.intakeDetail ? <IntakeApprovalDialog key={selected?.id} detail={detail} intakeDetail={detail.intakeDetail} note={note} onNoteChange={setNote} pending={pending} onDecision={process} onResubmit={() => applicantAction("resubmit")} returnControl={returnControl} onDirtyChange={setIntakeDirty} /> : <ReviewDialogContent
       key={selected?.id}
       title={detail?.title ?? "申请详情"}
       eyebrow={selected ? ACTION_LABELS[selected.action] : "审批申请"}
@@ -362,24 +362,24 @@ export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data
           {loading && <p role="status">正在读取审批详情…</p>}
           {detailError && <div role="alert">{detailError} <Button htmlType="button" onClick={() => { if (selected) void open(selected); }} theme="borderless" type="tertiary">重新读取</Button></div>}
           {!detail && <Button htmlType="button" onClick={() => void closeDetail()} theme="borderless" type="tertiary">返回审批列表</Button>}
-          <ReviewFields title="当前申请内容" icon={<FileText />} fields={detail?.fields ?? []} />
-          {detail?.archiveReview && (detail.archiveReview.legacy ? <ReviewSection title="历史材料未固定" icon={<AlertTriangle />}><div className="conf-sum"><div className="cs-ic"><AlertTriangle /></div><div><div className="cs-t">该申请只保存了勾选结果</div><div className="cs-d">无法还原当时实际送审材料。请驳回后由申请人重新关联材料并提交。</div></div></div></ReviewSection> : <>
-            {detail.archiveReview.policy && <ReviewSection title="制度依据" icon={<BookOpenCheck />} extra={<a className="text-[var(--semi-color-primary-active)]" href={`/api/firm-files/${detail.archiveReview.policy.sourceFileId}/download?inline=1`} target="_blank" rel="noreferrer">查看制度原文 →</a>}>
+          <ReviewFields title="当前申请内容" icon={<FileText aria-hidden />} fields={detail?.fields ?? []} />
+          {detail?.archiveReview && (detail.archiveReview.legacy ? <ReviewSection title="历史材料未固定" icon={<AlertTriangle aria-hidden />}><div className="conf-sum"><div className="cs-ic"><AlertTriangle aria-hidden /></div><div><div className="cs-t">该申请只保存了勾选结果</div><div className="cs-d">无法还原当时实际送审材料。请驳回后由申请人重新关联材料并提交。</div></div></div></ReviewSection> : <>
+            {detail.archiveReview.policy && <ReviewSection title="制度依据" icon={<BookOpenCheck aria-hidden />} extra={<a className="text-[var(--semi-color-primary-active)]" href={`/api/firm-files/${detail.archiveReview.policy.sourceFileId}/download?inline=1`} target="_blank" rel="noreferrer">查看制度原文 →</a>}>
               <div className="arow"><span className="k">制度</span><span className="v">{detail.archiveReview.policy.name} · {detail.archiveReview.policy.version}</span></div>
               <div className="arow"><span className="k">生效日期</span><span className="v mono">{detail.archiveReview.policy.effectiveAt}</span></div>
             </ReviewSection>}
-            <ReviewSection title="实际归档材料" icon={<Paperclip />}>
+            <ReviewSection title="实际归档材料" icon={<Paperclip aria-hidden />}>
               {detail.archiveReview.items.map(item => <div key={item.id} className="arow" style={{ alignItems: "flex-start" }}>
                 <Checkbox disabled={pending} className="mt-0.5" aria-label={`核验清单项：${item.label}`} checked={verified.has(`item:${item.id}`)} onChange={event => (value => toggleVerification(`item:${item.id}`, value === true))(event.target.checked === true)} />
                 <div className="v min-w-0">
                   <div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{item.label}{item.required ? " *" : ""}</span><SemiTag size="small" color={item.status === "ATTACHED" ? "teal" : item.status === "AUTO_GENERATED" ? "grey" : item.status === "NOT_APPLICABLE" ? "grey" : "red"}>{item.status === "ATTACHED" ? "已关联材料" : item.status === "AUTO_GENERATED" ? "系统生成" : item.status === "NOT_APPLICABLE" ? "不适用" : "缺失"}</SemiTag></div>
                   {item.note && <p className="t-xs t-mute mt-1">说明：{item.note}</p>}
-                  {item.documentIds.map(documentId => { const attachment = detail.attachments.find(document => document.id === documentId); const snapshotDocument = detail.archiveReview?.documents.find(document => document.id === documentId); return <div key={documentId} className="mt-2 flex items-start gap-2 rounded-[8px] bg-[var(--semi-color-fill-1)] p-2"><Checkbox disabled={pending || !attachment?.readable} aria-label={`核验文件：${attachment?.name ?? documentId}`} checked={verified.has(`document:${documentId}`)} onChange={event => (value => toggleVerification(`document:${documentId}`, value === true))(event.target.checked === true)} /><span className="min-w-0 flex-1 break-words text-[12.5px]">{attachment?.readable ? <a className="text-[var(--semi-color-primary-active)] underline" href={`/api/documents/${documentId}/download?inline=1`} target="_blank" rel="noreferrer">{attachment.name}</a> : `${attachment?.name ?? "材料"}（当前无法读取）`}{snapshotDocument && <span className="mt-1 block font-mono text-[11px] text-[var(--semi-color-text-2)]">{snapshotDocument.folderName ? `${snapshotDocument.folderName} · ` : ""}v{snapshotDocument.version} · {ARCHIVE_DOCUMENT_STATUS_LABELS[snapshotDocument.workflowStatus] ?? "状态待核实"} · {snapshotDocument.isLatest ? "当前版本" : "历史版本"} · {Math.max(1, Math.ceil(snapshotDocument.size / 1024))} KB · SHA-256 {snapshotDocument.sha256.slice(0, 12)}…</span>}</span></div>; })}
+                  {item.documentIds.map(documentId => { const attachment = detail.attachments.find(document => document.id === documentId); const snapshotDocument = detail.archiveReview?.documents.find(document => document.id === documentId); return <div key={documentId} className="mt-2 flex items-start gap-2 rounded-[8px] bg-[var(--semi-color-fill-1)] p-2"><Checkbox disabled={pending || !attachment?.readable} aria-label={`核验文件：${attachment?.name ?? documentId}`} checked={verified.has(`document:${documentId}`)} onChange={event => (value => toggleVerification(`document:${documentId}`, value === true))(event.target.checked === true)} /><span className="min-w-0 flex-1 break-words text-sm">{attachment?.readable ? <a className="text-[var(--semi-color-primary-active)] underline" href={`/api/documents/${documentId}/download?inline=1`} target="_blank" rel="noreferrer">{attachment.name}</a> : `${attachment?.name ?? "材料"}（当前无法读取）`}{snapshotDocument && <span className="mt-1 block font-mono text-xs text-[var(--semi-color-text-2)]">{snapshotDocument.folderName ? `${snapshotDocument.folderName} · ` : ""}v{snapshotDocument.version} · {ARCHIVE_DOCUMENT_STATUS_LABELS[snapshotDocument.workflowStatus] ?? "状态待核实"} · {snapshotDocument.isLatest ? "当前版本" : "历史版本"} · {Math.max(1, Math.ceil(snapshotDocument.size / 1024))} KB · SHA-256 {snapshotDocument.sha256.slice(0, 12)}…</span>}</span></div>; })}
                 </div>
               </div>)}
             </ReviewSection>
-            {detail.archiveReview.excludedDocuments.length > 0 && <ReviewSection title={`本案另有 ${detail.archiveReview.excludedDocuments.length} 份材料未纳入本次归档`} icon={<AlertTriangle />}><div className="panel-body"><p className="t-xs t-mute">这些文件只展示名称，不因归档审批开放内容。请判断是否属于无关草稿、重复件，或应退回补充。</p><ul className="mt-2 max-h-28 list-disc space-y-1 overflow-y-auto pl-5 text-[12px]">{detail.archiveReview.excludedDocuments.map(document => <li key={document.id}>{document.folderName ? `${document.folderName} / ` : ""}{document.name}</li>)}</ul></div></ReviewSection>}
-            <ReviewSection title="人工核验事项" icon={<ShieldCheck />}>
+            {detail.archiveReview.excludedDocuments.length > 0 && <ReviewSection title={`本案另有 ${detail.archiveReview.excludedDocuments.length} 份材料未纳入本次归档`} icon={<AlertTriangle aria-hidden />}><div className="panel-body"><p className="t-xs t-mute">这些文件只展示名称，不因归档审批开放内容。请判断是否属于无关草稿、重复件，或应退回补充。</p><ul className="mt-2 max-h-28 list-disc space-y-1 overflow-y-auto pl-5 text-xs">{detail.archiveReview.excludedDocuments.map(document => <li key={document.id}>{document.folderName ? `${document.folderName} / ` : ""}{document.name}</li>)}</ul></div></ReviewSection>}
+            <ReviewSection title="人工核验事项" icon={<ShieldCheck aria-hidden />}>
               {detail.archiveReview.manualChecks.map(item => (
                 <Checkbox key={item.id} disabled={pending} checked={verified.has(`manual:${item.id}`)}
                   extra={item.note ? `申请人说明：${item.note}` : undefined}
@@ -397,7 +397,7 @@ export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data
             </ReviewSection>
           </>)}
         </> },
-        { id: "attachments", label: "附件", count: detail?.attachments.length ?? 0, content: detail?.attachments.length ? <ReviewSection title="申请附件" icon={<Paperclip />}>{detail.attachments.map(d => <ReviewFileRow key={d.id} id={d.id} name={d.name} readable={d.readable} />)}</ReviewSection> : <ReviewEmpty icon={<Paperclip />} title="暂无申请附件" desc="当前申请未关联可展示的材料。" /> },
+        { id: "attachments", label: "附件", count: detail?.attachments.length ?? 0, content: detail?.attachments.length ? <ReviewSection title="申请附件" icon={<Paperclip aria-hidden />}>{detail.attachments.map(d => <ReviewFileRow key={d.id} id={d.id} name={d.name} readable={d.readable} />)}</ReviewSection> : <ReviewEmpty icon={<Paperclip aria-hidden />} title="暂无申请附件" desc="当前申请未关联可展示的材料。" /> },
         ...(selected?.action === "DOCUMENT_APPROVE" ? [{ id: "review", label: "人工复核", content: <DocumentReviewPanel key={selected.id} documentId={selected.id} initialIssueId={selectedReviewIssue} onIssueChange={changeIssue} onDirtyChange={setReviewDirty} onPendingChange={setReviewBusy} /> }] : []),
         { id: "history", label: "处理记录", count: detail?.history.length ?? 0, content: <ReviewHistory items={detail?.history ?? []} emptyText={detail?.status === "PENDING" ? "尚无处理记录" : "此记录未保存逐次处理历史"} emptyDesc={detail?.status === "PENDING" ? "处理后将在这里显示审批意见与结果。" : "当前结果见申请状态。"} /> },
       ]}
@@ -411,13 +411,13 @@ export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data
         {detail?.task && (detail.task === "stamp" || (selected?.action === "INVOICE_APPROVE" && detail.task!=="terminate")) && <label className="mt-3 block space-y-2"><span className="op-label" style={{ margin: "12px 0 7px" }}>{detail.task === "stamp" ? "盖章后的 PDF 扫描件（必传）" : "电子发票（上传后记为已开具）"}</span><FileInput disabled={pending} aria-label={detail.task === "stamp" ? "盖章后的 PDF 扫描件（必传）" : "电子发票（上传后记为已开具）"} accept={detail.task === "stamp" ? "application/pdf" : "application/pdf,image/*"} onChange={e => setFile(e.currentTarget.files?.[0] ?? null)} /></label>}
         {detail?.task && detail.task!=="terminate" && selected?.action === "INVOICE_APPROVE" && <Input className="mt-2" aria-label="发票号码" placeholder="发票号码" value={invoiceNo} onChange={e => setInvoiceNo(e)} />}
         {detail?.task && detail.task!=="terminate" && selected?.action === "INVOICE_APPROVE" && <InvoiceRecognition file={file} onNumber={setInvoiceNo} requestedAmount={detail.fields.find(f => f.label === "金额（元）")?.value} />}
-        {detail?.archiveReview && detail.task === "approve" && <div className="op-check"><span className={`box ${archiveReady ? "checked" : ""}`}>{archiveReady ? <FileCheck2 /> : null}</span><span>{archiveReady ? "清单、材料与人工核验事项已全部核对。" : "请在「资料与核验」逐项勾选清单、文件与人工核验事项后再通过。"}</span></div>}
-        <div className="side-note" style={{ marginTop: 16 }}><Clock3 /><span>审批结果与意见同事务写入审计日志，处理后不可重复审批；审批授权不扩大案件其他材料的访问范围。</span></div>
+        {detail?.archiveReview && detail.task === "approve" && <div className="op-check"><span className={`box ${archiveReady ? "checked" : ""}`}>{archiveReady ? <FileCheck2 aria-hidden /> : null}</span><span>{archiveReady ? "清单、材料与人工核验事项已全部核对。" : "请在「资料与核验」逐项勾选清单、文件与人工核验事项后再通过。"}</span></div>}
+        <div className="side-note" style={{ marginTop: 16 }}><Clock3 aria-hidden /><span>审批结果与意见同事务写入审计日志，处理后不可重复审批；审批授权不扩大案件其他材料的访问范围。</span></div>
       </>}
       footer={detail && (detail.task || detail.canResubmit || detail.canCancel) ? <>
         {detail.task === "approve" && <Button htmlType="button"  disabled={pending || reviewBusy} onClick={() => process("reject")} theme="solid" type="danger">驳回</Button>}
         {detail.task === "approve" && selected?.action === "INTAKE_APPROVE" && <Button htmlType="button"  disabled={pending} onClick={() => process("revision")} theme="outline" type="tertiary">退回补正</Button>}
-        {detail.task && detail.task!=="terminate" && <Button htmlType="button"  disabled={pending || reviewBusy || !archiveReady} onClick={() => process("approve")} theme="solid" type="primary">{detail.task === "stamp" ? "完成盖章回填" : detail.task === "issue" ? "完成开票" : selected?.action === "ARCHIVE_APPROVE" ? <><FileCheck2 />逐项核验并通过</> : "审批通过"}</Button>}
+        {detail.task && detail.task!=="terminate" && <Button htmlType="button"  disabled={pending || reviewBusy || !archiveReady} onClick={() => process("approve")} theme="solid" type="primary">{detail.task === "stamp" ? "完成盖章回填" : detail.task === "issue" ? "完成开票" : selected?.action === "ARCHIVE_APPROVE" ? <><FileCheck2 aria-hidden />逐项核验并通过</> : "审批通过"}</Button>}
         {detail.canResubmit && <Button htmlType="button"  disabled={pending || reviewBusy} onClick={() => applicantAction("resubmit")} theme="solid" type="primary">重新提交审批</Button>}
         {detail.canCancel && <Button htmlType="button"  disabled={pending || reviewBusy} onClick={() => applicantAction("cancel")} theme="outline" type="tertiary">撤回用章申请</Button>}
       </> : undefined}

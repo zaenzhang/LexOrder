@@ -112,7 +112,7 @@ export function AdminShell({
   );
 
   return (
-    <Layout className="mo-rules min-h-screen bg-[var(--semi-color-bg-0)]">
+    <Layout className="mo-rules min-h-screen bg-[var(--workspace-background,var(--semi-color-bg-0))]">
       <Layout.Header className="sticky top-0 z-20 flex h-[56px] items-center gap-3 border-b border-[var(--semi-color-border)] bg-[var(--semi-color-bg-0)] px-6">
         <IconShieldStroked aria-hidden />
         <Tag color="blue">{personal ? "工作区设置" : "系统管理模式"}</Tag>
@@ -155,7 +155,7 @@ export function AdminShell({
           <div className="overflow-x-auto border-b border-[var(--semi-color-border)] md:hidden">
             <Nav mode="horizontal" aria-label="移动端管理后台导航" selectedKeys={selectedKeys}>{items.map(renderItem)}</Nav>
           </div>
-          <main className="mx-auto w-full max-w-[1440px] px-4 pb-12 pt-6 sm:px-6">{children}</main>
+          <div className="mx-auto w-full max-w-[1440px] px-4 pb-12 pt-6 sm:px-8">{children}</div>
         </Layout.Content>
       </Layout>
     </Layout>

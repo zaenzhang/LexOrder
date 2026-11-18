@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
-import { FolderArchive, Search, Download, Trash2, History, X, Tag as TagIcon } from "lucide-react";
+import { IconArchive as FolderArchive, IconSearch as Search, IconDownload as Download, IconDelete as Trash2, IconHistory as History, IconClose as X, IconPriceTag as TagIcon } from "@douyinfe/semi-icons";
 import { Button, Checkbox, Input, Notification, Tag, Toast, Typography } from "@douyinfe/semi-ui";
 import type { FirmFileCategory } from "@prisma/client";
 import { deleteFirmFile } from "@/server/firm-files/actions";
@@ -11,7 +11,7 @@ import { UploadDialog } from "./upload-dialog";
 import { PreviewDialog } from "./preview-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { useTopbarAction } from "@/components/layout/topbar-action";
-import { WorkspaceTabs } from "@/components/patterns/moan";
+import { WorkspaceTabs } from "@/components/patterns/workspace-surfaces";
 import { actionErrorMessage } from "@/lib/action-error";
 
 type FileEntry = {
@@ -178,11 +178,11 @@ export function FirmFilesView({
         )}
 
         <form onSubmit={handleSearch} className="flex items-center gap-1.5">
-          <Input className="max-w-md flex-1" value={search} onChange={setSearch} prefix={<Search size={16} />}
+          <Input className="max-w-md flex-1" value={search} onChange={setSearch} prefix={<Search aria-hidden size="default" />}
             aria-label="搜索律所资料" placeholder="名称 / 描述 / 标签" />
           <Button htmlType="submit" theme="light">搜索</Button>
           {currentSearch && (
-            <Button aria-label="清除搜索" theme="borderless" type="tertiary" icon={<X size={16} />}
+            <Button aria-label="清除搜索" theme="borderless" type="tertiary" icon={<X aria-hidden size="default" />}
               onClick={() => { setSearch(""); navigate({ q: undefined }); }} />
           )}
         </form>
@@ -191,7 +191,7 @@ export function FirmFilesView({
       {/* 列表 */}
       {files.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border bg-card py-16 text-center">
-          <FolderArchive className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
+          <FolderArchive aria-hidden className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
           <p className="text-sm text-muted-foreground">
             {currentSearch
               ? `没有匹配「${currentSearch}」的资料`
@@ -220,9 +220,9 @@ export function FirmFilesView({
                       <Tag color={meta.color}>{meta.label}</Tag>
                       {f.hasNewerVersion && <Tag color="amber">旧版</Tag>}
                       {f.supersedesCount > 0 && (
-                        <Tag color="violet" prefixIcon={<History size={12} />}>已替代 {f.supersedesCount} 个旧版</Tag>
+                        <Tag color="violet" prefixIcon={<History aria-hidden size="small" />}>已替代 {f.supersedesCount} 个旧版</Tag>
                       )}
-                      <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[10px] text-muted-foreground">
+                      <span className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
                         <span className="font-mono tabular">{formatBytes(f.size)}</span>
                         <span className="opacity-50">·</span>
                         <span>{formatDate(new Date(f.createdAt))}</span>
@@ -232,7 +232,7 @@ export function FirmFilesView({
                           <>
                             <span className="opacity-50">·</span>
                             <span className="flex items-center gap-0.5">
-                              <TagIcon className="h-2.5 w-2.5" />
+                              <TagIcon aria-hidden className="h-2.5 w-2.5" />
                               {f.tags.join(" / ")}
                             </span>
                           </>
@@ -242,11 +242,11 @@ export function FirmFilesView({
                     {f.description && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{f.description}</p>}
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    <Typography.Text link={{ href: `/api/firm-files/${f.id}/download` }} icon={<Download size={14} />}>
+                    <Typography.Text link={{ href: `/api/firm-files/${f.id}/download` }} icon={<Download aria-hidden size="default" />}>
                       下载
                     </Typography.Text>
                     {canUpload && (
-                      <Button theme="borderless" type="danger" icon={<Trash2 size={16} />} aria-label={`删除 ${f.name}`} title="删除"
+                      <Button theme="borderless" type="danger" icon={<Trash2 aria-hidden size="default" />} aria-label={`删除 ${f.name}`} title="删除"
                         loading={isPending && pendingId === f.id} disabled={isPending && pendingId !== f.id}
                         onClick={() => { if (!isPending) void handleDelete(f); }} />
                     )}

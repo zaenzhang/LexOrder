@@ -1,12 +1,12 @@
+import { MatterListBack } from "./matter-list-back";
 import { Card as SemiCard, Tag as SemiTag } from "@/components/patterns/semi-surfaces";
-import { statusTagColor } from "@/lib/ui/moan-tones";
-import Link from "next/link";
-import { BookOpen, CalendarClock, ChevronLeft, Eye, Landmark, Users } from "lucide-react";
+import { statusTagColor } from "@/lib/ui/status-tones";
+import { IconBook as BookOpen, IconCalendarClock as CalendarClock, IconEyeOpened as Eye, IconApartment as Landmark, IconUserGroup as Users } from "@douyinfe/semi-icons";
 import type { getMatterById } from "@/server/matters/actions";
 import { listNotes } from "@/server/notes/actions";
 import { matterStatusLabel, matterCategoryLabel, matterCategoryKind, procedureTypeLabel, litigationStandingLabel } from "@/lib/enums";
-import { avatarTone, matterStatusTone } from "@/lib/ui/moan-tones";
-import { InitialAvatar } from "@/components/patterns/moan";
+import { avatarTone, matterStatusTone } from "@/lib/ui/status-tones";
+import { InitialAvatar } from "@/components/patterns/workspace-surfaces";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { ActionError } from "@/lib/action-error";
 import { requireSession } from "@/lib/auth/session";
@@ -21,7 +21,7 @@ const date = (value: Date | null) => (value ? formatDate(new Date(value)) : "—
  * 团队只读视图（与案件详情同一套墨案版式：案卷头 + 程序栏 + 主栏/侧栏）。
  * 只换外观，可见内容与权限不变：不加载财务与私有附件，业务操作按案件经办权限开放。
  */
-export async function TeamMatterOverview({ matter }: { matter: Matter }) {
+export async function TeamMatterOverview({ matter, listQuery = null }: { matter: Matter; listQuery?: string | null }) {
   const { user } = await requireSession("matters.read");
   const canReadNotes = hasCustomPermission(user, "schedule.read");
   const notesResult = canReadNotes
@@ -47,15 +47,12 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
   return (
     <div className="mo-matter mo-dossier">
       {/* ① 案卷头 */}
+      <div className="mb-2"><MatterListBack listQuery={listQuery} /></div>
       <section className="dos-head" aria-label="案卷头">
         <SemiCard bodyStyle={{ padding: 0 }}>
         <div className="dos-head-top">
           <div className="min-w-0 flex-1">
             <div className="dos-eyebrow">
-              <Link href="/matters" className="ctx-back no-underline">
-                <ChevronLeft className="h-3.5 w-3.5" />
-                案件列表
-              </Link>
               <span className="code">{matter.internalCode}</span>
               {matter.firmCaseNo ? <span className="code">所内 {matter.firmCaseNo}</span> : null}
               <span>{[matterCategoryLabel[matter.category], matter.cause?.name ?? matter.causeFreeText].filter(Boolean).join(" · ")}</span>
@@ -68,17 +65,21 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
               <span className="v">{kind === "litigation" ? opposing.map((p) => p.name).join("、") || "—" : matter.owner.name}</span>
             </div>
             <div className="ctx-badges">
-              <SemiTag size="small" color={statusTagColor(matterStatusTone(matter.status))}>
-
-                {matterStatusLabel[matter.status]}
-              </SemiTag>
               <SemiTag size="small" color="grey"><span title="你不在本案团队内，只能查看概况">
-                <Eye className="h-3 w-3" />
+                <Eye aria-hidden size="small" />
                 团队只读
               </span></SemiTag>
               {claim ? <SemiTag size="small" color="grey">{kind === "litigation" ? "标的" : "金额"} <span className="mono">{claim}</span></SemiTag> : null}
               {matter.intakeDate ? <SemiTag size="small" color="grey">收案 <span className="mono">{date(matter.intakeDate)}</span></SemiTag> : null}
               <SemiTag size="small" color="grey">主办 {matter.owner.name}</SemiTag>
+            </div>
+          </div>
+          <div className="dos-head-aside">
+            <div className="dos-head-status">
+              <span>案件状态</span>
+              <SemiTag size="large" color={statusTagColor(matterStatusTone(matter.status))}>
+                {matterStatusLabel[matter.status]}
+              </SemiTag>
             </div>
           </div>
         </div>
@@ -125,7 +126,7 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
               <section key={proc.id} className="card">
                 <div className="panel-head">
                   <div className="panel-title">
-                    <Landmark className="ic" strokeWidth={1.8} />
+                    <Landmark aria-hidden className="ic" />
                     {proc.customLabel ?? procedureTypeLabel[proc.type]}
                     <span className="t-xs t-mute" style={{ fontWeight: 400 }}>{proc.caseNumber || "案号未登记"}</span>
                   </div>
@@ -143,8 +144,8 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
                       <p className="t-xs t-mute">暂无开庭与期限</p>
                     ) : (
                       upcoming.map((u) => (
-                        <div key={u.id} className="flex items-center gap-3 text-[12.5px]">
-                          <span className="w-[120px] shrink-0 font-mono text-[12px] text-[var(--semi-color-text-1)]">{formatDateTime(u.at)}</span>
+                        <div key={u.id} className="flex items-center gap-3 text-sm">
+                          <span className="w-[120px] shrink-0 font-mono text-xs text-[var(--semi-color-text-1)]">{formatDateTime(u.at)}</span>
                           <span className={u.done ? "t-mute line-through" : ""}>{u.text}</span>
                         </div>
                       ))
@@ -158,7 +159,7 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
           {notesResult ? <section className="card" aria-label="记录">
             <div className="panel-head">
               <div className="panel-title">
-                <BookOpen className="ic" strokeWidth={1.8} />
+                <BookOpen aria-hidden className="ic" />
                 记录
                 {notesResult.notes ? <SemiTag size="small" color="grey" style={{ marginLeft: 2 }}>{notesResult.notes.length}</SemiTag> : null}
               </div>
@@ -177,7 +178,7 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
                     <div className="t-xs t-mute">
                       {note.author.name} · {formatDateTime(note.occurredAt)}
                     </div>
-                    <p className="mt-1 whitespace-pre-wrap text-[12.5px] leading-relaxed">{note.content}</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">{note.content}</p>
                   </div>
                 ))}
               </div>
@@ -187,7 +188,7 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
           <section className="card">
             <div className="panel-head">
               <div className="panel-title">
-                <CalendarClock className="ic" strokeWidth={1.8} />
+                <CalendarClock aria-hidden className="ic" />
                 案件进展
               </div>
             </div>
@@ -198,7 +199,7 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
                 <div className="timeline">
                   {matter.timelineEvents.map((event) => (
                     <div key={event.id} className="tl-item">
-                      <div className="text-[12.5px] font-medium">{event.title}</div>
+                      <div className="text-sm font-medium">{event.title}</div>
                       <div className="t-xs t-mute">{date(event.occurredAt)}</div>
                     </div>
                   ))}
@@ -211,7 +212,7 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
         <aside className="dos-rail">
           <section className="card">
             <div className="rail-sec-head">
-              <Users className="h-[15px] w-[15px] text-[var(--semi-color-text-2)]" strokeWidth={1.8} />
+              <Users aria-hidden className="h-[15px] w-[15px] text-[var(--semi-color-text-2)]" />
               承办团队
             </div>
             {members.length === 0 ? (

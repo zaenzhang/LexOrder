@@ -1,6 +1,6 @@
 "use client";
 
-import { WorkspaceTabs } from "@/components/patterns/moan";
+import { WorkspaceTabs } from "@/components/patterns/workspace-surfaces";
 import { Button as SemiButton } from "@douyinfe/semi-ui";
 
 import { DeadlineDueFields } from "@/components/matters/deadline-due-fields";
@@ -8,21 +8,7 @@ import { deadlineDueDraft, deadlineDueFromDraft, formatDeadlineDue, deadlineOver
 
 import { useId, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Calendar,
-  AlertTriangle,
-  Plus,
-  Gavel,
-  Check,
-  Trash2,
-  Loader2,
-  StickyNote,
-  Package,
-  ArrowDownToLine,
-  ArrowUpFromLine,
-  ScanLine,
-  ScanText
-} from "lucide-react";
+import { IconCalendar as Calendar, IconAlertTriangle as AlertTriangle, IconPlus as Plus, IconVerify as Gavel, IconTick as Check, IconDelete as Trash2, IconLoading as Loader2, IconArticle as StickyNote, IconBox as Package, IconDownload as ArrowDownToLine, IconUpload as ArrowUpFromLine, IconScan as ScanLine, IconScan as ScanText } from "@douyinfe/semi-icons";
 import type {
   Deadline,
   Hearing,
@@ -57,7 +43,7 @@ import { createExpress, deleteExpress } from "@/server/express/actions";
 import { parseExpressLabel } from "@/server/ai/parse-express";
 import { parseSummons } from "@/server/ai/parse-summons";
 import type { ExpressItem } from "./info-extras";
-import { confirmDialog } from "@/components/patterns/confirm-dialog";
+import { confirmDialog, confirmDiscardChanges } from "@/components/patterns/confirm-dialog";
 import { shDayKey, shMonthDayTime, shTime } from "@/lib/ui/sh-time";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -270,7 +256,7 @@ function ImportantItemsCard({
     <section className="flex max-h-[460px] min-h-[160px] flex-col card">
       <header className="panel-head shrink-0 flex-wrap">
         <span className="panel-title">
-          <AlertTriangle className="ic" />
+          <AlertTriangle aria-hidden className="ic" />
           {kinds ? kinds.map((k) => ({ hearing: "开庭", deadline: "期限", express: "快递", memo: "备忘" })[k]).join("与") : "期限、开庭与备忘"}
           <span className="mo-count">{total}</span>
         </span>
@@ -279,7 +265,7 @@ function ImportantItemsCard({
             value={filter} onChange={setFilter} />
           {canManage && (
             <SemiButton htmlType="button" onClick={openAddDialog} theme="outline" type="tertiary">
-              <Plus />
+              <Plus aria-hidden />
               添加
             </SemiButton>
           )}
@@ -388,10 +374,21 @@ function ImportantItemsCard({
 
 /** v1.x P0-8: 人工调整到期日（写已调整 + 留痕；规则重算不再覆盖）——日期控件 + 必填原因 */
 export function AdjustDeadlineDialog({ deadline, onClose }: { deadline: { id: string; title: string; dueAt: Date; duePrecision: DeadlineDuePrecision | null; updatedAt: Date }; onClose: () => void }) {
-  const [dueDraft, setDueDraft] = useState(() => deadlineDueDraft(deadline));
+  const reasonId = useId();
+  const originalDue = deadlineDueDraft(deadline);
+  const [dueDraft, setDueDraft] = useState(originalDue);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  async function close() {
+    if (pending) return;
+    const dirty = reason !== "" || dueDraft.precision !== originalDue.precision ||
+      dueDraft.date !== originalDue.date ||
+      (dueDraft.precision === "DATETIME" && dueDraft.time !== originalDue.time);
+    if (dirty && !await confirmDiscardChanges()) return;
+    onClose();
+  }
 
   function submit() {
     if (!reason.trim()) return setError("请填写调整原因（将记入审计）");
@@ -408,7 +405,7 @@ export function AdjustDeadlineDialog({ deadline, onClose }: { deadline: { id: st
   }
 
   return (
-    <WorkspaceDialog open onOpenChange={(o) => { if (!o && !pending) onClose(); }}>
+    <WorkspaceDialog dismissOnBackdrop open onOpenChange={open => { if (!open) void close(); }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>调整到期日</DialogTitle>
@@ -417,13 +414,13 @@ export function AdjustDeadlineDialog({ deadline, onClose }: { deadline: { id: st
         <div className="space-y-3">
           <DeadlineDueFields value={dueDraft} onChange={setDueDraft} original={deadline} disabled={pending} />
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-[var(--semi-color-text-1)]">调整原因 *</label>
-            <TextArea rows={3} disabled={pending} value={reason} maxLength={300} onChange={inputValue => setReason(inputValue)} placeholder="如：法院通知书载明举证期限延长至…" />
+            <label htmlFor={reasonId} className="text-sm font-medium text-[var(--semi-color-text-1)]">调整原因 *</label>
+            <TextArea id={reasonId} rows={3} disabled={pending} value={reason} maxLength={300} onChange={inputValue => setReason(inputValue)} placeholder="如：法院通知书载明举证期限延长至…" />
           </div>
-          {error ? <div className="text-[12px] text-[var(--semi-color-danger)]">{error}</div> : null}
+          {error ? <div className="text-xs text-[var(--semi-color-danger)]">{error}</div> : null}
         </div>
         <DialogFooter>
-          <Button onClick={onClose} disabled={pending} type="primary" theme="light">取消</Button>
+          <Button onClick={() => void close()} disabled={pending} type="primary" theme="light">取消</Button>
           <Button onClick={submit} disabled={pending} theme="solid">保存调整</Button>
         </DialogFooter>
       </DialogContent>
@@ -552,7 +549,7 @@ function AllImportantRow({
 function ProcTag({ label }: { label: string }) {
   return (
     <Tag
-      className="shrink-0 border-border bg-muted/40 px-1 text-[9px] font-normal text-muted-foreground"
+      className="shrink-0 border-border bg-muted/40 px-1 text-xs font-normal text-muted-foreground"
       color="grey"
       type="ghost"
     >
@@ -602,39 +599,39 @@ function DeadlineRow({
         )}
         aria-label={d.completed ? "标记未完成" : "标记完成"}
       >
-        {d.completed && <Check className="h-2.5 w-2.5" />}
+        {d.completed && <Check aria-hidden className="h-2.5 w-2.5" />}
       </SemiButton>
 
       <div className="flex-1 overflow-hidden">
         <div className="flex items-center gap-1.5">
           <span
             className={cn(
-              "truncate text-[12.5px] font-medium",
+              "truncate text-sm font-medium",
               d.completed && "line-through text-muted-foreground"
             )}
           >
             {d.title}
           </span>
-          <Tag className="h-5 shrink-0 px-1.5 text-[9px]" color="grey" type="ghost">
+          <Tag className="h-5 shrink-0 px-1.5 text-xs" color="grey" type="ghost">
             {deadlineCategoryLabel[d.category]}
           </Tag>
           {d.confirmStatus === "PENDING" && (
-            <Tag className="h-5 shrink-0 bg-[var(--semi-color-warning-light-default)] px-1.5 text-[9px] text-[var(--semi-color-warning)] hover:bg-[var(--semi-color-warning-light-default)]" color="teal">
+            <Tag className="h-5 shrink-0 bg-[var(--semi-color-warning-light-default)] px-1.5 text-xs text-[var(--semi-color-warning)] hover:bg-[var(--semi-color-warning-light-default)]" color="teal">
               待确认
             </Tag>
           )}
           {d.confirmStatus === "ADJUSTED" && (
-            <Tag className="h-5 shrink-0 border-[var(--semi-color-info-light-active)] px-1.5 text-[9px] text-[var(--semi-color-info)]" color="grey" type="ghost">
+            <Tag className="h-5 shrink-0 border-[var(--semi-color-info-light-active)] px-1.5 text-xs text-[var(--semi-color-info)]" color="grey" type="ghost">
               已调整
             </Tag>
           )}
           {multiProc && <ProcTag label={d.procLabel} />}
         </div>
         {d.startFact && (
-          <div className="mt-0.5 text-[11px] text-muted-foreground">起算：{d.startFact}</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">起算：{d.startFact}</div>
         )}
         {d.basis && (
-          <div className="mt-0.5 text-[11px] text-muted-foreground">{d.basis}</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">{d.basis}</div>
         )}
       </div>
 
@@ -652,7 +649,7 @@ function DeadlineRow({
             <span>{days}d</span>
           )}
         </div>
-        <div className="font-mono text-[10px] text-muted-foreground tabular">
+        <div className="font-mono text-xs text-muted-foreground tabular">
           {formatDeadlineDue(d.dueAt, d.duePrecision)}
         </div>
       </div>
@@ -664,7 +661,7 @@ function DeadlineRow({
               htmlType="button"
               onClick={onConfirm}
               disabled={pending}
-              className="rounded border border-[var(--semi-color-warning-light-active)] px-1.5 py-0.5 text-[10px] text-[var(--semi-color-warning)] hover:bg-[var(--semi-color-warning-light-default)]"
+              className="rounded border border-[var(--semi-color-warning-light-active)] px-1.5 py-0.5 text-xs text-[var(--semi-color-warning)] hover:bg-[var(--semi-color-warning-light-default)]"
               title="核对起算事实后确认该期限"
             >
               确认
@@ -674,7 +671,7 @@ function DeadlineRow({
             htmlType="button"
             onClick={onAdjust}
             disabled={pending}
-            className="rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:bg-accent"
+            className="rounded px-1 py-0.5 text-xs text-muted-foreground hover:bg-accent"
             title="调整到期日（记录原因，规则重算不再覆盖）"
           >
             调整
@@ -689,7 +686,7 @@ function DeadlineRow({
           className="opacity-0 transition-opacity group-hover:opacity-100"
           aria-label="删除"
         >
-          <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+          <Trash2 aria-hidden size="small" className="text-muted-foreground hover:text-destructive" />
         </SemiButton>
       )}
     </li>
@@ -711,24 +708,24 @@ function HearingRow({
   return (
     <li className="group flex items-center gap-3 py-2 text-xs">
       <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-        <Calendar className="h-3.5 w-3.5" strokeWidth={1.8} />
+        <Calendar aria-hidden size="small" />
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="truncate text-[12.5px] font-medium">{h.title}</span>
+          <span className="truncate text-sm font-medium">{h.title}</span>
           {multiProc && <ProcTag label={h.procLabel} />}
         </div>
-        <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+        <div className="mt-0.5 truncate text-xs text-muted-foreground">
           {h.room || h.address || h.judge
             ? [h.room, h.address, h.judge].filter(Boolean).join(" · ")
             : "未填写法庭信息"}
         </div>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1 text-right">
-        <Tag className="h-5 px-1.5 text-[9px]" color="grey" type="ghost">
+        <Tag className="h-5 px-1.5 text-xs" color="grey" type="ghost">
           {upcoming ? "未召开" : "已召开"}
         </Tag>
-        <span className="font-mono text-[10px] tabular text-muted-foreground">
+        <span className="font-mono text-xs tabular text-muted-foreground">
           {shMonthDayTime(h.startsAt)}
         </span>
       </div>
@@ -738,7 +735,7 @@ function HearingRow({
           onClick={onDelete}
           className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
         >
-          <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+          <Trash2 aria-hidden size="small" className="text-muted-foreground hover:text-destructive" />
         </SemiButton>
       )}
     </li>
@@ -766,27 +763,27 @@ function ExpressRow({
         )}
       >
         {isOutbound ? (
-          <ArrowUpFromLine className="h-3.5 w-3.5" strokeWidth={1.8} />
+          <ArrowUpFromLine aria-hidden size="small" />
         ) : (
-          <ArrowDownToLine className="h-3.5 w-3.5" strokeWidth={1.8} />
+          <ArrowDownToLine aria-hidden size="small" />
         )}
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="truncate text-[12.5px] font-medium">{item.purpose}</span>
-          <Tag className="h-5 shrink-0 px-1.5 text-[9px]" color="grey" type="ghost">
+          <span className="truncate text-sm font-medium">{item.purpose}</span>
+          <Tag className="h-5 shrink-0 px-1.5 text-xs" color="grey" type="ghost">
             {isOutbound ? "寄出" : "收件"}
           </Tag>
         </div>
-        <div className="mt-0.5 truncate font-mono text-[11px] tabular text-muted-foreground">
+        <div className="mt-0.5 truncate font-mono text-xs tabular text-muted-foreground">
           {item.companyCode ?? "待识别"} · {item.trackingNo}
         </div>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1 text-right">
-        <div className="max-w-[96px] truncate text-[11px] text-foreground/80">
+        <div className="max-w-[96px] truncate text-xs text-foreground/80">
           {item.lastState ?? "待跟踪"}
         </div>
-        <div className="font-mono text-[10px] tabular text-muted-foreground">
+        <div className="font-mono text-xs tabular text-muted-foreground">
           {item.lastUpdateAt
             ? formatDate(new Date(item.lastUpdateAt))
             : formatDate(new Date(item.createdAt))}
@@ -799,7 +796,7 @@ function ExpressRow({
           className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
           aria-label="删除"
         >
-          <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+          <Trash2 aria-hidden size="small" className="text-muted-foreground hover:text-destructive" />
         </SemiButton>
       )}
     </li>
@@ -820,13 +817,13 @@ function MemoRow({
   return (
     <li className="group flex items-start gap-3 py-2 text-xs">
       <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-        <StickyNote className="h-3.5 w-3.5" strokeWidth={1.8} />
+        <StickyNote aria-hidden size="small" />
       </span>
       <div className="min-w-0 flex-1">
-        <div className="whitespace-pre-wrap break-words text-[12.5px] leading-relaxed">
+        <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
           {memo.content}
         </div>
-        <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
           {multiProc && <ProcTag label={memo.procLabel} />}
           <span className="font-mono tabular">
             {formatDate(new Date(memo.createdAt))}
@@ -840,7 +837,7 @@ function MemoRow({
           className="mt-1 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
           aria-label="删除"
         >
-          <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+          <Trash2 aria-hidden size="small" className="text-muted-foreground hover:text-destructive" />
         </SemiButton>
       )}
     </li>
@@ -1216,13 +1213,13 @@ export function ImportantItemDialog({
                     size="small"
                   >
                     {summonsPending ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <Loader2 aria-hidden size="small" spin />
                     ) : (
-                      <ScanText className="h-3.5 w-3.5" />
+                      <ScanText aria-hidden size="small" />
                     )}
                     {summonsPending ? "识别中…" : "上传传票识别"}
                   </Button>
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     上传传票照片，自动填充开庭信息
                   </span>
                 </div>
@@ -1389,9 +1386,9 @@ export function ImportantItemDialog({
                       size="small"
                     >
                       {expressOcrPending ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
+                        <Loader2 aria-hidden size="small" spin />
                       ) : (
-                        <ScanLine className="h-3 w-3" />
+                        <ScanLine aria-hidden size="small" />
                       )}
                       识别
                     </Button>
@@ -1474,7 +1471,7 @@ export function ImportantItemDialog({
               htmlType="submit"
               theme="solid"
             >
-              {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isPending && <Loader2 aria-hidden size="default" spin />}
               {submitLabel}
             </Button>
           </DialogFooter>

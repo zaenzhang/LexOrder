@@ -4,7 +4,7 @@ import { FocusButton } from "@/components/patterns/focus-button";
 import { useId, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, X, Search, Loader2 } from "lucide-react";
+import { IconPlus as Plus, IconClose as X, IconSearch as Search, IconLoading as Loader2 } from "@douyinfe/semi-icons";
 import { Button, Input, Notification, Popover, RadioGroup, Toast } from "@douyinfe/semi-ui";
 import {
   searchMattersForLink,
@@ -114,7 +114,7 @@ export function RelatedMattersField({
           value={query}
           onChange={runSearch}
           placeholder="搜索案件名称 / 所内案号"
-          prefix={<Search className="h-3.5 w-3.5" aria-hidden />}
+          prefix={<Search size="small" aria-hidden />}
         />
         <RadioGroup
           type="button"
@@ -126,7 +126,7 @@ export function RelatedMattersField({
         <div className="max-h-64 space-y-1 overflow-y-auto">
           {searching ? (
             <div className="flex items-center justify-center py-6 text-xs text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <Loader2 aria-hidden size="small" spin />
             </div>
           ) : results.length === 0 ? (
             <p className="py-6 text-center text-xs text-muted-foreground">无可关联的案件</p>
@@ -140,7 +140,7 @@ export function RelatedMattersField({
                 className="flex w-full flex-col rounded-sm border border-border bg-background px-2 py-1.5 text-left text-xs transition-colors hover:border-input hover:bg-muted hover:text-foreground disabled:opacity-50"
               >
                 {m.firmCaseNo ? (
-                  <span className="font-mono text-[10.5px] text-muted-foreground">
+                  <span className="font-mono text-xs text-muted-foreground">
                     {m.firmCaseNo}
                   </span>
                 ) : null}
@@ -159,7 +159,7 @@ export function RelatedMattersField({
           aria-controls={open ? resultsId : undefined}
           onClick={() => onOpenChange(!open)}
         >
-          <Plus className="h-3.5 w-3.5" aria-hidden />
+          <Plus size="small" aria-hidden />
         </FocusButton>
       </Popover>
     </span>
@@ -170,7 +170,7 @@ export function RelatedMattersField({
       {related.map((m, index) => (
         <span
           key={m.id}
-          className="group flex min-w-0 max-w-full items-center gap-1 text-[12px]"
+          className="group flex min-w-0 max-w-full items-center gap-1 text-xs"
         >
           <Link
             href={matterHref(m)}
@@ -182,7 +182,7 @@ export function RelatedMattersField({
             <span className="max-w-[260px] truncate">{m.title}</span>
           </Link>
           {m.relation && m.relation !== "RELATED_CASE" && (
-            <span className="shrink-0 rounded bg-muted px-1 py-px text-[9.5px] text-muted-foreground">
+            <span className="shrink-0 rounded bg-muted px-1 py-px text-xs text-muted-foreground">
               {RELATION_LABEL[m.relation] ?? m.relation}
             </span>
           )}
@@ -194,7 +194,7 @@ export function RelatedMattersField({
               className="rounded-sm p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
               title="解除关联"
             >
-              <X className="h-3 w-3" />
+              <X aria-hidden size="small" />
             </Button>
           )}
           {index === related.length - 1 && addButton}
@@ -202,7 +202,7 @@ export function RelatedMattersField({
       ))}
 
       {related.length === 0 && (
-        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
           暂无关联
           {addButton}
         </span>

@@ -54,21 +54,20 @@ export function IntakesTable({
   return (
     <div className="mo-scroll-x">
       <Table<(typeof items)[number]>
-        size="small"
         pagination={false}
         rowKey="id"
         dataSource={items}
         scroll={{ x: 900 }}
         columns={[
           { title: "收案 / 当事人", width: "30%", key: "column1", render: (_, it) => <a href={`/intakes/${it.id}`} className="block min-w-0 no-underline" onClick={(e) => e.stopPropagation()}>
-                    <span className="block truncate text-[13px] font-semibold leading-5 text-foreground">{it.title}</span>
+                    <span className="block truncate text-sm font-semibold leading-5 text-foreground">{it.title}</span>
                     {it.parties.length > 0 ? (
-                      <span className="mt-0.5 block truncate text-[11px] leading-4 text-muted-foreground">
+                      <span className="mt-0.5 block truncate text-xs leading-4 text-muted-foreground">
                         当事人：{it.parties.map((p) => p.name).join("、")}
                       </span>
                     ) : null}
                     {it.matter ? (
-                      <span className="mt-0.5 block font-mono text-[11px] leading-4 text-muted-foreground/70 tabular">
+                      <span className="mt-0.5 block font-mono text-xs leading-4 text-muted-foreground/70 tabular">
                         已转案件 {it.matter.internalCode}
                       </span>
                     ) : null}
@@ -78,7 +77,7 @@ export function IntakesTable({
           { title: "收案时间", width: "11%", key: "column4", render: (_, it) => <span className="font-mono text-[var(--semi-color-text-1)]">{formatDate(new Date(it.receivedAt))}</span> },
           { title: "标的额", width: "12%", align: "right", key: "column5", render: (_, it) => <span className="font-mono">{it.claimAmount != null ? it.claimAmount.toLocaleString("zh-CN", { maximumFractionDigits: 0 }) : "—"}</span> },
           { title: "冲突核查", width: "22%", key: "column6", render: (_, it) => { const hitSeverities = it.conflictChecks.flatMap((c) => c.hits.map((h) => h.severity)); const hasBlocking = hitSeverities.includes("BLOCKING"); const pendingConclusion = it.conflictChecks.some((c) => c.conclusion === "PENDING"); return (it.conflictChecks.length === 0 ? (
-                    <span className="text-[12px] text-muted-foreground/55">未发起</span>
+                    <span className="text-xs text-muted-foreground/55">未发起</span>
                   ) : (
                     <span className="flex flex-wrap items-center gap-1.5">
                       {hasBlocking ? (

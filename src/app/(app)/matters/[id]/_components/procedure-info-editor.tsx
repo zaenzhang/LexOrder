@@ -3,7 +3,7 @@
 import { useId, useEffect, useMemo, useState, useTransition } from "react";
 import type { LitigationStanding, MatterCategory, PartyRole, PartyType, ProcedureType } from "@prisma/client";
 import { Select, Button, Checkbox, Input, Toast } from "@douyinfe/semi-ui";
-import { Loader2, Plus, X } from "lucide-react";
+import { IconLoading as Loader2, IconPlus as Plus, IconClose as X } from "@douyinfe/semi-icons";
 import { DialogFooter } from "@/components/patterns/workspace-dialog";
 import { FormDialogBody } from "@/components/patterns/form-dialog";
 import { EnterpriseNameInput } from "@/components/matters/enterprise-name-input";
@@ -365,7 +365,7 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
             <section data-editor-autofocus={initialSection === "procedure"} tabIndex={-1} aria-label="当前程序信息" className={formSectionClass}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <SectionTitle>当前程序信息</SectionTitle>
-                <span className="font-mono text-[11px] text-muted-foreground">
+                <span className="font-mono text-xs text-muted-foreground">
                   {procedureLabel}
                 </span>
               </div>
@@ -490,9 +490,9 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
                   size="small"
                 >
                   {showNewPartyForm ? (
-                    <X className="h-3.5 w-3.5" />
+                    <X aria-hidden size="small" />
                   ) : (
-                    <Plus className="h-3.5 w-3.5" />
+                    <Plus aria-hidden size="small" />
                   )}
                   {showNewPartyForm ? "收起新增当事人" : "添加当事人"}
                 </Button>
@@ -514,26 +514,26 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
                             {draft.name || "—"}
                           </span>
                           {party.standing && (
-                            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                               {litigationStandingLabel[party.standing]}
                             </span>
                           )}
                           {party.role === "CLIENT_PARTY" && (
-                            <span className="shrink-0 rounded border border-primary/20 bg-primary/10 px-1 py-0 text-[10px] font-medium leading-4 text-primary">
+                            <span className="shrink-0 rounded border border-primary/20 bg-primary/10 px-1 py-0 text-xs font-medium leading-4 text-primary">
                               客户
                             </span>
                           )}
                         </div>
                         <div className="flex flex-wrap gap-x-3 gap-y-2">
                           {partyStandingOptions.map((standing) => (
-                            <div key={`${party.id}-${standing}`} className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                            <div key={`${party.id}-${standing}`} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                               <Checkbox checked={hasProcedureStanding(party.id, standing)} onChange={({ target: { checked } }) => toggleProcedureParty(party.id, standing, checked === true)}>
                               <span>{litigationStandingLabel[standing]}</span>
                             </Checkbox></div>
                           ))}
                         </div>
                         {party.id.startsWith("client:") ? <p className="text-xs text-muted-foreground">客户资料请在客户详情修改；此处仅设置程序地位。</p> : <div className="rounded-md border border-border bg-muted/30 p-2">
-                          <div className="mb-2 text-[11px] font-medium text-muted-foreground">
+                          <div className="mb-2 text-xs font-medium text-muted-foreground">
                             主体基础信息
                           </div>
                           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -621,7 +621,7 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
                               />
                               {(() => {
                                 const err = isOrg ? personIdError("USCC", draft.enterpriseSocialCode) : personIdError(draft.idType, draft.idNumber);
-                                return err ? <p className="text-[11px] text-[var(--semi-color-warning,#b7791f)]">{err}</p> : null;
+                                return err ? <p className="text-xs text-[var(--semi-color-warning,#b7791f)]">{err}</p> : null;
                               })()}
                             </div>
                             {isOrg && (
@@ -674,10 +674,10 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
                         <span className="min-w-0 truncate text-xs font-medium" title={party.name}>
                           {party.name}
                         </span>
-                        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                           {PARTY_ROLE_LABEL[party.role]} · {partyTypeLabel[party.partyType]}
                         </span>
-                        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                           {party.partyType === "NATURAL_PERSON"
                             ? party.idNumber
                             : party.enterpriseSocialCode}
@@ -692,12 +692,12 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
                           className="ml-auto rounded p-0.5 text-muted-foreground hover:text-destructive"
                           aria-label={`移除待添加的${party.name}`}
                         >
-                          <X className="h-3.5 w-3.5" />
+                          <X aria-hidden size="small" />
                         </Button>
                       </div>
                       <div className="flex flex-wrap gap-x-3 gap-y-2">
                         {partyStandingOptions.map((standing) => (
-                          <div key={`${party.tempId}-${standing}`} className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                          <div key={`${party.tempId}-${standing}`} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                             <Checkbox checked={party.standings.includes(standing)} onChange={({ target: { checked } }) => toggleNewDraftStanding(party.tempId, standing, checked === true)}>
                             <span>{litigationStandingLabel[standing]}</span>
                           </Checkbox></div>
@@ -779,7 +779,7 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
                   </div>
                   <div className="mt-2 flex flex-wrap gap-x-3 gap-y-2">
                     {partyStandingOptions.map((standing) => (
-                      <div key={`new-form-${standing}`} className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <div key={`new-form-${standing}`} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                         <Checkbox checked={newPartyForm.standings.includes(standing)} onChange={({ target: { checked } }) => toggleNewPartyFormStanding(standing, checked === true)}>
                         <span>{litigationStandingLabel[standing]}</span>
                       </Checkbox></div>
@@ -795,7 +795,7 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
     <DialogFooter className="px-6 py-4">
       {error && <p role="alert" className="basis-full text-sm text-destructive">{error}</p>}
       <Button onClick={onCancel} disabled={isPending} htmlType="button" type="tertiary" theme="outline">取消</Button>
-      <Button disabled={isPending || !dirty} htmlType="submit" theme="solid">{isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}保存程序与当事人</Button>
+      <Button disabled={isPending || !dirty} htmlType="submit" theme="solid">{isPending && <Loader2 aria-hidden size="default" className="mr-1.5" spin />}保存程序与当事人</Button>
     </DialogFooter>
   </form>;
 }

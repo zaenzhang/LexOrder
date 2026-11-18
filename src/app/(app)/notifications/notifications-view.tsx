@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, CheckCheck } from "lucide-react";
+import { IconBell as Bell, IconTickCircle as CheckCheck } from "@douyinfe/semi-icons";
 import { markAllNotificationsRead, type getNotifications } from "@/server/notifications/actions";
 import { Button, Tag } from "@douyinfe/semi-ui";
 import { cn } from "@/lib/utils";
-import { PageHeader } from "@/components/patterns/moan";
+import { PageHeader } from "@/components/patterns/workspace-surfaces";
 import { shMonthDayTime } from "@/lib/ui/sh-time";
 
 const typeLabels: Record<string, string> = {
@@ -62,7 +62,7 @@ export function NotificationsView({ notifications: initialNotifications }: {
         sub={<>系统提醒、用章、期限和庭审通知{unreadCount > 0 ? <> · 未读 <b>{unreadCount}</b> 条</> : null}</>}
         actions={
           unreadCount > 0 ? (
-            <Button htmlType="button" type="secondary" size="small" loading={busy} disabled={busy} icon={<CheckCheck size={16} />} onClick={() => void markAllRead()}>全部已读</Button>
+            <Button htmlType="button" type="secondary" size="small" loading={busy} disabled={busy} icon={<CheckCheck aria-hidden size="default" />} onClick={() => void markAllRead()}>全部已读</Button>
           ) : null
         }
       />
@@ -71,7 +71,7 @@ export function NotificationsView({ notifications: initialNotifications }: {
       <div className="ll-surface overflow-hidden rounded-lg">
         {notifications.length === 0 ? (
           <div className="p-12 text-center text-sm text-muted-foreground">
-            <Bell className="mx-auto mb-2 h-6 w-6 opacity-40" />
+            <Bell aria-hidden size="extra-large" className="mx-auto mb-2 opacity-40" />
             暂无通知
           </div>
         ) : (
@@ -95,7 +95,7 @@ export function NotificationsView({ notifications: initialNotifications }: {
                       <Tag size="small">{typeLabels[n.type] ?? "其他"}</Tag>
                       <span
                         className={cn(
-                          "min-w-0 truncate text-[13px]",
+                          "min-w-0 truncate text-sm",
                           !n.read && "font-medium",
                           priorityClass[n.priority] ?? "text-foreground"
                         )}
@@ -104,12 +104,12 @@ export function NotificationsView({ notifications: initialNotifications }: {
                       </span>
                     </div>
                     {n.content && (
-                      <p className="mt-1 truncate text-[12px] text-muted-foreground">
+                      <p className="mt-1 truncate text-xs text-muted-foreground">
                         {n.content}
                       </p>
                     )}
                   </div>
-                  <time className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                  <time className="shrink-0 font-mono text-xs text-muted-foreground">
                     {formatTime(n.createdAt)}
                   </time>
                 </div>

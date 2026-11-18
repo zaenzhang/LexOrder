@@ -1,8 +1,10 @@
 "use client";
 
+import { FormField as Field } from "@/components/patterns/form-dialog";
+
 import { useId, useTransition } from "react";
-import { ScanLine } from "lucide-react";
-import { Button, Form, Input, Notification, Select, Toast } from "@douyinfe/semi-ui";
+import { IconScan as ScanLine } from "@douyinfe/semi-icons";
+import { Button, Input, Notification, Select, Toast } from "@douyinfe/semi-ui";
 import {
   identityDocumentTypeLabel,
   identityDocumentTypes,
@@ -88,10 +90,10 @@ export function IdentityDocumentFields({
         <Select aria-labelledby={`${prefix}-type-label`} disabled={busy} value={value.documentType}
           onChange={documentType => onChange({ ...value, documentType: documentType as IdentityDocumentTypeValue, documentName: documentType === "OTHER" ? value.documentName : "" })}>{identityDocumentTypes.map(type => <Select.Option key={type} value={type} showTick={false}>{identityDocumentTypeLabel[type]}</Select.Option>)}</Select>
       </Field>
-      {value.documentType === "OTHER" && <Field name={`${prefix}-name`} label="证件名称" required error={errors?.documentName}>
+      {value.documentType === "OTHER" && <Field id={`${prefix}-name`} label="证件名称" required error={errors?.documentName}>
         <Input id={`${prefix}-name`} disabled={busy} maxLength={60} value={value.documentName} onChange={documentName => onChange({ ...value, documentName })} placeholder="请输入证件全称" />
       </Field>}
-      <Field name={`${prefix}-number`} label="证件号码" required error={errors?.documentNumber}>
+      <Field id={`${prefix}-number`} label="证件号码" required error={errors?.documentNumber}>
         <Input id={`${prefix}-number`} disabled={busy} autoComplete="off" spellCheck={false} maxLength={50} className="font-mono uppercase" value={value.documentNumber} onChange={documentNumber => onChange({ ...value, documentNumber })} placeholder={value.documentType === "PRC_RESIDENT_ID" ? "请输入18位居民身份证号码" : "请输入证件号码"} />
       </Field>
     </div>
@@ -103,18 +105,10 @@ export function IdentityDocumentFields({
       支持 JPG、PNG 或 WebP，单张不超过 10 MB。照片也可稍后在「资料 → 身份证件」补充。
     </p>
     <div className="flex flex-wrap items-center gap-3">
-      <Button htmlType="button" theme="outline" size="small" disabled={disabled || recognizing || !value.primaryFile} onClick={recognize} loading={recognizing} icon={<ScanLine size={16} aria-hidden />}>
+      <Button htmlType="button" theme="outline" size="small" disabled={disabled || recognizing || !value.primaryFile} onClick={recognize} loading={recognizing} icon={<ScanLine size="default" aria-hidden />}>
         {recognizing ? "正在识别" : "自动识别"}
       </Button>
       <p className="text-xs text-muted-foreground">识别结果需核对原件。非本地识别需确认后发送。</p>
     </div>
   </section>;
-}
-
-function Field({ name, labelId, label, required, error, children }: { name?: string; labelId?: string; label: string; required?: boolean; error?: string; children: React.ReactNode }) {
-  return <div className="space-y-1.5">
-    <Form.Label name={name} id={labelId} text={label} required={required} />
-    {children}
-    {error && <p className="text-xs text-destructive">{error}</p>}
-  </div>;
 }

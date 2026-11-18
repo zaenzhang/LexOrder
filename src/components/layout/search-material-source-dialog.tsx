@@ -1,7 +1,9 @@
 "use client";
 
+import { DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, WorkspaceDialog } from "@/components/patterns/workspace-dialog";
+
 import { useEffect, useState } from "react";
-import { Button, Modal, Typography } from "@douyinfe/semi-ui";
+import { Button, Typography } from "@douyinfe/semi-ui";
 import { getMaterialSource } from "@/server/documents/processing-actions";
 import type { MaterialSourceInput, MaterialSourceResult } from "@/server/documents/material-processing";
 
@@ -27,15 +29,12 @@ export function SearchMaterialSourceDialog({ input, onClose }: {
     return () => { active = false; };
   }, [documentId, runId, anchorId, attempt]);
   const source = result?.status === "AVAILABLE" ? result : null;
-  return <Modal visible title={source?.document.name ?? "材料命中来源"} onCancel={onClose}
-    width="min(900px, calc(100vw - 24px))" centered motion={false} preventScroll bodyStyle={{ maxHeight: "70vh", overflowY: "auto" }}
-    footer={<div className="flex flex-wrap items-center justify-end gap-3">
-      {error || result?.status === "UNAVAILABLE" ? <Button theme="outline" onClick={() => setAttempt(value => value + 1)}>重新读取来源</Button> : null}
-      {source?.previewUrl ? <Typography.Text link={{ href: source.previewUrl, target: "_blank", rel: "noopener noreferrer" }}>{source.previewKind === "TABLE" ? "查看单元格转换预览" : source.previewKind === "CONVERTED" ? "另页查看转换预览" : "另页查看预览"}</Typography.Text> : null}
-      {source ? <Typography.Text link={{ href: source.downloadUrl, target: "_blank", rel: "noopener noreferrer" }}>下载此版本</Typography.Text> : null}
-      <Button theme="outline" autoFocus onClick={onClose}>返回搜索结果</Button>
-    </div>}>
-      <p className="mb-3 text-sm text-[var(--semi-color-text-2)]">{source ? `第 ${source.document.version} 版 · ${source.locationLabel}` : "指定材料与原文位置"}</p>
+  return <WorkspaceDialog open dismissOnBackdrop onOpenChange={open => { if (!open) onClose(); }}>
+    <DialogContent className="max-w-[900px]">
+      <DialogHeader>
+        <DialogTitle>{source?.document.name ?? "材料命中来源"}</DialogTitle>
+        <DialogDescription>{source ? `第 ${source.document.version} 版 · ${source.locationLabel}` : "指定材料与原文位置"}</DialogDescription>
+      </DialogHeader>
       {!result && !error ? <p role="status" className="text-sm text-muted-foreground">正在读取命中位置…</p> : null}
       {result?.status === "UNAVAILABLE" ? <p role="alert" className="text-sm text-muted-foreground">此来源当前不可用，请核对材料状态和读取权限。</p> : null}
       {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
@@ -47,5 +46,12 @@ export function SearchMaterialSourceDialog({ input, onClose }: {
         {source.previewKind === "CONVERTED" && <p className="text-sm text-muted-foreground">转换预览打开整份文件，未按引用位置跳转。</p>}
         {source.previewUrl ? <iframe title={source.previewKind === "TABLE" ? "单元格转换预览" : source.previewKind === "CONVERTED" ? "整份转换预览" : "文件预览"} src={source.previewUrl} className="h-[55vh] w-full rounded border" /> : null}
       </> : null}
-  </Modal>;
+      <DialogFooter>
+        {error || result?.status === "UNAVAILABLE" ? <Button theme="outline" onClick={() => setAttempt(value => value + 1)}>重新读取来源</Button> : null}
+        {source?.previewUrl ? <Typography.Text link={{ href: source.previewUrl, target: "_blank", rel: "noopener noreferrer" }}>{source.previewKind === "TABLE" ? "查看单元格转换预览" : source.previewKind === "CONVERTED" ? "另页查看转换预览" : "另页查看预览"}</Typography.Text> : null}
+        {source ? <Typography.Text link={{ href: source.downloadUrl, target: "_blank", rel: "noopener noreferrer" }}>下载此版本</Typography.Text> : null}
+        <Button theme="outline" autoFocus onClick={onClose}>返回搜索结果</Button>
+      </DialogFooter>
+    </DialogContent>
+  </WorkspaceDialog>;
 }

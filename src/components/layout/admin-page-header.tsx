@@ -6,7 +6,7 @@
  */
 import { Breadcrumb } from "@douyinfe/semi-ui";
 import { adminNavigation } from "@/components/layout/admin-shell";
-import { PageHeader } from "@/components/patterns/moan";
+import { PageHeader } from "@/components/patterns/workspace-surfaces";
 import { useWorkspaceActor } from "@/components/workspace-actor-provider";
 
 export function AdminPageHeader({ title, sub, actions }: { title: string; sub?: React.ReactNode; actions?: React.ReactNode }) {

@@ -2,7 +2,7 @@
 
 import { Button, Form, Input, Notification, Select, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
-import { Plus, Trash2, Loader2, Pencil, Save } from "lucide-react";
+import { IconPlus as Plus, IconDelete as Trash2, IconLoading as Loader2, IconEdit as Pencil, IconSave as Save } from "@douyinfe/semi-icons";
 import type { ProcedureType, StageTemplate } from "@prisma/client";
 import {
   WorkspaceDialog,
@@ -76,7 +76,7 @@ export function TemplatesView({ templates }: { templates: StageTemplate[] }) {
             </p>
           </div>
           <Button theme="solid" size="small" onClick={() => setEditing(true)} className="gap-1.5">
-            <Pencil className="h-3.5 w-3.5" />
+            <Pencil aria-hidden size="small" />
             {current ? "编辑" : "新建模板"}
           </Button>
         </div>
@@ -196,7 +196,7 @@ function EditTemplateDialog({
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-medium">阶段流程</h3>
             <Button theme="outline" size="small" onClick={addStep} className="h-7 gap-1">
-              <Plus className="h-3.5 w-3.5" />
+              <Plus aria-hidden size="small" />
               添加阶段
             </Button>
           </div>
@@ -220,7 +220,7 @@ function EditTemplateDialog({
                     onClick={() => removeStep(idx)}
                     className="h-8 w-8 p-0 text-destructive"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 aria-hidden size="small" />
                   </Button>
                 </div>
               </li>
@@ -233,7 +233,7 @@ function EditTemplateDialog({
             取消
           </Button>
           <Button theme="solid" onClick={handleSave} disabled={isPending} className="gap-1.5">
-            {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {isPending ? <Loader2 aria-hidden size="default" spin /> : <Save aria-hidden size="default" />}
             保存模板
           </Button>
         </DialogFooter>

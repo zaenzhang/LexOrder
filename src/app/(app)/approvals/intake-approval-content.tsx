@@ -5,7 +5,7 @@ import { Button, Tag } from "@douyinfe/semi-ui";
 import {RevisionHistory} from "@/app/(app)/intakes/[id]/_components/revision-history";
 import { useState } from "react";
 
-import { AlertTriangle, FileText, Scale, Users, Wallet, Building2, BriefcaseBusiness, ChevronRight } from "lucide-react";
+import { IconAlertTriangle as AlertTriangle, IconArticle as FileText, IconVerify as Scale, IconUserGroup as Users, IconCoinMoney as Wallet, IconApartment as Building2, IconBriefcase as BriefcaseBusiness, IconChevronRight as ChevronRight } from "@douyinfe/semi-icons";
 import styles from "./intake-approval.module.css";
 
 import { conflictMatchKind, conflictMatchKinds, conflictMatchedFieldLabel, conflictPartyRoleLabel, conflictSeverityLabel, type IntakeReviewField } from "@/lib/approvals/intake-detail";
@@ -34,7 +34,7 @@ function splitEmpty(fields: IntakeReviewField[]) {
 
 function EmptyToggle({ count, open, onToggle }: { count: number; open: boolean; onToggle: () => void }) {
   if (!count) return null;
-  return <Button htmlType="button" onClick={onToggle} aria-expanded={open} className="ml-auto text-[11px] font-normal text-[var(--semi-color-text-3)] hover:text-[var(--semi-color-primary-active)]" theme="borderless" type="tertiary">{open ? "收起未填写项" : `未填写 ${count} 项`}</Button>;
+  return <Button htmlType="button" onClick={onToggle} aria-expanded={open} className="ml-auto text-xs font-normal text-[var(--semi-color-text-3)] hover:text-[var(--semi-color-primary-active)]" theme="borderless" type="tertiary">{open ? "收起未填写项" : `未填写 ${count} 项`}</Button>;
 }
 
 function ReviewSection({ section }: { section: Detail["sections"][number] }) {
@@ -54,7 +54,7 @@ function PartiesSection({ sections }: { sections: Detail["sections"] }) {
   const [showEmpty, setShowEmpty] = useState(false);
   const emptyCount = sections.reduce((n, sec) => n + emptyPartyFieldCount(sec.fields), 0);
   return <section className="rv-section">
-    <div className="rv-sec-head"><Users className="h-[14px] w-[14px] text-[var(--semi-color-primary)]" />当事人<span className="t-xs t-mute font-normal">{sections.length} 位</span><EmptyToggle count={emptyCount} open={showEmpty} onToggle={() => setShowEmpty(!showEmpty)} /></div>
+    <div className="rv-sec-head"><Users aria-hidden className="h-[14px] w-[14px] text-[var(--semi-color-primary)]" />当事人<span className="t-xs t-mute font-normal">{sections.length} 位</span><EmptyToggle count={emptyCount} open={showEmpty} onToggle={() => setShowEmpty(!showEmpty)} /></div>
     {sections.map(sec => {
       const get = (label: string) => sec.fields.find(f => f.label === label)?.value;
       const rest = sec.fields.filter(f => !partyHeadFields.has(f.label));
@@ -90,18 +90,18 @@ export function IntakeApprovalContent({ detail, view = "all", onOpenConflicts }:
       return blocks;
     })()}
     {view === "overview" && <section className="rv-section">
-      <div className="rv-sec-head"><AlertTriangle className="h-[14px] w-[14px] text-[var(--semi-color-danger)]" />冲突核查摘要{onOpenConflicts && <Button htmlType="button" onClick={onOpenConflicts} className="ml-auto text-[11px] font-[550] text-[var(--semi-color-primary-active)]" theme="borderless" type="tertiary">查看完整检索记录 →</Button>}</div>
+      <div className="rv-sec-head"><AlertTriangle aria-hidden className="h-[14px] w-[14px] text-[var(--semi-color-danger)]" />冲突核查摘要{onOpenConflicts && <Button htmlType="button" onClick={onOpenConflicts} className="ml-auto text-xs font-[550] text-[var(--semi-color-primary-active)]" theme="borderless" type="tertiary">查看完整检索记录 →</Button>}</div>
       <div className="conf-sum">
-        <div className="cs-ic" style={!latest || latest.hits.length ? undefined : { background: "var(--semi-color-success-light-default)", color: "var(--semi-color-success)" }}><AlertTriangle /></div>
+        <div className="cs-ic" style={!latest || latest.hits.length ? undefined : { background: "var(--semi-color-success-light-default)", color: "var(--semi-color-success)" }}><AlertTriangle aria-hidden /></div>
         <div style={{ flex: 1 }}>
           <div className="cs-t">{!latest ? "尚未进行冲突检索" : latest.hits.length ? conflictMatchKinds.map(k => ({ k, n: latest.hits.filter(h => conflictMatchKind(h) === k.key).length })).filter(x => x.n).map(x => `${x.k.label} × ${x.n}`).join(" · ") : "系统检索未命中"}</div>
           <div className="cs-d">{!latest ? "当前没有可供核查的检索记录，请退回补正或要求重新检索。" : `最近一次检索 ${dateText(latest.checkedAt)} · 当前结论「${latest.conclusion}」${latest.coversCurrentParties ? "" : " · 检索资料不完整，请重新检索"}。未命中不等于人工确认无冲突。`}</div>
         </div>
-        {onOpenConflicts && <ChevronRight className="h-4 w-4 text-[var(--semi-color-text-3)]" />}
+        {onOpenConflicts && <ChevronRight aria-hidden size="default" className="text-[var(--semi-color-text-3)]" />}
       </div>
     </section>}
     {view !== "overview" && <section className="rv-section">
-      <div className="rv-sec-head"><AlertTriangle className="h-[14px] w-[14px] text-[var(--semi-color-danger)]" />利益冲突核查详情<span className="t-xs t-mute ml-auto font-normal">系统提示不能代替审批判断</span></div>
+      <div className="rv-sec-head"><AlertTriangle aria-hidden className="h-[14px] w-[14px] text-[var(--semi-color-danger)]" />利益冲突核查详情<span className="t-xs t-mute ml-auto font-normal">系统提示不能代替审批判断</span></div>
       <div className="panel-body space-y-4">
       {!detail.checks.length && <p className="rounded-lg border border-[var(--semi-color-warning-light-active)] bg-[var(--semi-color-warning-light-default)] p-3 text-sm">尚未运行利益冲突检索，当前没有可供核查的检索记录。</p>}
       {detail.checks.map((check, index) => <Disclosure key={check.id} defaultOpen={index === 0} className={styles.check} heading={<>{index === 0 ? "最近一次检索" : "历史检索"} · {dateText(check.checkedAt)} · 检索结果 {check.hits.length} 条</>}>

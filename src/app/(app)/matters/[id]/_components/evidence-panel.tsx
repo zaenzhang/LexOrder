@@ -4,7 +4,7 @@ import { FocusButton } from "@/components/patterns/focus-button";
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Select, Button, Input, Notification, Tag, TextArea, Toast, Typography } from "@douyinfe/semi-ui";
-import { Loader2, Unlink } from "lucide-react";
+import { IconLoading as Loader2, IconUnlink as Unlink } from "@douyinfe/semi-icons";
 import { WorkspaceDialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import {
@@ -86,7 +86,7 @@ function SourceButton({ itemId, revision, source }: { itemId: string; revision?:
   const [pending, startTransition] = useTransition();
   const [preview, setPreview] = useState<Extract<EvidenceSourceResult, { status: "AVAILABLE" }> | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-  if (source.status === "UNAVAILABLE") return <span className="inline-flex items-center gap-1 text-muted-foreground"><Unlink className="h-3 w-3" />来源不可用</span>;
+  if (source.status === "UNAVAILABLE") return <span className="inline-flex items-center gap-1 text-muted-foreground"><Unlink aria-hidden size="small" />来源不可用</span>;
   function open() {
     startTransition(async () => {
       try {
@@ -103,7 +103,7 @@ function SourceButton({ itemId, revision, source }: { itemId: string; revision?:
       onClick={open}
       disabled={pending}
       className="min-w-0 max-w-full">
-      {pending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : null}
+      {pending ? <Loader2 aria-hidden data-icon="inline-start" spin /> : null}
       <span className="min-w-0 break-words">
         {source.relation ? sourceRelationLabel[source.relation] + " · " : "历史来源 · "}
         {source.documentName} · 第 {source.documentVersion} 版 · {source.locationLabel}
@@ -237,7 +237,7 @@ function EvidenceDetailDialog({ initial, onClose, onReturnFocus }: { initial: Ed
     if (!date.success) { setError(date.error.issues[0].message); return; }
     change(() => updateEvidenceItem({ evidenceItemId: item.id, expectedRevision: item.revision, title, content, kind, eventDate: date.data }), "要点修改已保存，记录待核对");
   }
-  return <WorkspaceDialog open onOpenChange={open => { if (!open) void close(); }}>
+  return <WorkspaceDialog dismissOnBackdrop open onOpenChange={open => { if (!open) void close(); }}>
     <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto" onCloseAutoFocus={event => { event.preventDefault(); onReturnFocus(); }}>
       <DialogHeader><DialogTitle>证据要点</DialogTitle><DialogDescription>
         第 {item.revision} 版 · {item.confirmedAt ? `记录已由 ${item.confirmedByName ?? "记录的核对人"} 核对 · ${formatDate(new Date(item.confirmedAt))}` : "记录待核对"}
@@ -278,7 +278,7 @@ function EvidenceDetailDialog({ initial, onClose, onReturnFocus }: { initial: Ed
         {item.canEdit ? <>
           <Button disabled={pending || sourceBusy || dirty || Boolean(item.confirmedAt)} onClick={() => void confirm()} type="tertiary" theme="outline">核对本版记录</Button>
           <Button disabled={pending || sourceBusy || !dirty || !title.trim() || !content.trim()} onClick={save} theme="solid">
-            {pending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}保存要点修改
+            {pending ? <Loader2 aria-hidden size="small" className="mr-1" spin /> : null}保存要点修改
           </Button>
         </> : null}
       </DialogFooter>
@@ -388,6 +388,6 @@ function EvidenceCreateForm({ matterId, documents, defaultDocumentId, onClose, o
       <div className="space-y-1.5"><label id={id + "-relation" + "-label"} className="text-sm font-medium text-[var(--semi-color-text-1)]">来源关系</label><Select value={relation} onChange={value => { if (typeof value === "string") setRelation(value as Relation); }} disabled={pending} id={id + "-relation"} aria-labelledby={id + "-relation" + "-label"} className="w-full" motion={false}>{RELATIONS.map(value => <Select.Option key={value} value={value}>{sourceRelationLabel[value]}</Select.Option>)}</Select></div>
     </div> : null}
     {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
-    <DialogFooter><Button onClick={onClose} disabled={pending} type="tertiary" theme="outline">取消</Button><Button onClick={submit} disabled={pending} theme="solid">{pending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}保存要点</Button></DialogFooter>
+    <DialogFooter><Button onClick={onClose} disabled={pending} type="tertiary" theme="outline">取消</Button><Button onClick={submit} disabled={pending} theme="solid">{pending ? <Loader2 aria-hidden size="small" className="mr-1" spin /> : null}保存要点</Button></DialogFooter>
   </DialogContent>;
 }

@@ -69,33 +69,29 @@ afterEach(() => {
   else Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
 });
 
-async function openFromMore() {
-  const more = screen.getByRole("button", { name: "更多操作" });
-  more.focus();
-  fireEvent.keyDown(more, { key: "Enter" });
-  const edit = await screen.findByRole("menuitem", { name: "编辑案件与团队" });
-  await waitFor(() => expect(edit).toHaveFocus());
-  fireEvent.keyDown(edit, { key: "Enter" });
+async function openFromHeader() {
+  const trigger = screen.getByRole("button", { name: "编辑案件与团队" });
+  trigger.focus();
+  fireEvent.click(trigger);
   const dialog = await screen.findByRole("dialog", { name: "编辑案件信息" });
-  await waitFor(() => expect(edit).not.toBeInTheDocument());
-  return { more, dialog };
+  return { trigger, dialog };
 }
 
 describe("无程序事项编辑弹窗的返回位置", () => {
-  it.each(["IN_PROGRESS", "ARCHIVED"] as const)("%s 从更多菜单取消后回到稳定页头按钮", async (status) => {
+  it.each(["IN_PROGRESS", "ARCHIVED"] as const)("%s 从页头直接编辑，取消后回到原按钮", async (status) => {
     render(<MatterDetailTabs {...props} matter={{ ...matter, status }} />);
-    const { more, dialog } = await openFromMore();
+    const { trigger, dialog } = await openFromHeader();
     fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
-    await waitFor(() => expect(more).toHaveFocus());
+    await waitFor(() => expect(trigger).toHaveFocus());
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
-  it("菜单打开后按 Escape 返回；再次从基本信息或团队打开仍返回各自入口", async () => {
+  it("页头编辑按 Escape 返回；从基本信息或团队打开仍返回各自入口", async () => {
     render(<MatterDetailTabs {...props} />);
-    const { more, dialog } = await openFromMore();
+    const { trigger, dialog } = await openFromHeader();
     fireEvent.keyDown(dialog, { key: "Escape" });
-    await waitFor(() => expect(more).toHaveFocus());
+    await waitFor(() => expect(trigger).toHaveFocus());
     for (const name of ["编辑基本信息", "管理团队"]) {
       const trigger = screen.getByRole("button", { name });
       trigger.focus();

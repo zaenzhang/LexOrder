@@ -1,16 +1,12 @@
 "use client";
 
-/**
- * 案件页壳（墨案 03 效果图 · 从零重写，替代旧 matters-view 的渲染路径）。
- * 布局 = 效果图：22px 页头 + 统计副文 + 导出/新建按钮 / 带计数的胶囊分段 /
- * 搜索 + 筛选胶囊 + 排序工具栏 / 档案架表格 / 分页栏。URL 为唯一筛选状态源。
- */
+/** 案件列表的页签、筛选、排序与分页以 URL 为准。 */
 import { useCallback, useEffect, useId, useState, useTransition, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, Checkbox, Input, Pagination, Popover, Select, Tabs } from "@douyinfe/semi-ui";
-import { Archive, CalendarDays, Columns3, Download, Search } from "lucide-react";
-import { PageHeader } from "@/components/patterns/moan";
+import { IconArchive as Archive, IconCalendar as CalendarDays, IconGridView as Columns3, IconDownload as Download, IconSearch as Search } from "@douyinfe/semi-icons";
+import { PageHeader } from "@/components/patterns/workspace-surfaces";
 import type { MatterCategory } from "@prisma/client";
 import { matterCategoryLabel } from "@/lib/enums";
 import { MATTER_COLUMNS, MattersTable, type MatterColumn, type MatterRow } from "./matters-table";
@@ -18,8 +14,7 @@ import { IntakesTable, type IntakeRow } from "./intakes-table";
 import { IntakeWizard } from "@/app/(app)/intakes/_components/intake-wizard";
 import { useTopbarAction } from "@/components/layout/topbar-action";
 
-type Tab = "intake" | "active" | "archived" | "revision" | "all";
-type SortBy = "hearing" | "intakeDate" | "claimAmount" | "archivedAt";
+import { defaultSortByForTab, supportsSortBy, type MattersTab as Tab, type MatterSortBy as SortBy } from "@/lib/matters/list-location";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "all", label: "全部" },
@@ -107,8 +102,8 @@ export function MattersViewV4({
     const to = o.to !== undefined ? String(o.to) : f.to;
     if (from) p.set("from", from);
     if (to) p.set("to", to);
-    const sb = (o.sortBy as SortBy) ?? f.sortBy ?? (t === "archived" ? "archivedAt" : t === "active" ? "hearing" : "intakeDate");
-    p.set("sortBy", sb);
+    const sort = (o.sortBy as SortBy) ?? f.sortBy;
+    p.set("sortBy", sort && supportsSortBy(t, sort) ? sort : defaultSortByForTab(t));
     p.set("sortDir", (o.sortDir as "asc" | "desc") ?? f.sortDir ?? "desc");
     const pg = o.page ?? 1;
     if (pg > 1) p.set("page", String(pg));
@@ -159,8 +154,8 @@ export function MattersViewV4({
       return next;
     });
   }
-  const currentSort = f.sortBy ?? (tab === "archived" ? "archivedAt" : tab === "active" ? "hearing" : "intakeDate");
-  const sortOptions = SORTS.filter((o) => (o.value === "archivedAt" ? tab === "archived" : o.value === "hearing" ? tab === "active" || tab === "all" : !(o.value === "claimAmount" && tab === "archived")));
+  const currentSort = f.sortBy ?? defaultSortByForTab(tab);
+  const sortOptions = SORTS.filter(o => supportsSortBy(tab, o.value));
   const scopeLabel: Record<string, string> = { all: "全部可见", mine: "我经办", team: "按团队" };
   const lastPage = Math.ceil(total / pageSize);
 
@@ -172,14 +167,14 @@ export function MattersViewV4({
         actions={
           <>
             {tab === "archived" ? (
-              <Link href="/archive" className="btn btn-secondary btn-sm" title="归档号、归档日期、结案原因与卷宗目录">
-                <Archive />
+              <Link href="/archive" className="workspace-action-link" title="归档号、归档日期、结案原因与卷宗目录">
+                <Archive aria-hidden />
                 归档台账
               </Link>
             ) : null}
             {!isIntakeTab && canExportMatters ? (
-              <a href={exportUrl} title="仅导出本人经办或原有管理权限范围内的案件；团队查看权不含导出" className="btn btn-secondary btn-sm">
-                <Download />
+              <a href={exportUrl} title="仅导出本人经办或原有管理权限范围内的案件；团队查看权不含导出" className="workspace-action-link">
+                <Download aria-hidden />
                 导出
               </a>
             ) : null}
@@ -189,7 +184,6 @@ export function MattersViewV4({
 
       <Tabs
         type="button"
-        size="small"
         tabBarClassName="mb-3"
         activeKey={tab}
         keepDOM
@@ -199,15 +193,15 @@ export function MattersViewV4({
         }))}
         onChange={(key) => go({ tab: key, page: 1 })}
       >
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <form onSubmit={(e) => { e.preventDefault(); go({ search: searchInput, page: 1 }); }}>
+        <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-2.5">
+          <form className="w-full sm:w-[17rem]" role="search" onSubmit={(e) => { e.preventDefault(); go({ search: searchInput, page: 1 }); }}>
             <Input
-              size="small"
-              className="w-60"
+              size="default"
+              className="w-full"
               value={searchInput}
               onChange={setSearchInput}
-              prefix={<Search size={14} className="mx-2 shrink-0 text-[var(--semi-color-text-2)]" aria-hidden />}
-              placeholder="按名称、案号、当事人搜索"
+              prefix={<Search size="default" className="mx-2 shrink-0 text-[var(--semi-color-text-2)]" aria-hidden />}
+              placeholder="搜索案件名称、案号或当事人"
               aria-label="搜索案件"
             />
           </form>
@@ -253,7 +247,7 @@ export function MattersViewV4({
               </form>
             )}
           >
-            <Button theme="light" type={f.from || f.to ? "primary" : "tertiary"} size="small" icon={<CalendarDays size={14} aria-hidden />}>
+            <Button theme="light" type={f.from || f.to ? "primary" : "tertiary"} size="default" icon={<CalendarDays size="default" aria-hidden />}>
               收案日期{f.from || f.to ? <span className="ml-1 font-mono">{f.from ?? "…"} ~ {f.to ?? "…"}</span> : null}
             </Button>
           </Popover>
@@ -266,7 +260,7 @@ export function MattersViewV4({
               options={sortOptions.map((o) => ({ value: o.value, label: o.label.replace("按", "") }))}
               onChange={(v) => go({ sortBy: v, page: 1 })}
             />
-            <Button theme="light" type="tertiary" size="small" onClick={() => go({ sortDir: f.sortDir === "asc" ? "desc" : "asc", page: 1 })} title="切换升序 / 降序" aria-label="切换排序方向">
+            <Button theme="light" type="tertiary" size="default" onClick={() => go({ sortDir: f.sortDir === "asc" ? "desc" : "asc", page: 1 })} title="切换升序 / 降序" aria-label="切换排序方向">
               {f.sortDir === "asc" ? "升序" : "降序"}
             </Button>
             {!isIntakeTab ? (
@@ -283,7 +277,7 @@ export function MattersViewV4({
                   </div>
                 }
               >
-                <Button theme="light" type="tertiary" size="small" icon={<Columns3 size={14} aria-hidden />}>
+                <Button theme="light" type="tertiary" size="default" icon={<Columns3 size="default" aria-hidden />}>
                   列设置
                 </Button>
               </Popover>
@@ -330,7 +324,7 @@ function MatterListSelect({ label, value, options, onChange, allLabel = "全部"
   const labelId = useId();
   return (
     <Select<string>
-      size="small"
+      size="default"
       motion={false}
       insetLabel={label}
       insetLabelId={labelId}
@@ -339,6 +333,7 @@ function MatterListSelect({ label, value, options, onChange, allLabel = "全部"
       optionList={required ? options : [{ label: allLabel, value: "" }, ...options]}
       onChange={(next) => { if (typeof next === "string") onChange(next); }}
       dropdownMatchSelectWidth={false}
+      dropdownStyle={{ minWidth: 168 }}
     />
   );
 }

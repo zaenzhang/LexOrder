@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ImageUp, Trash2 } from "lucide-react";
+import { IconImage as ImageUp, IconDelete as Trash2 } from "@douyinfe/semi-icons";
 import { Avatar, Button, Tag, Toast } from "@douyinfe/semi-ui";
 import { saveMyAvatar } from "@/server/users/actions";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -57,8 +57,8 @@ export function AvatarForm({ name, role, initialAvatar }: { name: string; role?:
         <Avatar size="extra-large" src={avatar ?? undefined} alt={name}>{initial}</Avatar>
       </Button>
       <div className="flex gap-2">
-        <Button htmlType="button" size="small" onClick={() => fileRef.current?.click()} disabled={pending} loading={pending} icon={<ImageUp size={14} aria-hidden />}>上传头像</Button>
-        {avatar && <Button htmlType="button" size="small" type="danger" theme="borderless" onClick={() => save(null)} disabled={pending} icon={<Trash2 size={14} aria-hidden />}>清除</Button>}
+        <Button htmlType="button" size="small" onClick={() => fileRef.current?.click()} disabled={pending} loading={pending} icon={<ImageUp size="default" aria-hidden />}>上传头像</Button>
+        {avatar && <Button htmlType="button" size="small" type="danger" theme="borderless" onClick={() => save(null)} disabled={pending} icon={<Trash2 size="default" aria-hidden />}>清除</Button>}
       </div>
       {role && <Tag color="cyan">{role}</Tag>}
       <p className="text-xs leading-relaxed text-[var(--semi-color-text-2)]">未上传时显示姓名首字「{initial}」<br />建议方形图片，≤ 180KB</p>

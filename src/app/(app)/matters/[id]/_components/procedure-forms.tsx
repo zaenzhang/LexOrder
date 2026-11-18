@@ -1,13 +1,15 @@
 "use client";
 
+import { FormField as Field, FormDialogBody, FormDialogContent } from "@/components/patterns/form-dialog";
+
 import { DeadlineDueFields } from "@/components/matters/deadline-due-fields";
 import { deadlineDueDraft, type DeadlineDueDraft } from "@/lib/deadline-due";
 
 import { useId, useTransition, useRef, useState, useEffect, useMemo, useCallback } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Select, Button, Input, InputNumber, Notification, TextArea, Toast } from "@douyinfe/semi-ui";
-import { ExternalLink, Loader2, Scale, ScanText } from "lucide-react";
+import { Select, Button, DatePicker, Input, InputNumber, Notification, TextArea, Toast } from "@douyinfe/semi-ui";
+import { IconExternalOpen as ExternalLink, IconLoading as Loader2, IconVerify as Scale, IconScan as ScanText } from "@douyinfe/semi-icons";
 import type { MatterCategory, ProcedureType } from "@prisma/client";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import {
@@ -55,7 +57,6 @@ import {
   isNationalAgency
 } from "@/lib/china-regions";
 import { JurisdictionSelect } from "@/app/(app)/intakes/_components/jurisdiction-select";
-import { cn } from "@/lib/utils";
 
 // ============ AddProcedureSheet ============
 
@@ -90,6 +91,8 @@ export function AddProcedureSheet({
   onCreated?: (procedureId: string) => void;
 }) {
   const selectLabelId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const [dateOpen, setDateOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const procedureOptions = proceduresByCategory[category];
 
@@ -111,7 +114,7 @@ export function AddProcedureSheet({
       handlingAgency: "",
       panel: "",
       handler: "",
-      acceptedAt: undefined,
+      acceptedAt: "",
       jurisdiction: "",
       leadLawyerId: null,
       isExternalLead: false
@@ -129,28 +132,28 @@ export function AddProcedureSheet({
   );
 
   function handleProcedureTypeChange(p: ProcedureType) {
-    setValue("type", p);
+    setValue("type", p, { shouldDirty: true });
     // 机构可自由手输，只在新程序下不合法时清空（商事仲裁下选了法院）
     const cur = getValues("handlingAgency");
     if (cur && !isAgencyAllowedForProcedure(cur, p)) {
-      setValue("handlingAgency", "");
+      setValue("handlingAgency", "", { shouldDirty: true });
     }
   }
 
   function handleJurisdictionChange(v: string) {
-    setValue("jurisdiction", v);
+    setValue("jurisdiction", v, { shouldDirty: true });
     const cur = getValues("handlingAgency");
     if (isNationalAgency(cur)) {
-      setValue("handlingAgency", "");
+      setValue("handlingAgency", "", { shouldDirty: true });
     } else if (cur && !agencyOptionsForProcedure(v, getValues("type")).includes(cur)) {
-      setValue("handlingAgency", "");
+      setValue("handlingAgency", "", { shouldDirty: true });
     }
   }
 
   function handleHandlingAgencyChange(v: string) {
-    setValue("handlingAgency", v);
+    setValue("handlingAgency", v, { shouldDirty: true });
     if (isNationalAgency(v)) {
-      setValue("jurisdiction", "");
+      setValue("jurisdiction", "", { shouldDirty: true });
     }
   }
 
@@ -176,112 +179,105 @@ export function AddProcedureSheet({
   }
 
   return (
-    <WorkspaceDialog open={open} onOpenChange={open => { if (!open) void closeProcedure(); }}>
-      <DialogContent className="max-w-xl max-h-[85vh] flex flex-col gap-0 p-0">
-        <DialogHeader className="border-b border-border px-6 py-4">
+    <WorkspaceDialog dismissOnBackdrop open={open} onOpenChange={open => { if (!open) void closeProcedure(); }}>
+      <FormDialogContent
+        ref={dialogRef}
+        className="max-w-2xl"
+        showClose={!isPending}
+        onKeyDownCapture={event => {
+          if (event.key === "Escape" && dateOpen) {
+            event.preventDefault();
+            event.stopPropagation();
+            setDateOpen(false);
+          }
+        }}
+      >
+        <DialogHeader>
           <DialogTitle>添加程序（第 {nextOrder} 个）</DialogTitle>
-          <DialogDescription className="text-xs">
-            填写程序基本信息和主办律师
-          </DialogDescription>
+          <DialogDescription>填写程序基本信息和主办律师</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-1 flex-col overflow-hidden">
-          <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
-            {/* 程序类型 */}
-            <div className="space-y-2">
-              <label className="text-xs">程序类型 *</label>
-              <div className="flex flex-wrap gap-1.5">
-                {procedureOptions.map((p) => (
-                  <Button theme="outline" type="primary" size="small"
-                    key={p}
+        <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
+          <FormDialogBody>
+            <Field label="程序类型" required labelId={`${selectLabelId}-type`}>
+              <div role="group" aria-labelledby={`${selectLabelId}-type`} className="flex flex-wrap gap-2">
+                {procedureOptions.map(type => (
+                  <Button
+                    key={type}
+                    theme={procedureType === type ? "solid" : "outline"}
+                    type={procedureType === type ? "primary" : "tertiary"}
+                    aria-pressed={procedureType === type}
                     htmlType="button"
-                    onClick={() => handleProcedureTypeChange(p as ProcedureType)}
-                    className={cn(
-                      "rounded-md border px-2.5 py-1 text-xs transition-colors",
-                      procedureType === p
-                        ? "border-primary bg-primary/15 text-primary"
-                        : "border-border bg-background text-muted-foreground hover:border-input hover:bg-muted hover:text-foreground"
-                    )}
-                  >
-                    {procedureTypeLabel[p]}
-                  </Button>
+                    onClick={() => handleProcedureTypeChange(type)}
+                  >{procedureTypeLabel[type]}</Button>
                 ))}
               </div>
-            </div>
+            </Field>
 
-            {/* 主办律师 */}
             {colleagues && colleagues.length > 0 && (
-              <div className="space-y-2">
-                <label className="text-xs">主办律师</label>
-                <div className="flex items-center gap-3">
-                  <> <span className="sr-only" id={selectLabelId + "-1"}>{"选择主办律师"}</span><Select
-                    value={isExternalLead ? "__external__" : (leadLawyerId ?? "__none__")}
-                    onChange={v => { if (typeof v !== "string") return;
-                      if (v === "__external__") {
-                        setValue("isExternalLead", true);
-                        setValue("leadLawyerId", null);
-                      } else if (v === "__none__") {
-                        setValue("isExternalLead", false);
-                        setValue("leadLawyerId", null);
-                      } else {
-                        setValue("isExternalLead", false);
-                        setValue("leadLawyerId", v);
-                      }
-                    }}
-                    aria-labelledby={selectLabelId + "-1"}
-                    placeholder="选择主办律师"
-                    className="w-full"
-                    motion={false}><Select.Option value="__none__">未指定</Select.Option>{colleagues.map((c) => (
-                        <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>
-                      ))}<Select.Option value="__external__">非本所代理</Select.Option></Select></>
-                  {isExternalLead && (
-                    <span className="text-xs text-muted-foreground">此程序由外部律师代理</span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="案号">
-                <Controller control={control} name="caseNumber" render={({ field }) => <Input className="font-mono" placeholder="如 (2026)沪0105民初1288号" name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} onChange={field.onChange} />} />
-              </Field>
-              <Field label="管辖地">
-                <JurisdictionSelect
-                  value={jurisdiction}
-                  onChange={handleJurisdictionChange}
+              <Field label="主办律师" labelId={`${selectLabelId}-lead`} hint={isExternalLead ? "此程序由外部律师代理" : undefined}>
+                <Select
+                  value={isExternalLead ? "__external__" : leadLawyerId ?? "__none__"}
+                  onChange={value => {
+                    if (typeof value !== "string") return;
+                    setValue("isExternalLead", value === "__external__", { shouldDirty: true });
+                    setValue("leadLawyerId", value === "__external__" || value === "__none__" ? null : value, { shouldDirty: true });
+                  }}
+                  aria-labelledby={`${selectLabelId}-lead`}
+                  optionList={[
+                    { value: "__none__", label: "未指定" },
+                    ...colleagues.map(person => ({ value: person.id, label: person.name })),
+                    { value: "__external__", label: "非本所代理" }
+                  ]}
+                  className="w-full"
                 />
               </Field>
-              <Field label="办理机关">
-                <> <span className="sr-only" id={selectLabelId + "-2"}>{"办理机关"}</span><Select
-                  value={handlingAgency}
+            )}
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="管辖地" className="sm:col-span-2">
+                <JurisdictionSelect value={jurisdiction} onChange={handleJurisdictionChange} />
+              </Field>
+              <Field id={`${selectLabelId}-case`} label="案号">
+                <Controller control={control} name="caseNumber" render={({ field }) => <Input {...field} id={`${selectLabelId}-case`} placeholder="如 (2026)沪0105民初1288号" value={field.value ?? ""} />} />
+              </Field>
+              <Field label="办理机关" labelId={`${selectLabelId}-agency`}>
+                <Select
+                  value={handlingAgency || undefined}
                   onChange={value => { if (typeof value === "string") handleHandlingAgencyChange(value); }}
                   disabled={agencyOpts.length === 0}
-                  aria-labelledby={selectLabelId + "-2"}
+                  aria-labelledby={`${selectLabelId}-agency`}
                   placeholder="选择机构"
                   className="w-full"
-                  motion={false}>{agencyOpts.map((a) => (
-                      <Select.Option key={a} value={a}>{a}</Select.Option>
-                    ))}</Select></>
+                  optionList={agencyOpts.map(agency => ({ value: agency, label: agency }))}
+                />
               </Field>
-              <Field label="主审 / 仲裁员">
-                <Controller control={control} name="handler" render={({ field }) => <Input name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} onChange={field.onChange} />} />
+              <Field id={`${selectLabelId}-handler`} label="主审 / 仲裁员">
+                <Controller control={control} name="handler" render={({ field }) => <Input {...field} id={`${selectLabelId}-handler`} value={field.value ?? ""} />} />
               </Field>
-              <Field label="庭别 / 合议庭">
-                <Controller control={control} name="panel" render={({ field }) => <Input name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} onChange={field.onChange} />} />
+              <Field id={`${selectLabelId}-panel`} label="庭别 / 合议庭">
+                <Controller control={control} name="panel" render={({ field }) => <Input {...field} id={`${selectLabelId}-panel`} value={field.value ?? ""} />} />
               </Field>
-              <Field
-                label="立案 / 受理日期"
-                error={errors.acceptedAt?.message as string | undefined}
-              >
-                <Controller control={control} name="acceptedAt" render={({ field }) => <Input type="date" onChange={inputValue => {
-                    // 表单保存日期字符串，resolver 在提交时解析成 Date。
-                    setValue("acceptedAt", inputValue || undefined, { shouldValidate: true });
-                  }} name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} />} />
+              <Field label="立案 / 受理日期" labelId={`${selectLabelId}-accepted`} error={errors.acceptedAt?.message as string | undefined}>
+                <Controller control={control} name="acceptedAt" render={({ field }) => <DatePicker
+                  aria-labelledby={`${selectLabelId}-accepted`}
+                  aria-invalid={Boolean(errors.acceptedAt)}
+                  format="yyyy-MM-dd"
+                  placeholder="选择日期"
+                  showClear
+                  value={typeof field.value === "string" ? field.value : undefined}
+                  onChangeWithDateFirst={false}
+                  onChange={value => field.onChange(typeof value === "string" ? value : "")}
+                  open={dateOpen}
+                  onOpenChange={setDateOpen}
+                  getPopupContainer={() => dialogRef.current ?? document.body}
+                  className="w-full"
+                />} />
               </Field>
             </div>
-          </div>
+          </FormDialogBody>
 
-          <DialogFooter className="border-t border-border px-6 py-4">
+          <DialogFooter>
             <Button
               onClick={() => void closeProcedure()}
               disabled={isPending}
@@ -291,12 +287,12 @@ export function AddProcedureSheet({
               取消
             </Button>
             <Button disabled={isPending} className="gap-1.5" htmlType="submit" theme="solid">
-              {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isPending && <Loader2 aria-hidden size="default" spin />}
               添加程序
             </Button>
           </DialogFooter>
         </form>
-      </DialogContent>
+      </FormDialogContent>
     </WorkspaceDialog>
   );
 }
@@ -489,10 +485,10 @@ export function AddDeadlineDialog({
 
             {(rulesLoading || rules.length > 0) && (
               <section className="space-y-2.5 rounded-md border border-primary/25 bg-primary/[0.04] p-3">
-                <div className="flex items-center gap-1.5 text-[12px] font-medium text-foreground/85">
-                  <Scale className="h-3.5 w-3.5 text-primary" strokeWidth={1.8} />
+                <div className="flex items-center gap-1.5 text-xs font-medium text-foreground/85">
+                  <Scale aria-hidden size="small" className="text-primary" />
                   按法定期限生成
-                  {rulesLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                  {rulesLoading && <Loader2 aria-hidden size="small" className="text-muted-foreground" spin />}
                 </div>
                 <div className="space-y-1.5">
                   <label id={selectLabelId + "-4"} className="text-xs text-muted-foreground">法定期限规则</label>
@@ -515,7 +511,7 @@ export function AddDeadlineDialog({
                         className="bg-background"
                       />
                     </div>
-                    <div className="space-y-1 text-[11px] leading-5 text-muted-foreground">
+                    <div className="space-y-1 text-xs leading-5 text-muted-foreground">
                       <p>
                         {selectedRule.legalBasis}
                         {selectedRule.legalBasisUrl && (
@@ -525,12 +521,12 @@ export function AddDeadlineDialog({
                             rel="noreferrer"
                             className="ml-1 inline-flex items-center gap-0.5 text-primary hover:underline"
                           >
-                            <ExternalLink className="h-3 w-3" />
+                            <ExternalLink aria-hidden size="small" />
                             查看法条
                           </a>
                         )}
                         {selectedRule.verifiedAt && (
-                          <span className="ml-1.5 rounded bg-[var(--semi-color-success-light-default)] px-1.5 py-0.5 text-[10px] text-[var(--semi-color-success)]">
+                          <span className="ml-1.5 rounded bg-[var(--semi-color-success-light-default)] px-1.5 py-0.5 text-xs text-[var(--semi-color-success)]">
                             已核验 {shDayKey(selectedRule.verifiedAt)}
                           </span>
                         )}
@@ -551,7 +547,7 @@ export function AddDeadlineDialog({
                     <Button
                       onClick={applyRule}
                       disabled={!computedDue}
-                      className="h-7 px-2.5 text-[11px]"
+                      className="h-7 px-2.5 text-xs"
                       htmlType="button"
                       type="tertiary" theme="outline"
                       size="small"
@@ -609,7 +605,7 @@ export function AddDeadlineDialog({
               取消
             </Button>
             <Button disabled={isPending} className="gap-1.5" htmlType="submit" theme="solid">
-              {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isPending && <Loader2 aria-hidden size="default" spin />}
               添加期限
             </Button>
           </DialogFooter>
@@ -770,13 +766,13 @@ export function AddHearingDialog({
                 size="small"
               >
                 {ocrLoading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <Loader2 aria-hidden size="small" spin />
                 ) : (
-                  <ScanText className="h-3.5 w-3.5" />
+                  <ScanText aria-hidden size="small" />
                 )}
                 {ocrLoading ? "识别中…" : "上传传票识别"}
               </Button>
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 上传传票照片，AI 自动填充开庭信息
               </span>
             </div>
@@ -858,7 +854,7 @@ export function AddHearingDialog({
               取消
             </Button>
             <Button disabled={isPending} className="gap-1.5" htmlType="submit" theme="solid">
-              {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isPending && <Loader2 aria-hidden size="default" spin />}
               添加开庭
             </Button>
           </DialogFooter>
@@ -869,26 +865,3 @@ export function AddHearingDialog({
 }
 
 // ============ Shared Field ============
-
-function Field({
-  label,
-  required,
-  error,
-  children
-}: {
-  label: string;
-  required?: boolean;
-  error?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <label className="flex items-center gap-1 text-xs">
-        {label}
-        {required && <span className="text-destructive">*</span>}
-      </label>
-      {children}
-      {error && <p className="text-xs text-destructive">{error}</p>}
-    </div>
-  );
-}

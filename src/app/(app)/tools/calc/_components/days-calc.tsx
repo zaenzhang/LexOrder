@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button, Checkbox, Input, RadioGroup } from "@douyinfe/semi-ui";
-import { CalendarDays, ArrowRight, Calculator } from "lucide-react";
+import { IconCalendar as CalendarDays, IconArrowRight as ArrowRight, IconPercentage as Calculator } from "@douyinfe/semi-icons";
 import { daysBetween, addDays } from "@/lib/legal-calc";
 import { shDayKey, civilFromKey, civilKey } from "@/lib/ui/sh-time";
 
@@ -59,9 +59,9 @@ export function DaysCalc({ calculator }: { calculator: ReturnType<typeof useDays
   return (
     <section className="ll-surface rounded-lg border border-border p-5">
       <header className="mb-4 flex items-center gap-2">
-        <CalendarDays className="h-4 w-4 text-primary" strokeWidth={1.8} />
+        <CalendarDays aria-hidden size="default" className="text-primary" />
         <h2 className="text-lg">天数计算</h2>
-        <span className="ml-2 text-[10px] text-muted-foreground">
+        <span className="ml-2 text-xs text-muted-foreground">
           举证期 / 上诉期 / 答辩期常用
         </span>
       </header>
@@ -110,19 +110,19 @@ export function DaysCalc({ calculator }: { calculator: ReturnType<typeof useDays
             >
               仅算工作日（排除周末，不含法定节假日）
             </Checkbox>
-            <Button htmlType="button" theme="solid" onClick={computeBetween} icon={<Calculator size={16} aria-hidden />}>
+            <Button htmlType="button" theme="solid" onClick={computeBetween} icon={<Calculator size="default" aria-hidden />}>
               计算
             </Button>
           </div>
 
           {between !== null && (
             <div className="rounded-lg border border-border bg-muted/20 p-4">
-              <div className="text-[10px] tracking-wider text-muted-foreground">间隔天数</div>
+              <div className="text-xs tracking-wider text-muted-foreground">间隔天数</div>
               <div className="mt-1 font-mono text-[26px] font-medium tabular text-primary">
                 {between >= 0 ? between : `-${Math.abs(between)}`} 天
               </div>
               {between < 0 && (
-                <p className="mt-1 text-[11px] text-muted-foreground">截止日早于起始日</p>
+                <p className="mt-1 text-xs text-muted-foreground">截止日早于起始日</p>
               )}
             </div>
           )}
@@ -153,7 +153,7 @@ export function DaysCalc({ calculator }: { calculator: ReturnType<typeof useDays
           </div>
 
           <div className="flex justify-end">
-            <Button htmlType="button" theme="solid" onClick={computeTarget} icon={<Calculator size={16} aria-hidden />}>
+            <Button htmlType="button" theme="solid" onClick={computeTarget} icon={<Calculator size="default" aria-hidden />}>
               计算
             </Button>
           </div>
@@ -161,20 +161,20 @@ export function DaysCalc({ calculator }: { calculator: ReturnType<typeof useDays
           {targetDate && (
             <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/20 p-4">
               <div className="text-center">
-                <div className="text-[10px] tracking-wider text-muted-foreground">基准日</div>
+                <div className="text-xs tracking-wider text-muted-foreground">基准日</div>
                 <div className="mt-1 font-mono text-[14px] tabular text-foreground">
                   {baseDate}
                 </div>
               </div>
-              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+              <ArrowRight aria-hidden size="default" className="text-muted-foreground" />
               <div className="text-center">
-                <div className="text-[10px] tracking-wider text-muted-foreground">
+                <div className="text-xs tracking-wider text-muted-foreground">
                   目标日（{parseInt(offset) >= 0 ? "+" : ""}{offset} 天）
                 </div>
                 <div className="mt-1 font-mono text-[20px] font-medium tabular text-primary">
                   {civilKey(targetDate)}
                 </div>
-                <div className="mt-0.5 text-[10px] text-muted-foreground">
+                <div className="mt-0.5 text-xs text-muted-foreground">
                   {["日", "一", "二", "三", "四", "五", "六"][targetDate.getDay()]}
                 </div>
               </div>

@@ -3,7 +3,7 @@
 import { Table, Empty, Button, Input, Notification, Form, Select, Switch, TextArea, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import type { CustomFieldDef } from "@prisma/client";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { IconPlus as Plus, IconEdit as Pencil, IconDelete as Trash2 } from "@douyinfe/semi-icons";
 import {
   WorkspaceDialog,
   DialogContent,
@@ -58,11 +58,10 @@ export function CustomFieldsView({ matterFields }: { matterFields: CustomFieldDe
 
   return (
     <div className="space-y-4">
-      <AdminPageHeader title="自定义字段" sub="为案件添加机构特有的字段，新建/编辑案件详情时填写。" actions={<Button theme="solid" onClick={() => setCreateOpen(true)} size="small"><Plus />添加字段</Button>} />
+      <AdminPageHeader title="自定义字段" sub="为案件添加机构特有的字段，新建/编辑案件详情时填写。" actions={<Button theme="solid" onClick={() => setCreateOpen(true)} size="small"><Plus aria-hidden />添加字段</Button>} />
 
       <div className="overflow-hidden card">
         <Table<(typeof matterFields)[number]>
-          size="small"
           pagination={false}
           rowKey="id"
           dataSource={matterFields}
@@ -86,7 +85,7 @@ export function CustomFieldsView({ matterFields }: { matterFields: CustomFieldDe
                         className="h-7 w-7 p-0"
                         onClick={() => setEditing(f)}
                       >
-                        <Pencil className="h-3.5 w-3.5" />
+                        <Pencil aria-hidden size="small" />
                       </Button>
                       <Button
                         theme="borderless" type="tertiary"
@@ -95,7 +94,7 @@ export function CustomFieldsView({ matterFields }: { matterFields: CustomFieldDe
                         onClick={() => handleDelete(f.id, f.label)}
                         disabled={pending}
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 aria-hidden size="small" />
                       </Button>
                     </div> },
           ]}

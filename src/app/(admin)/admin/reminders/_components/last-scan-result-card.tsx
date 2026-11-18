@@ -3,7 +3,7 @@
  * 数据来自 scan-due-reminders 写入的 SystemSetting 与 JobQueue，只读展示；
  * 死信需人工处置（不自动清理、不在此提供补发按钮——队列无单条补发能力）。
  */
-import { Send } from "lucide-react";
+import { IconSend as Send } from "@douyinfe/semi-icons";
 import type { ReminderWebhookLastResult } from "@/server/settings/webhook-last-result";
 
 export type DeliveryStats = { delivered: number; failed: number; inFlight: number };
@@ -35,7 +35,7 @@ export function LastScanResultCard({ result, stats, deadJobs }: { result: Remind
     <div className="card">
       <div className="panel-head">
         <div className="panel-title" style={{ fontSize: 13 }}>
-          <Send className="ic" strokeWidth={1.8} />
+          <Send aria-hidden className="ic" />
           提醒投递记录
         </div>
         <span className="t-xs t-mute">最近一次扫描</span>

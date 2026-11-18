@@ -2,7 +2,7 @@
 import { Button } from "@douyinfe/semi-ui";
 import { useState } from "react";
 import Link from "next/link";
-import { Receipt, Clock, CheckCircle2, XCircle, Download, FileText, FileCheck2 } from "lucide-react";
+import { IconNoteMoney as Receipt, IconClock as Clock, IconTickCircle as CheckCircle2, IconClear as XCircle, IconDownload as Download, IconArticle as FileText, IconTestScore as FileCheck2 } from "@douyinfe/semi-icons";
 import type { InvoiceRequestStatus } from "@prisma/client";
 
 import { invoiceRequestStatusLabel, invoiceRequestStatusColor } from "@/lib/enums";
@@ -64,7 +64,7 @@ export function InvoiceManagementSection({
               )} theme="borderless" type="tertiary"
             >
               {t.label}
-              <span className="font-mono text-[10px] tabular opacity-70">{count}</span>
+              <span className="font-mono text-xs tabular opacity-70">{count}</span>
             </Button>
           );
         })}
@@ -73,7 +73,7 @@ export function InvoiceManagementSection({
       <section className="rounded-xl border border-border bg-muted/30">
         {filtered.length === 0 ? (
           <p className="py-16 text-center text-sm text-muted-foreground">
-            <Receipt className="mx-auto mb-2 h-5 w-5 opacity-50" />
+            <Receipt aria-hidden size="large" className="mx-auto mb-2 opacity-50" />
             没有匹配的开票申请
           </p>
         ) : (
@@ -92,7 +92,7 @@ export function InvoiceManagementSection({
                   className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-popover/30"
                 >
                   <span
-                    className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-medium"
+                    className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium"
                     style={{ borderColor: `${color}50`, color }}
                   >
                     <Icon className="h-3 w-3" />
@@ -121,14 +121,14 @@ export function InvoiceManagementSection({
                         无关联案件{r.noMatterReason ? ` · ${r.noMatterReason}` : ""}
                       </div>
                     )}
-                    <div className="mt-1 text-[11px] text-muted-foreground">
+                    <div className="mt-1 text-xs text-muted-foreground">
                       申请：{r.requestedBy.name} ·{" "}
                       {shMonthDayTime(r.requestedAt)}
                       {r.requestNote && <> · 备注：{r.requestNote}</>}
                     </div>
                     {/* v0.42 开票信息（专票六要素供财务直接开票） */}
                     {(r.buyerName || r.invoiceType) && (
-                      <div className="mt-1 rounded-md border border-border bg-muted/30 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+                      <div className="mt-1 rounded-md border border-border bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
                         <div>
                           <span className="text-foreground/70">
                             {r.invoiceType ? INVOICE_TYPE_LABEL[r.invoiceType] : "发票"}
@@ -163,16 +163,16 @@ export function InvoiceManagementSection({
                             href={`/api/documents/${doc.id}/download`}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex max-w-64 items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground"
+                            className="inline-flex max-w-64 items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
                           >
-                            <FileText className="h-3 w-3 shrink-0" />
+                            <FileText aria-hidden size="small" className="shrink-0" />
                             <span className="truncate">{doc.name}</span>
                           </a>
                         ))}
                       </div>
                     )}
                     {r.processNote && (
-                      <div className="mt-1 text-[11px] text-destructive/80">
+                      <div className="mt-1 text-xs text-destructive/80">
                         财务备注：{r.processNote}
                       </div>
                     )}
@@ -183,9 +183,9 @@ export function InvoiceManagementSection({
                         href={`/api/documents/${r.contractScan.id}/download`}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground"
+                        className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
                       >
-                        <FileCheck2 className="h-3 w-3" />
+                        <FileCheck2 aria-hidden size="small" />
                         历史合同
                       </a>
                     )}
@@ -194,9 +194,9 @@ export function InvoiceManagementSection({
                         href={`/api/documents/${r.invoiceFile.id}/download`}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/15 px-2 py-1 text-[11px] text-primary"
+                        className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/15 px-2 py-1 text-xs text-primary"
                       >
-                        <Download className="h-3 w-3" />
+                        <Download aria-hidden size="small" />
                         电子发票
                       </a>
                     )}

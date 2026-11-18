@@ -1,5 +1,7 @@
 "use client";
 
+import { FormField as Field } from "@/components/patterns/form-dialog";
+
 import { FormDialogContent as DialogContent, FormDialogBody } from "@/components/patterns/form-dialog";
 
 import { useId, useRef, useState, useTransition } from "react";
@@ -449,12 +451,3 @@ export function RenewPropertyDialog({ open, onOpenChange, property }: { open: bo
 }
 
 // ── Shared ──
-
-function Field({ label, id, children }: { label: string; id: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1">
-      <label id={`${id}-label`} htmlFor={id} className="block text-sm font-medium">{label}</label>
-      {children}
-    </div>
-  );
-}

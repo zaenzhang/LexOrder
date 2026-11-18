@@ -5,7 +5,7 @@
  * 展示当前用户的 ICS 订阅 URL，可复制 / 重置；URL 即凭证。
  */
 import { useEffect, useId, useRef, useState, useTransition } from "react";
-import { CalendarPlus, Copy, Loader2, RefreshCw } from "lucide-react";
+import { IconCalendar as CalendarPlus, IconCopy as Copy, IconLoading as Loader2, IconRefresh as RefreshCw } from "@douyinfe/semi-icons";
 import { Button, Notification, Toast } from "@douyinfe/semi-ui";
 import { WorkspaceDialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { getCalendarToken, regenerateCalendarToken } from "@/server/calendar/actions";
@@ -27,7 +27,7 @@ export function CalendarSubscriptionDialog() {
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? dialogId : undefined}
-        icon={<CalendarPlus className="h-3.5 w-3.5" strokeWidth={1.8} />}
+        icon={<CalendarPlus aria-hidden size="small" />}
         onClick={(event) => {
           triggerRef.current = event.currentTarget;
           setOpen(true);
@@ -110,7 +110,7 @@ function CalendarSubscriptionContent() {
 
   return (
     <div className="min-w-0">
-      <p className="mb-4 text-[12px] leading-5 text-muted-foreground">
+      <p className="mb-4 text-xs leading-5 text-muted-foreground">
         把下方链接添加到 Apple 日历 / Google Calendar / Outlook 的「订阅日历」，
         开庭、期限、任务和保全到期会自动同步到手机日历（含过去 7 天 ~ 未来 90 天，
         事项只显示客户名不含完整案件名）。这是单向订阅，更新频率由日历应用决定。
@@ -119,15 +119,15 @@ function CalendarSubscriptionContent() {
 
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <Loader2 aria-hidden size="default" spin />
           正在获取订阅链接…
         </div>
       ) : url ? (
         <div className="flex flex-wrap items-center gap-2">
-          <code className="block w-full min-w-0 break-all rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-[11.5px]">
+          <code className="block w-full min-w-0 break-all rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-xs">
             {url}
           </code>
-          <Button theme="outline" type="tertiary" size="small" onClick={copyUrl} disabled={pending} icon={<Copy className="h-3.5 w-3.5" />}>
+          <Button theme="outline" type="tertiary" size="small" onClick={copyUrl} disabled={pending} icon={<Copy aria-hidden size="small" />}>
             复制链接
           </Button>
           <Button
@@ -137,7 +137,7 @@ function CalendarSubscriptionContent() {
             onClick={regenerate}
             disabled={pending}
             loading={pending}
-            icon={<RefreshCw className="h-3.5 w-3.5" />}
+            icon={<RefreshCw aria-hidden size="small" />}
           >
             重置链接
           </Button>

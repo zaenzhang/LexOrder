@@ -1,7 +1,7 @@
 "use client";
 
 import { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Loader2, Sparkles, AlertTriangle, AlertCircle, Lightbulb, FileWarning, BookmarkPlus, ChevronLeft } from "lucide-react";
+import { IconLoading as Loader2, IconAIWandLevel1 as Sparkles, IconAlertTriangle as AlertTriangle, IconAlertCircle as AlertCircle, IconBulb as Lightbulb, IconAlertTriangle as FileWarning, IconBookmark as BookmarkPlus, IconChevronLeft as ChevronLeft } from "@douyinfe/semi-icons";
 import { Button, Notification, Tag, Typography } from "@douyinfe/semi-ui";
 import { WorkspaceDialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/patterns/workspace-dialog";
 import { FormDialogBody, FormDialogContent } from "@/components/patterns/form-dialog";
@@ -153,7 +153,7 @@ function ReviewSession({ documentId, matterId, canStartReview, canSaveReport, on
     <FormDialogContent className="max-w-2xl">
       <DialogHeader className="px-5 pt-4">
         <DialogTitle className="flex items-center gap-2">
-          {result && <Button disabled={saving} aria-label="返回审查历史" onClick={() => { lifecycle.current.viewRequest++; setError(null); setView({ kind: "list" }); }} htmlType="button" type="tertiary" theme="borderless"><ChevronLeft className="h-4 w-4" /></Button>}
+          {result && <Button disabled={saving} aria-label="返回审查历史" onClick={() => { lifecycle.current.viewRequest++; setError(null); setView({ kind: "list" }); }} htmlType="button" type="tertiary" theme="borderless"><ChevronLeft aria-hidden size="default" /></Button>}
           AI 文书审查
         </DialogTitle>
         <DialogDescription className={result ? "break-words" : "sr-only"}>
@@ -164,7 +164,7 @@ function ReviewSession({ documentId, matterId, canStartReview, canSaveReport, on
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         {!result && <>
           <Button onClick={runNewReview} disabled={!canStartReview || reviewing || opening} htmlType="button" theme="solid">
-            {reviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {reviewing ? <Loader2 aria-hidden size="default" spin /> : <Sparkles aria-hidden size="default" />}
             {reviewing ? "正在审查" : "发起新审查"}
           </Button>
           {!canStartReview && <p className="text-xs text-muted-foreground">当前无法发起新审查，仍可查看获准的历史记录。</p>}
@@ -205,7 +205,7 @@ function ReviewSession({ documentId, matterId, canStartReview, canSaveReport, on
       </FormDialogBody>
       <DialogFooter className="px-5 pb-4">
         {result?.reportDocumentId ? <Typography.Text link={{ href: `/api/documents/${encodeURIComponent(result.reportDocumentId)}/download` }}>下载报告</Typography.Text> : result?.reportReady && canSaveReport ? <Button onClick={handleSave} disabled={saving} htmlType="button" type="tertiary" theme="outline">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <BookmarkPlus className="h-4 w-4" />}{saving ? "正在保存" : "保存报告到本案"}
+          {saving ? <Loader2 aria-hidden size="default" spin /> : <BookmarkPlus aria-hidden size="default" />}{saving ? "正在保存" : "保存报告到本案"}
         </Button> : null}
         <Button disabled={saving} onClick={close} htmlType="button" type="tertiary" theme="borderless">关闭</Button>
       </DialogFooter>

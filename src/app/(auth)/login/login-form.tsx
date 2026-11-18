@@ -8,7 +8,7 @@ import { signIn } from "next-auth/react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button, Card, Checkbox, Form, Input, Notification, Spin } from "@douyinfe/semi-ui";
-import { Eye, EyeOff } from "lucide-react";
+import { IconEyeOpened as Eye, IconEyeClosed as EyeOff } from "@douyinfe/semi-icons";
 import { checkLoginTotpEnforcement } from "@/server/auth/totp-actions";
 import { PRODUCT_SHORT_NAME } from "@/lib/product";
 import styles from "./login.module.css";
@@ -135,7 +135,7 @@ export function LoginForm() {
                   aria-label={passwordToggleLabel}
                   aria-controls="password"
                   title={passwordToggleLabel}
-                  icon={<PasswordIcon size={16} aria-hidden />}
+                  icon={<PasswordIcon size="default" aria-hidden />}
                   onClick={() => setShowPassword((visible) => !visible)}
                 />
               }

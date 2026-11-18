@@ -11,7 +11,7 @@ import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { ContextInputPicker } from "@/components/matters/context-input-picker";
 import type { ContextInputSelection } from "@/lib/matters/context-inputs";
 import { documentCategoryLabel } from "@/lib/enums";
-import { documentSourceChip } from "@/lib/ui/moan-tones";
+import { documentSourceChip } from "@/lib/ui/status-tones";
 import { actionErrorMessage } from "@/lib/action-error";
 import { updateDossierLocation } from "@/lib/matters/dossier-location";
 import type { MaterialUploadReceipt } from "@/lib/documents/upload-contract";
@@ -292,7 +292,7 @@ export function MaterialUploadDialog({ current, procedures, canWrite, scopeValid
     }
   }
 
-  return <WorkspaceDialog open={context !== null} onOpenChange={open => { if (!open) void closeDialog(); }}>
+  return <WorkspaceDialog dismissOnBackdrop open={context !== null} onOpenChange={open => { if (!open) void closeDialog(); }}>
     <DialogContent className="max-w-5xl" onCloseAutoFocus={event => { event.preventDefault(); trigger.current?.focus({ preventScroll: true }); }}>
       <DialogHeader><DialogTitle>上传材料 · {context?.title}</DialogTitle>
         <DialogDescription>逐件核对归属和来源，文件分别保存。</DialogDescription></DialogHeader>

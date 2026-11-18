@@ -7,7 +7,7 @@
  */
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ShieldCheck, ShieldOff } from "lucide-react";
+import { IconShieldStroked as ShieldCheck, IconShieldStroked as ShieldOff } from "@douyinfe/semi-icons";
 import { Banner, Button, Card, Form, Input, Notification, Tag, Toast } from "@douyinfe/semi-ui";
 import { enrollStartTotp, enrollConfirmTotp, disableTotp } from "@/server/auth/totp-actions";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -79,7 +79,7 @@ export function TotpCard({ enabled }: { enabled: boolean }) {
 
   return (
     <Card title={<div className="flex items-center gap-2">
-      {enabled ? <ShieldCheck size={16} aria-hidden /> : <ShieldOff size={16} aria-hidden />}
+      {enabled ? <ShieldCheck size="default" aria-hidden /> : <ShieldOff size="default" aria-hidden />}
       <h2 className="text-base font-semibold">双步验证（动态码）</h2>
       {enabled && <Tag color="green">已开启</Tag>}
     </div>}>

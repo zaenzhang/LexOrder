@@ -53,7 +53,8 @@ export default async function MatterDetailPage({ params, searchParams }: PagePro
   }
 
   if (session?.user && !businessAccess) {
-    return <TeamMatterOverview matter={matterRaw} />;
+    const { list } = await searchParams ?? {};
+    return <TeamMatterOverview matter={matterRaw} listQuery={typeof list === "string" ? list : null} />;
   }
 
   if (!session?.user) redirect("/login");

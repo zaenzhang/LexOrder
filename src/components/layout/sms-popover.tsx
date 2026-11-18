@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ClipboardPaste, Mail } from "lucide-react";
+import { IconCopy, IconMail } from "@douyinfe/semi-icons";
 import { Button, Popover, Spin, Tag, Toast } from "@douyinfe/semi-ui";
 import { listSmsMessages, markSmsProcessed } from "@/server/sms/actions";
 import { SmsPasteDialog } from "@/app/(app)/inbox/_components/sms-paste-dialog";
@@ -115,7 +115,7 @@ export function SmsPopover() {
               <div className="text-sm font-medium">法院短信</div>
               <div className="text-xs text-[var(--semi-color-text-2)]">{loadError ? "读取失败" : loading ? "正在读取…" : count > 0 ? `未处理 ${count} 条` : "均已处理"}</div>
             </div>
-            <Button htmlType="button" size="small" theme="solid" icon={<ClipboardPaste size={16} />} onClick={() => {
+            <Button htmlType="button" size="small" theme="solid" icon={<IconCopy aria-hidden />} onClick={() => {
               triggerRef.current?.querySelector("button")?.focus();
               setOpen(false);
               setPasteOpen(true);
@@ -148,7 +148,7 @@ export function SmsPopover() {
           </div>
         </section>
       }>
-      <Button htmlType="button" theme="light" type="tertiary" icon={<Mail size={18} />}
+      <Button htmlType="button" theme="light" type="tertiary" icon={<IconMail aria-hidden />}
         aria-label={loadError ? "法院短信（读取失败），可粘贴新短信" : count > 0 ? `法院短信（${count} 条未处理），可粘贴新短信` : "法院短信，可粘贴新短信"}
         title="法院短信：粘贴 12368 短信自动解析，生成开庭与期限">
         <span className="hidden md:inline">法院短信</span>

@@ -3,7 +3,7 @@
 import { Button, Notification } from "@douyinfe/semi-ui";
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw } from "lucide-react";
+import { IconRefresh as RefreshCw } from "@douyinfe/semi-icons";
 import { triggerDueReminderScan } from "@/server/reminders/actions";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -25,7 +25,7 @@ export function ReminderScanButton() {
   }
 
   return (
-    <Button htmlType="button" size="small" theme="outline" onClick={handleScan} loading={isPending} disabled={isPending} icon={<RefreshCw size={14} aria-hidden />}>
+    <Button htmlType="button" size="small" theme="outline" onClick={handleScan} loading={isPending} disabled={isPending} icon={<RefreshCw size="default" aria-hidden />}>
       立即扫描
     </Button>
   );

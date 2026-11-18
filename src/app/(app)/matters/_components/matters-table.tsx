@@ -5,12 +5,12 @@ import type { ColumnProps } from "@douyinfe/semi-ui/lib/es/table";
 import type { Matter, PartyRole, LitigationStanding } from "@prisma/client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { InitialAvatar, RiskLadder } from "@/components/patterns/moan";
+import { InitialAvatar, RiskLadder } from "@/components/patterns/workspace-surfaces";
 import { litigationStandingLabel, matterStatusLabel, procedureTypeLabel } from "@/lib/enums";
 import { matterListEntryHref } from "@/lib/matters/list-location";
 import { procedureStateLabel } from "@/lib/procedure-status";
 import { shDaysFromToday } from "@/lib/ui/sh-time";
-import { avatarTone, deadlineRisk } from "@/lib/ui/moan-tones";
+import { avatarTone, deadlineRisk } from "@/lib/ui/status-tones";
 import { formatDate } from "@/lib/utils";
 
 export type MatterRow = Omit<Matter, "claimAmount"> & {
@@ -165,7 +165,6 @@ export function MattersTable({ items, columns, listQuery }: {
       rowKey="id"
       columns={visibleColumns}
       pagination={false}
-      size="small"
       scroll={{ x: visibleColumns.reduce((sum, column) => sum + Number(column.width), 0) }}
       empty={<span role="status">没有匹配的案件</span>}
       onRow={matter => matter ? {

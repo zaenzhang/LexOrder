@@ -5,7 +5,7 @@ import { formatDeadlineDue } from "@/lib/deadline-due";
  */
 import Link from "next/link";
 import { Card, Empty, Tag } from "@/components/patterns/semi-surfaces";
-import { ChevronRight, Gavel, SquareCheck, Timer, TriangleAlert, Calendar as CalendarIcon, Landmark, Clock3, ChartColumn } from "lucide-react";
+import { IconChevronRight as ChevronRight, IconVerify as Gavel, IconCheckList as SquareCheck, IconDuration as Timer, IconAlertTriangle as TriangleAlert, IconCalendar as CalendarIcon, IconApartment as Landmark, IconClock as Clock3, IconHistogram as ChartColumn } from "@douyinfe/semi-icons";
 import { getSession } from "@/lib/auth/session";
 import { canEnterAdminWorkspace } from "@/lib/auth/system-role";
 import { hasCustomPermission } from "@/lib/roles/catalog";
@@ -108,12 +108,12 @@ export default async function DashboardPage() {
           <Link key={label} href={href} className="min-w-0 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--semi-color-primary)]">
             <Card shadows="hover" className="h-full">
               <div className="flex items-center gap-3">
-                <Icon size={20} color={color} aria-hidden />
+                <Icon size="large" style={{ color }} aria-hidden />
                 <div className="min-w-0 flex-1">
                   <div className="text-xl font-semibold tabular-nums" style={{ color: value && value !== "¥0" ? color : "var(--semi-color-text-2)" }}>{value}</div>
                   <div className="text-xs leading-relaxed text-[var(--semi-color-text-2)]">{label}</div>
                 </div>
-                <ChevronRight size={14} aria-hidden />
+                <ChevronRight size="default" aria-hidden />
               </div>
             </Card>
           </Link>
@@ -122,7 +122,7 @@ export default async function DashboardPage() {
 
       <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,4fr)]">
         <Card
-          title={<h2 className="flex items-center gap-2"><CalendarIcon size={16} aria-hidden />近期日程与期限</h2>}
+          title={<h2 className="flex items-center gap-2"><CalendarIcon size="default" aria-hidden />近期日程与期限</h2>}
           headerExtraContent={<Link href="/schedule" className="text-[var(--semi-color-primary)]">完整日历</Link>}
         >
           {Object.keys(groups).length === 0 ? <Empty description="未来 30 天暂无开庭与期限" /> : (
@@ -140,7 +140,7 @@ export default async function DashboardPage() {
                       const row = (
                         <>
                           <span className="shrink-0 text-xs text-[var(--semi-color-text-2)]">{it.time ?? (isDeadline && it.duePrecision == null ? "精度未记录" : "全天")}</span>
-                          <Icon size={16} className="shrink-0 text-[var(--semi-color-primary)]" aria-hidden />
+                          <Icon size="default" className="shrink-0 text-[var(--semi-color-primary)]" aria-hidden />
                           <span className="min-w-0 flex-1">
                             <span className="block truncate font-medium">{isDeadline || /^(开庭|庭审|询问)/.test(it.title) ? it.title : `开庭 · ${it.title}`}</span>
                             <span className="block truncate text-xs text-[var(--semi-color-text-2)]">{[it.matter, it.procedure].filter(Boolean).join(" · ")}</span>

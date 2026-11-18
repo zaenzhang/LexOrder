@@ -2,7 +2,7 @@
 
 import { Banner, Select, Button, Checkbox, Input, Tag, TextArea, Toast } from "@douyinfe/semi-ui";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, FileText, Plus } from "lucide-react";
+import { IconArrowDown as ArrowDown, IconArrowUp as ArrowUp, IconArticle as FileText, IconPlus as Plus } from "@douyinfe/semi-icons";
 
 import { WorkspaceDialog, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 
@@ -237,8 +237,8 @@ export function DeliveryPanel({ matterId, initialDeliveryId, initialEventId, ini
     <header className="flex items-center justify-between gap-3">
       <h3 id="delivery-list-title" className="font-medium">简报与交付</h3>
       <div className="flex gap-2">
-        {options?.canCreateBrief && <Button theme="outline" type="tertiary" size="small" onClick={event => begin("brief", event.currentTarget)} htmlType="button"><FileText data-icon="inline-start" />准备简报</Button>}
-        {options?.canPrepare && <Button size="small" onClick={event => begin("prepare", event.currentTarget)} theme="solid" type="primary" htmlType="button"><Plus data-icon="inline-start" />准备交付</Button>}
+        {options?.canCreateBrief && <Button theme="outline" type="tertiary" size="small" onClick={event => begin("brief", event.currentTarget)} htmlType="button"><FileText aria-hidden data-icon="inline-start" />准备简报</Button>}
+        {options?.canPrepare && <Button size="small" onClick={event => begin("prepare", event.currentTarget)} theme="solid" type="primary" htmlType="button"><Plus aria-hidden data-icon="inline-start" />准备交付</Button>}
       </div>
     </header>
     {listError ? <Banner type="danger" closeIcon={null} description={<>{listError} <Button theme="outline" type="tertiary" size="small" onClick={() => setRefresh(value => value + 1)} htmlType="button">重新加载</Button></>} />
@@ -253,7 +253,7 @@ export function DeliveryPanel({ matterId, initialDeliveryId, initialEventId, ini
       <Button size="small" theme="outline" type="tertiary" disabled={loading || !nextCursor} onClick={() => { setPreviousCursors(value => [...value, cursor]); setCursor(nextCursor!); }} htmlType="button">下一页</Button>
     </div>}
 
-    <WorkspaceDialog open={mode !== null} onOpenChange={open => { if (!open) void close(); }}>
+    <WorkspaceDialog dismissOnBackdrop open={mode !== null} onOpenChange={open => { if (!open) void close(); }}>
       <FormDialogContent ref={popupContainer} className="max-w-3xl" aria-describedby={undefined} onCloseAutoFocus={event => { event.preventDefault(); trigger.current?.focus(); }}
         onEscapeKeyDown={event => { if (busy || openDropdown.current) event.preventDefault(); }}>
         <DialogHeader className="px-6 pt-5"><DialogTitle>{title}</DialogTitle></DialogHeader>
@@ -286,8 +286,8 @@ export function DeliveryPanel({ matterId, initialDeliveryId, initialEventId, ini
               {draft.documentIds.length > 0 && <ol className="flex flex-col gap-2">{draft.documentIds.map((id, index) => {
                 const document = options?.documents.find(item => item.id === id);
                 return <li key={id} className="flex items-center gap-2 text-sm"><span className="flex-1 break-words">{index + 1}. {document ? `${document.name} · 第 ${document.version} 版` : "材料当前不可读取"}</span>
-                  <Button size="small" theme="borderless" type="tertiary" disabled={busy || index === 0} aria-label={`上移第 ${index + 1} 份材料`} onClick={() => reorder(index, -1)} htmlType="button"><ArrowUp /></Button>
-                  <Button size="small" theme="borderless" type="tertiary" disabled={busy || index === draft.documentIds.length - 1} aria-label={`下移第 ${index + 1} 份材料`} onClick={() => reorder(index, 1)} htmlType="button"><ArrowDown /></Button>
+                  <Button size="small" theme="borderless" type="tertiary" disabled={busy || index === 0} aria-label={`上移第 ${index + 1} 份材料`} onClick={() => reorder(index, -1)} htmlType="button"><ArrowUp aria-hidden /></Button>
+                  <Button size="small" theme="borderless" type="tertiary" disabled={busy || index === draft.documentIds.length - 1} aria-label={`下移第 ${index + 1} 份材料`} onClick={() => reorder(index, 1)} htmlType="button"><ArrowDown aria-hidden /></Button>
                   <Button size="small" theme="borderless" type="tertiary" disabled={busy} onClick={() => changeDraft({
                     documentIds: draft.documentIds.filter(item => item !== id), sourceDeclarations: draft.sourceDeclarations.filter(item => item.documentId !== id),
                   })} htmlType="button">移除</Button>

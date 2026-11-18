@@ -48,6 +48,15 @@ describe("案件列表、导出与跨工作区返回", () => {
     expect(applied.searchParams.has("page")).toBe(false);
   });
 
+  it("从开庭时间排序切到收案中时生成可返回的收案列表地址", () => {
+    render(<MattersViewV4 {...props} tab="active" initialFilters={{ ...props.initialFilters, sortBy: "hearing" }} />);
+    fireEvent.click(screen.getByRole("tab", { name: "收案中" }));
+    const target = new URL(replace.mock.lastCall![0], "https://lexorder.invalid");
+    expect(target.searchParams.get("tab")).toBe("intake");
+    expect(target.searchParams.get("sortBy")).toBe("intakeDate");
+    expect(matterListReturnHref(target.searchParams.toString())).toBe(target.pathname + target.search);
+  });
+
   it("筛选已应用的范围可以换回全部，并清除团队条件和旧页码", async () => {
     render(<MattersViewV4 {...props} initialFilters={{ ...props.initialFilters, scope: "team", teamId: "team-1" }}
       readableTeams={[{ id: "team-1", name: "团队一" }]} />);

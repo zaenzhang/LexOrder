@@ -1,0 +1,110 @@
+/* LexOrder light theme, adapted from Semi DSM Timeless 1.0.38 (MIT).
+ * https://www.npmjs.com/package/@semi-bot/semi-theme-timeless/v/1.0.38
+ */
+body.lexorder-theme:not([theme-mode="dark"]) {
+  --semi-color-primary: #222726;
+  --semi-color-primary-hover: #343b39;
+  --semi-color-primary-active: #171717;
+  --semi-color-primary-disabled: #cfcfce;
+  --semi-color-primary-light-default: #f4f4f3;
+  --semi-color-primary-light-hover: #ebebea;
+  --semi-color-primary-light-active: #dfdfde;
+  --semi-color-focus-border: var(--semi-color-primary);
+  --semi-color-link: var(--semi-color-primary);
+  --semi-color-link-hover: var(--semi-color-primary-hover);
+  --semi-color-link-active: var(--semi-color-primary-active);
+  --semi-color-link-visited: var(--semi-color-primary);
+
+  /* Muted status palettes also drive Semi tag, message, and icon colors. */
+  --semi-red-0: 250, 240, 240;
+  --semi-red-1: 242, 224, 225;
+  --semi-red-2: 231, 205, 208;
+  --semi-red-4: 183, 127, 130;
+  --semi-red-5: 140, 72, 77;
+  --semi-red-6: 119, 58, 64;
+  --semi-red-7: 100, 48, 54;
+  --semi-red-8: 83, 39, 44;
+
+  --semi-green-0: 237, 244, 239;
+  --semi-green-1: 224, 235, 227;
+  --semi-green-2: 203, 222, 209;
+  --semi-green-4: 125, 165, 140;
+  --semi-green-5: 65, 107, 83;
+  --semi-green-6: 54, 91, 69;
+  --semi-green-7: 45, 78, 59;
+  --semi-green-8: 38, 66, 50;
+
+  --semi-orange-0: 248, 243, 234;
+  --semi-orange-1: 240, 230, 213;
+  --semi-orange-2: 232, 217, 189;
+  --semi-orange-4: 174, 141, 95;
+  --semi-orange-5: 129, 94, 49;
+  --semi-orange-6: 109, 78, 40;
+  --semi-orange-7: 93, 66, 33;
+  --semi-orange-8: 78, 55, 27;
+
+  --semi-amber-0: 248, 243, 234;
+  --semi-amber-1: 240, 230, 213;
+  --semi-amber-2: 232, 217, 189;
+  --semi-amber-4: 174, 141, 95;
+  --semi-amber-5: 129, 94, 49;
+  --semi-amber-6: 109, 78, 40;
+  --semi-amber-7: 93, 66, 33;
+  --semi-amber-8: 78, 55, 27;
+
+  --semi-blue-0: 237, 242, 246;
+  --semi-blue-1: 226, 234, 240;
+  --semi-blue-2: 207, 222, 232;
+  --semi-blue-4: 128, 153, 173;
+  --semi-blue-5: 72, 100, 123;
+  --semi-blue-6: 60, 84, 105;
+  --semi-blue-7: 51, 72, 89;
+  --semi-blue-8: 41, 60, 75;
+
+  --semi-teal-0: 237, 244, 241;
+  --semi-teal-1: 223, 235, 229;
+  --semi-teal-2: 199, 221, 210;
+  --semi-teal-4: 123, 156, 144;
+  --semi-teal-5: 65, 105, 91;
+  --semi-teal-6: 54, 88, 77;
+  --semi-teal-7: 46, 74, 64;
+  --semi-teal-8: 38, 61, 53;
+
+  --semi-violet-0: 242, 239, 245;
+  --semi-violet-1: 233, 226, 238;
+  --semi-violet-2: 220, 209, 228;
+  --semi-violet-4: 156, 135, 171;
+  --semi-violet-5: 108, 85, 125;
+  --semi-violet-6: 94, 73, 109;
+  --semi-violet-7: 81, 64, 94;
+  --semi-violet-8: 68, 54, 79;
+
+  --semi-color-text-0: #212121;
+  --semi-color-text-1: #3b3b3b;
+  --semi-color-text-2: #565656;
+  --semi-color-text-3: #676767;
+  --semi-color-border: #e5e5e4;
+  --semi-color-fill-0: #f3f3f2;
+  --semi-color-fill-1: #ececeb;
+  --semi-color-fill-2: #e2e2e1;
+  --semi-color-nav-bg: #f5f5f4;
+  --semi-border-radius-small: 6px;
+  --semi-border-radius-medium: 8px;
+  --semi-border-radius-large: 12px;
+
+  --workspace-background: #f9f9f9;
+}
+
+body.lexorder-theme {
+  --workspace-text-body: 14px;
+  --workspace-text-secondary: 12px;
+  --radius-sm: var(--semi-border-radius-small);
+  --radius-md: var(--semi-border-radius-medium);
+  --radius-lg: var(--semi-border-radius-large);
+  --workspace-selection-bg: var(--semi-color-primary-light-active);
+  --workspace-selection-text: var(--semi-color-primary-active);
+}
+
+.lexorder-theme .workspace-nav .semi-navigation-item-selected:not(.semi-navigation-item-disabled) {
+  background-color: var(--workspace-selection-bg);
+}

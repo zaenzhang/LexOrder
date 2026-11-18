@@ -1,6 +1,6 @@
 import { Table, Tag } from "@/components/patterns/semi-surfaces";
 import Link from "next/link";
-import { Download } from "lucide-react";
+import { IconDownload as Download } from "@douyinfe/semi-icons";
 import {
   listArchivedMatters
 } from "@/server/archive/actions";
@@ -12,7 +12,7 @@ import { requireSession } from "@/lib/auth/session";
 import { isSystemAdmin } from "@/lib/auth/system-role";
 import { matterCategoryLabel } from "@/lib/enums";
 import { matterHref } from "@/lib/matters/route";
-import { PageHeader } from "@/components/patterns/moan";
+import { PageHeader } from "@/components/patterns/workspace-surfaces";
 import { ArchiveSearchForm } from "./_components/archive-search-form";
 import { ActionError } from "@/lib/action-error";
 import { archiveListSchema } from "@/server/archive/list-cursor";
@@ -72,7 +72,6 @@ export default async function ArchivePage({ searchParams }: { searchParams: Prom
         <div className="card" style={{ overflow: "hidden" }}>
           <div className="mo-scroll-x">
             <Table
-              size="small"
               pagination={false}
               rowKey="id"
               scroll={{ x: 1180 }}
@@ -90,8 +89,8 @@ export default async function ArchivePage({ searchParams }: { searchParams: Prom
               ]}
               dataSource={items.map(rec => ({
                 id: rec.id,
-                archive: <> <div className="font-mono text-[12px] font-semibold">{rec.archiveNo}</div>
-                      <div className="font-mono text-[11px] text-[var(--semi-color-text-2)]">{rec.matter.firmCaseNo ?? "—"}</div></>,
+                archive: <> <div className="font-mono text-xs font-semibold">{rec.archiveNo}</div>
+                      <div className="font-mono text-xs text-[var(--semi-color-text-2)]">{rec.matter.firmCaseNo ?? "—"}</div></>,
                 matter: <Link href={matterHref(rec.matter)} className="block truncate font-semibold hover:text-[var(--semi-color-primary-active)]" title={rec.matter.title}>
                         {rec.matter.title}
                       </Link>,
@@ -108,13 +107,13 @@ export default async function ArchivePage({ searchParams }: { searchParams: Prom
                       ) : (
                         <Tag color="green">齐全</Tag>
                       ),
-                actions: <div className="flex items-center gap-2 whitespace-nowrap text-[12px]">
+                actions: <div className="flex items-center gap-2 whitespace-nowrap text-xs">
                         {canAuditAll || rec.archivedById === session.user.id ? (
                           <Link className="text-[var(--semi-color-primary-active)] hover:underline" href={`/approvals?type=ARCHIVE_APPROVE&id=${rec.id}`}>审阅记录</Link>
                         ) : null}
                         {rec.materialSnapshotVerified ? (
                           <a href={`/api/archive/${rec.matter.id}/export?archiveId=${rec.id}`} className="inline-flex items-center gap-1 text-[var(--semi-color-primary-active)] hover:underline" title="导出归档 ZIP">
-                            <Download className="h-3 w-3" />
+                            <Download aria-hidden size="small" />
                             ZIP
                           </a>
                         ) : null}

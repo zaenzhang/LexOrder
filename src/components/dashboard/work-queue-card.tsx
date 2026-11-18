@@ -4,7 +4,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { ApprovalAction } from "@prisma/client";
-import { AlertTriangle, ListChecks, SquareCheck, Stamp, CalendarClock } from "lucide-react";
+import { IconAlertTriangle as AlertTriangle, IconCheckList as ListChecks, IconCheckList as SquareCheck, IconVerify as Stamp, IconCalendarClock as CalendarClock } from "@douyinfe/semi-icons";
 import { ACTION_LABELS } from "@/lib/approvals/rules";
 import { approvalHref } from "@/lib/approvals/workspace";
 import { matterHref } from "@/lib/matters/route";
@@ -30,10 +30,9 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
   const fmt = (d: Date | null) => (d ? `${shParts(d).m}月${shParts(d).d}日` : "");
 
   return (
-    <Card title={<h2 className="flex items-center gap-2"><SquareCheck size={16} aria-hidden />待我处理</h2>}>
+    <Card title={<h2 className="flex items-center gap-2"><SquareCheck size="default" aria-hidden />待我处理</h2>}>
       <Tabs
         type="button"
-        size="small"
         activeKey={seg}
         onChange={(key) => setSeg(key as Seg)}
         tabPaneMotion={false}
@@ -52,7 +51,7 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
               return (
                 <Link key={a.action + a.id} href={approvalHref(a.action as ApprovalAction, a.id)} className="flex items-start gap-3 rounded px-2 py-3 hover:bg-[var(--semi-color-fill-0)]">
                   <span className={cn("type-ic", urgent ? "t-red" : "t-bronze")} aria-hidden>
-                    <Stamp strokeWidth={2} />
+                    <Stamp aria-hidden />
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="textext-sm font-medium truncate">{ACTION_LABELS[a.action as ApprovalAction]} · {a.title}</div>
@@ -79,7 +78,7 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
             queue.tasks.map((t) => (
               <Link key={t.id} href={matterHref({ internalCode: t.matterCode }, `?view=work&workPane=tasks${t.hasResponsibility ? `&task=${encodeURIComponent(t.id)}` : ""}`)} className="flex items-start gap-3 rounded px-2 py-3 hover:bg-[var(--semi-color-fill-0)]">
                 <span className={cn("type-ic", t.overdue ? "t-red" : "t-teal")} aria-hidden>
-                  <ListChecks strokeWidth={2} />
+                  <ListChecks aria-hidden />
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="textext-sm font-medium truncate">{t.title}</div>
@@ -105,7 +104,7 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
         {seg === "followups" && (!queue.followUps.available ? <p className="p-4 textext-sm text-muted-foreground">当前资格不能读取客户跟进</p>
           : queue.followUps.items.length === 0 ? <p className="p-4 textext-sm text-muted-foreground">暂无本人待跟进</p>
           : queue.followUps.items.map(item => <Link key={item.id} href={personalFollowUpHref({}, { followUpId: item.id, clientId: item.client.id })} className="flex items-start gap-3 rounded px-2 py-3 hover:bg-[var(--semi-color-fill-0)]">
-            <span className={cn("type-ic", item.overdue ? "t-red" : "t-teal")} aria-hidden><CalendarClock /></span>
+            <span className={cn("type-ic", item.overdue ? "t-red" : "t-teal")} aria-hidden><CalendarClock aria-hidden /></span>
             <div className="min-w-0 flex-1"><div className="textext-sm font-medium truncate">{item.title}</div><div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-[var(--semi-color-text-2)]"><span>{item.client.name}</span><span>{formatDateTime(item.dueAt)}</span></div></div>
             <Tag color={item.overdue ? "red" : "grey"}>{item.overdue ? "已逾期" : "待跟进"}</Tag>
           </Link>))}
@@ -116,7 +115,7 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
             reminders.map((a) => (
               <Link key={a.id} href={a.href} className="flex items-start gap-3 rounded px-2 py-3 hover:bg-[var(--semi-color-fill-0)]">
                 <span className={cn("type-ic", a.tone === "danger" ? "t-red" : a.tone === "warn" ? "t-amber" : "t-slate")} aria-hidden>
-                  <AlertTriangle strokeWidth={2} />
+                  <AlertTriangle aria-hidden />
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="textext-sm font-medium truncate">{a.title}</div>
@@ -133,7 +132,7 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
         <span className="text-xs text-[var(--semi-color-text-2)]">
           {seg === "approvals" ? `共 ${queue.approvalTotal} 件审批${queue.tasksAvailable ? ` · ${queue.taskTotal} 项任务` : ""}` : seg === "tasks" ? queue.tasksAvailable ? `本人共 ${queue.taskTotal} 项任务，逾期任务优先` : "任务详情当前不可读取" : seg === "followups" ? queue.followUps.available ? `本人共 ${queue.followUps.total} 项待跟进，按时间先后显示前五项` : "客户跟进当前不可读取" : "保全到期 · 法院短信"}
         </span>
-        <Link href={seg === "approvals" ? "/approvals" : seg === "tasks" ? "/schedule#work-responsibilities" : seg === "followups" ? "/clients/follow-ups" : "/inbox"} className="text-sm" style={{ color: "var(--semi-color-primary)", fontWeight: 550 }}>
+        <Link href={seg === "approvals" ? "/approvals" : seg === "tasks" ? "/schedule?section=responsibilities#work-responsibilities" : seg === "followups" ? "/clients/follow-ups" : "/inbox"} className="text-sm" style={{ color: "var(--semi-color-primary)", fontWeight: 550 }}>
           {seg === "approvals" ? "进入审批工作台 →" : seg === "tasks" ? "打开任务责任总览 →" : seg === "followups" ? "查看全部待跟进 →" : "进入法院短信 →"}
         </Link>
       </div>

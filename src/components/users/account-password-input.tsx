@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Input } from "@douyinfe/semi-ui";
-import { Eye, EyeOff } from "lucide-react";
+import { IconEyeOpened as Eye, IconEyeClosed as EyeOff } from "@douyinfe/semi-icons";
 import { useState, type ComponentPropsWithRef } from "react";
 
 type AccountPasswordInputProps = Omit<ComponentPropsWithRef<typeof Input>, "mode" | "suffix" | "type"> & { id: string };
@@ -25,7 +25,7 @@ export function AccountPasswordInput({ id, disabled, ...props }: AccountPassword
       aria-label={label}
       aria-controls={id}
       title={label}
-      icon={<Icon size={16} aria-hidden />}
+      icon={<Icon size="default" aria-hidden />}
       onClick={() => setVisible(shown => !shown)}
     />}
   />;

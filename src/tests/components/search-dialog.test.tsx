@@ -235,6 +235,11 @@ describe("材料搜索命中的固定来源与返回", () => {
     const input = screen.getByLabelText("搜索关键词");
     fireEvent.change(input, { target: { value: "命中" } });
     expect(await screen.findByText("本批没有可展示结果。")).toBeInTheDocument();
+    // jsdom has no layout. Give the visible controls a client rect for the shared focus trap.
+    const rect = new DOMRect(0, 0, 10, 10);
+    vi.spyOn(HTMLElement.prototype, "getClientRects").mockReturnValue(Object.assign([rect], {
+      item: (index: number) => index === 0 ? rect : null,
+    }));
     const tab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
     input.dispatchEvent(tab); expect(tab.defaultPrevented).toBe(false);
     const more = screen.getByRole("button", { name: "继续检索" });

@@ -5,8 +5,9 @@ import { FormDialogContent as DialogContent, FormDialogBody, FormSection } from 
 
 import { useRef, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { confirmDiscardChanges } from "@/components/patterns/confirm-dialog";
 import { FileInput } from "@/components/patterns/file-input";
-import { Loader2, Link2 } from "lucide-react";
+import { IconLoading as Loader2, IconLink as Link2 } from "@douyinfe/semi-icons";
 import {
   WorkspaceDialog,
   DialogFooter,
@@ -53,11 +54,12 @@ export function SealRequestSheet({
   useEffect(() => { if (open) listActiveSealPurposes().then(setPurposes).catch(() => Notification.error({ title: "无法读取用章事项，请重新打开申请", duration: 6 })); }, [open]);
   const popupContainer = useRef<HTMLDivElement>(null);
   const openDropdown = useRef(false);
+  const confirmingClose = useRef(false);
   const [sealType, setSealType] = useState<string>("");
-  const [matterId, setMatterId] = useState<string>("");
+  const [matterId, setMatterId] = useState(preset?.matterId ?? "");
   /** 本次用印说明：一句话，说明这次为什么盖章；分类由上方「用章事项」承担（2026-09-19 去重） */
   const [purpose, setPurpose] = useState("");
-  const [documentTitle, setDocumentTitle] = useState("");
+  const [documentTitle, setDocumentTitle] = useState(preset?.documentTitle ?? "");
   const [pageCount, setPageCount] = useState(1);
   const [crossPage, setCrossPage] = useState(false);
   const [copies, setCopies] = useState(1);
@@ -72,14 +74,14 @@ export function SealRequestSheet({
   useEffect(() => {
     if (preset?.matterId) setMatterId(preset.matterId);
     if (preset?.documentTitle) setDocumentTitle(preset.documentTitle);
-  }, [preset]);
+  }, [preset?.matterId, preset?.documentTitle]);
 
   const reset = () => {
     setSealType("");
     setPurposeConfigId("");
-    setMatterId("");
+    setMatterId(preset?.matterId ?? "");
     setPurpose("");
-    setDocumentTitle("");
+    setDocumentTitle(preset?.documentTitle ?? "");
     setPageCount(1);
     setCrossPage(false);
     setCopies(1);
@@ -156,9 +158,26 @@ export function SealRequestSheet({
     });
   };
 
+  async function close() {
+    if (pending || confirmingClose.current) return;
+    const dirty = sealType || purposeConfigId || matterId !== (preset?.matterId ?? "") || purpose
+      || documentTitle !== (preset?.documentTitle ?? "") || pageCount !== 1 || crossPage
+      || copies !== 1 || urgency !== "NORMAL" || requestNote || file || alsoLegalRep;
+    if (dirty) {
+      confirmingClose.current = true;
+      try {
+        if (!await confirmDiscardChanges()) return;
+      } finally {
+        confirmingClose.current = false;
+      }
+    }
+    reset();
+    onOpenChange(false);
+  }
+
   return (
-    <WorkspaceDialog open={open} onOpenChange={value => { if (!pending) onOpenChange(value); }}>
-      <DialogContent ref={popupContainer} className="max-w-3xl" onEscapeKeyDown={event => { if (pending || openDropdown.current) event.preventDefault(); }}>
+    <WorkspaceDialog open={open} dismissOnBackdrop onOpenChange={value => { if (!value) void close(); }}>
+      <DialogContent ref={popupContainer} showClose={!pending} className="max-w-3xl" onEscapeKeyDown={event => { if (pending || openDropdown.current) event.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle>新建用章申请</DialogTitle>
           <DialogDescription>填写用印事项并核对待盖章文件，提交后可在审批工作台跟进。</DialogDescription>
@@ -171,10 +190,10 @@ export function SealRequestSheet({
           {/* 联动提示 */}
           {hasExisting && (
             <div
-              className="ll-surface flex items-start gap-2 rounded p-2.5 text-[12px] md:col-span-2"
+              className="ll-surface flex items-start gap-2 rounded p-2.5 text-xs md:col-span-2"
 
             >
-              <Link2 className="mt-0.5 h-3.5 w-3.5 text-primary" />
+              <Link2 aria-hidden size="small" className="mt-0.5 text-primary" />
               <div>
                 <p className="text-foreground">已关联卷宗文档作为待盖章稿</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
@@ -205,7 +224,7 @@ export function SealRequestSheet({
               })(String(event.target.value))} type="button"
             />
             {sealType && (
-              <p className="mt-1.5 text-[11px] text-muted-foreground">
+              <p className="mt-1.5 text-xs text-muted-foreground">
                 {enabledConfigs.find((c) => c.type === sealType)?.description}
               </p>
             )}
@@ -213,7 +232,7 @@ export function SealRequestSheet({
               <Checkbox disabled={pending} checked={alsoLegalRep} onChange={event => ((v) => setAlsoLegalRep(v === true))(event.target.checked === true)} className="mt-2">
 
                 <span>同时加盖 <strong className="text-foreground">法定代表人章</strong></span>
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   会自动建一条配套的法人章审批，与本章并行
                 </span>
               </Checkbox>
@@ -225,8 +244,8 @@ export function SealRequestSheet({
             <div className="mt-1">
               {preset?.matterId ? (
                 // 从案件详情页发起时，case 已锁定，不展示可切换的下拉
-                <div className="flex h-9 items-center gap-2 rounded-md border border-border bg-muted/40 px-2.5 text-[12px]">
-                  <span className="text-[11px] text-muted-foreground">已关联</span>
+                <div className="flex h-9 items-center gap-2 rounded-md border border-border bg-muted/40 px-2.5 text-xs">
+                  <span className="text-xs text-muted-foreground">已关联</span>
                   <span className="truncate">
                     {matters.find((m) => m.id === preset.matterId)?.title ?? "当前案件"}
                   </span>
@@ -295,7 +314,7 @@ export function SealRequestSheet({
           </div>
 
           <div className="flex items-center justify-between md:col-span-2">
-            <Checkbox disabled={pending} checked={crossPage} onChange={event => ((v) => setCrossPage(v === true))(event.target.checked === true)} className="flex items-center gap-2 text-[12px]">
+            <Checkbox disabled={pending} checked={crossPage} onChange={event => ((v) => setCrossPage(v === true))(event.target.checked === true)} className="flex items-center gap-2 text-xs">
 
               需要骑缝章
             </Checkbox>
@@ -319,7 +338,7 @@ export function SealRequestSheet({
               value={requestNote}
               onChange={(e) => setRequestNote(e)}
               rows={2}
-              className="mt-1 text-[12px]"
+              className="mt-1 text-xs"
             />
           </div>
 
@@ -347,11 +366,11 @@ export function SealRequestSheet({
         </div>
         </FormDialogBody>
         <DialogFooter className="mt-6">
-          <Button theme="outline" type="tertiary" disabled={pending} onClick={() => onOpenChange(false)} htmlType="button">
+          <Button theme="outline" type="tertiary" disabled={pending} onClick={() => void close()} htmlType="button">
             取消
           </Button>
           <Button onClick={submit} disabled={pending} theme="solid" type="primary" htmlType="button">
-            {pending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+            {pending && <Loader2 aria-hidden size="small" className="mr-1" spin />}
             提交申请
           </Button>
         </DialogFooter>

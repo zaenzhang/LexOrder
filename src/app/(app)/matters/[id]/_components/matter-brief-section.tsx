@@ -5,7 +5,7 @@ import { formatDeadlineDue } from "@/lib/deadline-due";
 
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
-import { ClipboardList, RefreshCw } from "lucide-react";
+import { IconList as ClipboardList, IconRefresh as RefreshCw } from "@douyinfe/semi-icons";
 import { actionErrorMessage } from "@/lib/action-error";
 import { clientChannelLabels } from "@/lib/clients/relationship";
 import { contextKindLabels, type MatterBrief } from "@/lib/matters/context";
@@ -16,6 +16,8 @@ type Props = {
   matterId: string;
   refreshKey?: string | number;
   onOpenTask: (taskId: string) => void;
+  getProcedureLabel: (procedureId: string) => string | undefined;
+  onOpenDeadline: (procedureId: string, deadlineId: string) => void;
   onCreateTask?: () => void;
 };
 type ReadState = { status: "loading" } | { status: "ready"; data: MatterBrief } | { status: "error"; error: string };
@@ -26,7 +28,7 @@ export function MatterBriefSection(props: Props) {
   return <BriefSection key={`${props.matterId}:${props.refreshKey ?? ""}`} {...props} />;
 }
 
-function BriefSection({ matterId, onOpenTask, onCreateTask }: Props) {
+function BriefSection({ matterId, onOpenTask, getProcedureLabel, onOpenDeadline, onCreateTask }: Props) {
   const titleId = useId();
   const request = useRef(0);
   const [attempt, setAttempt] = useState(0);
@@ -60,23 +62,23 @@ function BriefSection({ matterId, onOpenTask, onCreateTask }: Props) {
   return (
     <section className="dos-group" id="matter-brief" aria-labelledby={titleId} aria-busy={state.status === "loading"}>
       <div className="dos-group-h flex-wrap">
-        <ClipboardList className="ic" strokeWidth={1.8} aria-hidden="true" />
+        <ClipboardList className="ic" aria-hidden="true" />
         <h2 className="t" id={titleId}>事项摘要</h2>
         <SemiButton htmlType="button" theme="outline" type="tertiary" className="a" onClick={reload} disabled={state.status === "loading"}>
-          <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+          <RefreshCw size="small" aria-hidden="true" />
           {state.status === "error" ? "重试摘要" : "刷新摘要"}
         </SemiButton>
       </div>
       <div className="dos-group-b">
         {state.status === "loading" ? <p className="t-sm t-mute" role="status">正在读取事项摘要…</p> : null}
         {state.status === "error" ? <p className="t-sm text-destructive" role="alert">摘要读取失败：{state.error}</p> : null}
-        {state.status === "ready" ? <BriefContent brief={state.data} onOpenTask={onOpenTask} onCreateTask={onCreateTask} /> : null}
+        {state.status === "ready" ? <BriefContent brief={state.data} onOpenTask={onOpenTask} getProcedureLabel={getProcedureLabel} onOpenDeadline={onOpenDeadline} onCreateTask={onCreateTask} /> : null}
       </div>
     </section>
   );
 }
 
-function BriefContent({ brief, onOpenTask, onCreateTask }: Pick<Props, "onOpenTask" | "onCreateTask"> & { brief: MatterBrief }) {
+function BriefContent({ brief, onOpenTask, getProcedureLabel, onOpenDeadline, onCreateTask }: Pick<Props, "onOpenTask" | "getProcedureLabel" | "onOpenDeadline" | "onCreateTask"> & { brief: MatterBrief }) {
   const readableRecords = brief.context.records.filter(record => record.readable && record.content !== null
     && (!record.source || record.source.available) && (record.visibility !== "FINANCE" || brief.context.canReadFinance));
   const recentRecords = readableRecords.slice(0, 5);
@@ -84,7 +86,7 @@ function BriefContent({ brief, onOpenTask, onCreateTask }: Pick<Props, "onOpenTa
   const hasPending = brief.nextActions.length > 0 || brief.deadlines.length > 0 || brief.clientFollowUps.length > 0;
 
   return (
-    <div className="space-y-4 text-[12.5px] leading-relaxed">
+    <div className="space-y-4 text-sm leading-relaxed">
       <div>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-medium">下一步工作</h3>
@@ -124,9 +126,14 @@ function BriefContent({ brief, onOpenTask, onCreateTask }: Pick<Props, "onOpenTa
               <ul className="space-y-2">
                 {brief.deadlines.map(deadline => (
                   <li key={deadline.id}>
-                    <p className="break-words">{deadline.title}</p>
+                    <SemiButton htmlType="button" size="small" theme="borderless" type="primary"
+                      contentClassName="whitespace-normal break-words text-left"
+                      aria-label={[deadline.title, getProcedureLabel(deadline.procedureId)].filter(Boolean).join(" · ")}
+                      onClick={() => onOpenDeadline(deadline.procedureId, deadline.id)}>
+                      {deadline.title}
+                    </SemiButton>
                     <p className="t-xs t-mute">
-                      {formatDeadlineDue(deadline.dueAt, deadline.duePrecision)} · {deadlineStatusLabels[deadline.confirmationStatus] || "确认状态待核实"}
+                      {getProcedureLabel(deadline.procedureId) ? `${getProcedureLabel(deadline.procedureId)} · ` : ""}{formatDeadlineDue(deadline.dueAt, deadline.duePrecision)} · {deadlineStatusLabels[deadline.confirmationStatus] || "确认状态待核实"}
                       {deadline.assigneeName ? ` · ${deadline.assigneeName}` : ""}
                     </p>
                   </li>

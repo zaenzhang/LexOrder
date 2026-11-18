@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { Inbox, Gavel, Clock, CheckCircle2, Trash2, Link as LinkIcon, Briefcase, ExternalLink, Phone, Loader2, Sparkles, AlertCircle, ArrowRight, CalendarClock, FileCheck2, FileDigit, FileDown, KeyRound, Upload } from "lucide-react";
+import { IconInbox as Inbox, IconVerify as Gavel, IconClock as Clock, IconTickCircle as CheckCircle2, IconDelete as Trash2, IconLink as LinkIcon, IconBriefcase as Briefcase, IconExternalOpen as ExternalLink, IconPhone as Phone, IconLoading as Loader2, IconAIWandLevel1 as Sparkles, IconAlertCircle as AlertCircle, IconArrowRight as ArrowRight, IconCalendarClock as CalendarClock, IconTestScore as FileCheck2, IconArticle as FileDigit, IconDownload as FileDown, IconKey as KeyRound, IconUpload as Upload } from "@douyinfe/semi-icons";
 import { Button, Select, Tabs, Tag, Notification, Toast } from "@douyinfe/semi-ui";
 import { cn, formatDateTime } from "@/lib/utils";
 import {
@@ -32,7 +32,7 @@ import {
   GenerateDeadlineDialog
 } from "./sms-actions-dialogs";
 import { matterHref } from "@/lib/matters/route";
-import { PageHeader } from "@/components/patterns/moan";
+import { PageHeader } from "@/components/patterns/workspace-surfaces";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { useTopbarAction } from "@/components/layout/topbar-action";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -120,7 +120,7 @@ export function InboxView({
       <div className="space-y-2">
         {rows.length === 0 ? (
           <div className="ll-surface rounded-lg border border-border p-12 text-center text-sm text-muted-foreground">
-            <Inbox className="mx-auto mb-2 h-6 w-6 opacity-40" />
+            <Inbox aria-hidden size="extra-large" className="mx-auto mb-2 opacity-40" />
             {tab === "unprocessed"
               ? "无待处理短信"
               : tab === "needsManual"
@@ -262,16 +262,16 @@ function SmsCard({
   return (
     <div id={domId} className="ll-surface rounded-lg border border-border p-4">
       {/* 头：类型徽 + 法院 + 案号 + 时间 + 来源标 */}
-      <div className="flex flex-wrap items-center gap-2 text-[11px]">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
         <span
-          className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+          className="rounded-full px-2 py-0.5 text-xs font-medium"
           style={{ background: `${accent}1A`, color: accent }}
         >
           {SMS_TYPE_CN[sms.smsType]}
         </span>
         {sms.processingState && sms.processingState !== "READY_FOR_REVIEW" && (
           <span
-            className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+            className="rounded-full px-2 py-0.5 text-xs font-medium"
             style={{ background: `${SMS_STATE_ACCENT[sms.processingState]}14`, color: SMS_STATE_ACCENT[sms.processingState] }}
           >
             {SMS_STATE_CN[sms.processingState]}
@@ -279,11 +279,11 @@ function SmsCard({
         )}
         {parsed.court && <span className="text-foreground/80">{parsed.court}</span>}
         {parsed.caseNumbers.length > 0 && (
-          <span className="font-mono text-[10px] text-muted-foreground">
+          <span className="font-mono text-xs text-muted-foreground">
             {parsed.caseNumbers.join("、")}
           </span>
         )}
-        <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+        <span className="ml-auto font-mono text-xs text-muted-foreground">
           {formatDateTime(new Date(sms.receivedAt))}
         </span>
       </div>
@@ -293,18 +293,18 @@ function SmsCard({
         <div className="flex items-start gap-2">
           {parsed.aiEnriched && (
             <span
-              className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
+              className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary"
               title="AI 增强解析"
             >
-              <Sparkles className="h-3 w-3" />
+              <Sparkles aria-hidden size="small" />
               AI
             </span>
           )}
-          <p className="line-clamp-2 text-[13px] text-foreground/85">{parsed.summary}</p>
+          <p className="line-clamp-2 text-sm text-foreground/85">{parsed.summary}</p>
         </div>
         {parsed.action && (
-          <div className="flex items-baseline gap-1.5 text-[12px]">
-            <ArrowRight className="h-3 w-3 shrink-0 text-primary/70" />
+          <div className="flex items-baseline gap-1.5 text-xs">
+            <ArrowRight aria-hidden size="small" className="shrink-0 text-primary/70" />
             <span className="text-muted-foreground">应对：</span>
             <span className="text-foreground/90">{parsed.action}</span>
             {parsed.urgency && <UrgencyBadge level={parsed.urgency} />}
@@ -313,15 +313,15 @@ function SmsCard({
       </div>
 
       {/* 字段栏 */}
-      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
         {parsed.hearingDate && (
-          <Field icon={<Gavel className="h-3 w-3" />}>开庭：{parsed.hearingDate}</Field>
+          <Field icon={<Gavel aria-hidden size="small" />}>开庭：{parsed.hearingDate}</Field>
         )}
         {parsed.courtRoom && <Field>{parsed.courtRoom}</Field>}
         {parsed.judge && <Field>法官：{parsed.judge}</Field>}
         {parsed.clerk && <Field>书记员：{parsed.clerk}</Field>}
         {parsed.phones.map((p) => (
-          <Field key={p} icon={<Phone className="h-3 w-3" />}>
+          <Field key={p} icon={<Phone aria-hidden size="small" />}>
             <a href={`tel:${p}`} className="hover:text-foreground">
               {p}
             </a>
@@ -331,7 +331,7 @@ function SmsCard({
         {parsed.judgmentDate && <Field>判决日：{parsed.judgmentDate}</Field>}
         {parsed.urls.length > 0 &&
           parsed.urls.map((u, i) => (
-            <Field key={u} icon={<ExternalLink className="h-3 w-3" />}>
+            <Field key={u} icon={<ExternalLink aria-hidden size="small" />}>
               <a
                 href={u}
                 target="_blank"
@@ -346,8 +346,8 @@ function SmsCard({
 
       {parsed.importantItems.length > 0 && (
         <div className="mt-3 border-t border-border pt-3">
-          <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-foreground/80">
-            <CalendarClock className="h-3.5 w-3.5 text-primary" />
+          <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-foreground/80">
+            <CalendarClock aria-hidden size="small" className="text-primary" />
             重要事项
           </div>
           <div className="grid gap-1.5 md:grid-cols-2">
@@ -356,13 +356,13 @@ function SmsCard({
                 key={`${item.kind}-${item.dateText ?? i}-${i}`}
                 className="rounded-md border border-border/70 bg-muted/20 px-2.5 py-2"
               >
-                <div className="flex items-center gap-2 text-[11px]">
+                <div className="flex items-center gap-2 text-xs">
                   <span className="font-medium text-foreground/85">{item.title}</span>
                   {item.dateText && (
-                    <span className="font-mono text-[10px] text-primary">{item.dateText}</span>
+                    <span className="font-mono text-xs text-primary">{item.dateText}</span>
                   )}
                 </div>
-                <p className="mt-0.5 line-clamp-1 text-[10px] text-muted-foreground">
+                <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
                   {item.sourceText}
                 </p>
               </div>
@@ -374,21 +374,21 @@ function SmsCard({
       {/* B1 来件文件清单：自动取件与人工补传统一列出，逐件状态（v3 §3.2「文件」块） */}
       {sms.inboundFiles?.length > 0 && (
         <div className="mt-3 border-t border-border pt-3">
-          <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-foreground/80">
-            <FileCheck2 className="h-3.5 w-3.5 text-primary" />
+          <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-foreground/80">
+            <FileCheck2 aria-hidden size="small" className="text-primary" />
             来件文件（{sms.inboundFiles.filter(f => f.state === "FILED").length}/{sms.inboundFiles.length} 已入卷）
           </div>
           <div className="space-y-1">
             {sms.inboundFiles.map((f) => (
-              <div key={f.id} className="flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/20 px-2.5 py-1.5 text-[11px]">
+              <div key={f.id} className="flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/20 px-2.5 py-1.5 text-xs">
                 <span className="font-medium text-foreground/85">{f.displayName ?? f.originalName}</span>
-                <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{SMS_FILE_STATE_CN[f.state]}</span>
-                <span className="text-[10px] text-muted-foreground">{SMS_FILE_SOURCE_CN[f.uploadSource]}</span>
+                <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{SMS_FILE_STATE_CN[f.state]}</span>
+                <span className="text-xs text-muted-foreground">{SMS_FILE_SOURCE_CN[f.uploadSource]}</span>
                 {f.analysisState && f.analysisState !== "PENDING" && (
-                  <span className={`rounded px-1.5 py-0.5 text-[10px] ${f.analysisState === "ANALYZED" ? "bg-emerald-50 text-emerald-700" : f.analysisState === "NEEDS_OCR" || f.analysisState === "FAILED" ? "bg-amber-50 text-amber-700" : "bg-muted text-muted-foreground"}`} title={f.analysisError ?? undefined}>{SMS_ANALYSIS_CN[f.analysisState] ?? f.analysisState}{f.docType ? ` · ${f.docType}` : ""}</span>
+                  <span className={`rounded px-1.5 py-0.5 text-xs ${f.analysisState === "ANALYZED" ? "bg-[var(--semi-color-success-light-default)] text-[var(--semi-color-success)]" : f.analysisState === "NEEDS_OCR" || f.analysisState === "FAILED" ? "bg-[var(--semi-color-warning-light-default)] text-[var(--semi-color-warning)]" : "bg-muted text-muted-foreground"}`} title={f.analysisError ?? undefined}>{SMS_ANALYSIS_CN[f.analysisState] ?? f.analysisState}{f.docType ? ` · ${f.docType}` : ""}</span>
                 )}
-                <span className="font-mono text-[10px] text-muted-foreground">{(f.size / 1024).toFixed(0)} KB</span>
-                <span className="ml-auto font-mono text-[10px] text-muted-foreground">{formatDateTime(f.downloadedAt)}</span>
+                <span className="font-mono text-xs text-muted-foreground">{(f.size / 1024).toFixed(0)} KB</span>
+                <span className="ml-auto font-mono text-xs text-muted-foreground">{formatDateTime(f.downloadedAt)}</span>
               </div>
             ))}
           </div>
@@ -400,10 +400,10 @@ function SmsCard({
       {/* B1 人工接续：需登录/验证码平台的来件，律师平台下载后补传回本条（v3 §4.2） */}
       {(sms.processingState === "NEEDS_MANUAL_FETCH" || sms.inboundFiles.some(file => !file.documentId && ["PENDING_REVIEW", "FAILED"].includes(file.state))) && (
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             收件人可把实际取得的原件补传回本条来件；同内容补传可接续尚未入卷的文件。
           </span>
-          <Button htmlType="button" theme="outline" type="tertiary" size="small" disabled={uploading || pending} loading={uploading} icon={<Upload className="h-3 w-3" />} onClick={() => uploadInput.current?.click()}>
+          <Button htmlType="button" theme="outline" type="tertiary" size="small" disabled={uploading || pending} loading={uploading} icon={<Upload aria-hidden size="small" />} onClick={() => uploadInput.current?.click()}>
             补传文件
           </Button>
             <input
@@ -440,14 +440,14 @@ function SmsCard({
         <div className="mt-3 space-y-2 border-t border-border pt-3">
           {parsed.documentLinks.length > 0 && (
             <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5 text-[11px] font-medium text-foreground/80">
-                <FileDown className="h-3.5 w-3.5 text-primary" />
+              <div className="flex items-center gap-1.5 text-xs font-medium text-foreground/80">
+                <FileDown aria-hidden size="small" className="text-primary" />
                 电子送达
               </div>
               {parsed.documentLinks.map((link, i) => (
                 <div
                   key={`${link.url}-${i}`}
-                  className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground"
+                  className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground"
                 >
                   <a
                     href={link.url}
@@ -455,11 +455,11 @@ function SmsCard({
                     rel="noreferrer"
                     className="inline-flex items-center gap-1 text-primary hover:underline"
                   >
-                    <ExternalLink className="h-3 w-3" />
+                    <ExternalLink aria-hidden size="small" />
                     {link.platform ?? `送达链接 ${i + 1}`}
                   </a>
                   {link.requiresLogin && (
-                    <span className="rounded bg-[var(--semi-color-warning-light-default)] px-1.5 py-0.5 text-[10px] text-[var(--semi-color-warning)]">
+                    <span className="rounded bg-[var(--semi-color-warning-light-default)] px-1.5 py-0.5 text-xs text-[var(--semi-color-warning)]">
                       需登录/校验
                     </span>
                   )}
@@ -469,15 +469,15 @@ function SmsCard({
           )}
 
           {parsed.credentials.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 text-[11px] text-muted-foreground">
+            <div className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1 text-foreground/75">
-                <KeyRound className="h-3 w-3 text-primary" />
+                <KeyRound aria-hidden size="small" className="text-primary" />
                 已识别凭证
               </span>
               {parsed.credentials.map((cred, i) => (
                 <span
                   key={`${cred.kind}-${cred.valuePreview}-${i}`}
-                  className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px]"
+                  className="rounded bg-muted/50 px-1.5 py-0.5 text-xs"
                 >
                   {cred.label}：{cred.valuePreview}
                 </span>
@@ -500,15 +500,15 @@ function SmsCard({
         {sms.matchedMatter ? (
           <Link
             href={matterHref(sms.matchedMatter)}
-            className="group inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/5 px-2 py-1 text-[11px] hover:bg-primary/10"
+            className="group inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/5 px-2 py-1 text-xs hover:bg-primary/10"
           >
-            <Briefcase className="h-3 w-3 text-primary" />
-            <span className="font-mono text-[10px] text-muted-foreground">
+            <Briefcase aria-hidden size="small" className="text-primary" />
+            <span className="font-mono text-xs text-muted-foreground">
               {sms.matchedMatter.internalCode}
             </span>
             <span className="truncate font-medium">{sms.matchedMatter.title}</span>
             {sms.matchedBy === "AUTO_CASE_NUMBER" && (
-              <span className="ml-0.5 rounded bg-muted/60 px-1 text-[9px] text-muted-foreground">
+              <span className="ml-0.5 rounded bg-muted/60 px-1 text-xs text-muted-foreground">
                 自动
               </span>
             )}
@@ -529,9 +529,9 @@ function SmsCard({
                   size="small"
                   theme="outline" type="tertiary"
                   onClick={onGenerateHearing}
-                  className="h-7 gap-1 text-[11px]"
+                  className="h-7 gap-1 text-xs"
                 >
-                  <Gavel className="h-3 w-3" />
+                  <Gavel aria-hidden size="small" />
                   生成开庭
                 </Button>
               )}
@@ -539,9 +539,9 @@ function SmsCard({
                 size="small"
                 theme="outline" type="tertiary"
                 onClick={onGenerateDeadline}
-                className="h-7 gap-1 text-[11px]"
+                className="h-7 gap-1 text-xs"
               >
-                <Clock className="h-3 w-3" />
+                <Clock aria-hidden size="small" />
                 生成期限
               </Button>
               {canBackfillCaseNumber && (
@@ -549,10 +549,10 @@ function SmsCard({
                   size="small"
                   theme="outline" type="tertiary"
                   onClick={onBackfillCaseNumber}
-                  className="h-7 gap-1 text-[11px]"
+                  className="h-7 gap-1 text-xs"
                   title="把短信解析出的案号回填到缺案号的程序"
                 >
-                  <FileDigit className="h-3 w-3" />
+                  <FileDigit aria-hidden size="small" />
                   回填案号
                 </Button>
               )}
@@ -564,10 +564,10 @@ function SmsCard({
               theme="outline" type="tertiary"
               onClick={onExtractAttachments}
               disabled={pending}
-              className="h-7 gap-1 text-[11px]"
+              className="h-7 gap-1 text-xs"
               title="提取短信中的送达附件（未匹配案件时文件入私有来件暂存，匹配后再转正）"
             >
-              {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileDown className="h-3 w-3" />}
+              {pending ? <Loader2 aria-hidden size="small" spin /> : <FileDown aria-hidden size="small" />}
               提取附件
             </Button>
           )}
@@ -577,9 +577,9 @@ function SmsCard({
               theme="borderless" type="tertiary"
               onClick={onMarkProcessed}
               disabled={pending}
-              className="h-7 gap-1 text-[11px]"
+              className="h-7 gap-1 text-xs"
             >
-              <CheckCircle2 className="h-3 w-3" />
+              <CheckCircle2 aria-hidden size="small" />
               标为已处理
             </Button>
           )}
@@ -591,13 +591,13 @@ function SmsCard({
             onClick={onDelete}
             disabled={pending}
             aria-label="删除短信"
-            icon={<Trash2 className="h-3.5 w-3.5" />}
+            icon={<Trash2 aria-hidden size="small" />}
           />
         </div>
       </div>
 
       {showRaw && (
-        <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-muted/30 p-3 font-sans text-[11px] leading-relaxed text-foreground/80">
+        <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-muted/30 p-3 font-sans text-xs leading-relaxed text-foreground/80">
           {sms.rawText}
         </pre>
       )}
@@ -657,8 +657,8 @@ function AttachmentResultRow({ result }: { result: ParsedJson["attachmentResults
   }[result.status] ?? { label: "未知", color: "text-muted-foreground", bg: "bg-muted/50" };
 
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-      <span className={cn("rounded px-1.5 py-0.5 text-[10px]", meta.bg, meta.color)}>
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+      <span className={cn("rounded px-1.5 py-0.5 text-xs", meta.bg, meta.color)}>
         {meta.label}
       </span>
       {result.documentId ? (
@@ -666,7 +666,7 @@ function AttachmentResultRow({ result }: { result: ParsedJson["attachmentResults
           href={`/api/documents/${result.documentId}/download`}
           className="inline-flex items-center gap-1 text-primary hover:underline"
         >
-          <FileCheck2 className="h-3 w-3" />
+          <FileCheck2 aria-hidden size="small" />
           {result.documentName ?? "已保存附件"}
         </a>
       ) : (
@@ -685,10 +685,10 @@ function UrgencyBadge({ level }: { level: "HIGH" | "MEDIUM" | "LOW" }) {
   }[level];
   return (
     <span
-      className="ml-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px]"
+      className="ml-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs"
       style={{ background: meta.bg, color: meta.color }}
     >
-      <AlertCircle className="h-2.5 w-2.5" />
+      <AlertCircle aria-hidden className="h-2.5 w-2.5" />
       {meta.label}
     </span>
   );
@@ -718,7 +718,7 @@ function MatterPicker({ sms, matters }: { sms: SmsRow; matters: MatterOption[] }
     aria-labelledby={labelId}
     placeholder="指派案件"
     searchPlaceholder="搜索编号或案件名..."
-    prefix={<LinkIcon className="h-3 w-3" />}
+    prefix={<LinkIcon aria-hidden size="small" />}
     style={{ width: 320 }}
     filter
     motion={false}

@@ -15,12 +15,12 @@ import { Button, Input, Notification, Toast } from "@douyinfe/semi-ui";
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Briefcase, FileClock, Info, Loader2, Plus, Search, ShieldAlert, ShieldCheck, TriangleAlert, Users, X } from "lucide-react";
+import { IconBriefcase as Briefcase, IconHistory as FileClock, IconInfoCircle as Info, IconLoading as Loader2, IconPlus as Plus, IconSearch as Search, IconShield as ShieldAlert, IconShieldStroked as ShieldCheck, IconAlertTriangle as TriangleAlert, IconUserGroup as Users, IconClose as X } from "@douyinfe/semi-icons";
 import type { ConflictSeverity, MatterCategory, MatterStatus, PartyRole, LitigationStanding } from "@prisma/client";
 import { runCheckAndSave } from "@/server/conflicts/actions";
 import { matterHref } from "@/lib/matters/route";
 import { intakeStatusLabel, litigationStandingLabel, matterCategoryLabel, matterStatusLabel } from "@/lib/enums";
-import { PageHeader } from "@/components/patterns/moan";
+import { PageHeader } from "@/components/patterns/workspace-surfaces";
 import { cn, formatDate } from "@/lib/utils";
 import { useTopbarAction } from "@/components/layout/topbar-action";
 import { shMonthDayTime } from "@/lib/ui/sh-time";
@@ -180,7 +180,7 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="panel-head">
           <div className="panel-title">
-            <Search className="ic" />
+            <Search aria-hidden className="ic" />
             检索主体 <SemiTag size="small" color="grey" style={{ marginLeft: 2 }}>{queries.length}</SemiTag>
           </div>
         </div>
@@ -228,7 +228,7 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
                 </Button>
                 {queries.length > 1 ? (
                   <Button theme="borderless" htmlType="button" disabled={pending} aria-label="移除该主体" onClick={() => setQueries((qs) => qs.filter((x) => x.key !== q.key))}>
-                    <X />
+                    <X aria-hidden />
                   </Button>
                 ) : null}
               </div>
@@ -238,18 +238,18 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
 
         <div className="subject" style={{ borderTop: "1px dashed var(--semi-color-border)" }}>
           <Button theme="borderless" htmlType="button" disabled={pending} block onClick={() => setQueries((qs) => [...qs, emptyRow("OPPOSING_PARTY")])}>
-            <Plus />
+            <Plus aria-hidden />
             添加检索主体（自然人 / 机构）
           </Button>
         </div>
 
         <div className="run-bar" style={{ padding: "0 16px 16px" }}>
           <Button theme="solid" htmlType="button" onClick={run} disabled={pending}>
-            {pending ? <Loader2 className="animate-spin" /> : <Search />}
+            {pending ? <Loader2 aria-hidden spin /> : <Search aria-hidden />}
             {hasRun ? "重新预检" : "开始预检"}
           </Button>
           <span className="run-note">
-            <Info className="h-3.5 w-3.5" />
+            <Info aria-hidden size="small" />
             检索范围：历史案件当事人 · 客户档案关联案件 · 尚未转为案件的在办收案
           </span>
         </div>
@@ -260,7 +260,7 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
           {!hasRun ? (
             <div className="card">
               <div className="empty">
-                <div className="empty-ic"><ShieldCheck /></div>
+                <div className="empty-ic"><ShieldCheck aria-hidden /></div>
                 <div className="mo-empty-title">填写主体后开始预检</div>
                 <div className="mo-empty-desc">按名称与证件号码比对本所的历史案件、客户档案和在办收案，按主体逐个列出相关记录，方便在收案前掌握情况。</div>
               </div>
@@ -269,19 +269,19 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
             <>
               <div className="risk-strip" style={{ marginTop: 0 }}>
                 <div className="card risk-cell">
-                  <div className="risk-ic" style={{ background: "var(--semi-color-primary-light-default)", color: "var(--semi-color-primary-active)" }}><Users /></div>
+                  <div className="risk-ic" style={{ background: "var(--semi-color-primary-light-default)", color: "var(--semi-color-primary-active)" }}><Users aria-hidden /></div>
                   <div><div className="rn">{hitSubjects.length}<span className="t-xs t-mute" style={{ fontFamily: "inherit", fontWeight: 500 }}> / {subjects.length}</span></div><div className="rl">有相关记录的主体</div></div>
                 </div>
                 <div className="card risk-cell">
-                  <div className="risk-ic" style={{ background: "var(--semi-color-fill-0)", color: "var(--semi-color-text-1)" }}><Briefcase /></div>
+                  <div className="risk-ic" style={{ background: "var(--semi-color-fill-0)", color: "var(--semi-color-text-1)" }}><Briefcase aria-hidden /></div>
                   <div><div className="rn" style={{ color: matterCount ? undefined : "var(--semi-color-text-3)" }}>{matterCount}</div><div className="rl">涉及历史案件</div></div>
                 </div>
                 <div className="card risk-cell">
-                  <div className="risk-ic" style={{ background: "var(--semi-color-warning-light-default)", color: "var(--semi-color-warning)" }}><FileClock /></div>
+                  <div className="risk-ic" style={{ background: "var(--semi-color-warning-light-default)", color: "var(--semi-color-warning)" }}><FileClock aria-hidden /></div>
                   <div><div className="rn" style={{ color: intakeCount ? "var(--semi-color-warning)" : "var(--semi-color-text-3)" }}>{intakeCount}</div><div className="rl">涉及在办收案</div></div>
                 </div>
                 <div className="card risk-cell" style={attention ? { borderColor: "var(--semi-color-danger-light-active)" } : undefined}>
-                  <div className="risk-ic" style={{ background: "var(--semi-color-danger-light-default)", color: "var(--semi-color-danger)" }}><TriangleAlert /></div>
+                  <div className="risk-ic" style={{ background: "var(--semi-color-danger-light-default)", color: "var(--semi-color-danger)" }}><TriangleAlert aria-hidden /></div>
                   <div><div className="rn" style={{ color: attention ? "var(--semi-color-danger)" : "var(--semi-color-text-3)" }}>{attention}</div><div className="rl">重点关注 / 高风险</div></div>
                 </div>
               </div>
@@ -313,7 +313,7 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
                   ))
                 )}
                 <div className="disclaimer">
-                  <Info className="h-3.5 w-3.5 shrink-0" style={{ marginTop: 2 }} />
+                  <Info aria-hidden size="small" className="shrink-0" style={{ marginTop: 2 }} />
                   <span>未发现仅表示系统登记的记录里没有匹配，<b>不等于确认无冲突</b>：别名、关联公司、未录入系统的代理关系仍需自行核实。正式收案时系统会重新检索，并由审批人核查。</span>
                 </div>
               </div>
@@ -327,7 +327,7 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
               <div className="panel-title" style={{ fontSize: 13 }}>本次预检</div>
               {checkedAt ? <SemiTag size="small" color="teal">{shMonthDayTime(checkedAt)}</SemiTag> : <SemiTag size="small" color="grey">未开始</SemiTag>}
             </div>
-            <div className="panel-body space-y-1.5 text-[12px]" style={{ paddingTop: 10 }}>
+            <div className="panel-body space-y-1.5 text-xs" style={{ paddingTop: 10 }}>
               <div className="flex justify-between"><span className="t-mute">检索主体</span><span>{hasRun ? searchedQueries.length : queries.filter((q) => q.name.trim() || q.idNumber.trim()).length} 个</span></div>
               <div className="flex justify-between"><span className="t-mute">填写证件</span><span>{(hasRun ? searchedQueries : queries).filter((q) => q.idNumber.trim()).length} 个</span></div>
               <div className="flex justify-between"><span className="t-mute">相关记录</span><span>{hasRun ? `${hits.length} 条` : "—"}</span></div>
@@ -335,7 +335,7 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
           </div>
 
           <div className="side-note">
-            <ShieldAlert />
+            <ShieldAlert aria-hidden />
             <span>
               预检最小披露：案件只显示<b>编号、名称、主办、状态、角色</b>；在办收案只显示<b>名称、登记人、状态、角色</b>。案件正文与材料不因预检开放。每次预检写入审计日志。
             </span>
@@ -382,11 +382,11 @@ function TargetRow({ target }: { target: TargetGroup }) {
     <div className="hit-match" style={{ borderBottom: "none", display: "block" }}>
       <div className="flex flex-wrap items-center gap-1.5">
         <SemiTag size="small" color={m ? "grey" : "amber"} className="shrink-0">{m ? "历史案件" : "在办收案"}</SemiTag>
-        <span className="min-w-0 truncate text-[13px] font-semibold">{m ? `${m.internalCode} · ${m.title}` : it?.title ?? top.matchedName}</span>
+        <span className="min-w-0 truncate text-sm font-semibold">{m ? `${m.internalCode} · ${m.title}` : it?.title ?? top.matchedName}</span>
         <SemiTag size="small" className="ml-auto shrink-0" color={sev.color}>{sev.label}</SemiTag>
       </div>
-      <div className="mt-1.5 grid grid-cols-1 gap-x-4 gap-y-1 text-[12px] sm:grid-cols-2">
-        <div><span className="t-mute">命中方式　</span>{[...new Set(hits.map(matchKind))].join("、")}{idHit ? <span className="ml-1 font-mono text-[11px] t-mute">{idHit.matchedValue}</span> : null}</div>
+      <div className="mt-1.5 grid grid-cols-1 gap-x-4 gap-y-1 text-xs sm:grid-cols-2">
+        <div><span className="t-mute">命中方式　</span>{[...new Set(hits.map(matchKind))].join("、")}{idHit ? <span className="ml-1 font-mono text-xs t-mute">{idHit.matchedValue}</span> : null}</div>
         <div><span className="t-mute">命中主体　</span>「{top.matchedName}」在该{m ? "案" : "收案"}中为 <b>{roleText}</b></div>
         {m ? (
           <>
@@ -401,11 +401,11 @@ function TargetRow({ target }: { target: TargetGroup }) {
           </>
         ) : null}
       </div>
-      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] t-faint">
+      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs t-faint">
         {href ? (
-          <Link href={href} className="btn btn-ghost btn-sm">查看案件</Link>
+          <Link href={href} className="workspace-action-link">查看案件</Link>
         ) : (
-          <span className="inline-flex items-center gap-1"><Info className="h-3 w-3" />{m ? "你不是该案成员，如需了解请联系主办律师" : "收案内容不因预检开放，如需了解请联系登记人"}</span>
+          <span className="inline-flex items-center gap-1"><Info aria-hidden size="small" />{m ? "你不是该案成员，如需了解请联系主办律师" : "收案内容不因预检开放，如需了解请联系登记人"}</span>
         )}
       </div>
     </div>

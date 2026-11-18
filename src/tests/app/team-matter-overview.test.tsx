@@ -5,8 +5,9 @@ import { ActionError } from "@/lib/action-error";
 
 const mock = vi.hoisted(() => ({
   user: { id: "cmtestuser000000000000001", role: "CUSTOM", runtimeMode: "SERVER" } as RoleUser & { id: string },
-  session: vi.fn(), notes: vi.fn()
+  session: vi.fn(), notes: vi.fn(), push: vi.fn()
 }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mock.push }) }));
 vi.mock("@/lib/auth/session", () => ({ requireSession: mock.session }));
 vi.mock("@/server/notes/actions", () => ({ listNotes: mock.notes }));
 

@@ -6,7 +6,7 @@
  */
 import { Notification, Switch, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
-import { SlidersHorizontal } from "lucide-react";
+import { IconCustomize as SlidersHorizontal } from "@douyinfe/semi-icons";
 import { saveWorkflowTogglesAction } from "@/server/settings/workflow-toggles-actions";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -37,10 +37,10 @@ export function WorkflowTogglesCard({
   return (
     <section className="card p-6">
       <div className="mb-1 flex items-center gap-2">
-        <SlidersHorizontal className="h-4 w-4 text-primary" strokeWidth={1.8} />
+        <SlidersHorizontal aria-hidden size="default" className="text-primary" />
         <h2 className="text-base font-semibold">工作流开关</h2>
       </div>
-      <p className="mb-4 text-[12px] text-muted-foreground">
+      <p className="mb-4 text-xs text-muted-foreground">
         按团队规模选择流程松紧；改动即时生效。
       </p>
       <div className="flex items-start justify-between gap-4">

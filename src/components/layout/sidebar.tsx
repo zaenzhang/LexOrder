@@ -47,7 +47,7 @@ export function BrandMark({ logoDataUrl, name, size = 30 }: { logoDataUrl?: stri
       <svg width={size * 0.53} height={size * 0.53} viewBox="0 0 16 16" fill="none">
         <rect x="3" y="2.6" width="2.7" height="10.8" rx="1.1" fill="#fff" />
         <rect x="8.4" y="2.6" width="2.7" height="10.8" rx="1.1" fill="#fff" />
-        <rect x="3" y="6.8" width="8.1" height="2.4" rx="1.1" fill="#00A6A6" />
+        <rect x="3" y="6.8" width="8.1" height="2.4" rx="1.1" fill="var(--semi-color-primary-light-active)" />
       </svg>
     </span>
   );

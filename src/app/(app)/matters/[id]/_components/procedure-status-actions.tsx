@@ -46,7 +46,7 @@ export function ProcedureStatusActions({ procedure, label }: { procedure: Proced
       {procedure.status !== "IN_PROGRESS" && <Button onClick={() => open("IN_PROGRESS")} type="tertiary" theme="outline" size="small">{procedure.status === "CONCLUDED" && !unverifiedInformation ? "恢复办理" : procedure.engagement === "INFORMATIONAL" ? "记录办理中" : "开始办理"}</Button>}
       {(procedure.status !== "CONCLUDED" || !procedure.concludedAt) && <Button onClick={() => open("CONCLUDED")} type="tertiary" theme="outline" size="small">终结程序</Button>}
     </div>
-    <WorkspaceDialog open={Boolean(target)} onOpenChange={open => { if (!open) void close(); }}>
+    <WorkspaceDialog dismissOnBackdrop open={Boolean(target)} onOpenChange={open => { if (!open) void close(); }}>
       <DialogContent className="max-w-md">
         <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{target?.label}</DialogDescription></DialogHeader>
         {target?.status === "CONCLUDED" && <div className="space-y-2"><label htmlFor="procedure-concluded-at" className="text-sm font-medium text-[var(--semi-color-text-1)]">实际终结日期</label><Input id="procedure-concluded-at" type="date" max={shDayKey(new Date())} value={date} disabled={busy} onChange={inputValue => setDate(inputValue)} /></div>}

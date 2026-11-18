@@ -1,10 +1,10 @@
 "use client";
 
 import { Button as SemiButton } from "@douyinfe/semi-ui";
-import { FieldGrid, FieldItem } from "@/components/patterns/moan";
+import { FieldGrid, FieldItem } from "@/components/patterns/workspace-surfaces";
 
 import { useState } from "react";
-import { FileText, Pencil } from "lucide-react";
+import { IconArticle as FileText, IconEdit as Pencil } from "@douyinfe/semi-icons";
 import { litigationStandingLabel, matterCategoryKind } from "@/lib/enums";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import type { MatterPayload } from "./matter-detail-tabs";
@@ -114,7 +114,7 @@ export function InfoPanel({
       <div className="panel-head" style={{ borderBottom: "none", paddingBottom: 8 }}>
         <div className="ws-head min-w-0 flex-1">
           <div className="ic-wrap">
-            <FileText strokeWidth={1.8} />
+            <FileText aria-hidden />
           </div>
           <div className="min-w-0">
             <h2>信息总览</h2>
@@ -126,7 +126,7 @@ export function InfoPanel({
           {canEdit ? (
             <div className="acts">
               <SemiButton htmlType="button" onClick={onEdit} theme="outline" type="tertiary">
-                <Pencil strokeWidth={1.8} />
+                <Pencil aria-hidden />
                 编辑信息
               </SemiButton>
             </div>
@@ -195,7 +195,7 @@ function ClampedText({ text }: { text: string }) {
         <SemiButton theme="borderless" type="primary" size="small"
           htmlType="button"
           onClick={() => setOpen((v) => !v)}
-          className="mt-0.5 text-[11px] text-primary hover:underline"
+          className="mt-0.5 text-xs text-primary hover:underline"
         >
           {open ? "收起" : "展开全文"}
         </SemiButton>
@@ -261,12 +261,12 @@ export function Pair({
         tight ? "md:flex-none" : wide ? "md:flex-[3]" : grow ? "md:flex-[2]" : "md:flex-1"
       )}
     >
-      <div className="w-[68px] shrink-0 border-r border-border bg-muted/50 px-2 py-2 text-[11.5px] leading-snug text-muted-foreground">
+      <div className="w-[68px] shrink-0 border-r border-border bg-muted/50 px-2 py-2 text-xs leading-snug text-muted-foreground">
         <AlignedLabel label={label} />
       </div>
       <div
         className={cn(
-          "min-w-0 flex-1 bg-card px-2.5 py-2 text-[12.5px] leading-snug text-foreground/95",
+          "min-w-0 flex-1 bg-card px-2.5 py-2 text-sm leading-snug text-foreground/95",
           tight ? "whitespace-nowrap" : "break-words"
         )}
       >

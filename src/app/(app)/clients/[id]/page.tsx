@@ -1,4 +1,4 @@
-import { clientCooperationTone, statusTagColor } from "@/lib/ui/moan-tones";
+import { clientCooperationTone, statusTagColor } from "@/lib/ui/status-tones";
 import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
 import { Disclosure } from "@/components/patterns/disclosure";
 import { clientIdTypeLabel } from "@/lib/clients/person-id";
@@ -9,7 +9,7 @@ import { requireSession } from "@/lib/auth/session";
 import { hasCustomPermission } from "@/lib/roles/catalog";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Users, CreditCard, UserRound } from "lucide-react";
+import { IconChevronLeft as ChevronLeft, IconUserGroup as Users, IconCreditCard as CreditCard, IconUser as UserRound } from "@douyinfe/semi-icons";
 import { getClientById, getClientFinanceSummary } from "@/server/clients/actions";
 import { getClientInsights } from "@/server/clients/insights";
 import { getClientRelationship } from "@/server/clients/relationship-actions";
@@ -21,8 +21,8 @@ import { ClientDetailTabs } from "./_components/client-detail-tabs";
 import { getClientHistoryPage } from "@/server/clients/history-actions";
 import { decryptIdNumber } from "@/lib/clients/id-number-crypto";
 import { clientTypeLabel, cooperationStatusLabel, genderLabel } from "@/lib/enums";
-import { avatarTone } from "@/lib/ui/moan-tones";
-import { FieldGrid, FieldItem, InitialAvatar } from "@/components/patterns/moan";
+import { avatarTone } from "@/lib/ui/status-tones";
+import { FieldGrid, FieldItem, InitialAvatar } from "@/components/patterns/workspace-surfaces";
 import { ClientEditButton } from "./_components/client-edit-button";
 import { AddContactButton, MergeBanner } from "./_components/client-detail-parts";
 
@@ -71,7 +71,7 @@ export default async function ClientDetailPage({ params, searchParams }: {
   return (
     <div className="mo-client">
       <Link href={returnHref} className="mo-back">
-        <ChevronLeft className="h-3.5 w-3.5" />
+        <ChevronLeft aria-hidden size="small" />
         {returnHref.startsWith("/clients/follow-ups") ? "返回待跟进" : "返回客户列表"}
       </Link>
 
@@ -97,12 +97,12 @@ export default async function ClientDetailPage({ params, searchParams }: {
           matters: <div className="space-y-3.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="t-sm t-mute">在办 {activeCount} 件</span>
-              {hasCustomPermission(session.user, "intakes.create") ? <Link href={intakeHref} className="btn btn-secondary btn-sm">为此客户新建收案</Link> : null}
+              {hasCustomPermission(session.user, "intakes.create") ? <Link href={intakeHref} className="workspace-action-link">为此客户新建收案</Link> : null}
             </div>
             <div className={`grid items-start gap-3.5 ${finance ? "xl:grid-cols-[minmax(0,1fr)_296px]" : "grid-cols-1"}`}>
               <ClientMattersPanel clientId={client.id} initial={insights.matterPage} />
               {finance ? <section className="card min-w-0" aria-labelledby="client-finance-title">
-                <div className="panel-head"><h2 id="client-finance-title" className="panel-title"><CreditCard className="ic" strokeWidth={1.8} />财务往来</h2></div>
+                <div className="panel-head"><h2 id="client-finance-title" className="panel-title"><CreditCard aria-hidden className="ic" />财务往来</h2></div>
                 <div className="panel-body">
                   <div className="flex justify-between py-1"><span className="t-sm t-mute">合同总额</span><span className="num-md">{yuan(finance.contractTotal)}</span></div>
                   <div className="flex justify-between py-1"><span className="t-sm t-mute">累计实收</span><span className="num-md" style={{ color: "var(--semi-color-success)" }}>{yuan(finance.received)}</span></div>
@@ -117,17 +117,17 @@ export default async function ClientDetailPage({ params, searchParams }: {
             ? <ClientHistoryPanel clientId={client.id} initial={history.page} initialError={history.error}
               initialCursor={historyLocation.data.historyCursor} initialFilters={historyLocation.data.filters} rowId={historyLocation.data.rowId} returnTo={query.returnTo} />
             : <section className="card p-4 space-y-3"><p role="alert" className="text-sm text-destructive">{history.error}</p>
-              <Link className="btn btn-secondary btn-sm" href={clientHistoryHref(client.id, { returnTo: query.returnTo })}>查看最新客户动态</Link></section>,
+              <Link className="workspace-action-link" href={clientHistoryHref(client.id, { returnTo: query.returnTo })}>查看最新客户动态</Link></section>,
           profile: <div className="space-y-3.5">
             {canMerge && insights.suspects.length > 0 ? <MergeBanner keepId={client.id} keepName={client.name} suspects={insights.suspects} canMerge={canMerge} /> : null}
             <div className="flex flex-wrap items-center gap-2">
               {canWrite ? <ClientEditButton client={{ ...client, idNumber: idNumber || null }} /> : null}
-              <Link href={`/conflicts?name=${encodeURIComponent(client.name)}`} className="btn btn-secondary btn-sm">冲突预检</Link>
+              <Link href={`/conflicts?name=${encodeURIComponent(client.name)}`} className="workspace-action-link">冲突预检</Link>
               {canMerge && insights.suspects.length === 0 ? <MergeBanner keepId={client.id} keepName={client.name} suspects={[]} canMerge={canMerge} /> : null}
             </div>
             <div className="grid items-start gap-3.5 xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.65fr)]">
               <section className="card min-w-0" aria-labelledby="client-profile-title">
-                <div className="panel-head"><h2 id="client-profile-title" className="panel-title"><UserRound className="ic" strokeWidth={1.8} />{isIndividual ? "个人信息" : "工商信息"}</h2></div>
+                <div className="panel-head"><h2 id="client-profile-title" className="panel-title"><UserRound aria-hidden className="ic" />{isIndividual ? "个人信息" : "工商信息"}</h2></div>
                 <div className="panel-body">
                   <FieldGrid cols={2}>
                     <FieldItem label="客户编号" mono>{client.internalCode || "—"}</FieldItem>
@@ -150,7 +150,7 @@ export default async function ClientDetailPage({ params, searchParams }: {
               </section>
               <section className="card min-w-0 overflow-hidden" aria-labelledby="client-contacts">
                 <div className="panel-head flex-wrap gap-2">
-                  <h2 id="client-contacts" className="panel-title"><Users className="ic" strokeWidth={1.8} />联系人 <SemiTag size="small" color="grey">{client.contacts.length}</SemiTag></h2>
+                  <h2 id="client-contacts" className="panel-title"><Users aria-hidden className="ic" />联系人 <SemiTag size="small" color="grey">{client.contacts.length}</SemiTag></h2>
                   {canWrite ? <AddContactButton clientId={client.id} /> : null}
                 </div>
                 {client.contacts.length === 0 ? <div className="empty mo-empty-compact"><div className="mo-empty-title">暂无联系人</div></div> : client.contacts.map(c => (

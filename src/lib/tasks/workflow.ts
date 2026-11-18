@@ -136,7 +136,8 @@ const reason = z.string().trim().min(1, "请填写变更原因").max(1000);
 
 export const taskWorkspaceInput = z.object({
   matterId: z.string().cuid(),
-  includeClosed: z.boolean().default(false)
+  includeClosed: z.boolean().default(false),
+  returnTaskId: taskId.optional()
 });
 
 export const taskDependenciesInput = z.object({

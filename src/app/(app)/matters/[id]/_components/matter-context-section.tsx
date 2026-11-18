@@ -7,7 +7,7 @@ import { Button as SemiButton } from "@douyinfe/semi-ui";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Check, FileText, History, Loader2, Pencil, Plus } from "lucide-react";
+import { IconTick as Check, IconArticle as FileText, IconHistory as History, IconLoading as Loader2, IconEdit as Pencil, IconPlus as Plus } from "@douyinfe/semi-icons";
 import { Select, Input, Notification, TextArea, Toast } from "@douyinfe/semi-ui";
 import { WorkspaceDialog, DrawerContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
@@ -241,8 +241,8 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
     <>
     <section hidden={!overviewVisible} className="dos-group scroll-mt-44" aria-labelledby={titleId} id="matter-context" aria-busy={page.pending}>
       <div className="dos-group-h">
-        <FileText className="ic" strokeWidth={1.9} /><h2 ref={sectionTitle} tabIndex={-1} id={titleId} className="t">目标与指示</h2>
-        {page.data?.canWrite ? <span className="a"><FocusButton theme="outline" type="tertiary" size="small" ref={addTrigger} htmlType="button" disabled={pending} onClick={event => begin(null, event.currentTarget)}><Plus />记录目标或指示</FocusButton></span> : null}
+        <FileText aria-hidden className="ic" /><h2 ref={sectionTitle} tabIndex={-1} id={titleId} className="t">目标与指示</h2>
+        {page.data?.canWrite ? <span className="a"><FocusButton theme="outline" type="tertiary" size="small" ref={addTrigger} htmlType="button" disabled={pending} onClick={event => begin(null, event.currentTarget)}><Plus aria-hidden />记录目标或指示</FocusButton></span> : null}
       </div>
       <div className="dos-group-b">
         {page.pending ? <p role="status" className="t-sm t-mute">正在读取记录…</p> : null}
@@ -252,9 +252,9 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
           {page.data.records.map(record => <li key={record.id} className="border-b border-[var(--semi-color-border)] pb-4 last:border-0 last:pb-0">
             <RecordContent matterId={matterId} record={record} onSource={trigger => showSource(record, trigger)} />
             <div className="mt-2 flex flex-wrap gap-1">
-              <SemiButton htmlType="button" theme="borderless" type="tertiary" disabled={pending} aria-label={`查看${contextKindLabels[record.kind]}记录的历史版本`} onClick={event => showHistory(record, undefined, event.currentTarget)}><History />查看历史版本</SemiButton>
-              {record.canRevise ? <SemiButton htmlType="button" theme="borderless" type="tertiary" disabled={pending} aria-label={`更正${contextKindLabels[record.kind]}第 ${record.version} 版记录`} onClick={event => begin(record, event.currentTarget)}><Pencil />更正此记录</SemiButton> : null}
-              {record.canConfirm ? <SemiButton htmlType="button" theme="outline" type="tertiary" disabled={pending} aria-label={`核对确认${contextKindLabels[record.kind]}第 ${record.version} 版记录`} onClick={() => void confirmRecord(record)}><Check />核对确认此版本</SemiButton> : null}
+              <SemiButton htmlType="button" theme="borderless" type="tertiary" disabled={pending} aria-label={`查看${contextKindLabels[record.kind]}记录的历史版本`} onClick={event => showHistory(record, undefined, event.currentTarget)}><History aria-hidden />查看历史版本</SemiButton>
+              {record.canRevise ? <SemiButton htmlType="button" theme="borderless" type="tertiary" disabled={pending} aria-label={`更正${contextKindLabels[record.kind]}第 ${record.version} 版记录`} onClick={event => begin(record, event.currentTarget)}><Pencil aria-hidden />更正此记录</SemiButton> : null}
+              {record.canConfirm ? <SemiButton htmlType="button" theme="outline" type="tertiary" disabled={pending} aria-label={`核对确认${contextKindLabels[record.kind]}第 ${record.version} 版记录`} onClick={() => void confirmRecord(record)}><Check aria-hidden />核对确认此版本</SemiButton> : null}
             </div>
           </li>)}
         </ol> : null}
@@ -301,7 +301,7 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
             {exactCurrent?.error ? <div className="space-y-3"><p role="alert" className="text-sm text-destructive">{exactCurrent.error}</p>
               <SemiButton htmlType="button" theme="outline" type="tertiary" onClick={() => setExactAttempt(value => value + 1)}>重新读取这版记录</SemiButton></div> : null}
             {exactCurrent?.data ? <RecordContent matterId={matterId} record={exactCurrent.data} onSource={trigger => showSource(exactCurrent.data!, trigger, false, true)} /> : null}
-            {historyReturnHref ? <Link className="btn btn-secondary btn-sm" href={historyReturnHref}>返回客户动态</Link> : null}
+            {historyReturnHref ? <Link className="workspace-action-link" href={historyReturnHref}>返回客户动态</Link> : null}
           </div>
         </DrawerContent>
       </WorkspaceDialog>
@@ -317,7 +317,7 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
             {sourceError ? <p role="alert" className="text-sm text-destructive">{sourceError}</p> : null}
             {sourceLoading ? <p role="status" className="t-sm t-mute">正在读取来源…</p> : null}
             {sourceData?.content ? <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{sourceData.content}</p> : null}
-            {sourceData?.href ? <a className="btn btn-secondary" href={sourceData.href} target="_blank" rel="noopener noreferrer">打开来源原件</a> : null}
+            {sourceData?.href ? <a className="workspace-action-link" href={sourceData.href} target="_blank" rel="noopener noreferrer">打开来源原件</a> : null}
             {source && sourceError ? <SemiButton htmlType="button" theme="outline" type="tertiary" disabled={sourceLoading} onClick={() => void loadSource(source.id, source.recordLabel, source.exactRecordId)}>重新读取来源</SemiButton> : null}
           </div>
         </DrawerContent>
@@ -411,6 +411,6 @@ function ContextEditor({ matterId, state, canReadFinance, onSaved, onSaving, onD
       <div className="space-y-1.5"><label htmlFor={`${prefix}-source-description`} className="text-sm font-medium text-[var(--semi-color-text-1)]">来源说明 *</label><TextArea id={`${prefix}-source-description`} required rows={3} maxLength={1200} value={sourceDescription} onChange={inputValue => setSourceDescription(inputValue)} placeholder="指示人、沟通方式、原件位置或其他真实依据" /></div>
     </fieldset>
     {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
-    <div className="flex justify-end"><SemiButton htmlType="submit" disabled={pending} theme="solid" type="primary">{pending ? <Loader2 className="animate-spin" /> : <Check />}{record ? "保存更正版" : "保存记录"}</SemiButton></div>
+    <div className="flex justify-end"><SemiButton htmlType="submit" disabled={pending} theme="solid" type="primary">{pending ? <Loader2 aria-hidden spin /> : <Check aria-hidden />}{record ? "保存更正版" : "保存记录"}</SemiButton></div>
   </form>;
 }

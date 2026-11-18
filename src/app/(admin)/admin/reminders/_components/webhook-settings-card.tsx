@@ -6,7 +6,7 @@
  */
 import { Button, Checkbox, Form, Input, Notification, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
-import { Loader2, Send, Webhook } from "lucide-react";
+import { IconLoading as Loader2, IconSend as Send, IconConnectionPoint1 as Webhook } from "@douyinfe/semi-icons";
 import {
   saveWebhookSettingsAction,
   sendTestWebhookAction
@@ -51,12 +51,12 @@ export function WebhookSettingsCard({
     <section className="card">
       <div className="panel-head">
         <div className="panel-title">
-          <Webhook className="ic" strokeWidth={1.8} />
+          <Webhook aria-hidden className="ic" />
           群机器人推送（企业微信 / 钉钉）
         </div>
       </div>
       <div className="panel-body">
-      <p className="max-w-[760px] text-[12px] leading-5 text-muted-foreground">
+      <p className="max-w-[760px] text-xs leading-5 text-muted-foreground">
         每日到期扫描发现新提醒时，向群机器人推送一条汇总（只含事项标题与案件编号，不含当事人详情）。
         在企业微信 / 钉钉群里添加「自定义机器人」，把 Webhook 地址粘贴到下方；
         钉钉机器人建议用「自定义关键词」安全设置并填 <code className="font-mono">LexOrder</code>。
@@ -71,14 +71,14 @@ export function WebhookSettingsCard({
             value={url}
             onChange={(value) => setUrl(value)}
             placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=... 或 https://oapi.dingtalk.com/robot/send?access_token=..."
-            className="font-mono text-[12px]"
+            className="font-mono text-xs"
           />
         </div>
         <Checkbox checked={enabled} onChange={event => setEnabled(event.target.checked === true)}>启用每日提醒推送
         </Checkbox>
         <div className="flex items-center gap-2">
           <Button theme="solid" size="small" onClick={save} disabled={saving}>
-            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {saving && <Loader2 aria-hidden size="small" spin />}
             保存
           </Button>
           <Button
@@ -87,7 +87,7 @@ export function WebhookSettingsCard({
             onClick={test}
             disabled={testing}
           >
-            {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            {testing ? <Loader2 aria-hidden size="small" spin /> : <Send aria-hidden size="small" />}
             发送测试消息
           </Button>
         </div>

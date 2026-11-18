@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Tag } from "@douyinfe/semi-ui";
-import { Hourglass, XCircle, Archive } from "lucide-react";
+import { IconHourglass as Hourglass, IconClear as XCircle, IconArchive as Archive } from "@douyinfe/semi-icons";
 import { cn } from "@/lib/utils";
 
 type ArchiveStatus = "PENDING_REVIEW" | "REJECTED" | "APPROVED";
@@ -36,7 +36,7 @@ export function ArchiveStatusBanner({ record, onReArchive }: Props) {
       )}
     >
       <div className={cn("mt-0.5", isRejected ? "text-[var(--semi-color-danger)]" : "text-[var(--semi-color-warning)]")}>
-        {isRejected ? <XCircle className="h-4 w-4" /> : <Hourglass className="h-4 w-4" />}
+        {isRejected ? <XCircle aria-hidden size="default" /> : <Hourglass aria-hidden size="default" />}
       </div>
       <div className="flex-1 space-y-1">
         <div className="flex items-center gap-2">
@@ -45,7 +45,7 @@ export function ArchiveStatusBanner({ record, onReArchive }: Props) {
           </span>
           <Tag
             className={cn(
-              "text-[10px]",
+              "text-xs",
               isRejected
                 ? "border-[var(--semi-color-danger-light-active)] text-[var(--semi-color-danger)]"
                 : "border-[var(--semi-color-warning-light-active)] text-[var(--semi-color-warning)]"
@@ -64,7 +64,7 @@ export function ArchiveStatusBanner({ record, onReArchive }: Props) {
             : "归档申请已提交，等待有归档审批权限的人员审批；审批通过后案件转为只读。"}
         </div>
         {isRejected && record.missingItems.length > 0 && (
-          <div className="text-[11px] text-muted-foreground">
+          <div className="text-xs text-muted-foreground">
             上次缺项：{record.missingItems.join("、")}
           </div>
         )}
@@ -75,7 +75,7 @@ export function ArchiveStatusBanner({ record, onReArchive }: Props) {
           onClick={onReArchive}
           className="mt-0.5 inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs hover:bg-muted/80"
         >
-          <Archive className="h-3 w-3" />
+          <Archive aria-hidden size="small" />
           重新归档
         </Button>
       )}

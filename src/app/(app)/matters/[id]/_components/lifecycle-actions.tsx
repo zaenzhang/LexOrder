@@ -1,20 +1,10 @@
 "use client";
 
-import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
 import { FocusButton } from "@/components/patterns/focus-button";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Dropdown, Notification, TextArea, Toast } from "@douyinfe/semi-ui";
-import {
-  CheckCircle2,
-  Archive,
-  Pause,
-  Play,
-  Loader2,
-  MoreHorizontal,
-  Lock,
-  Download
-} from "lucide-react";
+import { IconTickCircle as CheckCircle2, IconArchive as Archive, IconPause as Pause, IconPlay as Play, IconLoading as Loader2, IconMore as MoreHorizontal, IconDownload as Download } from "@douyinfe/semi-icons";
 import type { MatterStatus } from "@prisma/client";
 import {
   WorkspaceDialog,
@@ -38,21 +28,14 @@ export function LifecycleActions({
   status,
   canArchive,
   canChangeStatus = true,
-  canExportBundle = false,
-  extraItems = [],
-  moreTriggerRef
+  canExportBundle = false
 }: {
   matterId: string;
   status: MatterStatus;
   canArchive: boolean;
   /** M-3c（D 批）：在办卷宗打包导出资格（与案件工作簿导出同口径，页面服务端判定） */
   canExportBundle?: boolean;
-  /** 无主办/协办权限时只显示 extraItems（查看类入口） */
   canChangeStatus?: boolean;
-  /** 墨案 04 页头「···」菜单：页面级入口（编辑信息）。服务轴 UI 已移除（2026-09-20 用户确认） */
-  extraItems?: { key: string; label: string; icon: React.ComponentType<{ className?: string }>; onSelect: () => void }[];
-  /** 菜单项卸载后，外部弹窗仍可返回常驻的页头按钮。 */
-  moreTriggerRef?: React.Ref<HTMLButtonElement>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -103,71 +86,42 @@ export function LifecycleActions({
     });
   }
 
-  const extras = extraItems.map((it) => (
-    <Dropdown.Item key={it.key} onClick={() => { setMoreOpen(false); it.onSelect(); }}>
-      <it.icon className="mr-2 h-4 w-4 text-[var(--semi-color-text-2)]" />
-      {it.label}
-    </Dropdown.Item>
-  ));
-
   // M-3c（D 批）：在办卷宗打包导出（归档案件走归档包，见下方分支）
   const bundleLink = !isArchived && canExportBundle ? (
-    <a href={`/api/matters/${matterId}/export-bundle`} className="btn btn-secondary btn-sm" title="导出在办卷宗 ZIP（manifest + 材料 + 记录与财务摘要）">
-      <Download />
+    <a href={`/api/matters/${matterId}/export-bundle`} className="workspace-action-link" title="导出在办卷宗 ZIP（manifest + 材料 + 记录与财务摘要）">
+      <Download aria-hidden />
       导出卷宗
     </a>
   ) : null;
   if (isArchived) {
-    return (
-      <>
-        <SemiTag size="small" color="amber">
-          <Lock className="h-3.5 w-3.5" />
-          已归档（只读）
-        </SemiTag>
-        <a href={`/api/archive/${matterId}/export`} className="btn btn-secondary btn-sm" title="导出归档 ZIP（含材料 + 结构化数据 + 卷宗封皮目录）">
-          <Download />
-          导出 ZIP
-        </a>
-        {extras.length > 0 ? (
-          <Dropdown trigger="click" position="bottomRight" closeOnEsc clickTriggerToHide motion={false}
-          visible={moreOpen} onVisibleChange={setMoreOpen}
-          render={<Dropdown.Menu className="w-48">
-            {extras}
-          </Dropdown.Menu>}>
-          <FocusButton theme="outline" type="tertiary" size="small" ref={moreTriggerRef} htmlType="button" aria-label="更多操作" aria-haspopup="menu" aria-expanded={moreOpen}>
-                <MoreHorizontal />
-              </FocusButton>
-        </Dropdown>
-        ) : null}
-      </>
-    );
+    return <a href={`/api/archive/${matterId}/export`} className="workspace-action-link" title="导出归档 ZIP（含材料 + 结构化数据 + 卷宗封皮目录）">
+      <Download aria-hidden />
+      导出 ZIP
+    </a>;
   }
 
   return (
     <>
       {bundleLink}
-      {extras.length > 0 || canChangeStatus ? (
+      {canChangeStatus ? (
         <Dropdown trigger="click" position="bottomRight" closeOnEsc clickTriggerToHide motion={false}
           visible={moreOpen} onVisibleChange={setMoreOpen}
           render={<Dropdown.Menu className="w-48">
-            {extras}
-            {extras.length > 0 && canChangeStatus ? <Dropdown.Divider /> : null}
-            {canChangeStatus ? (<>
             {(status === "ON_HOLD" || status === "CLOSED") && (
               <Dropdown.Item onClick={() => { setMoreOpen(false); void handleReopen(); }}>
-                <Play className="mr-2 h-4 w-4" />
+                <Play aria-hidden size="default" className="mr-2" />
                 重新开放
               </Dropdown.Item>
             )}
             {status === "IN_PROGRESS" && (
               <Dropdown.Item onClick={() => { setMoreOpen(false); open("hold"); }}>
-                <Pause className="mr-2 h-4 w-4" />
+                <Pause aria-hidden size="default" className="mr-2" />
                 暂停办理
               </Dropdown.Item>
             )}
             {status !== "CLOSED" && (
               <Dropdown.Item onClick={() => { setMoreOpen(false); open("close"); }}>
-                <CheckCircle2 className="mr-2 h-4 w-4 text-[var(--semi-color-success)]" />
+                <CheckCircle2 aria-hidden size="default" className="mr-2 text-[var(--semi-color-success)]" />
                 结案
               </Dropdown.Item>
             )}
@@ -178,15 +132,14 @@ export function LifecycleActions({
                   onClick={() => { setMoreOpen(false); setArchiveOpen(true); }}
                   className="text-[var(--semi-color-warning)] focus:text-[var(--semi-color-warning)]"
                 >
-                  <Archive className="mr-2 h-4 w-4" />
+                  <Archive aria-hidden size="default" className="mr-2" />
                   归档（不可逆）
                 </Dropdown.Item>
               </>
             )}
-            </>) : null}
           </Dropdown.Menu>}>
-          <FocusButton theme="outline" type="tertiary" size="small" ref={moreTriggerRef} htmlType="button" disabled={isPending} aria-label="更多操作" aria-haspopup="menu" aria-expanded={moreOpen}>
-              {isPending ? <Loader2 className="animate-spin" /> : <MoreHorizontal />}
+          <FocusButton theme="outline" type="tertiary" htmlType="button" disabled={isPending} aria-label="更多操作" aria-haspopup="menu" aria-expanded={moreOpen}>
+              {isPending ? <Loader2 aria-hidden spin /> : <MoreHorizontal aria-hidden />}
             </FocusButton>
         </Dropdown>
       ) : null}
@@ -224,7 +177,7 @@ export function LifecycleActions({
               取消
             </Button>
             <Button onClick={handleSubmit} disabled={isPending} theme="solid">
-              {isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              {isPending && <Loader2 aria-hidden size="small" className="mr-1.5" spin />}
               {dialog === "close" ? "确认结案" : "确认暂停"}
             </Button>
           </DialogFooter>

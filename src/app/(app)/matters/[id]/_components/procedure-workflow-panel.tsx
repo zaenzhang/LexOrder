@@ -1,39 +1,14 @@
 "use client";
 
 import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
-import { statusTagColor } from "@/lib/ui/moan-tones";
+import { statusTagColor } from "@/lib/ui/status-tones";
 import { Button as SemiButton } from "@douyinfe/semi-ui";
 import { deadlineOverdue, deadlineRelative, formatDeadlineDue, type DeadlineDuePrecision } from "@/lib/deadline-due";
 
 import { useId, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button, Dropdown, Input, Notification, Select, Tabs, TextArea, Toast } from "@douyinfe/semi-ui";
-import {
-  Archive,
-  BookOpen,
-  CalendarClock,
-  Check,
-  CircleDollarSign,
-  FileCheck2,
-  FileText,
-  FolderOpen,
-  Gavel,
-  Landmark,
-  Lightbulb,
-  ListChecks,
-  Loader2,
-  MessageSquare,
-  PenLine,
-  Plus,
-  Scale,
-  ScrollText,
-  Shield,
-  Stamp,
-  StickyNote,
-  Truck,
-  Sparkles,
-  Upload
-} from "lucide-react";
+import { IconArchive as Archive, IconBook as BookOpen, IconCalendarClock as CalendarClock, IconTick as Check, IconCoinMoney as CircleDollarSign, IconTestScore as FileCheck2, IconArticle as FileText, IconFolderOpen as FolderOpen, IconVerify as Gavel, IconApartment as Landmark, IconBulb as Lightbulb, IconCheckList as ListChecks, IconLoading as Loader2, IconComment as MessageSquare, IconEdit as PenLine, IconPlus as Plus, IconVerify as Scale, IconArticle as ScrollText, IconShield as Shield, IconVerify as Stamp, IconArticle as StickyNote, IconSend as Truck, IconAIWandLevel1 as Sparkles, IconUpload as Upload } from "@douyinfe/semi-icons";
 import type {
   DeadlineCategory,
   DocumentCategory,
@@ -54,7 +29,7 @@ import {
 } from "@/components/patterns/workspace-dialog";
 import { TaskWorkPanel } from "@/components/matters/task-work-panel";
 import { WorkResponsibilityPanel, type WorkBoardData, type ScheduleResponsibilityTarget, type RenderScheduleResponsibility } from "@/components/matters/work-responsibility-panel";
-import { updateDossierLocation, type DossierView, type WorkPane } from "@/lib/matters/dossier-location";
+import { openDossierDeadline, updateDossierLocation, type DossierView, type WorkPane } from "@/lib/matters/dossier-location";
 import { createProcedureStage, deleteProcedureMemo, ensureProcedureStage, removeProcedureStage, toggleDeadlineCompleted, toggleProcedureMemo } from "@/server/procedures/actions";
 import { deleteExpress } from "@/server/express/actions";
 import type { ExpressItem } from "./info-extras";
@@ -90,8 +65,8 @@ import { TemplatePickerDialog } from "./template-picker-dialog";
 import { MaterialUploadDialog } from "./material-upload-dialog";
 import { AdjustDeadlineDialog } from "./procedure-content";
 import { confirmDeadline } from "@/server/deadlines/confirm";
-import { DocIcon, EmptyState, SourceChip } from "@/components/patterns/moan";
-import { documentSourceChip } from "@/lib/ui/moan-tones";
+import { DocIcon, EmptyState, SourceChip } from "@/components/patterns/workspace-surfaces";
+import { documentSourceChip } from "@/lib/ui/status-tones";
 import type { FolderPayload, TemplateSummary } from "./folder-types";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { materialFamilyRows } from "@/lib/documents/family-rows";
@@ -671,7 +646,6 @@ export const stageNoteTag = (stageName: string) => `环节:${stageName}`;
 
 export type WorkflowApi = {
   /** 从外部（页头「上传材料」）打开当前环节的上传 */
-  openUpload: () => void;
   /** 从「登记进展」打开当前环节的添加任务 */
   openAddTask: () => void;
   /** 当前可归档环节名（研判笔记归档用） */
@@ -770,6 +744,7 @@ export function ProcedureWorkflowPanel({
   waiting?: WaitingItem[];
 }) {
   const router = useRouter();
+  const scopeLabelId = useId();
   const searchParams = useSearchParams();
   const requestedPane = searchParams.get("workPane");
   const workPane: WorkPane | null = requestedPane === null ? "materials" : ["materials", "facts", "tasks", "records"].includes(requestedPane) ? requestedPane as WorkPane : null;
@@ -801,11 +776,18 @@ export function ProcedureWorkflowPanel({
   const requestedStage = searchParams.get("stage");
   const unassignedOnly = requestedStage === "unassigned";
   const selectedKey = stages.some(stage => stage.key === requestedStage) ? requestedStage : null;
-  const setSelectedKey = (stage: string | null) => updateDossierLocation({ stage, task: null });
-  const invalidStage = requestedStage !== null && !unassignedOnly && selectedKey === null;
+  const setSelectedKey = (stage: string | null) => updateDossierLocation({ stage, task: null, deadline: null });
+  const invalidStage = requestedStage !== null && (
+    unassignedOnly ? workPane === "tasks" && Boolean(procedure) : selectedKey === null
+  );
+  const scopeVisible = workPane === "materials" || workPane === "tasks" && canReadSchedule;
   const selectedStage = requestedStage !== null ? stages.find(stage => stage.key === requestedStage) ?? null : null;
   const effectiveScope: "all" | "stage" = selectedStage ? "stage" : "all";
-  const actions = useMemo(() => (procedure ? [procedure] : allProcedures).flatMap(item => buildActionItems(item)), [procedure, allProcedures]);
+  const actions = useMemo(() => {
+    if (view !== "work") return allProcedures.flatMap(buildActionItems);
+    if (invalidProcedure || unassignedOnly && !procedure) return [];
+    return (procedure ? [procedure] : allProcedures).flatMap(buildActionItems);
+  }, [view, procedure, allProcedures, invalidProcedure, unassignedOnly]);
   const scheduleTargets = actions.flatMap<ScheduleResponsibilityTarget>(item => item.kind === "deadline" && item.deadlineId
     ? [{ kind: "Deadline", targetId: item.deadlineId, hasDeadlineAdjuster: canAdjustActionDeadline(item, Boolean(canWriteTasks)) }]
     : item.kind === "hearing" && item.hearingId ? [{ kind: "Hearing", targetId: item.hearingId }] : []);
@@ -823,22 +805,15 @@ export function ProcedureWorkflowPanel({
   useEffect(() => {
     if (!apiRef) return;
     apiRef.current = {
-      openUpload: () => {
-        if (invalidStage || invalidProcedure) {
-          Toast.error("请先重新选择有效程序和环节");
-          return;
-        }
-        setUploadSignal((n) => n + 1);
-      },
       openAddTask: () => {
         setCreateTaskStage(null);
-        updateDossierLocation({ view: "work", workPane: "tasks", procedure: null, stage: null, task: null });
+        updateDossierLocation({ view: "work", workPane: "tasks", procedure: null, stage: null, task: null, deadline: null });
         setCreateTaskRequest(value => value + 1);
       },
       stageNames: stages.map((st) => st.name),
       currentStageName: selectedStage?.name ?? null
     };
-  }, [apiRef, selectedStage, stages, invalidStage, invalidProcedure]);
+  }, [apiRef, selectedStage, stages]);
 
   function selectStage(key: string | null) {
     pendingWorkFocus.current = null;
@@ -855,7 +830,11 @@ export function ProcedureWorkflowPanel({
   function selectWorkSection(value: string) {
     if (value !== "materials" && value !== "facts" && value !== "tasks" && value !== "records") return;
     pendingWorkFocus.current = null;
-    updateDossierLocation({ workPane: value });
+    updateDossierLocation({
+      workPane: value,
+      ...(value === "tasks" && procedure && unassignedOnly ? { stage: null } : {}),
+      ...(value !== "tasks" ? { deadline: null, task: null } : {})
+    });
   }
 
   function selectView(next: DossierView) {
@@ -895,6 +874,85 @@ export function ProcedureWorkflowPanel({
     { key: "seal", label: "审批用印", show: Boolean(sealNode), icon: Stamp, count: viewCounts?.seal }
   ];
 
+  const invalidStageNotice = invalidStage ? <p role="alert" className="mb-3 text-sm text-destructive">
+    指定环节不可用。<Button onClick={() => setSelectedKey(null)} type="primary" theme="borderless">重新选择环节</Button>
+  </p> : null;
+  const rangeControls = <>
+    {scopeVisible ? invalidStageNotice : null}
+    {scopeVisible && allProcedures.length > 0 ? (
+      <div role="group" aria-label="办案范围" className="dossier-scope">
+        <span className="dossier-scope-label">办案范围</span>
+        <span className="sr-only" id={`${scopeLabelId}-procedure`}>程序范围</span>
+        <Select<string> aria-labelledby={`${scopeLabelId}-procedure`} prefix="程序" motion={false}
+          value={invalidProcedure ? undefined : procedure?.id ?? (unassignedOnly ? "matter" : "all")}
+          placeholder="选择程序"
+          optionList={[
+            { value: "all", label: "全案" },
+            { value: "matter", label: workPane === "tasks" ? "事项级任务" : "未归属程序" },
+            ...allProcedures.map(item => ({ value: item.id, label: [item.customLabel ?? procedureTypeLabel[item.type], item.caseNumber].filter(Boolean).join(" · ") }))
+          ]}
+          onChange={value => {
+            if (typeof value !== "string") return;
+            updateDossierLocation({ procedure: value === "all" || value === "matter" ? null : value,
+              stage: value === "matter" ? "unassigned" : null, task: null, deadline: null });
+          }}
+        />
+        {procedure ? <>
+          <span className="sr-only" id={`${scopeLabelId}-stage`}>环节范围</span>
+          <Select<string> aria-labelledby={`${scopeLabelId}-stage`} prefix="环节" motion={false}
+          value={invalidStage ? undefined : requestedStage ?? "all"} placeholder="选择环节"
+          optionList={[
+            { value: "all", label: "全部环节" },
+            ...(workPane === "materials" ? [{ value: "unassigned", label: "未归属环节" }] : []),
+            ...stages.map(stage => ({
+              value: stage.key,
+              label: [stage.name, stage.id ? stageChainDate(stage, procedure) ?? (stage.status === "active" ? "进行中" : "未记录进度") : "尚未启用"].join(" · ")
+            }))
+          ]}
+            onChange={value => { if (typeof value === "string") selectStage(value === "all" ? null : value); }}
+          />
+        </> : null}
+        {canWriteTasks && procedure ? <Button onClick={() => setStageCreateTarget({ procedure, stages, selected: selectedStage, location: window.location.pathname + window.location.search })} theme="borderless" type="tertiary" icon={<Plus aria-hidden />}>添加环节</Button> : null}
+      </div>
+    ) : null}
+    {(workPane === "materials" || workPane === "tasks") && selectedStage && procedure && effectiveScope === "stage" ? (
+      <>
+      <StageBar
+        stage={selectedStage}
+        procedure={procedure}
+        documents={workPane === "materials" && !materialStatus ? documents : undefined}
+        canManage={Boolean(canWriteTasks)}
+        onRemoveStage={canWriteTasks && selectedStage.removable ? () => handleRemoveStage(selectedStage) : undefined}
+      />
+      {workPane === "materials" && selectedStage.id && canWriteTasks && !invalidStage && !invalidProcedure ? <Button
+        onClick={() => {
+        setCreateTaskStage({ id: selectedStage.id!, name: selectedStage.name });
+        setCreateTaskRequest(value => value + 1);
+        updateDossierLocation({ view: "work", workPane: "tasks" });
+        onViewChange("work");
+      }}
+        type="tertiary" theme="outline"
+        size="small">为此环节新建任务</Button> : null}
+      {!selectedStage.id && canManage && canWriteTasks && !invalidStage && !invalidProcedure ? <Button
+        disabled={stageActivationPending}
+        onClick={() => {
+        startStageActivation(async () => {
+          try {
+            const location = window.location.pathname + window.location.search;
+            const result = await ensureProcedureStage({ procedureId: procedure.id, name: selectedStage.name, description: "", insertPosition: "END" });
+            if (window.location.pathname + window.location.search === location) setSelectedKey(`stage-${result.id}`);
+            router.refresh();
+          } catch (error) {
+            Notification.error({ title: "启用环节失败", content: actionErrorMessage(error) });
+          }
+        });
+      }}
+        type="tertiary" theme="outline"
+        size="small">{stageActivationPending ? "正在启用…" : "启用此环节"}</Button> : null}
+      </>
+    ) : null}
+  </>;
+
   return (
     <>
       <div className="dossier-view-tabs" role="group" aria-label="案件视图">
@@ -905,7 +963,7 @@ export function ProcedureWorkflowPanel({
           tabList={VIEWS.filter(item => item.show).map(item => ({
             itemKey: item.key,
             tab: <span className="inline-flex items-center gap-2">
-              <item.icon size={16} aria-hidden />
+              <item.icon size="default" aria-hidden />
               {item.label}
               {item.count ? <SemiTag size="small" color={item.hot ? "red" : "grey"}>{item.count}</SemiTag> : null}
             </span>,
@@ -913,63 +971,25 @@ export function ProcedureWorkflowPanel({
         />
       </div>
 
-      {/* 团队信息常驻；工作区按业务切换，其余视图保留待办与记录摘要。 */}
-      <div className="dos-work">
+      <div className={view === "archive" ? "dossier-overview-grid" : "dossier-single-view"}>
         <div className="dos-main">
       {view === "archive" ? archiveNode : null}
 
       {view === "work" || visitedWorkMatterId === matter.id ? (
         <div hidden={view !== "work"} className="min-w-0">
-        {invalidStage ? <p role="alert" className="mb-3 text-sm text-destructive">指定环节不可用。<Button onClick={() => setSelectedKey(null)} type="primary" theme="borderless">重新选择环节</Button></p> : null}
-        <div className={workPane === "materials" || workPane === "tasks" ? "dos-flow" : "min-w-0"}>
-          {workPane === "materials" || workPane === "tasks" ? <StageLine
-            procedure={procedure}
-            stages={stages}
-            selectedKey={unassignedOnly ? "unassigned" : selectedStage?.key ?? null}
-            onSelect={selectStage}
-            onAddStage={canWriteTasks && procedure ? () => setStageCreateTarget({ procedure, stages, selected: selectedStage, location: window.location.pathname + window.location.search }) : undefined}
-          /> : null}
-          <div className="dos-main">
-          {(workPane === "materials" || workPane === "tasks") && selectedStage && procedure && effectiveScope === "stage" ? (
-            <>
-            <StageBar
-              stage={selectedStage}
-              procedure={procedure}
-              documents={workPane === "materials" && !materialStatus ? documents : undefined}
-              canManage={Boolean(canWriteTasks)}
-              onRemoveStage={canWriteTasks && selectedStage.removable ? () => handleRemoveStage(selectedStage) : undefined}
-            />
-            {selectedStage.id && canWriteTasks && !invalidStage && !invalidProcedure ? <Button
-              onClick={() => {
-              setCreateTaskStage({ id: selectedStage.id!, name: selectedStage.name });
-              setCreateTaskRequest(value => value + 1);
-              updateDossierLocation({ view: "work", workPane: "tasks" });
-              onViewChange("work");
-            }}
-              type="tertiary" theme="outline"
-              size="small">为此环节新建任务</Button> : null}
-            {!selectedStage.id && canManage && canWriteTasks && !invalidStage && !invalidProcedure ? <Button
-              disabled={stageActivationPending}
-              onClick={() => {
-              startStageActivation(async () => {
-                try {
-                  const location = window.location.pathname + window.location.search;
-                  const result = await ensureProcedureStage({ procedureId: procedure.id, name: selectedStage.name, description: "", insertPosition: "END" });
-                  if (window.location.pathname + window.location.search === location) setSelectedKey(`stage-${result.id}`);
-                  router.refresh();
-                } catch (error) {
-                  Notification.error({ title: "启用环节失败", content: actionErrorMessage(error) });
-                }
-              });
-            }}
-              type="tertiary" theme="outline"
-              size="small">{stageActivationPending ? "正在启用…" : "启用此环节"}</Button> : null}
-            </>
-          ) : null}
-          <div role="group" aria-label="办案工作区"><Tabs activeKey={workPane ?? "unavailable"} onChange={selectWorkSection} keepDOM lazyRender={false} tabPaneMotion={false}>
+          <div className="dossier-workspace" role="group" aria-label="办案工作区"><Tabs
+            type="button"
+            activeKey={workPane ?? "unavailable"}
+            onChange={selectWorkSection}
+            tabBarClassName="dossier-workspace-nav"
+            keepDOM
+            lazyRender={false}
+            tabPaneMotion={false}
+          >
 
             <Tabs.TabPane itemKey="materials" tab="材料">
               <div className="flex flex-col gap-4">
+                {workPane === "materials" ? rangeControls : null}
                 {!invalidStage && !invalidProcedure ? <>{materialsActions}
                 {materialStatus ?? <MaterialsSection
                   procedure={procedure}
@@ -987,6 +1007,7 @@ export function ProcedureWorkflowPanel({
             <Tabs.TabPane itemKey="facts" tab="事实与来源">{factsNode}</Tabs.TabPane>
             <Tabs.TabPane itemKey="tasks" tab="待办">
               <div ref={actionSectionRef} tabIndex={-1} className="flex scroll-mt-44 flex-col gap-4" role="region" aria-label="待办">
+                {workPane === "tasks" ? rangeControls : null}
                 {procedure && selectedStage && !selectedStage.id && !invalidStage && !invalidProcedure && <p className="text-sm text-muted-foreground">此环节尚未启用，请在材料区启用后再添加环节任务。</p>}
                 {!canReadSchedule ? <p className="text-sm text-muted-foreground">无日程查看权限</p> : <p className="text-sm text-muted-foreground">{unassignedOnly ? "事项级任务 · 未关联程序或环节" : selectedStage ? `环节任务 · ${selectedStage.name}` : procedure ? "本程序任务 · 全部真实环节" : "全案任务"}</p>}
                 {canReadSchedule && (tasksVisited || view === "work" && workPane === "tasks") ? <TaskWorkPanel
@@ -997,6 +1018,7 @@ export function ProcedureWorkflowPanel({
                   defaultStage={selectedStage?.id && effectiveScope === "stage" ? { id: selectedStage.id, name: selectedStage.name } : null}
                   scopeStageIds={invalidStage || invalidProcedure ? [] : unassignedOnly || !procedure ? null : effectiveScope === "stage" ? (selectedStage?.id ? [selectedStage.id] : []) : procedure.stages.map(stage => stage.id)}
                   unassignedOnly={unassignedOnly}
+                  scopeKey={`${procedure?.id ?? ""}:${requestedStage ?? ""}`}
                   selectedTaskId={searchParams.get("task")}
                   onTaskSelect={(task, mode) => updateDossierLocation({ ...(task ? { view: "work", workPane: "tasks" } : {}), task }, mode)}
                   onTaskCreated={(task, stageId) => updateDossierLocation({ view: "work", workPane: "tasks",
@@ -1008,9 +1030,10 @@ export function ProcedureWorkflowPanel({
                   expandRequest={expandRequest}
                   actions={actions}
                   selectedStage={selectedStage}
+                  selectedDeadlineId={view === "work" && workPane === "tasks" ? searchParams.get("deadline") : null}
                   scope="all"
                   allScopeLabel={procedure ? `${procedure.customLabel ?? procedureTypeLabel[procedure.type]} · 程序级日程` : "全案日程 · 各程序"}
-                  canManage={Boolean(canWriteTasks)}
+                  canManage={Boolean(canWriteTasks && !invalidStage && !invalidProcedure)}
                   waiting={waiting ?? []}
                   onAddDeadline={canWriteTasks && procedure ? () => setDeadlineTarget(procedure) : undefined}
                   onAddHearing={canWriteTasks && procedure && onAddLedger ? () => onAddLedger("hearing") : undefined}
@@ -1020,7 +1043,7 @@ export function ProcedureWorkflowPanel({
               </div>
             </Tabs.TabPane>
             <Tabs.TabPane itemKey="records" tab="办理记录">
-              <div role="group" aria-label="办理记录分区"><Tabs activeKey={recordsPane} onChange={value => updateDossierLocation({ recordsView: value === "delivery" ? "delivery" : "activity" })} keepDOM lazyRender={false} tabPaneMotion={false}>
+              <div className="dossier-records" role="group" aria-label="办理记录分区"><Tabs activeKey={recordsPane} onChange={value => updateDossierLocation({ recordsView: value === "delivery" ? "delivery" : "activity" })} keepDOM lazyRender={false} tabPaneMotion={false}>
 
               <Tabs.TabPane itemKey="activity" tab="进展记录">
               <CaseLog
@@ -1042,28 +1065,28 @@ export function ProcedureWorkflowPanel({
               <Tabs.TabPane itemKey="delivery" tab="交付与回复">{visitedDelivery ? deliveryNode : null}</Tabs.TabPane>
               </Tabs></div>
             </Tabs.TabPane>
-          </Tabs>{!workPane ? <p role="alert" className="py-4 text-sm text-destructive">指定工作区不可用，请选择上方工作区。</p> : null}</div>
-        </div>
-          </div>
+          </Tabs>{!workPane ? <>
+            <p role="alert" className="py-4 text-sm text-destructive">指定工作区不可用，请选择上方工作区。</p>
+            {invalidStageNotice}
+          </> : null}</div>
         </div>
       ) : null}
 
       {view === "money" ? financeNode : null}
       {view === "seal" ? sealNode : null}
         </div>
-        <aside className="dos-rail">
-          {archiveRailTop}
-          {view !== "work" ? (
-          <ArchiveGlance
-            actions={actions}
-            logItems={logItems}
-            waiting={waiting ?? []}
-            procedureLabel={procedure ? procedure.customLabel ?? procedureTypeLabel[procedure.type] : null}
-            canReadSchedule={canReadSchedule}
-            onOpenWork={openWorkSection}
-          />
-          ) : null}
-        </aside>
+        {view === "archive" ? (
+          <aside className="dos-rail dossier-overview-rail" aria-label="案件动态与协作">
+            <ArchiveGlance
+              actions={actions}
+              logItems={logItems}
+              waiting={waiting ?? []}
+              canReadSchedule={canReadSchedule}
+              onOpenWork={openWorkSection}
+            />
+            {archiveRailTop}
+          </aside>
+        ) : null}
       </div>
 
       <MaterialUploadDialog
@@ -1122,16 +1145,16 @@ function stageChainDate(stage: WorkflowStage, procedure: WorkflowProcedure | nul
 
 function StageGlyph({ name, kind, className }: { name: string; kind: WorkflowStage["kind"]; className?: string }) {
   const p = { className, strokeWidth: 1.8 };
-  if (kind === "preservation" || name.includes("保全")) return <Shield {...p} />;
-  if (name.includes("授权") || name.includes("委托")) return <FileCheck2 {...p} />;
-  if (name.includes("研判") || name.includes("分析")) return <Lightbulb {...p} />;
-  if (name.includes("证据") || name.includes("举证") || name.includes("质证")) return <BookOpen {...p} />;
-  if (name.includes("开庭") || name.includes("庭审") || name.includes("庭")) return <Landmark {...p} />;
-  if (name.includes("判决") || name.includes("裁") || name.includes("送达")) return <ScrollText {...p} />;
-  if (name.includes("归档") || name.includes("结案")) return <Archive {...p} />;
-  if (name.includes("立案") || name.includes("材料") || name.includes("起诉")) return <FolderOpen {...p} />;
-  if (name.includes("执行")) return <Gavel {...p} />;
-  return <ListChecks {...p} />;
+  if (kind === "preservation" || name.includes("保全")) return <Shield aria-hidden {...p} />;
+  if (name.includes("授权") || name.includes("委托")) return <FileCheck2 aria-hidden {...p} />;
+  if (name.includes("研判") || name.includes("分析")) return <Lightbulb aria-hidden {...p} />;
+  if (name.includes("证据") || name.includes("举证") || name.includes("质证")) return <BookOpen aria-hidden {...p} />;
+  if (name.includes("开庭") || name.includes("庭审") || name.includes("庭")) return <Landmark aria-hidden {...p} />;
+  if (name.includes("判决") || name.includes("裁") || name.includes("送达")) return <ScrollText aria-hidden {...p} />;
+  if (name.includes("归档") || name.includes("结案")) return <Archive aria-hidden {...p} />;
+  if (name.includes("立案") || name.includes("材料") || name.includes("起诉")) return <FolderOpen aria-hidden {...p} />;
+  if (name.includes("执行")) return <Gavel aria-hidden {...p} />;
+  return <ListChecks aria-hidden {...p} />;
 }
 
 const STAGE_STATUS_TEXT: Record<WorkflowStageStatus, string> = {
@@ -1207,17 +1230,17 @@ function StageBar({
 function StageGuideBody({ guide }: { guide: StageGuide }) {
   return (
     <div className="mx-4 mb-3 rounded-[8px] bg-[var(--semi-color-fill-1)] px-3 py-2.5">
-      <div className="text-[11.5px] font-semibold text-[var(--semi-color-text-1)]">{guide.checklistTitle}</div>
+      <div className="text-xs font-semibold text-[var(--semi-color-text-1)]">{guide.checklistTitle}</div>
       <ul className="mt-1.5 space-y-1">
         {guide.checklist.map((item) => (
-          <li key={item} className="flex items-start gap-2 text-[12px] leading-5 text-[var(--semi-color-text-1)]">
+          <li key={item} className="flex items-start gap-2 text-xs leading-5 text-[var(--semi-color-text-1)]">
             <span className="mt-[7px] h-[5px] w-[5px] shrink-0 rounded-full bg-[var(--semi-color-primary)]" />
             {item}
           </li>
         ))}
       </ul>
       {guide.actions.length > 0 ? (
-        <p className="mt-1.5 text-[11px] leading-5 text-[var(--semi-color-text-2)]">常用文书：{guide.actions.join("、")}（在「从模板生成」中选用）</p>
+        <p className="mt-1.5 text-xs leading-5 text-[var(--semi-color-text-2)]">常用文书：{guide.actions.join("、")}（在「从模板生成」中选用）</p>
       ) : null}
     </div>
   );
@@ -1258,36 +1281,6 @@ const EVENT_TONE: Record<string, { bg: string; fg: string; icon: typeof FileText
 /* 环节线：当前程序的全部环节，末尾是「＋ 添加环节」                     */
 /* ------------------------------------------------------------------ */
 
-function StageLine({ procedure, stages, selectedKey, onSelect, onAddStage }: {
-  procedure: WorkflowProcedure | null;
-  stages: WorkflowStage[];
-  selectedKey: string | null;
-  onSelect: (key: string | null) => void;
-  onAddStage?: () => void;
-}) {
-  return <nav className="card dos-vline" aria-label="办案范围">
-    <div className="dos-vline-head"><span className="t">{procedure ? "程序环节" : "全案范围"}</span></div>
-    <div className="flex flex-wrap gap-2 px-3 pb-3">
-      <Button onClick={() => onSelect(null)} type={selectedKey === null ? "primary" : "tertiary"} theme={selectedKey === null ? "solid" : "outline"} size="small">{procedure ? "全部环节" : "全部材料与任务"}</Button>
-      <Button onClick={() => onSelect("unassigned")} type={selectedKey === "unassigned" ? "primary" : "tertiary"} theme={selectedKey === "unassigned" ? "solid" : "outline"} size="small">{procedure ? "未归属环节" : "未归属"}</Button>
-    </div>
-    {procedure ? <ol className="dos-vline-list">{stages.map(stage => {
-      const state = stage.status === "done" ? "done" : stage.status === "active" ? "cur" : "todo";
-      const overdue = stage.tasks.filter(task => !task.completed && task.dueAt && daysUntil(task.dueAt) < 0).length;
-      return <li key={stage.key} className={cn("dos-vnode", state, stage.key === selectedKey && "sel")}>
-        <SemiButton theme="borderless" type="tertiary" size="small" contentClassName="flex min-w-0 items-center gap-2" htmlType="button" onClick={() => onSelect(stage.key)} aria-pressed={stage.key === selectedKey} title={`${stage.name} · ${STAGE_STATUS_TEXT[stage.status]}`}>
-          <span className="pin" aria-hidden>{state === "done" ? <Check strokeWidth={3} /> : null}</span>
-          <span className="body"><span className="nm">{stage.name}</span><span className="sub">
-            {overdue > 0 ? <span className="dos-flag red">任务逾期 {overdue}</span> : null}
-            <span className="dt">{stageChainDate(stage, procedure) ?? (stage.id ? "未记录进度" : "尚未启用")}</span>
-          </span></span>
-        </SemiButton>
-      </li>;
-    })}</ol> : null}
-    {onAddStage ? <Button className="m-3" onClick={onAddStage} type="tertiary" theme="borderless" size="small"><Plus />添加环节</Button> : null}
-  </nav>;
-}
-
 /** 一个按钮 + 类型菜单：待办用「＋事项」，记录用「＋记录」（2026-09-15 入口合并） */
 function AddMenu({
   label,
@@ -1308,17 +1301,17 @@ function AddMenu({
           const Icon = item.icon;
           return (
             <Dropdown.Item key={item.key} onClick={() => { setOpen(false); item.onSelect(); }} className="items-start gap-2.5 py-2">
-              <Icon className="mt-0.5 h-4 w-4 text-[var(--semi-color-text-2)]" strokeWidth={1.8} />
+              <Icon aria-hidden className="mt-0.5 h-4 w-4 text-[var(--semi-color-text-2)]" />
               <span className="flex flex-col">
-                <span className="text-[13px] font-medium">{item.label}</span>
-                <span className="text-[11px] text-muted-foreground">{item.hint}</span>
+                <span className="text-sm font-medium">{item.label}</span>
+                <span className="text-xs text-muted-foreground">{item.hint}</span>
               </span>
             </Dropdown.Item>
           );
         })}
           </Dropdown.Menu>}>
           <SemiButton theme={primary ? "solid" : "outline"} type={primary ? "primary" : "tertiary"} size="small" htmlType="button" aria-haspopup="menu" aria-expanded={open}>
-          <Plus />
+          <Plus aria-hidden />
           {label}
         </SemiButton>
         </Dropdown>
@@ -1340,6 +1333,7 @@ type ActionItem = {
   meta: string;
   priority: number;
   deadlineId?: string;
+  procedure?: { id: string; label: string };
   deadlineUpdatedAt?: Date;
   hearingId?: string;
   duePrecision?: DeadlineDuePrecision | null;
@@ -1365,6 +1359,7 @@ function buildActionItems(procedure: WorkflowProcedure | null): ActionItem[] {
       meta: [procedureLabel, deadline.basis].filter(Boolean).join(" · "),
       priority: 2,
       deadlineId: deadline.id,
+      procedure: { id: procedure.id, label: procedureLabel },
       deadlineUpdatedAt: deadline.updatedAt,
       duePrecision: deadline.duePrecision,
       overdue: deadlineOverdue(deadline.dueAt, deadline.duePrecision),
@@ -1441,6 +1436,7 @@ function NextActions({
   waiting,
   onAddDeadline,
   onAddHearing,
+  selectedDeadlineId,
   renderResponsibility
 }: {
   sectionRef?: React.Ref<HTMLElement>;
@@ -1456,6 +1452,7 @@ function NextActions({
   waiting: WaitingItem[];
   onAddDeadline?: () => void;
   onAddHearing?: () => void;
+  selectedDeadlineId?: string | null;
   renderResponsibility: RenderScheduleResponsibility;
 }) {
   const router = useRouter();
@@ -1474,6 +1471,14 @@ function NextActions({
   const later = inScope.filter((i) => i.days === null || i.days > 7);
   const others = scope === "stage" && selectedStage ? actions.filter((i) => i.stageKey !== selectedStage.key) : [];
   const othersOverdue = others.filter((i) => i.overdue).length;
+  const selectedDeadlineRow = useRef<HTMLDivElement>(null);
+  const selectedDeadlineExists = Boolean(selectedDeadlineId && inScope.some(item => item.deadlineId === selectedDeadlineId));
+  useEffect(() => {
+    if (selectedDeadlineId) setShowLater(true);
+  }, [selectedDeadlineId]);
+  useEffect(() => {
+    if (selectedDeadlineExists && selectedDeadlineId && showLater) selectedDeadlineRow.current?.focus();
+  }, [selectedDeadlineId, selectedDeadlineExists, showLater]);
 
   function run(action: () => Promise<unknown>, ok: string) {
     startTransition(async () => {
@@ -1509,7 +1514,7 @@ function NextActions({
         <div key={item.key} className={cn("dos-act-c", when.tone, other && "other")}>
           <span className="bar" aria-hidden />
           <span className={cn("ki", kindMeta.cls)} title={kindMeta.label} aria-label={kindMeta.label}>
-            <KindIcon strokeWidth={2} />
+            <KindIcon aria-hidden />
           </span>
           <div className="body">
             <div className="top">
@@ -1549,7 +1554,10 @@ function NextActions({
       );
     }
     return (
-      <div key={item.key} className={cn("dos-act", when.tone)}>
+      <div key={item.key}
+        ref={selectedDeadlineId && item.deadlineId === selectedDeadlineId ? selectedDeadlineRow : undefined}
+        tabIndex={selectedDeadlineId && item.deadlineId === selectedDeadlineId ? -1 : undefined}
+        className={cn("dos-act scroll-mt-32", when.tone)}>
         <i className="sev" aria-hidden />
         <div className="when">
           <b>{when.main}</b>
@@ -1611,7 +1619,7 @@ function NextActions({
     <section ref={sectionRef} tabIndex={-1} className={cn("card scroll-mt-44", compact && "dos-todo-rail")} aria-label="期限与庭期">
       <div className={cn("panel-head flex-wrap", compact && "rail-sec-head")}>
         <div className={compact ? "flex items-center gap-2" : "panel-title"}>
-          <ListChecks className={compact ? "h-[15px] w-[15px] text-[var(--semi-color-text-2)]" : "ic"} strokeWidth={1.8} />
+          <ListChecks aria-hidden className={compact ? "h-[15px] w-[15px] text-[var(--semi-color-text-2)]" : "ic"} />
           期限与庭期
           <span className="t-xs t-mute" style={{ fontWeight: 400 }}>{scope === "stage" && selectedStage ? selectedStage.name : allScopeLabel}</span>
         </div>
@@ -1628,6 +1636,10 @@ function NextActions({
         </div>
       </div>
 
+      {selectedDeadlineId && !selectedDeadlineExists ? <div role="alert" className="flex flex-wrap items-center gap-2 px-4 py-2">
+        <span>原期限已完成或当前不可查看。</span>
+        <Button type="primary" theme="borderless" onClick={() => updateDossierLocation({ deadline: null }, "replace")}>查看当前期限</Button>
+      </div> : null}
       {empty && waiting.length === 0 ? (
         <EmptyState compact title={scope === "stage" ? "本环节没有未结日程" : "当前程序没有未结日程"} />
       ) : null}
@@ -1673,7 +1685,7 @@ function NextActions({
             <div key={w.key} className="dos-act-c teal">
               <span className="bar" aria-hidden />
               <span className="ki k-approval" aria-label="审批">
-                <Stamp strokeWidth={2} />
+                <Stamp aria-hidden />
               </span>
               <div className="body">
               <div className="top">
@@ -1854,7 +1866,7 @@ function LogRow({ item, canManage, onEditNote }: { item: LogItem; canManage?: bo
     return (
       <div className="rec">
         <div className="rec-ic" style={{ background: "var(--semi-color-secondary-light-default)", color: "var(--semi-color-secondary)" }}>
-          <PenLine strokeWidth={2} />
+          <PenLine aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
           <div className="rec-title">
@@ -1885,7 +1897,7 @@ function LogRow({ item, canManage, onEditNote }: { item: LogItem; canManage?: bo
   return (
     <div className="rec">
       <div className="rec-ic" style={{ background: tone.bg, color: tone.fg }}>
-        <Icon strokeWidth={2} />
+        <Icon aria-hidden />
       </div>
       <div className="min-w-0 flex-1">
         <div className="rec-title">{item.title}</div>
@@ -1943,14 +1955,14 @@ function CaseLog({
     <section ref={sectionRef} tabIndex={-1} className="card scroll-mt-44" aria-label="记录">
       <div className="panel-head flex-wrap">
         <div className="panel-title">
-          <BookOpen className="ic" strokeWidth={1.8} />
+          <BookOpen aria-hidden className="ic" />
           记录
           <span className="t-xs t-mute" style={{ fontWeight: 400 }}>{allScopeLabel}</span>
         </div>
         <div className="flex items-center gap-[7px]">
         {onCaseSearch ? (
           <SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={onCaseSearch}>
-            <Scale />
+            <Scale aria-hidden />
             类案检索
           </SemiButton>
         ) : null}
@@ -1987,14 +1999,12 @@ function ArchiveGlance({
   actions,
   logItems,
   waiting,
-  procedureLabel,
   canReadSchedule,
   onOpenWork
 }: {
   actions: ActionItem[];
   logItems: LogItem[];
   waiting: WaitingItem[];
-  procedureLabel: string | null;
   canReadSchedule: boolean;
   onOpenWork: (section: "tasks" | "records") => void;
 }) {
@@ -2003,9 +2013,8 @@ function ArchiveGlance({
     <>
       <div className="card">
         <div className="rail-sec-head">
-          <ListChecks className="h-[15px] w-[15px] text-[var(--semi-color-text-2)]" strokeWidth={1.8} />
+          <ListChecks aria-hidden className="h-[15px] w-[15px] text-[var(--semi-color-text-2)]" />
           近期日程与审批
-          {procedureLabel ? <span className="t-xs t-mute" style={{ fontWeight: 400 }}>{procedureLabel}</span> : null}
           <SemiButton theme="borderless" type="primary" size="small" htmlType="button" onClick={() => onOpenWork("tasks")}>查看全部任务与日程</SemiButton>
         </div>
         {actions.length === 0 && waiting.length === 0 ? (
@@ -2015,10 +2024,14 @@ function ArchiveGlance({
             {overdue > 0 ? <div className="dos-glance-alert">已逾期 {overdue} 项</div> : null}
             {actions.slice(0, 3).map((a) => {
               const when = actionWhen(a);
+              const { deadlineId, procedure } = a;
               return (
-                <SemiButton theme="borderless" type="tertiary" size="small" contentClassName="flex w-full min-w-0 flex-wrap items-center gap-2 text-left" style={{ height: "auto" }} key={a.key} htmlType="button" className="dos-glance-row" onClick={() => onOpenWork("tasks")}>
+                <SemiButton theme="borderless" type="tertiary" size="small" contentClassName="flex w-full min-w-0 flex-wrap items-center gap-2 text-left" style={{ height: "auto" }} key={a.key} htmlType="button" className="dos-glance-row" onClick={() => {
+                  if (deadlineId && procedure) openDossierDeadline(procedure.id, deadlineId);
+                  else onOpenWork("tasks");
+                }}>
                   <span className={cn("w", when.tone)}>{when.main}</span>
-                  <span className="t">{a.title}</span>
+                  <span className="t">{a.title}{procedure ? ` · ${procedure.label}` : ""}</span>
                 </SemiButton>
               );
             })}
@@ -2033,7 +2046,7 @@ function ArchiveGlance({
       </div>
       <div className="card">
         <div className="rail-sec-head">
-          <BookOpen className="h-[15px] w-[15px] text-[var(--semi-color-text-2)]" strokeWidth={1.8} />
+          <BookOpen aria-hidden className="h-[15px] w-[15px] text-[var(--semi-color-text-2)]" />
           最近记录
           {logItems.length > 0 ? <SemiButton theme="borderless" type="primary" size="small" htmlType="button" onClick={() => onOpenWork("records")}>
             查看全部记录 <span className="mono">{logItems.length}</span>
@@ -2129,11 +2142,11 @@ function DocRow({ doc, versionCount = 1, compact = false }: { doc: WorkflowDocum
               </SemiButton>
             ) : null}
             {pUrl ? (
-              <a href={pUrl} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm">
+              <a href={pUrl} target="_blank" rel="noreferrer" className="workspace-action-link">
                 预览
               </a>
             ) : null}
-            <a href={`/api/documents/${doc.id}/download`} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm">
+            <a href={`/api/documents/${doc.id}/download`} target="_blank" rel="noreferrer" className="workspace-action-link">
               下载
             </a>
             {onReview && doc.ocrStatus !== "FAILED" ? (
@@ -2204,7 +2217,7 @@ export function MatterPreservationContent({
     {cases.length === 0 ? (
       canManage ? (
         <Button className="self-start" onClick={() => setCreateOpen(true)} htmlType="button" type="tertiary" theme="outline" size="small">
-          <Plus />
+          <Plus aria-hidden />
           新建保全
         </Button>
       ) : null
@@ -2213,7 +2226,7 @@ export function MatterPreservationContent({
       <div className="panel-head" style={{ borderBottom: "none", paddingBottom: 8 }}>
         <div className="ws-head min-w-0 flex-1">
           <div className="ic-wrap" style={expiringCount > 0 ? { background: "var(--semi-color-warning-light-default)", color: "var(--semi-color-warning)" } : undefined}>
-            <Shield strokeWidth={1.8} />
+            <Shield aria-hidden />
           </div>
           <div className="min-w-0">
             <h2>事项级保全</h2>
@@ -2226,7 +2239,7 @@ export function MatterPreservationContent({
             {canManage ? (
               <>
                 <SemiButton htmlType="button" theme="solid" type="primary" onClick={() => setCreateOpen(true)}>
-                  <Plus />
+                  <Plus aria-hidden />
                   新建保全
                 </SemiButton>
               </>
@@ -2241,13 +2254,13 @@ export function MatterPreservationContent({
               <div className="flex flex-wrap items-start justify-between gap-2 border-b border-[var(--semi-color-border)] px-3 py-2">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[13px] font-medium">{PRES_TYPE_CN[item.type]}</span>
-                    {item.court && <span className="text-[11px] text-muted-foreground">{item.court}</span>}
+                    <span className="text-sm font-medium">{PRES_TYPE_CN[item.type]}</span>
+                    {item.court && <span className="text-xs text-muted-foreground">{item.court}</span>}
                     {item.rulingNumber && (
-                      <span className="font-mono text-[10.5px] text-muted-foreground">{item.rulingNumber}</span>
+                      <span className="font-mono text-xs text-muted-foreground">{item.rulingNumber}</span>
                     )}
                   </div>
-                  <div className="mt-0.5 text-[10.5px] text-muted-foreground">
+                  <div className="mt-0.5 text-xs text-muted-foreground">
                     {item.guaranteeType ? GUARANTEE_TYPE_CN[item.guaranteeType] : "未填写担保方式"}
                     {item.owner?.name ? ` · ${item.owner.name}` : ""}
                   </div>
@@ -2255,11 +2268,11 @@ export function MatterPreservationContent({
                 {canManage && (
                   <Button
                     onClick={() => setAddTargetCaseId(item.id)}
-                    className="h-7 gap-1 px-2 text-[11px]"
+                    className="h-7 gap-1 px-2 text-xs"
                     type="tertiary" theme="borderless"
                     size="small"
                   >
-                    <Plus className="h-3 w-3" />
+                    <Plus aria-hidden size="small" />
                     被保全人
                   </Button>
                 )}
@@ -2272,20 +2285,20 @@ export function MatterPreservationContent({
                   item.targets.map((target) => (
                     <div key={target.id} className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <Landmark className="h-3.5 w-3.5 text-muted-foreground" />
+                        <Landmark aria-hidden size="small" className="text-muted-foreground" />
                         <span className="text-xs font-medium">{target.name}</span>
                         {canManage && (
                           <SemiButton theme="borderless" type="primary" size="small"
                             htmlType="button"
                             onClick={() => setAddPropertyTargetId(target.id)}
-                            className="ml-auto text-[11px] text-primary hover:underline"
+                            className="ml-auto text-xs text-primary hover:underline"
                           >
                             + 添加财产
                           </SemiButton>
                         )}
                       </div>
                       {target.properties.length === 0 ? (
-                        <p className="pl-6 text-[11px] text-muted-foreground">暂无财产</p>
+                        <p className="pl-6 text-xs text-muted-foreground">暂无财产</p>
                       ) : (
                         <div className="space-y-1.5 pl-6">
                           {target.properties.map((property) => (
@@ -2359,7 +2372,7 @@ function PreservationPropertyRow({
   const isActive = property.status === "ACTIVE" || property.status === "RENEWED";
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-[8px] border border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] px-2.5 py-2 text-[11.5px]">
+    <div className="flex flex-wrap items-center gap-2 rounded-[8px] border border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] px-2.5 py-2 text-xs">
       <span className="font-medium">{PROPERTY_TYPE_CN[property.propertyType]}</span>
       {property.amount && (
         <span className="font-mono text-muted-foreground tabular">
@@ -2380,7 +2393,7 @@ function PreservationPropertyRow({
         {expiry.label}
       </span>
       <span
-        className="shrink-0 rounded border px-1.5 py-0 text-[9px]"
+        className="shrink-0 rounded border px-1.5 py-0 text-xs"
         style={{
           borderColor: statusColor.border,
           color: statusColor.text,
@@ -2463,20 +2476,20 @@ function StageMaterialsPanel({
       {/* 头部两行：标题与操作按钮固定一行，筛选标签单独一行（窄宽度下不再挤乱） */}
       <div className={cn("panel-head", bare && "!border-b-0 !pb-1")}>
         <div className="panel-title min-w-0">
-          <FileText className="ic" strokeWidth={1.8} />
+          <FileText aria-hidden className="ic" />
           材料
           <SemiTag size="small" color="grey" style={{ marginLeft: 2 }}>{familyRows.length}</SemiTag>
         </div>
         <div className="flex shrink-0 items-center gap-[7px]">
           {canManage && onOpenTemplate ? (
             <SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={onOpenTemplate}>
-              <Sparkles />
+              <Sparkles aria-hidden />
               从模板生成
             </SemiButton>
           ) : null}
           {canManage ? (
             <SemiButton htmlType="button" theme="outline" type="tertiary" onClick={onRequestUpload}>
-              <Upload />
+              <Upload aria-hidden />
               上传
             </SemiButton>
           ) : null}
@@ -2611,7 +2624,7 @@ function StageCreateDialog({
   }
 
   return (
-    <WorkspaceDialog open={open} onOpenChange={open => { if (!open) void close(); }}>
+    <WorkspaceDialog dismissOnBackdrop open={open} onOpenChange={open => { if (!open) void close(); }}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>添加环节 · {procedureLabel}</DialogTitle>
@@ -2635,7 +2648,7 @@ function StageCreateDialog({
                 </p>
               )}
               {selectedPreset && (
-                <p className="text-[10.5px] leading-5 text-muted-foreground">{selectedPreset.description}</p>
+                <p className="text-xs leading-5 text-muted-foreground">{selectedPreset.description}</p>
               )}
             </div>
           ) : (
@@ -2646,7 +2659,7 @@ function StageCreateDialog({
                 onChange={inputValue => setCustomName(inputValue)}
                 placeholder="如：二次庭询 / 专家论证 / 履行谈判"
               />
-              {duplicate && <p className="text-[10px] text-[var(--semi-color-warning)]">该环节已在列表中</p>}
+              {duplicate && <p className="text-xs text-[var(--semi-color-warning)]">该环节已在列表中</p>}
             </div>
           )}
 
@@ -2671,7 +2684,7 @@ function StageCreateDialog({
           <SemiButton theme="borderless" type="primary" size="small"
             htmlType="button"
             onClick={() => setCustomMode((value) => !value)}
-            className="text-[11px] text-primary hover:underline"
+            className="text-xs text-primary hover:underline"
           >
             {customMode ? "返回预设环节" : "预设没有覆盖，添加自定义环节"}
           </SemiButton>
@@ -2686,7 +2699,7 @@ function StageCreateDialog({
             className="gap-1.5"
             theme="solid"
           >
-            {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {isPending && <Loader2 aria-hidden size="small" spin />}
             添加
           </Button>
         </DialogFooter>

@@ -1,5 +1,6 @@
-@import "./moan.css";
-@import "./moan-pages.css";
+@import "./semi-theme.css";
+@import "./workspace.css";
+@import "./business-layout.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,9 +8,6 @@
 @layer base {
   :root {
     --radius: 0.5rem;                  /* 8px */
-    --radius-sm: 0.375rem;             /* 6px */
-    --radius-md: 0.5rem;               /* 8px */
-    --radius-lg: 0.75rem;              /* 12px */
     --radius-xl: 1rem;                 /* 16px */
 
     --font-cjk: "STSong", "Songti SC", "SimSun", "Noto Serif SC", "Source Han Serif SC", "Noto Serif CJK SC";
@@ -23,7 +21,7 @@
     --shadow-float: 0 24px 64px -12px rgba(12,25,39,0.24), 0 8px 20px -8px rgba(12,25,39,0.12);
     --shadow-inset: inset 0 1px 0 rgba(255,255,255,0.9);
     --shadow-inset-deep: inset 0 1px 2px rgba(12,25,39,0.05);
-    --shadow-glow: 0 1px 2px rgba(0,80,84,0.25), inset 0 1px 0 rgba(255,255,255,0.12);
+    --shadow-glow: 0 1px 2px color-mix(in srgb, var(--semi-color-primary) 25%, transparent), inset 0 1px 0 rgba(255,255,255,0.12);
 
     --glass-bg: rgba(248,250,249,0.86);
     --scrim-bg: rgba(12,25,39,0.44);
@@ -47,7 +45,7 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);
-    font-size: 13.5px;
+    font-size: var(--workspace-text-body);
     line-height: 1.5;
     letter-spacing: 0;
     font-optical-sizing: auto;
@@ -68,105 +66,12 @@
 @layer components {
   /* 卡片 */
   .ll-surface {
-    /* = 墨案 .card */
     background: var(--semi-color-bg-0);
     border: 1px solid var(--semi-color-border);
     border-radius: var(--semi-border-radius-large);
-    box-shadow: var(--sh-card), var(--sh-inset);
-  }
-  .ll-surface-quiet {
-    background: var(--semi-color-fill-0);
-    border: 1px solid var(--semi-color-border);
-    border-radius: var(--radius-md);
-  }
-
-  /* hairline */
-  .ll-hairline-b { border-bottom: 1px solid var(--semi-color-border); }
-  .ll-hairline-t { border-top: 1px solid var(--semi-color-border); }
-  .ll-hairline-y {
-    border-top: 1px solid var(--semi-color-border);
-    border-bottom: 1px solid var(--semi-color-border);
-  }
-
-  /* 分割线 */
-  .ll-rule {
-    height: 1px;
-    background: var(--semi-color-border);
-  }
-
-  /* stat 数字 */
-  .ll-stat {
-    font-family: var(--font-mono), 'JetBrains Mono', ui-monospace, monospace;
-    font-variant-numeric: tabular-nums lining-nums;
-    letter-spacing: -0.02em;
-    font-weight: 500;
-  }
-
-  /* pill / chip */
-  .ll-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.15rem 0.55rem;
-    border-radius: 999px;
-    font-size: 0.72rem;
-    line-height: 1.4;
-    background: var(--semi-color-fill-0);
-    color: var(--semi-color-text-2);
-  }
-  .ll-chip-primary {
-    background: var(--semi-color-primary-light-default);
-    color: var(--semi-color-primary);
-  }
-
-  /* 状态严重度 */
-  .ll-sev-low      { color: var(--semi-color-success); background: var(--semi-color-success-light-default); }
-  .ll-sev-medium   { color: var(--semi-color-warning); background: var(--semi-color-warning-light-default); }
-  .ll-sev-high     { color: var(--semi-color-danger); background: var(--semi-color-danger-light-default); }
-  .ll-sev-blocking { color: var(--semi-color-danger); background: var(--semi-color-danger-light-default); font-weight: 600; }
-
-  /* 列表行 hover */
-  .ll-row {
-    position: relative;
-    transition: background-color var(--motion-fast) var(--ease-out);
-  }
-  @media (hover: hover) and (pointer: fine) {
-    .ll-row:hover {
-      background: color-mix(in srgb, var(--semi-color-fill-0) 50%, transparent);
-    }
-  }
-
-  /* chip status colors */
-  .ll-chip-green  { color: var(--semi-color-success);  background: var(--semi-color-success-light-default); }
-  .ll-chip-orange { color: var(--semi-color-warning); background: var(--semi-color-warning-light-default); }
-  .ll-chip-red    { color: var(--semi-color-danger);    background: var(--semi-color-danger-light-default); }
-  .ll-chip-purple { color: var(--semi-color-secondary); background: var(--semi-color-secondary-light-default); }
-  .ll-chip-blue   { color: var(--semi-color-info);   background: var(--semi-color-info-light-default); }
-  .ll-chip-teal   { color: var(--semi-color-primary);       background: color-mix(in srgb, var(--semi-color-primary) 10%, transparent); }
-
-  .ll-hero-surface {
-    position: relative;
-    overflow: hidden;
-    background: linear-gradient(135deg, var(--semi-color-bg-0) 0%, var(--semi-color-primary-light-default) 100%);
-    border: 1px solid var(--semi-color-border);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-low), var(--shadow-inset);
-  }
-
-  .ll-hero-surface::after {
-    content: "";
-    position: absolute;
-    top: -4rem;
-    right: -4rem;
-    width: 14rem;
-    height: 14rem;
-    border-radius: 999px;
-    background: radial-gradient(circle, rgba(0,123,127,0.18), transparent 65%);
-    pointer-events: none;
   }
 
   .ll-panel-head {
-    /* = 墨案 .panel-head */
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -179,7 +84,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 13.5px;
+    font-size: var(--workspace-text-body);
     font-weight: 600;
     letter-spacing: -0.01em;
   }
@@ -196,71 +101,10 @@
     margin-bottom: 16px;
   }
 
-  .ll-page-title {
-    /* 墨案 03 效果图 ph-title：22px / 700 / 负字距 */
-    font-size: 22px;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    line-height: 1.25;
-  }
-
   .ll-page-sub {
     margin-top: 0.25rem;
-    font-size: 12.5px;
+    font-size: var(--workspace-text-body);
     color: var(--semi-color-text-2);
-  }
-
-  .ll-segmented {
-    display: inline-flex;
-    gap: 2px;
-    padding: 3px;
-    border-radius: 9px;
-    background: var(--semi-color-fill-1);
-  }
-
-  .ll-seg {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.375rem;
-    min-height: 26px;
-    padding: 0 13px;
-    border-radius: 7px;
-    color: var(--semi-color-text-1);
-    font-size: 12.5px;
-    font-weight: 550;
-    transition:
-      background-color var(--motion-fast) var(--ease-out),
-      color var(--motion-fast) var(--ease-out),
-      box-shadow var(--motion-fast) var(--ease-out);
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .ll-seg:hover {
-      color: var(--semi-color-text-0);
-    }
-  }
-
-  .ll-seg-active {
-    /* 墨案 .seg.active：白底浮起，不用 teal（teal 只属于主操作） */
-    background: #fff;
-    color: var(--semi-color-text-0);
-    box-shadow: 0 1px 2px rgba(12,25,39,0.08), 0 0 0 1px var(--semi-color-border);
-  }
-
-  .ll-dot {
-    display: inline-block;
-    width: 7px;
-    height: 7px;
-    flex-shrink: 0;
-    border-radius: 999px;
-  }
-
-  .ll-form-card {
-    border: 1px solid var(--semi-color-border);
-    border-radius: var(--semi-border-radius-large);
-    background: var(--semi-color-bg-0);
-    box-shadow: var(--sh-card), var(--sh-inset);
   }
 }
 
@@ -278,11 +122,6 @@
 @media (prefers-reduced-transparency: reduce) {
   :root {
     --glass-bg: rgba(248, 250, 249, 0.98);
-  }
-
-  .ll-material {
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
   }
 }
 
@@ -336,54 +175,3 @@
     text-decoration: none !important;
   }
 }
-
-/* ============================================================
- * v4「墨案」签名组件（docs/mockup/v4，实施基准见 P1 方案第七节）
- * 配色纪律：teal 仅品牌/主操作；blue 进行中；green 完成终态；
- * red 仅风险/阻断；bronze 仅归档/结案。
- * ============================================================ */
-/* 案卷脊：列表行左侧状态色竖条（列表即档案架）。挂在 li/td 首格内——
-   表格场景禁止用 tr::before（Chrome 匿名单元格错位，见 03 页修复记录）。 */
-.ll-spine-row { position: relative; }
-.ll-spine-row::before {
-  content: ""; position: absolute; left: 0; top: 10px; bottom: 10px;
-  width: 3px; border-radius: 0 2px 2px 0;
-  background: var(--ll-spine, #CFD7D3);
-}
-/* 程序链：五段进度轨道（done=teal 实心 / cur=teal 半透明 / risk=amber / 未来=浅灰） */
-.ll-stage-track { display: flex; gap: 2.5px; }
-.ll-stage-track i { width: 16px; height: 3.5px; border-radius: 2px; background: #DDE3E0; }
-.ll-stage-track i.done { background: #007B7F; }
-.ll-stage-track i.cur  { background: #007B7F; opacity: 0.45; }
-.ll-stage-track i.risk { background: #96650B; }
-/* 期限倒计时 chip：红=逾期/阻断，amber=临近，muted=普通 */
-.ll-dl-chip {
-  font-family: ui-monospace, monospace; font-variant-numeric: tabular-nums;
-  font-size: 11px; font-weight: 600; padding: 2px 8px;
-  border-radius: 9800px; white-space: nowrap;
-}
-.ll-dl-red   { color: #B42318; background: #FBECE9; }
-.ll-dl-amber { color: #96650B; background: #FAF0DB; }
-.ll-dl-muted { color: #68747F; background: #E9EDEB; }
-
-/* ============================================================
- * 墨案全局排版基线（docs/mockup/v4）：13.5px 高密度、负字距、
- * 数字等宽特性——整站观感的底层变化（外壳已由侧栏/顶栏承载）。
- * ============================================================ */
-body {
-  font-size: 13.5px;
-  letter-spacing: -0.004em;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-}
-
-/* 页题规格（03 效果图 ph-title）：主列表页标题统一 22px/700/负字距 */
-.ph-title {
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.25;
-}
-.ph-sub { font-size: 12.5px; color: var(--semi-color-text-2); }
-.ph-sub b { font-weight: 600; }

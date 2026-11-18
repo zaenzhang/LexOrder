@@ -2,7 +2,7 @@
 
 import { Button, TextArea } from "@douyinfe/semi-ui";
 import { useEffect, useState } from "react";
-import { Sparkles, Loader2, X } from "lucide-react";
+import { IconAIWandLevel1 as Sparkles, IconLoading as Loader2, IconClose as X } from "@douyinfe/semi-icons";
 import type { MatterCategory, ProcedureType } from "@prisma/client";
 import {
   WorkspaceDialog,
@@ -90,7 +90,7 @@ export function CauseAiManualDialog({
       <DialogContent className="max-w-lg gap-0 p-0">
         <DialogHeader className="border-b border-border px-5 py-3">
           <DialogTitle className="flex items-center gap-2 text-base">
-            <Sparkles className="h-4 w-4 text-[var(--semi-color-secondary)]" />
+            <Sparkles aria-hidden size="default" className="text-[var(--semi-color-secondary)]" />
             AI 案由推荐
           </DialogTitle>
           <DialogDescription className="text-xs">
@@ -131,9 +131,9 @@ export function CauseAiManualDialog({
             theme="solid"
           >
             {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 aria-hidden size="default" spin />
             ) : (
-              <Sparkles className="h-4 w-4" />
+              <Sparkles aria-hidden size="default" />
             )}
             {candidates.length > 0 ? "重新推荐" : "AI 推荐"}
           </Button>
@@ -163,7 +163,7 @@ export function CauseAiManualDialog({
                       <span className="text-sm font-medium">{c.cause.name}</span>
                       <span
                         className={cn(
-                          "shrink-0 rounded border px-1.5 py-0.5 text-[10px] leading-none",
+                          "shrink-0 rounded border px-1.5 py-0.5 text-xs leading-none",
                           conf.cls
                         )}
                       >
@@ -171,7 +171,7 @@ export function CauseAiManualDialog({
                       </span>
                     </div>
                     {path && (
-                      <span className="text-[11px] text-muted-foreground">{path}</span>
+                      <span className="text-xs text-muted-foreground">{path}</span>
                     )}
                     {c.reason && (
                       <span className="text-xs text-foreground/70">{c.reason}</span>
@@ -185,7 +185,7 @@ export function CauseAiManualDialog({
 
         <DialogFooter className="border-t border-border px-5 py-2.5">
           <Button onClick={() => onOpenChange(false)} htmlType="button" type="tertiary" theme="borderless" size="small">
-            <X className="h-3.5 w-3.5" />
+            <X aria-hidden size="small" />
             关闭
           </Button>
         </DialogFooter>

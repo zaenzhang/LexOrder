@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pin, Pencil, Archive } from "lucide-react";
+import { IconMark as Pin, IconEdit as Pencil, IconArchive as Archive } from "@douyinfe/semi-icons";
 import { Button, Tag, Notification, Toast } from "@douyinfe/semi-ui";
 import { formatDate } from "@/lib/utils";
 import { AnnouncementDialog } from "./announcement-dialog";
@@ -74,7 +74,7 @@ export function AnnouncementsView({
                 <header className="mb-1.5 flex items-start justify-between gap-3">
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     {a.pinned && (
-                      <Tag color="orange" prefixIcon={<Pin size={12} aria-hidden />}>置顶</Tag>
+                      <Tag color="orange" prefixIcon={<Pin size="small" aria-hidden />}>置顶</Tag>
                     )}
                     <h3 className="min-w-0 break-words text-sm font-medium">{a.title}</h3>
                     {expired && (
@@ -92,7 +92,7 @@ export function AnnouncementsView({
                           setDialogOpen(true);
                         }}
                         aria-label={`编辑公告：${a.title}`}
-                        icon={<Pencil size={14} aria-hidden />}
+                        icon={<Pencil size="default" aria-hidden />}
                       />
                       <Button
                         htmlType="button"
@@ -101,15 +101,15 @@ export function AnnouncementsView({
                         onClick={() => handleArchive(a)}
                         type="danger"
                         aria-label={`归档公告：${a.title}`}
-                        icon={<Archive size={14} aria-hidden />}
+                        icon={<Archive size="default" aria-hidden />}
                       />
                     </div>
                   )}
                 </header>
-                <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground/80">
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/80">
                   {a.content}
                 </p>
-                <div className="mt-2 text-[10px] text-muted-foreground">
+                <div className="mt-2 text-xs text-muted-foreground">
                   {a.author.name} · 发布于 {formatDate(a.publishedAt)}
                   {a.expiresAt && ` · 过期于 ${formatDate(a.expiresAt)}`}
                 </div>

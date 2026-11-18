@@ -10,12 +10,12 @@ import { buildIntakeConflictQueries } from "@/lib/approvals/intake-detail";
 import { canApproveItem } from "@/lib/approvals/service";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Users, AlertTriangle } from "lucide-react";
+import { IconUserGroup as Users, IconAlertTriangle as AlertTriangle } from "@douyinfe/semi-icons";
 import { getIntakeById } from "@/server/intakes/actions";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { decryptIdNumber } from "@/lib/clients/id-number-crypto";
-import { FieldGrid, FieldItem, PageHeader, Panel } from "@/components/patterns/moan";
+import { FieldGrid, FieldItem, PageHeader, Panel } from "@/components/patterns/workspace-surfaces";
 import {
   matterCategoryLabel,
   intakeStatusLabel,
@@ -192,8 +192,8 @@ export default async function IntakeDetailPage({ params }: PageProps) {
       <WorkResponsibilityPanel data={await getWorkBoard({intakeId:id})} intakeId={id}/>
       <RevisionHistory rounds={rounds}/>
       {intake.declinedReason ? (
-        <div className="flex items-start gap-2 rounded-[10px] border border-[var(--semi-color-danger-light-active)] bg-[var(--semi-color-danger-light-default)] px-3.5 py-3 text-[12.5px]">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--semi-color-danger)]" />
+        <div className="flex items-start gap-2 rounded-[10px] border border-[var(--semi-color-danger-light-active)] bg-[var(--semi-color-danger-light-default)] px-3.5 py-3 text-sm">
+          <AlertTriangle aria-hidden size="default" className="mt-0.5 shrink-0 text-[var(--semi-color-danger)]" />
           <div><b className="text-[var(--semi-color-danger)]">{intake.status==="DECLINED"?"不接案原因":"补正说明"}</b><div className="mt-0.5 text-[var(--semi-color-text-1)]">{intake.declinedReason}</div></div>
         </div>
       ) : null}
@@ -256,13 +256,13 @@ function PartyGroup({ title, tone, children }: { title: string; tone: "teal" | "
 function PartyCard({ name, sub, href }: { name: string; sub?: string; href?: string }) {
   const inner = (
     <div className="rounded-[9px] border border-[var(--semi-color-border)] bg-[var(--semi-color-bg-0)] px-3 py-2 transition-colors hover:bg-[var(--semi-color-fill-0)]">
-      <div className="truncate text-[13px] font-medium">{name}</div>
-      {sub ? <div className="mt-0.5 font-mono text-[11px] text-[var(--semi-color-text-2)]">{sub}</div> : null}
+      <div className="truncate text-sm font-medium">{name}</div>
+      {sub ? <div className="mt-0.5 font-mono text-xs text-[var(--semi-color-text-2)]">{sub}</div> : null}
     </div>
   );
   return href ? <Link href={href} className="block">{inner}</Link> : inner;
 }
 
 function Empty() {
-  return <div className="rounded-[9px] border border-dashed border-[var(--semi-color-border)] py-2 text-center text-[11px] text-[var(--semi-color-text-3)]">—</div>;
+  return <div className="rounded-[9px] border border-dashed border-[var(--semi-color-border)] py-2 text-center text-xs text-[var(--semi-color-text-3)]">—</div>;
 }

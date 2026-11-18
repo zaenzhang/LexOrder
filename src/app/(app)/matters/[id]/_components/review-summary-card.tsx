@@ -1,4 +1,4 @@
-import { Sparkles, AlertTriangle, FileText } from "lucide-react";
+import { IconAIWandLevel1 as Sparkles, IconAlertTriangle as AlertTriangle, IconArticle as FileText } from "@douyinfe/semi-icons";
 import type { MatterReviewSummary } from "@/server/ai/matter-review-summary";
 import { cn, formatDate } from "@/lib/utils";
 import { BatchReviewButton } from "./batch-review-button";
@@ -21,11 +21,11 @@ export function ReviewSummaryCard({
     <section className="rounded-lg border border-[var(--semi-color-secondary-light-active)] bg-[var(--semi-color-secondary-light-default)] p-3">
       <header className="mb-2 flex items-center justify-between">
         <h3 className="flex items-center gap-1.5 text-xs font-medium text-[var(--semi-color-secondary)]">
-          <Sparkles className="h-3.5 w-3.5" />
+          <Sparkles aria-hidden size="small" />
           AI 审查总览
         </h3>
         <div className="flex items-center gap-3">
-          <span className="font-mono text-[10px] text-muted-foreground">
+          <span className="font-mono text-xs text-muted-foreground">
             {summary.documentCount} 份文档 · {summary.recordCount} 次审查 · 共 {summary.totalItems} 条
             {summary.latestReviewedAt && (
               <span className="ml-2">最新 {formatDate(summary.latestReviewedAt)}</span>
@@ -43,8 +43,8 @@ export function ReviewSummaryCard({
 
       {summary.topHighItems.length > 0 && (
         <div className="mt-3 space-y-1.5">
-          <div className="flex items-center gap-1 text-[10px] text-[var(--semi-color-danger)]">
-            <AlertTriangle className="h-3 w-3" />
+          <div className="flex items-center gap-1 text-xs text-[var(--semi-color-danger)]">
+            <AlertTriangle aria-hidden size="small" />
             最近高风险（最多 3 条）
           </div>
           <ul className="space-y-1">
@@ -54,11 +54,11 @@ export function ReviewSummaryCard({
                 className="rounded border border-[var(--semi-color-danger-light-active)] bg-background px-2 py-1.5 text-xs"
               >
                 <div className="font-medium">{it.title}</div>
-                <p className="mt-0.5 text-[11px] leading-relaxed text-foreground/70">
+                <p className="mt-0.5 text-xs leading-relaxed text-foreground/70">
                   {it.detail}
                 </p>
-                <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
-                  <FileText className="h-2.5 w-2.5" />
+                <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                  <FileText aria-hidden className="h-2.5 w-2.5" />
                   <span className="truncate">{it.documentName}</span>
                 </div>
               </li>
@@ -78,7 +78,7 @@ function SevTile({ sev, n }: { sev: "HIGH" | "MEDIUM" | "LOW"; n: number }) {
   }[sev];
   return (
     <div className={cn("rounded border px-2 py-1.5", meta.cls)}>
-      <div className="text-[10px] opacity-80">{meta.label}</div>
+      <div className="text-xs opacity-80">{meta.label}</div>
       <div className="mt-0.5 font-mono text-base leading-none">{n}</div>
     </div>
   );

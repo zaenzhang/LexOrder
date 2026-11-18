@@ -4,7 +4,7 @@
  * 对账：应发几条、实发几条、作废几条一目了然（此前只有"发了多少"）。
  */
 import { Table } from "@/components/patterns/semi-surfaces";
-import { BellRing } from "lucide-react";
+import { IconBell as BellRing } from "@douyinfe/semi-icons";
 import type { ReminderDeliveryChannel, ReminderDeliveryStatus } from "@prisma/client";
 
 export type LedgerAggregate = { dayKey: string; channel: ReminderDeliveryChannel; status: ReminderDeliveryStatus; count: number };
@@ -35,7 +35,7 @@ export function DeliveryLedgerCard({
     <div className="card">
       <div className="panel-head">
         <div className="panel-title" style={{ fontSize: 13 }}>
-          <BellRing className="ic" strokeWidth={1.8} />
+          <BellRing aria-hidden className="ic" />
           提醒送达台账 · 近 7 天
         </div>
         <span className="t-xs t-mute">登记 / 送达 / 作废对账</span>
@@ -48,7 +48,6 @@ export function DeliveryLedgerCard({
           </div>
         ) : null}
         <Table
-          size="small"
           pagination={false}
           rowKey="channel"
           scroll={{ x: 560 }}

@@ -4,8 +4,8 @@ import { Table, Button, Input, Notification, Toast } from "@douyinfe/semi-ui";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { LucideIcon } from "lucide-react";
-import { Wallet, Briefcase, Archive, CheckCircle2, Download, CircleAlert, Send, Loader2, Printer } from "lucide-react";
+import { type IconFile } from "@douyinfe/semi-icons";
+import { IconCoinMoney as Wallet, IconBriefcase as Briefcase, IconArchive as Archive, IconTickCircle as CheckCircle2, IconDownload as Download, IconAlertCircle as CircleAlert, IconSend as Send, IconLoading as Loader2, IconPrint as Printer } from "@douyinfe/semi-icons";
 import { matterCategoryLabel, matterCategoryColor } from "@/lib/enums";
 import type { ReportData } from "@/server/reports/queries";
 import type {
@@ -158,9 +158,9 @@ export function ReportsView({
             title="扫描已结超过 30 天未归档的案件" htmlType="button"
           >
             {scanning ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <Loader2 aria-hidden size="small" spin />
             ) : (
-              <Send className="h-3.5 w-3.5" />
+              <Send aria-hidden size="small" />
             )}
             扫归档逾期
           </Button>
@@ -173,9 +173,9 @@ export function ReportsView({
             title="给所有律师推送本周报告通知" htmlType="button"
           >
             {pushing ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <Loader2 aria-hidden size="small" spin />
             ) : (
-              <Send className="h-3.5 w-3.5" />
+              <Send aria-hidden size="small" />
             )}
             推送周报
           </Button>
@@ -186,12 +186,12 @@ export function ReportsView({
             className="gap-1.5"
             title="Cmd/Ctrl+P 同样可触发，可以「另存为 PDF」" htmlType="button"
           >
-            <Printer className="h-3.5 w-3.5" />
+            <Printer aria-hidden size="small" />
             打印 / PDF
           </Button>
           <Link href={exportHref} prefetch={false}>
             <Button size="small" className="gap-1.5" theme="solid" type="primary" htmlType="button">
-              <Download className="h-3.5 w-3.5" />
+              <Download aria-hidden size="small" />
               导出 xlsx
             </Button>
           </Link>
@@ -206,7 +206,7 @@ export function ReportsView({
               type="date"
               value={start}
               onChange={(e) => setStart(e)}
-              className="mt-0.5 h-8 w-36 text-[12px]"
+              className="mt-0.5 h-8 w-36 text-xs"
             />
           </div>
           <span className="pb-2 text-muted-foreground">~</span>
@@ -216,19 +216,19 @@ export function ReportsView({
               type="date"
               value={end}
               onChange={(e) => setEnd(e)}
-              className="mt-0.5 h-8 w-36 text-[12px]"
+              className="mt-0.5 h-8 w-36 text-xs"
             />
           </div>
           <Button size="small" onClick={applyCustom} disabled={!start || !end} theme="solid" type="primary" htmlType="button">
             应用
           </Button>
-          <span className="ml-2 text-[10px] text-muted-foreground">最大跨度 5 年</span>
+          <span className="ml-2 text-xs text-muted-foreground">最大跨度 5 年</span>
         </div>
       )}
 
       {resolveError && (
         <div className="flex items-start gap-2 rounded-md border border-[var(--semi-color-warning-light-active)] bg-[var(--semi-color-warning-light-default)] p-3 text-xs text-[var(--semi-color-warning)]">
-          <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <CircleAlert aria-hidden size="small" className="mt-0.5 shrink-0" />
           <span>{resolveError}</span>
         </div>
       )}
@@ -299,7 +299,7 @@ export function ReportsView({
                       {s.source}
                     </span>
                     <div className="flex-1">
-                      <div className="h-4 rounded" style={{ width: `${pct}%`, minWidth: 8, backgroundColor: "#007B7F99" }} />
+                      <div className="h-4 rounded" style={{ width: `${pct}%`, minWidth: 8, backgroundColor: "color-mix(in srgb, var(--semi-color-primary) 60%, transparent)" }} />
                     </div>
                     <span className="w-16 shrink-0 font-mono text-right text-foreground" title={`${s.count} 位客户 · 关联 ${s.intakeCount} 件案件`}>
                       {s.count} / {s.intakeCount}
@@ -309,7 +309,7 @@ export function ReportsView({
               })}
             </ul>
           )}
-          <p className="mt-2 text-[11px] text-muted-foreground">客户数 / 关联案件数 · 未记录来源的客户可在客户档案中补录</p>
+          <p className="mt-2 text-xs text-muted-foreground">客户数 / 关联案件数 · 未记录来源的客户可在客户档案中补录</p>
         </section>
 
         {/* 律师产出 */}
@@ -320,7 +320,6 @@ export function ReportsView({
           ) : (
             <div className="overflow-hidden rounded border border-border">
               <Table<(typeof data.byLawyer)[number]>
-                size="small"
                 pagination={false}
                 rowKey="userId"
                 dataSource={data.byLawyer}
@@ -346,7 +345,6 @@ export function ReportsView({
           ) : (
             <div className="overflow-hidden rounded border border-border">
               <Table<(typeof data.byClientReceivable)[number]>
-                size="small"
                 pagination={false}
                 rowKey="clientId"
                 dataSource={data.byClientReceivable}
@@ -370,7 +368,6 @@ export function ReportsView({
         ) : (
           <div className="overflow-hidden rounded border border-border">
             <Table<(typeof cycle)[number]>
-              size="small"
               pagination={false}
               rowKey="category"
               dataSource={cycle}
@@ -391,7 +388,7 @@ export function ReportsView({
       <section className="ll-surface p-5">
         <h3 className="mb-3 flex items-center gap-2 text-sm font-medium">
           AI 审查 · 本期高频问题
-          <span className="text-[10px] font-normal text-muted-foreground">
+          <span className="text-xs font-normal text-muted-foreground">
             （{reviewAnalysis.recordCount} 次审查 / {reviewAnalysis.documentCount} 份文档 /{" "}
             {reviewAnalysis.totalItems} 条问题）
           </span>
@@ -407,7 +404,6 @@ export function ReportsView({
             </div>
             <div className="overflow-hidden rounded border border-border">
               <Table<(typeof reviewAnalysis.topIssues)[number]>
-                size="small"
                 pagination={false}
                 rowKey="title"
                 dataSource={reviewAnalysis.topIssues}
@@ -445,7 +441,7 @@ function SevTotalChip({ sev, n }: { sev: "HIGH" | "MEDIUM" | "LOW"; n: number })
   }[sev];
   return (
     <div className={cn("rounded border px-3 py-2 text-xs", meta.cls)}>
-      <div className="text-[10px] opacity-80">{meta.label}</div>
+      <div className="text-xs opacity-80">{meta.label}</div>
       <div className="mt-0.5 font-mono text-lg">{n}</div>
     </div>
   );
@@ -458,7 +454,7 @@ function Kpi({
   color,
   hint
 }: {
-  icon: LucideIcon;
+  icon: typeof IconFile;
   label: string;
   value: number;
   color: string;
@@ -467,16 +463,16 @@ function Kpi({
   return (
     <div className="card p-3">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] text-muted-foreground">{label}</span>
+        <span className="text-xs text-muted-foreground">{label}</span>
         <span
           className="flex h-7 w-7 items-center justify-center rounded-md"
           style={{ backgroundColor: `${color}1F`, color }}
         >
-          <Icon className="h-3.5 w-3.5" strokeWidth={1.8} />
+          <Icon className="h-3.5 w-3.5" />
         </span>
       </div>
       <div className="mt-1 font-mono text-2xl tabular text-foreground">{value}</div>
-      {hint && <div className="mt-0.5 text-[10px] text-muted-foreground">{hint}</div>}
+      {hint && <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div>}
     </div>
   );
 }

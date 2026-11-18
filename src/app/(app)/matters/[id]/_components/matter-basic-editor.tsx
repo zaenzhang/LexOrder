@@ -3,7 +3,7 @@
 import { useId, useEffect, useState, useTransition } from "react";
 import type { LitigationStanding, ProcedureType } from "@prisma/client";
 import { Select, Button, Checkbox, Input, Toast } from "@douyinfe/semi-ui";
-import { Loader2 } from "lucide-react";
+import { IconLoading as Loader2 } from "@douyinfe/semi-icons";
 import { DialogFooter } from "@/components/patterns/workspace-dialog";
 import { FormDialogBody } from "@/components/patterns/form-dialog";
 import { CauseCombobox } from "@/app/(app)/matters/_components/cause-combobox";
@@ -146,7 +146,7 @@ export function MatterBasicEditor({ matterId, matterMeta, procedureType, onState
     <DialogFooter className="px-6 py-4">
       {error && <p role="alert" className="basis-full text-sm text-destructive">{error}</p>}
       <Button onClick={onCancel} disabled={isPending} htmlType="button" type="tertiary" theme="outline">取消</Button>
-      <Button disabled={isPending || !dirty} htmlType="submit" theme="solid">{isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}保存案件信息</Button>
+      <Button disabled={isPending || !dirty} htmlType="submit" theme="solid">{isPending && <Loader2 aria-hidden size="default" className="mr-1.5" spin />}保存案件信息</Button>
     </DialogFooter>
   </form>;
 }

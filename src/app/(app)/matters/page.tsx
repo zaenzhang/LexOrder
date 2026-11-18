@@ -8,9 +8,8 @@ import type { MatterCategory } from "@prisma/client";
 import { requireSession } from "@/lib/auth/session";
 import { hasCustomPermission } from "@/lib/roles/catalog";
 import { shDayBoundary } from "@/lib/ui/sh-time";
+import { defaultSortByForTab, supportsSortBy, type MattersTab, type MatterSortBy } from "@/lib/matters/list-location";
 
-export type MattersTab = "intake" | "active" | "archived" | "revision" | "all";
-export type MatterSortBy = "hearing" | "intakeDate" | "claimAmount" | "archivedAt";
 export type MatterSortDir = "asc" | "desc";
 
 const MATTERS_PAGE_SIZE = 12;
@@ -18,19 +17,6 @@ const MATTERS_PAGE_SIZE = 12;
 function resolveTab(input?: string): MattersTab {
   if (input === "intake" || input === "archived" || input === "revision" || input === "all") return input;
   return "active";
-}
-
-function defaultSortByForTab(tab: MattersTab): MatterSortBy {
-  if (tab === "active") return "hearing";
-  if (tab === "archived") return "archivedAt";
-  return "intakeDate";
-}
-
-function supportsSortBy(tab: MattersTab, sortBy: MatterSortBy) {
-  if (sortBy === "hearing") return tab === "active" || tab === "all";
-  if (sortBy === "archivedAt") return tab === "archived";
-  if (sortBy === "claimAmount") return tab !== "archived";
-  return true;
 }
 
 function resolveSortBy(input: string | undefined, tab: MattersTab): MatterSortBy {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef } from "react";
-import { Select } from "@douyinfe/semi-ui";
+import { Form, Select } from "@douyinfe/semi-ui";
 import { cn } from "@/lib/utils";
 import { provinces, citiesOf, areasOf, joinJurisdiction, parseJurisdiction } from "@/lib/china-regions";
 
@@ -59,10 +59,10 @@ export function JurisdictionSelect({ value, onChange, triggerClassName, onDropdo
   ];
 
   return (
-    <div ref={fields} role="group" aria-label="管辖地" className="grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-3">
+    <div ref={fields} role="group" aria-label="管辖地" className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-3">
       {options.map(field => (
         <div key={field.name} className="min-w-0 space-y-1">
-          <span className="block text-xs text-[var(--semi-color-text-2)]" id={`${labelId}-${field.name}`}>{field.label}</span>
+          <Form.Label id={`${labelId}-${field.name}`} text={field.label} />
           <Select<string>
             className={cn("w-full", triggerClassName)}
             aria-labelledby={`${labelId}-${field.name}`}

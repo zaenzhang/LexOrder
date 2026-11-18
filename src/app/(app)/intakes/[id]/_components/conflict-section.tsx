@@ -3,17 +3,7 @@ import { Button, Tag, TextArea, Notification, Toast } from "@douyinfe/semi-ui";
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import {
-  AlertTriangle,
-  ShieldCheck,
-  Loader2,
-  Search,
-  ExternalLink,
-  CheckCircle2,
-  HelpCircle,
-  Info,
-  Briefcase
-} from "lucide-react";
+import { IconAlertTriangle as AlertTriangle, IconShieldStroked as ShieldCheck, IconLoading as Loader2, IconSearch as Search, IconExternalOpen as ExternalLink, IconTickCircle as CheckCircle2, IconHelpCircle as HelpCircle, IconInfoCircle as Info, IconBriefcase as Briefcase } from "@douyinfe/semi-icons";
 import type {
   ConflictSeverity,
   ConflictConclusion,
@@ -149,7 +139,7 @@ export function ConflictSection({
       <div className="panel-head flex-wrap gap-2">
         <div className="min-w-0">
           <div className="panel-title">
-            <ShieldCheck className="ic" />
+            <ShieldCheck aria-hidden className="ic" />
             利益冲突检索
           </div>
           <p className="t-xs t-mute" style={{ marginTop: 2 }}>
@@ -163,7 +153,7 @@ export function ConflictSection({
           size="small"
           theme={latestCheck ? "light" : "solid"}
         >
-          {isPending ? <Loader2 className="animate-spin" /> : <Search />}
+          {isPending ? <Loader2 aria-hidden spin /> : <Search aria-hidden />}
           {latestCheck ? "重新检索" : "运行冲突检索"}
         </Button>
       </div>
@@ -175,8 +165,8 @@ export function ConflictSection({
       ) : (
         <div className="space-y-3">
           {/* 概览 */}
-          <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/20 p-2.5 text-[12px]">
-            <span className="font-mono text-[11px] text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/20 p-2.5 text-xs">
+            <span className="font-mono text-xs text-muted-foreground">
               {formatDateTime(new Date(latestCheck.checkedAt))}
             </span>
             <span className="text-muted-foreground">·</span>
@@ -192,7 +182,7 @@ export function ConflictSection({
               {latestCheck.note?.startsWith("系统自动标记：")?"未命中（系统自动提示）":conflictConclusionLabel[latestCheck.conclusion]}
             </Tag>
             {latestCheck.decidedBy && !latestCheck.note?.startsWith("系统自动标记：") && (
-              <span className="ml-auto text-[11px] text-muted-foreground">
+              <span className="ml-auto text-xs text-muted-foreground">
                 {latestCheck.decidedBy.name} ·{" "}
                 {latestCheck.decidedAt
                   ? formatDate(new Date(latestCheck.decidedAt))
@@ -204,7 +194,7 @@ export function ConflictSection({
           {/* 客户库同名提示（非冲突） */}
           {latestCheck.sameNameClients.length > 0 && (
             <InfoBar
-              icon={<Info className="h-3.5 w-3.5" />}
+              icon={<Info aria-hidden size="small" />}
               tone="info"
               text={`客户库已有 ${latestCheck.sameNameClients.length} 个同名记录（仅提示，非冲突）`}
             >
@@ -213,10 +203,10 @@ export function ConflictSection({
                   <Link
                     key={c.clientId}
                     href={`/clients/${c.clientId}`}
-                    className="inline-flex items-center gap-1 rounded border border-border bg-background px-2 py-0.5 text-[11px] hover:border-primary/40 hover:text-primary"
+                    className="inline-flex items-center gap-1 rounded border border-border bg-background px-2 py-0.5 text-xs hover:border-primary/40 hover:text-primary"
                   >
                     {c.name}
-                    <ExternalLink className="h-2.5 w-2.5" />
+                    <ExternalLink aria-hidden className="h-2.5 w-2.5" />
                   </Link>
                 ))}
               </div>
@@ -226,7 +216,7 @@ export function ConflictSection({
           {/* 身份证号一致客户提示（强提示） */}
           {latestCheck.idMatchedClients.length > 0 && (
             <InfoBar
-              icon={<AlertTriangle className="h-3.5 w-3.5" />}
+              icon={<AlertTriangle aria-hidden size="small" />}
               tone="warn"
               text={`身份证 / 信用代码与客户库 ${latestCheck.idMatchedClients.length} 条记录精确匹配，请人工核对是否为同一主体`}
             >
@@ -235,10 +225,10 @@ export function ConflictSection({
                   <Link
                     key={c.clientId}
                     href={`/clients/${c.clientId}`}
-                    className="inline-flex items-center gap-1 rounded border border-[var(--semi-color-warning-light-active)] bg-[var(--semi-color-warning-light-default)] px-2 py-0.5 text-[11px] text-[var(--semi-color-warning)] hover:bg-[var(--semi-color-warning-light-default)]"
+                    className="inline-flex items-center gap-1 rounded border border-[var(--semi-color-warning-light-active)] bg-[var(--semi-color-warning-light-default)] px-2 py-0.5 text-xs text-[var(--semi-color-warning)] hover:bg-[var(--semi-color-warning-light-default)]"
                   >
                     {c.name} <span className="font-mono opacity-60">{c.idNumber}</span>
-                    <ExternalLink className="h-2.5 w-2.5" />
+                    <ExternalLink aria-hidden className="h-2.5 w-2.5" />
                   </Link>
                 ))}
               </div>
@@ -249,7 +239,7 @@ export function ConflictSection({
           {latestCheck.hits.length === 0 ? (
             <div className="rounded-md border border-[#1A7F45]/30 bg-[#1A7F45]/10 p-3 text-sm">
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-[#1A7F45]" />
+                <CheckCircle2 aria-hidden size="default" className="text-[#1A7F45]" />
                 <span className="text-foreground">本次检索未命中，仍须结合实际主体关系核查</span>
               </div>
             </div>
@@ -265,8 +255,8 @@ export function ConflictSection({
           {canEditConclusion ? (
             <div className="rounded-md border border-border bg-background p-3">
               <div className="mb-2 flex items-center gap-2">
-                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
-                <h3 className="text-[13px] font-medium">标记结论</h3>
+                <HelpCircle aria-hidden size="small" className="text-muted-foreground" />
+                <h3 className="text-sm font-medium">标记结论</h3>
               </div>
               <TextArea
                 value={conclusionNote}
@@ -305,8 +295,8 @@ export function ConflictSection({
             </div>
           ) : latestCheck.note ? (
             <div className="rounded-md border border-border bg-background p-3">
-              <h3 className="mb-1 text-[13px] font-medium">结论说明</h3>
-              <p className="whitespace-pre-wrap text-[12px] text-muted-foreground">{latestCheck.note}</p>
+              <h3 className="mb-1 text-sm font-medium">结论说明</h3>
+              <p className="whitespace-pre-wrap text-xs text-muted-foreground">{latestCheck.note}</p>
             </div>
           ) : null}
         </div>
@@ -332,7 +322,7 @@ function InfoBar({
       ? { border: "border-[var(--semi-color-warning-light-active)]", bg: "bg-[var(--semi-color-warning-light-default)]", text: "text-[var(--semi-color-warning)]" }
       : { border: "border-[var(--semi-color-info-light-active)]", bg: "bg-[var(--semi-color-info-light-default)]", text: "text-[var(--semi-color-info)]" };
   return (
-    <div className={cn("rounded-md border p-2.5 text-[12px]", colors.border, colors.bg)}>
+    <div className={cn("rounded-md border p-2.5 text-xs", colors.border, colors.bg)}>
       <div className={cn("flex items-center gap-1.5 font-medium", colors.text)}>
         {icon}
         {text}
@@ -348,15 +338,15 @@ function HitCard({ hit }: { hit: Hit }) {
   const causeOrCategory = m ? (m.causeText ?? matterCategoryLabel[m.category]) : "—";
   const matterContent = m ? (
     <>
-      <div className="flex items-center gap-2 text-[12px]">
-        <Briefcase className="h-3.5 w-3.5 text-muted-foreground" />
-        <span className="font-mono text-[11px] text-muted-foreground">{m.code}</span>
+      <div className="flex items-center gap-2 text-xs">
+        <Briefcase aria-hidden size="small" className="text-muted-foreground" />
+        <span className="font-mono text-xs text-muted-foreground">{m.code}</span>
         <span className="truncate font-medium">{m.title}</span>
         {m.canViewMatter && (
-          <ExternalLink className="ml-auto h-3 w-3 text-muted-foreground transition-colors group-hover:text-primary" />
+          <ExternalLink aria-hidden size="small" className="ml-auto text-muted-foreground transition-colors group-hover:text-primary" />
         )}
       </div>
-      <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+      <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <Field label="系统收案">{formatDate(m.intakeDate)}</Field>
         <Field label="当前状态">{matterStatusLabel[m.status]}</Field>
         <Field label="案由/类型">{causeOrCategory}</Field>
@@ -387,19 +377,19 @@ function HitCard({ hit }: { hit: Hit }) {
       }}
     >
       {/* 头：严重度 + 命中字段 */}
-      <div className="flex items-center gap-2 text-[11px]">
+      <div className="flex items-center gap-2 text-xs">
         <span
           className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-medium"
           style={{ color: style.color, background: `${style.color}1A` }}
         >
-          <AlertTriangle className="h-3 w-3" />
+          <AlertTriangle aria-hidden size="small" />
           {style.label}
         </span>
         <span className="text-muted-foreground">
           {hit.matchedField === "idNumber" ? "证件号一致" : hit.matchedRatio === 1 ? "姓名一致" : "姓名相似"}
         </span>
         {hit.matchedRatio !== null && hit.matchedRatio < 1 && (
-          <span className="font-mono text-[10px] text-muted-foreground">
+          <span className="font-mono text-xs text-muted-foreground">
             {(hit.matchedRatio * 100).toFixed(0)}%
           </span>
         )}
@@ -420,7 +410,7 @@ function HitCard({ hit }: { hit: Hit }) {
           </div>
         )
       ) : (
-        <p className="mt-2 text-[12px] text-muted-foreground">{hit.reason}</p>
+        <p className="mt-2 text-xs text-muted-foreground">{hit.reason}</p>
       )}
     </li>
   );

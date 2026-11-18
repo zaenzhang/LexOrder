@@ -7,6 +7,7 @@ type DossierUpdate = Partial<{
   procedure: string | null;
   stage: string | null;
   task: string | null;
+  deadline: string | null;
   recordsExpanded: string | null;
   factsView: "facts" | "research";
   recordsView: "activity" | "delivery";
@@ -35,4 +36,8 @@ export function updateDossierLocation(update: DossierUpdate, mode: "push" | "rep
   if (next !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
     window.history[mode === "push" ? "pushState" : "replaceState"](null, "", next);
   }
+}
+
+export function openDossierDeadline(procedure: string, deadline: string) {
+  updateDossierLocation({ view: "work", workPane: "tasks", procedure, stage: null, task: null, deadline });
 }

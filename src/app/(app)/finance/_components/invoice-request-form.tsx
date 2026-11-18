@@ -4,7 +4,8 @@ import { Select, Button, Checkbox, Input, RadioGroup, TextArea, Toast } from "@d
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Loader2, Paperclip, X } from "lucide-react";
+import { IconLoading as Loader2, IconPaperclip as Paperclip, IconClose as X } from "@douyinfe/semi-icons";
+import { confirmDiscardChanges } from "@/components/patterns/confirm-dialog";
 import { FormDialogContent, FormDialogBody } from "@/components/patterns/form-dialog";
 import { WorkspaceDialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 
@@ -55,6 +56,7 @@ export function InvoiceRequestForm({ matterId: fixedMatterId, onOpenChange, canC
   const fileInput = useRef<HTMLInputElement>(null);
   const popupContainer = useRef<HTMLDivElement>(null);
   const openDropdown = useRef(false);
+  const confirmingClose = useRef(false);
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const ready = noMatter || Boolean(matterId && context?.matterId === matterId && !contextLoading && !contextError);
@@ -183,7 +185,24 @@ export function InvoiceRequestForm({ matterId: fixedMatterId, onOpenChange, canC
     }
   }
   const field = (name: string) => `${prefix}-${name}`;
-  return <WorkspaceDialog open onOpenChange={open => { if (!busy) onOpenChange(open); }}>
+  async function close() {
+    if (busy || confirmingClose.current) return;
+    const defaultBuyer = context?.clientOptions.length === 1 ? buyerFor(context.clientOptions[0]) : emptyBuyer();
+    const buyerChanged = (Object.keys(buyer) as Array<keyof Buyer>).some(key => buyer[key] !== defaultBuyer[key]);
+    const dirty = selectedMatter || noMatter || buyerChanged || amount || invoiceType || invoiceItem !== "LAWYER_FEE"
+      || noMatterReason || requestNote || selectedDocuments.length || attachments.length;
+    if (dirty) {
+      confirmingClose.current = true;
+      try {
+        if (!await confirmDiscardChanges()) return;
+      } finally {
+        confirmingClose.current = false;
+      }
+    }
+    onOpenChange(false);
+  }
+
+  return <WorkspaceDialog open dismissOnBackdrop onOpenChange={open => { if (!open) void close(); }}>
     <FormDialogContent ref={popupContainer} className="max-w-2xl" onEscapeKeyDown={event => { if (busy || openDropdown.current) event.preventDefault(); }}>
       <DialogHeader className="border-b px-5 py-3"><DialogTitle>申请开票</DialogTitle><DialogDescription className="sr-only">填写购方资料并选择本次开票依据。</DialogDescription></DialogHeader>
       <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
@@ -195,7 +214,7 @@ export function InvoiceRequestForm({ matterId: fixedMatterId, onOpenChange, canC
               {searchLoading ? <p role="status" className="text-sm text-muted-foreground">正在查找案件…</p> : searchError ? <div role="alert" className="flex items-center justify-between gap-3 text-sm text-destructive"><span>{searchError}</span><Button htmlType="button" theme="outline" type="tertiary" size="small" onClick={() => void loadSearch(query)}>重试搜索</Button></div> : <ul className="max-h-40 overflow-y-auto">{matters.map(matter => <li key={matter.id}><Button htmlType="button" theme="borderless" type="tertiary" className="h-auto w-full justify-start whitespace-normal text-left" onClick={() => setSelectedMatter(matter)}>{matter.internalCode} · {matter.title}</Button></li>)}{!matters.length && <li className="py-2 text-sm text-muted-foreground">{query.trim() ? "无匹配案件" : "暂无可关联案件"}</li>}</ul>}
             </>)}
           </section>}
-          {contextLoading && <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />正在读取案件资料…</p>}
+          {contextLoading && <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 aria-hidden size="default" spin />正在读取案件资料…</p>}
           {contextError && <div role="alert" className="flex items-center justify-between gap-3 text-sm text-destructive"><span>{contextError}</span><Button htmlType="button" theme="outline" type="tertiary" size="small" onClick={() => matterId && void loadContext(matterId, contextVersion.current)}>重试加载</Button></div>}
           {fixedMatterId && context && <p className="text-sm">{context.internalCode} · {context.matterTitle}</p>}
           {ready && <fieldset disabled={busy} className="space-y-5">
@@ -208,11 +227,11 @@ export function InvoiceRequestForm({ matterId: fixedMatterId, onOpenChange, canC
               {invoiceType === "SPECIAL" && <div className="grid gap-3 sm:grid-cols-2">{([ ["bank", "开户银行", 200], ["bankAccount", "银行账号", 100], ["address", "购方地址", 500], ["phone", "购方电话", 80] ] as const).map(([name, label, maxLength]) => <div key={name} className="space-y-1.5"><label htmlFor={field(name)}>{label} *</label><Input id={field(name)} required maxLength={maxLength} value={buyer[name]} onChange={event => setBuyer({ ...buyer, [name]: event })} /></div>)}</div>}
             </section>
             {matterId && context && <section className="space-y-3 border-t pt-4">
-              <div className="flex items-center justify-between gap-3"><label>开票依据 *</label><Button htmlType="button" theme="outline" type="tertiary" size="small" disabled={busy} onClick={() => fileInput.current?.click()}><Paperclip className="mr-1.5 size-4" />添加文件</Button></div>
+              <div className="flex items-center justify-between gap-3"><label>开票依据 *</label><Button htmlType="button" theme="outline" type="tertiary" size="small" disabled={busy} onClick={() => fileInput.current?.click()}><Paperclip aria-hidden size="default" className="mr-1.5" />添加文件</Button></div>
               {context.evidenceDocuments.length > 0 && <ul className="max-h-44 space-y-2 overflow-y-auto">{context.evidenceDocuments.map(document => <li key={document.id} className="flex items-center gap-2 text-sm"><Checkbox className="flex-1" disabled={busy} checked={selectedDocuments.includes(document.id)} onChange={event => (checked => setSelectedDocuments(current => checked === true ? [...current, document.id] : current.filter(id => id !== document.id)))(event.target.checked === true)} >{document.name} <span className="text-muted-foreground">v{document.version}</span></Checkbox><a href={`/api/documents/${document.id}/download`} target="_blank" rel="noreferrer" className="text-xs text-primary underline">查看</a></li>)}</ul>}
               <input ref={fileInput} type="file" multiple accept="image/*,application/pdf,.doc,.docx" aria-label="添加开票依据" className="hidden" onChange={event => addFiles(event.target.files)} />
               {fileError && <p role="alert" className="text-sm text-destructive">{fileError}</p>}
-              {attachments.length > 0 && <ul className="space-y-2">{attachments.map(item => <li key={item.key} className="rounded-md border p-3 text-sm"><div className="flex items-center gap-2"><span className="min-w-0 flex-1 break-all">{item.file.name}</span><span className="shrink-0 text-xs text-muted-foreground">{{ queued: "待上传", uploading: "上传中…", saved: "已保存", failed: "上传失败" }[item.status]}</span><Button htmlType="button" theme="borderless" type="tertiary" size="small" className="size-7" disabled={busy} aria-label={`移出本次申请：${item.file.name}`} onClick={() => setAttachments(current => current.filter(value => value.key !== item.key))}><X className="size-3.5" /></Button></div>{item.error && <div role="alert" className="mt-2 flex items-center justify-between gap-3"><span className="text-destructive">{item.error}</span><Button htmlType="button" theme="outline" type="tertiary" size="small" disabled={busy} onClick={() => void retryAttachment(item.key)}>重试上传</Button></div>}</li>)}</ul>}
+              {attachments.length > 0 && <ul className="space-y-2">{attachments.map(item => <li key={item.key} className="rounded-md border p-3 text-sm"><div className="flex items-center gap-2"><span className="min-w-0 flex-1 break-all">{item.file.name}</span><span className="shrink-0 text-xs text-muted-foreground">{{ queued: "待上传", uploading: "上传中…", saved: "已保存", failed: "上传失败" }[item.status]}</span><Button htmlType="button" theme="borderless" type="tertiary" size="small" className="size-7" disabled={busy} aria-label={`移出本次申请：${item.file.name}`} onClick={() => setAttachments(current => current.filter(value => value.key !== item.key))}><X aria-hidden size="small" /></Button></div>{item.error && <div role="alert" className="mt-2 flex items-center justify-between gap-3"><span className="text-destructive">{item.error}</span><Button htmlType="button" theme="outline" type="tertiary" size="small" disabled={busy} onClick={() => void retryAttachment(item.key)}>重试上传</Button></div>}</li>)}</ul>}
               {!context.evidenceDocuments.length && !attachments.length && <p className="text-sm text-muted-foreground">本案暂无可选材料，请添加开票依据。单文件不超过 20MB。</p>}
             </section>}
             <div className="space-y-1.5"><label htmlFor={field("note")}>申请备注（选填）</label><TextArea id={field("note")} rows={2} maxLength={500} value={requestNote} onChange={event => setRequestNote(event)} /></div>
@@ -220,7 +239,7 @@ export function InvoiceRequestForm({ matterId: fixedMatterId, onOpenChange, canC
         </FormDialogBody>
         <DialogFooter className="flex-col gap-3 border-t px-5 py-3 sm:flex-col">
           {submitError && <div role="alert" className="w-full space-y-1 text-sm"><p className="text-destructive">{submitError}</p><Link href="/approvals?type=INVOICE_APPROVE&tab=mine" className="text-primary underline">查看我的开票申请</Link></div>}
-          <div className="flex w-full justify-end gap-2"><Button htmlType="button" theme="outline" type="tertiary" disabled={busy} onClick={() => onOpenChange(false)}>取消</Button><Button htmlType="submit" disabled={busy || !ready} theme="solid" type="primary">{busy && <Loader2 className="mr-1.5 size-4 animate-spin" />}提交申请</Button></div>
+          <div className="flex w-full justify-end gap-2"><Button htmlType="button" theme="outline" type="tertiary" disabled={busy} onClick={() => void close()}>取消</Button><Button htmlType="submit" disabled={busy || !ready} theme="solid" type="primary">{busy && <Loader2 aria-hidden size="default" className="mr-1.5" spin />}提交申请</Button></div>
         </DialogFooter>
       </form>
     </FormDialogContent>

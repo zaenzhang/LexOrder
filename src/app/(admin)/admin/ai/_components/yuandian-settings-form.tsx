@@ -3,14 +3,7 @@
 import { Button, Form, Input, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Scale,
-  CheckCircle2,
-  AlertTriangle,
-  Loader2,
-  Trash2,
-  ExternalLink
-} from "lucide-react";
+import { IconVerify as Scale, IconTickCircle as CheckCircle2, IconAlertTriangle as AlertTriangle, IconLoading as Loader2, IconDelete as Trash2, IconExternalOpen as ExternalLink } from "@douyinfe/semi-icons";
 import {
   saveYuandianSettingsAction,
   clearYuandianKeyAction,
@@ -89,22 +82,22 @@ export function YuandianSettingsForm({
   return (
     <section className="ll-surface rounded-lg border border-border p-5">
       <header className="mb-3 flex flex-wrap items-center gap-2">
-        <Scale className="h-4 w-4 text-primary" strokeWidth={1.8} />
+        <Scale aria-hidden size="default" className="text-primary" />
         <h2 className="text-[14px] font-semibold">元典案例库 API</h2>
-        <span className="ml-2 text-[11px] text-muted-foreground">{initial.configurationError ? "配置需修复" : initial.configured ? "已配置 · 未验证" : "未配置"}</span>
+        <span className="ml-2 text-xs text-muted-foreground">{initial.configurationError ? "配置需修复" : initial.configured ? "已配置 · 未验证" : "未配置"}</span>
       </header>
 
-      <p className="mb-4 text-[12px] text-muted-foreground">
+      <p className="mb-4 text-xs text-muted-foreground">
         用于类案检索与企业信息匹配。MCP 接入单独配置；计费和数据权益以平台账号为准。
       </p>
       {initial.configurationError && <p role="alert" className="mb-3 text-sm text-destructive">{initial.configurationError}</p>}
 
       <div className="space-y-3">
         <div>
-          <Form.Label name="yuandian-api-key" className="text-[11px]">
+          <Form.Label name="yuandian-api-key" className="text-xs">
             接口密钥（API Key）
             {initial.apiKeyMasked && (
-              <span className="ml-2 font-mono text-[10px] text-muted-foreground">
+              <span className="ml-2 font-mono text-xs text-muted-foreground">
                 当前：{initial.apiKeyMasked}（留空保留原值）
               </span>
             )}
@@ -121,26 +114,26 @@ export function YuandianSettingsForm({
         </div>
 
         <div>
-          <Form.Label name="yuandian-base-url" className="text-[11px]">接口地址（Base URL）</Form.Label>
+          <Form.Label name="yuandian-base-url" className="text-xs">接口地址（Base URL）</Form.Label>
           <Input
             id="yuandian-base-url"
             value={baseUrl}
             onChange={(value) => setBaseUrl(value)}
             placeholder={defaults.baseUrl}
-            className="mt-1 font-mono text-[12px]"
+            className="mt-1 font-mono text-xs"
           />
         </div>
 
         <div>
-          <Form.Label name="yuandian-case-detail-host" className="text-[11px]">案例详情前端域名</Form.Label>
+          <Form.Label name="yuandian-case-detail-host" className="text-xs">案例详情前端域名</Form.Label>
           <Input
             id="yuandian-case-detail-host"
             value={caseDetailHost}
             onChange={(value) => setCaseDetailHost(value)}
             placeholder={defaults.caseDetailHost}
-            className="mt-1 font-mono text-[12px]"
+            className="mt-1 font-mono text-xs"
           />
-          <p className="mt-1 text-[10px] text-muted-foreground">
+          <p className="mt-1 text-xs text-muted-foreground">
             用于「查看全文」外跳，与接口 URL 区分
           </p>
         </div>
@@ -148,7 +141,7 @@ export function YuandianSettingsForm({
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Button theme="solid" onClick={save} disabled={pending} className="gap-1.5">
-          {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          {pending && <Loader2 aria-hidden size="small" spin />}
           保存配置
         </Button>
         <Button
@@ -157,7 +150,7 @@ export function YuandianSettingsForm({
           disabled={testing || pending || changed || !initial.configured}
           className="gap-1.5"
         >
-          {testing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          {testing && <Loader2 aria-hidden size="small" spin />}
           {changed ? "保存后测试" : "测试案例检索（可能计费）"}
         </Button>
         {initial.apiKeyMasked && (
@@ -167,7 +160,7 @@ export function YuandianSettingsForm({
             disabled={pending}
             className="ml-auto gap-1 text-destructive"
           >
-            <Trash2 className="h-3 w-3" />
+            <Trash2 aria-hidden size="small" />
             清除密钥
           </Button>
         )}
@@ -176,22 +169,22 @@ export function YuandianSettingsForm({
       {!changed && testResult && (
         <div
           className={
-            "mt-3 flex items-start gap-2 rounded-md border p-3 text-[12px] " +
+            "mt-3 flex items-start gap-2 rounded-md border p-3 text-xs " +
             (testResult.ok
               ? "border-[var(--semi-color-success-light-active)] bg-[var(--semi-color-success-light-default)] text-[var(--semi-color-success)]"
               : "border-destructive/30 bg-destructive/10 text-destructive")
           }
         >
           {testResult.ok ? (
-            <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <CheckCircle2 aria-hidden size="small" className="mt-0.5 shrink-0" />
           ) : (
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <AlertTriangle aria-hidden size="small" className="mt-0.5 shrink-0" />
           )}
           <span>{testResult.msg}</span>
         </div>
       )}
 
-      <p className="mt-4 text-[11px] text-muted-foreground">
+      <p className="mt-4 text-xs text-muted-foreground">
         申请密钥：
         <a
           href="https://open.chineselaw.com"
@@ -200,7 +193,7 @@ export function YuandianSettingsForm({
           className="ml-1 inline-flex items-center gap-1 text-primary hover:underline"
         >
           元典开放平台
-          <ExternalLink className="h-3 w-3" />
+          <ExternalLink aria-hidden size="small" />
         </a>
       </p>
     </section>

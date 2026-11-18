@@ -1,13 +1,10 @@
-/**
- * 墨案跨页面模式（docs/mockup/v4/design-system.css 的 React 形态）。
- * 只承载视觉结构，不含业务判断；色调由 `@/lib/ui/moan-tones` 映射后传入。
- */
+/** 跨页面共享的 Semi 标题、卡片与业务状态。 */
 import * as React from "react";
 import Link from "next/link";
 import { IconChevronLeft, IconFile } from "@douyinfe/semi-icons";
 import { Avatar, Card, Empty, PageTitle, Tabs, Tag as SemiTag } from "./semi-surfaces";
 import { cn } from "@/lib/utils";
-import type { AvatarTone, MoanTone } from "@/lib/ui/moan-tones";
+import type { AvatarTone, StatusTone } from "@/lib/ui/status-tones";
 
 /* ---------------- 页头 ---------------- */
 export function PageHeader({
@@ -111,7 +108,7 @@ export function WorkspaceTabs<K extends string>({ items, value, onChange, classN
 }
 
 /** 风险阶梯：四格递增，level 0–4 */
-export function RiskLadder({ level, tone, className, label }: { level: number; tone: MoanTone; className?: string; label?: string }) {
+export function RiskLadder({ level, tone, className, label }: { level: number; tone: StatusTone; className?: string; label?: string }) {
   const lt = tone === "red" || tone === "amber" || tone === "blue" || tone === "green" ? tone : "blue";
   return (
     <span role="img" aria-label={label ?? `风险等级 ${level}/4`} className={cn("ladder", `l-${lt}`, className)}>

@@ -10,7 +10,7 @@ import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
 import { Table, Empty, Button, Checkbox, Form, Input, Select, Switch, Toast } from "@douyinfe/semi-ui";
 import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Info, Pencil, Plus, Scale, Search, Trash2 } from "lucide-react";
+import { IconInfoCircle as Info, IconEdit as Pencil, IconPlus as Plus, IconVerify as Scale, IconSearch as Search, IconDelete as Trash2 } from "@douyinfe/semi-icons";
 import type { ProcedureType } from "@prisma/client";
 import {
   createDeadlineRule, updateDeadlineRule, toggleDeadlineRule, deleteDeadlineRule
@@ -173,23 +173,23 @@ export function DeadlineRulesCard({ rules, rail, headerActions }: { rules: Admin
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {headerActions}
-          <Button htmlType="button" theme="solid" size="small" onClick={openCreate} icon={<Plus size={16} aria-hidden />}>新建规则</Button>
+          <Button htmlType="button" theme="solid" size="small" onClick={openCreate} icon={<Plus size="default" aria-hidden />}>新建规则</Button>
         </div>
       </div>
 
       <div className="flow-strip">
         <div className="card flow-card">
-          <div className="flow-ic" style={{ background: "var(--semi-color-primary-light-default)", color: "var(--semi-color-primary-active)" }}><Scale /></div>
+          <div className="flow-ic" style={{ background: "var(--semi-color-primary-light-default)", color: "var(--semi-color-primary-active)" }}><Scale aria-hidden /></div>
           <div><div className="flow-t">① 起算事件发生</div><div className="flow-d">如：判决书送达之日、立案受理之日，由程序环节与材料识别记录</div></div>
         </div>
         <div className="flow-arrow">→</div>
         <div className="card flow-card">
-          <div className="flow-ic" style={{ background: "var(--semi-color-info-light-default)", color: "var(--semi-color-info)" }}><Info /></div>
+          <div className="flow-ic" style={{ background: "var(--semi-color-info-light-default)", color: "var(--semi-color-info)" }}><Info aria-hidden /></div>
           <div><div className="flow-t">② 规则推算期限</div><div className="flow-d">按日 / 月 / 年计算（期间开始日不计入），届满日遇法定休假日由人工核对顺延</div></div>
         </div>
         <div className="flow-arrow">→</div>
         <div className="card flow-card">
-          <div className="flow-ic" style={{ background: "var(--semi-color-warning-light-default)", color: "var(--semi-color-warning)" }}><Search /></div>
+          <div className="flow-ic" style={{ background: "var(--semi-color-warning-light-default)", color: "var(--semi-color-warning)" }}><Search aria-hidden /></div>
           <div><div className="flow-t">③ 阶梯预警推送</div><div className="flow-d">T-3 / T-1 / T-0 / T+1 固定四档，另加规则建议提前档；逾期升级团队负责人</div></div>
         </div>
       </div>
@@ -198,18 +198,17 @@ export function DeadlineRulesCard({ rules, rail, headerActions }: { rules: Admin
         <div className="card" style={{ overflow: "hidden", minWidth: 0 }}>
           <div className="panel-head flex-wrap gap-2">
             <div className="panel-title">
-              <Scale className="ic" strokeWidth={1.8} />
+              <Scale aria-hidden className="ic" />
               规则列表 <SemiTag size="small" color="grey" style={{ marginLeft: 2 }}>{rules.length}</SemiTag>
               <span className="t-xs t-mute" style={{ fontWeight: 400 }}>启用 {rules.filter((r) => r.enabled).length}</span>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <Input className="w-56" value={search} onChange={setSearch} placeholder="按规则名称、起算事件搜索" aria-label="搜索规则" prefix={<Search size={14} aria-hidden />} />
+              <Input className="w-56" value={search} onChange={setSearch} placeholder="按规则名称、起算事件搜索" aria-label="搜索规则" prefix={<Search size="default" aria-hidden />} />
               <FilterSelect label="类别" value={category} options={Object.entries(CATEGORY_CN).map(([value, label]) => ({ value, label }))} onChange={setCategory} />
             </div>
           </div>
           <div className="mo-scroll-x">
             <Table<(typeof filtered)[number]>
-              size="small"
               pagination={false}
               rowKey="id"
               dataSource={filtered}
@@ -230,9 +229,9 @@ export function DeadlineRulesCard({ rules, rail, headerActions }: { rules: Admin
                 { title: "预警阶梯", width: "20%", key: "column5", render: (_, rule) => <OffsetChips remindDays={rule.remindDays} /> },
                 { title: "状态", width: 96, key: "column6", render: (_, rule) => <div className="flex items-center gap-0.5">
                         <Switch size="small" checked={rule.enabled} disabled={pending} onChange={value => toggle(rule, value)} aria-label={`启用期限规则：${rule.name}`} />
-                        <Button htmlType="button" type="tertiary" theme="borderless" size="small" onClick={() => openEdit(rule)} aria-label={`编辑 ${rule.name}`} icon={<Pencil size={14} aria-hidden />} />
+                        <Button htmlType="button" type="tertiary" theme="borderless" size="small" onClick={() => openEdit(rule)} aria-label={`编辑 ${rule.name}`} icon={<Pencil size="default" aria-hidden />} />
                         {!rule.isBuiltIn ? (
-                          <Button htmlType="button" type="danger" theme="borderless" size="small" onClick={() => remove(rule)} aria-label={`删除 ${rule.name}`} icon={<Trash2 size={14} aria-hidden />} />
+                          <Button htmlType="button" type="danger" theme="borderless" size="small" onClick={() => remove(rule)} aria-label={`删除 ${rule.name}`} icon={<Trash2 size="default" aria-hidden />} />
                         ) : null}
                       </div> },
               ]}
@@ -274,7 +273,7 @@ export function DeadlineRulesCard({ rules, rail, headerActions }: { rules: Admin
                 </div>
                 <div className="panel-foot" style={{ padding: "10px 14px" }}>
                   <div className="ex-note">
-                    <Info />
+                    <Info aria-hidden />
                     <span>系统不内置节假日表（每年由国务院调整），届满日遇法定休假日请人工核对顺延。案件内人工修改过的期限会记录<b>修改人与时间</b>，规则调整不回溯。</span>
                   </div>
                 </div>

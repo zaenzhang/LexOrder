@@ -12,7 +12,7 @@ import { Button as SemiButton } from "@douyinfe/semi-ui";
  */
 import { useId, useState, type ReactNode } from "react";
 import { Controller, useController, useFormContext, type FieldErrors } from "react-hook-form";
-import { X } from "lucide-react";
+import { IconClose as X } from "@douyinfe/semi-icons";
 import type { PartyType } from "@prisma/client";
 import { Input, Select } from "@douyinfe/semi-ui";
 import { partyTypeLabel, PARTY_TYPE_OPTIONS } from "@/lib/enums";
@@ -117,7 +117,7 @@ export function PartyCard({
         </SemiButton>
         {removable ? (
           <SemiButton htmlType="button" theme="borderless" type="tertiary" className="!px-2" onClick={onRemove} aria-label="移除当事人">
-            <X />
+            <X aria-hidden />
           </SemiButton>
         ) : null}
       </div>
@@ -135,7 +135,7 @@ export function PartyCard({
                   诉讼地位<span className="star">*</span>
                 </label>
                 {standingSlot}
-                {standingErr?.message ? <div className="mt-1 text-[11px] text-[var(--semi-color-danger)]">{standingErr.message}</div> : null}
+                {standingErr?.message ? <div className="mt-1 text-xs text-[var(--semi-color-danger)]">{standingErr.message}</div> : null}
               </div>
             ) : (
               <div className="fitem" />
@@ -177,7 +177,7 @@ export function PartyCard({
                     placeholder="姓名"
                   />
                 ))}
-              {nameErr?.message ? <div className="mt-1 text-[11px] text-[var(--semi-color-danger)]">{nameErr.message}</div> : null}
+              {nameErr?.message ? <div className="mt-1 text-xs text-[var(--semi-color-danger)]">{nameErr.message}</div> : null}
             </div>
             {!isOrg ? (
               <div className="fitem" style={{ maxWidth: 210 }}>
@@ -223,11 +223,11 @@ export function PartyCard({
                 />
               )}
               {idErr?.message ? (
-                <div className="mt-1 text-[11px] text-[var(--semi-color-danger)]">{idErr.message}</div>
+                <div className="mt-1 text-xs text-[var(--semi-color-danger)]">{idErr.message}</div>
               ) : liveIdError ? (
-                <div className="mt-1 text-[11px] text-[var(--semi-color-warning)]">{liveIdError}</div>
+                <div className="mt-1 text-xs text-[var(--semi-color-warning)]">{liveIdError}</div>
               ) : !isOrg && idType === "ID_CARD" ? (
-                <div className="mt-1 text-[11px] text-[var(--semi-color-text-3)]">只能输入数字或 X，共 18 位（{idValue.length}/18）</div>
+                <div className="mt-1 text-xs text-[var(--semi-color-text-3)]">只能输入数字或 X，共 18 位（{idValue.length}/18）</div>
               ) : null}
             </div>
           </div>

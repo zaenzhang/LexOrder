@@ -3,7 +3,7 @@
 import { Button, Checkbox, Form, Input, Notification, Select, Tag, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil } from "lucide-react";
+import { IconPlus as Plus, IconEdit as Pencil } from "@douyinfe/semi-icons";
 import type { listTeams } from "@/server/teams/actions";
 import { saveTeam } from "@/server/teams/actions";
 import { WorkspaceDialog, DrawerContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/patterns/workspace-dialog";
@@ -16,13 +16,13 @@ type User = { id: string; name: string; role: string; active: boolean };
 export function TeamsView({ teams, users }: { teams: Team[]; users: User[] }) {
   const [editor, setEditor] = useState<Team | "new" | null>(null);
   return <div className="space-y-4">
-    <AdminPageHeader title="律师团队" sub="设置成员后，负责人自动看到成员立案或主办的全部案件。" actions={<Button theme="solid" size="small" onClick={() => setEditor("new")}><Plus />新建团队</Button>} />
+    <AdminPageHeader title="律师团队" sub="设置成员后，负责人自动看到成员立案或主办的全部案件。" actions={<Button theme="solid" size="small" onClick={() => setEditor("new")}><Plus aria-hidden />新建团队</Button>} />
     {teams.length === 0 ? <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">暂无律师团队。先创建团队，再指定负责人和成员。</div> :
       <div className="divide-y rounded-xl border bg-card">{teams.map((team) => <article key={team.id} className="flex items-start justify-between gap-3 p-4">
         <div className="min-w-0 space-y-2"><div className="flex flex-wrap items-center gap-2"><h3 className="font-medium">{team.name}</h3><Tag color={team.active ? "green" : "grey"}>{team.active ? "使用中" : "已停用"}</Tag></div>
           <p className="text-sm text-muted-foreground">负责人：{team.leader.name} · {team.members.length} 位成员</p>
           <p className="text-xs leading-relaxed text-muted-foreground">{team.members.map((m) => `${m.user.name}${m.userId === team.leaderId ? "（负责人）" : m.canViewAllMatters ? "（团队查看）" : ""}${!m.user.active ? "（账号停用）" : ""}`).join("、")}</p>
-        </div><Button theme="borderless" type="tertiary" size="small" onClick={() => setEditor(team)} aria-label={`编辑${team.name}`}><Pencil className="mr-1 h-3.5 w-3.5" />编辑</Button>
+        </div><Button theme="borderless" type="tertiary" size="small" onClick={() => setEditor(team)} aria-label={`编辑${team.name}`}><Pencil aria-hidden size="small" className="mr-1" />编辑</Button>
       </article>)}</div>}
     {editor && <TeamEditor key={editor === "new" ? "new" : editor.id} team={editor === "new" ? null : editor} users={users} onClose={() => setEditor(null)} />}
   </div>;

@@ -5,7 +5,7 @@ import { Button, Select, Tag } from "@douyinfe/semi-ui";
 import { useState, useCallback, useTransition } from "react";
 import { auditActionLabel, auditTargetLabel } from "@/lib/audit-labels";
 import { useRouter } from "next/navigation";
-import { RotateCcw } from "lucide-react";
+import { IconUndo as RotateCcw } from "@douyinfe/semi-icons";
 import { AdminPageHeader } from "@/components/layout/admin-page-header";
 import { shMonthDayTime } from "@/lib/ui/sh-time";
 
@@ -140,7 +140,7 @@ export function AuditView({
 
         {(action !== "ALL" || userId !== "ALL" || days !== "30") && (
           <Button theme="borderless" type="tertiary" size="small" onClick={reset} className="gap-1">
-            <RotateCcw className="h-3.5 w-3.5" />
+            <RotateCcw aria-hidden size="small" />
             重置
           </Button>
         )}
@@ -170,20 +170,20 @@ export function AuditView({
                       </span>
                     )}
                     {it.targetId && (
-                      <span className="font-mono text-[10px] text-muted-foreground">
+                      <span className="font-mono text-xs text-muted-foreground">
                         {it.targetId.slice(0, 8)}
                       </span>
                     )}
                   </div>
                   <Disclosure className="mt-1 text-xs text-muted-foreground" heading="技术详情">
-                    <pre className="mt-1 max-h-48 overflow-auto font-mono text-[10px]">
+                    <pre className="mt-1 max-h-48 overflow-auto font-mono text-xs">
                       {JSON.stringify({ action: it.action, targetType: it.targetType, detail: it.detail }, null, 2)}
                     </pre>
                   </Disclosure>
                 </div>
                 <div className="text-right text-xs">
                   <div>{it.user?.name ?? "—"}</div>
-                  <div className="font-mono text-[10px] text-muted-foreground tabular">
+                  <div className="font-mono text-xs text-muted-foreground tabular">
                     {shMonthDayTime(it.createdAt)}
                   </div>
                 </div>

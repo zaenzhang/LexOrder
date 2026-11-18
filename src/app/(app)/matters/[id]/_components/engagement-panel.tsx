@@ -11,7 +11,7 @@
 import { useId, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Select, Button, Checkbox, Input, Notification, TextArea, Toast } from "@douyinfe/semi-ui";
-import { Handshake, Link2, Loader2, Plus, SquareSlash } from "lucide-react";
+import { IconUserGroup as Handshake, IconLink as Link2, IconLoading as Loader2, IconPlus as Plus, IconClear as SquareSlash } from "@douyinfe/semi-icons";
 import {
   WorkspaceDialog,
   DialogContent,
@@ -165,20 +165,20 @@ export function EngagementPanel({
     <section className="ll-surface">
       <header className="flex items-center justify-between border-b border-[var(--semi-color-border)] px-4 py-3">
         <span className="panel-title">
-          <Handshake className="h-3.5 w-3.5 text-primary" />
+          <Handshake aria-hidden size="small" className="text-primary" />
           委托
-          <span className="font-mono text-[11px] tabular text-muted-foreground">
+          <span className="font-mono text-xs tabular text-muted-foreground">
             {activeEngagements.length}/{engagements.length}
           </span>
         </span>
         {canManage && client && (
           <div className="flex items-center gap-1">
             <Button className="h-7 gap-1" onClick={() => setDialog("link")} type="tertiary" theme="borderless" size="small">
-              <Link2 className="h-3 w-3" />
+              <Link2 aria-hidden size="small" />
               关联已有
             </Button>
             <Button className="h-7 gap-1" onClick={() => setDialog("create")} type="tertiary" theme="borderless" size="small">
-              <Plus className="h-3 w-3" />
+              <Plus aria-hidden size="small" />
               新建委托
             </Button>
           </div>
@@ -203,20 +203,20 @@ export function EngagementPanel({
                       className={`inline-flex h-4 w-1 rounded-full ${terminated ? "bg-border" : "bg-primary"}`}
                       aria-hidden
                     />
-                    <span className={`truncate text-[13px] font-medium ${terminated ? "text-muted-foreground line-through decoration-border" : ""}`}>
+                    <span className={`truncate text-sm font-medium ${terminated ? "text-muted-foreground line-through decoration-border" : ""}`}>
                       {eng.title}
                     </span>
                     <span
-                      className={`rounded-full border px-1.5 py-px text-[10px] ${
+                      className={`rounded-full border px-1.5 py-px text-xs ${
                         terminated
                           ? "border-border bg-muted text-muted-foreground"
-                          : "border-[#B7D8D6] bg-[#E4F1F0] text-[#005054]"
+                          : "border-[var(--semi-color-success-light-active)] bg-[var(--semi-color-success-light-default)] text-[var(--semi-color-success)]"
                       }`}
                       title={terminated ? eng.terminatedReason ?? undefined : undefined}
                     >
                       {terminated ? "已终止" : "生效中"}
                     </span>
-                    <span className="text-[11px] text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       {eng.client.name}
                       {row.validFrom || row.validTo ? (
                         <span className="font-mono tabular">
@@ -238,7 +238,7 @@ export function EngagementPanel({
                       终止原因：{eng.terminatedReason}
                     </p>
                   )}
-                  <p className="mt-1 pl-3 font-mono text-[10.5px] tabular text-muted-foreground/70">
+                  <p className="mt-1 pl-3 font-mono text-xs tabular text-muted-foreground/70">
                     委托起始 {fmtDate(eng.startedAt)}
                     {eng.endedAt ? ` · 终止于 ${fmtDate(eng.endedAt)}` : ""}
                     {" · "}
@@ -254,7 +254,7 @@ export function EngagementPanel({
                     type="tertiary" theme="borderless"
                     size="small"
                   >
-                    <SquareSlash className="h-3 w-3" />
+                    <SquareSlash aria-hidden size="small" />
                     终止
                   </Button>
                 )}
@@ -311,7 +311,7 @@ export function EngagementPanel({
           <DialogFooter>
             <Button onClick={closeDialog} disabled={isPending} type="tertiary" theme="outline">取消</Button>
             <Button onClick={submitCreate} disabled={isPending} theme="solid">
-              {isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              {isPending && <Loader2 aria-hidden size="small" className="mr-1.5" spin />}
               创建
             </Button>
           </DialogFooter>
@@ -332,7 +332,7 @@ export function EngagementPanel({
               <label className="text-xs">委托 <span className="text-destructive">*</span></label>
               {activeOptions === null ? (
                 <div className="flex h-9 items-center gap-2 text-xs text-muted-foreground">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> 正在读取客户委托…
+                  <Loader2 aria-hidden size="small" spin /> 正在读取客户委托…
                 </div>
               ) : activeOptions.length === 0 ? (
                 <p className="text-xs text-muted-foreground">该客户暂无未终止的委托，可先新建。</p>
@@ -359,7 +359,7 @@ export function EngagementPanel({
           <DialogFooter>
             <Button onClick={closeDialog} disabled={isPending} type="tertiary" theme="outline">取消</Button>
             <Button onClick={submitLink} disabled={isPending || !linkEngagementId} theme="solid">
-              {isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              {isPending && <Loader2 aria-hidden size="small" className="mr-1.5" spin />}
               关联
             </Button>
           </DialogFooter>
@@ -388,7 +388,7 @@ export function EngagementPanel({
           <DialogFooter>
             <Button onClick={closeDialog} disabled={isPending} type="tertiary" theme="outline">取消</Button>
             <Button onClick={submitTerminate} disabled={isPending} type="danger" theme="solid">
-              {isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              {isPending && <Loader2 aria-hidden size="small" className="mr-1.5" spin />}
               确认终止
             </Button>
           </DialogFooter>

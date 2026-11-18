@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
-import { FileText, Loader2 } from "lucide-react";
+import { IconArticle as FileText, IconLoading as Loader2 } from "@douyinfe/semi-icons";
 import { Banner, Button, Checkbox, Input, Select, Tag, Toast } from "@douyinfe/semi-ui";
 import { WorkspaceDialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
@@ -110,14 +110,14 @@ export function TemplatePickerDialog({ open, onOpenChange, matterId, matterCateg
     { key: "procedureId", choices: "procedures", label: "程序" },
   ] as const;
 
-  return <WorkspaceDialog open={open} onOpenChange={value => { if (!value) void close(); }}>
+  return <WorkspaceDialog dismissOnBackdrop open={open} onOpenChange={value => { if (!value) void close(); }}>
     <DialogContent className="max-w-4xl" onEscapeKeyDown={event => { if (pending) event.preventDefault(); }}>
       <DialogHeader><DialogTitle>从模板起草</DialogTitle></DialogHeader>
       <div className="grid min-h-0 grid-cols-[220px_minmax(0,1fr)] gap-6">
         <div className="flex max-h-[60vh] flex-col gap-2 overflow-y-auto" aria-label="文书模板">
           {applicable.length === 0 && <p className="text-muted-foreground">暂无适用模板</p>}
           {applicable.map(template => <Button key={template.id} aria-label={template.name} disabled={pending || loading} className="h-auto justify-start whitespace-normal text-left" onClick={() => { if (selectedId !== template.id) void load(template.id); }} htmlType="button" type={selectedId === template.id ? "primary" : "tertiary"} theme={selectedId === template.id ? "light" : "borderless"}>
-            <FileText data-icon="inline-start" />
+            <FileText aria-hidden data-icon="inline-start" />
             <span className="flex min-w-0 flex-col gap-1"><span>{template.name}</span><span className="text-xs text-muted-foreground">{TEMPLATE_CATEGORY_CN[template.category]}</span></span>
           </Button>)}
         </div>
@@ -161,7 +161,7 @@ export function TemplatePickerDialog({ open, onOpenChange, matterId, matterCateg
           </>}
         </div>
       </div>
-      <DialogFooter><Button disabled={pending} onClick={() => void close()} type="tertiary" theme="outline">取消</Button><Button disabled={!preparation || loading || pending || needsRecheck || !reviewed || missing.length > 0 || unselected.length > 0} onClick={submit} theme="solid">{pending && <Loader2 data-icon="inline-start" className="animate-spin" />}生成草稿并下载</Button></DialogFooter>
+      <DialogFooter><Button disabled={pending} onClick={() => void close()} type="tertiary" theme="outline">取消</Button><Button disabled={!preparation || loading || pending || needsRecheck || !reviewed || missing.length > 0 || unselected.length > 0} onClick={submit} theme="solid">{pending && <Loader2 aria-hidden data-icon="inline-start" spin />}生成草稿并下载</Button></DialogFooter>
     </DialogContent>
   </WorkspaceDialog>;
 }

@@ -10,7 +10,7 @@ import { Table, Tabs, Select, Button, Input, Notification, Toast } from "@douyin
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { DollarSign, FileText, Search, Users, Clock3, Plus } from "lucide-react";
+import { IconCoinMoney as DollarSign, IconArticle as FileText, IconSearch as Search, IconUserGroup as Users, IconClock as Clock3, IconPlus as Plus } from "@douyinfe/semi-icons";
 import type { InvoiceReconciliation } from "@/lib/finance/invoice-reconciliation";
 import type { InvoiceRequestRow } from "./invoice-types";
 import type { getReceivablesAging } from "@/server/finance/aging";
@@ -18,7 +18,7 @@ import { RevenueChart } from "@/components/dashboard/revenue-chart";
 import { InvoiceManagementSection } from "./invoice-management";
 import { InvoiceCreateDialog } from "./invoice-create-dialog";
 import { RecordFeeLauncher } from "./record-fee-launcher";
-import { MetricCard, PageHeader } from "@/components/patterns/moan";
+import { MetricCard, PageHeader } from "@/components/patterns/workspace-surfaces";
 
 import { confirmFeeEntry, rejectFeeEntry } from "@/server/finance/actions";
 import { promptDialog } from "@/components/patterns/confirm-dialog";
@@ -222,50 +222,11 @@ export function FinanceViewV4({ entries, monthly, aging, stats, invoiceRequests,
 
       {tab === "ledger" ? (
         <>
-          <div className="fin-grid">
-            <RevenueChart data={monthly} height={190} />
-            <div className="card">
-              <div className="panel-head">
-                <div className="panel-title">
-                  <FileText className="ic" strokeWidth={1.8} />
-                  开票进度
-                </div>
-                <Button htmlType="button" className="t-sm t-mute" onClick={() => setTab("invoices")} theme="borderless" type="tertiary">开票管理 →</Button>
-              </div>
-              {invoiceRows.length === 0 && overdueRows.length === 0 ? (
-                <div className="empty mo-empty-compact"><div className="mo-empty-title">暂无开票申请</div></div>
-              ) : (
-                <>
-                  {invoiceRows.slice(0, overdueRows.length ? 3 : 4).map((r) => (
-                    <div key={r.id} className="inv-row">
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div className="inv-title truncate">{r.matter?.title ?? r.buyerName ?? "无关联案件开票"}{r.title ? ` · ${r.title}` : ""}</div>
-                        <div className="inv-meta truncate">
-                          {yuan(r.amount)} · {r.invoiceType === "SPECIAL" ? "专票" : "普票"} · {r.status === "ISSUED" ? `${r.issuedAt ? mmdd(r.issuedAt) : ""} 已开出${r.invoiceNo ? ` ${r.invoiceNo}` : ""}` : invoiceRequestStatusLabel[r.status]}
-                        </div>
-                      </div>
-                      <SemiTag size="small" color={r.status === "ISSUED" ? "green" : r.status === "REJECTED" ? "red" : "teal"}>{r.status === "ISSUED" ? "已开票" : r.status === "REJECTED" ? "已驳回" : "待处理"}</SemiTag>
-                    </div>
-                  ))}
-                  {overdueRows.slice(0, 1).map((r) => (
-                    <div key={r.id} className="inv-row" style={{ background: "var(--semi-color-danger-light-default)" }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div className="inv-title truncate">{r.matter.clientName ?? r.matter.title} · {r.title}</div>
-                        <div className="inv-meta">{yuan(r.outstanding)} · 逾期 {r.overdueDays} 天未回款</div>
-                      </div>
-                      <Button htmlType="button" onClick={() => setTab("aging")} theme="borderless" type="danger" size="small">催收跟进</Button>
-                    </div>
-                  ))}
-                </>
-              )}
-            </div>
-          </div>
-
           {pendingReceipts.length > 0 ? (
             <div className="card" style={{ overflow: "hidden" }}>
               <div className="panel-head flex-wrap">
                 <div className="panel-title">
-                  <Clock3 className="ic" strokeWidth={1.8} />
+                  <Clock3 aria-hidden className="ic" />
                   待确认实收 <span className="mo-count">{pendingReceipts.length}</span>
                   <span className="t-xs t-mute" style={{ fontWeight: 400 }}>
                     合计 {yuan(pendingReceipts.reduce((s, e) => s + e.amount, 0))} · 确认后才计入已实收并派生分成
@@ -274,7 +235,6 @@ export function FinanceViewV4({ entries, monthly, aging, stats, invoiceRequests,
               </div>
               <div className="mo-scroll-x">
                 <Table<(typeof pendingReceipts)[number]>
-                  size="small"
                   pagination={false}
                   rowKey="id"
                   dataSource={pendingReceipts}
@@ -306,11 +266,11 @@ export function FinanceViewV4({ entries, monthly, aging, stats, invoiceRequests,
           <div className="card" style={{ overflow: "hidden" }}>
             <div className="panel-head flex-wrap">
               <div className="panel-title">
-                <DollarSign className="ic" strokeWidth={1.8} />
+                <DollarSign aria-hidden className="ic" />
                 收付流水 <span className="mo-count">{filtered.length}</span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Input value={q} onChange={setQ} placeholder="按案件、对方户名搜索" aria-label="搜索流水" prefix={<Search size={16} />} style={{ width: 240 }} />
+                <Input value={q} onChange={setQ} placeholder="按案件、对方户名搜索" aria-label="搜索流水" prefix={<Search aria-hidden size="default" />} style={{ width: 240 }} />
                 <Select<Entry["type"] | "all">
                   value={typeFilter ?? "all"}
                   optionList={[
@@ -346,7 +306,6 @@ export function FinanceViewV4({ entries, monthly, aging, stats, invoiceRequests,
             ) : (
               <div className="mo-scroll-x">
                 <Table<(typeof filtered)[number]>
-                  size="small"
                   pagination={false}
                   rowKey="id"
                   dataSource={filtered}
@@ -378,6 +337,45 @@ export function FinanceViewV4({ entries, monthly, aging, stats, invoiceRequests,
             )}
             <div className="panel-foot t-xs t-mute">{stats.ledgerReady?"待确认实收不计入统计；已入账记录不可直接删除。律师费与代收、代垫回收分别统计。":"已确认记录受保护：关联已签署合同或已登记发票号的收付不可物理删除，更正需走关联冲正并留痕"}</div>
           </div>
+          <div className="fin-grid mt-4">
+            <RevenueChart data={monthly} height={190} />
+            <div className="card">
+              <div className="panel-head">
+                <div className="panel-title">
+                  <FileText aria-hidden className="ic" />
+                  开票进度
+                </div>
+                <Button htmlType="button" className="t-sm t-mute" onClick={() => setTab("invoices")} theme="borderless" type="tertiary">开票管理 →</Button>
+              </div>
+              {invoiceRows.length === 0 && overdueRows.length === 0 ? (
+                <div className="empty mo-empty-compact"><div className="mo-empty-title">暂无开票申请</div></div>
+              ) : (
+                <>
+                  {invoiceRows.slice(0, overdueRows.length ? 3 : 4).map((r) => (
+                    <div key={r.id} className="inv-row">
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="inv-title truncate">{r.matter?.title ?? r.buyerName ?? "无关联案件开票"}{r.title ? ` · ${r.title}` : ""}</div>
+                        <div className="inv-meta truncate">
+                          {yuan(r.amount)} · {r.invoiceType === "SPECIAL" ? "专票" : "普票"} · {r.status === "ISSUED" ? `${r.issuedAt ? mmdd(r.issuedAt) : ""} 已开出${r.invoiceNo ? ` ${r.invoiceNo}` : ""}` : invoiceRequestStatusLabel[r.status]}
+                        </div>
+                      </div>
+                      <SemiTag size="small" color={r.status === "ISSUED" ? "green" : r.status === "REJECTED" ? "red" : "teal"}>{r.status === "ISSUED" ? "已开票" : r.status === "REJECTED" ? "已驳回" : "待处理"}</SemiTag>
+                    </div>
+                  ))}
+                  {overdueRows.slice(0, 1).map((r) => (
+                    <div key={r.id} className="inv-row" style={{ background: "var(--semi-color-danger-light-default)" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="inv-title truncate">{r.matter.clientName ?? r.matter.title} · {r.title}</div>
+                        <div className="inv-meta">{yuan(r.outstanding)} · 逾期 {r.overdueDays} 天未回款</div>
+                      </div>
+                      <Button htmlType="button" onClick={() => setTab("aging")} theme="borderless" type="danger" size="small">催收跟进</Button>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+
         </>
       ) : null}
 
@@ -385,11 +383,11 @@ export function FinanceViewV4({ entries, monthly, aging, stats, invoiceRequests,
         <div className="card">
           <div className="panel-head">
             <div className="panel-title">
-              <FileText className="ic" strokeWidth={1.8} />
+              <FileText aria-hidden className="ic" />
               开票管理
             </div>
             <Button htmlType="button" onClick={() => setInvoiceCreateOpen(true)}  size="small" theme="solid" type="primary">
-              <Plus />
+              <Plus aria-hidden />
               新建开票申请
             </Button>
           </div>
@@ -403,7 +401,7 @@ export function FinanceViewV4({ entries, monthly, aging, stats, invoiceRequests,
         <div className="card" style={{ marginTop: 14, overflow: "hidden" }}>
           <div className="panel-head flex-wrap">
             <div className="panel-title">
-              <Clock3 className="ic" strokeWidth={1.8} />
+              <Clock3 aria-hidden className="ic" />
               已开票待收款 / 待核 <span className="mo-count">{issuedUnpaid.length}</span>
               <span className="t-xs t-mute" style={{ fontWeight: 400 }}>
                 {stats.ledgerReady?"按发票金额关联；未关联金额不直接等于客户欠款":"部分回款仍保留；票款关系不明确时不认定结清"}
@@ -412,7 +410,6 @@ export function FinanceViewV4({ entries, monthly, aging, stats, invoiceRequests,
           </div>
           <div className="mo-scroll-x">
             <Table<(typeof issuedUnpaid)[number]>
-              size="small"
               pagination={false}
               rowKey="id"
               dataSource={issuedUnpaid}
@@ -442,7 +439,7 @@ export function FinanceViewV4({ entries, monthly, aging, stats, invoiceRequests,
           <div className="card" style={{ overflow: "hidden" }}>
             <div className="panel-head">
               <div className="panel-title">
-                <Users className="ic" strokeWidth={1.8} />
+                <Users aria-hidden className="ic" />
                 分成流水 <span className="mo-count">{commissionEntries.length}</span>
               </div>
               <span className="t-xs t-mute">分成方案在案件详情「财务明细」中维护</span>
@@ -452,7 +449,6 @@ export function FinanceViewV4({ entries, monthly, aging, stats, invoiceRequests,
             ) : (
               <div className="mo-scroll-x">
                 <Table<(typeof commissionEntries)[number]>
-                  size="small"
                   pagination={false}
                   rowKey="id"
                   dataSource={commissionEntries}
@@ -481,7 +477,7 @@ export function FinanceViewV4({ entries, monthly, aging, stats, invoiceRequests,
           <div className="card" style={{ overflow: "hidden" }}>
             <div className="panel-head">
               <div className="panel-title">
-                <Clock3 className="ic" strokeWidth={1.8} />
+                <Clock3 aria-hidden className="ic" />
                 未核销应收 <span className="mo-count">{aging.items.length}</span>
               </div>
               <span className="t-xs t-mute">余额 = 应收金额 − 已核销；按到期日排序</span>
@@ -491,7 +487,6 @@ export function FinanceViewV4({ entries, monthly, aging, stats, invoiceRequests,
             ) : (
               <div className="mo-scroll-x">
                 <Table<(typeof aging.items)[number]>
-                  size="small"
                   pagination={false}
                   rowKey="id"
                   dataSource={aging.items}

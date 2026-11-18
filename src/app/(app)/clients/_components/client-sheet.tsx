@@ -1,5 +1,7 @@
 "use client";
 
+import { FormField as Field } from "@/components/patterns/form-dialog";
+
 import { Button, Checkbox, Input, Select, Tag, TextArea, Notification, Toast } from "@douyinfe/semi-ui";
 
 import type { z } from "zod";
@@ -7,7 +9,7 @@ import type { z } from "zod";
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { Controller, useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, X, Loader2, Trash2, Star, Sparkles, Search } from "lucide-react";
+import { IconPlus as Plus, IconClose as X, IconLoading as Loader2, IconDelete as Trash2, IconStar as Star, IconAIWandLevel1 as Sparkles, IconSearch as Search } from "@douyinfe/semi-icons";
 import type { Client, Contact } from "@prisma/client";
 
 import {
@@ -231,7 +233,7 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
   }
 
   return (
-    <WorkspaceDialog open={open} onOpenChange={(value) => { if (!value) void requestClose(); }}>
+    <WorkspaceDialog dismissOnBackdrop open={open} onOpenChange={(value) => { if (!value) void requestClose(); }}>
       <DrawerContent
         ref={editorContent}
         onEscapeKeyDown={event => { if (openSelect) event.preventDefault(); }}
@@ -330,7 +332,7 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
                       onChange={value => setValue("idNumber", sanitizePersonIdInput(personIdType, value), { shouldDirty: true, shouldValidate: !!errors.idNumber })}
                     />
                     {watchedIdNumber && personIdError(personIdType, watchedIdNumber) ? (
-                      <p className="text-[11px] text-[var(--semi-color-warning,#b7791f)]">{personIdError(personIdType, watchedIdNumber)}</p>
+                      <p className="text-xs text-[var(--semi-color-warning,#b7791f)]">{personIdError(personIdType, watchedIdNumber)}</p>
                     ) : null}
                   </div>
                 ) : (
@@ -354,17 +356,17 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
                         title="按客户名称在元典搜索，自动回填信用代码 / 法代 / 注册地址"
                       >
                         {aiSearching ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <Loader2 aria-hidden size="small" spin />
                         ) : (
-                          <Sparkles className="h-3 w-3" />
+                          <Sparkles aria-hidden size="small" />
                         )}
                         AI 查找
                       </Button>
                     </div>
                     {candidates && candidates.length > 0 && (
                       <div className="rounded-md border border-border bg-muted/30 p-1.5">
-                        <div className="mb-1 flex items-center gap-1 text-[10px] text-muted-foreground">
-                          <Search className="h-3 w-3" />共 {candidates.length} 条候选，点击回填
+                        <div className="mb-1 flex items-center gap-1 text-xs text-muted-foreground">
+                          <Search aria-hidden size="small" />共 {candidates.length} 条候选，点击回填
                         </div>
                         <ul className="space-y-1">
                           {candidates.map((c) => (
@@ -377,7 +379,7 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
                                 contentClassName="flex-col items-start whitespace-normal text-left text-xs"
                               >
                                 <div className="font-medium">{c.name}</div>
-                                <div className="font-mono text-[10px] text-muted-foreground">
+                                <div className="font-mono text-xs text-muted-foreground">
                                   {c.creditCode}
                                 </div>
                               </Button>
@@ -387,7 +389,7 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
                         <Button theme="borderless" size="small"
                           htmlType="button"
                           onClick={() => setCandidates(null)}
-                          className="mt-1 w-full text-[10px] text-muted-foreground hover:text-foreground"
+                          className="mt-1 w-full text-xs text-muted-foreground hover:text-foreground"
                         >
                           关闭
                         </Button>
@@ -482,7 +484,7 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
                 />
               </Field>
 
-              <Field id={`${formId}-notes`} label="备注" full>
+              <Field id={`${formId}-notes`} label="备注" className="sm:col-span-2">
                 <Controller name={"notes"} control={control} render={({ field: inputField }) => (<TextArea id={`${formId}-notes`} rows={3} placeholder="可选" {...inputField} value={inputField.value ?? ""} />)} />
               </Field>
             </Section>
@@ -508,7 +510,7 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
                   }
                   className="h-7 gap-1"
                 >
-                  <Plus className="h-3.5 w-3.5" />
+                  <Plus aria-hidden size="small" />
                   添加联系人
                 </Button>
               }
@@ -538,7 +540,7 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
                               }
                              }}
                           >
-                            <span className="inline-flex items-center gap-1"><Star className="h-3 w-3" />主要联系人</span>
+                            <span className="inline-flex items-center gap-1"><Star aria-hidden size="small" />主要联系人</span>
                           </Checkbox>
                         </div>
                         {fields.length > 1 && (
@@ -550,7 +552,7 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
                             aria-label={`删除联系人 ${watch(`contacts.${idx}.name`) || idx + 1}`}
                             className="h-7 w-7 p-0 text-destructive"
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <Trash2 aria-hidden size="small" />
                           </Button>
                         )}
                       </div>
@@ -626,7 +628,7 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
               disabled={isPending}
               className="gap-1.5 "
             >
-              {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isPending && <Loader2 aria-hidden size="default" spin />}
               {isEdit ? "保存" : "创建客户"}
             </Button>
           </DialogFooter>
@@ -649,7 +651,6 @@ function Section({
     <section className="mb-6">
       <header className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="h-3 w-0.5 rounded-full bg-primary" />
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {title}
           </h3>
@@ -661,32 +662,6 @@ function Section({
   );
 }
 
-function Field({
-  id,
-  label,
-  required,
-  full,
-  error,
-  children
-}: {
-  id: string;
-  label: string;
-  required?: boolean;
-  full?: boolean;
-  error?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className={cn("space-y-1.5", full && "col-span-2")}>
-      <label id={`${id}-label`} htmlFor={id} className="flex items-center gap-1 text-xs">
-        {label}
-        {required && <span className="text-destructive">*</span>}
-      </label>
-      {children}
-      {error && <p id={`${id}-error`} className="text-xs text-destructive">{error}</p>}
-    </div>
-  );
-}
 
 function TagInput({
   id,
@@ -710,7 +685,7 @@ function TagInput({
           <Button theme="borderless" type="tertiary" size="small"
             htmlType="button"
             onClick={() => onRemove(t)}
-            icon={<X size={12} />}
+            icon={<X aria-hidden size="small" />}
             aria-label={`移除 ${t}`}
           />
         </Tag>

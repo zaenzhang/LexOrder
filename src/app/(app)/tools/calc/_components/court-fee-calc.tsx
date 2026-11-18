@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button, Input, RadioGroup } from "@douyinfe/semi-ui";
-import { Scale, Calculator } from "lucide-react";
+import { IconVerify as Scale, IconPercentage as Calculator } from "@douyinfe/semi-icons";
 import { calcCourtFee, numberToChinese, type CourtFeeCaseType } from "@/lib/legal-calc";
 
 const CASE_TYPES: { value: CourtFeeCaseType; label: string }[] = [
@@ -33,9 +33,9 @@ export function CourtFeeCalc({ calculator }: { calculator: ReturnType<typeof use
   return (
     <section className="ll-surface rounded-lg border border-border p-5">
       <header className="mb-4 flex items-center gap-2">
-        <Scale className="h-4 w-4 text-primary" strokeWidth={1.8} />
+        <Scale aria-hidden size="default" className="text-primary" />
         <h2 className="text-lg">诉讼费计算</h2>
-        <span className="ml-2 text-[10px] text-muted-foreground">
+        <span className="ml-2 text-xs text-muted-foreground">
           《诉讼费用交纳办法》全国统一标准
         </span>
       </header>
@@ -68,7 +68,7 @@ export function CourtFeeCalc({ calculator }: { calculator: ReturnType<typeof use
               placeholder="如 100000"
             />
             {amount > 0 && (
-              <p className="mt-1 text-[10px] text-muted-foreground">
+              <p className="mt-1 text-xs text-muted-foreground">
                 大写：{numberToChinese(amount)}
               </p>
             )}
@@ -77,7 +77,7 @@ export function CourtFeeCalc({ calculator }: { calculator: ReturnType<typeof use
       </div>
 
       <div className="mt-4 flex justify-end">
-        <Button htmlType="button" theme="solid" onClick={compute} icon={<Calculator size={16} aria-hidden />}>
+        <Button htmlType="button" theme="solid" onClick={compute} icon={<Calculator size="default" aria-hidden />}>
           计算
         </Button>
       </div>
@@ -88,7 +88,7 @@ export function CourtFeeCalc({ calculator }: { calculator: ReturnType<typeof use
             <ResultCard label="普通程序" value={result.fee} accent="var(--semi-color-primary)" />
             <ResultCard label="简易程序（减半）" value={result.feeSimplified} accent="var(--semi-color-success)" />
           </div>
-          <p className="mt-3 text-[11px] text-muted-foreground">{result.note}</p>
+          <p className="mt-3 text-xs text-muted-foreground">{result.note}</p>
         </>
       )}
     </section>
@@ -98,7 +98,7 @@ export function CourtFeeCalc({ calculator }: { calculator: ReturnType<typeof use
 function ResultCard({ label, value, accent }: { label: string; value: number; accent: string }) {
   return (
     <div className="rounded-lg border border-border bg-muted/20 p-4">
-      <div className="text-[10px] tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-xs tracking-wider text-muted-foreground">{label}</div>
       <div
         className="mt-1 font-mono text-[26px] font-medium tabular"
         style={{ color: accent }}

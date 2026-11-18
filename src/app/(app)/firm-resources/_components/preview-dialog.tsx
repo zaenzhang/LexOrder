@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, ExternalLink, FileText } from "lucide-react";
+import { IconDownload as Download, IconExternalOpen as ExternalLink, IconArticle as FileText } from "@douyinfe/semi-icons";
 import {
   WorkspaceDialog,
   DialogContent,
@@ -53,7 +53,7 @@ export function PreviewDialog({
       <DialogContent className="flex h-[88vh] w-[92vw] max-w-5xl flex-col gap-0 p-0">
         <DialogHeader className="border-b border-border px-5 py-3">
           <DialogTitle className="flex items-center gap-2 text-base">
-            <FileText className="h-4 w-4 text-primary" />
+            <FileText aria-hidden size="default" className="text-primary" />
             <span className="truncate">{file.name}</span>
           </DialogTitle>
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -62,11 +62,11 @@ export function PreviewDialog({
             </DialogDescription>
             <div className="flex items-center gap-3">
               {canInlinePreview && (
-                <Typography.Text link={{ href: previewUrl, target: "_blank", rel: "noreferrer" }} icon={<ExternalLink size={14} />}>
+                <Typography.Text link={{ href: previewUrl, target: "_blank", rel: "noreferrer" }} icon={<ExternalLink aria-hidden size="default" />}>
                   新窗口打开
                 </Typography.Text>
               )}
-              <Typography.Text link={{ href: downloadUrl }} icon={<Download size={14} />}>下载文件</Typography.Text>
+              <Typography.Text link={{ href: downloadUrl }} icon={<Download aria-hidden size="default" />}>下载文件</Typography.Text>
             </div>
           </div>
         </DialogHeader>
@@ -91,10 +91,10 @@ export function PreviewDialog({
             )
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center text-sm text-muted-foreground">
-              <FileText className="h-10 w-10 opacity-30" />
+              <FileText aria-hidden className="h-10 w-10 opacity-30" />
               <p>
                 浏览器暂不支持直接预览
-                <span className="ml-1 font-mono text-[11px]">
+                <span className="ml-1 font-mono text-xs">
                   ({file.mimeType ?? "未知类型"})
                 </span>
               </p>

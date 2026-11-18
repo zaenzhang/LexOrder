@@ -1,5 +1,7 @@
 "use client";
 
+import { FormField as Field } from "@/components/patterns/form-dialog";
+
 import { ChoiceField } from "@/components/patterns/choice-field";
 import type { z } from "zod";
 
@@ -9,7 +11,7 @@ import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Select, Button, Input, InputNumber, Notification, TextArea, Toast } from "@douyinfe/semi-ui";
 import { FileInput } from "@/components/patterns/file-input";
-import { Loader2, Sparkles } from "lucide-react";
+import { IconLoading as Loader2, IconAIWandLevel1 as Sparkles } from "@douyinfe/semi-icons";
 import {
   WorkspaceDialog,
   DialogContent,
@@ -33,6 +35,7 @@ import {
 import { uploadDocument } from "@/server/documents/actions";
 import { recognizeInvoiceFromImage, type RecognizedInvoice } from "@/server/ai/actions";
 import { shDayKey } from "@/lib/ui/sh-time";
+import { confirmDiscardChanges } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
 
 // ============ AddBillingSheet ============
@@ -55,7 +58,7 @@ export function AddBillingSheet({
     handleSubmit,
     setValue,
     reset,
-    formState: { errors }
+    formState: { errors, isDirty }
   } = useForm<z.input<typeof billingCreateSchema>, unknown, BillingCreateInput>({
     resolver: zodResolver(billingCreateSchema),
     defaultValues: {
@@ -95,9 +98,17 @@ export function AddBillingSheet({
     });
   }
 
+  async function close() {
+    if (isPending) return;
+    if ((isDirty || contractFile) && !await confirmDiscardChanges()) return;
+    reset();
+    setContractFile(null);
+    onOpenChange(false);
+  }
+
   return (
-    <WorkspaceDialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[88vh] w-[92vw] max-w-2xl flex-col gap-0 p-0">
+    <WorkspaceDialog open={open} dismissOnBackdrop onOpenChange={value => { if (!value) void close(); }}>
+      <DialogContent showClose={!isPending} className="flex max-h-[88vh] w-[92vw] max-w-2xl flex-col gap-0 p-0">
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle>新增合同</DialogTitle>
           <DialogDescription className="text-xs">
@@ -128,7 +139,7 @@ export function AddBillingSheet({
                   { value: "CLOSED", label: "已结清" }
                 ]}
                 value={billingStatus}
-                onChange={(v) => setValue("status", v as BillingCreateInput["status"])}
+                onChange={(v) => setValue("status", v as BillingCreateInput["status"], { shouldDirty: true })}
               />
             </Field>
 
@@ -153,7 +164,7 @@ export function AddBillingSheet({
 
           <DialogFooter className="border-t border-border px-6 py-4">
             <Button
-              onClick={() => onOpenChange(false)}
+              onClick={() => void close()}
               disabled={isPending}
               htmlType="button"
               type="tertiary" theme="outline"
@@ -161,7 +172,7 @@ export function AddBillingSheet({
               取消
             </Button>
             <Button disabled={isPending} className="gap-1.5" htmlType="submit" theme="solid">
-              {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isPending && <Loader2 aria-hidden size="default" spin />}
               创建
             </Button>
           </DialogFooter>
@@ -219,7 +230,7 @@ export function AddFeeEntrySheet({
     setValue,
     getValues,
     reset,
-    formState: { errors }
+    formState: { errors, isDirty }
   } = useForm<z.input<typeof feeEntryCreateSchema>, unknown, FeeEntryCreateInput>({
     resolver: zodResolver(feeEntryCreateSchema),
     defaultValues: feeEntryDefaults(matterId)
@@ -248,9 +259,16 @@ export function AddFeeEntrySheet({
     });
   }
 
+  async function close() {
+    if (isPending) return;
+    if (isDirty && !await confirmDiscardChanges()) return;
+    reset();
+    onOpenChange(false);
+  }
+
   return (
-    <WorkspaceDialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[88vh] w-[92vw] max-w-2xl flex-col gap-0 p-0">
+    <WorkspaceDialog open={open} dismissOnBackdrop onOpenChange={value => { if (!value) void close(); }}>
+      <DialogContent showClose={!isPending} className="flex max-h-[88vh] w-[92vw] max-w-2xl flex-col gap-0 p-0">
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle>新增收付记录</DialogTitle>
         </DialogHeader>
@@ -267,7 +285,7 @@ export function AddFeeEntrySheet({
                   { value: "COST", label: "成本" }
                 ]}
                 value={type}
-                onChange={(v) => setValue("type", v as FeeEntryCreateInput["type"])}
+                onChange={(v) => setValue("type", v as FeeEntryCreateInput["type"], { shouldDirty: true })}
               />
             </Field>
 
@@ -287,7 +305,7 @@ export function AddFeeEntrySheet({
               <Field label="关联合同">
                 <> <span className="sr-only" id={selectLabelId + "-1"}>{"关联合同"}</span><Select
                   value={billingId || "none"}
-                  onChange={v => { if (typeof v === "string") setValue("billingId", v === "none" ? "" : v); }}
+                  onChange={v => { if (typeof v === "string") setValue("billingId", v === "none" ? "" : v, { shouldDirty: true }); }}
                   aria-labelledby={selectLabelId + "-1"}
                   className="w-full"
                   motion={false}><Select.Option value="none">不关联</Select.Option>{billings.map((b) => (
@@ -380,7 +398,7 @@ export function AddFeeEntrySheet({
 
           <DialogFooter className="border-t border-border px-6 py-4">
             <Button
-              onClick={() => onOpenChange(false)}
+              onClick={() => void close()}
               disabled={isPending}
               htmlType="button"
               type="tertiary" theme="outline"
@@ -388,7 +406,7 @@ export function AddFeeEntrySheet({
               取消
             </Button>
             <Button disabled={isPending} className="gap-1.5" htmlType="submit" theme="solid">
-              {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isPending && <Loader2 aria-hidden size="default" spin />}
               {type === "RECEIVED" ? "记录实收" : "保存"}
             </Button>
           </DialogFooter>
@@ -436,10 +454,10 @@ function InvoiceOcrBlock({
   return (
     <div className="space-y-1.5 rounded-md border border-dashed border-border bg-muted/20 p-3">
       <label className="flex items-center gap-1.5 text-xs">
-        <Sparkles className="h-3 w-3 text-primary" />
+        <Sparkles aria-hidden size="small" className="text-primary" />
         AI 发票识别（可选）
       </label>
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         上传增值税发票（JPG / PNG / PDF），识别后自动填发票号 / 金额 / 销售方 / 开票日
       </p>
       <div className="flex items-center gap-2">
@@ -456,17 +474,17 @@ function InvoiceOcrBlock({
         <Button
           onClick={recognize}
           disabled={!file || busy}
-          className="h-8 gap-1 text-[11px]"
+          className="h-8 gap-1 text-xs"
           htmlType="button"
           type="tertiary" theme="outline"
           size="small"
         >
-          {busy && <Loader2 className="h-3 w-3 animate-spin" />}
+          {busy && <Loader2 aria-hidden size="small" spin />}
           识别
         </Button>
       </div>
       {preview && (
-        <div className="mt-1.5 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5 rounded border border-border bg-background p-2 text-[10.5px] text-muted-foreground">
+        <div className="mt-1.5 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5 rounded border border-border bg-background p-2 text-xs text-muted-foreground">
           {preview.invoiceType && <div>类型：{preview.invoiceType}</div>}
           {preview.invoiceNumber && (
             <div>
@@ -489,29 +507,3 @@ function InvoiceOcrBlock({
 }
 
 // ============ Shared Field ============
-
-function Field({
-  label,
-  required,
-  error,
-  hint,
-  children
-}: {
-  label: string;
-  required?: boolean;
-  error?: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <label className="flex items-center gap-1 text-xs">
-        {label}
-        {required && <span className="text-destructive">*</span>}
-      </label>
-      {children}
-      {hint && !error && <p className="text-[11px] text-muted-foreground">{hint}</p>}
-      {error && <p className="text-xs text-destructive">{error}</p>}
-    </div>
-  );
-}

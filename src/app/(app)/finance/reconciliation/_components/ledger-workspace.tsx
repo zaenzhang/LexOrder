@@ -8,7 +8,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { WorkspaceDialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/patterns/workspace-dialog";
 
-import { MetricCard } from "@/components/patterns/moan";
+import { MetricCard } from "@/components/patterns/workspace-surfaces";
 import { formatDate } from "@/lib/utils";
 import { moneyKindLabels, dueLabels } from "@/lib/finance/ledger-labels";
 import { allocateLedger, type getFinanceLedger } from "@/server/finance/ledger-actions";
@@ -106,7 +106,6 @@ export function LedgerWorkspace({ data, canWrite, canConfirm, canCorrect, canSet
         <h2 className="mb-1 font-semibold">应收计划与余额</h2>
         <p className="mb-3 text-xs text-muted-foreground">未结清 {openReceivables.length} 项 · 共 {data.receivables.length} 条{data.receivables.length > TABLE_LIMIT && !showAllReceivables ? ` · 当前显示前 ${TABLE_LIMIT} 条` : ""}</p>
         <div className="overflow-x-auto"><Table<(typeof receivableRows)[number]>
-          size="small"
           pagination={false}
           rowKey="id"
           dataSource={receivableRows}
@@ -126,7 +125,6 @@ export function LedgerWorkspace({ data, canWrite, canConfirm, canCorrect, canSet
         <h2 className="mb-1 font-semibold">实收与分配</h2>
         <p className="mb-3 text-xs text-muted-foreground">未核销 {unallocatedPayments.length} 笔 · 共 {data.payments.length} 条{data.payments.length > TABLE_LIMIT && !showAllPayments ? ` · 当前显示前 ${TABLE_LIMIT} 条` : ""}</p>
         <div className="overflow-x-auto"><Table<(typeof paymentRows)[number]>
-          size="small"
           pagination={false}
           rowKey="id"
           dataSource={paymentRows}

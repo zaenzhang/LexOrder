@@ -6,7 +6,7 @@ import { FormDialogContent as DialogContent, FormDialogBody } from "@/components
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Clock } from "lucide-react";
+import { IconLoading as Loader2, IconClock as Clock } from "@douyinfe/semi-icons";
 
 import {
   WorkspaceDialog,
@@ -141,7 +141,7 @@ export function AddTaskDialog({
 
           <div className="space-y-1.5">
             <label htmlFor="task-time" className="flex items-center gap-1 text-xs">
-              <Clock className="h-3 w-3" />
+              <Clock aria-hidden size="small" />
               时间
             </label>
             <div className="flex items-center gap-2">
@@ -194,7 +194,7 @@ export function AddTaskDialog({
             取消
           </Button>
           <Button theme="solid" htmlType="submit" form={formId} disabled={isPending} className="gap-1.5">
-            {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            {isPending && <Loader2 aria-hidden size="default" spin />}
             创建任务
           </Button>
         </DialogFooter>

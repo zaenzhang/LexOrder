@@ -1,7 +1,7 @@
 "use client";
 import { Button, Tag } from "@douyinfe/semi-ui";
 
-import { Loader2, Sparkles, X } from "lucide-react";
+import { IconLoading as Loader2, IconAIWandLevel1 as Sparkles, IconClose as X } from "@douyinfe/semi-icons";
 import {
   WorkspaceDialog,
   DialogContent,
@@ -46,7 +46,7 @@ export function CauseRecommendationDialog({
       <DialogContent className="max-w-lg gap-0 p-0">
         <DialogHeader className="border-b border-border px-5 py-3">
           <DialogTitle className="flex items-center gap-2 text-base">
-            <Sparkles className="h-4 w-4 text-[var(--semi-color-secondary)]" />
+            <Sparkles aria-hidden size="default" className="text-[var(--semi-color-secondary)]" />
             AI 案由推荐
           </DialogTitle>
           <DialogDescription className="text-xs">
@@ -57,7 +57,7 @@ export function CauseRecommendationDialog({
         <div className="flex flex-col gap-2 px-5 py-4">
           {loading ? (
             <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 aria-hidden size="default" spin />
               正在分析案情
             </div>
           ) : errorMessage ? (
@@ -94,7 +94,7 @@ export function CauseRecommendationDialog({
                     </Tag>
                   </span>
                   {path && (
-                    <span className="text-[11px] text-muted-foreground">{path}</span>
+                    <span className="text-xs text-muted-foreground">{path}</span>
                   )}
                   {c.reason && (
                     <span className="text-xs text-foreground/70">{c.reason}</span>
@@ -112,7 +112,7 @@ export function CauseRecommendationDialog({
             size="small"
             onClick={() => onOpenChange(false)}
           >
-            <X className="h-3.5 w-3.5" />
+            <X aria-hidden size="small" />
             不选用
           </Button>
         </DialogFooter>

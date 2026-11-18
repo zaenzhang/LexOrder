@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Loader2 } from "lucide-react";
+import { IconLoading as Loader2 } from "@douyinfe/semi-icons";
 import { Button, Checkbox, Toast } from "@douyinfe/semi-ui";
 import { ColleaguePicker } from "@/components/matters/colleague-picker";
 import { FormDialogBody } from "@/components/patterns/form-dialog";
@@ -63,7 +63,7 @@ export function MatterTeamEditor({ matterId, currentOwnerId, currentMembers, use
     <DialogFooter className="px-6 py-4">
       {error && <p role="alert" className="basis-full text-sm text-destructive">{error}</p>}
       <Button onClick={onCancel} disabled={isPending} htmlType="button" type="tertiary" theme="outline">取消</Button>
-      <Button disabled={isPending || !dirty} htmlType="submit" theme="solid">{isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}保存承办成员</Button>
+      <Button disabled={isPending || !dirty} htmlType="submit" theme="solid">{isPending && <Loader2 aria-hidden size="default" className="mr-1.5" spin />}保存承办成员</Button>
     </DialogFooter>
   </form>;
 }

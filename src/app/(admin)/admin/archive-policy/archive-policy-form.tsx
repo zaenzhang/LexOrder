@@ -3,7 +3,7 @@
 import { Banner, Button, Form, Input, Notification, Select } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpenCheck, ExternalLink } from "lucide-react";
+import { IconFavoriteList as BookOpenCheck, IconExternalOpen as ExternalLink } from "@douyinfe/semi-icons";
 import { saveArchivePolicy, type getArchivePolicySettings } from "@/server/archive/policy";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -33,7 +33,7 @@ export function ArchivePolicyForm({ data }: { data: Data }) {
     <section className="space-y-5 rounded-xl border bg-card p-5">
       <header>
         <h2 className="flex items-center gap-2 text-[14px] font-semibold">
-          <BookOpenCheck className="h-4 w-4 text-primary" />
+          <BookOpenCheck aria-hidden size="default" className="text-primary" />
           现行归档制度
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -82,7 +82,7 @@ export function ArchivePolicyForm({ data }: { data: Data }) {
 
       {sourceFileId && (
         <a href={`/api/firm-files/${sourceFileId}/download?inline=1`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-primary underline">
-          查看当前选择的制度原文 <ExternalLink className="h-3.5 w-3.5" />
+          查看当前选择的制度原文 <ExternalLink aria-hidden size="small" />
         </a>
       )}
 

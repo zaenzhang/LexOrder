@@ -27,13 +27,13 @@ export function AppShell({
 
   return (
     <TopbarActionProvider>
-      <Layout className="min-h-screen bg-[var(--semi-color-bg-0)]">
+      <Layout className="min-h-screen bg-[var(--workspace-background,var(--semi-color-bg-0))]">
         <Topbar onMobileMenuToggle={() => setMobileNavOpen(true)} userAvatar={userAvatar ?? null} />
         <Layout hasSider>
           <Sidebar firm={firm} onOpenTools={() => setToolsOpen(true)} />
           <Layout.Content className="min-w-0" style={{ overflow: "visible" }}>
             {banner}
-            <main className="mx-auto w-full max-w-[1440px] px-4 pb-12 pt-6 sm:px-6">{children}</main>
+            <div className="mx-auto w-full max-w-[1440px] px-4 pb-12 pt-6 sm:px-8">{children}</div>
           </Layout.Content>
         </Layout>
         <MobileNav open={mobileNavOpen} onOpenChange={setMobileNavOpen} firm={firm} onOpenTools={() => setToolsOpen(true)} />

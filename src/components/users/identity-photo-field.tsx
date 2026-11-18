@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Toast } from "@douyinfe/semi-ui";
-import { ImagePlus, X } from "lucide-react";
+import { IconImage as ImagePlus, IconClose as X } from "@douyinfe/semi-icons";
 import Image from "next/image";
 import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
 import { IDENTITY_IMAGE_MAX_BYTES, IDENTITY_IMAGE_MIME_TYPES } from "@/lib/identity-documents";
@@ -53,7 +53,7 @@ export function IdentityPhotoField({ label, file, disabled, error, preview, onCh
         disabled={disabled}
         aria-label={`${choose}${label}`}
         aria-describedby={file ? statusId : undefined}
-        icon={<ImagePlus size={14} aria-hidden />}
+        icon={<ImagePlus size="default" aria-hidden />}
         onClick={() => input.current?.click()}
       >
         {choose}照片
@@ -65,7 +65,7 @@ export function IdentityPhotoField({ label, file, disabled, error, preview, onCh
         size="small"
         disabled={disabled}
         aria-label={`移除${label}`}
-        icon={<X size={14} aria-hidden />}
+        icon={<X size="default" aria-hidden />}
         onClick={() => {
           document.getElementById(pickerId)?.focus();
           onChange(null);

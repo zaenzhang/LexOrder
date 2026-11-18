@@ -1,16 +1,8 @@
-/**
- * 墨案（docs/mockup/v4）颜色纪律的集中映射。
- * teal 只表达品牌与当前交互；blue 进行中；green 完成终态；
- * red 只表达风险或阻断；amber 临期/待办；bronze 归档金线。
- * 页面只取语义色调，不自行判断颜色。
- */
 import type { ClientCooperationStatus, DocumentSourceOrigin, MatterStatus } from "@prisma/client";
 
-export type MoanTone = "teal" | "blue" | "green" | "amber" | "red" | "violet" | "slate" | "bronze";
+export type StatusTone = "teal" | "blue" | "green" | "amber" | "red" | "violet" | "slate" | "bronze";
 
-/** 案卷脊：案件状态 → 脊线色（逾期风险优先于状态） */
-export function matterSpineTone(status: MatterStatus, overdue = false): MoanTone {
-  if (overdue && status !== "CLOSED" && status !== "ARCHIVED") return "red";
+export function matterStatusTone(status: MatterStatus): StatusTone {
   switch (status) {
     case "PENDING_ACCEPTANCE":
       return "amber";
@@ -25,15 +17,11 @@ export function matterSpineTone(status: MatterStatus, overdue = false): MoanTone
   }
 }
 
-export function matterStatusTone(status: MatterStatus): MoanTone {
-  return matterSpineTone(status);
-}
-
 /**
  * 风险阶梯：剩余天数 → 档位与色调。
  * 正常(1) → 关注(2, ≤30 天) → 临期(3, ≤7 天) → 逾期(4)；红永远只属于最后一格与 3 天内的法定期限。
  */
-export function deadlineRisk(daysLeft: number | null | undefined): { level: 0 | 1 | 2 | 3 | 4; tone: MoanTone } {
+export function deadlineRisk(daysLeft: number | null | undefined): { level: 0 | 1 | 2 | 3 | 4; tone: StatusTone } {
   if (daysLeft === null || daysLeft === undefined) return { level: 0, tone: "slate" };
   if (daysLeft < 0) return { level: 4, tone: "red" };
   if (daysLeft <= 3) return { level: 3, tone: "red" };
@@ -76,7 +64,7 @@ export function avatarTone(seed: string | null | undefined): AvatarTone {
 }
 
 /** 审批事项 → 徽章色调 */
-export function approvalActionTone(action: string): MoanTone {
+export function approvalActionTone(action: string): StatusTone {
   if (action.includes("INTAKE") || action.includes("MATTER")) return "amber";
   if (action.includes("SEAL")) return "amber";
   if (action.includes("INVOICE")) return "teal";
@@ -85,11 +73,11 @@ export function approvalActionTone(action: string): MoanTone {
   return "slate";
 }
 
-export function statusTagColor(tone: MoanTone) {
+export function statusTagColor(tone: StatusTone) {
   return ({ teal: "teal", blue: "blue", green: "green", amber: "amber", red: "red", violet: "violet", slate: "grey", bronze: "amber" } as const)[tone];
 }
 
-export const clientCooperationTone: Record<ClientCooperationStatus, MoanTone> = {
+export const clientCooperationTone: Record<ClientCooperationStatus, StatusTone> = {
   POTENTIAL: "slate",
   NEGOTIATING: "amber",
   SIGNED: "teal",

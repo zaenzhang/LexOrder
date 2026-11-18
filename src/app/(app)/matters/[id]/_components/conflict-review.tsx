@@ -5,7 +5,7 @@ import { Button as SemiButton } from "@douyinfe/semi-ui";
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { TextArea, Toast } from "@douyinfe/semi-ui";
-import { ShieldAlert } from 'lucide-react';
+import { IconShield as ShieldAlert } from "@douyinfe/semi-icons";
 import { runMatterReview, decideMatterReview } from '@/server/conflicts/matter-actions';
 import type { readMatterReview } from '@/server/conflicts/matter-review';
 import { conflictConclusionLabel } from '@/lib/enums';
@@ -37,7 +37,7 @@ export function MatterConflictReview({ matterId, data, canWrite }: { matterId: s
   return (
     <div className="card" aria-label="利益冲突复核">
       <div className="rail-sec-head">
-        <ShieldAlert className="h-[15px] w-[15px] text-[var(--semi-color-warning)]" strokeWidth={1.8} />
+        <ShieldAlert aria-hidden className="h-[15px] w-[15px] text-[var(--semi-color-warning)]" />
         利益冲突复核
         <SemiTag size="small" color="amber">待复核</SemiTag>
       </div>

@@ -2,13 +2,13 @@
 
 import { Card, Empty } from "@douyinfe/semi-ui";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
-import { LineChart as LineChartIcon } from "lucide-react";
+import { IconActivity as LineChartIcon } from "@douyinfe/semi-icons";
 
 export function RevenueChart({ data, height = 196 }: { data: { month: string; received: number; receivable: number }[]; height?: number }) {
   const empty = data.every((d) => !d.received && !d.receivable);
   return (
     <Card
-      title={<h2 className="flex items-center gap-2"><LineChartIcon size={16} aria-hidden />近 6 个月实收与应收</h2>}
+      title={<h2 className="flex items-center gap-2"><LineChartIcon size="default" aria-hidden />近 6 个月实收与应收</h2>}
       headerExtraContent={!empty ? <span className="whitespace-nowrap text-xs text-[var(--semi-color-text-2)]">实收 / 应收</span> : undefined}
       className="h-full min-w-0"
     >

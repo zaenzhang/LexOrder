@@ -42,7 +42,7 @@ export function ClientHistoryPanel(props: PanelProps) {
     loading: !initialMatches, failed: initialMatches && Boolean(initialError),
   };
   if (!location.success) return <section className="card p-4 space-y-3"><p role="alert" className="text-sm text-destructive">客户动态位置无效，请重新打开客户动态</p>
-    <Link className="btn btn-secondary btn-sm" href={clientHistoryHref(clientId, { returnTo })}>查看最新客户动态</Link></section>;
+    <Link className="workspace-action-link" href={clientHistoryHref(clientId, { returnTo })}>查看最新客户动态</Link></section>;
   const currentReturn = location.data.returnTo ?? returnTo;
   return <section className="card min-w-0" aria-labelledby="client-history-title" aria-busy={status.loading}>
     <div className="panel-head"><h2 id="client-history-title" className="panel-title" style={{ fontSize: 13 }}>客户动态</h2></div>

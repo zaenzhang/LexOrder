@@ -6,7 +6,7 @@ import { Button, Checkbox, Input, Radio, Notification, Toast } from "@douyinfe/s
 /** 墨案 10 客户详情的交互零件：疑似重复横幅 + 合并向导、添加联系人 */
 import { useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { GitMerge, Loader2, Plus, ScanSearch } from "lucide-react";
+import { IconBranch as GitMerge, IconLoading as Loader2, IconPlus as Plus, IconScan as ScanSearch } from "@douyinfe/semi-icons";
 import { mergeClientsByCode } from "@/server/clients/dedup";
 import { addContact } from "@/server/clients/actions";
 import { WorkspaceDialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
@@ -58,7 +58,7 @@ export function MergeBanner({
     <>
       {s ? (
         <div className="merge-banner">
-          <div className="ic-wrap"><ScanSearch /></div>
+          <div className="ic-wrap"><ScanSearch aria-hidden /></div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="merge-t">发现疑似同一主体的客户档案</div>
             <div className="merge-d">
@@ -75,7 +75,7 @@ export function MergeBanner({
       {!s ? (
         <Button theme="borderless" size="small" htmlType="button" aria-haspopup="dialog" aria-expanded={open} aria-controls={dialogId}
           onClick={event => { trigger.current = event.currentTarget; setOpen(true); }} data-merge-trigger>
-          <GitMerge />
+          <GitMerge aria-hidden />
           合并重复档案
         </Button>
       ) : null}
@@ -93,7 +93,7 @@ export function MergeBanner({
                   <Radio key={x.id} className="flex items-center gap-2" name="merge-suspect" checked={code === (x.internalCode ?? "")} onChange={() => setCode(x.internalCode ?? "")} disabled={pending || !x.internalCode}>
                     <span className="min-w-0 flex-1 truncate font-[550]">{x.name}</span>
                     <SemiTag size="small" color="amber">{x.reason}</SemiTag>
-                    <span className="font-mono text-[11px] text-[var(--semi-color-text-2)]">{x.internalCode ?? "无编号"}</span>
+                    <span className="font-mono text-xs text-[var(--semi-color-text-2)]">{x.internalCode ?? "无编号"}</span>
                   </Radio>
                 ))}
               </div>
@@ -110,7 +110,7 @@ export function MergeBanner({
           <DialogFooter>
             <Button theme="outline" size="small" htmlType="button"  onClick={() => setOpen(false)} disabled={pending}>取消</Button>
             <Button theme="solid" size="small" htmlType="button"  onClick={submit} disabled={pending}>
-              {pending ? <Loader2 className="animate-spin" /> : <GitMerge />}
+              {pending ? <Loader2 aria-hidden spin /> : <GitMerge aria-hidden />}
               确认合并
             </Button>
           </DialogFooter>
@@ -148,7 +148,7 @@ export function AddContactButton({ clientId }: { clientId: string }) {
     <WorkspaceDialog open={open} onOpenChange={value => { if (!pending) setOpen(value); }}>
         <Button htmlType="button" theme="borderless" size="small" aria-haspopup="dialog" aria-expanded={open} aria-controls={`${formId}-dialog`}
           onClick={event => { trigger.current = event.currentTarget; setOpen(true); }}>
-          <Plus />
+          <Plus aria-hidden />
           添加联系人
         </Button>
         <DialogContent id={`${formId}-dialog`} className="sm:max-w-[460px]" onCloseAutoFocus={event => { event.preventDefault(); trigger.current?.focus({ preventScroll: true }); }}>
@@ -164,7 +164,7 @@ export function AddContactButton({ clientId }: { clientId: string }) {
           </fieldset>
           <DialogFooter>
             <Button theme="outline" size="small" htmlType="button"  onClick={() => setOpen(false)} disabled={pending}>取消</Button>
-            <Button theme="solid" size="small" htmlType="button"  onClick={submit} disabled={pending}>{pending ? <Loader2 className="animate-spin" /> : null}添加</Button>
+            <Button theme="solid" size="small" htmlType="button"  onClick={submit} disabled={pending}>{pending ? <Loader2 aria-hidden spin /> : null}添加</Button>
           </DialogFooter>
         </DialogContent>
     </WorkspaceDialog>

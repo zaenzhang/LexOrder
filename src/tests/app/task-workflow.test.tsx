@@ -21,7 +21,7 @@ vi.mock("@/server/reminders/work-actions", () => actions);
 vi.mock("@/components/matters/intake-handover-panel", () => ({ IntakeHandoverPanel: (props: { data: unknown; intakeId?: string }) => { actions.intakeHandover(props); return null; } }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: actions.refresh }) }));
 vi.mock("@douyinfe/semi-ui", async (load) => ({ ...await load<typeof import("@douyinfe/semi-ui")>(), Toast: { success: actions.success, error: actions.error }, Notification: { success: actions.success, error: actions.error } }));
-vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: actions.confirm }));
+vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: actions.confirm, confirmDiscardChanges: () => actions.confirm({ title: "放弃未保存的修改？", cancelText: "继续编辑", initialFocus: "cancel" }) }));
 
 const matterId = "cm3matter00000000000000001";
 const userId = "cm3person00000000000000001";
@@ -163,25 +163,34 @@ describe("任务弹窗的键盘返回", () => {
     expect(original.isConnected).toBe(false);
   });
 
-  it("办结任务被默认列表滤掉后，关闭详情回到任务标题", async () => {
+  it("办结后列表重读保留原行，按原行回焦，历史筛选继续关闭", async () => {
     actions.changeWork.mockResolvedValue({ ok: true });
     render(<TaskWorkPanel matterId={matterId} />);
     fireEvent.click(await screen.findByRole("button", { name: "收集付款凭证" }));
     fireEvent.click(await screen.findByRole("button", { name: "办结任务" }));
     fireEvent.change(screen.getByLabelText("处置结果"), { target: { value: "已经核对原件" } });
-    actions.getTaskWorkspace.mockResolvedValue(workspace([]));
-    actions.getTaskWorkflow.mockResolvedValue(detail(task({ responsibility: { ...task().responsibility, state: "DONE" } })));
+    const completed = task({ responsibility: { ...task().responsibility, state: "DONE" } });
+    let finishList!: (data: TaskWorkflowWorkspace) => void;
+    actions.getTaskWorkspace.mockImplementationOnce(() => new Promise(resolve => { finishList = resolve; }));
+    actions.getTaskWorkflow.mockResolvedValue(detail(completed));
     fireEvent.click(screen.getByRole("button", { name: "确认办结任务" }));
     await screen.findByText("已办结");
+    expect(actions.getTaskWorkspace).toHaveBeenLastCalledWith({ matterId, includeClosed: false, returnTaskId: taskId });
     fireEvent.click(screen.getByRole("button", { name: "关闭详情" }));
     await waitFor(() => expect(screen.getByRole("heading", { name: "任务" })).toHaveFocus());
+    await act(async () => finishList(workspace([completed])));
+    expect(await screen.findByRole("button", { name: "收集付款凭证" })).toHaveFocus();
+    expect(screen.getByRole("checkbox", { name: "显示已办结和已取消" })).not.toBeChecked();
   });
 
   it("不可用的任务深链关闭后回到任务区，不尝试聚焦不存在的入口", async () => {
     actions.getTaskWorkflow.mockRejectedValue(new Error("任务不属于当前事项"));
-    render(<TaskWorkPanel matterId={matterId} selectedTaskId={otherTaskId} />);
+    const onTaskSelect = vi.fn();
+    const view = render(<TaskWorkPanel matterId={matterId} selectedTaskId={otherTaskId} onTaskSelect={onTaskSelect} />);
     await screen.findByRole("alert");
     fireEvent.click(screen.getByRole("button", { name: "关闭详情" }));
+    await waitFor(() => expect(onTaskSelect).toHaveBeenCalledWith(null, "push"));
+    view.rerender(<TaskWorkPanel matterId={matterId} selectedTaskId={null} onTaskSelect={onTaskSelect} />);
     await waitFor(() => expect(screen.getByRole("heading", { name: "任务" })).toHaveFocus());
   });
 
@@ -281,7 +290,7 @@ describe("G02 首页与完整任务责任总览", () => {
     expect(within(link).getByText("待收成果：银行付款回单")).toBeVisible();
     expect(within(link).getByText("前置未完成 1 项（含已取消 1 项）")).toBeVisible();
     expect(screen.getByRole("link", { name: /历史原任务/ })).toHaveAttribute("href", "/matters/CASE-G02?view=work&workPane=tasks");
-    expect(screen.getByRole("link", { name: "打开任务责任总览 →" })).toHaveAttribute("href", "/schedule#work-responsibilities");
+    expect(screen.getByRole("link", { name: "打开任务责任总览 →" })).toHaveAttribute("href", "/schedule?section=responsibilities#work-responsibilities");
     expect(screen.getByText("本人共 8 项任务，逾期任务优先")).toBeVisible();
   });
 
@@ -409,6 +418,21 @@ describe("事项任务的同一对象与保稿", () => {
     expect(actions.createTask.mock.calls[0][0].requestKey).toBe(actions.createTask.mock.calls[1][0].requestKey);
     expect(onCreated).toHaveBeenCalledWith(createdId, null);
     expect(actions.getTaskWorkflow).toHaveBeenLastCalledWith(createdId, matterId);
+  });
+
+  it("关闭后可重新打开同一待办，回焦发生在受控关闭后", async () => {
+    const view = render(<TaskWorkPanel matterId={matterId} selectedTaskId={taskId} />);
+    const row = await screen.findByRole("button", { name: "收集付款凭证" });
+    await screen.findByRole("button", { name: "关闭详情" });
+    // 父级 URL 更新尚未提交时，保留遮罩，避免点击原行后刷新出同一个 ID。
+    fireEvent.click(screen.getByRole("button", { name: "关闭详情" }));
+    await act(async () => {});
+    expect(screen.getByRole("dialog")).toBeVisible();
+    view.rerender(<TaskWorkPanel matterId={matterId} selectedTaskId={null} />);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(row).toHaveFocus());
+    view.rerender(<TaskWorkPanel matterId={matterId} selectedTaskId={taskId} />);
+    expect(await screen.findByRole("button", { name: "关闭详情" })).toBeVisible();
   });
 
   it("登记等待失败及切区保留草稿；重试复用同一个 waitingId，检查时间不走任务改期", async () => {

@@ -3,7 +3,7 @@
 import { Button, Input, Popover, Select } from "@douyinfe/semi-ui";
 
 import { useId, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { IconChevronDown as ChevronDown } from "@douyinfe/semi-icons";
 
 import { clientHistoryFiltersSchema, historySourceLabels, type ClientHistoryFilters as Filters, type ClientHistoryMatter, type HistorySource } from "@/lib/clients/history";
 import { getClientHistoryMatterPage } from "@/server/clients/history-actions";
@@ -42,7 +42,7 @@ export function ClientHistoryFilters({ clientId, filters, selectedMatter, loadin
           <Button htmlType="button" theme="borderless" size="small" onClick={() => { closeDates(); onChange({ ...filters, from: undefined, to: undefined }); }}>清除日期</Button></div>
       </div>}>
       <Button htmlType="button" theme="outline" size="small" aria-label={`筛选动态日期：${dateLabel}`}>
-        {dateLabel}<ChevronDown className="ml-1 h-3.5 w-3.5" aria-hidden />
+        {dateLabel}<ChevronDown size="small" className="ml-1" aria-hidden />
       </Button>
     </Popover>
     <span id={`${id}-source-label`} className="sr-only">动态类型</span>

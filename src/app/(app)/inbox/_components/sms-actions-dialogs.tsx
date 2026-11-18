@@ -6,7 +6,7 @@ import { DeadlineDueFields } from "@/components/matters/deadline-due-fields";
 import { deadlineDueDraft, deadlineDueFromDraft } from "@/lib/deadline-due";
 
 import { useId, useRef, useState, useTransition } from "react";
-import { Loader2, Gavel, Clock, FileDigit } from "lucide-react";
+import { IconLoading as Loader2, IconVerify as Gavel, IconClock as Clock, IconArticle as FileDigit } from "@douyinfe/semi-icons";
 import {
   WorkspaceDialog,
   DialogContent,
@@ -100,14 +100,14 @@ export function GenerateHearingDialog({
       <DialogContent ref={dialogRef} onEscapeKeyDown={event => { if (pickerOpen) event.preventDefault(); }} className="max-h-[88vh] w-[92vw] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Gavel className="h-4 w-4 text-primary" />
+            <Gavel aria-hidden size="default" className="text-primary" />
             生成开庭 · {matter.internalCode} {matter.title}
           </DialogTitle>
         </DialogHeader>
 
         <fieldset disabled={pending} className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div className="md:col-span-2">
-            <label id={`${formId}-procedure-label`} className="text-[11px]">关联程序 *</label>
+            <label id={`${formId}-procedure-label`} className="text-xs">关联程序 *</label>
             <Select<string>
               aria-labelledby={`${formId}-procedure-label`}
               className="mt-2"
@@ -126,7 +126,7 @@ export function GenerateHearingDialog({
           </div>
 
           <div>
-            <label htmlFor={`${formId}-title`} className="text-[11px]">标题 *</label>
+            <label htmlFor={`${formId}-title`} className="text-xs">标题 *</label>
             <Input
               id={`${formId}-title`} value={title}
               onChange={setTitle}
@@ -136,7 +136,7 @@ export function GenerateHearingDialog({
           </div>
 
           <div>
-            <label htmlFor={`${formId}-date`} className="text-[11px]">开庭时间 *</label>
+            <label htmlFor={`${formId}-date`} className="text-xs">开庭时间 *</label>
             <Input
               type="datetime-local"
               id={`${formId}-date`} value={dateStr}
@@ -146,22 +146,22 @@ export function GenerateHearingDialog({
           </div>
 
           <div>
-            <label htmlFor={`${formId}-room`} className="text-[11px]">法庭</label>
+            <label htmlFor={`${formId}-room`} className="text-xs">法庭</label>
             <Input id={`${formId}-room`} value={room} onChange={setRoom} className="mt-1" />
           </div>
 
           <div>
-            <label htmlFor={`${formId}-judge`} className="text-[11px]">承办法官</label>
+            <label htmlFor={`${formId}-judge`} className="text-xs">承办法官</label>
             <Input id={`${formId}-judge`} value={judge} onChange={setJudge} className="mt-1" />
           </div>
 
           <div className="md:col-span-2">
-            <label htmlFor={`${formId}-notes`} className="text-[11px]">备注</label>
+            <label htmlFor={`${formId}-notes`} className="text-xs">备注</label>
             <TextArea
               id={`${formId}-notes`} value={notes}
               onChange={setNotes}
               rows={2}
-              className="mt-1 text-[12px]"
+              className="mt-1 text-xs"
             />
           </div>
         </fieldset>
@@ -171,7 +171,7 @@ export function GenerateHearingDialog({
             取消
           </Button>
           <Button onClick={submit} disabled={pending}>
-            {pending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+            {pending && <Loader2 aria-hidden size="small" className="mr-1.5" spin />}
             生成开庭
           </Button>
         </DialogFooter>
@@ -302,14 +302,14 @@ export function GenerateDeadlineDialog({
       <DialogContent ref={dialogRef} onEscapeKeyDown={event => { if (openSelect) event.preventDefault(); }} className="max-h-[88vh] w-[92vw] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-primary" />
+            <Clock aria-hidden size="default" className="text-primary" />
             生成期限 · {matter.internalCode} {matter.title}
           </DialogTitle>
         </DialogHeader>
 
         <fieldset disabled={pending} className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div className="md:col-span-2">
-            <label id={`${formId}-procedure-label`} className="text-[11px]">关联程序 *</label>
+            <label id={`${formId}-procedure-label`} className="text-xs">关联程序 *</label>
             <Select<string>
               aria-labelledby={`${formId}-procedure-label`}
               className="mt-2"
@@ -328,7 +328,7 @@ export function GenerateDeadlineDialog({
           </div>
 
           <div className="md:col-span-2">
-            <label id={`${formId}-category-label`} className="text-[11px]">期限类别 *</label>
+            <label id={`${formId}-category-label`} className="text-xs">期限类别 *</label>
             <Select<DeadlineCategory>
               aria-labelledby={`${formId}-category-label`}
               className="mt-2"
@@ -344,7 +344,7 @@ export function GenerateDeadlineDialog({
           </div>
 
           <div className="md:col-span-2">
-            <label htmlFor={`${formId}-title`} className="text-[11px]">标题 *</label>
+            <label htmlFor={`${formId}-title`} className="text-xs">标题 *</label>
             <Input
               id={`${formId}-title`} value={title}
               onChange={setTitle}
@@ -356,7 +356,7 @@ export function GenerateDeadlineDialog({
           <DeadlineDueFields value={dueDraft} onChange={setDueDraft} disabled={pending} />
 
           <div>
-            <label htmlFor={`${formId}-remind`} className="text-[11px]">提前提醒（天）</label>
+            <label htmlFor={`${formId}-remind`} className="text-xs">提前提醒（天）</label>
             <Input
               type="number"
               min={1}
@@ -368,12 +368,12 @@ export function GenerateDeadlineDialog({
           </div>
 
           <div className="md:col-span-2">
-            <label htmlFor={`${formId}-basis`} className="text-[11px]">期限依据</label>
+            <label htmlFor={`${formId}-basis`} className="text-xs">期限依据</label>
             <TextArea
               id={`${formId}-basis`} value={basis}
               onChange={setBasis}
               rows={2}
-              className="mt-1 text-[12px]"
+              className="mt-1 text-xs"
             />
           </div>
         </fieldset>
@@ -383,7 +383,7 @@ export function GenerateDeadlineDialog({
             取消
           </Button>
           <Button onClick={submit} disabled={pending}>
-            {pending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+            {pending && <Loader2 aria-hidden size="small" className="mr-1.5" spin />}
             生成期限
           </Button>
         </DialogFooter>
@@ -442,14 +442,14 @@ export function BackfillCaseNumberDialog({
       <DialogContent ref={dialogRef} onEscapeKeyDown={event => { if (openSelect) event.preventDefault(); }} className="w-[92vw] max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileDigit className="h-4 w-4 text-primary" />
+            <FileDigit aria-hidden size="default" className="text-primary" />
             案号回填 · {matter.internalCode}
           </DialogTitle>
         </DialogHeader>
 
         <fieldset disabled={pending} className="space-y-3">
           <div>
-            <label id={`${formId}-number-label`} className="text-[11px]">短信解析出的案号 *</label>
+            <label id={`${formId}-number-label`} className="text-xs">短信解析出的案号 *</label>
             <Select<string>
               aria-labelledby={`${formId}-number-label`}
               className="mt-2"
@@ -464,7 +464,7 @@ export function BackfillCaseNumberDialog({
             />
           </div>
           <div>
-            <label id={`${formId}-procedure-label`} className="text-[11px]">回填到程序（仅列出尚无案号的程序） *</label>
+            <label id={`${formId}-procedure-label`} className="text-xs">回填到程序（仅列出尚无案号的程序） *</label>
             <Select<string>
               aria-labelledby={`${formId}-procedure-label`}
               className="mt-2"
@@ -481,7 +481,7 @@ export function BackfillCaseNumberDialog({
               onChange={value => { if (typeof value === "string") setProcedureId(value); }}
             />
           </div>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             已有案号的程序不可覆盖；如需更正请到案件详情的程序信息中修改。
           </p>
         </fieldset>
@@ -491,7 +491,7 @@ export function BackfillCaseNumberDialog({
             取消
           </Button>
           <Button onClick={submit} disabled={pending || !caseNumber || !procedureId}>
-            {pending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+            {pending && <Loader2 aria-hidden size="small" className="mr-1.5" spin />}
             回填案号
           </Button>
         </DialogFooter>

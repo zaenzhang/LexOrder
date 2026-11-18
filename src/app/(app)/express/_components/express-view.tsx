@@ -3,7 +3,7 @@
 import { Tabs, Select, Button, Input, RadioGroup, Tag, Notification, Toast } from "@douyinfe/semi-ui";
 import { useRef, useState, useMemo, useTransition } from "react";
 import Link from "next/link";
-import { Package, Search, RefreshCw, Trash2, Briefcase, ArrowDownToLine, ArrowUpFromLine, ExternalLink, AlertTriangle } from "lucide-react";
+import { IconBox as Package, IconSearch as Search, IconRefresh as RefreshCw, IconDelete as Trash2, IconBriefcase as Briefcase, IconDownload as ArrowDownToLine, IconUpload as ArrowUpFromLine, IconExternalOpen as ExternalLink, IconAlertTriangle as AlertTriangle } from "@douyinfe/semi-icons";
 import type { Prisma, ExpressDirection } from "@prisma/client";
 
 import {
@@ -20,7 +20,7 @@ import { cn, formatDateTime } from "@/lib/utils";
 import { createExpress, refreshExpress, deleteExpress } from "@/server/express/actions";
 import { SUPPORTED_COMPANIES, detectCompany } from "@/lib/express/companies";
 import { matterHref } from "@/lib/matters/route";
-import { PageHeader } from "@/components/patterns/moan";
+import { PageHeader } from "@/components/patterns/workspace-surfaces";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { useTopbarAction } from "@/components/layout/topbar-action";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -93,8 +93,8 @@ export function ExpressView({
       </div>
 
       {!configured && (
-        <div className="flex items-start gap-2 rounded-md border border-[var(--semi-color-warning-light-active)] bg-[var(--semi-color-warning-light-default)] p-3 text-[12px] text-[var(--semi-color-warning)]">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <div className="flex items-start gap-2 rounded-md border border-[var(--semi-color-warning-light-active)] bg-[var(--semi-color-warning-light-default)] p-3 text-xs text-[var(--semi-color-warning)]">
+          <AlertTriangle aria-hidden size="small" className="mt-0.5 shrink-0" />
           <div>
             未配置任何快递接入。记录可创建但物流状态拉不到。
             <Link href="/admin/express" target="_blank" rel="noopener" className="ml-1 font-medium underline">
@@ -110,7 +110,7 @@ export function ExpressView({
             value={search}
             onChange={(e) => setSearch(e)}
             placeholder="搜索单号 / 用途 / 收件人 / 案件"
-            prefix={<Search size={16} />}
+            prefix={<Search aria-hidden size="default" />}
           />
         </div>
         <Tabs activeKey={direction} onChange={key => setDirection(key as DirectionFilter)}
@@ -125,7 +125,7 @@ export function ExpressView({
       <div>
         {filtered.length === 0 ? (
           <div className="ll-surface rounded-lg border border-border p-12 text-center text-sm text-muted-foreground">
-            <Package className="mx-auto mb-2 h-6 w-6 opacity-40" />
+            <Package aria-hidden size="extra-large" className="mx-auto mb-2 opacity-40" />
             {items.length === 0
               ? "暂无快递追踪记录，点上方「新建追踪」开始"
               : "没有匹配的记录"}
@@ -180,15 +180,15 @@ function Card({ e }: { e: Row }) {
   return (
     <div className="ll-surface flex flex-col gap-2 rounded-lg border border-border p-4">
       {/* 行 1：方向 + 公司 + 状态 */}
-      <div className="flex flex-wrap items-center gap-2 text-[11px]">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
         {e.direction === "OUTBOUND" ? (
           <span className="inline-flex items-center gap-1 rounded-full bg-[var(--semi-color-info-light-default)] px-2 py-0.5 text-[var(--semi-color-info)]">
-            <ArrowUpFromLine className="h-3 w-3" />
+            <ArrowUpFromLine aria-hidden size="small" />
             寄出
           </span>
         ) : (
           <span className="inline-flex items-center gap-1 rounded-full bg-[var(--semi-color-success-light-default)] px-2 py-0.5 text-[var(--semi-color-success)]">
-            <ArrowDownToLine className="h-3 w-3" />
+            <ArrowDownToLine aria-hidden size="small" />
             收到
           </span>
         )}
@@ -207,19 +207,19 @@ function Card({ e }: { e: Row }) {
 
       {/* 行 2：单号 + 用途 */}
       <div>
-        <div className="font-mono text-[13px] font-medium text-foreground">
+        <div className="font-mono text-sm font-medium text-foreground">
           {e.trackingNo}
         </div>
-        <p className="mt-1 line-clamp-2 text-[12px] text-foreground/85">{e.purpose}</p>
+        <p className="mt-1 line-clamp-2 text-xs text-foreground/85">{e.purpose}</p>
       </div>
 
       {/* 行 3：收件人 + 案件 */}
-      <div className="space-y-1 text-[11px] text-muted-foreground">
+      <div className="space-y-1 text-xs text-muted-foreground">
         {(e.recipient || e.recipientPhone) && (
           <div>
             收件人：{e.recipient ?? "—"}
             {e.recipientPhone && (
-              <span className="ml-1 font-mono text-[10px]">{e.recipientPhone}</span>
+              <span className="ml-1 font-mono text-xs">{e.recipientPhone}</span>
             )}
           </div>
         )}
@@ -228,13 +228,13 @@ function Card({ e }: { e: Row }) {
             href={matterHref(e.matter)}
             className="inline-flex items-center gap-1 hover:text-primary"
           >
-            <Briefcase className="h-3 w-3" />
-            <span className="shrink-0 whitespace-nowrap font-mono text-[10px]">{e.matter.internalCode}</span>
+            <Briefcase aria-hidden size="small" />
+            <span className="shrink-0 whitespace-nowrap font-mono text-xs">{e.matter.internalCode}</span>
             <span className="truncate">{e.matter.title}</span>
           </Link>
         )}
         {e.lastUpdateAt && (
-          <div className="font-mono text-[10px]">
+          <div className="font-mono text-xs">
             上次刷新：{formatDateTime(new Date(e.lastUpdateAt))}
           </div>
         )}
@@ -246,9 +246,9 @@ function Card({ e }: { e: Row }) {
             size="small"
             theme="borderless" type="tertiary"
             onClick={() => setTracesOpen(true)}
-            className="h-7 gap-1 px-2 text-[11px]" htmlType="button"
+            className="h-7 gap-1 px-2 text-xs" htmlType="button"
           >
-            <ExternalLink className="h-3 w-3" />
+            <ExternalLink aria-hidden size="small" />
             轨迹 {traces.length}
           </Button>
         )}
@@ -257,9 +257,9 @@ function Card({ e }: { e: Row }) {
           theme="borderless" type="tertiary"
           onClick={onRefresh}
           disabled={pending}
-          className="h-7 gap-1 px-2 text-[11px] text-primary" htmlType="button"
+          className="h-7 gap-1 px-2 text-xs text-primary" htmlType="button"
         >
-          <RefreshCw className={cn("h-3 w-3", pending && "animate-spin")} />
+          <RefreshCw aria-hidden className={cn("h-3 w-3", pending && "animate-spin")} />
           刷新
         </Button>
         <Button
@@ -269,7 +269,7 @@ function Card({ e }: { e: Row }) {
           className="rounded p-1 text-muted-foreground hover:text-destructive"
           title="删除" theme="borderless" type="tertiary"
         >
-          <Trash2 className="h-3.5 w-3.5" />
+          <Trash2 aria-hidden size="small" />
         </Button>
       </div>
 
@@ -292,8 +292,8 @@ function Card({ e }: { e: Row }) {
                     i === 0 ? "bg-primary" : "bg-muted-foreground/40"
                   )}
                 />
-                <div className="text-[12px] text-foreground/85">{t.desc}</div>
-                <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
+                <div className="text-xs text-foreground/85">{t.desc}</div>
+                <div className="mt-0.5 font-mono text-xs text-muted-foreground">
                   {t.time}
                 </div>
               </li>
@@ -400,7 +400,7 @@ function NewExpressDialog({
 
         <div className="space-y-3">
           <div>
-            <label className="text-[11px]">方向 *</label>
+            <label className="text-xs">方向 *</label>
             <RadioGroup
               buttonSize="small"
               className="mt-2"
@@ -416,7 +416,7 @@ function NewExpressDialog({
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <label className="text-[11px]">快递单号 *</label>
+              <label className="text-xs">快递单号 *</label>
               <Input
                 value={trackingNo}
                 disabled={pending}
@@ -426,7 +426,7 @@ function NewExpressDialog({
               />
             </div>
             <div>
-              <label className="text-[11px]">快递公司</label>
+              <label className="text-xs">快递公司</label>
               <Select<string> insetLabel="快递公司" insetLabelId="express-company-label" aria-labelledby="express-company-label" disabled={pending} getPopupContainer={() => popupContainer.current!} onDropdownVisibleChange={visible => { openDropdown.current = visible; }} value={companyCode} onChange={value => ((e) => setCompanyCode(e))(String(value ?? ""))} className="mt-1" style={{ width: "100%" }} motion={false}>
                 <Select.Option value="">自动识别 / 未知</Select.Option>
                 {SUPPORTED_COMPANIES.map((c) => (
@@ -439,7 +439,7 @@ function NewExpressDialog({
           </div>
 
           <div>
-            <label className="text-[11px]">用途 *</label>
+            <label className="text-xs">用途 *</label>
             <Input
               value={purpose}
               disabled={pending}
@@ -454,7 +454,7 @@ function NewExpressDialog({
           </div>
 
           <div>
-            <label className="text-[11px]">关联案件（可选）</label>
+            <label className="text-xs">关联案件（可选）</label>
             <div className="mt-1">
               <MatterCombobox
                 matters={matters}
@@ -469,7 +469,7 @@ function NewExpressDialog({
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <label className="text-[11px]">{direction === "OUTBOUND" ? "收件人" : "寄件人"}</label>
+              <label className="text-xs">{direction === "OUTBOUND" ? "收件人" : "寄件人"}</label>
               <Input
                 value={recipient}
                 disabled={pending}
@@ -479,7 +479,7 @@ function NewExpressDialog({
               />
             </div>
             <div>
-              <label className="text-[11px]">联系电话</label>
+              <label className="text-xs">联系电话</label>
               <Input
                 value={recipientPhone}
                 disabled={pending}

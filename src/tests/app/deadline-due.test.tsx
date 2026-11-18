@@ -2,7 +2,7 @@ import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mock = vi.hoisted(() => ({ add: vi.fn(), adjust: vi.fn(), change: vi.fn(), rules: vi.fn(), error: vi.fn(), refresh: vi.fn() }));
+const mock = vi.hoisted(() => ({ add: vi.fn(), adjust: vi.fn(), change: vi.fn(), discard: vi.fn(), rules: vi.fn(), error: vi.fn(), refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mock.refresh }) }));
 vi.mock("@douyinfe/semi-ui", async (load) => ({ ...await load<typeof import("@douyinfe/semi-ui")>(), Toast: { success: vi.fn(), warning: vi.fn(), error: mock.error }, Notification: { success: vi.fn(), warning: vi.fn(), error: mock.error } }));
 vi.mock("@/server/procedures/actions", () => ({ addDeadline: mock.add, addProcedure: vi.fn(), addHearing: vi.fn(), toggleDeadlineCompleted: vi.fn(), deleteDeadline: vi.fn(), deleteHearing: vi.fn(), addProcedureMemo: vi.fn(), deleteProcedureMemo: vi.fn() }));
@@ -15,7 +15,7 @@ vi.mock("@/server/reminders/work-actions", () => ({ getWorkBoard: vi.fn(), chang
 vi.mock("@/server/tasks/actions", () => ({ completeTasksBatch: vi.fn() }));
 vi.mock("@/components/matters/task-detail-dialog", () => ({ TaskDetailDialog: () => null }));
 vi.mock("@/components/matters/intake-handover-panel", () => ({ IntakeHandoverPanel: () => null }));
-vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: vi.fn(async () => true) }));
+vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: vi.fn(async () => true), confirmDiscardChanges: mock.discard }));
 
 import { AdjustDeadlineDialog, ImportantItemDialog } from "@/app/(app)/matters/[id]/_components/procedure-content";
 import { AddDeadlineDialog } from "@/app/(app)/matters/[id]/_components/procedure-forms";
@@ -49,6 +49,24 @@ async function exact() { await choose(screen.getByRole("combobox", { name: "期�
 const reason = () => fireEvent.change(screen.getByPlaceholderText("如：法院通知书载明举证期限延长至…"), { target: { value: "按合成来件明确核对" } });
 
 describe("F01 真实期限表单（组件环境，服务动作边界受控）", () => {
+  it("关闭调整时，空白可关闭，有草稿允许继续编辑或放弃", async () => {
+    const close = vi.fn();
+    render(<AdjustDeadlineDialog deadline={original} onClose={close} />);
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+    expect(close).toHaveBeenCalledOnce();
+    expect(mock.discard).not.toHaveBeenCalled();
+    const field = screen.getByRole("textbox", { name: "调整原因 *" });
+    fireEvent.change(field, { target: { value: "待核对法院通知" } });
+    mock.discard.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+    await waitFor(() => expect(mock.discard).toHaveBeenCalledOnce());
+    expect(field).toHaveValue("待核对法院通知");
+    expect(close).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+    await waitFor(() => expect(close).toHaveBeenCalledTimes(2));
+    expect(mock.adjust).not.toHaveBeenCalled();
+  });
+
   it("新增默认为日期并发送上海日界，不因容器时区变成上午八时", async () => {
     render(<AddDeadlineDialog open onOpenChange={vi.fn()} procedures={procedures} defaultProcedureId={procedureId} />);
     fireEvent.change(screen.getByPlaceholderText("如：举证截止 / 上诉到期日"), { target: { value: "合成日期期限" } });

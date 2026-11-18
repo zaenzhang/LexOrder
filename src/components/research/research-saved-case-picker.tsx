@@ -1,7 +1,9 @@
 "use client";
 
+import { DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, WorkspaceDialog } from "@/components/patterns/workspace-dialog";
+
 import { useEffect, useId, useRef, useState } from "react";
-import { Button, Modal, Select } from "@douyinfe/semi-ui";
+import { Button, Select } from "@douyinfe/semi-ui";
 import { actionErrorMessage } from "@/lib/action-error";
 import { getSavedCaseResearchInput } from "@/server/research/actions";
 import { queryAccessLabels, queryOutcomeLabels, type ResearchContent, type ResearchOptions, type SavedCaseResearchInput } from "@/server/research/contracts";
@@ -63,49 +65,46 @@ export function ResearchSavedCasePicker({ matterId, options, value, onChange, di
     <Button htmlType="button" size="small" type="tertiary" aria-haspopup="dialog" aria-expanded={open && !disabled} disabled={disabled} onClick={() => changeOpen(true)}>
       采用已保存类案
     </Button>
-    <Modal
-      title="采用已保存类案"
-      visible={open && !disabled}
-      width="min(42rem, calc(100vw - 2rem))"
-      centered
-      motion={false}
-      okText="加入研究"
-      cancelText="取消"
-      okButtonProps={{ disabled: !input || loading || disabled }}
-      bodyStyle={{ maxHeight: "65vh", overflowY: "auto" }}
-      onOk={adopt}
-      onCancel={() => changeOpen(false)}
-    >
-      <p className="mb-3 text-sm text-muted-foreground">选择本事项内的一份固定材料版本，核对后将来源与阅读记录加入当前研究草稿。</p>
-      {documents.length ? <div className="space-y-3">
-        <div className="space-y-1.5" onKeyDown={event => {
-          if (optionsOpen && event.key === "Escape") event.stopPropagation();
-        }}>
-          <p id={labelId} className="text-sm font-medium">已保存类案材料</p>
-          <Select<string>
-            aria-labelledby={labelId}
-            motion={false}
-            value={documentId || undefined}
-            onChange={next => { if (typeof next === "string") selectDocument(next); }}
-            onDropdownVisibleChange={setOptionsOpen}
-            disabled={disabled}
-            placeholder="选择具体材料版本"
-            optionList={documents.map(document => ({ value: document.id, label: `${document.name} · V${document.version}` }))}
-            className="w-full"
-          />
-        </div>
-        <Button htmlType="button" type="tertiary" size="small" onClick={read} disabled={!documentId || loading || disabled}>{loading ? "正在读取材料…" : error ? "重新读取材料" : "读取材料元信息"}</Button>
-      </div> : <p className="text-sm text-muted-foreground">没有可自动识别的已保存类案。缺少保存记录的材料仍可在研究中手工选入。</p>}
-      {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
-      {input ? <div className="space-y-3 text-sm">
-        <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-2 break-words">
-          <dt className="text-muted-foreground">材料所载名称</dt><dd>{input.source.lawMetadata.title || "未记录"}</dd>
-          <dt className="text-muted-foreground">法院 / 案号</dt><dd>{input.source.lawMetadata.authority || "未记录"} / {input.source.lawMetadata.number || "未记录"}</dd>
-          <dt className="text-muted-foreground">采用范围</dt><dd>{queryAccessLabels[input.query.access]} · {queryOutcomeLabels[input.query.outcome]} · 待核实</dd>
-          <dt className="text-muted-foreground">材料所载链接</dt><dd className="min-w-0 break-all">{input.query.location || "未记录"}</dd>
-        </dl>
-        <p className="whitespace-pre-wrap break-words text-muted-foreground">{input.query.notes}</p>
-      </div> : null}
-    </Modal>
+    <WorkspaceDialog open={open && !disabled} dismissOnBackdrop onOpenChange={changeOpen}>
+      <DialogContent className="max-w-2xl" onEscapeKeyDown={event => { if (optionsOpen) event.preventDefault(); }}>
+        <DialogHeader>
+          <DialogTitle>采用已保存类案</DialogTitle>
+          <DialogDescription>选择本事项内的一份固定材料版本，核对后将来源与阅读记录加入当前研究草稿。</DialogDescription>
+        </DialogHeader>
+        {documents.length ? <div className="space-y-3">
+          <div className="space-y-1.5" onKeyDown={event => {
+            if (optionsOpen && event.key === "Escape") event.stopPropagation();
+          }}>
+            <p id={labelId} className="text-sm font-medium">已保存类案材料</p>
+            <Select<string>
+              aria-labelledby={labelId}
+              motion={false}
+              value={documentId || undefined}
+              onChange={next => { if (typeof next === "string") selectDocument(next); }}
+              onDropdownVisibleChange={setOptionsOpen}
+              disabled={disabled}
+              placeholder="选择具体材料版本"
+              optionList={documents.map(document => ({ value: document.id, label: `${document.name} · V${document.version}` }))}
+              className="w-full"
+            />
+          </div>
+          <Button htmlType="button" type="tertiary" size="small" onClick={read} disabled={!documentId || loading || disabled}>{loading ? "正在读取材料…" : error ? "重新读取材料" : "读取材料元信息"}</Button>
+        </div> : <p className="text-sm text-muted-foreground">没有可自动识别的已保存类案。缺少保存记录的材料仍可在研究中手工选入。</p>}
+        {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
+        {input ? <div className="space-y-3 text-sm">
+          <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-2 break-words">
+            <dt className="text-muted-foreground">材料所载名称</dt><dd>{input.source.lawMetadata.title || "未记录"}</dd>
+            <dt className="text-muted-foreground">法院 / 案号</dt><dd>{input.source.lawMetadata.authority || "未记录"} / {input.source.lawMetadata.number || "未记录"}</dd>
+            <dt className="text-muted-foreground">采用范围</dt><dd>{queryAccessLabels[input.query.access]} · {queryOutcomeLabels[input.query.outcome]} · 待核实</dd>
+            <dt className="text-muted-foreground">材料所载链接</dt><dd className="min-w-0 break-all">{input.query.location || "未记录"}</dd>
+          </dl>
+          <p className="whitespace-pre-wrap break-words text-muted-foreground">{input.query.notes}</p>
+        </div> : null}
+        <DialogFooter>
+          <Button theme="outline" type="tertiary" onClick={() => changeOpen(false)}>取消</Button>
+          <Button theme="solid" type="primary" disabled={!input || loading || disabled} onClick={adopt}>加入研究</Button>
+        </DialogFooter>
+      </DialogContent>
+    </WorkspaceDialog>
   </>;
 }

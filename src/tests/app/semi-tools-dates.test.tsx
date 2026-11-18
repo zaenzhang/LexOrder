@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ToolsDialog } from "@/components/layout/tools-dialog";
 
 beforeEach(() => {
-  // 只冻结日期，保留 Semi Modal 的真实关闭定时器。
+  // 只冻结日期，保留交互的真实定时器。
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-11-18T15:59:59.000Z"));
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
@@ -62,9 +62,6 @@ describe("实务工具首次打开的上海默认日期", () => {
     fireEvent.change(screen.getByLabelText("实际履行日期（或截至日）"), { target: { value: "" } });
 
     fireEvent.keyDown(dialog, { key: "Escape", code: "Escape", keyCode: 27 });
-    // jsdom lacks AnimationEvent, so React subscribes to the WebKit-prefixed event.
-    expect(dialog).toHaveClass("semi-modal-content-animate-hide");
-    fireEvent(dialog, new Event("webkitAnimationEnd", { bubbles: true }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     vi.setSystemTime(new Date("2026-11-19T16:00:01.000Z"));
     await openTools();

@@ -3,7 +3,7 @@
 import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
 import { Button } from "@douyinfe/semi-ui";
 import { useState } from "react";
-import { Wallet, Receipt } from "lucide-react";
+import { IconCoinMoney as Wallet, IconNoteMoney as Receipt } from "@douyinfe/semi-icons";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { InvoiceRequestSheet } from "./invoice-request-sheet";
 import type { FinancePayload, UserOption } from "./matter-detail-tabs";
@@ -55,17 +55,16 @@ export function FinancePanel({
       <header className={compact ? "border-b border-border px-3 py-2" : "border-b border-[var(--semi-color-border)] px-4 py-3"}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="panel-title">
-            <Wallet className="h-3.5 w-3.5 text-primary" />
-            财务费用
+            <Wallet aria-hidden size="small" className="text-primary" />
+            收付与开票
           </span>
           {canRequestInvoice && (
             <Button
               onClick={() => setInvoiceOpen(true)}
-              className="h-6 gap-0.5 px-2 text-[11px]"
+              htmlType="button"
               theme="solid"
-              size="small"
+              icon={<Receipt aria-hidden />}
             >
-              <Receipt className="h-2.5 w-2.5" />
               申请开票
             </Button>
           )}
@@ -105,8 +104,8 @@ export function FinancePanel({
               key={e.id}
               className={
                 compact
-                  ? "flex items-center gap-2 px-3 py-2 text-[12px]"
-                  : "flex items-center gap-3 px-4 py-2 text-[12.5px]"
+                  ? "flex items-center gap-2 px-3 py-2 text-xs"
+                  : "flex items-center gap-3 px-4 py-2 text-sm"
               }
             >
               <span className={cn("shrink-0 font-mono tabular text-[14px] font-medium", e.confirmState === "PENDING" ? "text-[var(--semi-color-warning)]" : "text-[var(--semi-color-success)]")}>
@@ -118,16 +117,16 @@ export function FinancePanel({
               <span className="min-w-0 flex-1 truncate text-muted-foreground">
                 {e.payerOrPayee && <span>{e.payerOrPayee}</span>}
                 {e.method && (
-                  <span className="ml-2 text-[10.5px]">· {e.method}</span>
+                  <span className="ml-2 text-xs">· {e.method}</span>
                 )}
                 {e.invoiceNo && (
-                  <span className="ml-2 font-mono text-[10.5px]">
+                  <span className="ml-2 font-mono text-xs">
                     · 发票 {e.invoiceNo}
                   </span>
                 )}
-                {e.note && <span className="ml-2 text-[10.5px]">· {e.note}</span>}
+                {e.note && <span className="ml-2 text-xs">· {e.note}</span>}
               </span>
-              <span className="shrink-0 font-mono text-[11px] tabular text-muted-foreground">
+              <span className="shrink-0 font-mono text-xs tabular text-muted-foreground">
                 {formatDate(new Date(e.occurredAt))}
               </span>
             </li>
@@ -171,10 +170,10 @@ function StatCard({
           : "text-foreground";
   return (
     <div className={`bg-card px-3 text-center ${compact ? "py-2" : "py-2.5"} ${className ?? ""}`}>
-      <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
         {label}
       </div>
-      <div className={`mt-1 font-mono leading-none tabular ${compact ? "text-[13px]" : "text-[15px]"} ${cls}`}>
+      <div className={`mt-1 font-mono leading-none tabular ${compact ? "text-sm" : "text-[15px]"} ${cls}`}>
         {formatCurrency(value, { compact: true })}
       </div>
     </div>

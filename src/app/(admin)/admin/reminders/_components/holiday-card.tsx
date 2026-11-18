@@ -5,7 +5,7 @@
  */
 import { Button, Notification, TextArea, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
-import { CalendarDays, Loader2 } from "lucide-react";
+import { IconCalendar as CalendarDays, IconLoading as Loader2 } from "@douyinfe/semi-icons";
 import { saveHolidayBatch } from "@/server/calendar/holiday-actions";
 import { formatDate } from "@/lib/utils";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -53,7 +53,7 @@ export function HolidayCard({ year, rows, canEdit }: { year: number; rows: Holid
     <div className="card">
       <div className="panel-head">
         <div className="panel-title" style={{ fontSize: 13 }}>
-          <CalendarDays className="ic" strokeWidth={1.8} />
+          <CalendarDays aria-hidden className="ic" />
           法定放假安排 · {year} 年
         </div>
         <span className="t-xs t-mute">届满日顺延依据（民诉法第八十五条第三款）</span>
@@ -83,7 +83,7 @@ export function HolidayCard({ year, rows, canEdit }: { year: number; rows: Holid
             />
             <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-end" }}>
               <Button theme="solid" size="small" onClick={save} disabled={isPending} className="gap-1.5">
-                {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}保存本批
+                {isPending && <Loader2 aria-hidden size="small" spin />}保存本批
               </Button>
             </div>
           </>

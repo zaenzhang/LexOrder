@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
-import { Loader2 } from "lucide-react";
+import { IconLoading as Loader2 } from "@douyinfe/semi-icons";
 import { Button, Input, Notification, Popover, Toast } from "@douyinfe/semi-ui";
 import { searchEnterpriseCandidates, getEnterpriseDetail, type EnterpriseSearchItem } from "@/server/yuandian/enterprise";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -147,7 +147,7 @@ export function EnterpriseNameInput({
             validateStatus={invalid ? "error" : "default"}
             onBlur={onBlur}
             onChange={next => { onChange(next); schedule(next); }}
-            suffix={searching || filling ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
+            suffix={searching || filling ? <Loader2 size="small" spin aria-hidden /> : null}
           />
         </span>
       </Popover>

@@ -5,8 +5,8 @@ import { deadlineOverdue, formatDeadlineDue, type DeadlineDuePrecision } from "@
  * 配色纪律：红只属于 3 天内或已逾期的期限；开庭用蓝；收费 teal；任务琥珀。
  */
 import { deadlineCategoryLabel } from "@/lib/enums";
-import { deadlineRisk } from "@/lib/ui/moan-tones";
-import { RiskLadder } from "@/components/patterns/moan";
+import { deadlineRisk } from "@/lib/ui/status-tones";
+import { RiskLadder } from "@/components/patterns/workspace-surfaces";
 import { cn } from "@/lib/utils";
 
 type SignalProcedure = {

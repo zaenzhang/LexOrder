@@ -5,9 +5,9 @@ import { Button, Input, Notification, Pagination } from "@douyinfe/semi-ui";
 import { useState, useTransition, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Search, X } from "lucide-react";
+import { IconSearch as Search, IconClose as X } from "@douyinfe/semi-icons";
 import type { Client, ClientType, Contact } from "@prisma/client";
-import { PageHeader, WorkspaceTabs } from "@/components/patterns/moan";
+import { PageHeader, WorkspaceTabs } from "@/components/patterns/workspace-surfaces";
 import { ClientSheet } from "./client-sheet";
 import { ClientsTable } from "./clients-table";
 import { useTopbarAction } from "@/components/layout/topbar-action";
@@ -138,10 +138,10 @@ export function ClientsView({ initialData, initialFilters, canCreate, editableCl
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <form className="w-full min-w-0 sm:w-80" onSubmit={handleSearchSubmit}>
-          <Input ref={searchInput} prefix={<Search aria-hidden size={16} className="ml-3" />} value={search} onChange={setSearch} onBlur={handleSearchBlur} placeholder="搜索客户名称 / 证件号 / 电话 / 邮箱" aria-label="搜索客户" />
+          <Input ref={searchInput} prefix={<Search aria-hidden size="default" className="ml-3" />} value={search} onChange={setSearch} onBlur={handleSearchBlur} placeholder="搜索客户名称 / 证件号 / 电话 / 邮箱" aria-label="搜索客户" />
         </form>
         {search || type !== "ALL" ? (
-          <Button htmlType="button" theme="borderless" type="tertiary" size="small" icon={<X size={14} />} onClick={clearFilters}>
+          <Button htmlType="button" theme="borderless" type="tertiary" size="small" icon={<X aria-hidden size="default" />} onClick={clearFilters}>
             清除筛选
           </Button>
         ) : null}

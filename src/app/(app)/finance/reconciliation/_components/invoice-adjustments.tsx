@@ -1,10 +1,12 @@
 "use client";
 
-import { Button, Input, Modal, Select, TextArea, Notification, Toast } from "@douyinfe/semi-ui";
+import { Button, Input, Select, TextArea, Notification, Toast } from "@douyinfe/semi-ui";
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { adjustInvoice, type getFinanceLedger } from "@/server/finance/ledger-actions";
 import { shDayKey } from "@/lib/ui/sh-time";
+import { DialogContent, DialogHeader, DialogTitle, WorkspaceDialog } from "@/components/patterns/workspace-dialog";
+import { confirmDiscardChanges } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
 
 type Data = Awaited<ReturnType<typeof getFinanceLedger>>;
@@ -19,15 +21,31 @@ export function InvoiceAdjustments({ data, canCorrect }: { data: Data; canCorrec
   const [doc, setDoc] = useState(""), [replacement, setReplacement] = useState("");
   const [reversals, setReversals] = useState<Record<string, string>>({});
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const initial = useRef({ id: "", amount: "", date: "" });
+  const confirmingClose = useRef(false);
   const popupContainer = useRef<HTMLDivElement>(null);
   const invoice = data.invoices.find(item => item.id === id);
   const selectProps = { disabled: busy, motion: false as const, style: { width: "100%" }, getPopupContainer: () => popupContainer.current!, onDropdownVisibleChange: setDropdownOpen };
 
   function begin() {
     const first = data.invoices.find(item => Number(item.amount) > 0);
-    setId(first?.id ?? ""); setAmount(first?.amount ?? ""); setReversals({});
+    initial.current = { id: first?.id ?? "", amount: first?.amount ?? "", date: shDayKey(new Date()) };
+    setId(initial.current.id); setAmount(initial.current.amount); setDate(initial.current.date); setKind("RED"); setReversals({});
     setDoc(""); setReplacement(""); setReference(""); setReason(""); setDropdownOpen(false); setOpen(true);
   }
+  async function close() {
+    if (busy || confirmingClose.current) return;
+    const dirty = id !== initial.current.id || kind !== "RED" || amount !== initial.current.amount ||
+      date !== initial.current.date || Boolean(reference.trim() || reason.trim() || doc || replacement) ||
+      Object.values(reversals).some(value => value.trim());
+    if (dirty) {
+      confirmingClose.current = true;
+      try { if (!await confirmDiscardChanges()) return; }
+      finally { confirmingClose.current = false; }
+    }
+    setOpen(false);
+  }
+
   function submit(event: React.FormEvent) {
     event.preventDefault();
     if (busy || !id || !doc || (kind === "REPLACE" && !replacement)) return;
@@ -51,9 +69,10 @@ export function InvoiceAdjustments({ data, canCorrect }: { data: Data; canCorrec
     {data.invoiceAdjustments.map(item => <p className="text-sm" key={item.id}>
       {kinds[item.kind as keyof typeof kinds] ?? item.kind} ¥{item.amount} · {item.reference} · {item.reason} · <a className="underline" href={`/api/documents/${item.documentId}/download`}>处理依据</a>
     </p>)}
-    <Modal visible={open} title="登记外部发票处理结果" footer={null} width={640} motion={false}
-      closeOnEsc={!busy && !dropdownOpen} maskClosable={!busy} closable={!busy} onCancel={() => { if (!busy) setOpen(false); }}
-      bodyStyle={{ maxHeight: "75vh", overflowY: "auto" }}>
+    <WorkspaceDialog open={open} dismissOnBackdrop onOpenChange={next => { if (!next) void close(); }}>
+      <DialogContent className="max-w-[640px]" showClose={!busy}
+        onEscapeKeyDown={event => { if (dropdownOpen) event.preventDefault(); }}>
+        <DialogHeader><DialogTitle>登记外部发票处理结果</DialogTitle></DialogHeader>
       <div ref={popupContainer}>
         <p className="mb-4 text-sm text-muted-foreground">须具备开票执行和财务更正确认权限。按实际外部凭证登记。</p>
         <form className="space-y-3" onSubmit={submit}>
@@ -80,6 +99,7 @@ export function InvoiceAdjustments({ data, canCorrect }: { data: Data; canCorrec
           </fieldset>
         </form>
       </div>
-    </Modal>
+      </DialogContent>
+    </WorkspaceDialog>
   </section>;
 }

@@ -5,7 +5,7 @@ import { FormDialogContent as DialogContent, FormDialogBody } from "@/components
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { IconLoading as Loader2 } from "@douyinfe/semi-icons";
 import type { ExternalContactCategory } from "@prisma/client";
 
 import {
@@ -230,7 +230,7 @@ export function ExternalContactDialog({
             取消
           </Button>
           <Button htmlType="button" theme="solid" onClick={handleSave} disabled={isPending}>
-            {isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+            {isPending && <Loader2 aria-hidden size="default" className="mr-1.5" spin />}
             {editing ? "更新" : "保存"}
           </Button>
         </DialogFooter>

@@ -7,7 +7,7 @@
  */
 import type { ReactNode } from "react";
 import { Button, Tabs, Tag, Typography } from "@douyinfe/semi-ui";
-import { AlertTriangle, SquareCheck } from "lucide-react";
+import { IconAlertTriangle as AlertTriangle, IconCheckList as SquareCheck } from "@douyinfe/semi-icons";
 import { DialogContent, DialogDescription, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { cn, formatDateTime } from "@/lib/utils";
 import styles from "./review-dialog.module.css";
@@ -117,7 +117,7 @@ export function ReviewDialogContent({
 
         <aside className="rv-side" aria-label={sidebarTitle}>
           <div className="rv-side-head">
-            <SquareCheck className="h-[15px] w-[15px] text-[var(--semi-color-primary)]" strokeWidth={1.8} />
+            <SquareCheck aria-hidden className="h-[15px] w-[15px] text-[var(--semi-color-primary)]" />
             {sidebarTitle}
             {sidebarDescription ? <span className="t-xs t-mute ml-auto font-normal">{sidebarDescription}</span> : null}
           </div>
@@ -141,7 +141,7 @@ export function ReviewSummaryItem({ k, v, mono }: { k: string; v: ReactNode; mon
 export function ReviewAlert({ children }: { children: ReactNode }) {
   return (
     <>
-      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+      <AlertTriangle aria-hidden size="small" className="shrink-0" />
       {children}
     </>
   );
@@ -153,7 +153,7 @@ export function ReviewSection({ title, icon, extra, children, className }: { tit
       <div className="rv-sec-head">
         {icon ? <span className="flex text-[var(--semi-color-primary)] [&_svg]:h-[14px] [&_svg]:w-[14px]">{icon}</span> : null}
         {title}
-        {extra ? <span className="ml-auto flex items-center gap-2 text-[11px] font-[550]">{extra}</span> : null}
+        {extra ? <span className="ml-auto flex items-center gap-2 text-xs font-[550]">{extra}</span> : null}
       </div>
       {children}
     </section>
@@ -229,7 +229,7 @@ export function ReviewFileRow({ id, name, readable, meta }: { id: string; name: 
         <div className="doc-meta">{meta ?? (readable ? "申请关联材料" : "当前无附件读取权限")}</div>
       </div>
       {readable ? (
-        <a href={`/api/documents/${id}/download?inline=1`} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm" aria-label={`查看附件：${name}`}>
+        <a href={`/api/documents/${id}/download?inline=1`} target="_blank" rel="noreferrer" className="workspace-action-link" aria-label={`查看附件：${name}`}>
           查看
         </a>
       ) : null}
@@ -247,7 +247,7 @@ export function ReviewHistory({ items, emptyText, emptyDesc }: { items: { id: st
           {items.map((h) => (
             <div key={h.id} className={cn("tl-item", h.decision && "done")}>
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <span className="text-[12.5px] font-semibold">
+                <span className="text-sm font-semibold">
                   {h.label} · {h.userName}
                 </span>
                 <span className="num-sm t-mute">{dateText(h.at)}</span>

@@ -3,7 +3,7 @@
 import { Button } from "@douyinfe/semi-ui";
 
 import { useRef, useState } from "react";
-import { Pencil } from "lucide-react";
+import { IconEdit as Pencil } from "@douyinfe/semi-icons";
 import type { Client, Contact } from "@prisma/client";
 import { ClientSheet } from "@/app/(app)/clients/_components/client-sheet";
 
@@ -23,7 +23,7 @@ export function ClientEditButton({
       <Button
         htmlType="button"
         onClick={event => { trigger.current = event.currentTarget; setOpen(true); }}
-        theme="outline" type="tertiary" size="small" icon={<Pencil size={14} />}
+        theme="outline" type="tertiary" size="small" icon={<Pencil aria-hidden size="default" />}
       >
         编辑资料
       </Button>

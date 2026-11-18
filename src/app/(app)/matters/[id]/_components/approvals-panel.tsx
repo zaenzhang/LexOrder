@@ -1,10 +1,11 @@
 "use client";
 
-import { Button, Tag } from "@douyinfe/semi-ui";
+import { Button, Card, Empty, Notification, Table, Tabs, Tag } from "@douyinfe/semi-ui";
 import { useState } from "react";
 import Link from "next/link";
-import { Loader2, Stamp, Plus } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { IconPlus as Plus } from "@douyinfe/semi-icons";
+import { formatDate } from "@/lib/utils";
+import { actionErrorMessage } from "@/lib/action-error";
 import { SealRequestSheet } from "@/app/(app)/approvals/seals/_components/seal-request-sheet";
 import type { SealTypeConfigRow } from "@/app/(app)/approvals/seals/_components/seal-types";
 import { listSealTypeConfigs } from "@/server/seals/actions";
@@ -18,12 +19,6 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: "done", label: "已审批" }
 ];
 
-/**
- * v0.13: 案件详情"审批"板块（不再独立 tab，嵌入基本信息内）
- * - 仅显示用印审批（开票申请入口已收口到财务区，此处不重复）
- * - 顶部三分类切换：全部 / 审批中 / 已审批
- * - v0.23: 顶部"发起审批"改为弹窗，自动锁定当前案件 + 支持"+ 法定代表人章"
- */
 export function ApprovalsPanel({
   matterId,
   matterTitle,
@@ -42,11 +37,10 @@ export function ApprovalsPanel({
   const [configs, setConfigs] = useState<SealTypeConfigRow[] | null>(null);
   const [loadingConfigs, setLoadingConfigs] = useState(false);
 
-  const filtered = sealContracts.filter((s) => {
-    if (filter === "all") return true;
-    if (filter === "pending") return s.status === "PENDING";
-    return s.status === "APPROVED" || s.status === "STAMPED" || s.status === "REJECTED" || s.status === "CANCELLED";
-  });
+  const pending = sealContracts.filter(request => request.status === "PENDING");
+  const completed = sealContracts.filter(request => ["APPROVED", "STAMPED", "REJECTED", "CANCELLED"].includes(request.status));
+  const records = { all: sealContracts, pending, done: completed };
+  const filtered = records[filter];
 
   async function handleOpenSheet() {
     if (configs) {
@@ -58,88 +52,63 @@ export function ApprovalsPanel({
       const list = await listSealTypeConfigs();
       setConfigs(list);
       setSheetOpen(true);
+    } catch (error) {
+      Notification.error({ title: "无法打开用印申请", content: actionErrorMessage(error) });
     } finally {
       setLoadingConfigs(false);
     }
   }
 
   return (
-    <section className="card">
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--semi-color-border)] px-4 py-3">
-        <div className="flex items-center gap-3">
-          <span className="panel-title">
-            <Stamp className="h-3.5 w-3.5 text-primary" />
-            用印审批
-            <span className="ml-1 font-mono text-[11px] text-muted-foreground tabular">
-              {sealContracts.length}
-            </span>
-          </span>
-          <div className="flex items-center gap-0.5 rounded-md border border-border bg-background p-0.5">
-            {FILTERS.map((f) => (
-              <Button theme="borderless" type="primary" size="small"
-                key={f.value}
-                htmlType="button"
-                onClick={() => setFilter(f.value)}
-                className={cn(
-                  "rounded px-2 py-0.5 text-[11px] transition-colors",
-                  filter === f.value
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {f.label}
-                {f.value === "pending" && sealContracts.some((s) => s.status === "PENDING") && (
-                  <span className="ml-1 font-mono text-[10px]">
-                    {sealContracts.filter((s) => s.status === "PENDING").length}
-                  </span>
-                )}
-              </Button>
-            ))}
-          </div>
-        </div>
-        {canRequest && (
-          <Button
+    <section aria-labelledby="dossier-seals-heading">
+      <Card bodyStyle={{ padding: 0 }}>
+        <header className="dossier-section-heading">
+          <h2 id="dossier-seals-heading">用印申请</h2>
+          {canRequest ? <Button
             onClick={handleOpenSheet}
-            disabled={loadingConfigs}
-            className="h-6 gap-0.5 px-2 text-[11px]"
+            loading={loadingConfigs}
             htmlType="button"
             theme="solid"
-            size="small"
-          >
-            {loadingConfigs ? (
-              <Loader2 className="h-2.5 w-2.5 animate-spin" />
-            ) : (
-              <Plus className="h-2.5 w-2.5" />
-            )}
-            发起审批
-          </Button>
-        )}
-      </header>
-
-      {filtered.length === 0 ? (
-        <p className="py-4 text-center text-xs text-muted-foreground">
-          {filter === "all" ? "暂无审批" : filter === "pending" ? "无审批中" : "无已审批"}
-        </p>
-      ) : (
-        <ul className="divide-y divide-border">
-          {filtered.map((s) => (
-            <li
-              key={s.id}
-              className="flex items-center gap-3 px-4 py-2 text-[12.5px]"
-            >
-              <span className="font-mono text-[11px] text-muted-foreground">{s.code}</span>
-              <span className="min-w-0 flex-1 truncate">{s.documentTitle}</span>
-              <SealStatusBadge status={s.status} />
-              <Link
-                href={`/approvals?${new URLSearchParams({ type: "SEAL_APPROVE", id: s.id, returnTo })}`}
-                className="text-[11px] text-primary hover:text-primary/80"
-              >
-                详情
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+            icon={<Plus aria-hidden />}
+          >发起用印申请</Button> : null}
+        </header>
+        <div className="dossier-register-tabs">
+          <Tabs
+            type="button"
+            activeKey={filter}
+            onChange={value => setFilter(value as Filter)}
+            tabList={FILTERS.map(({ value, label }) => ({
+              itemKey: value,
+              tab: <span className="inline-flex items-center gap-2">{label}
+                <span className="dossier-count">{records[value].length}</span>
+              </span>
+            }))}
+          />
+        </div>
+        {filtered.length ? <div className="min-w-0 overflow-x-auto">
+          <Table<SealContractItem>
+            rowKey="id"
+            dataSource={filtered}
+            pagination={false}
+            scroll={{ x: 560 }}
+            columns={[
+              {
+                title: "申请文书",
+                key: "document",
+                render: (_, request) => <div className="space-y-1">
+                  <Link href={`/approvals?${new URLSearchParams({ type: "SEAL_APPROVE", id: request.id, returnTo })}`}
+                    className="workspace-action-link font-medium">{request.documentTitle}</Link>
+                  <div className="font-mono text-xs text-muted-foreground">{request.code}</div>
+                </div>
+              },
+              { title: "当前状态", key: "status", width: 124, render: (_, request) => <SealStatusBadge status={request.status} /> },
+              { title: "发起日期", key: "date", width: 136, render: (_, request) => formatDate(new Date(request.createdAt)) }
+            ]}
+          />
+        </div> : <Empty className="dossier-register-empty" description={
+          filter === "all" ? "本案暂无用印申请" : filter === "pending" ? "没有审批中的用印申请" : "没有已审批的用印申请"
+        } />}
+      </Card>
 
       {configs && canRequest && (
         <SealRequestSheet
@@ -163,15 +132,8 @@ const SEAL_STATUS_LABEL: Record<string, string> = {
 };
 
 function SealStatusBadge({ status }: { status: string }) {
-  const tone =
-    status === "APPROVED" || status === "STAMPED"
-      ? "text-[var(--semi-color-success)] bg-[var(--semi-color-success-light-default)] border-[var(--semi-color-success-light-active)]"
-      : status === "REJECTED" || status === "CANCELLED"
-        ? "text-[var(--semi-color-danger)] bg-[var(--semi-color-danger-light-default)] border-[var(--semi-color-danger-light-active)]"
-        : "text-[var(--semi-color-warning)] bg-[var(--semi-color-warning-light-default)] border-[var(--semi-color-warning-light-active)]";
-  return (
-    <Tag className={cn("h-5 border px-1.5 text-[10px]", tone)} color="grey" type="ghost">
-      {SEAL_STATUS_LABEL[status] ?? status}
-    </Tag>
-  );
+  const color = status === "APPROVED" || status === "STAMPED" ? "green"
+    : status === "REJECTED" ? "red"
+    : status === "PENDING" ? "amber" : "grey";
+  return <Tag color={color}>{SEAL_STATUS_LABEL[status] ?? "状态待核实"}</Tag>;
 }

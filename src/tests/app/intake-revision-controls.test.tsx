@@ -18,6 +18,8 @@ vi.mock("@/server/clients/actions", () => ({ listClients: vi.fn() }));
 vi.mock("@/server/users/actions", () => ({ listActiveColleagues: vi.fn() }));
 import { RevisionControls } from "@/app/(app)/intakes/[id]/_components/revision-controls";
 
+import { ConfirmHost } from "@/components/patterns/confirm-dialog";
+
 beforeEach(() => { vi.clearAllMocks(); });
 afterEach(cleanup);
 
@@ -37,8 +39,6 @@ describe("收案补正动作的 Semi 控件", () => {
     await act(async () => reject(new Error("合成失败")));
     expect(screen.getByRole("textbox", { name: "撤回原因" })).toHaveValue("合成：需要补充资料");
     expect(mock.refresh).not.toHaveBeenCalled();
-    // Semi Modal suppresses another confirmation click in its 100 ms debounce window.
-    await act(async () => { await new Promise(resolve => setTimeout(resolve, 110)); });
     expect(screen.getByRole("button", { name: "撤回申请" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "撤回申请" }));
     await waitFor(() => expect(mock.withdraw).toHaveBeenCalledTimes(2));
@@ -64,5 +64,24 @@ describe("收案补正动作的 Semi 控件", () => {
     expect(screen.getByRole("textbox", { name: "作废原因" })).toHaveValue("合成：重复登记");
     expect(screen.getByRole("textbox", { name: "作废原因" })).toBeEnabled();
     expect(mock.void).toHaveBeenCalledWith({ id: "intake-original", reason: "合成：重复登记" });
+  });
+
+  it("点击遮罩时先确认，继续编辑保留理由，放弃后重新打开为空", async () => {
+    const { baseElement } = render(<><RevisionControls id="intake-original" status="PENDING_CONFIRMATION" /><ConfirmHost /></>);
+    const trigger = screen.getByRole("button", { name: "撤回补正" });
+    fireEvent.click(trigger);
+    const reason = screen.getByRole("textbox", { name: "撤回原因" });
+    fireEvent.change(reason, { target: { value: "合成草稿" } });
+    const backdrop = baseElement.querySelector(".semi-modal-wrap")!;
+    fireEvent.click(backdrop);
+    await screen.findByRole("dialog", { name: "放弃未保存的修改？" });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "继续编辑" })); });
+    expect(reason).toHaveValue("合成草稿");
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+    fireEvent.click(await screen.findByRole("button", { name: "放弃修改" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(mock.withdraw).not.toHaveBeenCalled();
+    fireEvent.click(trigger);
+    expect(screen.getByRole("textbox", { name: "撤回原因" })).toHaveValue("");
   });
 });

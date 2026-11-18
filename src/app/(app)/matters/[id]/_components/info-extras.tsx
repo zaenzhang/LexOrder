@@ -3,16 +3,7 @@
 import { useId, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  FileText,
-  Download,
-  Package,
-  ArrowDownToLine,
-  ArrowUpFromLine,
-  Plus,
-  Loader2,
-  ScanLine
-} from "lucide-react";
+import { IconArticle as FileText, IconDownload as Download, IconBox as Package, IconDownload as ArrowDownToLine, IconUpload as ArrowUpFromLine, IconPlus as Plus, IconLoading as Loader2, IconScan as ScanLine } from "@douyinfe/semi-icons";
 import { Select, Button, Input, Notification, Toast } from "@douyinfe/semi-ui";
 import { cn, formatDate } from "@/lib/utils";
 import {
@@ -83,9 +74,9 @@ export function ContractsCard({
   return (
     <section className="ll-surface rounded-lg border border-border p-4">
       <header className="mb-3 flex items-center gap-2">
-        <FileText className="h-3.5 w-3.5 text-primary" strokeWidth={1.8} />
+        <FileText aria-hidden size="small" className="text-primary" />
         <span className="text-[15px]">委托合同 / 附件</span>
-        <span className="font-mono text-[11px] text-muted-foreground tabular">
+        <span className="font-mono text-xs text-muted-foreground tabular">
           {rows.length}
         </span>
       </header>
@@ -102,7 +93,7 @@ export function ContractsCard({
             >
               <span
                 className={cn(
-                  "inline-flex h-7 items-center rounded-sm px-2 text-[10px] font-medium",
+                  "inline-flex h-7 items-center rounded-sm px-2 text-xs font-medium",
                   r.kind === "intake"
                     ? "bg-[var(--semi-color-success-light-default)] text-[var(--semi-color-success)] dark:text-[var(--semi-color-success)]"
                     : r.kind === "draft"
@@ -114,7 +105,7 @@ export function ContractsCard({
               </span>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[0.82rem] font-medium">{r.doc.name}</div>
-                <div className="font-mono text-[10px] tabular text-muted-foreground">
+                <div className="font-mono text-xs tabular text-muted-foreground">
                   {r.sealCode ? `${r.sealCode} · ` : ""}
                   {r.doc.size ? `${(r.doc.size / 1024).toFixed(0)} KB · ` : ""}
                   {formatDate(new Date(r.doc.createdAt))}
@@ -127,7 +118,7 @@ export function ContractsCard({
                 className="text-muted-foreground transition-colors hover:text-primary"
                 aria-label="下载"
               >
-                <Download className="h-4 w-4" strokeWidth={1.6} />
+                <Download aria-hidden size="default" />
               </a>
             </li>
           ))}
@@ -160,22 +151,22 @@ export function ExpressMiniCard({
     <section className="ll-surface h-full rounded-lg border border-border">
       <header className="flex items-center justify-between border-b border-[var(--semi-color-border)] px-4 py-3">
         <span className="panel-title">
-          <Package className="h-3.5 w-3.5 text-primary" strokeWidth={1.8} />
+          <Package aria-hidden size="small" className="text-primary" />
           快递记录
-          <span className="ml-1 font-mono text-[11px] text-muted-foreground tabular">
+          <span className="ml-1 font-mono text-xs text-muted-foreground tabular">
             {expresses.length}
           </span>
         </span>
         <div className="flex items-center gap-2">
           {matterId && (
-            <Button onClick={() => setAddOpen(true)} className="h-6 gap-0.5 px-2 text-[11px]" theme="solid" size="small">
-              <Plus className="h-2.5 w-2.5" />
+            <Button onClick={() => setAddOpen(true)} className="h-6 gap-0.5 px-2 text-xs" theme="solid" size="small">
+              <Plus aria-hidden className="h-2.5 w-2.5" />
               添加
             </Button>
           )}
           <Link
             href="/express"
-            className="text-[11px] text-muted-foreground transition-colors hover:text-primary"
+            className="text-xs text-muted-foreground transition-colors hover:text-primary"
           >
             全部 →
           </Link>
@@ -191,19 +182,19 @@ export function ExpressMiniCard({
               className="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2"
             >
               {e.direction === "OUTBOUND" ? (
-                <ArrowUpFromLine className="h-3.5 w-3.5 shrink-0 text-[var(--semi-color-warning)]" strokeWidth={1.8} />
+                <ArrowUpFromLine aria-hidden size="small" className="shrink-0 text-[var(--semi-color-warning)]" />
               ) : (
-                <ArrowDownToLine className="h-3.5 w-3.5 shrink-0 text-[var(--semi-color-success)]" strokeWidth={1.8} />
+                <ArrowDownToLine aria-hidden size="small" className="shrink-0 text-[var(--semi-color-success)]" />
               )}
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[0.82rem]">{e.purpose}</div>
-                <div className="font-mono text-[10px] tabular text-muted-foreground">
+                <div className="font-mono text-xs tabular text-muted-foreground">
                   {e.companyCode ?? "—"} · {e.trackingNo}
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-[11px] text-foreground/80">{e.lastState ?? "—"}</div>
-                <div className="font-mono text-[10px] tabular text-muted-foreground">
+                <div className="text-xs text-foreground/80">{e.lastState ?? "—"}</div>
+                <div className="font-mono text-xs tabular text-muted-foreground">
                   {e.lastUpdateAt
                     ? formatDate(new Date(e.lastUpdateAt))
                     : formatDate(new Date(e.createdAt))}
@@ -348,9 +339,9 @@ function AddExpressDialog({
                 size="small"
               >
                 {ocrPending ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <Loader2 aria-hidden size="small" spin />
                 ) : (
-                  <ScanLine className="h-3 w-3" />
+                  <ScanLine aria-hidden size="small" />
                 )}
                 识别
               </Button>
@@ -410,7 +401,7 @@ function AddExpressDialog({
             取消
           </Button>
           <Button onClick={handleSubmit} disabled={submitting} theme="solid">
-            {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+            {submitting && <Loader2 aria-hidden size="default" className="mr-1.5" spin />}
             保存并跟踪
           </Button>
         </DialogFooter>

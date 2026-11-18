@@ -3,7 +3,7 @@
 import { FocusButton } from "@/components/patterns/focus-button";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { IconPlus as Plus } from "@douyinfe/semi-icons";
 import { Table, Select, Button, Checkbox, Input, Tag, TextArea, Toast } from "@douyinfe/semi-ui";
 import { WorkspaceDialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
@@ -22,6 +22,7 @@ type TaskWorkPanelProps = {
   createStage?: { id: string; name: string } | null;
   defaultStage?: { id: string; name: string } | null;
   scopeStageIds?: string[] | null;
+  scopeKey?: string;
   unassignedOnly?: boolean;
   refreshRequest?: number;
   selectedTaskId?: string | null;
@@ -30,7 +31,7 @@ type TaskWorkPanelProps = {
 };
 
 /** 全案待办的 Task 入口；不从程序环节投影任务，也不生成平行任务状态。 */
-export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, createStage = null, defaultStage = null, scopeStageIds = null, unassignedOnly = false, refreshRequest = 0, selectedTaskId, onTaskSelect, onTaskCreated }: TaskWorkPanelProps) {
+export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, createStage = null, defaultStage = null, scopeStageIds = null, scopeKey = "", unassignedOnly = false, refreshRequest = 0, selectedTaskId, onTaskSelect, onTaskCreated }: TaskWorkPanelProps) {
   const router = useRouter();
   const [data, setData] = useState<TaskWorkflowWorkspace | null>(null);
   const [error, setError] = useState("");
@@ -38,6 +39,7 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, cr
   const [dueWaitingOnly, setDueWaitingOnly] = useState(false);
   const [observedAt, setObservedAt] = useState(0);
   const [reload, setReload] = useState(0);
+  const [returnedTask, setReturnedTask] = useState<{ matterId: string; scopeKey: string; id: string } | null>(null);
   const [creating, setCreating] = useState(false);
   const [creatingStage, setCreatingStage] = useState<{ id: string; name: string } | null>(null);
   const [localTaskId, setLocalTaskId] = useState<string | null>(null);
@@ -46,23 +48,29 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, cr
   const taskHeading = useRef<HTMLHeadingElement>(null);
   const createButton = useRef<HTMLButtonElement>(null);
   const taskButtons = useRef(new Map<string, HTMLButtonElement>());
+  const pendingFocus = useRef<string | null>(null);
+  const returnTaskId = returnedTask?.matterId === matterId && returnedTask.scopeKey === scopeKey ? returnedTask.id : undefined;
   const taskId = selectedTaskId === undefined ? localTaskId : selectedTaskId;
   const waitingIsDue = (task: TaskWorkflowWorkspace["tasks"][number]) => task.responsibility.state === "OPEN" && Boolean(task.activeWaiting && new Date(task.activeWaiting.nextCheckAt).getTime() <= observedAt);
   const inScope = (task: { stageId?: string | null }) => (!unassignedOnly || !task.stageId) && (scopeStageIds === null || Boolean(task.stageId && scopeStageIds.includes(task.stageId)));
-  const scopedTasks = data?.tasks.filter(task => inScope(task) && (!dueWaitingOnly || waitingIsDue(task))) ?? [];
+  const scopedTasks = data?.tasks.filter(task => inScope(task) && (!dueWaitingOnly || waitingIsDue(task) || task.id === returnTaskId)) ?? [];
   const scopedUntracked = dueWaitingOnly ? [] : data?.untrackedTasks.filter(inScope) ?? [];
+
+  useEffect(() => {
+    setReturnedTask(null);
+  }, [matterId, scopeKey]);
 
   useEffect(() => {
     let cancelled = false;
     setData(null);
     setError("");
-    getTaskWorkspace({ matterId, includeClosed }).then(result => {
+    getTaskWorkspace({ matterId, includeClosed, ...(returnTaskId ? { returnTaskId } : {}) }).then(result => {
       if (!cancelled) { setData(result); setObservedAt(Date.now()); }
     }).catch(cause => {
       if (!cancelled) setError(actionErrorMessage(cause) || "任务读取失败，请重试");
     });
     return () => { cancelled = true; };
-  }, [matterId, includeClosed, reload, refreshRequest]);
+  }, [matterId, includeClosed, returnTaskId, reload, refreshRequest]);
 
   useEffect(() => {
     if (createRequest > 0 && createRequest !== handledCreateRequest.current && canWrite && data?.canWrite) {
@@ -89,10 +97,18 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, cr
     router.refresh();
   }
 
+  useEffect(() => {
+    if ((!data && !error) || !pendingFocus.current) return;
+    const target = taskButtons.current.get(pendingFocus.current);
+    pendingFocus.current = null;
+    if (document.activeElement === taskHeading.current && target?.isConnected && !target.closest("[hidden]")) target.focus();
+  }, [data, error]);
+
   function returnTaskFocus(id: string) {
     const target = taskButtons.current.get(id);
+    if (!data && !error) pendingFocus.current = id;
     const visibleTarget = target?.isConnected && !target.closest("[hidden]") ? target : taskHeading.current;
-    if (visibleTarget?.isConnected && !visibleTarget.closest("[hidden]")) visibleTarget.focus({ preventScroll: true });
+    if (visibleTarget?.isConnected && !visibleTarget.closest("[hidden]")) visibleTarget.focus();
   }
 
   function returnCreateFocus() {
@@ -105,21 +121,20 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, cr
       <h3 ref={taskHeading} tabIndex={-1} className="text-sm font-semibold">任务</h3>
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Checkbox checked={dueWaitingOnly} onChange={({ target: { checked } }) => { setObservedAt(Date.now()); setDueWaitingOnly(checked === true); }}>
+          <Checkbox checked={dueWaitingOnly} onChange={({ target: { checked } }) => { setReturnedTask(null); setObservedAt(Date.now()); setDueWaitingOnly(checked === true); }}>
           仅看待检查
         </Checkbox></div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Checkbox checked={includeClosed} onChange={({ target: { checked } }) => setIncludeClosed(checked === true)}>
+          <Checkbox checked={includeClosed} onChange={({ target: { checked } }) => { setReturnedTask(null); setIncludeClosed(checked === true); }}>
           显示已办结和已取消
         </Checkbox></div>
-        {canWrite && data?.canWrite && <FocusButton theme="borderless" type="tertiary" size="small" style={{ height: "auto", paddingInline: 0 }} contentClassName="whitespace-normal break-words text-left" ref={createButton} onClick={() => { creatingLocation.current = window.location.href; setCreatingStage(defaultStage); setCreating(true); }} htmlType="button" className="min-w-0 max-w-full"><Plus />新建任务</FocusButton>}
+        {canWrite && data?.canWrite && <FocusButton theme="borderless" type="tertiary" size="small" style={{ height: "auto", paddingInline: 0 }} contentClassName="whitespace-normal break-words text-left" ref={createButton} onClick={() => { creatingLocation.current = window.location.href; setCreatingStage(defaultStage); setCreating(true); }} htmlType="button" className="min-w-0 max-w-full"><Plus aria-hidden />新建任务</FocusButton>}
       </div>
     </div>
     {error ? <div role="alert" className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm">
       <span>{error}</span><Button onClick={() => setReload(value => value + 1)} type="tertiary" theme="outline" size="small">重试</Button>
     </div> : !data ? <p role="status" className="py-4 text-sm text-muted-foreground">正在读取任务…</p> : scopedTasks.length === 0 ? <p className="py-4 text-sm text-muted-foreground">{dueWaitingOnly ? "当前范围没有到期的等待检查。" : scopedUntracked.length ? "没有责任记录完整的任务。" : includeClosed ? "当前范围还没有任务。" : "当前范围没有办理中的任务。"}</p> : <div className="overflow-x-auto rounded-lg border">
       <Table<(typeof scopedTasks)[number]>
-        size="small"
         pagination={false}
         rowKey="id"
         dataSource={scopedTasks}
@@ -141,7 +156,7 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, cr
       <ul className="mt-2 list-disc pl-5">{scopedUntracked.map(task => <li key={task.id}>{task.title} · {task.completed ? "原记录已标完成" : "原记录未标完成"} · 截止：{task.dueAt ? formatDateTime(task.dueAt) : "未安排"} · 原负责人：{task.assigneeName ?? "未记录或不可用"}{task.procedureTitle ? ` · ${task.procedureTitle}` : ""}{task.stageName ? ` · ${task.stageName}` : ""}</li>)}</ul>
     </div>}
     {creating && data && <CreateTaskDialog matterId={matterId} data={data} stage={creatingStage} onClose={() => setCreating(false)} onCreated={taskCreated} onReturnFocus={returnCreateFocus} />}
-    <TaskDetailDialog taskId={taskId} expectedMatterId={matterId} open={Boolean(taskId)} onOpenChange={open => { if (!open) selectTask(null); }} onTaskChangeRejected={id => selectTask(id, "replace")} onChanged={() => setReload(value => value + 1)} onReturnFocus={returnTaskFocus} />
+    <TaskDetailDialog taskId={taskId} expectedMatterId={matterId} open={Boolean(taskId)} onOpenChange={open => { if (!open) selectTask(null); }} onTaskChangeRejected={id => selectTask(id, "replace")} onChanged={id => { if (id) setReturnedTask({ matterId, scopeKey, id }); setReload(value => value + 1); }} onReturnFocus={returnTaskFocus} />
   </section>;
 }
 
@@ -182,7 +197,7 @@ function CreateTaskDialog({ matterId, data, stage, onClose, onCreated, onReturnF
     }
   }
 
-  return <WorkspaceDialog open onOpenChange={open => { if (!open) void close(); }}>
+  return <WorkspaceDialog dismissOnBackdrop open onOpenChange={open => { if (!open) void close(); }}>
     <FormDialogContent onCloseAutoFocus={event => { event.preventDefault(); if (!created.current) onReturnFocus(); }}>
       <DialogHeader><DialogTitle>{stage ? "新建环节任务" : "新建事项级任务"}</DialogTitle><DialogDescription>{stage ? `关联环节：${stage.name}` : "不关联程序或环节"}</DialogDescription></DialogHeader>
       <FormDialogBody>

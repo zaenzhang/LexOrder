@@ -4,7 +4,7 @@ import { customOrLegacy, hasCustomPermission, scopeFor, type RoleGrant } from "@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Archive, Check, XCircle } from "lucide-react";
+import { IconPlus as Plus, IconEdit as Pencil, IconArchive as Archive, IconTick as Check, IconClear as XCircle } from "@douyinfe/semi-icons";
 import type { ExternalContactCategory, ExternalContactStatus } from "@prisma/client";
 
 import { userRoleLabel } from "@/lib/enums";
@@ -14,7 +14,7 @@ import {
   archiveExternalContact,
   rejectExternalContact
 } from "@/server/external-contacts/actions";
-import { PageHeader } from "@/components/patterns/moan";
+import { PageHeader } from "@/components/patterns/workspace-surfaces";
 import { confirmDialog, promptDialog } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
 import type { RuntimeMode } from "@/lib/runtime/mode";
@@ -148,10 +148,10 @@ export function ContactsView({
               <Avatar size="default" src={u.avatar ?? undefined} alt={u.name}>{u.name.charAt(0)}</Avatar>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">{u.name}</div>
-                <div className="text-[11px] text-muted-foreground">
+                <div className="text-xs text-muted-foreground">
                   {u.roleName ?? userRoleLabel[u.role as keyof typeof userRoleLabel] ?? u.role}
                 </div>
-                <div className="mt-1 space-y-0.5 text-[11px] text-foreground/80">
+                <div className="mt-1 space-y-0.5 text-xs text-foreground/80">
                   <div className="truncate font-mono">{u.email}</div>
                   {u.phone && <div className="font-mono">{u.phone}</div>}
                 </div>
@@ -167,7 +167,7 @@ export function ContactsView({
           <h2 className="flex items-center gap-2 text-sm font-medium">
             外部联系人 ({externalContacts.length})
             {canReviewContacts && pendingCount > 0 && (
-              <span className="rounded-full border border-[var(--semi-color-warning-light-active)] bg-[var(--semi-color-warning-light-default)] px-2 py-0.5 text-[10px] font-medium text-[var(--semi-color-warning)]">
+              <span className="rounded-full border border-[var(--semi-color-warning-light-active)] bg-[var(--semi-color-warning-light-default)] px-2 py-0.5 text-xs font-medium text-[var(--semi-color-warning)]">
                 {personal ? "待确认" : "待审核"} {pendingCount}
               </span>
             )}
@@ -180,7 +180,7 @@ export function ContactsView({
             }}
             className="gap-1.5"
           >
-            <Plus className="h-3.5 w-3.5" />
+            <Plus aria-hidden size="small" />
             新增
           </Button>
         </header>
@@ -217,34 +217,34 @@ export function ContactsView({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{c.name}</span>
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                         {EXT_CATEGORY_LABEL[c.category]}
                       </span>
                       {c.status === "PENDING_REVIEW" && (
-                        <span className="rounded-full border border-[var(--semi-color-warning-light-active)] bg-[var(--semi-color-warning-light-default)] px-2 py-0.5 text-[10px] font-medium text-[var(--semi-color-warning)]">
+                        <span className="rounded-full border border-[var(--semi-color-warning-light-active)] bg-[var(--semi-color-warning-light-default)] px-2 py-0.5 text-xs font-medium text-[var(--semi-color-warning)]">
                           {personal ? "待确认" : "待审核"}
                         </span>
                       )}
                       {c.title && (
-                        <span className="text-[11px] text-muted-foreground">{c.title}</span>
+                        <span className="text-xs text-muted-foreground">{c.title}</span>
                       )}
                     </div>
                     {c.organization && (
-                      <div className="text-[11px] text-foreground/80">{c.organization}</div>
+                      <div className="text-xs text-foreground/80">{c.organization}</div>
                     )}
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-foreground/80">
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-foreground/80">
                       {c.phone && <span className="font-mono">{c.phone}</span>}
                       {c.email && <span className="font-mono">{c.email}</span>}
                       {c.wechat && <span>微信 {c.wechat}</span>}
                     </div>
                     {c.address && (
-                      <div className="mt-0.5 text-[11px] text-muted-foreground">{c.address}</div>
+                      <div className="mt-0.5 text-xs text-muted-foreground">{c.address}</div>
                     )}
                     {c.notes && (
-                      <div className="mt-1 text-[11px] italic text-muted-foreground">{c.notes}</div>
+                      <div className="mt-1 text-xs italic text-muted-foreground">{c.notes}</div>
                     )}
                     {c.status === "PENDING_REVIEW" && (
-                      <div className="mt-1 text-[11px] text-muted-foreground">
+                      <div className="mt-1 text-xs text-muted-foreground">
                         提交人：{c.createdBy.name}
                       </div>
                     )}
@@ -260,7 +260,7 @@ export function ContactsView({
                             onClick={() => handleApprove(c)}
                             className="gap-1"
                           >
-                            <Check className="h-3 w-3" />
+                            <Check aria-hidden size="small" />
                             {personal ? "本人确认" : "通过"}
                           </Button>
                           <Button
@@ -271,7 +271,7 @@ export function ContactsView({
                             onClick={() => handleReject(c)}
                             className="gap-1"
                           >
-                            <XCircle className="h-3 w-3" />
+                            <XCircle aria-hidden size="small" />
                             驳回
                           </Button>
                         </div>
@@ -288,7 +288,7 @@ export function ContactsView({
                               setDialogOpen(true);
                             }}
                           >
-                            <Pencil className="h-3 w-3" />
+                            <Pencil aria-hidden size="small" />
                           </Button>
                           <Button
                             htmlType="button"
@@ -297,7 +297,7 @@ export function ContactsView({
                             aria-label={`归档联系人 ${c.name}`}
                             onClick={() => handleArchive(c)}
                           >
-                            <Archive className="h-3 w-3" />
+                            <Archive aria-hidden size="small" />
                           </Button>
                         </>
                       )}

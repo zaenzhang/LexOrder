@@ -2,7 +2,7 @@
 
 import { Button, Form, Input, Toast } from "@douyinfe/semi-ui";
 import { useRef, useState, useTransition } from "react";
-import { Building2, Hash, ImageUp, Loader2, Trash2 } from "lucide-react";
+import { IconApartment as Building2, IconHash as Hash, IconImage as ImageUp, IconLoading as Loader2, IconDelete as Trash2 } from "@douyinfe/semi-icons";
 
 import { PRODUCT_NAME } from "@/lib/product";
 import { renderCaseNoTemplate } from "@/lib/matters/firm-caseno";
@@ -90,10 +90,10 @@ export function FirmProfileForm({ initial }: { initial: Initial }) {
       {/* —— 律所品牌 —— */}
       <section className="ll-surface rounded-lg border border-border p-5">
         <header className="mb-3 flex items-center gap-2">
-          <Building2 className="h-4 w-4 text-primary" />
+          <Building2 aria-hidden size="default" className="text-primary" />
           <h2 className="text-[14px] font-semibold">律所品牌</h2>
         </header>
-        <p className="mb-4 text-[12px] text-muted-foreground">
+        <p className="mb-4 text-xs text-muted-foreground">
           侧边栏顶部显示的名称、副标题与标志图片。留空名称将回退默认「{PRODUCT_NAME}」。
         </p>
 
@@ -105,7 +105,7 @@ export function FirmProfileForm({ initial }: { initial: Initial }) {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={logoDataUrl} alt="Logo 预览" className="h-full w-full object-contain" />
               ) : (
-                <span className="text-[10px] text-muted-foreground">无标志图片</span>
+                <span className="text-xs text-muted-foreground">无标志图片</span>
               )}
             </div>
             <input
@@ -120,7 +120,7 @@ export function FirmProfileForm({ initial }: { initial: Initial }) {
                 htmlType="button"
                 onClick={() => fileRef.current?.click()}
               >
-                <ImageUp className="h-3 w-3" />
+                <ImageUp aria-hidden size="small" />
                 上传
               </Button>
               {logoDataUrl && (
@@ -131,7 +131,7 @@ export function FirmProfileForm({ initial }: { initial: Initial }) {
                     if (fileRef.current) fileRef.current.value = "";
                   }}
                 >
-                  <Trash2 className="h-3 w-3" />
+                  <Trash2 aria-hidden size="small" />
                   清除
                 </Button>
               )}
@@ -140,7 +140,7 @@ export function FirmProfileForm({ initial }: { initial: Initial }) {
 
           <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <Form.Label name="firm-profile-name" className="text-[11px]">律所名称</Form.Label>
+              <Form.Label name="firm-profile-name" className="text-xs">律所名称</Form.Label>
               <Input
                 id="firm-profile-name" value={firmName}
                 onChange={(value) => setFirmName(value)}
@@ -149,7 +149,7 @@ export function FirmProfileForm({ initial }: { initial: Initial }) {
               />
             </div>
             <div>
-              <Form.Label name="firm-profile-subtitle" className="text-[11px]">副标题</Form.Label>
+              <Form.Label name="firm-profile-subtitle" className="text-xs">副标题</Form.Label>
               <Input
                 id="firm-profile-subtitle" value={firmSubtitle}
                 onChange={(value) => setFirmSubtitle(value)}
@@ -164,16 +164,16 @@ export function FirmProfileForm({ initial }: { initial: Initial }) {
       {/* —— 内部编号前缀 —— */}
       <section className="ll-surface rounded-lg border border-border p-5">
         <header className="mb-3 flex items-center gap-2">
-          <Hash className="h-4 w-4 text-primary" />
+          <Hash aria-hidden size="default" className="text-primary" />
           <h2 className="text-[14px] font-semibold">系统内部编号</h2>
         </header>
-        <p className="mb-4 text-[12px] text-muted-foreground">
+        <p className="mb-4 text-xs text-muted-foreground">
           每个案件自动生成的系统编号前缀。格式固定为
           <span className="mx-1 font-mono">前缀-年份-类别-流水</span>，仅前缀可改。
         </p>
         <div className="flex items-end gap-4">
           <div className="w-40">
-            <Form.Label name="firm-case-prefix" className="text-[11px]">编号前缀</Form.Label>
+            <Form.Label name="firm-case-prefix" className="text-xs">编号前缀</Form.Label>
             <Input
               id="firm-case-prefix" value={prefix}
               onChange={(value) => setPrefix(value)}
@@ -181,7 +181,7 @@ export function FirmProfileForm({ initial }: { initial: Initial }) {
               className="mt-1 font-mono"
             />
           </div>
-          <div className="pb-2 text-[12px] text-muted-foreground">
+          <div className="pb-2 text-xs text-muted-foreground">
             示例：
             <span className="ml-1 font-mono text-foreground/85">
               {(prefix.trim() || "LL")}-{year}-CC-0001
@@ -193,10 +193,10 @@ export function FirmProfileForm({ initial }: { initial: Initial }) {
       {/* —— 所内案号 —— */}
       <section className="ll-surface rounded-lg border border-border p-5">
         <header className="mb-3 flex items-center gap-2">
-          <Hash className="h-4 w-4 text-primary" />
+          <Hash aria-hidden size="default" className="text-primary" />
           <h2 className="text-[14px] font-semibold">所内案号（自定义模板）</h2>
         </header>
-        <p className="mb-4 text-[12px] text-muted-foreground">
+        <p className="mb-4 text-xs text-muted-foreground">
           律所习惯的案号，转化收案时按模板自动生成。可用占位符：
           <code className="mx-0.5">{"{年}"}</code>
           <code className="mx-0.5">{"{年2}"}</code>
@@ -210,7 +210,7 @@ export function FirmProfileForm({ initial }: { initial: Initial }) {
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div>
-            <Form.Label name="firm-case-short-name" className="text-[11px]">所简称（{"{所}"}）</Form.Label>
+            <Form.Label name="firm-case-short-name" className="text-xs">所简称（{"{所}"}）</Form.Label>
             <Input
               id="firm-case-short-name" value={shortName}
               onChange={(value) => setShortName(value)}
@@ -219,7 +219,7 @@ export function FirmProfileForm({ initial }: { initial: Initial }) {
             />
           </div>
           <div>
-            <Form.Label name="firm-case-number-template" className="text-[11px]">案号模板</Form.Label>
+            <Form.Label name="firm-case-number-template" className="text-xs">案号模板</Form.Label>
             <Input
               id="firm-case-number-template" value={template}
               onChange={(value) => setTemplate(value)}
@@ -229,25 +229,25 @@ export function FirmProfileForm({ initial }: { initial: Initial }) {
           </div>
         </div>
 
-        <div className="mt-3 rounded-md border border-border bg-muted/20 px-3 py-2 text-[12px]">
+        <div className="mt-3 rounded-md border border-border bg-muted/20 px-3 py-2 text-xs">
           示例（{sample?.label ?? "民商诉讼"}）：
           <span className="ml-1 font-mono text-foreground/90">{caseNoPreview || "—"}</span>
         </div>
 
         <div className="mt-4">
-          <Form.Label className="text-[11px] text-muted-foreground">类别词（{"{类词}"}）映射</Form.Label>
+          <Form.Label className="text-xs text-muted-foreground">类别词（{"{类词}"}）映射</Form.Label>
           <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
             {initial.categories.map((c) => (
               <div key={c.key} className="rounded-md border border-border bg-card p-2">
                 <div className="mb-1 flex items-center justify-between">
-                  <span className="text-[11px] text-muted-foreground">{c.label}</span>
-                  <span className="font-mono text-[10px] text-muted-foreground/70">{c.abbr}</span>
+                  <span className="text-xs text-muted-foreground">{c.label}</span>
+                  <span className="font-mono text-xs text-muted-foreground/70">{c.abbr}</span>
                 </div>
                 <Input
                   value={words[c.key] ?? ""}
                   onChange={(value) => setWords((w) => ({ ...w, [c.key]: value }))}
                   placeholder={c.word}
-                  className="h-8 text-[12px]"
+                  className="h-8 text-xs"
                 />
               </div>
             ))}
@@ -256,11 +256,11 @@ export function FirmProfileForm({ initial }: { initial: Initial }) {
       </section>
 
       <div className="flex items-center justify-between">
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           修改前缀 / 模板不影响已生成的历史编号；仅对之后新建的案件生效。
         </p>
         <Button theme="solid" onClick={save} disabled={pending} className="gap-1.5">
-          {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          {pending && <Loader2 aria-hidden size="small" spin />}
           保存
         </Button>
       </div>

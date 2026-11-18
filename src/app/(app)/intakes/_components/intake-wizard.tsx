@@ -17,7 +17,7 @@ import { useForm, useFieldArray, FormProvider, useWatch, Controller, type FieldE
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { useWorkspaceActor } from "@/components/workspace-actor-provider";
-import { AlertTriangle, ChevronRight, FileText, Loader2, Paperclip, Plus, ScanLine, Sparkles, X } from "lucide-react";
+import { IconAlertTriangle as AlertTriangle, IconChevronRight as ChevronRight, IconArticle as FileText, IconLoading as Loader2, IconPaperclip as Paperclip, IconPlus as Plus, IconScan as ScanLine, IconAIWandLevel1 as Sparkles, IconClose as X } from "@douyinfe/semi-icons";
 import type { MatterCategory, ProcedureType, LitigationStanding, FeeType, PartyRole, BarFilingType, ClientType } from "@prisma/client";
 import { WorkspaceDialog, DrawerContent, DialogDescription, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { ColleaguePicker } from "@/components/matters/colleague-picker";
@@ -627,7 +627,7 @@ export function IntakeWizard({
   }
 
   return (
-    <WorkspaceDialog open={open} onOpenChange={next => { if (!next) void requestClose(); }}>
+    <WorkspaceDialog dismissOnBackdrop open={open} onOpenChange={next => { if (!next) void requestClose(); }}>
       <DrawerContent ref={sheetRef} onEscapeKeyDown={event => { if (openPopup) event.preventDefault(); }} side="right" className="mo-intake flex w-screen flex-col gap-0 p-0 sm:max-w-[780px]" showClose={false} onCloseAutoFocus={onReturnFocus}>
         <FormProvider {...methods}>
           <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="flex min-h-0 flex-1 flex-col" noValidate>
@@ -635,7 +635,7 @@ export function IntakeWizard({
               <div className="id-top">
                 <DialogTitle className="id-title">{editing?"补正收案资料":"新建收案"}</DialogTitle>
                 <Button className="ml-auto" type="tertiary" theme="borderless" htmlType="button" onClick={() => void requestClose()} aria-label="关闭" disabled={isPending}>
-                  <X />
+                  <X aria-hidden />
                 </Button>
               </div>
               <DialogDescription className="sr-only">四步完成收案登记：收案信息、当事人与冲突、收费与团队、确认提交</DialogDescription>
@@ -647,7 +647,7 @@ export function IntakeWizard({
             <div ref={bodyRef} className="id-body">
               {errCount > 0 ? (
                 <div role="alert" className="match-banner" style={{ background: "var(--semi-color-danger-light-default)", borderColor: "var(--semi-color-danger-light-active)" }}>
-                  <AlertTriangle style={{ color: "var(--semi-color-danger)" }} />
+                  <AlertTriangle aria-hidden style={{ color: "var(--semi-color-danger)" }} />
                   <div className="match-body">
                     <div className="match-title" style={{ color: "var(--semi-color-danger)" }}>尚有信息需要检查</div>
                     <div className="match-desc" style={{ color: "var(--semi-color-danger)" }}>{firstFormErrorMessage(errors) ?? "请检查表单中的红色提示"}</div>
@@ -668,7 +668,7 @@ export function IntakeWizard({
                             placeholder="留空时按「委托方与对方 + 案由」自动生成"
                             onChange={value => { field.onChange(value); setTitleTouched(true); }} />
                         )} />
-                        {errors.title?.message ? <div className="mt-1 text-[11px] text-[var(--semi-color-danger)]">{errors.title.message}</div> : null}
+                        {errors.title?.message ? <div className="mt-1 text-xs text-[var(--semi-color-danger)]">{errors.title.message}</div> : null}
                       </div>
                     </div>
                     <div className="frow">
@@ -683,7 +683,7 @@ export function IntakeWizard({
                         <div className="fitem">
                             <label className="flabel">代理程序</label>
                             <ChoiceField ariaLabel="代理程序" placeholder="选择代理程序" invalid={Boolean(errors.firstProcedureType)} options={procedureOptions.map((p) => ({ value: p, label: procedureTypeLabel[p] }))} value={firstProcedureType} onChange={handleProcedureChange} />
-                            {errors.firstProcedureType?.message ? <div className="mt-1 text-[11px] text-[var(--semi-color-danger)]">{errors.firstProcedureType.message}</div> : null}
+                            {errors.firstProcedureType?.message ? <div className="mt-1 text-xs text-[var(--semi-color-danger)]">{errors.firstProcedureType.message}</div> : null}
                           </div>
                       ) : null}
                     </div>
@@ -698,7 +698,7 @@ export function IntakeWizard({
                                 <CauseCombobox category={category} procedureType={firstProcedureType} value={watch("causeId") || ""} disabled={!firstProcedureType} placeholder={firstProcedureType ? "点击选择案由" : "请先选择代理程序"} onChange={(id, name) => { setValue("causeId", id, { shouldDirty: true }); setCauseName(name); }} />
                               </div>
                               <Button theme="outline" htmlType="button" className="shrink-0" onClick={() => setAiManualOpen(true)} disabled={!firstProcedureType} title="描述案情，由 AI 推荐规范案由">
-                                <Sparkles />
+                                <Sparkles aria-hidden />
                                 AI 推荐
                               </Button>
                             </div>
@@ -726,7 +726,7 @@ export function IntakeWizard({
                           <div className="fitem" style={{ maxWidth: 200 }}>
                             <label className="flabel" htmlFor={`${fieldId}-amount`}>标的额（元）</label>
                             <Controller name="claimAmount" control={control} render={({ field }) => <Input id={`${fieldId}-amount`} type="number" inputMode="decimal" step="0.01" placeholder="0.00" name={field.name} value={typeof field.value === "number" || typeof field.value === "string" ? field.value : ""} onBlur={field.onBlur} ref={field.ref} onChange={value => field.onChange(value === "" ? undefined : Number(value))} />} />
-                            {errors.claimAmount?.message ? <div className="mt-1 text-[11px] text-[var(--semi-color-danger)]">{errors.claimAmount.message}</div> : null}
+                            {errors.claimAmount?.message ? <div className="mt-1 text-xs text-[var(--semi-color-danger)]">{errors.claimAmount.message}</div> : null}
                           </div>
                           <div className="fitem">
                             <label className="flabel" htmlFor={`${fieldId}-claim`}>标的描述（非金钱标的或其他诉求）</label>
@@ -853,7 +853,7 @@ export function IntakeWizard({
                   <div className="fsec-body">
                     {dupResult && (dupResult.idNumberExists || dupResult.nameDuplicates.length > 0) ? (
                       <div className="match-banner">
-                        <AlertTriangle />
+                        <AlertTriangle aria-hidden />
                         <div className="match-body">
                           {dupResult.idNumberDuplicate ? (
                             <>
@@ -878,7 +878,7 @@ export function IntakeWizard({
                               </Button>
                             ) : null}
                             {dupResult.idNumberDuplicate ? (
-                              <a className="btn btn-secondary btn-sm" href={`/clients/${dupResult.idNumberDuplicate.id}`} target="_blank" rel="noreferrer">查看档案</a>
+                              <a className="workspace-action-link" href={`/clients/${dupResult.idNumberDuplicate.id}`} target="_blank" rel="noreferrer">查看档案</a>
                             ) : null}
                             {!dupResult.idNumberExists ? <Button theme="borderless" htmlType="button" onClick={() => setDupDismissed(true)}>仍要新建</Button> : null}
                           </div>
@@ -906,7 +906,7 @@ export function IntakeWizard({
                       <div className="fitem mb-3">
                         <label className="flabel">委托方诉讼地位<span className="star">*</span></label>
                         {standingSelect(ourStanding, ourStandingOptions, (v) => setValue("ourStanding", v, { shouldDirty: true, shouldValidate: true }), "委托方诉讼地位")}
-                        {errors.ourStanding?.message ? <div className="mt-1 text-[11px] text-[var(--semi-color-danger)]">{errors.ourStanding.message}</div> : null}
+                        {errors.ourStanding?.message ? <div className="mt-1 text-xs text-[var(--semi-color-danger)]">{errors.ourStanding.message}</div> : null}
                       </div>
                     ) : null}
                     {parties[clientIndex] ? (
@@ -937,14 +937,14 @@ export function IntakeWizard({
                     <div className="fsec-body">
                       {kind === "litigation" && ourStanding && RECEIVING_STANDINGS.has(ourStanding) ? (
                         <div className="match-banner" style={{ background: "var(--semi-color-secondary-light-default)", borderColor: "var(--semi-color-secondary-light-active)" }}>
-                          <ScanLine style={{ color: "var(--semi-color-secondary)" }} />
+                          <ScanLine aria-hidden style={{ color: "var(--semi-color-secondary)" }} />
                           <div className="match-body">
                             <div className="match-title" style={{ color: "var(--semi-color-secondary)" }}>识别起诉状 / 申请书</div>
                             <div className="match-desc" style={{ color: "var(--semi-color-text-1)" }}>我方为被动方，可上传对方起诉状或申请书（JPG / PNG / WebP / PDF，≤ 20MB），AI 抽取对方主体、诉求与法院，识别结果须人工核对。</div>
                             <div className="match-acts">
                               <input ref={pleadingRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePleadingFile(f); }} />
                               <Button theme="outline" htmlType="button" onClick={() => pleadingRef.current?.click()} disabled={ocrPending}>
-                                {ocrPending ? <Loader2 className="animate-spin" /> : <ScanLine />}
+                                {ocrPending ? <Loader2 aria-hidden spin /> : <ScanLine aria-hidden />}
                                 上传识别
                               </Button>
                             </div>
@@ -976,7 +976,7 @@ export function IntakeWizard({
                         );
                       })}
                       <Button theme="borderless" htmlType="button" block onClick={() => appendParty(emptyParty("OPPOSING_PARTY", parties.length + 1))}>
-                        <Plus />
+                        <Plus aria-hidden />
                         {kind === "litigation" ? "添加诉讼对方 / 第三人" : "添加相对方"}
                       </Button>
                     </div>
@@ -1007,7 +1007,7 @@ export function IntakeWizard({
                         <div className="fitem" style={{ maxWidth: 220 }}>
                           <label className="flabel">{feeType === "TIMED" ? "小时费率（元/时）" : feeType === "CONTINGENCY" ? "基础办案费（元）" : "总金额（元）"}</label>
                           <Controller name="feeAmount" control={control} render={({ field }) => <Input type="number" inputMode="decimal" step="0.01" placeholder="0.00" name={field.name} value={typeof field.value === "number" || typeof field.value === "string" ? field.value : ""} onBlur={field.onBlur} ref={field.ref} onChange={value => field.onChange(value === "" ? undefined : Number(value))} />} />
-                          {errors.feeAmount?.message ? <div className="mt-1 text-[11px] text-[var(--semi-color-danger)]">{errors.feeAmount.message}</div> : null}
+                          {errors.feeAmount?.message ? <div className="mt-1 text-xs text-[var(--semi-color-danger)]">{errors.feeAmount.message}</div> : null}
                         </div>
                         <div className="fitem">
                           <label className="flabel">{feeType === "TIMED" ? "计费说明 / 结算周期" : "付款节点 / 分期约定"}</label>
@@ -1020,7 +1020,7 @@ export function IntakeWizard({
                         <div className="fitem">
                           <label className="flabel">风险代理收费方式</label>
                           <Controller name="contingencyTerms" control={control} render={({ field }) => <TextArea rows={3} placeholder="详细描述风险代理收费方式 / 触发条件 / 计提比例" name={field.name} value={field.value ?? ""} onBlur={field.onBlur} ref={field.ref} onChange={field.onChange} />} />
-                          {errors.contingencyTerms?.message ? <div className="mt-1 text-[11px] text-[var(--semi-color-danger)]">{errors.contingencyTerms.message}</div> : null}
+                          {errors.contingencyTerms?.message ? <div className="mt-1 text-xs text-[var(--semi-color-danger)]">{errors.contingencyTerms.message}</div> : null}
                         </div>
                       </div>
                     ) : null}
@@ -1047,7 +1047,7 @@ export function IntakeWizard({
                           aria-labelledby={`${fieldId}-owner`} onDropdownVisibleChange={visible => trackPopup("owner", visible)} placeholder="选择主办律师" optionList={colleagues.map(value => ({ value: value.id, label: value.name }))}
                           filter motion={false} getPopupContainer={() => sheetRef.current!}
                           onChange={value => { if (typeof value === "string") setValue("ownerUserId", value, { shouldDirty: true }); }} />
-                        {errors.ownerUserId?.message ? <div className="mt-1 text-[11px] text-[var(--semi-color-danger)]">{errors.ownerUserId.message}</div> : null}
+                        {errors.ownerUserId?.message ? <div className="mt-1 text-xs text-[var(--semi-color-danger)]">{errors.ownerUserId.message}</div> : null}
                       </div>
                       <div className="fitem">
                         <label className="flabel">协办人员（可多选）</label>
@@ -1075,7 +1075,7 @@ export function IntakeWizard({
                     <span className="aside">
                       <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
                       <Button theme="outline" htmlType="button" onClick={() => fileRef.current?.click()}>
-                        <Paperclip />
+                        <Paperclip aria-hidden />
                         添加附件
                       </Button>
                     </span>
@@ -1086,11 +1086,11 @@ export function IntakeWizard({
                     ) : (
                       contracts.map((f, i) => (
                         <div key={i} className="entity-card">
-                          <FileText className="h-4 w-4 text-[var(--semi-color-primary)]" />
-                          <span className="min-w-0 flex-1 truncate text-[12.5px] font-[550]">{f.name}</span>
+                          <FileText aria-hidden size="default" className="text-[var(--semi-color-primary)]" />
+                          <span className="min-w-0 flex-1 truncate text-sm font-[550]">{f.name}</span>
                           <span className="num-sm t-mute">{Math.max(1, Math.round(f.size / 1024))} KB</span>
                           <Button theme="borderless" htmlType="button" onClick={() => setContracts((c) => c.filter((_, j) => j !== i))} aria-label={`移除 ${f.name}`}>
-                            <X />
+                            <X aria-hidden />
                           </Button>
                         </div>
                       ))
@@ -1102,7 +1102,7 @@ export function IntakeWizard({
                   <div className="fsec-head"><span className="t">补充说明</span></div>
                   <div className="fsec-body">
                     <Controller name="description" control={control} render={({ field }) => <TextArea rows={4} placeholder="客户来源、核心诉求、注意事项…" name={field.name} value={field.value ?? ""} onBlur={field.onBlur} ref={field.ref} onChange={field.onChange} />} />
-                    {errors.description?.message ? <div className="mt-1 text-[11px] text-[var(--semi-color-danger)]">{errors.description.message}</div> : null}
+                    {errors.description?.message ? <div className="mt-1 text-xs text-[var(--semi-color-danger)]">{errors.description.message}</div> : null}
                   </div>
                 </div>
 
@@ -1123,8 +1123,8 @@ export function IntakeWizard({
                         ["附件", `${contracts.length} 份`]
                       ].map(([k, v]) => (
                         <div key={k} className={cn("flex items-baseline gap-3 border-b border-[var(--semi-color-border)] py-2", (k === nameLabel || k === clientLabel || k === "其他当事人" || k === "标的描述") && "col-span-2")}>
-                          <dt className="w-[72px] shrink-0 text-[12px] text-[var(--semi-color-text-2)]">{k}</dt>
-                          <dd className="min-w-0 whitespace-pre-wrap break-words text-[12.75px] font-[550]">{v}</dd>
+                          <dt className="w-[72px] shrink-0 text-xs text-[var(--semi-color-text-2)]">{k}</dt>
+                          <dd className="min-w-0 whitespace-pre-wrap break-words text-sm font-[550]">{v}</dd>
                         </div>
                       ))}
                     </dl>
@@ -1139,7 +1139,7 @@ export function IntakeWizard({
               </span>
               <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
                 <span className="ai-note hidden whitespace-nowrap lg:flex">
-                  <Sparkles className="h-3.5 w-3.5" />
+                  <Sparkles aria-hidden size="small" />
                   {editing?"保存后复核冲突并重新送审":"提交时自动进行正式冲突检索"}
                 </span>
                 <Button theme="borderless" htmlType="button" disabled={step === 0 || isPending} onClick={() => setStep((s) => Math.max(0, s - 1))}>
@@ -1148,13 +1148,13 @@ export function IntakeWizard({
                 {step < STEPS.length - 1 ? (
                   <Button theme="solid" key="next-step" htmlType="button" onClick={next}>
                     下一步 · {STEPS[step + 1]}
-                    <ChevronRight />
+                    <ChevronRight aria-hidden />
                   </Button>
                 ) : (
                   <Button theme="solid" key="submit-intake" htmlType="submit" disabled={isPending}>
-                    {isPending ? <Loader2 className="animate-spin" /> : null}
+                    {isPending ? <Loader2 aria-hidden spin /> : null}
                     {editing?"保存补正":"提交审批"}
-                    <ChevronRight />
+                    <ChevronRight aria-hidden />
                   </Button>
                 )}
               </div>

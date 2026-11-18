@@ -3,12 +3,13 @@
  * 归档借阅面板（F-6）：我的借阅（查阅/归还）+ 待我审批（批准天数/驳回理由）
  * + 申请借阅（搜索归档号/案号/案名 → 事由）。审批人视图同页就地下钻。
  */
-import { Button, Input, Modal, Radio, TextArea, Notification, Toast } from "@douyinfe/semi-ui";
-import { useState, useTransition } from "react";
+import { Button, Input, Radio, TextArea, Notification, Toast } from "@douyinfe/semi-ui";
+import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { BookOpen, Loader2, Search } from "lucide-react";
+import { IconBook as BookOpen, IconLoading as Loader2, IconSearch as Search } from "@douyinfe/semi-icons";
 
-import { confirmDialog, promptDialog } from "@/components/patterns/confirm-dialog";
+import { DialogContent, DialogHeader, DialogTitle, WorkspaceDialog } from "@/components/patterns/workspace-dialog";
+import { confirmDialog, confirmDiscardChanges, promptDialog } from "@/components/patterns/confirm-dialog";
 import { formatDate } from "@/lib/utils";
 import { matterHref } from "@/lib/matters/route";
 import {
@@ -32,7 +33,7 @@ export function BorrowPanel({ mine, pending, canApply }: { mine: BorrowRow[]; pe
     <div className="card">
       <div className="panel-head">
         <div className="panel-title" style={{ fontSize: 13 }}>
-          <BookOpen className="ic" strokeWidth={1.8} />
+          <BookOpen aria-hidden className="ic" />
           案卷借阅
         </div>
         {canApply ? (
@@ -104,7 +105,7 @@ function ReturnButton({ id }: { id: string }) {
         }
       })} htmlType="button"
     >
-      {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}阅毕归还
+      {isPending && <Loader2 aria-hidden size="small" spin />}阅毕归还
     </Button>
   );
 }
@@ -189,14 +190,28 @@ function BorrowApplyDialog({ open, onOpenChange }: { open: boolean; onOpenChange
     });
   }
 
+  const confirmingClose = useRef(false);
+  async function close() {
+    if (isPending || confirmingClose.current) return;
+    if (picked || reason.trim()) {
+      confirmingClose.current = true;
+      try { if (!await confirmDiscardChanges()) return; }
+      finally { confirmingClose.current = false; }
+    }
+    setQ(""); setResults([]); setPicked(""); setReason("");
+    onOpenChange(false);
+  }
+
   return (
-    <Modal visible={open} onCancel={() => { if (!isPending) onOpenChange(false); }} title="申请借阅案卷" footer={null} width={560} motion={false} closable={!isPending} maskClosable={!isPending} closeOnEsc={!isPending}>
+    <WorkspaceDialog open={open} dismissOnBackdrop onOpenChange={next => { if (!next) void close(); }}>
+      <DialogContent className="max-w-[560px]" showClose={!isPending}>
+        <DialogHeader><DialogTitle>申请借阅案卷</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div className="flex gap-2">
             <Input disabled={isPending} value={q} onChange={(e) => setQ(e)} placeholder="归档号 / 所内案号 / 案件名称" className="text-xs"
               onKeyDown={(e) => e.key === "Enter" && search()} />
             <Button size="small" theme="outline" type="tertiary" onClick={search} disabled={isPending} className="gap-1.5 shrink-0" htmlType="button">
-              {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}检索
+              {isPending ? <Loader2 aria-hidden size="small" spin /> : <Search aria-hidden size="small" />}检索
             </Button>
           </div>
           {results.length > 0 ? (
@@ -213,11 +228,12 @@ function BorrowApplyDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           <TextArea aria-label="借阅事由" disabled={isPending} value={reason} onChange={(e) => setReason(e)} rows={3} placeholder="借阅事由（必填，如：客户回头咨询再审准备）" className="text-xs" />
         </div>
         <div className="mt-4 flex justify-end gap-2">
-          <Button theme="outline" type="tertiary" disabled={isPending} onClick={() => onOpenChange(false)} htmlType="button">取消</Button>
+          <Button theme="outline" type="tertiary" disabled={isPending} onClick={() => void close()} htmlType="button">取消</Button>
           <Button onClick={submit} disabled={isPending || !picked || reason.trim().length < 5} className="gap-1.5" theme="solid" type="primary" htmlType="button">
-            {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}提交申请
+            {isPending && <Loader2 aria-hidden size="small" spin />}提交申请
           </Button>
         </div>
-    </Modal>
+      </DialogContent>
+    </WorkspaceDialog>
   );
 }

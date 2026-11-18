@@ -36,7 +36,7 @@ export function OcrSettingsForm({ initial }: { initial: { endpoint: string; apiK
   return (
     <div className="card p-4">
       <div className="flex flex-wrap items-center gap-3"><h2 className="text-sm font-medium">独立 OCR 网关（可选）</h2><span className="text-xs text-muted-foreground">{!initial.enabled ? "已禁用" : initial.configurationError ? "配置需修复" : initial.endpoint ? "已配置 · 未验证" : "未配置"}</span></div>
-      <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">
         网关关闭时，图片识别仍可使用已启用的 AI 视觉模型；两者均不可用时保留原件并由人工处理。保存不会发送扫描件或测试请求。
       </p>
       {initial.configurationError && <p role="alert" className="mt-2 text-sm text-destructive">{initial.configurationError}</p>}

@@ -1,4 +1,6 @@
 "use client";
+
+import { DialogContent, DialogHeader, DialogTitle, WorkspaceDialog } from "@/components/patterns/workspace-dialog";
 import { deadlineDays, deadlineRelative, formatDeadlineDue, type DeadlineDuePrecision } from "@/lib/deadline-due";
 
 /**
@@ -7,14 +9,14 @@ import { deadlineDays, deadlineRelative, formatDeadlineDue, type DeadlineDuePrec
  * 「跳转案件」、键盘 ↑↓ 选择 · ↵ 打开 · Tab 遍历控件；底部注明权限口径与识别失败数。
  * 数据与授权过滤全部在 server/search/actions.ts（候选逐条 canReadDocument）。
  */
-import { cloneElement, Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Input, Modal, Tabs, Tag } from "@douyinfe/semi-ui";
-import { Building2, Clock, FileText, Folder, Inbox, Loader2, Lock, Search, Sparkle } from "lucide-react";
+import { Button, Highlight, Input, Tabs, Tag } from "@douyinfe/semi-ui";
+import { IconApartment as Building2, IconClock as Clock, IconArticle as FileText, IconFolder as Folder, IconInbox as Inbox, IconLoading as Loader2, IconLock as Lock, IconSearch as Search, IconAIWandLevel1 as Sparkle } from "@douyinfe/semi-icons";
 import { continueGlobalSearch, globalSearch, type GlobalSearchResult, type SearchResultItem } from "@/server/search/actions";
 import type { MaterialSourceInput } from "@/server/documents/material-processing";
 import { SearchMaterialSourceDialog } from "./search-material-source-dialog";
-import { documentSourceChip } from "@/lib/ui/moan-tones";
+import { documentSourceChip } from "@/lib/ui/status-tones";
 import { cn } from "@/lib/utils";
 
 type GroupKey = "documents" | "matters" | "clients" | "deadlines" | "intakes";
@@ -30,25 +32,13 @@ const GROUPS: { key: GroupKey; label: string; icon: typeof Folder; tone: string 
 const SCOPE_ORDER: Scope[] = ["all", "matters", "clients", "documents", "deadlines", "intakes"];
 const ALL_SCOPE_LIMIT = 4;
 
-function Highlight({ text, q }: { text: string; q: string }) {
-  if (!q) return <>{text}</>;
-  const lower = text.toLowerCase();
-  const needle = q.toLowerCase();
-  const parts: React.ReactNode[] = [];
-  let i = 0;
-  let k = 0;
-  while (i < text.length) {
-    const idx = lower.indexOf(needle, i);
-    if (idx < 0) {
-      parts.push(text.slice(i));
-      break;
-    }
-    if (idx > i) parts.push(text.slice(i, idx));
-    parts.push(<mark key={k++}>{text.slice(idx, idx + q.length)}</mark>);
-    i = idx + q.length;
-  }
-  return <>{parts}</>;
-}
+const matchStyle = {
+  backgroundColor: "var(--workspace-selection-bg)",
+  color: "var(--workspace-selection-text)",
+  fontWeight: 700,
+  textDecoration: "underline",
+  textUnderlineOffset: "0.14em",
+};
 
 function dueLabel(iso: string, precision: DeadlineDuePrecision | null) {
   return { date: formatDeadlineDue(iso, precision), left: deadlineRelative(iso, precision), urgent: deadlineDays(iso) <= 3 };
@@ -273,173 +263,161 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const total = GROUPS.reduce((n, g) => n + counts[g.key], 0);
 
   return (
-    <><Modal
-      visible={open}
-      title="全局搜索"
-      width="min(780px, calc(100vw - 24px))"
-      centered
-      motion={false}
-      preventScroll
-      footer={null}
-      closable={!source}
-      maskClosable={!source}
-      onCancel={() => {
-        if (source) return;
+    <>
+      <WorkspaceDialog open={open} dismissOnBackdrop={!source} onOpenChange={next => {
+        if (next || source) return;
         onOpenChange(false);
         setScope("all");
-      }}
-      modalRender={node => cloneElement(node as ReactElement<{ inert?: boolean; "aria-hidden"?: boolean; onKeyDown?: typeof onKeyDown }>, {
-        inert: source ? true : undefined,
-        "aria-hidden": source ? true : undefined,
-        onKeyDown,
-      })}
-    >
-      <div className="mo-search space-y-3">
-        <Input
-          ref={inputRef}
-          value={query}
-          onChange={setQuery}
-          prefix={
-            <span className="mx-3 inline-flex text-[var(--semi-color-text-2)]" aria-hidden>
-              {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-            </span>
-          }
-          placeholder="搜索案件、客户、材料正文、期限…"
-          aria-label="搜索关键词"
-          autoComplete="off"
-          autoFocus
-          showClear
-        />
-        <Tabs type="button" size="small" activeKey={scope} onChange={value => chooseScope(value as Scope)}>
-          {SCOPE_ORDER.map(value => <Tabs.TabPane itemKey={value} key={value} tab={
-            <span>{value === "all" ? "全部" : GROUPS.find(group => group.key === value)!.label}
-              {value !== "all" && results ? ` ${pages[value]?.failed ? "—" : counts[value]}` : ""}
-            </span>
-          } />)}
-        </Tabs>
-            <div className="gs-body" ref={bodyRef} style={{ maxHeight: "55vh", overflowY: "auto" }}>
-              {!q ? (
-                <div className="mo-gs-empty">
-                  <div className="mo-empty-title">输入关键词开始检索</div>
-                  <div className="mo-empty-desc">可搜案件名称 / 所内编号、客户名称 / 证件号 / 电话、材料名称与正文、期限事项、在途收案。</div>
-                </div>
-              ) : searchError ? (
-                <div role="alert" className="p-4 text-sm">搜索读取失败，请重试。<Button theme="outline" size="small" className="ml-2" onClick={() => setSearchRetry(value => value + 1)}>重新检索</Button></div>
-              ) : results && visible.length === 0 && !loading ? (
-                <div className="mo-gs-empty">
-                  <div className="mo-empty-title">{total === 0 ? "未找到相关结果" : "该范围下没有结果"}</div>
-                  <div className="mo-empty-desc">{total === 0 ? "换个关键词试试；证件号需完整输入才会精确匹配。" : "可切换到其他范围查看。"}</div>
-                </div>
-              ) : null}
-
-              {visible.map(({ group, items, start }) => {
-                const Icon = group.icon;
-                return (
-                  <Fragment key={group.key}>
-                    <div className="gs-group">
-                      {group.label} · {pages[group.key]?.failed ? "读取失败" : `已显示 ${counts[group.key]} 条`}
-                      {scope === "all" && counts[group.key] > items.length ? (
-                        <Button htmlType="button" size="small" theme="borderless" onClick={() => chooseScope(group.key)}>查看此范围 →</Button>
-                      ) : null}
+      }}>
+        <DialogContent className="max-w-[780px]" showClose={!source} inert={Boolean(source)} aria-hidden={source ? true : undefined} onKeyDown={onKeyDown}>
+          <DialogHeader><DialogTitle>全局搜索</DialogTitle></DialogHeader>
+          <div className="mo-search space-y-3">
+            <Input
+              ref={inputRef}
+              value={query}
+              onChange={setQuery}
+              prefix={
+                <span className="mx-3 inline-flex text-[var(--semi-color-text-2)]" aria-hidden>
+                  {loading ? <Loader2 aria-hidden size="default" spin /> : <Search aria-hidden size="default" />}
+                </span>
+              }
+              placeholder="搜索案件、客户、材料正文、期限…"
+              aria-label="搜索关键词"
+              autoComplete="off"
+              autoFocus
+              showClear
+            />
+            <Tabs type="button" activeKey={scope} onChange={value => chooseScope(value as Scope)}>
+              {SCOPE_ORDER.map(value => <Tabs.TabPane itemKey={value} key={value} tab={
+                <span>{value === "all" ? "全部" : GROUPS.find(group => group.key === value)!.label}
+                  {value !== "all" && results ? ` ${pages[value]?.failed ? "—" : counts[value]}` : ""}
+                </span>
+              } />)}
+            </Tabs>
+                <div className="gs-body" ref={bodyRef} style={{ maxHeight: "55vh", overflowY: "auto" }}>
+                  {!q ? (
+                    <div className="mo-gs-empty">
+                      <div className="mo-empty-title">输入关键词开始检索</div>
+                      <div className="mo-empty-desc">可搜案件名称 / 所内编号、客户名称 / 证件号 / 电话、材料名称与正文、期限事项、在途收案。</div>
                     </div>
-                    {items.map((item, i) => {
-                      const myIdx = start + i;
-                      const chip = item.sourceOrigin ? documentSourceChip[item.sourceOrigin] : null;
-                      const due = item.dueAt && item.type === "deadline" ? dueLabel(item.dueAt, item.duePrecision ?? null) : null;
-                      return (
-                        <div
-                          key={`${group.key}-${item.id}`}
-                          data-idx={myIdx}
-                          role="option"
-                          tabIndex={-1}
-                          aria-selected={sel === myIdx}
-                          className={cn("gs-item", sel === myIdx && "sel")}
-                          onMouseMove={() => sel !== myIdx && setSel(myIdx)}
-                          onClick={event => { setSel(myIdx); openResult(item, event.currentTarget); }}
-                          style={item.href ? undefined : { cursor: "default" }}
-                        >
-                          <div className={cn("gs-ic", group.tone)}>
-                            <Icon strokeWidth={1.9} />
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div className="gs-title">
-                              <Highlight text={item.title} q={q} />
-                              {item.ocr ? (
-                                <Tag color="violet" size="small" prefixIcon={<Sparkle size={10} />} className="ml-2">OCR</Tag>
-                              ) : null}
-                            </div>
-                            {item.type === "document" && item.snippet ? (
-                              <div className="gs-snippet">…<Highlight text={item.snippet} q={q} />…</div>
-                            ) : null}
-                            <div className="gs-meta">
-                              {item.type === "document" ? (
-                                <>
-                                  <span className="mono">{item.pageNo ? `第 ${item.pageNo} 页命中` : item.matchedBy}</span>
-                                  {chip ? <span className={cn("src-chip", chip.kind)}>{chip.label}</span> : null}
-                                  {item.context ? <span className="truncate">{item.context}</span> : <span>未挂案件或收案</span>}
-                                  {item.code ? <span className="mono">{item.code}</span> : null}
-                                </>
-                              ) : item.type === "matter" ? (
-                                <>
-                                  <span className="mono">{item.code}</span>
-                                  <span>· <Highlight text={item.matchedBy ?? ""} q={q} />{item.meta ? ` · ${item.meta}` : ""}</span>
-                                </>
-                              ) : item.type === "client" ? (
-                                <span>{item.meta}{item.matchedBy && item.matchedBy !== "名称命中" ? <> · <Highlight text={item.matchedBy} q={q} /></> : null}</span>
-                              ) : item.type === "deadline" && due ? (
-                                <>
-                                  <span className="mono">{due.date}</span>
-                                  <span>· {item.meta} · {item.context}</span>
-                                  <span style={{ color: due.urgent ? "var(--semi-color-danger)" : undefined }}>· {due.left}</span>
-                                </>
-                              ) : (
-                                <span>{item.meta}</span>
-                              )}
-                            </div>
-                          </div>
-                          {item.matterLink && item.type !== "matter" ? (
-                            <Button
-                              htmlType="button"
-                              theme="light"
-                              size="small"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                go(item.matterLink!);
-                              }}
-                            >
-                              {item.type === "document" && !item.code ? "打开收案" : "跳转案件"}
-                            </Button>
+                  ) : searchError ? (
+                    <div role="alert" className="p-4 text-sm">搜索读取失败，请重试。<Button theme="outline" size="small" className="ml-2" onClick={() => setSearchRetry(value => value + 1)}>重新检索</Button></div>
+                  ) : results && visible.length === 0 && !loading ? (
+                    <div className="mo-gs-empty">
+                      <div className="mo-empty-title">{total === 0 ? "未找到相关结果" : "该范围下没有结果"}</div>
+                      <div className="mo-empty-desc">{total === 0 ? "换个关键词试试；证件号需完整输入才会精确匹配。" : "可切换到其他范围查看。"}</div>
+                    </div>
+                  ) : null}
+
+                  {visible.map(({ group, items, start }) => {
+                    const Icon = group.icon;
+                    return (
+                      <Fragment key={group.key}>
+                        <div className="gs-group">
+                          {group.label} · {pages[group.key]?.failed ? "读取失败" : `已显示 ${counts[group.key]} 条`}
+                          {scope === "all" && counts[group.key] > items.length ? (
+                            <Button htmlType="button" size="small" theme="borderless" onClick={() => chooseScope(group.key)}>查看此范围 →</Button>
                           ) : null}
                         </div>
-                      );
-                    })}
-                    {pages[group.key]?.failed ? <div role="alert" className="flex flex-wrap items-center gap-2 px-4 py-3 text-sm">
-                      <span>此范围读取失败，先前结果已隐藏。</span>
-                      <Button theme="outline" size="small" disabled={pages[group.key]?.loading} onClick={() => void continueGroup(group.key)}>重试此批</Button>
-                      <Button theme="borderless" size="small" disabled={pages[group.key]?.loading} onClick={() => void continueGroup(group.key, true)}>从头检索</Button>
-                    </div> : results?.nextCursorByGroup[group.key] ? <div className="flex items-center gap-2 px-4 py-3">
-                      {!items.length ? <span className="text-sm text-muted-foreground">本批没有可展示结果。</span> : null}
-                      <Button theme="outline" size="small" disabled={pages[group.key]?.loading || loading} onClick={() => { if (scope === "all") chooseScope(group.key); void continueGroup(group.key); }}>
-                        {pages[group.key]?.loading ? "正在检索…" : "继续检索"}
-                      </Button>
-                    </div> : null}
-                  </Fragment>
-                );
-              })}
-            </div>
+                        {items.map((item, i) => {
+                          const myIdx = start + i;
+                          const chip = item.sourceOrigin ? documentSourceChip[item.sourceOrigin] : null;
+                          const due = item.dueAt && item.type === "deadline" ? dueLabel(item.dueAt, item.duePrecision ?? null) : null;
+                          return (
+                            <div
+                              key={`${group.key}-${item.id}`}
+                              data-idx={myIdx}
+                              role="option"
+                              tabIndex={-1}
+                              aria-selected={sel === myIdx}
+                              className={cn("gs-item", sel === myIdx && "sel")}
+                              onMouseMove={() => sel !== myIdx && setSel(myIdx)}
+                              onClick={event => { setSel(myIdx); openResult(item, event.currentTarget); }}
+                              style={item.href ? undefined : { cursor: "default" }}
+                            >
+                              <div className={cn("gs-ic", group.tone)}>
+                                <Icon />
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div className="gs-title">
+                                  <Highlight sourceString={item.title} searchWords={[q]} autoEscape highlightStyle={matchStyle} />
+                                  {item.ocr ? (
+                                    <Tag color="violet" size="small" prefixIcon={<Sparkle aria-hidden size="small" />} className="ml-2">OCR</Tag>
+                                  ) : null}
+                                </div>
+                                {item.type === "document" && item.snippet ? (
+                                  <div className="gs-snippet">…<Highlight sourceString={item.snippet} searchWords={[q]} autoEscape highlightStyle={matchStyle} />…</div>
+                                ) : null}
+                                <div className="gs-meta">
+                                  {item.type === "document" ? (
+                                    <>
+                                      <span className="mono">{item.pageNo ? `第 ${item.pageNo} 页命中` : item.matchedBy}</span>
+                                      {chip ? <span className={cn("src-chip", chip.kind)}>{chip.label}</span> : null}
+                                      {item.context ? <span className="truncate">{item.context}</span> : <span>未挂案件或收案</span>}
+                                      {item.code ? <span className="mono">{item.code}</span> : null}
+                                    </>
+                                  ) : item.type === "matter" ? (
+                                    <>
+                                      <span className="mono">{item.code}</span>
+                                      <span>· <Highlight sourceString={item.matchedBy ?? ""} searchWords={[q]} autoEscape highlightStyle={matchStyle} />{item.meta ? ` · ${item.meta}` : ""}</span>
+                                    </>
+                                  ) : item.type === "client" ? (
+                                    <span>{item.meta}{item.matchedBy && item.matchedBy !== "名称命中" ? <> · <Highlight sourceString={item.matchedBy} searchWords={[q]} autoEscape highlightStyle={matchStyle} /></> : null}</span>
+                                  ) : item.type === "deadline" && due ? (
+                                    <>
+                                      <span className="mono">{due.date}</span>
+                                      <span>· {item.meta} · {item.context}</span>
+                                      <span style={{ color: due.urgent ? "var(--semi-color-danger)" : undefined }}>· {due.left}</span>
+                                    </>
+                                  ) : (
+                                    <span>{item.meta}</span>
+                                  )}
+                                </div>
+                              </div>
+                              {item.matterLink && item.type !== "matter" ? (
+                                <Button
+                                  htmlType="button"
+                                  theme="light"
+                                  size="small"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    go(item.matterLink!);
+                                  }}
+                                >
+                                  {item.type === "document" && !item.code ? "打开收案" : "跳转案件"}
+                                </Button>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                        {pages[group.key]?.failed ? <div role="alert" className="flex flex-wrap items-center gap-2 px-4 py-3 text-sm">
+                          <span>此范围读取失败，先前结果已隐藏。</span>
+                          <Button theme="outline" size="small" disabled={pages[group.key]?.loading} onClick={() => void continueGroup(group.key)}>重试此批</Button>
+                          <Button theme="borderless" size="small" disabled={pages[group.key]?.loading} onClick={() => void continueGroup(group.key, true)}>从头检索</Button>
+                        </div> : results?.nextCursorByGroup[group.key] ? <div className="flex items-center gap-2 px-4 py-3">
+                          {!items.length ? <span className="text-sm text-muted-foreground">本批没有可展示结果。</span> : null}
+                          <Button theme="outline" size="small" disabled={pages[group.key]?.loading || loading} onClick={() => { if (scope === "all") chooseScope(group.key); void continueGroup(group.key); }}>
+                            {pages[group.key]?.loading ? "正在检索…" : "继续检索"}
+                          </Button>
+                        </div> : null}
+                      </Fragment>
+                    );
+                  })}
+                </div>
 
-            <div className="gs-foot">
-              <span className="hint"><span className="kbd">↑</span><span className="kbd">↓</span> 选择</span>
-              <span className="hint"><span className="kbd">↵</span> 打开</span>
-              <span className="hint"><span className="kbd">Tab</span> 切换控件</span>
-              <span className="perm">
-                <Lock style={{ width: 12, height: 12 }} aria-hidden />
-                仅展示你有权限访问的内容 · 有具体位置的材料可直接查看来源
-                {results && results.documentsFailedCount > 0 ? ` · 另有 ${results.documentsFailedCount} 份材料识别失败未纳入全文` : ""}
-              </span>
-            </div>
-      </div>
-    </Modal>
+                <div className="gs-foot">
+                  <span className="hint"><span className="kbd">↑</span><span className="kbd">↓</span> 选择</span>
+                  <span className="hint"><span className="kbd">↵</span> 打开</span>
+                  <span className="hint"><span className="kbd">Tab</span> 切换控件</span>
+                  <span className="perm">
+                    <Lock style={{ width: 12, height: 12 }} aria-hidden />
+                    仅展示你有权限访问的内容 · 有具体位置的材料可直接查看来源
+                    {results && results.documentsFailedCount > 0 ? ` · 另有 ${results.documentsFailedCount} 份材料识别失败未纳入全文` : ""}
+                  </span>
+                </div>
+          </div>
+        </DialogContent>
+      </WorkspaceDialog>
       {open && source && <SearchMaterialSourceDialog key={`${source.documentId}:${source.runId}:${source.anchorId}`} input={source}
         onClose={() => setSource(null)} />}
     </>

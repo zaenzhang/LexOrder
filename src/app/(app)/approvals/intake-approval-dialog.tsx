@@ -3,7 +3,7 @@
 import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
 import { Button, Checkbox, TextArea } from "@douyinfe/semi-ui";
 import { useEffect, useState, type ReactNode } from "react";
-import { Check, Paperclip } from "lucide-react";
+import { IconTick as Check, IconPaperclip as Paperclip } from "@douyinfe/semi-icons";
 import { APPROVAL_STATUS_LABELS } from "@/lib/approvals/workspace";
 import type { getApprovalDetail } from "@/server/approval-permissions/inbox";
 import {
@@ -68,7 +68,7 @@ export function IntakeApprovalDialog({ detail, intakeDetail, note, onNoteChange,
       tabs={[
         { id: "overview", label: "申请资料", content: <IntakeApprovalContent detail={intakeDetail} view="overview" onOpenConflicts={() => setTab("conflicts")} /> },
         { id: "conflicts", label: "冲突核查", count: hitCount, countTone: "red", content: <IntakeApprovalContent detail={intakeDetail} view="conflicts" /> },
-        { id: "attachments", label: "附件", count: detail.attachments.length, content: detail.attachments.length ? <div className="rv-section"><div className="rv-sec-head"><Paperclip className="h-[14px] w-[14px] text-[var(--semi-color-primary)]" />申请附件</div>{detail.attachments.map(file => <ReviewFileRow key={file.id} id={file.id} name={file.name} readable={file.readable} />)}</div> : <ReviewEmpty icon={<Paperclip />} title="申请人尚未上传附件" desc="可结合申请资料判断是否需要退回补充。" /> },
+        { id: "attachments", label: "附件", count: detail.attachments.length, content: detail.attachments.length ? <div className="rv-section"><div className="rv-sec-head"><Paperclip aria-hidden className="h-[14px] w-[14px] text-[var(--semi-color-primary)]" />申请附件</div>{detail.attachments.map(file => <ReviewFileRow key={file.id} id={file.id} name={file.name} readable={file.readable} />)}</div> : <ReviewEmpty icon={<Paperclip aria-hidden />} title="申请人尚未上传附件" desc="可结合申请资料判断是否需要退回补充。" /> },
         { id: "history", label: "处理记录", count: detail.history.length, content: <ReviewHistory items={detail.history} emptyText={detail.status === "PENDING" ? "尚无处理记录" : "此记录未保存逐次处理历史"} emptyDesc={detail.status === "PENDING" ? "处理后将在这里显示审批意见与结果。" : "当前结果见申请状态。"} /> }
       ]}
       sidebarTitle={detail.task ? "审批" : "申请进度"}
@@ -92,7 +92,7 @@ export function IntakeApprovalDialog({ detail, intakeDetail, note, onNoteChange,
       footer={detail.task ? <>
         <Button htmlType="button"  disabled={pending} onClick={() => onDecision("reject")} theme="solid" type="danger">驳回</Button>
         <Button htmlType="button"  disabled={pending} onClick={() => onDecision("revision")} theme="outline" type="tertiary">退回补正</Button>
-        <Button htmlType="button"  disabled={pending || !checkedMaterials || !checkedConvert} title={!checkedMaterials || !checkedConvert ? "请先勾选核对确认项" : undefined} onClick={() => onDecision("approve")} theme="solid" type="primary"><Check />{pending ? "处理中…" : "审批通过"}</Button>
+        <Button htmlType="button"  disabled={pending || !checkedMaterials || !checkedConvert} title={!checkedMaterials || !checkedConvert ? "请先勾选核对确认项" : undefined} onClick={() => onDecision("approve")} theme="solid" type="primary"><Check aria-hidden />{pending ? "处理中…" : "审批通过"}</Button>
       </> : detail.canResubmit ? <Button htmlType="button"  disabled={pending} onClick={onResubmit} theme="solid" type="primary">重新提交审批</Button> : undefined}
     />
   );

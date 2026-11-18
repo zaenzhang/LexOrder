@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Modal } from "@douyinfe/semi-ui";
-import { X } from "lucide-react";
+import { IconClose as X } from "@douyinfe/semi-icons";
 import {
   cloneElement, createContext, useContext, useEffect, useId, useRef, useSyncExternalStore,
   type HTMLAttributes, type MouseEvent, type ReactElement, type ReactNode, type Ref,
@@ -82,7 +82,7 @@ function tabBoundary(dialog: HTMLElement, backwards: boolean) {
 
 function DialogSurface({
   children, className, ref, edge, showClose = true, onOpenAutoFocus, onCloseAutoFocus,
-  onEscapeKeyDown, onKeyDown, onKeyDownCapture, ...props
+  onEscapeKeyDown, onKeyDown, onKeyDownCapture, inert, "aria-hidden": ariaHidden, ...props
 }: SurfaceProps) {
   const { open, change, dismissOnBackdrop, titleId, descriptionId } = useWorkspaceDialog();
   // Semi portals contain client-only DOM. A deep link may start with an open editor.
@@ -125,6 +125,8 @@ function DialogSurface({
         const modal = node as ReactElement<HTMLAttributes<HTMLDivElement> & { ref: Ref<HTMLDivElement> }>;
         return cloneElement(modal, {
           tabIndex: -1,
+          inert,
+          "aria-hidden": ariaHidden,
           "aria-labelledby": props["aria-labelledby"] ?? titleId,
           "aria-describedby": "aria-describedby" in props ? props["aria-describedby"] : descriptionId,
           id: props.id,
@@ -175,7 +177,7 @@ function DialogSurface({
         }} onClose={event => onCloseAutoFocus?.(event)} />
         {children}
         {showClose ? <Button
-          icon={<X size={16} aria-hidden />}
+          icon={<X size="default" aria-hidden />}
           aria-label="关闭"
           type="tertiary"
           theme="borderless"

@@ -6,7 +6,7 @@ import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { IconMore } from "@douyinfe/semi-icons";
-import { Plus, Search } from "lucide-react";
+import { IconPlus as Plus, IconSearch as Search } from "@douyinfe/semi-icons";
 import type { SystemRole, UserRole } from "@prisma/client";
 import { WorkspaceDialog, DrawerContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogContent } from "@/components/patterns/workspace-dialog";
 import {
@@ -99,11 +99,11 @@ export function UsersView({
       <AdminPageHeader
         title="用户与岗位"
         sub={<>共 <b>{users.length}</b> 个账号 · 岗位决定功能范围，审批资格在「审批权限」单独分配</>}
-        actions={<Button theme="solid" onClick={() => setSheetOpen(true)} size="small"><Plus />新增用户</Button>}
+        actions={<Button theme="solid" onClick={() => setSheetOpen(true)} size="small"><Plus aria-hidden />新增用户</Button>}
       />
 
       <div className="flex flex-wrap items-center gap-3">
-        <Input className="min-w-56 flex-1" aria-label="搜索账号" placeholder="按姓名、邮箱、角色或权限组搜索" value={query} onChange={setQuery} prefix={<Search size={14} aria-hidden />} />
+        <Input className="min-w-56 flex-1" aria-label="搜索账号" placeholder="按姓名、邮箱、角色或权限组搜索" value={query} onChange={setQuery} prefix={<Search size="default" aria-hidden />} />
         <Select<string> insetLabel="状态" insetLabelId="user-list-status-label" aria-labelledby="user-list-status-label" value={status} onChange={value => setStatus(String(value))} motion={false}>
           <Select.Option value="all">全部状态</Select.Option>
           <Select.Option value="active">已启用</Select.Option>
@@ -114,7 +114,6 @@ export function UsersView({
       </div>
       <div className="overflow-x-auto card">
         <Table<UserRow>
-          size="small"
           rowKey="id"
           pagination={false}
           scroll={{ x: 986 }}
@@ -145,7 +144,7 @@ export function UsersView({
             { title: "状态", key: "status", width: 80, render: (_, user) => (<> <Tag color={user.active ? "green" : "grey"}>
           {user.active ? "已激活" : "已禁用"}
         </Tag>
-        {(!user.active||!user.roleActive)&&Boolean(user.openResponsibilityCount)&&<p className="mt-1 text-xs text-amber-700">{user.openResponsibilityCount} 项责任待交接</p>}</>) },
+        {(!user.active||!user.roleActive)&&Boolean(user.openResponsibilityCount)&&<p className="mt-1 text-xs text-[var(--semi-color-warning)]">{user.openResponsibilityCount} 项责任待交接</p>}</>) },
             { title: "登录安全", key: "security", width: 110, render: (_, user) => (<div className="flex flex-col items-start gap-1">
           <Tag size="small" color={user.totpEnabled ? "green" : "grey"}>
             {user.totpEnabled ? "双步已绑定" : "双步未开启"}

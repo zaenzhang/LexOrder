@@ -3,7 +3,7 @@
 /** 页面筛选：业务值由调用方持有，清除与菜单内「全部」含义相同。 */
 import { useRef, useState } from "react";
 import { Button, ButtonGroup, Dropdown } from "@douyinfe/semi-ui";
-import { ChevronDown, X } from "lucide-react";
+import { IconChevronDown as ChevronDown, IconClose as X } from "@douyinfe/semi-icons";
 
 export type FilterOption = { value: string; label: string };
 
@@ -73,11 +73,11 @@ export function FilterSelect({
               {icon}
               {label}
               {current ? <span>{current.label}</span> : null}
-              <ChevronDown size={14} aria-hidden />
+              <ChevronDown size="default" aria-hidden />
             </span>
           </Button>
         </Dropdown>
-        {on ? <Button htmlType="button" type="primary" aria-label={`清除${label}筛选`} icon={<X size={14} />} onClick={() => choose(undefined)} /> : null}
+        {on ? <Button htmlType="button" type="primary" aria-label={`清除${label}筛选`} icon={<X aria-hidden size="default" />} onClick={() => choose(undefined)} /> : null}
       </ButtonGroup>
     </span>
   );

@@ -4,7 +4,7 @@ import { Disclosure } from "@/components/patterns/disclosure";
 import { Button, Checkbox, Form, Input, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, CheckCircle2, AlertTriangle, Loader2, Trash2, ExternalLink } from "lucide-react";
+import { IconAIWandLevel1 as Sparkles, IconTickCircle as CheckCircle2, IconAlertTriangle as AlertTriangle, IconLoading as Loader2, IconDelete as Trash2, IconExternalOpen as ExternalLink } from "@douyinfe/semi-icons";
 import {
   saveAiSettingsAction,
   clearAiKeyAction,
@@ -139,18 +139,18 @@ export function AiSettingsForm({
     <div className="space-y-5">
       <section className="ll-surface rounded-lg border border-border p-5">
         <header className="mb-3 flex flex-wrap items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" strokeWidth={1.8} />
+          <Sparkles aria-hidden size="default" className="text-primary" />
           <h2 className="text-[14px] font-semibold">AI 接入</h2>
-          <span className="ml-2 text-[11px] text-muted-foreground">{!initial.enabled ? "已禁用" : initial.configurationError ? "配置需修复" : initial.configured ? "已配置 · 未验证" : "未配置"}</span>
+          <span className="ml-2 text-xs text-muted-foreground">{!initial.enabled ? "已禁用" : initial.configurationError ? "配置需修复" : initial.configured ? "已配置 · 未验证" : "未配置"}</span>
         </header>
 
-        <p className="mb-4 text-[12px] text-muted-foreground">支持 OpenAI 兼容接口。</p>
+        <p className="mb-4 text-xs text-muted-foreground">支持 OpenAI 兼容接口。</p>
         {initial.configurationError && <p role="alert" className="mb-3 text-sm text-destructive">{initial.configurationError}</p>}
         <Checkbox className="mb-4" checked={enabled} onChange={e => setEnabled((e.target.checked === true))}>启用 AI 服务</Checkbox>
 
         {/* Provider 预设 */}
         <fieldset className="mb-4">
-          <legend className="text-[11px]">快速预设</legend>
+          <legend className="text-xs">快速预设</legend>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {PROVIDER_PRESETS.map((p) => (
               <Button theme="outline" type="tertiary" size="small"
@@ -166,10 +166,10 @@ export function AiSettingsForm({
 
         <div className="space-y-3">
           <div>
-            <Form.Label name="ai-api-key" className="text-[11px]">
+            <Form.Label name="ai-api-key" className="text-xs">
               接口密钥（API Key）
               {initial.credentialSaved && (
-                <span className="ml-2 font-mono text-[10px] text-muted-foreground">
+                <span className="ml-2 font-mono text-xs text-muted-foreground">
                   当前：{initial.apiKeyMasked}（留空保留原值）
                 </span>
               )}
@@ -186,45 +186,45 @@ export function AiSettingsForm({
           </div>
 
           <div>
-            <Form.Label name="ai-base-url" className="text-[11px]">接口地址（Base URL）</Form.Label>
+            <Form.Label name="ai-base-url" className="text-xs">接口地址（Base URL）</Form.Label>
             <Input
               id="ai-base-url"
               value={baseUrl}
               onChange={(value) => setBaseUrl(value)}
               placeholder={defaults.baseUrl}
-              className="mt-1 font-mono text-[12px]"
+              className="mt-1 font-mono text-xs"
             />
           </div>
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <Form.Label name="ai-text-model" className="text-[11px]">文本模型</Form.Label>
+              <Form.Label name="ai-text-model" className="text-xs">文本模型</Form.Label>
               <Input
                 id="ai-text-model"
                 value={textModel}
                 onChange={(value) => setTextModel(value)}
                 placeholder={defaults.textModel}
-                className="mt-1 font-mono text-[12px]"
+                className="mt-1 font-mono text-xs"
               />
-              <p className="mt-1 text-[10px] text-muted-foreground">用于法院短信 AI 解析等</p>
+              <p className="mt-1 text-xs text-muted-foreground">用于法院短信 AI 解析等</p>
             </div>
             <div>
-              <Form.Label name="ai-vision-model" className="text-[11px]">视觉模型</Form.Label>
+              <Form.Label name="ai-vision-model" className="text-xs">视觉模型</Form.Label>
               <Input
                 id="ai-vision-model"
                 value={visionModel}
                 onChange={(value) => setVisionModel(value)}
                 placeholder={defaults.visionModel}
-                className="mt-1 font-mono text-[12px]"
+                className="mt-1 font-mono text-xs"
               />
-              <p className="mt-1 text-[10px] text-muted-foreground">用于发票 OCR 等</p>
+              <p className="mt-1 text-xs text-muted-foreground">用于发票 OCR 等</p>
             </div>
           </div>
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <Button theme="solid" onClick={save} disabled={pending} className="gap-1.5">
-            {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {pending && <Loader2 aria-hidden size="small" spin />}
             保存配置
           </Button>
           <Button
@@ -233,7 +233,7 @@ export function AiSettingsForm({
             disabled={testing || pending || changed || !initial.configured}
             className="gap-1.5"
           >
-            {testing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {testing && <Loader2 aria-hidden size="small" spin />}
             {changed ? "保存后测试" : "测试连接"}
           </Button>
           {initial.credentialSaved && (
@@ -243,7 +243,7 @@ export function AiSettingsForm({
               disabled={pending}
               className="ml-auto gap-1 text-destructive"
             >
-              <Trash2 className="h-3 w-3" />
+              <Trash2 aria-hidden size="small" />
               清除密钥
             </Button>
           )}
@@ -252,16 +252,16 @@ export function AiSettingsForm({
         {!changed && testResult && (
           <div
             className={
-              "mt-3 flex items-start gap-2 rounded-md border p-3 text-[12px] " +
+              "mt-3 flex items-start gap-2 rounded-md border p-3 text-xs " +
               (testResult.ok
                 ? "border-[var(--semi-color-success-light-active)] bg-[var(--semi-color-success-light-default)] text-[var(--semi-color-success)]"
                 : "border-destructive/30 bg-destructive/10 text-destructive")
             }
           >
             {testResult.ok ? (
-              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <CheckCircle2 aria-hidden size="small" className="mt-0.5 shrink-0" />
             ) : (
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <AlertTriangle aria-hidden size="small" className="mt-0.5 shrink-0" />
             )}
             <span>{testResult.msg}</span>
           </div>
@@ -269,7 +269,7 @@ export function AiSettingsForm({
       </section>
 
       <Disclosure heading="获取接口密钥">
-        <ul className="mt-3 space-y-2 text-[12px]">
+        <ul className="mt-3 space-y-2 text-xs">
           {PROVIDER_PRESETS.map((p) => (
             <li key={p.name} className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <span className="w-28 shrink-0 text-foreground/85">{p.name}</span>
@@ -281,12 +281,12 @@ export function AiSettingsForm({
                 className="ml-auto inline-flex items-center gap-1 text-primary hover:underline"
               >
                 打开
-                <ExternalLink className="h-3 w-3" />
+                <ExternalLink aria-hidden size="small" />
               </a>
             </li>
           ))}
         </ul>
-        <p className="mt-3 text-[11px] text-muted-foreground">密钥加密保存，不显示原文。</p>
+        <p className="mt-3 text-xs text-muted-foreground">密钥加密保存，不显示原文。</p>
       </Disclosure>
     </div>
   );

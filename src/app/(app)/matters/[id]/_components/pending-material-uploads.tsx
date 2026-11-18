@@ -33,7 +33,7 @@ export function PendingMaterialUploads({ matterId }: { matterId: string }) {
   }
   if (error) return <div role="alert" className="text-sm text-destructive">未完成上传暂不可读取：{error} <Button theme="borderless" type="primary" size="small" htmlType="button" onClick={() => setRefresh(value => value + 1)}>重试</Button></div>;
   if (!view?.items.length) return null;
-  return <section aria-label="未完成上传" className="rounded border border-amber-300 p-3 text-sm">
+  return <section aria-label="未完成上传" className="rounded border border-[var(--semi-color-warning-light-active)] p-3 text-sm">
     <h3 className="font-medium">未完成上传</h3>
     {view.items.map(row => <div key={row.id} className="flex flex-wrap items-start justify-between gap-2 border-t py-2 first:border-0">
       <div className="min-w-0 flex-1 break-words"><p>{row.name}</p><p className="text-xs text-muted-foreground">{row.description}</p></div>

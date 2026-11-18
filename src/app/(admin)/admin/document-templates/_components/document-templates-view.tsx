@@ -9,7 +9,7 @@ import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
 import { Button, Checkbox, Form, Input, Notification, Select, Switch, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, Plus, Upload } from "lucide-react";
+import { IconArticle as FileText, IconPlus as Plus, IconUpload as Upload } from "@douyinfe/semi-icons";
 import {
   WorkspaceDialog,
   DrawerContent,
@@ -59,16 +59,16 @@ export function DocumentTemplatesView({ templates }: { templates: AdminTemplateR
     <div className="space-y-4">
       <AdminPageHeader
         title="文书模板"
-        actions={<Button theme="solid" size="small" onClick={() => setUploadOpen(true)}><Plus />上传模板</Button>}
+        actions={<Button theme="solid" size="small" onClick={() => setUploadOpen(true)}><Plus aria-hidden />上传模板</Button>}
         sub={<>
-            模板在案件详情「生成文书」时按案件类别选用；正文使用 <code className="font-mono text-[11px]">{"{{变量}}"}</code> 占位（如 <code className="font-mono text-[11px]">{"{{client.name}}"}</code>），生成时自动填充。
+            模板在案件详情「生成文书」时按案件类别选用；正文使用 <code className="font-mono text-xs">{"{{变量}}"}</code> 占位（如 <code className="font-mono text-xs">{"{{client.name}}"}</code>），生成时自动填充。
         </>}
       />
 
       <section className="ll-surface">
         <header className="ll-panel-head">
           <h3 className="ll-panel-title">
-            <FileText className="h-4 w-4 text-primary" />
+            <FileText aria-hidden size="default" className="text-primary" />
             模板库
             <span className="font-mono text-xs text-muted-foreground tabular">
               {templates.filter(t => t.enabled).length}/{templates.length}
@@ -76,23 +76,23 @@ export function DocumentTemplatesView({ templates }: { templates: AdminTemplateR
           </h3>
         </header>
         {templates.length === 0 ? (
-          <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">暂无模板</p>
+          <p className="px-4 py-6 text-center text-sm text-muted-foreground">暂无模板</p>
         ) : (
           <div className="divide-y divide-border/60">
             {templates.map(t => (
               <div key={t.id} className={`flex flex-wrap items-center gap-3 px-4 py-2.5 ${t.enabled ? "" : "opacity-55"}`}>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate text-[12.75px] font-semibold">{t.name}</span>
+                    <span className="truncate text-sm font-semibold">{t.name}</span>
                     <SemiTag size="small" color="grey">{CATEGORY_CN[t.category]}</SemiTag>
                     {t.isBuiltIn ? (
-                      <span className="rounded-full bg-primary/10 px-1.5 py-px text-[10px] text-primary">内置</span>
+                      <span className="rounded-full bg-primary/10 px-1.5 py-px text-xs text-primary">内置</span>
                     ) : (
-                      <span className="rounded-full border border-[#B7D8D6] bg-[#E4F1F0] px-1.5 py-px text-[10px] text-[#005054]">自定义</span>
+                      <span className="rounded-full border border-[var(--semi-color-primary-light-active)] bg-[var(--semi-color-primary-light-default)] px-1.5 py-px text-xs text-[var(--semi-color-primary-active)]">自定义</span>
                     )}
-                    {!t.enabled && <span className="text-[10px] text-muted-foreground">已停用</span>}
+                    {!t.enabled && <span className="text-xs text-muted-foreground">已停用</span>}
                   </div>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
                     <span className="font-mono tabular">{t.variables.length} 个变量</span>
                     <span>·</span>
                     <span>{t.applicableCategories.length === 0 ? "适用全部案件类别" : t.applicableCategories.map(c => MATTER_CAT_CN[c]).join("／")}</span>
@@ -105,14 +105,14 @@ export function DocumentTemplatesView({ templates }: { templates: AdminTemplateR
                     <span>·</span>
                     <span>{t.createdBy?.name ?? "系统"} · {formatDate(new Date(t.updatedAt))}</span>
                   </div>
-                  {t.description && <div className="mt-0.5 truncate text-[11px] text-muted-foreground/75">{t.description}</div>}
+                  {t.description && <div className="mt-0.5 truncate text-xs text-muted-foreground/75">{t.description}</div>}
                 </div>
                 <ToggleEnabled template={t} />
               </div>
             ))}
           </div>
         )}
-        <footer className="ll-panel-foot text-[11px] leading-relaxed text-muted-foreground">
+        <footer className="ll-panel-foot text-xs leading-relaxed text-muted-foreground">
           内置模板由系统维护、只可启停；自定义模板上传后立即生效，停用即从案件模板选择器隐藏。模板源文件加密存储，仅经生成流程读取。
         </footer>
       </section>
@@ -225,10 +225,10 @@ function UploadSheet({ open, onOpenChange, onDone }: { open: boolean; onOpenChan
               <FileInput id="new-template-file" required disabled={pending} accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={e => setFile(e.target.files?.[0] ?? null)} />
             </div>
             <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
-              <div className="text-[11px] font-semibold text-muted-foreground">常用变量（生成时自动填充）</div>
+              <div className="text-xs font-semibold text-muted-foreground">常用变量（生成时自动填充）</div>
               <div className="mt-1.5 flex flex-wrap gap-1">
                 {SAMPLE_VARS.map(v => (
-                  <span key={v} className="rounded-full bg-card px-2 py-0.5 font-mono text-[10px] text-muted-foreground" title={VARIABLE_LABEL_CN[v]}>
+                  <span key={v} className="rounded-full bg-card px-2 py-0.5 font-mono text-xs text-muted-foreground" title={VARIABLE_LABEL_CN[v]}>
                     {`{{${v}}}`}
                   </span>
                 ))}
@@ -237,7 +237,7 @@ function UploadSheet({ open, onOpenChange, onDone }: { open: boolean; onOpenChan
           </div>
           <DialogFooter className="border-t border-border bg-background px-6 py-4">
             <Button htmlType="button" theme="outline" onClick={() => onOpenChange(false)} disabled={pending}>取消</Button>
-            <Button theme="solid" htmlType="submit" loading={pending} disabled={pending} icon={<Upload size={16} aria-hidden />}>
+            <Button theme="solid" htmlType="submit" loading={pending} disabled={pending} icon={<Upload size="default" aria-hidden />}>
               上传
             </Button>
           </DialogFooter>

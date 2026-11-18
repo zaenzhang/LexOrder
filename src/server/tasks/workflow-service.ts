@@ -244,7 +244,7 @@ export async function readTaskWorkspaceTx(
   const tasks = await db.task.findMany({
     where: {
       matterId: matter.id,
-      ...(data.includeClosed ? {} : { OR: [{ responsibility: { is: { state: "OPEN" } } }, { responsibility: null }] })
+      ...(data.includeClosed ? {} : { OR: [{ responsibility: { is: { state: "OPEN" } } }, { responsibility: null }, ...(data.returnTaskId ? [{ id: data.returnTaskId }] : [])] })
     },
     orderBy: [{ priority: "desc" }, { dueAt: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }, { id: "asc" }],
     select: taskWorkflowSelect

@@ -3,7 +3,7 @@ import { canConfirmReceipt } from "@/lib/permissions";
 import { requireSession } from "@/lib/auth/session";
 import { canExecuteFinance, hasCustomPermission } from "@/lib/roles/catalog";
 import { getFinanceLedger } from "@/server/finance/ledger-actions";
-import { PageHeader } from "@/components/patterns/moan";
+import { PageHeader } from "@/components/patterns/workspace-surfaces";
 import { ActionError } from "@/lib/action-error";
 import { isMatterReturnHref } from "@/lib/matters/return-location";
 import { LedgerWorkspace, type LedgerTab } from "./_components/ledger-workspace";
@@ -11,7 +11,7 @@ import { contractHref } from "./_components/contract-location";
 
 type Params = Record<string, string | string[] | undefined>;
 function Unavailable({ message, matterId }: { message: string; matterId?: string }) {
-  return <div className="space-y-4"><PageHeader title="财务入口不可用" /><p role="alert" className="text-sm text-destructive">{message}</p><Link className="btn btn-secondary btn-sm" href={contractHref({ matterId })}>查看合同列表</Link></div>;
+  return <div className="space-y-4"><PageHeader title="财务入口不可用" /><p role="alert" className="text-sm text-destructive">{message}</p><Link className="workspace-action-link" href={contractHref({ matterId })}>查看合同列表</Link></div>;
 }
 
 export default async function ReconciliationPage({ searchParams }: { searchParams: Promise<Params> }) {
@@ -42,7 +42,7 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
   const canWrite = hasCustomPermission(session.user, "finance.write");
   if (action === "create" && (!canWrite || currentMatter?.status === "ARCHIVED" || !data.matters.some(matter => matter.status !== "ARCHIVED"))) return <Unavailable message="当前没有可登记合同的案件。" matterId={matterId} />;
   return <div className="space-y-5">
-    <PageHeader title="应收与收款分配" actions={<Link className="btn btn-secondary btn-sm" href={returnTo ?? "/finance"}>{returnTo ? "返回案件" : "返回财务"}</Link>} />
+    <PageHeader title="应收与收款分配" actions={<Link className="workspace-action-link" href={returnTo ?? "/finance"}>{returnTo ? "返回案件" : "返回财务"}</Link>} />
     <LedgerWorkspace data={data} canConfirm={canConfirmReceipt(session.user)} canCorrect={canExecuteFinance(session.user,"finance.correct")} canSettle={canExecuteFinance(session.user,"finance.settle")} canWrite={canWrite} selectedMatterId={matterId} tab={tab} billingId={billingId} createContract={action === "create"} returnTo={returnTo} />
   </div>;
 }

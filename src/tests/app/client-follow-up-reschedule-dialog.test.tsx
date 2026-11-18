@@ -114,6 +114,7 @@ describe("A2 原跟进改期编辑器（纯组件，服务动作替身）", () =
   it.each(["COMPLETED", "CANCELLED", "OPEN"] as const)("终态或无写权 %s 只读，仍可在当前读取权限下查看记录", async status => {
     mock.exact.mockResolvedValue({ ...item, status, canClose: false });
     render(view()); await screen.findByRole("dialog", { name: "查看跟进安排" });
+    await screen.findByText(`${item.client.name} · ${item.title}`);
     expect(screen.queryByRole("button", { name: "保存改期" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("新的跟进时间（北京时间）*")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "改期记录" }));

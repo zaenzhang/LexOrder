@@ -5,7 +5,7 @@ import { Button, Checkbox, TextArea, Notification, Toast } from "@douyinfe/semi-
 import { FormDialogContent as DialogContent } from "@/components/patterns/form-dialog";
 
 import { useState, useMemo, useTransition } from "react";
-import { CalendarClock, FileDown, Inbox, KeyRound, Loader2, Sparkles } from "lucide-react";
+import { IconCalendarClock as CalendarClock, IconDownload as FileDown, IconInbox as Inbox, IconKey as KeyRound, IconLoading as Loader2, IconAIWandLevel1 as Sparkles } from "@douyinfe/semi-icons";
 import {
   WorkspaceDialog,
   DialogFooter,
@@ -74,7 +74,7 @@ export function SmsPasteDialog({
       <DialogContent className="max-w-3xl">
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle className="flex items-center gap-2">
-            <Inbox className="h-4 w-4 text-primary" />
+            <Inbox aria-hidden size="default" className="text-primary" />
             粘贴法院短信
           </DialogTitle>
           <DialogDescription className="text-xs">
@@ -90,13 +90,13 @@ export function SmsPasteDialog({
             aria-label="法院短信原文"
             placeholder="原文粘贴在此..."
             rows={8}
-            className="text-[12px] leading-relaxed"
+            className="text-xs leading-relaxed"
             autoFocus
           />
 
           <div className="flex flex-col gap-2">
             <Checkbox
-                className="text-[12px]"
+                className="text-xs"
                 checked={batch}
                 disabled={pending}
                 onChange={event => setBatch(event.target.checked === true)}
@@ -104,25 +104,25 @@ export function SmsPasteDialog({
               <span>多条短信（按空行分隔）—— 一次提交，逐条解析与匹配</span>
             </Checkbox>
             <Checkbox
-                className="text-[12px]"
+                className="text-xs"
                 checked={useAi}
                 disabled={pending}
                 onChange={event => setUseAi(event.target.checked === true)}
               >
               <span>
-                用 AI 增强解析 <Sparkles className="inline h-3 w-3 text-primary" /> ——
+                用 AI 增强解析 <Sparkles aria-hidden size="small" className="inline text-primary" /> ——
                 补 <span className="text-foreground/80">摘要 / 律师动作 / 紧急程度</span>
                 （需先到 管理后台 → AI 与外部服务 配置）
               </span>
             </Checkbox>
             <Checkbox
-                className="text-[12px]"
+                className="text-xs"
                 checked={extractAttachments}
                 disabled={pending}
                 onChange={event => setExtractAttachments(event.target.checked === true)}
               >
               <span>
-                尝试提取电子送达附件 <FileDown className="inline h-3 w-3 text-primary" /> ——
+                尝试提取电子送达附件 <FileDown aria-hidden size="small" className="inline text-primary" /> ——
                 已匹配案件时保存为案件材料；需登录或验证码的平台会标记待处理
               </span>
             </Checkbox>
@@ -130,8 +130,8 @@ export function SmsPasteDialog({
 
           {preview.length > 0 && (
             <div className="rounded-md border border-border bg-muted/20 p-3">
-              <div className="mb-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <Sparkles className="h-3 w-3 text-primary" />
+              <div className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Sparkles aria-hidden size="small" className="text-primary" />
                 解析预览（前 {preview.length} 条）
               </div>
               <ul className="space-y-2">
@@ -140,11 +140,11 @@ export function SmsPasteDialog({
                   return (
                     <li
                       key={i}
-                      className="rounded border border-border bg-background p-2 text-[11px]"
+                      className="rounded border border-border bg-background p-2 text-xs"
                     >
                       <div className="flex items-center gap-2">
                         <span
-                          className="rounded-full px-1.5 py-0.5 text-[10px]"
+                          className="rounded-full px-1.5 py-0.5 text-xs"
                           style={{ background: `${accent}1A`, color: accent }}
                         >
                           {SMS_TYPE_CN[p.parsed.smsType]}
@@ -153,7 +153,7 @@ export function SmsPasteDialog({
                           <span className="text-foreground/80">{p.parsed.court}</span>
                         )}
                         {p.parsed.caseNumbers.length > 0 && (
-                          <span className="font-mono text-[10px] text-muted-foreground">
+                          <span className="font-mono text-xs text-muted-foreground">
                             {p.parsed.caseNumbers.join("、")}
                           </span>
                         )}
@@ -163,19 +163,19 @@ export function SmsPasteDialog({
                           {p.parsed.summary}
                         </p>
                       )}
-                      <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-muted-foreground/80">
+                      <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground/80">
                         {p.parsed.hearingDate && <span>开庭：{p.parsed.hearingDate}</span>}
                         {p.parsed.courtRoom && <span>{p.parsed.courtRoom}</span>}
                         {p.parsed.judge && <span>法官：{p.parsed.judge}</span>}
                         {p.parsed.importantItems.length > 0 && (
                           <span className="inline-flex items-center gap-1">
-                            <CalendarClock className="h-3 w-3" />
+                            <CalendarClock aria-hidden size="small" />
                             {p.parsed.importantItems.length} 个事项
                           </span>
                         )}
                         {p.parsed.credentials.length > 0 && (
                           <span className="inline-flex items-center gap-1">
-                            <KeyRound className="h-3 w-3" />
+                            <KeyRound aria-hidden size="small" />
                             {p.parsed.credentials.map((c) => c.label).join("、")}
                           </span>
                         )}
@@ -196,7 +196,7 @@ export function SmsPasteDialog({
             取消
           </Button>
           <Button onClick={submit} disabled={pending || !text.trim()}>
-            {pending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+            {pending && <Loader2 aria-hidden size="small" className="mr-1.5" spin />}
             解析并保存
           </Button>
         </DialogFooter>

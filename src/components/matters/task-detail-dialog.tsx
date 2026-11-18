@@ -4,7 +4,7 @@ import { forwardRef, useCallback, useEffect, useId, useImperativeHandle, useRef,
 import { useRouter } from "next/navigation";
 import { Tabs, Select, Button, Checkbox, Input, Tag, TextArea, Toast } from "@douyinfe/semi-ui";
 import { WorkspaceDialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
-import { confirmDialog } from "@/components/patterns/confirm-dialog";
+import { confirmDialog, confirmDiscardChanges } from "@/components/patterns/confirm-dialog";
 import { FormDialogBody, FormDialogContent } from "@/components/patterns/form-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
 import type { TaskWorkflowDetail, TaskWorkflowItem, TaskWorkState } from "@/lib/tasks/workflow";
@@ -22,7 +22,7 @@ type BasicsDraft = { revision: number; title: string; description: string; prior
 type WorkDraft = { revision: number; action: WorkAction; reason: string; assigneeId: string; dueAt: string };
 type WaitingDraft = { revision: number; waitingId: string; waitingFor: string; expectedResult: string; reason: string; nextCheckAt: string };
 type WaitingEdit = { revision: number; waitingId: string; mode: "finish" | "reschedule"; result: string; nextCheckAt: string; reason: string };
-type TaskDetailDialogProps = { taskId: string | null; expectedMatterId?: string; open: boolean; onOpenChange: (open: boolean) => void; onTaskChangeRejected?: (taskId: string) => void; onChanged?: () => void; onReturnFocus?: (taskId: string) => void };
+type TaskDetailDialogProps = { taskId: string | null; expectedMatterId?: string; open: boolean; onOpenChange: (open: boolean) => void; onTaskChangeRejected?: (taskId: string) => void; onChanged?: (returnTaskId?: string) => void; onReturnFocus?: (taskId: string) => void };
 type OpenTask = { id: string; expectedMatterId?: string };
 type TaskDetailHandle = { canLeave: () => Promise<boolean> };
 
@@ -33,6 +33,7 @@ const prerequisiteLabel = (state: TaskWorkState) => state === "CANCELLED" ? "已
 export function TaskDetailDialog({ taskId, expectedMatterId, open, onOpenChange, onTaskChangeRejected, onChanged, onReturnFocus }: TaskDetailDialogProps) {
   const [activeTask, setActiveTask] = useState<OpenTask | null>(() => open && taskId ? { id: taskId, expectedMatterId } : null);
   const activeTaskRef = useRef(activeTask);
+  const approvedClose = useRef<OpenTask | null>(null);
   const detailRef = useRef<TaskDetailHandle>(null);
   const navigationRejected = useRef(onTaskChangeRejected);
   const requestedKey = `${open ? taskId : ""}:${expectedMatterId ?? ""}`;
@@ -47,9 +48,11 @@ export function TaskDetailDialog({ taskId, expectedMatterId, open, onOpenChange,
     const previous = activeTaskRef.current;
     const next = open && taskId ? { id: taskId, expectedMatterId } : null;
     if (previous?.id === next?.id && previous?.expectedMatterId === next?.expectedMatterId) return;
+    const closingFromDialog = !next && approvedClose.current === previous;
+    approvedClose.current = null;
     let cancelled = false;
     void (async () => {
-      const allowed = !previous || await detailRef.current?.canLeave();
+      const allowed = closingFromDialog || !previous || await detailRef.current?.canLeave();
       if (cancelled) return;
       if (allowed) {
         activeTaskRef.current = next;
@@ -62,9 +65,10 @@ export function TaskDetailDialog({ taskId, expectedMatterId, open, onOpenChange,
   }, [requestedKey, open, taskId, expectedMatterId]);
 
   async function close() {
-    if (!await detailRef.current?.canLeave()) return;
-    activeTaskRef.current = null;
-    setActiveTask(null);
+    const current = activeTaskRef.current;
+    if (!current || approvedClose.current === current || !await detailRef.current?.canLeave()) return;
+    if (activeTaskRef.current !== current || approvedClose.current === current) return;
+    approvedClose.current = current;
     onOpenChange(false);
   }
 
@@ -74,7 +78,7 @@ export function TaskDetailDialog({ taskId, expectedMatterId, open, onOpenChange,
   }} /> : null;
 }
 
-const TaskDetail = forwardRef<TaskDetailHandle, { taskId: string; expectedMatterId?: string; onClose: () => void; onChanged?: () => void; onReturnFocus: () => void }>(function TaskDetail({ taskId, expectedMatterId, onClose, onChanged, onReturnFocus }, ref) {
+const TaskDetail = forwardRef<TaskDetailHandle, { taskId: string; expectedMatterId?: string; onClose: () => void; onChanged?: (returnTaskId?: string) => void; onReturnFocus: () => void }>(function TaskDetail({ taskId, expectedMatterId, onClose, onChanged, onReturnFocus }, ref) {
   const router = useRouter();
   const fieldId = useId();
   const request = useRef(0);
@@ -145,7 +149,7 @@ const TaskDetail = forwardRef<TaskDetailHandle, { taskId: string; expectedMatter
   }, [editingDependencies, task?.matterId, taskId, candidateReload]);
 
   async function discard(hasChanges: boolean) {
-    return !hasChanges || await confirmDialog({ title: "放弃未保存的修改？", confirmText: "放弃修改", cancelText: "继续编辑", initialFocus: "cancel" });
+    return !hasChanges || await confirmDiscardChanges();
   }
 
   useImperativeHandle(ref, () => ({ canLeave: async () => {
@@ -155,7 +159,7 @@ const TaskDetail = forwardRef<TaskDetailHandle, { taskId: string; expectedMatter
     return leaveConfirmation.current;
   } }), [busy, dirty]);
 
-  async function save(action: (revision: number) => Promise<unknown>, saved: () => void, message: string, expectedRevision = task?.responsibility.revision) {
+  async function save(action: (revision: number) => Promise<unknown>, saved: () => void, message: string, expectedRevision = task?.responsibility.revision, returnTaskId?: string) {
     if (saving.current || loading || !task || expectedRevision === undefined) return;
     saving.current = true;
     setBusy(true);
@@ -176,7 +180,7 @@ const TaskDetail = forwardRef<TaskDetailHandle, { taskId: string; expectedMatter
       await action(task.responsibility.revision);
       saved();
       Toast.success(message);
-      onChanged?.();
+      onChanged?.(returnTaskId);
       router.refresh();
       await load();
     } catch (cause) {
@@ -205,7 +209,7 @@ const TaskDetail = forwardRef<TaskDetailHandle, { taskId: string; expectedMatter
     if (!task || !work) return;
     if (!work.reason.trim()) { setSaveError("请填写处理结果或原因"); return; }
     if (work.action === "PROPOSE" && !work.assigneeId) { setSaveError("请选择接收人"); return; }
-    await save(revision => changeWork({ id: task.responsibility.id, revision, action: work.action, reason: work.reason.trim(), assigneeId: work.action === "PROPOSE" ? work.assigneeId : undefined, dueAt: work.action === "RESCHEDULE" ? asShanghaiDate(work.dueAt) : undefined }), () => setWork(null), "处理结果已保存", work.revision);
+    await save(revision => changeWork({ id: task.responsibility.id, revision, action: work.action, reason: work.reason.trim(), assigneeId: work.action === "PROPOSE" ? work.assigneeId : undefined, dueAt: work.action === "RESCHEDULE" ? asShanghaiDate(work.dueAt) : undefined }), () => setWork(null), "处理结果已保存", work.revision, work.action === "COMPLETE" ? task.id : undefined);
   }
 
   async function saveWaiting(event: FormEvent) {
@@ -241,7 +245,7 @@ const TaskDetail = forwardRef<TaskDetailHandle, { taskId: string; expectedMatter
   const history = task?.waitings.filter(item => item.endedAt) ?? [];
   const disabled = busy || loading;
 
-  return <WorkspaceDialog open onOpenChange={open => { if (!open) onClose(); }}>
+  return <WorkspaceDialog dismissOnBackdrop open onOpenChange={open => { if (!open) onClose(); }}>
     <FormDialogContent className="max-w-3xl" onCloseAutoFocus={event => { event.preventDefault(); onReturnFocus(); }}>
       <DialogHeader>
         <div className="flex items-start gap-3"><DialogTitle className="min-w-0 flex-1">{task?.title ?? "任务详情"}</DialogTitle>{task && <Tag color={task.responsibility.state === "DONE" ? "green" : "grey"}>{taskStateLabels[task.responsibility.state]}</Tag>}</div>

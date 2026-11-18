@@ -7,7 +7,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar, Button, Layout } from "@douyinfe/semi-ui";
 import { useWorkspaceActor } from "@/components/workspace-actor-provider";
-import { Search, ChevronDown, Plus, Menu, ScanSearch } from "lucide-react";
+import { IconChevronDown, IconMenu, IconPlus, IconScan, IconSearch } from "@douyinfe/semi-icons";
 import { WorkspaceAccountMenu } from "./workspace-account-menu";
 import { NotificationPopover } from "@/components/layout/notification-popover";
 import { SmsPopover } from "@/components/layout/sms-popover";
@@ -31,13 +31,13 @@ export function Topbar({ onMobileMenuToggle, userAvatar }: { onMobileMenuToggle?
     <Layout.Header className="sticky top-0 z-20 flex h-[56px] min-w-0 items-center gap-1 border-b border-[var(--semi-color-border)] bg-[var(--semi-color-bg-0)] px-2 sm:gap-2.5 sm:px-5">
       {onMobileMenuToggle ? (
         <span className="md:hidden">
-          <Button htmlType="button" onClick={onMobileMenuToggle} theme="borderless" type="tertiary" aria-label="打开菜单" icon={<Menu size={18} />} />
+          <Button htmlType="button" onClick={onMobileMenuToggle} theme="borderless" type="tertiary" aria-label="打开菜单" icon={<IconMenu aria-hidden />} />
         </span>
       ) : null}
 
       <Button htmlType="button" onClick={() => setSearchOpen(true)} theme="light" type="tertiary"
-        className="min-w-0" aria-label="全局搜索（⌘K）" icon={<Search size={16} />}>
-        <span className="hidden truncate sm:inline">搜索案件、客户、材料正文…</span>
+        className="min-w-0" aria-label="全局搜索（⌘K）" icon={<IconSearch aria-hidden />}>
+        <span className="hidden truncate sm:inline">搜索案件、客户、材料</span>
         <kbd className="ml-3 hidden sm:inline">⌘K</kbd>
       </Button>
 
@@ -50,10 +50,10 @@ export function Topbar({ onMobileMenuToggle, userAvatar }: { onMobileMenuToggle?
       {canCreateIntake || action ? (
         <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
           {canCreateIntake ? (
-            <Button htmlType="button" onClick={() => router.push("/conflicts")} theme="light" type="tertiary" title="收案前查一查本所有没有相关记录" aria-label="冲突预检" icon={<ScanSearch size={18} />}><span className="hidden lg:inline">冲突预检</span></Button>
+            <Button htmlType="button" onClick={() => router.push("/conflicts")} theme="light" type="tertiary" title="收案前查一查本所有没有相关记录" aria-label="冲突预检" icon={<IconScan aria-hidden />}><span className="hidden lg:inline">冲突预检</span></Button>
           ) : null}
           {action ? (
-            <Button id="workspace-top-action" htmlType="button" onClick={action.onClick} disabled={action.disabled} theme="solid" aria-label={action.label} icon={<Plus size={18} />}><span className="hidden sm:inline">{action.label}</span></Button>
+            <Button id="workspace-top-action" htmlType="button" onClick={action.onClick} disabled={action.disabled} theme="solid" aria-label={action.label} icon={<IconPlus aria-hidden />}><span className="hidden sm:inline">{action.label}</span></Button>
           ) : null}
         </div>
       ) : null}
@@ -62,7 +62,7 @@ export function Topbar({ onMobileMenuToggle, userAvatar }: { onMobileMenuToggle?
         <Button htmlType="button" theme="borderless" type="tertiary" className="shrink-0" aria-label="账户菜单" icon={
           <Avatar size="extra-extra-small" src={userAvatar || undefined} alt={displayName}>{displayName.charAt(0) || "?"}</Avatar>
         }>
-          <span className="hidden lg:inline">{displayName || "…"}</span><ChevronDown size={12} className="ml-2 hidden lg:block" />
+          <span className="hidden lg:inline">{displayName || "…"}</span><IconChevronDown size="small" className="ml-2 hidden lg:block" aria-hidden />
         </Button>
       </WorkspaceAccountMenu>
 

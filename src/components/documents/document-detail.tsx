@@ -85,7 +85,7 @@ export function DocumentDetail({ matterId, documentId, issueId, onClose, onDocum
   const office = officePreviewKind(detail?.mimeType, detail?.name);
   const previewable = canPreview(detail?.mimeType, detail?.name);
   const preview = office ? `/api/documents/${documentId}/preview` : `/api/documents/${documentId}/download?inline=1`;
-  return <WorkspaceDialog open onOpenChange={open => { if (!open) void canLeave().then(allowed => { if (allowed) onClose(); }); }}>
+  return <WorkspaceDialog dismissOnBackdrop open onOpenChange={open => { if (!open) void canLeave().then(allowed => { if (allowed) onClose(); }); }}>
     <DrawerContent side="right" className="flex w-screen flex-col gap-4 overflow-y-auto sm:max-w-5xl">
       <DialogHeader><DialogTitle className="break-words pr-5">{detail?.name ?? "文书版本"}</DialogTitle>
         <DialogDescription>{detail ? `第 ${detail.version} 版 · ${detail.uploadedByName} · ${shDayKey(detail.createdAt)} ${shTime(detail.createdAt)}` : "读取指定版本及当前权限"}</DialogDescription></DialogHeader>

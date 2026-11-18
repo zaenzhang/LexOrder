@@ -2,7 +2,7 @@
 
 import { Table, Tag, Button, Toast } from "@douyinfe/semi-ui";
 import { useRef, useState, useTransition } from "react";
-import { Download, Upload, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet } from "lucide-react";
+import { IconDownload as Download, IconUpload as Upload, IconLoading as Loader2, IconTickCircle as CheckCircle2, IconAlertCircle as AlertCircle, IconExcel as FileSpreadsheet } from "@douyinfe/semi-icons";
 
 import {
   parseMatterImportAction,
@@ -68,10 +68,10 @@ export function MatterImportView() {
     <div className="space-y-5">
       <section className="ll-surface rounded-lg border border-border p-5">
         <header className="mb-3 flex items-center gap-2">
-          <FileSpreadsheet className="h-4 w-4 text-primary" />
+          <FileSpreadsheet aria-hidden size="default" className="text-primary" />
           <h2 className="text-[14px] font-semibold">案件批量导入</h2>
         </header>
-        <p className="mb-4 text-[12px] text-muted-foreground">
+        <p className="mb-4 text-xs text-muted-foreground">
           下载 Excel 模板填写后上传 → 预览校验（有误的行会标红，仅导入无误行）→ 确认导入。
           每行将创建客户（按名称+证件号查重）、案件（自动编号 + 所内案号 + 主办）、当事人（驱动利益冲突），
           「办理中」的案件按类型自动生成首程序。
@@ -80,7 +80,7 @@ export function MatterImportView() {
         <div className="flex flex-wrap items-center gap-3">
           <a href="/api/imports/matters/template" download>
             <Button theme="outline" className="gap-1.5">
-              <Download className="h-3.5 w-3.5" />
+              <Download aria-hidden size="small" />
               下载模板
             </Button>
           </a>
@@ -93,10 +93,10 @@ export function MatterImportView() {
             onChange={(e) => onFile(e.target.files?.[0])}
           />
           <Button theme="solid" onClick={() => fileRef.current?.click()} disabled={parsing} className="gap-1.5">
-            {parsing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+            {parsing ? <Loader2 aria-hidden size="small" spin /> : <Upload aria-hidden size="small" />}
             上传并预览
           </Button>
-          {fileName && <span className="text-[12px] text-muted-foreground">{fileName}</span>}
+          {fileName && <span className="text-xs text-muted-foreground">{fileName}</span>}
         </div>
       </section>
 
@@ -106,7 +106,7 @@ export function MatterImportView() {
           <header className="mb-3 flex items-center justify-between">
             <h3 className="text-[14px] font-medium">
               预览
-              <span className="ml-2 text-[12px] font-normal text-muted-foreground">
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
                 共 {preview.total} 行 · 可导入{" "}
                 <span className="text-[var(--semi-color-success)]">{preview.validCount}</span> · 有误{" "}
                 <span className={preview.total - preview.validCount > 0 ? "text-destructive" : ""}>
@@ -119,7 +119,7 @@ export function MatterImportView() {
                 取消
               </Button>
               <Button theme="solid" size="small" onClick={doImport} disabled={importing || preview.validCount === 0} className="gap-1.5">
-                {importing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {importing && <Loader2 aria-hidden size="small" spin />}
                 确认导入 {preview.validCount} 行
               </Button>
             </div>
@@ -165,20 +165,20 @@ export function MatterImportView() {
 
           {result.succeeded.length > 0 && (
             <div className="mb-3">
-              <p className="mb-1 text-[12px] text-muted-foreground">成功创建：</p>
-              <ul className="space-y-0.5 text-[12px]">
+              <p className="mb-1 text-xs text-muted-foreground">成功创建：</p>
+              <ul className="space-y-0.5 text-xs">
                 {result.succeeded.map((s) => (
                   <li key={s.rowNo} className="space-y-0.5">
                     <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-3 w-3 shrink-0 text-[var(--semi-color-success)]" />
+                      <CheckCircle2 aria-hidden size="small" className="shrink-0 text-[var(--semi-color-success)]" />
                       <span className="font-mono text-muted-foreground">第{s.rowNo}行</span>
                       <span className="font-mono">{s.internalCode}</span>
                       {s.firmCaseNo && <span className="font-mono text-muted-foreground">{s.firmCaseNo}</span>}
                       <span className="truncate">{s.title}</span>
                     </div>
                     {s.causeDowngradeReason && (
-                      <div className="ml-5 flex items-start gap-1.5 text-[11px] text-[var(--semi-color-warning)]">
-                        <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
+                      <div className="ml-5 flex items-start gap-1.5 text-xs text-[var(--semi-color-warning)]">
+                        <AlertCircle aria-hidden size="small" className="mt-0.5 shrink-0" />
                         <span>
                           案由已降级为自由文本（{s.causeDowngradeReason}），案件已导入，请事后人工核对案由
                         </span>
@@ -192,11 +192,11 @@ export function MatterImportView() {
 
           {result.failed.length > 0 && (
             <div>
-              <p className="mb-1 text-[12px] text-destructive">失败行：</p>
-              <ul className="space-y-0.5 text-[12px]">
+              <p className="mb-1 text-xs text-destructive">失败行：</p>
+              <ul className="space-y-0.5 text-xs">
                 {result.failed.map((f) => (
                   <li key={f.rowNo} className="flex items-center gap-2 text-destructive">
-                    <AlertCircle className="h-3 w-3 shrink-0" />
+                    <AlertCircle aria-hidden size="small" className="shrink-0" />
                     <span className="font-mono">第{f.rowNo}行</span>
                     <span>{f.error}</span>
                   </li>
