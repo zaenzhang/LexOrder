@@ -22,7 +22,6 @@ import { listNotes } from "@/server/notes/actions";
 import { listEvidenceItems } from "@/server/evidence/actions";
 import { getMatterContext } from "@/server/matters/context-actions";
 import { MatterContextSection } from "./_components/matter-context-section";
-import { MatterBriefSection } from "./_components/matter-brief-section";
 import { actionErrorMessage } from "@/lib/action-error";
 
 type PageProps = {
@@ -176,7 +175,6 @@ export default async function MatterDetailPage({ params, searchParams }: PagePro
         evidenceItems={evidenceResult.items}
         evidenceError={evidenceResult.error}
         materialRefreshKey={refreshKey}
-        briefNode={<MatterBriefSection matterId={matter.id} refreshKey={refreshKey} />}
         contextNode={contextResult.view
           ? <MatterContextSection key={matter.id} matterId={matter.id} view={contextResult.view} />
           : <section key={matter.id} className="dos-group p-4 text-sm text-destructive" role="alert">事项上下文暂不可读取：{contextResult.error} <a className="underline" href={matterHref(matter)}>重新加载</a></section>}

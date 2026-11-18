@@ -832,7 +832,7 @@ export function ProcedureWorkflowPanel({
       },
       openAddTask: () => {
         setCreateTaskStage(null);
-        updateDossierLocation({ view: "work", workPane: "tasks" });
+        updateDossierLocation({ view: "work", workPane: "tasks", procedure: null, stage: null, task: null });
         setCreateTaskRequest(value => value + 1);
       },
       stageNames: stages.map((st) => st.name),

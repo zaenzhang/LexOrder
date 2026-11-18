@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ContextRecordView, MatterBrief } from "@/lib/matters/context";
 
-const mock = vi.hoisted(() => ({ get: vi.fn() }));
+const mock = vi.hoisted(() => ({ get: vi.fn(), openTask: vi.fn() }));
 vi.mock("@/server/matters/context-actions", () => ({ getMatterBrief: mock.get }));
 
 import { MatterBriefSection } from "@/app/(app)/matters/[id]/_components/matter-brief-section";
@@ -41,19 +41,21 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-beforeEach(() => { mock.get.mockReset(); });
+beforeEach(() => { mock.get.mockReset(); mock.openTask.mockClear(); });
 afterEach(cleanup);
 
 describe("事项摘要（组件环境）", () => {
   it("从现有授权服务加载实际记录，显示中文状态、上海时间和已有回查入口", async () => {
     const pending = deferred<MatterBrief>();
     mock.get.mockReturnValue(pending.promise);
-    render(<MatterBriefSection matterId={matterId} />);
+    render(<MatterBriefSection onOpenTask={mock.openTask} matterId={matterId} />);
     expect(screen.getByRole("status")).toHaveTextContent("正在读取事项摘要");
     expect(screen.getByRole("region", { name: "事项摘要" })).toHaveAttribute("aria-busy", "true");
     await act(async () => { pending.resolve(brief()); });
 
     expect(mock.get).toHaveBeenCalledWith(matterId);
+    fireEvent.click(screen.getByRole("button", { name: "合成核对材料" }));
+    expect(mock.openTask).toHaveBeenCalledExactlyOnceWith("task-1");
     expect(screen.getByText("合成合同审查服务")).toBeVisible();
     expect(screen.getByText("合成审查意见")).toBeVisible();
     expect(screen.getByText("合成客户希望及时完成交付")).toBeVisible();
@@ -78,7 +80,7 @@ describe("事项摘要（组件环境）", () => {
       record({ id: "context-3", content: "不可用来源正文", source: { type: "NOTE", id: "hidden", label: "受限来源标签", available: false } })
     ];
     mock.get.mockResolvedValue(data);
-    render(<MatterBriefSection matterId={matterId} />);
+    render(<MatterBriefSection onOpenTask={mock.openTask} matterId={matterId} />);
     await screen.findByText("部分记录当前不可读取。");
     for (const text of ["受限正文", "受限原因", "受限来源说明", "受限财务内容", "不可用来源正文", "受限来源标签"]) {
       expect(screen.queryByText(text)).not.toBeInTheDocument();
@@ -89,7 +91,7 @@ describe("事项摘要（组件环境）", () => {
   it("刷新即清除旧内容，失败明确报错且可重试，不回退到旧摘要", async () => {
     const refreshed = deferred<MatterBrief>();
     mock.get.mockResolvedValueOnce(brief()).mockReturnValueOnce(refreshed.promise);
-    render(<MatterBriefSection matterId={matterId} />);
+    render(<MatterBriefSection onOpenTask={mock.openTask} matterId={matterId} />);
     await screen.findByText("合成客户希望及时完成交付");
     fireEvent.click(screen.getByRole("button", { name: "刷新摘要" }));
     expect(screen.queryByText("合成客户希望及时完成交付")).not.toBeInTheDocument();
@@ -114,8 +116,8 @@ describe("事项摘要（组件环境）", () => {
     const current = deferred<MatterBrief>();
     const nextId = "cmtestmatter00000000000002";
     mock.get.mockReturnValueOnce(earlier.promise).mockReturnValueOnce(current.promise);
-    const { rerender } = render(<MatterBriefSection matterId={matterId} />);
-    rerender(<MatterBriefSection matterId={nextId} />);
+    const { rerender } = render(<MatterBriefSection onOpenTask={mock.openTask} matterId={matterId} />);
+    rerender(<MatterBriefSection onOpenTask={mock.openTask} matterId={nextId} />);
     const next = brief(nextId);
     next.serviceScope = "第二事项的服务范围";
     await act(async () => { current.resolve(next); });
@@ -128,9 +130,9 @@ describe("事项摘要（组件环境）", () => {
   it("同一事项服务端刷新后重新读取权限视图并丢弃旧内容", async () => {
     const refreshed = deferred<MatterBrief>();
     mock.get.mockResolvedValueOnce(brief()).mockReturnValueOnce(refreshed.promise);
-    const { rerender } = render(<MatterBriefSection matterId={matterId} refreshKey="before" />);
+    const { rerender } = render(<MatterBriefSection onOpenTask={mock.openTask} matterId={matterId} refreshKey="before" />);
     await screen.findByText("合成客户希望及时完成交付");
-    rerender(<MatterBriefSection matterId={matterId} refreshKey="after" />);
+    rerender(<MatterBriefSection onOpenTask={mock.openTask} matterId={matterId} refreshKey="after" />);
     expect(screen.queryByText("合成客户希望及时完成交付")).not.toBeInTheDocument();
     const revoked = brief();
     revoked.context.records = [record({ readable: false, content: null, reason: null, sourceDescription: null, source: { type: "NOTE", id: null, label: null, available: false } })];
@@ -142,7 +144,7 @@ describe("事项摘要（组件环境）", () => {
 
   it("响应事项不匹配时拒绝展示并提供重试", async () => {
     mock.get.mockResolvedValue(brief("cmtestmatter00000000000002"));
-    render(<MatterBriefSection matterId={matterId} />);
+    render(<MatterBriefSection onOpenTask={mock.openTask} matterId={matterId} />);
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("事项摘要与当前事项不一致"));
     expect(screen.queryByText("合成合同审查服务")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "重试摘要" })).toBeEnabled();

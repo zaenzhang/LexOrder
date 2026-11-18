@@ -12,16 +12,21 @@ import { contextKindLabels, type MatterBrief } from "@/lib/matters/context";
 import { formatDateTime } from "@/lib/utils";
 import { getMatterBrief } from "@/server/matters/context-actions";
 
-type Props = { matterId: string; refreshKey?: string | number };
+type Props = {
+  matterId: string;
+  refreshKey?: string | number;
+  onOpenTask: (taskId: string) => void;
+  onCreateTask?: () => void;
+};
 type ReadState = { status: "loading" } | { status: "ready"; data: MatterBrief } | { status: "error"; error: string };
 const deadlineStatusLabels: Record<string, string> = { PENDING: "待确认", CONFIRMED: "已确认", ADJUSTED: "已人工调整" };
 
 /** A server refresh can change permissions or source availability even for the same matter. */
-export function MatterBriefSection({ matterId, refreshKey }: Props) {
-  return <BriefSection key={`${matterId}:${refreshKey ?? ""}`} matterId={matterId} />;
+export function MatterBriefSection(props: Props) {
+  return <BriefSection key={`${props.matterId}:${props.refreshKey ?? ""}`} {...props} />;
 }
 
-function BriefSection({ matterId }: { matterId: string }) {
+function BriefSection({ matterId, onOpenTask, onCreateTask }: Props) {
   const titleId = useId();
   const request = useRef(0);
   const [attempt, setAttempt] = useState(0);
@@ -65,13 +70,13 @@ function BriefSection({ matterId }: { matterId: string }) {
       <div className="dos-group-b">
         {state.status === "loading" ? <p className="t-sm t-mute" role="status">正在读取事项摘要…</p> : null}
         {state.status === "error" ? <p className="t-sm text-destructive" role="alert">摘要读取失败：{state.error}</p> : null}
-        {state.status === "ready" ? <BriefContent brief={state.data} /> : null}
+        {state.status === "ready" ? <BriefContent brief={state.data} onOpenTask={onOpenTask} onCreateTask={onCreateTask} /> : null}
       </div>
     </section>
   );
 }
 
-function BriefContent({ brief }: { brief: MatterBrief }) {
+function BriefContent({ brief, onOpenTask, onCreateTask }: Pick<Props, "onOpenTask" | "onCreateTask"> & { brief: MatterBrief }) {
   const readableRecords = brief.context.records.filter(record => record.readable && record.content !== null
     && (!record.source || record.source.available) && (record.visibility !== "FINANCE" || brief.context.canReadFinance));
   const recentRecords = readableRecords.slice(0, 5);
@@ -80,47 +85,15 @@ function BriefContent({ brief }: { brief: MatterBrief }) {
 
   return (
     <div className="space-y-4 text-[12.5px] leading-relaxed">
-      <dl className="grid gap-x-5 gap-y-3 sm:grid-cols-2">
-        <div className="min-w-0">
-          <dt className="t-xs t-mute">服务范围</dt>
-          <dd className="mt-1 whitespace-pre-wrap break-words">{brief.serviceScope || "未登记"}</dd>
-        </div>
-        <div className="min-w-0">
-          <dt className="t-xs t-mute">约定成果</dt>
-          <dd className="mt-1 whitespace-pre-wrap break-words">{brief.deliverables || "未登记"}</dd>
-        </div>
-      </dl>
-
-      <div className="border-t border-[var(--semi-color-border)] pt-3">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="font-medium">近期目标与指示</h3>
-          <a href="#matter-context" className="t-xs underline underline-offset-2">查看目标与指示</a>
-        </div>
-        {recentRecords.length === 0 ? <p className="t-xs t-mute">暂无可显示的目标与指示。</p> : (
-          <ul className="space-y-2.5">
-            {recentRecords.map(record => (
-              <li key={record.id}>
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 t-xs t-mute">
-                  <span>{contextKindLabels[record.kind]}</span>
-                  <span>{record.confirmationStatus === "CONFIRMED" ? "已确认" : "待确认"}</span>
-                  <span>第 {record.version} 版</span>
-                  <span>{formatDateTime(record.occurredAt)}</span>
-                </div>
-                <p className="mt-1 line-clamp-3 whitespace-pre-wrap break-words">{record.content}</p>
-              </li>
-            ))}
-          </ul>
-        )}
-        {hasContextRestriction ? <p className="mt-2 t-xs t-mute">部分记录当前不可读取。</p> : null}
-        {readableRecords.length > 5 || brief.context.hasMore ? <p className="mt-2 t-xs t-mute">此处最多显示最近 5 条可读记录。</p> : null}
-      </div>
-
-      <div className="border-t border-[var(--semi-color-border)] pt-3">
+      <div>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-medium">下一步工作</h3>
           {brief.nextActions.length > 0 || brief.deadlines.length > 0 ? <Link href="/schedule" className="t-xs underline underline-offset-2">查看日程</Link> : null}
         </div>
-        {!hasPending ? <p className="t-xs t-mute">暂无可显示的任务、期限或客户跟进。</p> : null}
+        {!hasPending ? <div className="flex flex-wrap items-center gap-3">
+          <p className="t-xs t-mute">暂无可显示的任务、期限或客户跟进。</p>
+          {onCreateTask ? <SemiButton htmlType="button" size="small" theme="solid" type="primary" onClick={onCreateTask}>新建任务</SemiButton> : null}
+        </div> : null}
         <div className="space-y-3">
           {brief.nextActions.length > 0 ? (
             <div>
@@ -128,10 +101,15 @@ function BriefContent({ brief }: { brief: MatterBrief }) {
               <ul className="space-y-2">
                 {brief.nextActions.map(task => (
                   <li key={task.id}>
-                    <p className="break-words">{task.title}</p>
+                    {task.accepted === null ? <p className="break-words">{task.title}</p> : (
+                      <SemiButton htmlType="button" size="small" theme="borderless" type="primary"
+                        contentClassName="whitespace-normal break-words text-left" onClick={() => onOpenTask(task.id)}>
+                        {task.title}
+                      </SemiButton>
+                    )}
                     <p className="t-xs t-mute">
                       {task.dueAt ? formatDateTime(task.dueAt) : "未设期限"} · {task.assigneeName || "未指定责任人"}
-                      {task.accepted === false ? " · 待承接" : task.accepted === true ? " · 已承接" : ""}
+                      {task.accepted === null ? " · 责任待核实" : task.accepted ? " · 已承接" : " · 待承接"}
                     </p>
                   </li>
                 ))}
@@ -176,6 +154,41 @@ function BriefContent({ brief }: { brief: MatterBrief }) {
             </div>
           ) : null}
         </div>
+      </div>
+
+      <dl className="grid gap-x-5 gap-y-3 border-t border-[var(--semi-color-border)] pt-3 sm:grid-cols-2">
+        <div className="min-w-0">
+          <dt className="t-xs t-mute">服务范围</dt>
+          <dd className="mt-1 whitespace-pre-wrap break-words">{brief.serviceScope || "未登记"}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="t-xs t-mute">约定成果</dt>
+          <dd className="mt-1 whitespace-pre-wrap break-words">{brief.deliverables || "未登记"}</dd>
+        </div>
+      </dl>
+
+      <div className="border-t border-[var(--semi-color-border)] pt-3">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-medium">近期目标与指示</h3>
+          <a href="#matter-context" className="t-xs underline underline-offset-2">查看目标与指示</a>
+        </div>
+        {recentRecords.length === 0 ? <p className="t-xs t-mute">暂无可显示的目标与指示。</p> : (
+          <ul className="space-y-2.5">
+            {recentRecords.map(record => (
+              <li key={record.id}>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 t-xs t-mute">
+                  <span>{contextKindLabels[record.kind]}</span>
+                  <span>{record.confirmationStatus === "CONFIRMED" ? "已确认" : "待确认"}</span>
+                  <span>第 {record.version} 版</span>
+                  <span>{formatDateTime(record.occurredAt)}</span>
+                </div>
+                <p className="mt-1 line-clamp-3 whitespace-pre-wrap break-words">{record.content}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+        {hasContextRestriction ? <p className="mt-2 t-xs t-mute">部分记录当前不可读取。</p> : null}
+        {readableRecords.length > 5 || brief.context.hasMore ? <p className="mt-2 t-xs t-mute">此处最多显示最近 5 条可读记录。</p> : null}
       </div>
 
       {brief.recentClientActivities.length > 0 ? (

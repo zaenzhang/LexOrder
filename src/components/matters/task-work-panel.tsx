@@ -46,7 +46,6 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, cr
   const taskHeading = useRef<HTMLHeadingElement>(null);
   const createButton = useRef<HTMLButtonElement>(null);
   const taskButtons = useRef(new Map<string, HTMLButtonElement>());
-  const openedTaskId = useRef<string | null>(null);
   const taskId = selectedTaskId === undefined ? localTaskId : selectedTaskId;
   const waitingIsDue = (task: TaskWorkflowWorkspace["tasks"][number]) => task.responsibility.state === "OPEN" && Boolean(task.activeWaiting && new Date(task.activeWaiting.nextCheckAt).getTime() <= observedAt);
   const inScope = (task: { stageId?: string | null }) => (!unassignedOnly || !task.stageId) && (scopeStageIds === null || Boolean(task.stageId && scopeStageIds.includes(task.stageId)));
@@ -80,7 +79,6 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, cr
   }
 
   function taskCreated(id: string) {
-    openedTaskId.current = id;
     setCreating(false);
     setReload(value => value + 1);
     if (window.location.href === creatingLocation.current) {
@@ -92,8 +90,7 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, cr
   }
 
   function returnTaskFocus(id: string) {
-    const target = openedTaskId.current === id ? taskButtons.current.get(id) : null;
-    openedTaskId.current = null;
+    const target = taskButtons.current.get(id);
     const visibleTarget = target?.isConnected && !target.closest("[hidden]") ? target : taskHeading.current;
     if (visibleTarget?.isConnected && !visibleTarget.closest("[hidden]")) visibleTarget.focus({ preventScroll: true });
   }
@@ -128,7 +125,7 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, cr
         dataSource={scopedTasks}
         columns={[
           { title: "任务", key: "column1", render: (_, task) => <><div className="flex items-start gap-2">
-              <FocusButton theme="borderless" type="tertiary" size="small" style={{ height: "auto", paddingInline: 0 }} contentClassName="whitespace-normal break-words text-left" ref={node => { if (node) taskButtons.current.set(task.id, node); else taskButtons.current.delete(task.id); }} onClick={() => { openedTaskId.current = task.id; selectTask(task.id); }} htmlType="button" className="min-w-0 max-w-full">{task.title}</FocusButton>
+              <FocusButton theme="borderless" type="tertiary" size="small" style={{ height: "auto", paddingInline: 0 }} contentClassName="whitespace-normal break-words text-left" ref={node => { if (node) taskButtons.current.set(task.id, node); else taskButtons.current.delete(task.id); }} onClick={() => selectTask(task.id)} htmlType="button" className="min-w-0 max-w-full">{task.title}</FocusButton>
               <Tag color={task.responsibility.state === "DONE" ? "green" : "grey"}>{taskStateLabels[task.responsibility.state]}</Tag>
               {task.priority === 2 && <Tag color="red">紧急</Tag>}
             </div>

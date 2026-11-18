@@ -28,6 +28,7 @@ import {
 import { cn } from "@/lib/utils";
 import { contactRoleLabels } from "./info-panel";
 import { MatterArchive, TeamRailCard } from "./matter-archive";
+import { MatterBriefSection } from "./matter-brief-section";
 import { FinancePanel } from "./finance-panel";
 import { ImportantItemDialog } from "./procedure-content";
 import { ProcedureWorkflowPanel, MatterPreservationContent } from "./procedure-workflow-panel";
@@ -193,7 +194,6 @@ export function MatterDetailTabs({
   evidenceItems,
   evidenceError,
   materialRefreshKey,
-  briefNode,
   contextNode,
   notes,
   workBoard, closureNode, conflictNode,
@@ -231,7 +231,6 @@ export function MatterDetailTabs({
   evidenceItems: EvidenceItemRow[];
   evidenceError?: string | null;
   materialRefreshKey?: number;
-  briefNode?: React.ReactNode;
   contextNode?: React.ReactNode;
   notes: WorkflowNote[];
   workBoard: WorkBoardData;
@@ -666,8 +665,15 @@ export function MatterDetailTabs({
         viewCounts={{ seal: sealContracts.filter((sc) => sc.status === "PENDING").length }}
         waiting={waiting}
         archiveNode={<>
+          <div className="card dos-facts">
+            <MatterBriefSection
+              matterId={matter.id}
+              refreshKey={materialRefreshKey}
+              onOpenTask={task => updateDossierLocation({ view: "work", workPane: "tasks", procedure: null, stage: null, task })}
+              onCreateTask={canWriteSchedule && allowed("schedule.read") ? () => workflowApi.current?.openAddTask() : undefined}
+            />
+          </div>
           {!invalidProcedure && !currentProcedure && (preservationCases.length > 0 || canAssociateThisMatter) ? <MatterPreservationContent matter={{ id: matter.id, internalCode: matter.internalCode, title: matter.title, category: matter.category }} cases={preservationCases} users={colleagues} canManage={canAssociateThisMatter && !isArchived} /> : null}
-          {briefNode ? <div className="card dos-facts">{briefNode}</div> : null}
           <MatterArchive
             matter={matter}
             contextNode={contextNode}
