@@ -1,5 +1,6 @@
 "use client";
 
+import { Button, TextArea } from "@douyinfe/semi-ui";
 import { useEffect, useState } from "react";
 import { Sparkles, Loader2, X } from "lucide-react";
 import type { MatterCategory, ProcedureType } from "@prisma/client";
@@ -11,8 +12,6 @@ import {
   DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import {
   recommendCause,
   type CauseRecommendation
@@ -112,9 +111,9 @@ export function CauseAiManualDialog({
             </div>
           )}
 
-          <Textarea
+          <TextArea
             value={situation}
-            onChange={(e) => setSituation(e.target.value)}
+            onChange={inputValue => setSituation(inputValue)}
             placeholder={
               tab === "preset"
                 ? "已根据案件字段填入，可修改后再推荐"
@@ -125,10 +124,11 @@ export function CauseAiManualDialog({
           />
 
           <Button
-            type="button"
             onClick={runRecommend}
             disabled={loading || situation.trim().length < 5}
             className="w-full gap-1.5"
+            htmlType="button"
+            theme="solid"
           >
             {loading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -184,7 +184,7 @@ export function CauseAiManualDialog({
         </div>
 
         <DialogFooter className="border-t border-border px-5 py-2.5">
-          <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+          <Button onClick={() => onOpenChange(false)} htmlType="button" type="tertiary" theme="borderless" size="small">
             <X className="h-3.5 w-3.5" />
             关闭
           </Button>

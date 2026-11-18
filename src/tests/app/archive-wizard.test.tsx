@@ -5,7 +5,7 @@ const { prep, upload, submit, refresh } = vi.hoisted(() => ({ prep: vi.fn(), upl
 vi.mock("@/server/archive/actions", () => ({ getArchivePrepData: prep, archiveMatter: submit }));
 vi.mock("@/server/documents/actions", () => ({ uploadDocument: upload }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
+vi.mock("@douyinfe/semi-ui", async (load) => ({ ...await load<typeof import("@douyinfe/semi-ui")>(), Toast: { success: vi.fn() }, Notification: { success: vi.fn() } }));
 
 import { ArchiveWizardDialog } from "@/app/(app)/matters/[id]/_components/archive-wizard";
 

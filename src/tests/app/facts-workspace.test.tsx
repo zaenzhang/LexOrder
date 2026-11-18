@@ -5,7 +5,7 @@ import type { EvidenceItemRow } from "@/app/(app)/matters/[id]/_components/evide
 
 const mock = vi.hoisted(() => ({ add: vi.fn(), retry: vi.fn(), openDocument: vi.fn() }));
 vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(window.location.search), useRouter: () => ({ refresh: vi.fn() }) }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("@douyinfe/semi-ui", async (load) => ({ ...await load<typeof import("@douyinfe/semi-ui")>(), Toast: { success: vi.fn(), error: vi.fn() }, Notification: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/server/evidence/actions", () => ({ getEvidenceItem: vi.fn(), updateEvidenceItem: vi.fn(), confirmEvidenceItem: vi.fn(),
   listEvidenceRevisions: vi.fn(), resolveEvidenceSource: vi.fn(), addEvidenceSource: vi.fn(), removeEvidenceSource: vi.fn(), createEvidenceItem: vi.fn() }));
 vi.mock("@/server/documents/processing-actions", () => ({ listMaterialSources: vi.fn() }));
@@ -60,10 +60,10 @@ describe("事实工作区的单套呈现", () => {
     view.rerender(<FactsWorkspace {...props} />);
     expect(screen.getByText("研究争点：issue")).toBeVisible();
     fireEvent.change(screen.getByLabelText("合成研究输入"), { target: { value: "切换分区时保留的研究草稿" } });
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "事实与争点" }), { button: 0 });
+    fireEvent.click(screen.getByRole("tab", { name: "事实与争点" }));
     view.rerender(<FactsWorkspace {...props} />);
     expect(screen.getByLabelText("合成研究输入")).toHaveValue("切换分区时保留的研究草稿");
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "法律研究" }), { button: 0 });
+    fireEvent.click(screen.getByRole("tab", { name: "法律研究" }));
     view.rerender(<FactsWorkspace {...props} />);
     expect(screen.getByLabelText("合成研究输入")).toBeVisible();
     expect(screen.getByLabelText("合成研究输入")).toHaveValue("切换分区时保留的研究草稿");
@@ -75,7 +75,7 @@ describe("事实工作区的单套呈现", () => {
     expect(screen.getByRole("button", { name: `查看要点：${issue.title}` })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "以此争点开始研究" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "添加事实或争点" })).not.toBeInTheDocument();
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "法律研究" }), { button: 0 });
+    fireEvent.click(screen.getByRole("tab", { name: "法律研究" }));
     view.rerender(<FactsWorkspace {...props} canAdd={false} items={[{ ...issue, canEdit: false }]} />);
     expect(screen.getByRole("region", { name: "合成研究工作区" })).toBeVisible();
   });

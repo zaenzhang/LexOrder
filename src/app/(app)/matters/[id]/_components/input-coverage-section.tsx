@@ -1,7 +1,7 @@
 "use client";
 
+import { Checkbox } from "@douyinfe/semi-ui";
 import { useEffect, useId, useRef, useState } from "react";
-import { Checkbox } from "@/components/ui/checkbox";
 import { ActionError, actionErrorMessage } from "@/lib/action-error";
 import {
   INPUT_COVERAGE_MAX_DOCUMENTS,
@@ -93,11 +93,10 @@ function CoverageSection({ matterId, documents, showHeading }: Omit<Props, "refr
               const checked = selected.includes(document.id);
               const label = unavailable.has(document.id) ? `材料 ${index + 1}（当前不可用）`
                 : `${document.name}${document.version == null ? "" : ` · 第 ${document.version} 版`}`;
-              return <label key={document.id} className="flex min-w-0 cursor-pointer items-start gap-2 text-xs leading-relaxed">
-                <Checkbox checked={checked} onCheckedChange={value => changeSelection(document.id, value === true)}
-                  disabled={!checked && selected.length >= INPUT_COVERAGE_MAX_DOCUMENTS} aria-label={label} className="mt-0.5" />
+              return <div key={document.id} className="flex min-w-0 cursor-pointer items-start gap-2 text-xs leading-relaxed">
+                <Checkbox checked={checked} onChange={({ target: { checked } }) => changeSelection(document.id, checked === true)} disabled={!checked && selected.length >= INPUT_COVERAGE_MAX_DOCUMENTS} aria-label={label} className="mt-0.5">
                 <span className="min-w-0 break-all">{label}</span>
-              </label>;
+              </Checkbox></div>;
             })}
           </div>
         </fieldset>

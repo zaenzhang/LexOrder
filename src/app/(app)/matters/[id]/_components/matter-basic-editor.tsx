@@ -1,14 +1,9 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useId, useEffect, useState, useTransition } from "react";
 import type { LitigationStanding, ProcedureType } from "@prisma/client";
-import { toast } from "sonner";
+import { Select, Button, Checkbox, Input, Toast } from "@douyinfe/semi-ui";
 import { Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DialogFooter } from "@/components/ui/dialog";
 import { FormDialogBody } from "@/components/patterns/form-dialog";
 import { CauseCombobox } from "@/app/(app)/matters/_components/cause-combobox";
@@ -25,6 +20,7 @@ const formLabelClass = "text-xs font-medium text-muted-foreground";
 export function MatterBasicEditor({ matterId, matterMeta, procedureType, onStateChange, onSaved, onCancel }: EditorFormActions & {
   matterId: string; matterMeta: MatterMeta; procedureType?: ProcedureType;
 }) {
+  const selectLabelId = useId();
   const [title, setTitle] = useState(matterMeta.title);
   const [causeId, setCauseId] = useState(matterMeta.causeId ?? "");
   const [causeFreeText, setCauseFreeText] = useState(matterMeta.causeFreeText ?? "");
@@ -50,7 +46,7 @@ export function MatterBasicEditor({ matterId, matterMeta, procedureType, onState
       try {
         await updateMatterBasicInfo({ id: matterId, expectedUpdatedAt: matterMeta.updatedAt, title, causeId, causeFreeText,
           claimAmount: parsedAmount, ourStanding: ourStanding || null, teamAccessRestricted });
-        toast.success("案件信息已保存");
+        Toast.success("案件信息已保存");
         onSaved();
       } catch (err) { setError(actionErrorMessage(err) || "保存失败，请稍后重试"); }
     });
@@ -66,11 +62,11 @@ export function MatterBasicEditor({ matterId, matterMeta, procedureType, onState
             <section aria-label="案件基础信息" className="space-y-4">
 
               <div className="space-y-1.5">
-                <Label htmlFor="matter-title" className={formLabelClass}>案件名称</Label>
+                <label htmlFor="matter-title" className={formLabelClass}>案件名称</label>
                 <Input
                   id="matter-title"
                   value={title}
-                  onChange={(e) => setTitle(e.target.value)}
+                  onChange={inputValue => setTitle(inputValue)}
                   placeholder="案件名称"
                   className={formControlClass}
                 />
@@ -79,7 +75,7 @@ export function MatterBasicEditor({ matterId, matterMeta, procedureType, onState
               {isLitigationMatter ? (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label className={formLabelClass}>{matterMeta.category === "CRIMINAL" ? "涉嫌罪名" : "案由"}</Label>
+                  <label className={formLabelClass}>{matterMeta.category === "CRIMINAL" ? "涉嫌罪名" : "案由"}</label>
                   <CauseCombobox
                     category={matterMeta.category}
                     procedureType={procedureType}
@@ -89,11 +85,11 @@ export function MatterBasicEditor({ matterId, matterMeta, procedureType, onState
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className={formLabelClass}>自由文本案由（不在标准库时填）</Label>
+                  <label className={formLabelClass}>自由文本案由（不在标准库时填）</label>
                   <Input
                     aria-label="自由文本案由"
                     value={causeFreeText}
-                    onChange={(e) => setCauseFreeText(e.target.value)}
+                    onChange={inputValue => setCauseFreeText(inputValue)}
                     className={formControlClass}
                   />
                 </div>
@@ -103,14 +99,14 @@ export function MatterBasicEditor({ matterId, matterMeta, procedureType, onState
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {matterMeta.category !== "CRIMINAL" && categoryKind !== "counsel" ? (
                 <div className="space-y-1.5">
-                  <Label className={formLabelClass}>{isLitigationMatter ? "标的额（元）" : "项目金额（元）"}</Label>
+                  <label className={formLabelClass}>{isLitigationMatter ? "标的额（元）" : "项目金额（元）"}</label>
                   <Input
                     type="number"
                     inputMode="decimal"
                     step="0.01"
                     aria-label={isLitigationMatter ? "标的额（元）" : "项目金额（元）"}
                     value={claimAmount}
-                    onChange={(e) => setClaimAmount(e.target.value)}
+                    onChange={inputValue => setClaimAmount(inputValue)}
                     placeholder="非金钱标的留空"
                     className={cn(formControlClass, "font-mono")}
                   />
@@ -118,48 +114,39 @@ export function MatterBasicEditor({ matterId, matterMeta, procedureType, onState
                 ) : null}
                 {isLitigationMatter ? (
                 <div className="space-y-1.5">
-                  <Label className={formLabelClass}>我方诉讼地位</Label>
+                  <label id={selectLabelId + "-1"} className={formLabelClass}>我方诉讼地位</label>
                   <Select
                     value={ourStanding || "unset"}
-                    onValueChange={(v) => setOurStanding(v === "unset" ? "" : v as LitigationStanding)}
-                  >
-                    <SelectTrigger className={formControlClass}>
-                      <SelectValue placeholder="选择地位" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unset">未设置</SelectItem>
-                      {availableStandings.map((s) => (
-                        <SelectItem key={s} value={s}>
+                    onChange={v => { if (typeof v === "string") setOurStanding(v === "unset" ? "" : v as LitigationStanding); }}
+                    aria-labelledby={selectLabelId + "-1"}
+                    placeholder="选择地位"
+                    className="w-full"
+                    disabled={isPending} motion={false}><Select.Option value="unset">未设置</Select.Option>{availableStandings.map((s) => (
+                        <Select.Option key={s} value={s}>
                           {litigationStandingLabel[s]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                        </Select.Option>
+                      ))}</Select>
                 </div>
                 ) : null}
               </div>
 
-              <label className="flex cursor-pointer items-start gap-2 rounded-md border border-border bg-background px-3 py-2 text-xs">
-                <Checkbox
-                  className="mt-0.5"
-                  checked={teamAccessRestricted}
-                  onCheckedChange={(checked) => setTeamAccessRestricted(checked === true)}
-                />
+              <div className="flex cursor-pointer items-start gap-2 rounded-md border border-border bg-background px-3 py-2 text-xs">
+                <Checkbox checked={teamAccessRestricted} onChange={({ target: { checked } }) => setTeamAccessRestricted(checked === true)} className="mt-0.5">
                 <span>
                   <span className="font-medium">受限事项</span>
                   <span className="ml-1 text-muted-foreground">
                     勾选后本案不进入律师团队汇总视图（团队负责人与额外查看人不再自动可见）；个人直接授权不受影响。
                   </span>
                 </span>
-              </label>
+              </Checkbox></div>
             </section>
 
       </fieldset>
     </FormDialogBody>
     <DialogFooter className="px-6 py-4">
       {error && <p role="alert" className="basis-full text-sm text-destructive">{error}</p>}
-      <Button type="button" variant="outline" onClick={onCancel} disabled={isPending}>取消</Button>
-      <Button type="submit" disabled={isPending || !dirty}>{isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}保存案件信息</Button>
+      <Button onClick={onCancel} disabled={isPending} htmlType="button" type="tertiary" theme="outline">取消</Button>
+      <Button disabled={isPending || !dirty} htmlType="submit" theme="solid">{isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}保存案件信息</Button>
     </DialogFooter>
   </form>;
 }

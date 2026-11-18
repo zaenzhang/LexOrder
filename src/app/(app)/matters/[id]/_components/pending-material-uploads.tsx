@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { Toast } from "@douyinfe/semi-ui";
 import { actionErrorMessage } from "@/lib/action-error";
 import { closeMaterialUpload, continueMaterialUpload, listPendingMaterialUploads } from "@/server/documents/ingest-actions";
 
@@ -25,9 +25,9 @@ export function PendingMaterialUploads({ matterId }: { matterId: string }) {
     startTransition(async () => {
       try {
         if (close) await closeMaterialUpload(id); else await continueMaterialUpload(id);
-        toast.success(close ? "已关闭上传记录" : "材料已保存，等待处理");
+        Toast.success(close ? "已关闭上传记录" : "材料已保存，等待处理");
         router.refresh();
-      } catch (err) { toast.error(actionErrorMessage(err)); }
+      } catch (err) { Toast.error(actionErrorMessage(err)); }
       finally { setRefresh(value => value + 1); }
     });
   }

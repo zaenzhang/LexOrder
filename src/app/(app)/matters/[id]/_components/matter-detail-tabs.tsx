@@ -4,7 +4,7 @@ import Link from "next/link";
 import { hasCustomPermission, type RoleGrant } from "@/lib/roles/catalog";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { toast } from "sonner";
+import { Notification, Toast } from "@douyinfe/semi-ui";
 import type { ClientType, Prisma } from "@prisma/client";
 import { Archive, ChevronLeft, Clock3, FileSignature, Gavel, Pencil, Plus, Upload, X } from "lucide-react";
 import { CaseSearchPanel } from "./case-search-panel";
@@ -368,12 +368,12 @@ export function MatterDetailTabs({
     startTransition(async () => {
       try {
         const result = await deleteProcedure(id);
-        if (!result.ok) { toast.error("程序不存在或已变化"); return; }
-        toast.success("程序已删除");
+        if (!result.ok) { Toast.error("程序不存在或已变化"); return; }
+        Toast.success("程序已删除");
         if (new URLSearchParams(window.location.search).get("procedure") === id) setSelectedProcId(null);
         router.refresh();
       } catch (err) {
-        toast.error("删除失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "删除失败", content: actionErrorMessage(err) });
       }
     });
   }

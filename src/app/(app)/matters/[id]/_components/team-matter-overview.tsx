@@ -1,3 +1,4 @@
+import { Tag } from "@douyinfe/semi-ui";
 import Link from "next/link";
 import { BookOpen, CalendarClock, ChevronLeft, Eye, Landmark, Users } from "lucide-react";
 import type { getMatterById } from "@/server/matters/actions";
@@ -5,7 +6,6 @@ import { listNotes } from "@/server/notes/actions";
 import { matterStatusLabel, matterCategoryLabel, matterCategoryKind, procedureTypeLabel, litigationStandingLabel } from "@/lib/enums";
 import { avatarTone, matterStatusTone } from "@/lib/ui/moan-tones";
 import { InitialAvatar } from "@/components/patterns/moan";
-import { Badge } from "@/components/ui/badge";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import { ActionError } from "@/lib/action-error";
 import { requireSession } from "@/lib/auth/session";
@@ -99,7 +99,7 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
                     <span className={cn("badge", proc.status === "CONCLUDED" ? "b-slate" : proc.status === "IN_PROGRESS" ? "b-teal" : "b-white")} style={{ fontSize: 10 }}>
                       {procedureStateLabel(proc)}
                     </span>
-                    {proc.engagement === "INFORMATIONAL" && <Badge variant="secondary">信息记录</Badge>}
+                    {proc.engagement === "INFORMATIONAL" && <Tag color="grey">信息记录</Tag>}
                   </span>
                   <span className="no">{proc.caseNumber || "案号未登记"}</span>
                   <span className="ag">{proc.handlingAgency || "受理机构未登记"}</span>

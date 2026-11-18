@@ -1,8 +1,7 @@
 "use client";
 
+import { Button, Tag, Typography } from "@douyinfe/semi-ui";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { confirmDialog, promptDialog } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -195,27 +194,27 @@ export function ResearchWorkspace({ matterId, researchId = null, issueId = null,
   const showingEditor = editing || Boolean(row);
   return <section aria-label="事项研究" className="space-y-4">
     <div className="flex items-center justify-between gap-3">
-      <div className="flex items-center gap-3 min-w-0">{showingEditor || error ? <Button variant="ghost" size="sm" disabled={pending} onClick={() => void navigate(null)}>返回研究列表</Button> : <h2 className="font-semibold">研究</h2>}
-        {row ? <><Badge variant="outline">修订 {row.version}</Badge><Badge variant={row.checkedAt ? "secondary" : "outline"}>{row.checkedAt ? "研究已核对" : "待核对"}</Badge>{!row.current ? <Badge variant="outline">历史修订</Badge> : null}</> : editing ? <span className="text-sm text-muted-foreground">新建研究</span> : null}
+      <div className="flex items-center gap-3 min-w-0">{showingEditor || error ? <Button disabled={pending} onClick={() => void navigate(null)} type="tertiary" theme="borderless" size="small">返回研究列表</Button> : <h2 className="font-semibold">研究</h2>}
+        {row ? <><Tag color="grey" type="ghost">修订 {row.version}</Tag><Tag color={row.checkedAt ? "grey" : "grey"}>{row.checkedAt ? "研究已核对" : "待核对"}</Tag>{!row.current ? <Tag color="grey" type="ghost">历史修订</Tag> : null}</> : editing ? <span className="text-sm text-muted-foreground">新建研究</span> : null}
       </div>
       <div className="flex items-center gap-2">
-        {list?.canWrite ? <Button onClick={() => void navigate(null, true)} disabled={pending}>新建研究</Button> : null}
-        {row ? <Button variant="ghost" size="sm" disabled={pending} onClick={() => showHistory()}>修订记录</Button> : null}
-        {row && !editing && row.canRevise ? <Button variant="outline" size="sm" disabled={pending} onClick={() => void edit()}>修改研究</Button> : null}
-        {row && !editing && row.canCheck ? <Button variant="outline" size="sm" disabled={pending} onClick={() => void check()}>核对研究</Button> : null}
-        {row && !editing && row.canDraft ? <Button size="sm" disabled={pending} onClick={draft}>形成分析稿</Button> : null}
-        {editing ? <><Button variant="outline" size="sm" disabled={pending} onClick={() => void navigate(row?.id ?? null)}>取消编辑</Button><Button size="sm" disabled={pending || !options} onClick={save}>{pending ? "保存中…" : row ? "保存新修订" : "保存研究"}</Button></> : null}
+        {list?.canWrite ? <Button onClick={() => void navigate(null, true)} disabled={pending} theme="solid">新建研究</Button> : null}
+        {row ? <Button disabled={pending} onClick={() => showHistory()} type="tertiary" theme="borderless" size="small">修订记录</Button> : null}
+        {row && !editing && row.canRevise ? <Button disabled={pending} onClick={() => void edit()} type="tertiary" theme="outline" size="small">修改研究</Button> : null}
+        {row && !editing && row.canCheck ? <Button disabled={pending} onClick={() => void check()} type="tertiary" theme="outline" size="small">核对研究</Button> : null}
+        {row && !editing && row.canDraft ? <Button disabled={pending} onClick={draft} theme="solid" size="small">形成分析稿</Button> : null}
+        {editing ? <><Button disabled={pending} onClick={() => void navigate(row?.id ?? null)} type="tertiary" theme="outline" size="small">取消编辑</Button><Button disabled={pending || !options} onClick={save} theme="solid" size="small">{pending ? "保存中…" : row ? "保存新修订" : "保存研究"}</Button></> : null}
       </div>
     </div>
-    {error ? <div role="alert" className="rounded-md border border-destructive/30 p-3 text-sm space-y-2"><p>{error}</p>{!editing ? <Button size="sm" variant="outline" disabled={pending} onClick={() => { if (draftFailed) draft(); else void allowLeave().then(allowed => { if (allowed) void load(target.current); }); }}>重试</Button> : null}</div> : null}
+    {error ? <div role="alert" className="rounded-md border border-destructive/30 p-3 text-sm space-y-2"><p>{error}</p>{!editing ? <Button disabled={pending} onClick={() => { if (draftFailed) draft(); else void allowLeave().then(allowed => { if (allowed) void load(target.current); }); }} type="tertiary" theme="outline" size="small">重试</Button> : null}</div> : null}
     {notice ? <p role="status" className="text-sm text-muted-foreground">{notice}</p> : null}
     {loading ? <p role="status" className="text-sm text-muted-foreground">正在读取研究…</p> : null}
     {!loading && list ? <div className="divide-y rounded-md border">
       {list.records.length ? list.records.map(item => <div key={item.id} className="flex items-center justify-between gap-4 p-3">
         <div className="min-w-0 space-y-1"><p className="font-medium text-sm break-words">{item.question ?? "来源受限的研究"}</p><p className="text-xs text-muted-foreground">修订 {item.version} · {item.authorName ?? "原作者"} · {shDayKey(item.createdAt)} {shTime(item.createdAt)} · {item.checkedAt ? "已核对" : "待核对"}</p></div>
-        <Button size="sm" variant="outline" disabled={pending} onClick={() => void navigate(item.id)}>打开研究</Button>
+        <Button disabled={pending} onClick={() => void navigate(item.id)} type="tertiary" theme="outline" size="small">打开研究</Button>
       </div>) : <p className="p-4 text-sm text-muted-foreground">暂无研究记录</p>}
-      {list.nextCursor ? <div className="p-3"><Button size="sm" variant="outline" disabled={pending} onClick={more}>继续加载</Button></div> : null}
+      {list.nextCursor ? <div className="p-3"><Button disabled={pending} onClick={more} type="tertiary" theme="outline" size="small">继续加载</Button></div> : null}
     </div> : null}
     {!loading && row && !row.readable ? <p role="alert" className="rounded-md border p-4 text-sm">研究来源已撤回、变化或无权读取。请核对材料资格后重试。</p> : null}
     {!loading && showingEditor && (editing || row?.readable) ? <>
@@ -231,8 +230,8 @@ export function ResearchWorkspace({ matterId, researchId = null, issueId = null,
       {sourceError ? <p role="alert" className="text-sm text-destructive">{sourceError}</p> : !source ? <p role="status">正在读取来源…</p> : source.status === "UNAVAILABLE" ? <p role="alert">来源已变化或无权读取，请返回研究核对。</p> : <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3"><span className="text-sm">V{source.documentVersion} · {source.locationLabel}{source.historicalParse ? " · 历史解析位置" : ""}</span>
           <div className="flex flex-wrap gap-2">
-            {source.previewUrl ? <Button variant="outline" size="sm" asChild><a href={source.previewUrl} target="_blank" rel="noopener noreferrer">{source.previewKind === "TABLE" ? "查看单元格转换预览" : source.previewKind === "CONVERTED" ? "查看整份转换预览" : "查看预览"}</a></Button> : null}
-            <Button variant="outline" size="sm" asChild><a href={source.downloadUrl} target="_blank" rel="noopener noreferrer">下载此版本</a></Button>
+            {source.previewUrl ? <Typography.Text link={{ href: source.previewUrl, target: "_blank", rel: "noopener noreferrer" }} size="small">{source.previewKind === "TABLE" ? "查看单元格转换预览" : source.previewKind === "CONVERTED" ? "查看整份转换预览" : "查看预览"}</Typography.Text> : null}
+            <Typography.Text link={{ href: source.downloadUrl, target: "_blank", rel: "noopener noreferrer" }} size="small">下载此版本</Typography.Text>
           </div>
         </div>
         {source.previewKind === "CONVERTED" && <p className="text-sm text-muted-foreground">转换预览打开整份文件，未按引用位置跳转。</p>}
@@ -242,9 +241,9 @@ export function ResearchWorkspace({ matterId, researchId = null, issueId = null,
     </DialogContent></Dialog>
     <Dialog open={historyOpen} onOpenChange={open => { setHistoryOpen(open); if (!open) historySequence.current++; }}><DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
       <DialogHeader><DialogTitle>研究修订</DialogTitle><DialogDescription>每次保存保留独立修订，旧稿仍引用原修订。</DialogDescription></DialogHeader>
-      {historyError ? <div role="alert" className="space-y-2 text-sm"><p>{historyError}</p><Button variant="outline" size="sm" onClick={() => showHistory()}>重试</Button></div> : null}
-      {!history ? <p role="status">正在读取修订记录…</p> : <div className="divide-y">{history.records.map(item => <div key={item.id} className="flex items-center justify-between gap-3 py-3"><div className="min-w-0"><p className="text-sm font-medium break-words">修订 {item.version} · {item.content?.question ?? "来源受限"}</p><p className="text-xs text-muted-foreground">{item.authorName ?? "原作者"} · {shDayKey(item.createdAt)} · {item.checkedAt ? "已核对" : "待核对"}{item.current ? " · 当前修订" : ""}</p></div><Button variant="outline" size="sm" disabled={pending} onClick={() => void navigate(item.id)}>查看修订</Button></div>)}
-        {history.nextVersion ? <Button variant="outline" size="sm" onClick={() => showHistory(history.nextVersion!)}>更早修订</Button> : null}</div>}
+      {historyError ? <div role="alert" className="space-y-2 text-sm"><p>{historyError}</p><Button onClick={() => showHistory()} type="tertiary" theme="outline" size="small">重试</Button></div> : null}
+      {!history ? <p role="status">正在读取修订记录…</p> : <div className="divide-y">{history.records.map(item => <div key={item.id} className="flex items-center justify-between gap-3 py-3"><div className="min-w-0"><p className="text-sm font-medium break-words">修订 {item.version} · {item.content?.question ?? "来源受限"}</p><p className="text-xs text-muted-foreground">{item.authorName ?? "原作者"} · {shDayKey(item.createdAt)} · {item.checkedAt ? "已核对" : "待核对"}{item.current ? " · 当前修订" : ""}</p></div><Button disabled={pending} onClick={() => void navigate(item.id)} type="tertiary" theme="outline" size="small">查看修订</Button></div>)}
+        {history.nextVersion ? <Button onClick={() => showHistory(history.nextVersion!)} type="tertiary" theme="outline" size="small">更早修订</Button> : null}</div>}
     </DialogContent></Dialog>
   </section>;
 }

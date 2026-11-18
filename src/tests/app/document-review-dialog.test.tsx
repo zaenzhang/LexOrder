@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({ history: vi.fn(), detail: vi.fn(), review: vi.
 vi.mock("@/server/ai/review-document", () => ({ reviewDocument: mocks.review }));
 vi.mock("@/server/ai/review-history", () => ({ listReviewHistory: mocks.history, getReviewRecord: mocks.detail }));
 vi.mock("@/server/ai/save-review", () => ({ saveReviewToMatter: mocks.save }));
-vi.mock("sonner", () => ({ toast: { success: mocks.success, error: mocks.error } }));
+vi.mock("@douyinfe/semi-ui", async (load) => ({ ...await load<typeof import("@douyinfe/semi-ui")>(), Toast: { success: mocks.success, error: mocks.error }, Notification: { success: mocks.success, error: mocks.error } }));
 
 import { DocumentReviewDialog } from "@/app/(app)/matters/[id]/_components/document-review-dialog";
 import type { ReviewHistoryDetail, ReviewHistoryEntry } from "@/server/ai/review-history";

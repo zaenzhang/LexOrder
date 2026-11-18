@@ -1,9 +1,8 @@
 "use client";
 
+import { Tabs, Button } from "@douyinfe/semi-ui";
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ResearchWorkspace } from "@/components/research/research-workspace";
 import type { EvidenceItemRow } from "./evidence-panel";
 import { EvidenceTimeline } from "./evidence-timeline";
@@ -20,20 +19,17 @@ export function FactsWorkspace({ matterId, items, error, canAdd, onAdd, onRetry,
   useEffect(() => { if (pane === "research") setVisitedResearch(true); }, [pane]);
   const selectResearch = useCallback((id: string | null) => updateDossierLocation({ workPane: "facts", factsView: "research", research: id, issue: null }), []);
   const startResearch = useCallback((id: string) => updateDossierLocation({ factsView: "research", research: null, issue: id }), []);
-  return <Tabs value={pane} onValueChange={value => updateDossierLocation({ factsView: value === "research" ? "research" : "facts" })}>
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <TabsList aria-label="事实与研究分区"><TabsTrigger value="facts">事实与争点</TabsTrigger><TabsTrigger value="research">法律研究</TabsTrigger></TabsList>
-      <span className="text-xs text-muted-foreground">本事项 · 全部程序</span>
-    </div>
-    <TabsContent value="facts" forceMount className="space-y-4 data-[state=inactive]:hidden">
-      {canAdd && <Button size="sm" onClick={onAdd}>添加事实或争点</Button>}
-      {error ? <p role="alert" className="text-sm text-destructive">{error} <Button variant="link" onClick={onRetry}>重新加载</Button></p>
+  return <div role="group" aria-label="事实与研究分区"><Tabs activeKey={pane} onChange={value => updateDossierLocation({ factsView: value === "research" ? "research" : "facts" })} keepDOM lazyRender={false} tabPaneMotion={false} tabBarExtraContent={<span className="text-xs text-muted-foreground">本事项 · 全部程序</span>}>
+
+    <Tabs.TabPane itemKey="facts" tab="事实与争点" className="space-y-4">
+      {canAdd && <Button onClick={onAdd} theme="solid" size="small">添加事实或争点</Button>}
+      {error ? <p role="alert" className="text-sm text-destructive">{error} <Button onClick={onRetry} type="primary" theme="borderless">重新加载</Button></p>
         : items.length ? <EvidenceTimeline items={items} onResearch={canAdd ? startResearch : undefined} />
           : <p role="status" className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">尚未记录事实或争点，可从材料添加来源。</p>}
-    </TabsContent>
-    <TabsContent value="research" forceMount className="data-[state=inactive]:hidden">
+    </Tabs.TabPane>
+    <Tabs.TabPane itemKey="research" tab="法律研究">
       {(pane === "research" || visitedResearch) && <ResearchWorkspace matterId={matterId} researchId={params.get("research")} issueId={params.get("issue")}
         onSelectResearch={selectResearch} onOpenDocument={onOpenDocument} onDraftStateChange={onDraftStateChange} />}
-    </TabsContent>
-  </Tabs>;
+    </Tabs.TabPane>
+  </Tabs></div>;
 }

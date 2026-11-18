@@ -1,13 +1,12 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
+import { TextArea, Toast } from "@douyinfe/semi-ui";
 import { ShieldAlert } from 'lucide-react';
 import { runMatterReview, decideMatterReview } from '@/server/conflicts/matter-actions';
 import type { readMatterReview } from '@/server/conflicts/matter-review';
 import { conflictConclusionLabel } from '@/lib/enums';
 import { formatDateTime } from '@/lib/utils';
-import { Textarea } from '@/components/ui/textarea';
 import { actionErrorMessage } from "@/lib/action-error";
 
 /** 侧栏常驻的动态冲突复核卡（2026-09-20 用户确认：仅在待复核时渲染，放侧栏不占主视觉）。
@@ -23,9 +22,9 @@ export function MatterConflictReview({ matterId, data, canWrite }: { matterId: s
     try {
       await work();
       router.refresh();
-      toast.success('冲突核查已保存');
+      Toast.success('冲突核查已保存');
     } catch (e) {
-      toast.error(e instanceof Error ? actionErrorMessage(e) : '核查失败');
+      Toast.error(e instanceof Error ? actionErrorMessage(e) : '核查失败');
     } finally {
       setBusy(false);
     }
@@ -57,7 +56,7 @@ export function MatterConflictReview({ matterId, data, canWrite }: { matterId: s
         ))}
         {canWrite && latest?.current ? (
           <div className="space-y-2 border-t pt-2">
-            <Textarea aria-label="冲突复核理由" placeholder="排除冲突的依据，或存在冲突后的处理措施" value={note} onChange={(e) => setNote(e.target.value)} rows={3} />
+            <TextArea aria-label="冲突复核理由" placeholder="排除冲突的依据，或存在冲突后的处理措施" value={note} onChange={inputValue => setNote(inputValue)} rows={3} />
             <div className="flex flex-wrap gap-2">
               {(['DIFFERENT', 'SAME_SUBJECT', 'NEED_INFO'] as const).map((conclusion) => (
                 <button key={conclusion} disabled={busy || !note.trim()} className="btn btn-secondary btn-sm" onClick={() => void run(() => decideMatterReview({ matterId, checkId: latest.id, expectedDecidedAt: latest.decidedAt, conclusion, note }))}>

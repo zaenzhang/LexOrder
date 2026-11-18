@@ -1,13 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useId, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus, X, Search, Loader2 } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Input, Notification, Popover, RadioGroup, Toast } from "@douyinfe/semi-ui";
 import {
   searchMattersForLink,
   addMatterLink,
@@ -39,6 +36,9 @@ export function RelatedMattersField({
   canManage: boolean;
 }) {
   const router = useRouter();
+  const root = useRef<HTMLSpanElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const resultsId = useId();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<MatterRef[]>([]);
@@ -68,12 +68,13 @@ export function RelatedMattersField({
     startMutate(async () => {
       try {
         await addMatterLink(matterId, id, relation as "RELATED_CASE");
-        toast.success("已关联");
+        Toast.success("已关联");
         setOpen(false);
+        trigger.current?.focus({ preventScroll: true });
         setQuery("");
         router.refresh();
       } catch (err) {
-        toast.error("关联失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "关联失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -85,50 +86,42 @@ export function RelatedMattersField({
         await removeMatterLink(matterId, id);
         router.refresh();
       } catch (err) {
-        toast.error("解除失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "解除失败", content: actionErrorMessage(err) });
       }
     });
   }
 
   const addButton = canManage ? (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>
-        <Button
+    <span ref={root} className="inline-flex" onKeyDown={event => {
+      if (open && event.key === "Escape") {
+        event.stopPropagation();
+        setOpen(false);
+        trigger.current?.focus({ preventScroll: true });
+      }
+    }}>
+      <Popover
+        trigger="custom"
+        visible={open}
+        onClickOutSide={() => setOpen(false)}
+        getPopupContainer={() => root.current?.closest<HTMLElement>('[role="dialog"]') ?? document.body}
+        position="bottomLeft"
+        motion={false}
+        content={<div id={resultsId} className="w-80 space-y-2 p-2">
+        <Input
+          autoFocus
+          aria-label="搜索关联案件"
+          value={query}
+          onChange={runSearch}
+          placeholder="搜索案件名称 / 所内案号"
+          prefix={<Search className="h-3.5 w-3.5" aria-hidden />}
+        />
+        <RadioGroup
           type="button"
-          variant="outline"
-          size="sm"
-          aria-label="关联案件"
-          title="关联案件"
-          className="h-5 w-5 rounded-sm p-0 text-muted-foreground"
-        >
-          <Plus className="h-2.5 w-2.5" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 p-2">
-        <div className="relative mb-1.5">
-          <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            autoFocus
-            value={query}
-            onChange={(e) => runSearch(e.target.value)}
-            placeholder="搜索案件名称 / 所内案号"
-            className="h-8 pl-7 text-xs"
-          />
-        </div>
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          {RELATION_OPTIONS.map(o => (
-            <button
-              key={o.value}
-              type="button"
-              onClick={() => setRelation(o.value)}
-              className={`rounded-full border px-2 py-0.5 text-[10.5px] transition-colors ${
-                relation === o.value ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"
-              }`}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
+          aria-label="关联方式"
+          value={relation}
+          onChange={event => setRelation(event.target.value)}
+          options={[...RELATION_OPTIONS]}
+        />
         <div className="max-h-64 space-y-1 overflow-y-auto">
           {searching ? (
             <div className="flex items-center justify-center py-6 text-xs text-muted-foreground">
@@ -155,8 +148,21 @@ export function RelatedMattersField({
             ))
           )}
         </div>
-      </PopoverContent>
-    </Popover>
+        </div>}
+      >
+        <button
+          ref={trigger}
+          type="button"
+          aria-label="关联案件"
+          aria-expanded={open}
+          aria-controls={open ? resultsId : undefined}
+          className="inline-flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--semi-color-primary)]"
+          onClick={() => onOpenChange(!open)}
+        >
+          <Plus className="h-3.5 w-3.5" aria-hidden />
+        </button>
+      </Popover>
+    </span>
   ) : null;
 
   return (

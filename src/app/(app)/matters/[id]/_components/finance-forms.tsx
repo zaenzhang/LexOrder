@@ -1,24 +1,14 @@
 "use client";
 
+import { ChoiceField } from "@/components/patterns/choice-field";
 import type { z } from "zod";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useId, useEffect, useState, useTransition } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
+import { Select, Button, Input, Notification, TextArea, Toast } from "@douyinfe/semi-ui";
 import { Loader2, Paperclip, FileText, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -27,7 +17,6 @@ import {
   DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
-import { RadioChips } from "@/components/ui/radio-chips";
 import {
   billingCreateSchema,
   feeEntryCreateSchema,
@@ -93,15 +82,15 @@ export function AddBillingSheet({
           fd.set("file", contractFile);
           const uploaded = await uploadDocument(fd);
           if (!uploaded.ok) throw new Error(uploaded.message);
-          toast.success("合同已创建，附件已加密入库");
+          Toast.success("合同已创建，附件已加密入库");
         } else {
-          toast.success("合同已创建");
+          Toast.success("合同已创建");
         }
         reset();
         setContractFile(null);
         onOpenChange(false);
       } catch (err) {
-        toast.error("失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -119,25 +108,17 @@ export function AddBillingSheet({
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-1 flex-col">
           <div className="flex-1 space-y-3 overflow-y-auto px-6 py-5">
             <Field label="合同名称" required error={errors.title?.message}>
-              <Input
-                placeholder="如：委托代理合同 - 一审阶段"
-                {...register("title")}
-              />
+              <Controller control={control} name="title" render={({ field }) => <Input placeholder="如：委托代理合同 - 一审阶段" name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} onChange={field.onChange} />} />
             </Field>
 
             <Field label="合同金额（元）" required error={errors.contractAmount?.message as string | undefined}>
-              <Input
-                type="number"
-                step="0.01"
-                className="font-mono tabular"
-                {...register("contractAmount", { valueAsNumber: true })}
-              />
+              <input type="number" step="0.01" className="h-8 w-full rounded-md border border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] px-3 text-sm outline-none focus:border-[var(--semi-color-focus-border)] font-mono tabular" {...register("contractAmount", { valueAsNumber: true })} />
             </Field>
 
             <Field label="状态">
-              <RadioChips
-                size="sm"
-                items={[
+              <ChoiceField
+                ariaLabel="收费约定状态"
+                options={[
                   { value: "DRAFT", label: "草稿" },
                   { value: "ACTIVE", label: "生效中" },
                   { value: "CLOSED", label: "已结清" }
@@ -149,15 +130,11 @@ export function AddBillingSheet({
 
             <Field label="签订日期" error={errors.signedAt?.message}>
               {/* 留空时保持 undefined（草稿）；用字符串注册，空串会在 zod 校验报错并显示，避免 Invalid Date 静默失败 */}
-              <Input type="date" {...register("signedAt")} />
+              <Controller control={control} name="signedAt" render={({ field }) => <Input type="date" name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} onChange={field.onChange} />} />
             </Field>
 
             <Field label="阶段付款约定">
-              <Textarea
-                rows={3}
-                placeholder="如：签约时收 30%，立案时收 30%，判决生效后收 40%"
-                {...register("schedule")}
-              />
+              <Controller control={control} name="schedule" render={({ field }) => <TextArea rows={3} placeholder="如：签约时收 30%，立案时收 30%，判决生效后收 40%" name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} onChange={field.onChange} />} />
             </Field>
 
             <Field label="合同附件（可选）">
@@ -186,14 +163,14 @@ export function AddBillingSheet({
 
           <DialogFooter className="border-t border-border px-6 py-4">
             <Button
-              type="button"
-              variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={isPending}
+              htmlType="button"
+              type="tertiary" theme="outline"
             >
               取消
             </Button>
-            <Button type="submit" disabled={isPending} className="gap-1.5">
+            <Button disabled={isPending} className="gap-1.5" htmlType="submit" theme="solid">
               {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               创建
             </Button>
@@ -233,6 +210,7 @@ export function AddFeeEntrySheet({
   matterId: string;
   billings: { id: string; title: string }[];
 }) {
+  const selectLabelId = useId();
   const [isPending, startTransition] = useTransition();
   const [invoiceRequests, setInvoiceRequests] = useState<
     Awaited<ReturnType<typeof listMatterInvoiceRequests>>
@@ -270,13 +248,13 @@ export function AddFeeEntrySheet({
     startTransition(async () => {
       try {
         await createFeeEntry(values);
-        toast.success(
+        Toast.success(
           values.type === "RECEIVED" ? "实收已录入" : "记录已创建"
         );
         reset();
         onOpenChange(false);
       } catch (err) {
-        toast.error("失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -291,12 +269,12 @@ export function AddFeeEntrySheet({
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-1 flex-col">
           <div className="flex-1 space-y-3 overflow-y-auto px-6 py-5">
             <Field label="类型" required>
-              <RadioChips
-                size="sm"
-                items={[
+              <ChoiceField
+                ariaLabel="费用类型"
+                options={[
                   { value: "RECEIVABLE", label: "应收" },
-                  { value: "RECEIVED", label: "实收", accent: "#1A7F45" },
-                  { value: "REFUND", label: "退款", accent: "#B42318" },
+                  { value: "RECEIVED", label: "实收" },
+                  { value: "REFUND", label: "退款" },
                   { value: "COST", label: "成本" }
                 ]}
                 value={type}
@@ -305,49 +283,36 @@ export function AddFeeEntrySheet({
             </Field>
 
             <Field label="金额（元）" required error={errors.amount?.message}>
-              <Input
-                type="number"
-                step="0.01"
-                className="font-mono tabular"
-                {...register("amount", { valueAsNumber: true })}
-              />
+              <input type="number" step="0.01" className="h-8 w-full rounded-md border border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] px-3 text-sm outline-none focus:border-[var(--semi-color-focus-border)] font-mono tabular" {...register("amount", { valueAsNumber: true })} />
             </Field>
 
             <Field label="发生日期" required error={errors.occurredAt?.message}>
-              <Input type="date" {...register("occurredAt")} />
+              <Controller control={control} name="occurredAt" render={({ field }) => <Input type="date" name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} onChange={field.onChange} />} />
             </Field>
 
             {billings.length > 0 && (
               <Field label="关联合同">
-                <Select
+                <> <span className="sr-only" id={selectLabelId + "-1"}>{"关联合同"}</span><Select
                   value={billingId || "none"}
-                  onValueChange={(v) =>
-                    setValue("billingId", v === "none" ? "" : v)
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">不关联</SelectItem>
-                    {billings.map((b) => (
-                      <SelectItem key={b.id} value={b.id}>
+                  onChange={v => { if (typeof v === "string") setValue("billingId", v === "none" ? "" : v); }}
+                  aria-labelledby={selectLabelId + "-1"}
+                  className="w-full"
+                  motion={false}><Select.Option value="none">不关联</Select.Option>{billings.map((b) => (
+                      <Select.Option key={b.id} value={b.id}>
                         {b.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      </Select.Option>
+                    ))}</Select></>
               </Field>
             )}
 
             {/* 字段联动：付款/收款方名称随类型；应收尚未发生资金往来，不填支付方式 */}
             <Field label={type === "REFUND" || type === "COST" ? "收款方" : "付款方"}>
-              <Input placeholder={type === "COST" ? "如 法院 / 鉴定机构 / 快递公司" : "如 上海青石建设有限公司"} {...register("payerOrPayee")} />
+              <Controller control={control} name="payerOrPayee" render={({ field }) => <Input placeholder={type === "COST" ? "如 法院 / 鉴定机构 / 快递公司" : "如 上海青石建设有限公司"} name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} onChange={field.onChange} />} />
             </Field>
 
             {type !== "RECEIVABLE" && (
               <Field label="方式">
-                <Input placeholder="转账 / 现金 / 支付宝" {...register("method")} />
+                <Controller control={control} name="method" render={({ field }) => <Input placeholder="转账 / 现金 / 支付宝" name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} onChange={field.onChange} />} />
               </Field>
             )}
 
@@ -356,9 +321,9 @@ export function AddFeeEntrySheet({
                 label="关联申请发票"
                 hint="选中后自动填金额；已开具的会填真实发票号，未开具的填占位 req:xxxxxxxx"
               >
-                <Select
+                <> <span className="sr-only" id={selectLabelId + "-2"}>{"关联申请发票"}</span><Select
                   value="none"
-                  onValueChange={(v) => {
+                  onChange={v => { if (typeof v !== "string") return;
                     if (v === "none") return;
                     const req = invoiceRequests.find((r) => r.id === v);
                     if (!req) return;
@@ -374,27 +339,22 @@ export function AddFeeEntrySheet({
                       shouldDirty: true
                     });
                   }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="从已申请发票中选择" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">不关联</SelectItem>
-                    {invoiceRequests.map((r) => (
-                      <SelectItem key={r.id} value={r.id}>
+                  aria-labelledby={selectLabelId + "-2"}
+                  placeholder="从已申请发票中选择"
+                  className="w-full"
+                  motion={false}><Select.Option value="none">不关联</Select.Option>{invoiceRequests.map((r) => (
+                      <Select.Option key={r.id} value={r.id}>
                         ¥{Number(r.amount).toLocaleString()} ·{" "}
                         {r.title ?? "未命名"} ·{" "}
                         {r.invoiceNo ? `已开具 ${r.invoiceNo}` : r.status}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      </Select.Option>
+                    ))}</Select></>
               </Field>
             )}
 
             {type !== "RECEIVABLE" && (
             <Field label="发票号">
-              <Input className="font-mono" {...register("invoiceNo")} />
+              <Controller control={control} name="invoiceNo" render={({ field }) => <Input className="font-mono" name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} onChange={field.onChange} />} />
             </Field>
             )}
 
@@ -421,20 +381,20 @@ export function AddFeeEntrySheet({
             )}
 
             <Field label="备注">
-              <Textarea rows={2} {...register("note")} />
+              <Controller control={control} name="note" render={({ field }) => <TextArea rows={2} name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} onChange={field.onChange} />} />
             </Field>
           </div>
 
           <DialogFooter className="border-t border-border px-6 py-4">
             <Button
-              type="button"
-              variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={isPending}
+              htmlType="button"
+              type="tertiary" theme="outline"
             >
               取消
             </Button>
-            <Button type="submit" disabled={isPending} className="gap-1.5">
+            <Button disabled={isPending} className="gap-1.5" htmlType="submit" theme="solid">
               {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               {type === "RECEIVED" ? "记录实收" : "保存"}
             </Button>
@@ -458,7 +418,7 @@ function InvoiceOcrBlock({
 
   const recognize = async () => {
     if (!file) {
-      toast.warning("请先选择发票图片");
+      Toast.warning("请先选择发票图片");
       return;
     }
     setBusy(true);
@@ -467,14 +427,14 @@ function InvoiceOcrBlock({
       fd.set("file", file);
       const res = await recognizeInvoiceFromImage(fd);
       if (!res.ok) {
-        toast.error(res.message);
+        Toast.error(res.message);
         return;
       }
       setPreview(res.data);
       onRecognized(res.data);
-      toast.success("已识别并自动填入");
+      Toast.success("已识别并自动填入");
     } catch (e) {
-      toast.error(e instanceof Error ? actionErrorMessage(e) : "识别失败");
+      Toast.error(e instanceof Error ? actionErrorMessage(e) : "识别失败");
     } finally {
       setBusy(false);
     }
@@ -482,10 +442,10 @@ function InvoiceOcrBlock({
 
   return (
     <div className="space-y-1.5 rounded-md border border-dashed border-border bg-muted/20 p-3">
-      <Label className="flex items-center gap-1.5 text-xs">
+      <label className="flex items-center gap-1.5 text-xs">
         <Sparkles className="h-3 w-3 text-primary" />
         AI 发票识别（可选）
-      </Label>
+      </label>
       <p className="text-[11px] text-muted-foreground">
         上传增值税发票（JPG / PNG / PDF），识别后自动填发票号 / 金额 / 销售方 / 开票日
       </p>
@@ -511,12 +471,12 @@ function InvoiceOcrBlock({
           />
         </label>
         <Button
-          type="button"
-          size="sm"
-          variant="outline"
           onClick={recognize}
           disabled={!file || busy}
           className="h-8 gap-1 text-[11px]"
+          htmlType="button"
+          type="tertiary" theme="outline"
+          size="small"
         >
           {busy && <Loader2 className="h-3 w-3 animate-spin" />}
           识别
@@ -562,10 +522,10 @@ function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="flex items-center gap-1 text-xs">
+      <label className="flex items-center gap-1 text-xs">
         {label}
         {required && <span className="text-destructive">*</span>}
-      </Label>
+      </label>
       {children}
       {hint && !error && <p className="text-[11px] text-muted-foreground">{hint}</p>}
       {error && <p className="text-xs text-destructive">{error}</p>}

@@ -1,14 +1,10 @@
 "use client";
 
+import { FileInput } from "@/components/patterns/file-input";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Tabs, Button, Tag, Toast, Typography } from "@douyinfe/semi-ui";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { ContextInputPicker, ContextInputsSummary } from "@/components/matters/context-input-picker";
 import { carriedContextInputs, type ContextInputSelection } from "@/lib/matters/context-inputs";
@@ -72,7 +68,7 @@ export function DocumentDetail({ matterId, documentId, issueId, onClose, onDocum
     if (pending || reviewState.current.busy) return;
     if (reviewState.current.dirty) { setError("请先保存复核内容，再处理文书版本。"); return; }
     startTransition(async () => {
-      try { await run(); toast.success(message); await reload(); router.refresh(); }
+      try { await run(); Toast.success(message); await reload(); router.refresh(); }
       catch (cause) { setError(actionErrorMessage(cause)); }
     });
   }
@@ -82,7 +78,7 @@ export function DocumentDetail({ matterId, documentId, issueId, onClose, onDocum
       description: "撤回后此版本不再可用，已有来源和审批历史继续保留。", confirmText: "撤回此版本",
       cancelText: "保留材料", initialFocus: "cancel", danger: true })) return;
     startTransition(async () => {
-      try { await deleteDocument(documentId); toast.success("材料已撤回"); onClose(); router.refresh(); }
+      try { await deleteDocument(documentId); Toast.success("材料已撤回"); onClose(); router.refresh(); }
       catch (cause) { setError(actionErrorMessage(cause)); }
     });
   }
@@ -93,35 +89,38 @@ export function DocumentDetail({ matterId, documentId, issueId, onClose, onDocum
     <SheetContent side="right" className="flex w-full flex-col gap-4 overflow-y-auto sm:max-w-5xl">
       <SheetHeader><SheetTitle className="break-words pr-5">{detail?.name ?? "文书版本"}</SheetTitle>
         <SheetDescription>{detail ? `第 ${detail.version} 版 · ${detail.uploadedByName} · ${shDayKey(detail.createdAt)} ${shTime(detail.createdAt)}` : "读取指定版本及当前权限"}</SheetDescription></SheetHeader>
-      {error && <p role="alert" className="text-sm text-destructive">{error} <Button variant="link" onClick={() => void retry()}>重新读取</Button></p>}
+      {error && <p role="alert" className="text-sm text-destructive">{error} <Button onClick={() => void retry()} type="primary" theme="borderless">重新读取</Button></p>}
       {!detail && !error && <p role="status">正在读取文书…</p>}
       {detail && <>
-        <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{statusLabel[detail.status]}</Badge>{!detail.isLatest && <Badge variant="outline">历史版本</Badge>}
-          <Button asChild variant="outline" size="sm"><a href={`/api/documents/${documentId}/download`} target="_blank" rel="noreferrer">下载此版本</a></Button>
-          <Button asChild variant="outline" size="sm"><a href={`/approvals?type=DOCUMENT_APPROVE&id=${documentId}`} target="_blank" rel="noopener noreferrer">审批记录</a></Button>
-          {detail.canSubmit && <Button size="sm" disabled={pending} onClick={() => mutate(() => submitDocumentForReview(documentId), "已提交文书审核")}>送审</Button>}
-          {detail.canFile && <Button size="sm" variant="outline" disabled={pending} onClick={() => mutate(() => fileDocument({ documentId, expectedUpdatedAt: detail.updatedAt }), "此版本已入卷")}>入卷</Button>}
-          {detail.canPrepareDelivery && <Button size="sm" variant="outline" disabled={pending} onClick={() => void canLeave().then(allowed => { if (allowed) onPrepareDelivery(documentId); })}>准备交付</Button>}
-          {detail.reviewSourceId && <Button size="sm" variant="outline" disabled={pending} onClick={() => void canLeave().then(allowed => { if (allowed) onDocumentChange(detail.reviewSourceId!); })}>查看审查原件</Button>}
-          {detail.canWithdraw && <Button size="sm" variant="outline" disabled={pending} onClick={() => void withdraw()}>撤回此版本</Button>}
+        <div className="flex flex-wrap items-center gap-2"><Tag color="grey" type="ghost">{statusLabel[detail.status]}</Tag>{!detail.isLatest && <Tag color="grey" type="ghost">历史版本</Tag>}
+          <Typography.Text link={{ href: `/api/documents/${documentId}/download`, target: "_blank", rel: "noreferrer" }} size="small">下载此版本</Typography.Text>
+          <Typography.Text link={{ href: `/approvals?type=DOCUMENT_APPROVE&id=${documentId}`, target: "_blank", rel: "noopener noreferrer" }} size="small">审批记录</Typography.Text>
+          {detail.canSubmit && <Button disabled={pending} onClick={() => mutate(() => submitDocumentForReview(documentId), "已提交文书审核")} theme="solid" size="small">送审</Button>}
+          {detail.canFile && <Button disabled={pending} onClick={() => mutate(() => fileDocument({ documentId, expectedUpdatedAt: detail.updatedAt }), "此版本已入卷")} type="tertiary" theme="outline" size="small">入卷</Button>}
+          {detail.canPrepareDelivery && <Button disabled={pending} onClick={() => void canLeave().then(allowed => { if (allowed) onPrepareDelivery(documentId); })} type="tertiary" theme="outline" size="small">准备交付</Button>}
+          {detail.reviewSourceId && <Button disabled={pending} onClick={() => void canLeave().then(allowed => { if (allowed) onDocumentChange(detail.reviewSourceId!); })} type="tertiary" theme="outline" size="small">查看审查原件</Button>}
+          {detail.canWithdraw && <Button disabled={pending} onClick={() => void withdraw()} type="tertiary" theme="outline" size="small">撤回此版本</Button>}
         </div>
         {detail.folderName && <p className="text-sm text-muted-foreground">卷宗：{detail.folderName}</p>}
         {detail.withdrawBlockedReason && <p className="text-sm text-muted-foreground">{detail.withdrawBlockedReason}</p>}
         <ContextInputsSummary summary={detail.contextInputs} matterId={matterId} />
-        <Tabs value={activeTab} onValueChange={value => { setActiveTab(value); if (value === "review") setVisitedReview(true); }}>
-          <TabsList aria-label="文书详情分区"><TabsTrigger value="document">正文</TabsTrigger><TabsTrigger value="review">人工复核</TabsTrigger><TabsTrigger value="versions">版本</TabsTrigger></TabsList>
-          <TabsContent value="document" className="space-y-3">{previewable ? <><iframe title="具体文书版本正文" src={preview} className="h-[60vh] w-full rounded-lg border bg-white" /><Button asChild variant="link"><a href={preview} target="_blank" rel="noreferrer">另页查看此版本</a></Button></> : <p className="py-6 text-sm text-muted-foreground">此格式请下载原件查看。</p>}</TabsContent>
-          <TabsContent value="review" forceMount className="data-[state=inactive]:hidden">{visitedReview && <DocumentReviewPanel key={documentId} documentId={documentId} initialIssueId={issueId} onIssueChange={onIssueChange} onDirtyChange={onReviewDirty} onPendingChange={onReviewPending} />}</TabsContent>
-          <TabsContent value="versions" forceMount className="space-y-4 data-[state=inactive]:hidden">
+        <div role="group" aria-label="文书详情分区"><Tabs activeKey={activeTab} onChange={value => { setActiveTab(value); if (value === "review") setVisitedReview(true); }} keepDOM lazyRender={false} tabPaneMotion={false}>
+
+          <Tabs.TabPane itemKey="document" tab="正文" className="space-y-3">{previewable ? <><iframe title="具体文书版本正文" src={preview} className="h-[60vh] w-full rounded-lg border bg-white" /><Typography.Text link={{ href: preview, target: "_blank", rel: "noreferrer" }}>另页查看此版本</Typography.Text></> : <p className="py-6 text-sm text-muted-foreground">此格式请下载原件查看。</p>}</Tabs.TabPane>
+          <Tabs.TabPane itemKey="review" tab="人工复核">{visitedReview && <DocumentReviewPanel key={documentId} documentId={documentId} initialIssueId={issueId} onIssueChange={onIssueChange} onDirtyChange={onReviewDirty} onPendingChange={onReviewPending} />}</Tabs.TabPane>
+          <Tabs.TabPane itemKey="versions" tab="版本" className="space-y-4">
             {!detail.hasVersionFamily && <p role="status" className="text-sm text-muted-foreground">此文书尚未记录版本关系。保存新版本时将以当前原件建立版本关系。</p>}
-            <div className="flex flex-col gap-2">{detail.versions.map(version => <Button key={version.id} variant={version.id === documentId ? "secondary" : "outline"} className="h-auto justify-start whitespace-normal text-left" disabled={pending} onClick={() => void canLeave().then(allowed => { if (allowed && version.id !== documentId) onDocumentChange(version.id); })}>第 {version.version} 版 · {version.name} {version.isLatest ? "（当前版本）" : ""}</Button>)}</div>
-            {detail.canUploadVersion && <div className="space-y-2 rounded-lg border p-4"><Label htmlFor="document-new-version">上传新稿</Label><Input id="document-new-version" type="file" disabled={pending} onChange={event => { setFile(event.target.files?.[0] ?? null); requestKey.current = crypto.randomUUID(); }} /><p className="text-xs text-muted-foreground">新稿保存为新版本，审批需重新完成。</p><Button disabled={!file || pending} onClick={() => mutate(async () => {
+            <div className="flex flex-col gap-2">{detail.versions.map(version => <Button key={version.id} className="h-auto justify-start whitespace-normal text-left" disabled={pending} onClick={() => void canLeave().then(allowed => { if (allowed && version.id !== documentId) onDocumentChange(version.id); })} type={version.id === documentId ? "primary" : "tertiary"} theme={version.id === documentId ? "light" : "outline"}>第 {version.version} 版 · {version.name} {version.isLatest ? "（当前版本）" : ""}</Button>)}</div>
+            {detail.canUploadVersion && <div className="space-y-2 rounded-lg border p-4"><label htmlFor="document-new-version" className="text-sm font-medium text-[var(--semi-color-text-1)]">上传新稿</label><FileInput id="document-new-version" disabled={pending} onChange={event => { setFile(event.target.files?.[0] ?? null); requestKey.current = crypto.randomUUID(); }} /><p className="text-xs text-muted-foreground">新稿保存为新版本，审批需重新完成。</p><Button
+              disabled={!file || pending}
+              onClick={() => mutate(async () => {
               const result = await uploadNewVersion({ documentId, file: file!, requestKey: requestKey.current, contextInputs }); setFile(null); setInputEdits(null); onDocumentChange(result.id);
-            }, "新版本已保存")}>保存新版本</Button>
+            }, "新版本已保存")}
+              theme="solid">保存新版本</Button>
               <ContextInputPicker matterId={matterId} initial={detail.contextInputs} value={contextInputs} disabled={pending} onChange={value => { setInputEdits(value); requestKey.current = crypto.randomUUID(); }} />
             </div>}
-          </TabsContent>
-        </Tabs>
+          </Tabs.TabPane>
+        </Tabs></div>
       </>}
     </SheetContent>
   </Sheet>;

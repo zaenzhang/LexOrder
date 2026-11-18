@@ -1,9 +1,9 @@
 "use client";
 import { deadlineOverdue, deadlineRelative, formatDeadlineDue, type DeadlineDuePrecision } from "@/lib/deadline-due";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useId, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { toast } from "sonner";
+import { Button, Dropdown, Input, Notification, Select, Tabs, TextArea, Toast } from "@douyinfe/semi-ui";
 import {
   Archive,
   BookOpen,
@@ -40,8 +40,6 @@ import type {
   PreservationType,
   ProcedureType
 } from "@prisma/client";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -50,16 +48,6 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { TaskWorkPanel } from "@/components/matters/task-work-panel";
 import { WorkResponsibilityPanel, type WorkBoardData, type ScheduleResponsibilityTarget, type RenderScheduleResponsibility } from "@/components/matters/work-responsibility-panel";
 import { updateDossierLocation, type DossierView, type WorkPane } from "@/lib/matters/dossier-location";
@@ -99,7 +87,6 @@ import { MaterialUploadDialog } from "./material-upload-dialog";
 import { AdjustDeadlineDialog } from "./procedure-content";
 import { confirmDeadline } from "@/server/deadlines/confirm";
 import { DocIcon, EmptyState, SourceChip } from "@/components/patterns/moan";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { documentSourceChip } from "@/lib/ui/moan-tones";
 import type { FolderPayload, TemplateSummary } from "./folder-types";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
@@ -832,7 +819,7 @@ export function ProcedureWorkflowPanel({
     apiRef.current = {
       openUpload: () => {
         if (invalidStage || invalidProcedure) {
-          toast.error("请先重新选择有效程序和环节");
+          Toast.error("请先重新选择有效程序和环节");
           return;
         }
         setUploadSignal((n) => n + 1);
@@ -873,11 +860,11 @@ export function ProcedureWorkflowPanel({
   async function handleRemoveStage(stage: WorkflowStage) {
     const stageId = stage.id;
     if (!stageId) {
-      toast.info("该环节尚未写入流程，无需移除");
+      Toast.info("该环节尚未写入流程，无需移除");
       return;
     }
     if (!stage.removable) {
-      toast.warning("必备环节不能移除");
+      Toast.warning("必备环节不能移除");
       return;
     }
     const location = window.location.pathname + window.location.search;
@@ -885,11 +872,11 @@ export function ProcedureWorkflowPanel({
     startStageRemovalTransition(async () => {
       try {
         const res = await removeProcedureStage({ id: stageId });
-        toast.success(res.hidden ? "环节已隐藏，数据保留（重新添加同名环节可恢复）" : "环节已移除");
+        Toast.success(res.hidden ? "环节已隐藏，数据保留（重新添加同名环节可恢复）" : "环节已移除");
         if (window.location.pathname + window.location.search === location) setSelectedKey(null);
         router.refresh();
       } catch (err) {
-        toast.error("移除失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "移除失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -924,7 +911,7 @@ export function ProcedureWorkflowPanel({
 
       {view === "work" || visitedWorkMatterId === matter.id ? (
         <div hidden={view !== "work"} className="min-w-0">
-        {invalidStage ? <p role="alert" className="mb-3 text-sm text-destructive">指定环节不可用。<Button variant="link" onClick={() => setSelectedKey(null)}>重新选择环节</Button></p> : null}
+        {invalidStage ? <p role="alert" className="mb-3 text-sm text-destructive">指定环节不可用。<Button onClick={() => setSelectedKey(null)} type="primary" theme="borderless">重新选择环节</Button></p> : null}
         <div className={workPane === "materials" || workPane === "tasks" ? "dos-flow" : "min-w-0"}>
           {workPane === "materials" || workPane === "tasks" ? <StageLine
             procedure={procedure}
@@ -943,13 +930,18 @@ export function ProcedureWorkflowPanel({
               canManage={Boolean(canWriteTasks)}
               onRemoveStage={canWriteTasks && selectedStage.removable ? () => handleRemoveStage(selectedStage) : undefined}
             />
-            {selectedStage.id && canWriteTasks && !invalidStage && !invalidProcedure ? <Button size="sm" variant="outline" onClick={() => {
+            {selectedStage.id && canWriteTasks && !invalidStage && !invalidProcedure ? <Button
+              onClick={() => {
               setCreateTaskStage({ id: selectedStage.id!, name: selectedStage.name });
               setCreateTaskRequest(value => value + 1);
               updateDossierLocation({ view: "work", workPane: "tasks" });
               onViewChange("work");
-            }}>为此环节新建任务</Button> : null}
-            {!selectedStage.id && canManage && canWriteTasks && !invalidStage && !invalidProcedure ? <Button size="sm" variant="outline" disabled={stageActivationPending} onClick={() => {
+            }}
+              type="tertiary" theme="outline"
+              size="small">为此环节新建任务</Button> : null}
+            {!selectedStage.id && canManage && canWriteTasks && !invalidStage && !invalidProcedure ? <Button
+              disabled={stageActivationPending}
+              onClick={() => {
               startStageActivation(async () => {
                 try {
                   const location = window.location.pathname + window.location.search;
@@ -957,20 +949,17 @@ export function ProcedureWorkflowPanel({
                   if (window.location.pathname + window.location.search === location) setSelectedKey(`stage-${result.id}`);
                   router.refresh();
                 } catch (error) {
-                  toast.error("启用环节失败", { description: actionErrorMessage(error) });
+                  Notification.error({ title: "启用环节失败", content: actionErrorMessage(error) });
                 }
               });
-            }}>{stageActivationPending ? "正在启用…" : "启用此环节"}</Button> : null}
+            }}
+              type="tertiary" theme="outline"
+              size="small">{stageActivationPending ? "正在启用…" : "启用此环节"}</Button> : null}
             </>
           ) : null}
-          <Tabs value={workPane ?? "unavailable"} onValueChange={selectWorkSection}>
-            <TabsList aria-label="办案工作区" className="grid h-auto w-full grid-cols-4 gap-1">
-              <TabsTrigger value="materials">材料</TabsTrigger>
-              <TabsTrigger value="facts">事实与来源</TabsTrigger>
-              <TabsTrigger value="tasks">待办</TabsTrigger>
-              <TabsTrigger value="records">办理记录</TabsTrigger>
-            </TabsList>
-            <TabsContent value="materials" forceMount hidden={workPane !== "materials"} className="data-[state=inactive]:hidden">
+          <div role="group" aria-label="办案工作区"><Tabs activeKey={workPane ?? "unavailable"} onChange={selectWorkSection} keepDOM lazyRender={false} tabPaneMotion={false}>
+
+            <Tabs.TabPane itemKey="materials" tab="材料">
               <div className="flex flex-col gap-4">
                 {!invalidStage && !invalidProcedure ? <>{materialsActions}
                 <MaterialsSection
@@ -984,10 +973,10 @@ export function ProcedureWorkflowPanel({
                 />
                 {materialsExtra}</> : null}
               </div>
-            </TabsContent>
-            {!workPane ? <p role="alert" className="py-4 text-sm text-destructive">指定工作区不可用，请选择上方工作区。</p> : null}
-            <TabsContent value="facts" forceMount hidden={workPane !== "facts"} className="data-[state=inactive]:hidden">{factsNode}</TabsContent>
-            <TabsContent value="tasks" forceMount hidden={workPane !== "tasks"} className="data-[state=inactive]:hidden">
+            </Tabs.TabPane>
+
+            <Tabs.TabPane itemKey="facts" tab="事实与来源">{factsNode}</Tabs.TabPane>
+            <Tabs.TabPane itemKey="tasks" tab="待办">
               <div ref={actionSectionRef} tabIndex={-1} className="flex scroll-mt-44 flex-col gap-4" role="region" aria-label="待办">
                 {procedure && selectedStage && !selectedStage.id && !invalidStage && !invalidProcedure && <p className="text-sm text-muted-foreground">此环节尚未启用，请在材料区启用后再添加环节任务。</p>}
                 {!canReadSchedule ? <p className="text-sm text-muted-foreground">无日程查看权限</p> : <p className="text-sm text-muted-foreground">{unassignedOnly ? "事项级任务 · 未关联程序或环节" : selectedStage ? `环节任务 · ${selectedStage.name}` : procedure ? "本程序任务 · 全部真实环节" : "全案任务"}</p>}
@@ -1020,11 +1009,11 @@ export function ProcedureWorkflowPanel({
                 /> } : undefined} />
 
               </div>
-            </TabsContent>
-            <TabsContent value="records" forceMount hidden={workPane !== "records"} className="data-[state=inactive]:hidden">
-              <Tabs value={recordsPane} onValueChange={value => updateDossierLocation({ recordsView: value === "delivery" ? "delivery" : "activity" })}>
-              <TabsList aria-label="办理记录分区"><TabsTrigger value="activity">进展记录</TabsTrigger><TabsTrigger value="delivery">交付与回复</TabsTrigger></TabsList>
-              <TabsContent value="activity" forceMount hidden={recordsPane !== "activity"} className="data-[state=inactive]:hidden">
+            </Tabs.TabPane>
+            <Tabs.TabPane itemKey="records" tab="办理记录">
+              <div role="group" aria-label="办理记录分区"><Tabs activeKey={recordsPane} onChange={value => updateDossierLocation({ recordsView: value === "delivery" ? "delivery" : "activity" })} keepDOM lazyRender={false} tabPaneMotion={false}>
+
+              <Tabs.TabPane itemKey="activity" tab="进展记录">
               <CaseLog
                 sectionRef={recordSectionRef}
                 initiallyExpanded={recordsExpanded}
@@ -1040,11 +1029,11 @@ export function ProcedureWorkflowPanel({
                 onAddLedger={canManage && onAddLedger ? () => onAddLedger("express") : undefined}
                 onCaseSearch={onCaseSearch}
               />
-              </TabsContent>
-              <TabsContent value="delivery" forceMount hidden={recordsPane !== "delivery"} className="data-[state=inactive]:hidden">{visitedDelivery ? deliveryNode : null}</TabsContent>
-              </Tabs>
-            </TabsContent>
-          </Tabs>
+              </Tabs.TabPane>
+              <Tabs.TabPane itemKey="delivery" tab="交付与回复">{visitedDelivery ? deliveryNode : null}</Tabs.TabPane>
+              </Tabs></div>
+            </Tabs.TabPane>
+          </Tabs>{!workPane ? <p role="alert" className="py-4 text-sm text-destructive">指定工作区不可用，请选择上方工作区。</p> : null}</div>
         </div>
           </div>
         </div>
@@ -1270,8 +1259,8 @@ function StageLine({ procedure, stages, selectedKey, onSelect, onAddStage }: {
   return <nav className="card dos-vline" aria-label="办案范围">
     <div className="dos-vline-head"><span className="t">{procedure ? "程序环节" : "全案范围"}</span></div>
     <div className="flex flex-wrap gap-2 px-3 pb-3">
-      <Button size="sm" variant={selectedKey === null ? "default" : "outline"} onClick={() => onSelect(null)}>{procedure ? "全部环节" : "全部材料与任务"}</Button>
-      <Button size="sm" variant={selectedKey === "unassigned" ? "default" : "outline"} onClick={() => onSelect("unassigned")}>{procedure ? "未归属环节" : "未归属"}</Button>
+      <Button onClick={() => onSelect(null)} type={selectedKey === null ? "primary" : "tertiary"} theme={selectedKey === null ? "solid" : "outline"} size="small">{procedure ? "全部环节" : "全部材料与任务"}</Button>
+      <Button onClick={() => onSelect("unassigned")} type={selectedKey === "unassigned" ? "primary" : "tertiary"} theme={selectedKey === "unassigned" ? "solid" : "outline"} size="small">{procedure ? "未归属环节" : "未归属"}</Button>
     </div>
     {procedure ? <ol className="dos-vline-list">{stages.map(stage => {
       const state = stage.status === "done" ? "done" : stage.status === "active" ? "cur" : "todo";
@@ -1286,7 +1275,7 @@ function StageLine({ procedure, stages, selectedKey, onSelect, onAddStage }: {
         </button>
       </li>;
     })}</ol> : null}
-    {onAddStage ? <Button variant="ghost" size="sm" className="m-3" onClick={onAddStage}><Plus />添加环节</Button> : null}
+    {onAddStage ? <Button className="m-3" onClick={onAddStage} type="tertiary" theme="borderless" size="small"><Plus />添加环节</Button> : null}
   </nav>;
 }
 
@@ -1300,30 +1289,30 @@ function AddMenu({
   primary?: boolean;
   items: { key: string; label: string; hint: string; icon: typeof Plus; onSelect: () => void }[];
 }) {
+  const [open, setOpen] = useState(false);
   if (items.length === 0) return null;
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button type="button" className={cn("btn btn-sm", primary ? "btn-primary" : "btn-secondary")}>
-          <Plus />
-          {label}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60">
-        {items.map((item) => {
+    <Dropdown trigger="click" position="bottomRight" closeOnEsc clickTriggerToHide motion={false}
+      visible={open} onVisibleChange={setOpen}
+          render={<Dropdown.Menu className="w-60">
+            {items.map((item) => {
           const Icon = item.icon;
           return (
-            <DropdownMenuItem key={item.key} onSelect={item.onSelect} className="items-start gap-2.5 py-2">
+            <Dropdown.Item key={item.key} onClick={() => { setOpen(false); item.onSelect(); }} className="items-start gap-2.5 py-2">
               <Icon className="mt-0.5 h-4 w-4 text-[var(--t-muted)]" strokeWidth={1.8} />
               <span className="flex flex-col">
                 <span className="text-[13px] font-medium">{item.label}</span>
                 <span className="text-[11px] text-muted-foreground">{item.hint}</span>
               </span>
-            </DropdownMenuItem>
+            </Dropdown.Item>
           );
         })}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          </Dropdown.Menu>}>
+          <button type="button" aria-haspopup="menu" aria-expanded={open} className={cn("btn btn-sm", primary ? "btn-primary" : "btn-secondary")}>
+          <Plus />
+          {label}
+        </button>
+        </Dropdown>
   );
 }
 
@@ -1481,10 +1470,10 @@ function NextActions({
     startTransition(async () => {
       try {
         await action();
-        toast.success(ok);
+        Toast.success(ok);
         router.refresh();
       } catch (err) {
-        toast.error("操作失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "操作失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -1823,10 +1812,10 @@ function LogRow({ item, canManage, onEditNote }: { item: LogItem; canManage?: bo
     startTransition(async () => {
       try {
         await fn();
-        toast.success(ok);
+        Toast.success(ok);
         router.refresh();
       } catch (err) {
-        toast.error("操作失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "操作失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -1851,7 +1840,7 @@ function LogRow({ item, canManage, onEditNote }: { item: LogItem; canManage?: bo
         </button>
       </div>
     ) : null;
-  const noteOps = item.note && onEditNote ? <Button type="button" variant="ghost" size="sm" onClick={() => onEditNote(item.note!)}>编辑</Button> : null;
+  const noteOps = item.note && onEditNote ? <Button onClick={() => onEditNote(item.note!)} htmlType="button" type="tertiary" theme="borderless" size="small">编辑</Button> : null;
   if (item.kind === "note") {
     return (
       <div className="rec">
@@ -1979,7 +1968,7 @@ function CaseLog({
       </div>
       {shown.length === 0 ? <EmptyState compact title="暂无记录" /> : <div className="dos-seg">{visible.map(item => <LogRow key={item.key} item={item} canManage={canManage}
         onEditNote={canWriteRecords && item.note?.author.id === currentUserId ? onEditNote : undefined} />)}</div>}
-      {shown.length > visible.length ? <Button variant="ghost" className="m-3" onClick={() => setExpanded(true)}>展开更早的 {shown.length - visible.length} 条记录</Button> : null}
+      {shown.length > visible.length ? <Button className="m-3" onClick={() => setExpanded(true)} type="tertiary" theme="borderless">展开更早的 {shown.length - visible.length} 条记录</Button> : null}
     </section>
   );
 }
@@ -2193,10 +2182,10 @@ export function MatterPreservationContent({
     startTransition(async () => {
       try {
         await liftProperty(propertyId);
-        toast.success("已解除保全");
+        Toast.success("已解除保全");
         router.refresh();
       } catch (err) {
-        toast.error("操作失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "操作失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -2205,7 +2194,7 @@ export function MatterPreservationContent({
     <>
     {cases.length === 0 ? (
       canManage ? (
-        <Button type="button" variant="outline" size="sm" className="self-start" onClick={() => setCreateOpen(true)}>
+        <Button className="self-start" onClick={() => setCreateOpen(true)} htmlType="button" type="tertiary" theme="outline" size="small">
           <Plus />
           新建保全
         </Button>
@@ -2256,10 +2245,10 @@ export function MatterPreservationContent({
                 </div>
                 {canManage && (
                   <Button
-                    variant="ghost"
-                    size="sm"
                     onClick={() => setAddTargetCaseId(item.id)}
                     className="h-7 gap-1 px-2 text-[11px]"
+                    type="tertiary" theme="borderless"
+                    size="small"
                   >
                     <Plus className="h-3 w-3" />
                     被保全人
@@ -2541,6 +2530,7 @@ function StageCreateDialog({
   selectedItem: WorkflowItem | null;
   onCreated: (stageId: string) => void;
 }) {
+  const selectLabelId = useId();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [presetName, setPresetName] = useState("");
@@ -2583,11 +2573,11 @@ function StageCreateDialog({
 
   function submit() {
     if (!stageName) {
-      toast.warning("请填写环节名称");
+      Toast.warning("请填写环节名称");
       return;
     }
     if (duplicate) {
-      toast.warning("该环节已在列表中");
+      Toast.warning("该环节已在列表中");
       return;
     }
     startTransition(async () => {
@@ -2601,12 +2591,12 @@ function StageCreateDialog({
           insertAfterStageId: insert.afterStageId,
           insertAfterStageName: insert.afterStageName
         });
-        toast.success("环节已添加");
+        Toast.success("环节已添加");
         onCreated(created.id);
         onOpenChange(false);
         router.refresh();
       } catch (err) {
-        toast.error("添加失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "添加失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -2623,20 +2613,13 @@ function StageCreateDialog({
         <div className="space-y-3">
           {!customMode ? (
             <div className="space-y-1.5">
-              <Label className="text-xs">预设环节 *</Label>
+              <label className="text-xs">预设环节 *</label>
               {availablePresets.length > 0 ? (
-                <Select value={presetName} onValueChange={setPresetName}>
-                  <SelectTrigger className="h-10 bg-background">
-                    <SelectValue placeholder="选择预设环节" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availablePresets.map((preset) => (
-                      <SelectItem key={preset.name} value={preset.name}>
+                <> <span className="sr-only" id={selectLabelId + "-1"}>{"选择预设环节"}</span><Select value={presetName} onChange={value => { if (typeof value === "string") setPresetName(value); }} aria-labelledby={selectLabelId + "-1"} placeholder="选择预设环节" className="w-full" motion={false}>{availablePresets.map((preset) => (
+                      <Select.Option key={preset.name} value={preset.name}>
                         {preset.name} · {preset.kind === "required" ? "必备" : "可选"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      </Select.Option>
+                    ))}</Select></>
               ) : (
                 <p className="rounded-md border border-dashed border-border px-3 py-3 text-xs text-muted-foreground">
                   预设环节已全部加入当前程序。
@@ -2648,10 +2631,10 @@ function StageCreateDialog({
             </div>
           ) : (
             <div className="space-y-1.5">
-              <Label className="text-xs">自定义环节名称 *</Label>
+              <label className="text-xs">自定义环节名称 *</label>
               <Input
                 value={customName}
-                onChange={(event) => setCustomName(event.target.value)}
+                onChange={inputValue => setCustomName(inputValue)}
                 placeholder="如：二次庭询 / 专家论证 / 履行谈判"
               />
               {duplicate && <p className="text-[10px] text-[var(--amber)]">该环节已在列表中</p>}
@@ -2659,29 +2642,20 @@ function StageCreateDialog({
           )}
 
           <div className="space-y-1.5">
-            <Label className="text-xs">插入位置</Label>
-            <Select value={insertTarget} onValueChange={setInsertTarget}>
-              <SelectTrigger className="h-10 bg-background">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="START">放在最前</SelectItem>
-                <SelectItem value="END">放在最后</SelectItem>
-                {stages.map((stage) => (
-                  <SelectItem key={stage.key} value={stage.id ? `AFTER_ID:${stage.id}` : `AFTER_NAME:${stage.name}`}>
+            <label id={selectLabelId + "-2"} className="text-xs">插入位置</label>
+            <Select value={insertTarget} onChange={value => { if (typeof value === "string") setInsertTarget(value); }} aria-labelledby={selectLabelId + "-2"} className="w-full" motion={false}><Select.Option value="START">放在最前</Select.Option><Select.Option value="END">放在最后</Select.Option>{stages.map((stage) => (
+                  <Select.Option key={stage.key} value={stage.id ? `AFTER_ID:${stage.id}` : `AFTER_NAME:${stage.name}`}>
                     放在「{stage.name}」之后
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  </Select.Option>
+                ))}</Select>
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs">说明（可选）</Label>
-            <Textarea
+            <label className="text-xs">说明（可选）</label>
+            <TextArea
               rows={3}
               value={description}
-              onChange={(event) => setDescription(event.target.value)}
+              onChange={inputValue => setDescription(inputValue)}
               placeholder={customMode ? "记录该环节的目标或注意事项" : selectedPreset?.description ?? ""}
             />
           </div>
@@ -2694,13 +2668,14 @@ function StageCreateDialog({
           </button>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => void close()} disabled={isPending}>
+          <Button onClick={() => void close()} disabled={isPending} type="tertiary" theme="outline">
             取消
           </Button>
           <Button
             onClick={submit}
             disabled={isPending || duplicate || !stageName}
             className="gap-1.5"
+            theme="solid"
           >
             {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             添加

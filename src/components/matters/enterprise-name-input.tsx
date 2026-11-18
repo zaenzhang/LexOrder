@@ -1,10 +1,8 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
-import { Loader2, Search } from "lucide-react";
-import { toast } from "sonner";
-import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
+import { Loader2 } from "lucide-react";
+import { Button, Input, Notification, Popover, Toast } from "@douyinfe/semi-ui";
 import { searchEnterpriseCandidates, getEnterpriseDetail, type EnterpriseSearchItem } from "@/server/yuandian/enterprise";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -19,86 +17,139 @@ export function EnterpriseNameInput({
   onChange,
   onPick,
   className,
+  id,
+  name,
+  onBlur,
+  inputRef,
+  invalid,
   placeholder = "单位名称（输入自动匹配企业信息）"
 }: {
   value: string;
   onChange: (name: string) => void;
   onPick: (pick: EnterprisePick) => void;
   className?: string;
+  id?: string;
+  name?: string;
+  onBlur?: () => void;
+  inputRef?: (element: HTMLInputElement | null) => void;
+  invalid?: boolean;
   placeholder?: string;
 }) {
+  const root = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const listId = useId();
   const [candidates, setCandidates] = useState<EnterpriseSearchItem[] | null>(null);
   const [searching, startSearch] = useTransition();
   const [filling, startFill] = useTransition();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function schedule(next: string) {
+  const sequence = useRef(0);
+  const visible = Boolean(candidates?.length);
+
+  function dismiss() {
     if (timer.current) clearTimeout(timer.current);
-    const q = next.trim();
-    if (q.length < 2) {
-      setCandidates(null);
-      return;
-    }
+    sequence.current += 1;
+    setCandidates(null);
+  }
+
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+    sequence.current += 1;
+  }, []);
+
+  function schedule(value: string) {
+    dismiss();
+    const query = value.trim();
+    if (query.length < 2) return;
+    const request = sequence.current;
     timer.current = setTimeout(() => {
       startSearch(async () => {
         try {
-          const r = await searchEnterpriseCandidates(q);
-          setCandidates(r.configured && r.items.length > 0 ? r.items : null);
+          const result = await searchEnterpriseCandidates(query);
+          if (sequence.current === request && result.configured) setCandidates(result.items);
         } catch {
-          setCandidates(null);
+          if (sequence.current === request) setCandidates(null);
         }
       });
     }, 400);
   }
 
   function pick(item: EnterpriseSearchItem) {
-    setCandidates(null);
+    dismiss();
+    const request = sequence.current;
+    input.current?.focus({ preventScroll: true });
     onPick({ name: item.name, creditCode: item.creditCode });
     startFill(async () => {
       try {
         const r = await getEnterpriseDetail(item.id);
-        if (r.configured && r.info) {
+        if (sequence.current === request && r.configured && r.info) {
           onPick({ name: item.name, creditCode: item.creditCode, legalRep: r.info.legalRep, address: r.info.address });
-          toast.success(`已回填：${item.name}`);
+          Toast.success(`已回填：${item.name}`);
         }
       } catch (err) {
-        toast.warning("法定代表人 / 地址自动填充失败，可手动补充", { description: actionErrorMessage(err) });
+        if (sequence.current !== request) return;
+        Notification.warning({ title: "法定代表人 / 地址自动填充失败，可手动补充", content: actionErrorMessage(err) });
       }
     });
   }
 
   return (
-    <Popover open={!!candidates && candidates.length > 0} onOpenChange={(o) => { if (!o) setCandidates(null); }}>
-      <PopoverTrigger asChild>
-        <div className="relative">
+    <div ref={root} onKeyDown={event => {
+      if (visible && event.key === "Escape") {
+        event.stopPropagation();
+        dismiss();
+        input.current?.focus({ preventScroll: true });
+      } else if (visible && event.key === "ArrowDown" && event.target === input.current) {
+        event.preventDefault();
+        document.getElementById(listId)?.querySelector("button")?.focus();
+      }
+    }}>
+      <Popover
+        trigger="custom"
+        visible={visible}
+        onClickOutSide={dismiss}
+        getPopupContainer={() => root.current?.closest<HTMLElement>('[role="dialog"]') ?? document.body}
+        position="bottomLeft"
+        motion={false}
+        content={
+          <ul id={listId} aria-label="匹配的企业" className="max-h-64 w-80 space-y-1 overflow-y-auto p-1">
+            {candidates?.map(item => (
+              <li key={item.id}>
+                <Button
+                  block
+                  type="tertiary"
+                  theme="borderless"
+                  className="h-auto justify-start px-2 py-1.5 text-left"
+                  onClick={() => pick(item)}
+                >
+                  <span className="flex flex-col items-start gap-1">
+                    <span>{item.name}</span>
+                    <span className="font-mono text-xs text-muted-foreground">{item.creditCode}</span>
+                  </span>
+                </Button>
+              </li>
+            ))}
+          </ul>
+        }
+      >
+        <span>
           <Input
+            ref={node => { input.current = node; inputRef?.(node); }}
+            id={id}
+            name={name}
             value={value}
             placeholder={placeholder}
             className={className}
-            onChange={(e) => {
-              onChange(e.target.value);
-              schedule(e.target.value);
-            }}
+            aria-expanded={visible}
+            aria-controls={visible ? listId : undefined}
+            aria-invalid={invalid || undefined}
+            validateStatus={invalid ? "error" : "default"}
+            onBlur={onBlur}
+            onChange={next => { onChange(next); schedule(next); }}
+            suffix={searching || filling ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
           />
-          {searching || filling ? <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-[var(--t-muted)]" /> : null}
-        </div>
-      </PopoverTrigger>
-      <PopoverContent align="start" portalled={false} className="w-80 p-1.5" onOpenAutoFocus={(e) => e.preventDefault()}>
-        <div className="mb-1 flex items-center gap-1 px-1 text-[10.5px] text-[var(--t-muted)]">
-          <Search className="h-3 w-3" />
-          企业信息匹配，点击回填信用代码、法定代表人与地址
-        </div>
-        <ul className="max-h-64 space-y-1 overflow-y-auto">
-          {candidates?.map((c) => (
-            <li key={c.id}>
-              <button type="button" onClick={() => pick(c)} className="w-full rounded-[7px] border border-[var(--bd-hair)] px-2 py-1.5 text-left text-xs hover:bg-[var(--bg-hover)]">
-                <div className="font-medium">{c.name}</div>
-                <div className="font-mono text-[10.5px] text-[var(--t-muted)]">{c.creditCode}</div>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </PopoverContent>
-    </Popover>
+        </span>
+      </Popover>
+    </div>
   );
 }

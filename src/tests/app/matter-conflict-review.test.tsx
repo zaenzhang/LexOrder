@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 const actions = vi.hoisted(() => ({ run: vi.fn(), decide: vi.fn(), refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: actions.refresh }) }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("@douyinfe/semi-ui", async (load) => ({ ...await load<typeof import("@douyinfe/semi-ui")>(), Toast: { success: vi.fn(), error: vi.fn() }, Notification: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/server/conflicts/matter-actions", () => ({ runMatterReview: actions.run, decideMatterReview: actions.decide }));
 import { MatterConflictReview } from "@/app/(app)/matters/[id]/_components/conflict-review";
 import type { readMatterReview } from "@/server/conflicts/matter-review";

@@ -1,9 +1,8 @@
 "use client";
 
+import { Button, Tag } from "@douyinfe/semi-ui";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { actionErrorMessage } from "@/lib/action-error";
 import { contextKindLabels, type ContextHistoryView } from "@/lib/matters/context";
 import type { ContextInputChoice, ContextInputSelection, ContextInputSummary } from "@/lib/matters/context-inputs";
@@ -81,9 +80,13 @@ function Picker({ matterId, value, onChange, initial, disabled = false }: Props)
       <p className="text-sm font-medium">{contextKindLabels[row.kind]} · 第 {row.version} 版{row.historical ? " · 历史版" : ""}</p>
       <p className="whitespace-pre-wrap break-words text-sm">{row.content}</p>
       <p className="text-xs text-muted-foreground">来源：{row.sourceDescription} · {confirmation(row.selection.expectedConfirmedAt)}</p>
-      <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" size="sm" disabled={disabled || pending || (value.length >= 20 && !value.some(item => item.recordId === row.selection.recordId))}
-        onClick={() => choose(row)}>采用所显示的这版</Button>
-        {withHistory && <Button type="button" variant="ghost" size="sm" disabled={disabled || pending} onClick={() => versions(row)}>查看历史版本</Button>}</div>
+      <div className="flex flex-wrap gap-2"><Button
+        disabled={disabled || pending || (value.length >= 20 && !value.some(item => item.recordId === row.selection.recordId))}
+        onClick={() => choose(row)}
+        htmlType="button"
+        type="tertiary" theme="outline"
+        size="small">采用所显示的这版</Button>
+        {withHistory && <Button disabled={disabled || pending} onClick={() => versions(row)} htmlType="button" type="tertiary" theme="borderless" size="small">查看历史版本</Button>}</div>
     </div>;
   }
   return <fieldset className="space-y-3 rounded-md border p-3" disabled={disabled}>
@@ -96,28 +99,28 @@ function Picker({ matterId, value, onChange, initial, disabled = false }: Props)
       const changed = row && (row.selection.expectedCurrentRecordId !== selection.expectedCurrentRecordId || row.selection.expectedConfirmedAt !== selection.expectedConfirmedAt);
       return <div key={selection.recordId} className="space-y-2 rounded-md bg-muted/40 p-3">
         <div className="text-sm">{row ? `${contextKindLabels[row.kind]} · 第 ${row.version} 版` : "已选固定记录"}
-          {selection.recordId !== selection.expectedCurrentRecordId && <Badge variant="outline" className="ml-2">采用历史版</Badge>}
-          {changed && <Badge variant="secondary" className="ml-2">已有变化，请重新核对</Badge>}</div>
+          {selection.recordId !== selection.expectedCurrentRecordId && <Tag className="ml-2" color="grey" type="ghost">采用历史版</Tag>}
+          {changed && <Tag className="ml-2" color="grey">已有变化，请重新核对</Tag>}</div>
         {row && <details><summary className="cursor-pointer text-xs">查看选中内容</summary><p className="mt-2 whitespace-pre-wrap break-words text-sm">{row.content}</p></details>}
         {unavailable.includes(selection.recordId) && <p className="text-xs text-muted-foreground">这版记录读取未完成或当前不可读取，固定选择已保留。</p>}
         <p className="text-xs text-muted-foreground">所见确认：{confirmation(selection.expectedConfirmedAt)}</p>
-        <div className="flex gap-2"><Button type="button" size="sm" variant="ghost" disabled={disabled || pending} onClick={() => reread(selection.recordId)}>重新读取这版</Button>
-          <Button type="button" size="sm" variant="ghost" disabled={disabled || pending} onClick={() => onChange(value.filter(item => item.recordId !== selection.recordId))}>移除采用</Button></div>
+        <div className="flex gap-2"><Button disabled={disabled || pending} onClick={() => reread(selection.recordId)} htmlType="button" type="tertiary" theme="borderless" size="small">重新读取这版</Button>
+          <Button disabled={disabled || pending} onClick={() => onChange(value.filter(item => item.recordId !== selection.recordId))} htmlType="button" type="tertiary" theme="borderless" size="small">移除采用</Button></div>
       </div>;
     })}
-    <div className="flex gap-2"><Button type="button" variant="outline" size="sm" disabled={disabled || pending} onClick={() => list()}>选择目标或指示</Button>
-      {open && <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => { serial.current++; setOpen(false); setPending(false); }}>收起选择</Button>}</div>
+    <div className="flex gap-2"><Button disabled={disabled || pending} onClick={() => list()} htmlType="button" type="tertiary" theme="outline" size="small">选择目标或指示</Button>
+      {open && <Button disabled={disabled} onClick={() => { serial.current++; setOpen(false); setPending(false); }} htmlType="button" type="tertiary" theme="borderless" size="small">收起选择</Button>}</div>
     {open && <div className="max-h-80 space-y-3 overflow-y-auto">
       {pending && <p role="status" className="text-sm">正在读取目标与指示…</p>}
-      {error && <p role="alert" className="text-sm text-destructive">{error} <Button type="button" variant="link" size="sm" onClick={() => retry.current?.()}>重试读取</Button></p>}
+      {error && <p role="alert" className="text-sm text-destructive">{error} <Button onClick={() => retry.current?.()} htmlType="button" type="primary" theme="borderless" size="small">重试读取</Button></p>}
       {preview && choice(preview)}
       {page && <>{page.choices.map(row => choice(row, true))}{!page.choices.length && <p className="text-sm text-muted-foreground">本页没有可读取的目标或指示。</p>}
-        {page.nextCursor && <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => list(page.nextCursor!)}>继续查看</Button>}</>}
+        {page.nextCursor && <Button disabled={pending} onClick={() => list(page.nextCursor!)} htmlType="button" type="tertiary" theme="outline" size="small">继续查看</Button>}</>}
       {history && <>{history.data.records.filter(row => row.readable && row.content && (row.kind === "GOAL" || row.kind === "INSTRUCTION")).map(row => choice({
         selection: { recordId: row.id, expectedConfirmedAt: row.confirmedAt, expectedCurrentRecordId: history.base.selection.expectedCurrentRecordId },
         kind: row.kind as "GOAL" | "INSTRUCTION", version: row.version, content: row.content!, sourceDescription: row.sourceDescription ?? "",
         historical: row.id !== history.base.selection.expectedCurrentRecordId,
-      }))}{history.data.nextBeforeVersion && <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => versions(history.base, history.data.nextBeforeVersion!)}>更早版本</Button>}</>}
+      }))}{history.data.nextBeforeVersion && <Button disabled={pending} onClick={() => versions(history.base, history.data.nextBeforeVersion!)} htmlType="button" type="tertiary" theme="outline" size="small">更早版本</Button>}</>}
     </div>}
   </fieldset>;
 }

@@ -4,7 +4,7 @@ import type { ContextRecordView, MatterContextView } from "@/lib/matters/context
 
 const mocks = vi.hoisted(() => ({ options: vi.fn(), history: vi.fn(), source: vi.fn(), exact: vi.fn(), save: vi.fn(), confirm: vi.fn(), ask: vi.fn(), refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }), useSearchParams: () => new URLSearchParams(window.location.search) }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("@douyinfe/semi-ui", async (load) => ({ ...await load<typeof import("@douyinfe/semi-ui")>(), Toast: { success: vi.fn(), error: vi.fn() }, Notification: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: mocks.ask }));
 vi.mock("@/server/matters/context-actions", () => ({
   getMatterContextSourceOptions: mocks.options, getMatterContextHistory: mocks.history,

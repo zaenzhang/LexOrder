@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   positions: vi.fn(), refresh: vi.fn(), ask: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
+vi.mock("@douyinfe/semi-ui", async (load) => ({ ...await load<typeof import("@douyinfe/semi-ui")>(), Toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() }, Notification: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
 vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: mocks.ask }));
 vi.mock("@/server/evidence/actions", () => ({
   getEvidenceItem: mocks.get, updateEvidenceItem: mocks.update, confirmEvidenceItem: mocks.confirm,

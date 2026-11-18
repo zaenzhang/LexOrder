@@ -4,11 +4,8 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useTransi
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Check, FileText, History, Loader2, Pencil, Plus } from "lucide-react";
-import { toast } from "sonner";
+import { Input, Notification, TextArea, Toast } from "@douyinfe/semi-ui";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { ContextInputPicker, ContextInputsSummary } from "@/components/matters/context-input-picker";
 import { carriedContextInputs } from "@/lib/matters/context-inputs";
@@ -231,8 +228,8 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
     start(async () => {
       try {
         await confirmMatterContextRecord({ matterId, id: record.id, expectedVersion: record.version, acknowledged: true });
-        toast.success("核对确认已保存"); router.refresh();
-      } catch (error) { toast.error("未能确认", { description: actionErrorMessage(error) }); }
+        Toast.success("核对确认已保存"); router.refresh();
+      } catch (error) { Notification.error({ title: "未能确认", content: actionErrorMessage(error) }); }
     });
   }
 
@@ -384,7 +381,7 @@ function ContextEditor({ matterId, state, canReadFinance, onSaved, onSaving, onD
     } catch (issue) { setError(actionErrorMessage(issue)); return; }
     onSaving(true);
     start(async () => {
-      try { await recordMatterContext(input); toast.success("记录已保存，待核对确认"); onSaved(); }
+      try { await recordMatterContext(input); Toast.success("记录已保存，待核对确认"); onSaved(); }
       catch (issue) { setError(actionErrorMessage(issue) || "保存失败，请重试"); }
       finally { onSaving(false); }
     });
@@ -393,21 +390,21 @@ function ContextEditor({ matterId, state, canReadFinance, onSaved, onSaving, onD
   return <form onSubmit={submit} className="mt-5 space-y-4">
     <fieldset disabled={pending} className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1.5"><Label htmlFor={`${prefix}-kind`}>记录类型</Label><select id={`${prefix}-kind`} value={kind} disabled={Boolean(record)} onChange={event => setKind(event.target.value as ContextKind)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">{Object.entries(contextKindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
-        <div className="space-y-1.5"><Label htmlFor={`${prefix}-visibility`}>可见范围</Label><select id={`${prefix}-visibility`} value={visibility} disabled={Boolean(record)} onChange={event => setVisibility(event.target.value as ContextVisibility)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">{Object.entries(contextVisibilityLabels).filter(([value]) => value !== "FINANCE" || canReadFinance || visibility === "FINANCE").map(([value, label]) => <option key={value} value={value} disabled={value === "FINANCE" && !canReadFinance}>{label}</option>)}</select></div>
+        <div className="space-y-1.5"><label htmlFor={`${prefix}-kind`} className="text-sm font-medium text-[var(--semi-color-text-1)]">记录类型</label><select id={`${prefix}-kind`} value={kind} disabled={Boolean(record)} onChange={event => setKind(event.target.value as ContextKind)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">{Object.entries(contextKindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
+        <div className="space-y-1.5"><label htmlFor={`${prefix}-visibility`} className="text-sm font-medium text-[var(--semi-color-text-1)]">可见范围</label><select id={`${prefix}-visibility`} value={visibility} disabled={Boolean(record)} onChange={event => setVisibility(event.target.value as ContextVisibility)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">{Object.entries(contextVisibilityLabels).filter(([value]) => value !== "FINANCE" || canReadFinance || visibility === "FINANCE").map(([value, label]) => <option key={value} value={value} disabled={value === "FINANCE" && !canReadFinance}>{label}</option>)}</select></div>
       </div>
-      <div className="space-y-1.5"><Label htmlFor={`${prefix}-content`}>内容 *</Label><Textarea id={`${prefix}-content`} required maxLength={8000} rows={6} value={content} onChange={event => setContent(event.target.value)} /></div>
+      <div className="space-y-1.5"><label htmlFor={`${prefix}-content`} className="text-sm font-medium text-[var(--semi-color-text-1)]">内容 *</label><TextArea id={`${prefix}-content`} required maxLength={8000} rows={6} value={content} onChange={inputValue => setContent(inputValue)} /></div>
       {kind === "OPTION" && <ContextInputPicker matterId={matterId} value={contextInputs} onChange={setContextInputs} initial={record?.contextInputs} disabled={pending} />}
       {kind === "CONSTRAINT" ? <p className="t-xs t-mute">费用及预算约束请选择财务可见范围。</p> : null}
-      <div className="space-y-1.5"><Label htmlFor={`${prefix}-occurred`}>发生时间（北京时间）*</Label><Input id={`${prefix}-occurred`} type="datetime-local" required value={occurredAt} onChange={event => setOccurredAt(event.target.value)} /></div>
-      <div className="space-y-1.5"><Label htmlFor={`${prefix}-reason`}>{record ? "更正或决定理由" : "理由"}</Label><Textarea id={`${prefix}-reason`} rows={2} maxLength={3000} value={reason} onChange={event => setReason(event.target.value)} /></div>
-      <div className="space-y-1.5"><Label htmlFor={`${prefix}-source`}>关联来源</Label><select id={`${prefix}-source`} value={sourceKey} onChange={event => { setSourceKey(event.target.value); setSourceLabel(choices.find(choice => `${choice.type}:${choice.id}` === event.target.value)?.label ?? ""); }} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"><option value="">仅填写来源说明</option>
+      <div className="space-y-1.5"><label htmlFor={`${prefix}-occurred`} className="text-sm font-medium text-[var(--semi-color-text-1)]">发生时间（北京时间）*</label><Input id={`${prefix}-occurred`} type="datetime-local" required value={occurredAt} onChange={inputValue => setOccurredAt(inputValue)} /></div>
+      <div className="space-y-1.5"><label htmlFor={`${prefix}-reason`} className="text-sm font-medium text-[var(--semi-color-text-1)]">{record ? "更正或决定理由" : "理由"}</label><TextArea id={`${prefix}-reason`} rows={2} maxLength={3000} value={reason} onChange={inputValue => setReason(inputValue)} /></div>
+      <div className="space-y-1.5"><label htmlFor={`${prefix}-source`} className="text-sm font-medium text-[var(--semi-color-text-1)]">关联来源</label><select id={`${prefix}-source`} value={sourceKey} onChange={event => { setSourceKey(event.target.value); setSourceLabel(choices.find(choice => `${choice.type}:${choice.id}` === event.target.value)?.label ?? ""); }} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"><option value="">仅填写来源说明</option>
         {selectedSourceMissing ? <option value={sourceKey}>{sourceLabel}（保存时重新核验）</option> : null}
         {choices.map(choice => <option key={`${choice.type}:${choice.id}`} value={`${choice.type}:${choice.id}`}>{choice.label}</option>)}
       </select>{state.loading ? <p role="status" className="t-xs t-mute">正在读取可关联来源…</p> : null}
       {state.error ? <div role="alert" className="flex flex-wrap items-center gap-2 text-xs text-destructive"><span>{state.error}</span><button type="button" className="btn btn-secondary btn-sm" disabled={state.loading} onClick={() => onLoadSources(state.failedPage)}>重试</button>{state.failedPage ? <button type="button" className="btn btn-ghost btn-sm" disabled={state.loading} onClick={() => onLoadSources()}>重新读取来源</button> : null}</div> : null}
       {state.options ? <div className="flex flex-wrap gap-2">{(Object.keys(sourceMoreLabels) as ContextSourceType[]).map(type => state.options!.nextCursors[type] ? <button key={type} type="button" className="btn btn-secondary btn-sm" disabled={state.loading} onClick={() => onLoadSources({ type, cursor: state.options!.nextCursors[type]! })}>{sourceMoreLabels[type]}</button> : null)}</div> : null}</div>
-      <div className="space-y-1.5"><Label htmlFor={`${prefix}-source-description`}>来源说明 *</Label><Textarea id={`${prefix}-source-description`} required rows={3} maxLength={1200} value={sourceDescription} onChange={event => setSourceDescription(event.target.value)} placeholder="指示人、沟通方式、原件位置或其他真实依据" /></div>
+      <div className="space-y-1.5"><label htmlFor={`${prefix}-source-description`} className="text-sm font-medium text-[var(--semi-color-text-1)]">来源说明 *</label><TextArea id={`${prefix}-source-description`} required rows={3} maxLength={1200} value={sourceDescription} onChange={inputValue => setSourceDescription(inputValue)} placeholder="指示人、沟通方式、原件位置或其他真实依据" /></div>
     </fieldset>
     {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
     <div className="flex justify-end"><button type="submit" disabled={pending} className="btn btn-primary">{pending ? <Loader2 className="animate-spin" /> : <Check />}{record ? "保存更正版" : "保存记录"}</button></div>

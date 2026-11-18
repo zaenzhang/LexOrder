@@ -3,15 +3,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Select, Button, Checkbox, Input, Tag, TextArea, Toast } from "@douyinfe/semi-ui";
 import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { FormDialogBody, FormDialogContent } from "@/components/patterns/form-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -113,19 +106,19 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, cr
     <div className="flex items-center justify-between gap-3">
       <h3 ref={taskHeading} tabIndex={-1} className="text-sm font-semibold">任务</h3>
       <div className="flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Checkbox checked={dueWaitingOnly} onCheckedChange={value => { setObservedAt(Date.now()); setDueWaitingOnly(value === true); }} />
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Checkbox checked={dueWaitingOnly} onChange={({ target: { checked } }) => { setObservedAt(Date.now()); setDueWaitingOnly(checked === true); }}>
           仅看待检查
-        </label>
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Checkbox checked={includeClosed} onCheckedChange={value => setIncludeClosed(value === true)} />
+        </Checkbox></div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Checkbox checked={includeClosed} onChange={({ target: { checked } }) => setIncludeClosed(checked === true)}>
           显示已办结和已取消
-        </label>
-        {canWrite && data?.canWrite && <Button ref={createButton} size="sm" onClick={() => { creatingLocation.current = window.location.href; setCreatingStage(defaultStage); setCreating(true); }}><Plus />新建任务</Button>}
+        </Checkbox></div>
+        {canWrite && data?.canWrite && <button ref={createButton} onClick={() => { creatingLocation.current = window.location.href; setCreatingStage(defaultStage); setCreating(true); }} type="button" className="font-medium text-[var(--semi-color-link)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--semi-color-primary)] disabled:opacity-50"><Plus />新建任务</button>}
       </div>
     </div>
     {error ? <div role="alert" className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm">
-      <span>{error}</span><Button variant="outline" size="sm" onClick={() => setReload(value => value + 1)}>重试</Button>
+      <span>{error}</span><Button onClick={() => setReload(value => value + 1)} type="tertiary" theme="outline" size="small">重试</Button>
     </div> : !data ? <p role="status" className="py-4 text-sm text-muted-foreground">正在读取任务…</p> : scopedTasks.length === 0 ? <p className="py-4 text-sm text-muted-foreground">{dueWaitingOnly ? "当前范围没有到期的等待检查。" : scopedUntracked.length ? "没有责任记录完整的任务。" : includeClosed ? "当前范围还没有任务。" : "当前范围没有办理中的任务。"}</p> : <div className="overflow-x-auto rounded-lg border">
       <table className="w-full text-left text-sm">
         <thead className="border-b bg-muted/40 text-muted-foreground"><tr>
@@ -137,15 +130,15 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, cr
         <tbody className="divide-y">{scopedTasks.map(task => <tr key={task.id}>
           <td className="max-w-md px-3 py-3 align-top">
             <div className="flex items-start gap-2">
-              <Button ref={node => { if (node) taskButtons.current.set(task.id, node); else taskButtons.current.delete(task.id); }} variant="link" className="h-auto min-w-0 whitespace-normal py-0 text-left" onClick={() => { openedTaskId.current = task.id; selectTask(task.id); }}>{task.title}</Button>
-              <Badge variant={task.responsibility.state === "DONE" ? "green" : "secondary"}>{taskStateLabels[task.responsibility.state]}</Badge>
-              {task.priority === 2 && <Badge variant="red">紧急</Badge>}
+              <button ref={node => { if (node) taskButtons.current.set(task.id, node); else taskButtons.current.delete(task.id); }} onClick={() => { openedTaskId.current = task.id; selectTask(task.id); }} type="button" className="font-medium text-[var(--semi-color-link)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--semi-color-primary)] disabled:opacity-50 h-auto min-w-0 whitespace-normal py-0 text-left">{task.title}</button>
+              <Tag color={task.responsibility.state === "DONE" ? "green" : "grey"}>{taskStateLabels[task.responsibility.state]}</Tag>
+              {task.priority === 2 && <Tag color="red">紧急</Tag>}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">{task.stageId ? [task.procedureTitle, task.stageName].filter(Boolean).join(" · ") : "事项级"}</p>
           </td>
           <td className="px-3 py-3 align-top"><span>{task.responsibility.name}</span>{!task.responsibility.active && <p className="mt-1 text-xs text-destructive">待交接</p>}</td>
           <td className="whitespace-nowrap px-3 py-3 align-top">{task.dueAt ? formatDateTime(task.dueAt) : "未安排"}</td>
-          <td className="max-w-xs px-3 py-3 align-top">{task.activeWaiting ? <><p className="break-words">{task.activeWaiting.waitingFor}</p><p className="mt-1 text-xs text-muted-foreground">检查：{formatDateTime(task.activeWaiting.nextCheckAt)}</p>{waitingIsDue(task) && <Badge variant="outline" className="mt-1">待检查</Badge>}</> : <span className="text-muted-foreground">—</span>}</td>
+          <td className="max-w-xs px-3 py-3 align-top">{task.activeWaiting ? <><p className="break-words">{task.activeWaiting.waitingFor}</p><p className="mt-1 text-xs text-muted-foreground">检查：{formatDateTime(task.activeWaiting.nextCheckAt)}</p>{waitingIsDue(task) && <Tag className="mt-1" color="grey" type="ghost">待检查</Tag>}</> : <span className="text-muted-foreground">—</span>}</td>
         </tr>)}</tbody>
       </table>
     </div>}
@@ -186,7 +179,7 @@ function CreateTaskDialog({ matterId, data, stage, onClose, onCreated, onReturnF
     try {
       const result = await createTask({ matterId, requestKey: requestKey.current, title: title.trim(), description: description.trim(), assigneeId, priority: Number(priority), dueAt: dueAt ? new Date(`${dueAt}:00+08:00`) : undefined, ...(stage ? { stageId: stage.id } : {}) });
       created.current = true;
-      toast.success("任务已创建");
+      Toast.success("任务已创建");
       onCreated(result.id);
     } catch (cause) {
       setError(actionErrorMessage(cause) || "任务未保存，请重试");
@@ -200,17 +193,17 @@ function CreateTaskDialog({ matterId, data, stage, onClose, onCreated, onReturnF
       <DialogHeader><DialogTitle>{stage ? "新建环节任务" : "新建事项级任务"}</DialogTitle><DialogDescription>{stage ? `关联环节：${stage.name}` : "不关联程序或环节"}</DialogDescription></DialogHeader>
       <FormDialogBody>
         <form id="create-matter-task" onSubmit={submit} className="space-y-4">
-          <div className="space-y-2"><Label htmlFor="task-create-title">任务名称</Label><Input id="task-create-title" autoFocus required maxLength={200} value={title} onChange={event => setTitle(event.target.value)} disabled={busy} /></div>
-          <div className="space-y-2"><Label htmlFor="task-create-description">办理说明</Label><Textarea id="task-create-description" maxLength={2000} rows={3} value={description} onChange={event => setDescription(event.target.value)} disabled={busy} /></div>
-          <div className="space-y-2"><Label htmlFor="task-create-assignee">内部责任人</Label><Select value={assigneeId} onValueChange={setAssigneeId} disabled={busy}><SelectTrigger id="task-create-assignee"><SelectValue placeholder="选择责任人" /></SelectTrigger><SelectContent>{data.people.map(person => <SelectItem key={person.id} value={person.id}>{person.name}</SelectItem>)}</SelectContent></Select></div>
+          <div className="space-y-2"><label htmlFor="task-create-title" className="text-sm font-medium text-[var(--semi-color-text-1)]">任务名称</label><Input id="task-create-title" autoFocus required maxLength={200} value={title} onChange={inputValue => setTitle(inputValue)} disabled={busy} /></div>
+          <div className="space-y-2"><label htmlFor="task-create-description" className="text-sm font-medium text-[var(--semi-color-text-1)]">办理说明</label><TextArea id="task-create-description" maxLength={2000} rows={3} value={description} onChange={inputValue => setDescription(inputValue)} disabled={busy} /></div>
+          <div className="space-y-2"><label id={"task-create-assignee" + "-label"} className="text-sm font-medium text-[var(--semi-color-text-1)]">内部责任人</label><Select value={assigneeId} onChange={value => { if (typeof value === "string") setAssigneeId(value); }} disabled={busy} id="task-create-assignee" aria-labelledby={"task-create-assignee" + "-label"} placeholder="选择责任人" className="w-full" motion={false}>{data.people.map(person => <Select.Option key={person.id} value={person.id}>{person.name}</Select.Option>)}</Select></div>
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2"><Label htmlFor="task-create-due">任务截止（北京时间，选填）</Label><Input id="task-create-due" type="datetime-local" value={dueAt} onChange={event => setDueAt(event.target.value)} disabled={busy} /></div>
-            <div className="space-y-2"><Label htmlFor="task-create-priority">优先级</Label><Select value={priority} onValueChange={setPriority} disabled={busy}><SelectTrigger id="task-create-priority"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="0">普通</SelectItem><SelectItem value="1">较高</SelectItem><SelectItem value="2">紧急</SelectItem></SelectContent></Select></div>
+            <div className="space-y-2"><label htmlFor="task-create-due" className="text-sm font-medium text-[var(--semi-color-text-1)]">任务截止（北京时间，选填）</label><Input id="task-create-due" type="datetime-local" value={dueAt} onChange={inputValue => setDueAt(inputValue)} disabled={busy} /></div>
+            <div className="space-y-2"><label id={"task-create-priority" + "-label"} className="text-sm font-medium text-[var(--semi-color-text-1)]">优先级</label><Select value={priority} onChange={value => { if (typeof value === "string") setPriority(value); }} disabled={busy} id="task-create-priority" aria-labelledby={"task-create-priority" + "-label"} className="w-full" motion={false}><Select.Option value="0">普通</Select.Option><Select.Option value="1">较高</Select.Option><Select.Option value="2">紧急</Select.Option></Select></div>
           </div>
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         </form>
       </FormDialogBody>
-      <DialogFooter><Button variant="outline" onClick={() => void close()} disabled={busy}>取消</Button><Button type="submit" form="create-matter-task" disabled={busy}>{busy ? "正在保存…" : "创建任务"}</Button></DialogFooter>
+      <DialogFooter><Button onClick={() => void close()} disabled={busy} type="tertiary" theme="outline">取消</Button><Button form="create-matter-task" disabled={busy} htmlType="submit" theme="solid">{busy ? "正在保存…" : "创建任务"}</Button></DialogFooter>
     </FormDialogContent>
   </Dialog>;
 }

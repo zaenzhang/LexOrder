@@ -1,13 +1,10 @@
 "use client";
 
+import { FileInput } from "@/components/patterns/file-input";
+import { Select, Button, Input, Tag } from "@douyinfe/semi-ui";
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { DocumentCategory, DocumentSourceOrigin } from "@prisma/client";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { ContextInputPicker } from "@/components/matters/context-input-picker";
@@ -298,51 +295,66 @@ export function MaterialUploadDialog({ current, procedures, canWrite, scopeValid
     <DialogContent className="max-w-5xl" onCloseAutoFocus={event => { event.preventDefault(); trigger.current?.focus({ preventScroll: true }); }}>
       <DialogHeader><DialogTitle>上传材料 · {context?.title}</DialogTitle>
         <DialogDescription>逐件核对归属和来源，文件分别保存。</DialogDescription></DialogHeader>
-      {!scopeMatches && context ? <div role="alert" className="flex items-center justify-between gap-2 text-sm text-destructive"><span>上传范围已变化；未发送材料已暂停，原文件和输入保留。</span><Button variant="outline" disabled={busy} onClick={backToScope}>返回上传范围</Button></div>
+      {!scopeMatches && context ? <div role="alert" className="flex items-center justify-between gap-2 text-sm text-destructive"><span>上传范围已变化；未发送材料已暂停，原文件和输入保留。</span><Button disabled={busy} onClick={backToScope} type="tertiary" theme="outline">返回上传范围</Button></div>
         : paused ? <p role="status" className="text-sm text-muted-foreground">已暂停。核对本批输入后，可继续上传尚未发送的材料。</p> : null}
       {notice ? <p role="status" className="text-sm text-muted-foreground">{notice}</p> : null}
-      <div className="space-y-2"><Label htmlFor={`${id}-files`}>文件 *（可多选）</Label><Input id={`${id}-files`} type="file" multiple disabled={busy || !scopeMatches}
+      <div className="space-y-2"><label htmlFor={`${id}-files`} className="text-sm font-medium text-[var(--semi-color-text-1)]">文件 *（可多选）</label><FileInput
+        id={`${id}-files`}
+        multiple
+        disabled={busy || !scopeMatches}
         onChange={event => { addFiles(Array.from(event.target.files ?? [])); event.target.value = ""; }} /></div>
       <input ref={replacementInput} type="file" hidden aria-label="替换当前文件" onChange={event => { replaceFile(event.target.files?.[0]); event.target.value = ""; }} />
       {defaults && context ? <details className="rounded-md border p-3"><summary className="cursor-pointer text-sm">共同默认值</summary>
         <div className="space-y-3 pt-3"><UploadFields value={defaults} onChange={setDefaults} procedures={procedures} opened={context} disabled={busy || !scopeMatches} prefix={`${id}-defaults`} />
-          <Button variant="outline" size="sm" disabled={busy || !scopeMatches || !rows.some(editable)} onClick={() => {
+          <Button
+            disabled={busy || !scopeMatches || !rows.some(editable)}
+            onClick={() => {
             changeRows(previous => previous.map(row => editable(row) ? { ...row, draft: { ...row.draft, ...defaults }, sent: null, status: "DRAFT", message: "" } : row));
             setNotice("共同默认值已应用到可编辑项；逐件名称及采用的目标和指示保持。");
-          }}>应用到可编辑项</Button></div></details> : null}
+          }}
+            type="tertiary" theme="outline"
+            size="small">应用到可编辑项</Button></div></details> : null}
       {rows.length ? <div className="grid items-start gap-4 md:grid-cols-[minmax(13rem,1fr)_minmax(0,2fr)]">
         <ol aria-label="本批材料" className="max-h-[58vh] space-y-1 overflow-y-auto rounded-md border p-2">
-          {rows.map((row, index) => <li key={row.id}><Button variant={selected === row.id ? "secondary" : "ghost"} className="h-auto w-full justify-start whitespace-normal p-3 text-left"
-            aria-pressed={selected === row.id} onClick={() => setSelected(row.id)}><span className="min-w-0 space-y-1"><span className="block break-words">{index + 1}. {row.file.name}</span><Badge variant="outline">{labels[row.status]}</Badge></span></Button></li>)}
+          {rows.map((row, index) => <li key={row.id}><Button
+            className="h-auto w-full justify-start whitespace-normal p-3 text-left"
+            aria-pressed={selected === row.id}
+            onClick={() => setSelected(row.id)}
+            type={selected === row.id ? "primary" : "tertiary"}
+            theme={selected === row.id ? "light" : "borderless"}><span className="min-w-0 space-y-1"><span className="block break-words">{index + 1}. {row.file.name}</span><Tag color="grey" type="ghost">{labels[row.status]}</Tag></span></Button></li>)}
         </ol>
         {selectedRow && context ? <section aria-label="当前材料" className="min-w-0 space-y-3 rounded-md border p-4">
           <div className="flex items-start justify-between gap-2"><div className="min-w-0"><h3 className="break-words font-medium">{selectedRow.file.name}</h3><p className="text-xs text-muted-foreground">{(selectedRow.file.size / 1024).toFixed(0)} KB · {labels[selectedRow.status]}</p></div>
-            {editable(selectedRow) || selectedRow.status === "CLOSED" ? <Button variant="ghost" size="sm" disabled={busy || !scopeMatches} onClick={() => { replacement.current = selectedRow.id; replacementInput.current?.click(); }}>重新选择文件</Button> : null}</div>
+            {editable(selectedRow) || selectedRow.status === "CLOSED" ? <Button disabled={busy || !scopeMatches} onClick={() => { replacement.current = selectedRow.id; replacementInput.current?.click(); }} type="tertiary" theme="borderless" size="small">重新选择文件</Button> : null}</div>
           {selectedRow.message ? <p role={selectedRow.status === "SAVED" ? "status" : "alert"} className="whitespace-pre-wrap break-words text-sm">{selectedRow.message}</p> : null}
           <fieldset disabled={busy || !scopeMatches || !editable(selectedRow)} className="space-y-3">
-            <div className="space-y-1.5"><Label htmlFor={`${id}-name`}>显示名</Label><Input id={`${id}-name`} value={selectedRow.draft.name} onChange={event => editRow(selectedRow.id, draft => ({ ...draft, name: event.target.value }))} /></div>
+            <div className="space-y-1.5"><label htmlFor={`${id}-name`} className="text-sm font-medium text-[var(--semi-color-text-1)]">显示名</label><Input id={`${id}-name`} value={selectedRow.draft.name} onChange={inputValue => editRow(selectedRow.id, draft => ({ ...draft, name: inputValue }))} /></div>
             <UploadFields value={selectedRow.draft} onChange={fields => editRow(selectedRow.id, draft => ({ ...draft, ...fields }))}
               procedures={procedures} opened={context} disabled={busy || !scopeMatches || !editable(selectedRow)} prefix={`${id}-row`} />
             <ContextInputPicker key={selectedRow.id} matterId={context.matterId} value={selectedRow.draft.contextInputs}
               onChange={contextInputs => editRow(selectedRow.id, draft => ({ ...draft, contextInputs }))} disabled={busy || !scopeMatches || !editable(selectedRow)} />
           </fieldset>
           <div className="flex flex-wrap gap-2">
-            {editable(selectedRow) ? <><Button size="sm" disabled={busy || !scopeMatches} onClick={() => void send(selectedRow.id)}>上传此项</Button><Button size="sm" variant="ghost" disabled={busy} onClick={() => {
+            {editable(selectedRow) ? <><Button disabled={busy || !scopeMatches} onClick={() => void send(selectedRow.id)} theme="solid" size="small">上传此项</Button><Button
+              disabled={busy}
+              onClick={() => {
               changeRows(previous => previous.filter(row => row.id !== selectedRow.id)); setSelected(rowsRef.current[0]?.id ?? null);
-            }}>移除此项</Button></> : null}
-            {["UNKNOWN", "INCOMPLETE"].includes(selectedRow.status) ? <Button variant="outline" size="sm" disabled={busy || !scopeMatches} onClick={() => void inspect(selectedRow)}>核对上传结果</Button> : null}
-            {selectedRow.status === "UNKNOWN" && !selectedRow.hasIntent ? <Button size="sm" disabled={busy || !scopeMatches} onClick={() => void send(selectedRow.id)}>重试原提交</Button> : null}
-            {selectedRow.status === "INCOMPLETE" ? <><Button size="sm" disabled={busy || !scopeMatches || (selectedRow.receipt?.status === "INCOMPLETE" && selectedRow.receipt.waiting)} onClick={() => void continueUpload(selectedRow)}>继续本次上传</Button>
-              <Button size="sm" variant="outline" disabled={busy || !scopeMatches || (selectedRow.receipt?.status === "INCOMPLETE" && selectedRow.receipt.waiting)} onClick={() => void closeIntent(selectedRow)}>关闭本次上传</Button></> : null}
-            {selectedRow.status === "SAVED" && selectedRow.documentId && onOpenDocument ? <Button size="sm" variant="outline" onClick={() => onOpenDocument(selectedRow.documentId!)}>查看材料</Button> : null}
+            }}
+              type="tertiary" theme="borderless"
+              size="small">移除此项</Button></> : null}
+            {["UNKNOWN", "INCOMPLETE"].includes(selectedRow.status) ? <Button disabled={busy || !scopeMatches} onClick={() => void inspect(selectedRow)} type="tertiary" theme="outline" size="small">核对上传结果</Button> : null}
+            {selectedRow.status === "UNKNOWN" && !selectedRow.hasIntent ? <Button disabled={busy || !scopeMatches} onClick={() => void send(selectedRow.id)} theme="solid" size="small">重试原提交</Button> : null}
+            {selectedRow.status === "INCOMPLETE" ? <><Button disabled={busy || !scopeMatches || (selectedRow.receipt?.status === "INCOMPLETE" && selectedRow.receipt.waiting)} onClick={() => void continueUpload(selectedRow)} theme="solid" size="small">继续本次上传</Button>
+              <Button disabled={busy || !scopeMatches || (selectedRow.receipt?.status === "INCOMPLETE" && selectedRow.receipt.waiting)} onClick={() => void closeIntent(selectedRow)} type="tertiary" theme="outline" size="small">关闭本次上传</Button></> : null}
+            {selectedRow.status === "SAVED" && selectedRow.documentId && onOpenDocument ? <Button onClick={() => onOpenDocument(selectedRow.documentId!)} type="tertiary" theme="outline" size="small">查看材料</Button> : null}
           </div>
         </section> : null}
       </div> : <p className="py-3 text-sm text-muted-foreground">选择本次收到的文件，再逐件核对。</p>}
       {context && rows.some(row => row.status === "SAVED" && row.documentId) ? <MaterialProcessingStatus matterId={context.matterId}
         documentIds={rows.filter(row => row.status === "SAVED" && row.documentId).map(row => row.documentId!)} canManage={canWrite && scopeMatches} /> : null}
       <DialogFooter><span className="mr-auto text-sm text-muted-foreground">{rows.length} 份 · 已保存 {rows.filter(row => row.status === "SAVED").length} 份</span>
-        <Button variant="outline" onClick={() => void closeDialog()} disabled={busy}>关闭</Button>
-        <Button onClick={() => void send()} disabled={busy || !scopeMatches || !rows.some(editable)}>{busy ? "正在上传…" : paused ? "继续上传" : "上传"}</Button></DialogFooter>
+        <Button onClick={() => void closeDialog()} disabled={busy} type="tertiary" theme="outline">关闭</Button>
+        <Button onClick={() => void send()} disabled={busy || !scopeMatches || !rows.some(editable)} theme="solid">{busy ? "正在上传…" : paused ? "继续上传" : "上传"}</Button></DialogFooter>
     </DialogContent>
   </Dialog>;
 }
@@ -355,33 +367,40 @@ function UploadFields({ value, onChange, procedures, opened, disabled, prefix }:
   const virtual = opened.virtualKey && !opened.materializedId && value.procedureId === opened.procedureId;
   const stageValue = value.virtualKey ? "virtual" : value.stageId ?? "none";
   return <div className="grid gap-3 sm:grid-cols-2">
-    <div className="space-y-1.5"><Label htmlFor={`${prefix}-procedure`}>归属程序</Label><Select value={value.procedureId ?? "none"} disabled={disabled} onValueChange={next => onChange({ ...value,
-      procedureId: next === "none" ? null : next, stageId: null, stageName: null, virtualKey: null, sourceParty: "" })}>
-      <SelectTrigger id={`${prefix}-procedure`}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">未归属程序</SelectItem>
-        {procedures.map(item => <SelectItem key={item.id} value={item.id}>{item.label}</SelectItem>)}</SelectContent></Select>
+    <div className="space-y-1.5"><label id={`${prefix}-procedure` + "-label"} className="text-sm font-medium text-[var(--semi-color-text-1)]">归属程序</label><Select
+      value={value.procedureId ?? "none"}
+      disabled={disabled}
+      onChange={next => { if (typeof next === "string") onChange({ ...value,
+      procedureId: next === "none" ? null : next, stageId: null, stageName: null, virtualKey: null, sourceParty: "" }); }}
+      id={`${prefix}-procedure`}
+      aria-labelledby={`${prefix}-procedure` + "-label"}
+      className="w-full"
+      motion={false}><Select.Option value="none">未归属程序</Select.Option>{procedures.map(item => <Select.Option key={item.id} value={item.id}>{item.label}</Select.Option>)}</Select>
       {value.procedureId && !procedure ? <p className="text-xs text-destructive">原选择程序已不可用</p> : null}
       <p className="text-xs text-muted-foreground">改程序会清空原环节和来源方。</p>
     </div>
-    <div className="space-y-1.5"><Label htmlFor={`${prefix}-stage`}>归属环节</Label><Select value={stageValue} disabled={disabled || !procedure} onValueChange={next => {
+    <div className="space-y-1.5"><label id={`${prefix}-stage` + "-label"} className="text-sm font-medium text-[var(--semi-color-text-1)]">归属环节</label><Select
+      value={stageValue}
+      disabled={disabled || !procedure}
+      onChange={next => { if (typeof next !== "string") return;
       const stage = stages.find(item => item.id === next);
       onChange({ ...value, stageId: stage?.id ?? null, stageName: next === "virtual" ? opened.stageName : stage?.name ?? null,
         virtualKey: next === "virtual" ? opened.virtualKey : null });
-    }}><SelectTrigger id={`${prefix}-stage`}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">未归属环节</SelectItem>
-      {virtual ? <SelectItem value="virtual">{opened.stageName}（提交时建立）</SelectItem> : null}
-      {stages.map(stage => <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>)}
-      {value.stageId && !stages.some(stage => stage.id === value.stageId) ? <SelectItem value={value.stageId} disabled>{value.stageName ?? "原选择环节"}（待核对）</SelectItem> : null}
-    </SelectContent></Select></div>
-    <div className="space-y-1.5"><Label htmlFor={`${prefix}-category`}>材料类别</Label><Select value={value.category} disabled={disabled} onValueChange={category => onChange({ ...value, category: category as DocumentCategory,
-      sourceParty: hasParty(category as DocumentCategory) ? value.sourceParty : "" })}><SelectTrigger id={`${prefix}-category`}><SelectValue /></SelectTrigger><SelectContent>
-      {categories.map(category => <SelectItem key={category} value={category}>{documentCategoryLabel[category]}</SelectItem>)}
-    </SelectContent></Select></div>
-    <div className="space-y-1.5"><Label htmlFor={`${prefix}-origin`}>材料来源</Label><Select value={value.sourceOrigin || "none"} disabled={disabled} onValueChange={sourceOrigin => onChange({ ...value, sourceOrigin: sourceOrigin === "none" ? "" : sourceOrigin as DocumentSourceOrigin })}>
-      <SelectTrigger id={`${prefix}-origin`}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">不标注</SelectItem>
-        {(Object.keys(documentSourceChip) as DocumentSourceOrigin[]).map(origin => <SelectItem key={origin} value={origin}>{documentSourceChip[origin].label}</SelectItem>)}
-      </SelectContent></Select></div>
-    {hasParty(value.category) && procedure?.sourceOptions.length ? <div className="space-y-1.5 sm:col-span-2"><Label htmlFor={`${prefix}-party`}>来源方</Label><Select value={value.sourceParty || "none"} disabled={disabled} onValueChange={sourceParty => onChange({ ...value, sourceParty: sourceParty === "none" ? "" : sourceParty })}>
-      <SelectTrigger id={`${prefix}-party`}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">不标注</SelectItem>
-        {procedure.sourceOptions.map(party => <SelectItem key={party} value={party}>{party}</SelectItem>)}
-      </SelectContent></Select></div> : null}
+    }}
+      id={`${prefix}-stage`}
+      aria-labelledby={`${prefix}-stage` + "-label"}
+      className="w-full"
+      motion={false}><Select.Option value="none">未归属环节</Select.Option>{virtual ? <Select.Option value="virtual">{opened.stageName}（提交时建立）</Select.Option> : null}{stages.map(stage => <Select.Option key={stage.id} value={stage.id}>{stage.name}</Select.Option>)}{value.stageId && !stages.some(stage => stage.id === value.stageId) ? <Select.Option value={value.stageId} disabled>{value.stageName ?? "原选择环节"}（待核对）</Select.Option> : null}</Select></div>
+    <div className="space-y-1.5"><label id={`${prefix}-category` + "-label"} className="text-sm font-medium text-[var(--semi-color-text-1)]">材料类别</label><Select
+      value={value.category}
+      disabled={disabled}
+      onChange={category => { if (typeof category === "string") onChange({ ...value, category: category as DocumentCategory,
+      sourceParty: hasParty(category as DocumentCategory) ? value.sourceParty : "" }); }}
+      id={`${prefix}-category`}
+      aria-labelledby={`${prefix}-category` + "-label"}
+      className="w-full"
+      motion={false}>{categories.map(category => <Select.Option key={category} value={category}>{documentCategoryLabel[category]}</Select.Option>)}</Select></div>
+    <div className="space-y-1.5"><label id={`${prefix}-origin` + "-label"} className="text-sm font-medium text-[var(--semi-color-text-1)]">材料来源</label><Select value={value.sourceOrigin || "none"} disabled={disabled} onChange={sourceOrigin => { if (typeof sourceOrigin === "string") onChange({ ...value, sourceOrigin: sourceOrigin === "none" ? "" : sourceOrigin as DocumentSourceOrigin }); }} id={`${prefix}-origin`} aria-labelledby={`${prefix}-origin` + "-label"} className="w-full" motion={false}><Select.Option value="none">不标注</Select.Option>{(Object.keys(documentSourceChip) as DocumentSourceOrigin[]).map(origin => <Select.Option key={origin} value={origin}>{documentSourceChip[origin].label}</Select.Option>)}</Select></div>
+    {hasParty(value.category) && procedure?.sourceOptions.length ? <div className="space-y-1.5 sm:col-span-2"><label id={`${prefix}-party` + "-label"} className="text-sm font-medium text-[var(--semi-color-text-1)]">来源方</label><Select value={value.sourceParty || "none"} disabled={disabled} onChange={sourceParty => { if (typeof sourceParty === "string") onChange({ ...value, sourceParty: sourceParty === "none" ? "" : sourceParty }); }} id={`${prefix}-party`} aria-labelledby={`${prefix}-party` + "-label"} className="w-full" motion={false}><Select.Option value="none">不标注</Select.Option>{procedure.sourceOptions.map(party => <Select.Option key={party} value={party}>{party}</Select.Option>)}</Select></div> : null}
   </div>;
 }

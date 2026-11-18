@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mock = vi.hoisted(() => ({ add: vi.fn(), adjust: vi.fn(), change: vi.fn(), rules: vi.fn(), error: vi.fn(), refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mock.refresh }) }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), warning: vi.fn(), error: mock.error } }));
+vi.mock("@douyinfe/semi-ui", async (load) => ({ ...await load<typeof import("@douyinfe/semi-ui")>(), Toast: { success: vi.fn(), warning: vi.fn(), error: mock.error }, Notification: { success: vi.fn(), warning: vi.fn(), error: mock.error } }));
 vi.mock("@/server/procedures/actions", () => ({ addDeadline: mock.add, addProcedure: vi.fn(), addHearing: vi.fn(), toggleDeadlineCompleted: vi.fn(), deleteDeadline: vi.fn(), deleteHearing: vi.fn(), addProcedureMemo: vi.fn(), deleteProcedureMemo: vi.fn() }));
 vi.mock("@/server/deadlines/confirm", () => ({ adjustDeadline: mock.adjust, confirmDeadline: vi.fn() }));
 vi.mock("@/server/deadline-rules/actions", () => ({ listDeadlineRulesForProcedure: mock.rules }));
@@ -42,8 +42,8 @@ afterEach(() => {
   }
 });
 async function choose(trigger: HTMLElement, option: string | RegExp) {
-  trigger.focus(); fireEvent.keyDown(trigger, { key: "Enter" });
-  fireEvent.click(await screen.findByRole("option", { name: option }));
+  fireEvent.click(trigger);
+  fireEvent.click(await screen.findByRole("option", { name: typeof option === "string" ? name => name.includes(option) : option }));
 }
 async function exact() { await choose(screen.getByRole("combobox", { name: "期限精度" }), "准确时刻（北京时间）"); }
 const reason = () => fireEvent.change(screen.getByPlaceholderText("如：法院通知书载明举证期限延长至…"), { target: { value: "按合成来件明确核对" } });
@@ -64,7 +64,7 @@ describe("F01 真实期限表单（组件环境，服务动作边界受控）", 
     const ruleId = "crule0000000000000000001";
     mock.rules.mockResolvedValue([{ id: ruleId, name: "合成日期规则", periodValue: 15, periodUnit: "DAYS", category: "APPEAL", triggerLabel: "送达日期", legalBasis: "合成依据", remindDays: 3 }]);
     render(<AddDeadlineDialog open onOpenChange={vi.fn()} procedures={procedures} defaultProcedureId={procedureId} />);
-    const ruleTrigger = (await screen.findByText("选择适用的法定期限")).closest("button")!;
+    const ruleTrigger = (await screen.findByText("选择适用的法定期限")).closest<HTMLElement>('[role="combobox"]')!;
     await choose(ruleTrigger, /合成日期规则/);
     fireEvent.click(screen.getByRole("button", { name: "填入下方表单" }));
     expect(screen.getByRole("combobox", { name: "期限精度" })).toHaveTextContent("日期");

@@ -3,24 +3,13 @@
 import { DeadlineDueFields } from "@/components/matters/deadline-due-fields";
 import { deadlineDueDraft, type DeadlineDueDraft } from "@/lib/deadline-due";
 
-import { useTransition, useRef, useState, useEffect, useMemo, useCallback } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useId, useTransition, useRef, useState, useEffect, useMemo, useCallback } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
+import { Select, Button, Input, Notification, TextArea, Toast } from "@douyinfe/semi-ui";
 import { ExternalLink, Loader2, Scale, ScanText } from "lucide-react";
 import type { MatterCategory, ProcedureType } from "@prisma/client";
-import { Button } from "@/components/ui/button";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -100,11 +89,11 @@ export function AddProcedureSheet({
   colleagues?: { id: string; name: string }[];
   onCreated?: (procedureId: string) => void;
 }) {
+  const selectLabelId = useId();
   const [isPending, startTransition] = useTransition();
   const procedureOptions = proceduresByCategory[category];
 
   const {
-    register,
     control,
     handleSubmit,
     getValues,
@@ -176,14 +165,12 @@ export function AddProcedureSheet({
     startTransition(async () => {
       try {
         const created = await addProcedure(values);
-        toast.success(`程序已添加（${procedureTypeLabel[values.type]}）`);
+        Toast.success(`程序已添加（${procedureTypeLabel[values.type]}）`);
         reset();
         onOpenChange(false);
         if (window.location.pathname + window.location.search === location) onCreated?.(created.id);
       } catch (err) {
-        toast.error("添加失败", {
-          description: actionErrorMessage(err)
-        });
+        Notification.error({ title: "添加失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -202,7 +189,7 @@ export function AddProcedureSheet({
           <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
             {/* 程序类型 */}
             <div className="space-y-2">
-              <Label className="text-xs">程序类型 *</Label>
+              <label className="text-xs">程序类型 *</label>
               <div className="flex flex-wrap gap-1.5">
                 {procedureOptions.map((p) => (
                   <button
@@ -225,11 +212,11 @@ export function AddProcedureSheet({
             {/* 主办律师 */}
             {colleagues && colleagues.length > 0 && (
               <div className="space-y-2">
-                <Label className="text-xs">主办律师</Label>
+                <label className="text-xs">主办律师</label>
                 <div className="flex items-center gap-3">
-                  <Select
+                  <> <span className="sr-only" id={selectLabelId + "-1"}>{"选择主办律师"}</span><Select
                     value={isExternalLead ? "__external__" : (leadLawyerId ?? "__none__")}
-                    onValueChange={(v) => {
+                    onChange={v => { if (typeof v !== "string") return;
                       if (v === "__external__") {
                         setValue("isExternalLead", true);
                         setValue("leadLawyerId", null);
@@ -241,18 +228,12 @@ export function AddProcedureSheet({
                         setValue("leadLawyerId", v);
                       }
                     }}
-                  >
-                    <SelectTrigger className="h-9 text-xs">
-                      <SelectValue placeholder="选择主办律师" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">未指定</SelectItem>
-                      {colleagues.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                      ))}
-                      <SelectItem value="__external__">非本所代理</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    aria-labelledby={selectLabelId + "-1"}
+                    placeholder="选择主办律师"
+                    className="w-full"
+                    motion={false}><Select.Option value="__none__">未指定</Select.Option>{colleagues.map((c) => (
+                        <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>
+                      ))}<Select.Option value="__external__">非本所代理</Select.Option></Select></>
                   {isExternalLead && (
                     <span className="text-xs text-muted-foreground">此程序由外部律师代理</span>
                   )}
@@ -262,11 +243,7 @@ export function AddProcedureSheet({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="案号">
-                <Input
-                  className="font-mono"
-                  placeholder="如 (2026)沪0105民初1288号"
-                  {...register("caseNumber")}
-                />
+                <Controller control={control} name="caseNumber" render={({ field }) => <Input className="font-mono" placeholder="如 (2026)沪0105民初1288号" name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} onChange={field.onChange} />} />
               </Field>
               <Field label="管辖地">
                 <JurisdictionSelect
@@ -275,53 +252,45 @@ export function AddProcedureSheet({
                 />
               </Field>
               <Field label="办理机关">
-                <Select
+                <> <span className="sr-only" id={selectLabelId + "-2"}>{"办理机关"}</span><Select
                   value={handlingAgency}
-                  onValueChange={handleHandlingAgencyChange}
+                  onChange={value => { if (typeof value === "string") handleHandlingAgencyChange(value); }}
                   disabled={agencyOpts.length === 0}
-                >
-                  <SelectTrigger className="h-9 bg-background">
-                    <SelectValue placeholder="选择机构" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {agencyOpts.map((a) => (
-                      <SelectItem key={a} value={a}>{a}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  aria-labelledby={selectLabelId + "-2"}
+                  placeholder="选择机构"
+                  className="w-full"
+                  motion={false}>{agencyOpts.map((a) => (
+                      <Select.Option key={a} value={a}>{a}</Select.Option>
+                    ))}</Select></>
               </Field>
               <Field label="主审 / 仲裁员">
-                <Input {...register("handler")} />
+                <Controller control={control} name="handler" render={({ field }) => <Input name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} onChange={field.onChange} />} />
               </Field>
               <Field label="庭别 / 合议庭">
-                <Input {...register("panel")} />
+                <Controller control={control} name="panel" render={({ field }) => <Input name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} onChange={field.onChange} />} />
               </Field>
               <Field
                 label="立案 / 受理日期"
                 error={errors.acceptedAt?.message as string | undefined}
               >
-                <Input
-                  type="date"
-                  {...register("acceptedAt")}
-                  onChange={(e) => {
+                <Controller control={control} name="acceptedAt" render={({ field }) => <Input type="date" onChange={inputValue => {
                     // 表单保存日期字符串，resolver 在提交时解析成 Date。
-                    setValue("acceptedAt", e.target.value || undefined, { shouldValidate: true });
-                  }}
-                />
+                    setValue("acceptedAt", inputValue || undefined, { shouldValidate: true });
+                  }} name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} />} />
               </Field>
             </div>
           </div>
 
           <DialogFooter className="border-t border-border px-6 py-4">
             <Button
-              type="button"
-              variant="outline"
               onClick={() => void closeProcedure()}
               disabled={isPending}
+              htmlType="button"
+              type="tertiary" theme="outline"
             >
               取消
             </Button>
-            <Button type="submit" disabled={isPending} className="gap-1.5">
+            <Button disabled={isPending} className="gap-1.5" htmlType="submit" theme="solid">
               {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               添加程序
             </Button>
@@ -375,6 +344,7 @@ export function AddDeadlineDialog({
   procedures: { id: string; label: string }[];
   defaultProcedureId: string;
 }) {
+  const selectLabelId = useId();
   const [isPending, startTransition] = useTransition();
   const [dueDraft, setDueDraft] = useState<DeadlineDueDraft>(() => deadlineDueDraft());
 
@@ -458,7 +428,7 @@ export function AddDeadlineDialog({
       { shouldDirty: true }
     );
     setValue("remindDays", selectedRule.remindDays, { shouldDirty: true });
-    toast.success("已按法定期限填入，可再人工调整", { description: HOLIDAY_NOTE });
+    Notification.success({ title: "已按法定期限填入，可再人工调整", content: HOLIDAY_NOTE });
   }
 
   // 打开（变为 true）时重新生成默认值：defaultValues 只在首次渲染求值，跨天打开默认「到期日」会是昨天
@@ -486,13 +456,11 @@ export function AddDeadlineDialog({
     startTransition(async () => {
       try {
         await addDeadline(values);
-        toast.success("期限已添加");
+        Toast.success("期限已添加");
         reset();
         onOpenChange(false);
       } catch (err) {
-        toast.error("添加失败", {
-          description: actionErrorMessage(err)
-        });
+        Notification.error({ title: "添加失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -507,21 +475,17 @@ export function AddDeadlineDialog({
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-1 flex-col overflow-hidden">
           <div className="flex-1 space-y-3 overflow-y-auto px-6 py-5">
             <Field label="所处程序" required>
-              <Select
+              <> <span className="sr-only" id={selectLabelId + "-3"}>{"所处程序"}</span><Select
                 value={procedureId || undefined}
-                onValueChange={(v) => setValue("procedureId", v)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="选择所处程序" />
-                </SelectTrigger>
-                <SelectContent>
-                  {procedures.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
+                onChange={v => { if (typeof v === "string") setValue("procedureId", v); }}
+                aria-labelledby={selectLabelId + "-3"}
+                placeholder="选择所处程序"
+                className="w-full"
+                motion={false}>{procedures.map((p) => (
+                    <Select.Option key={p.id} value={p.id}>
                       {p.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    </Select.Option>
+                  ))}</Select></>
             </Field>
 
             {(rulesLoading || rules.length > 0) && (
@@ -532,30 +496,23 @@ export function AddDeadlineDialog({
                   {rulesLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">法定期限规则</Label>
-                  <Select value={selectedRuleId || undefined} onValueChange={setSelectedRuleId}>
-                    <SelectTrigger className="bg-background">
-                      <SelectValue placeholder="选择适用的法定期限" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {rules.map((rule) => (
-                        <SelectItem key={rule.id} value={rule.id}>
+                  <label id={selectLabelId + "-4"} className="text-xs text-muted-foreground">法定期限规则</label>
+                  <Select value={selectedRuleId || undefined} onChange={value => { if (typeof value === "string") setSelectedRuleId(value); }} aria-labelledby={selectLabelId + "-4"} placeholder="选择适用的法定期限" className="w-full" motion={false}>{rules.map((rule) => (
+                        <Select.Option key={rule.id} value={rule.id}>
                           {rule.name} · {periodLabel(rule.periodValue, rule.periodUnit)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                        </Select.Option>
+                      ))}</Select>
                 </div>
                 {selectedRule && (
                   <>
                     <div className="space-y-1.5">
-                      <Label className="text-xs text-muted-foreground">
+                      <label className="text-xs text-muted-foreground">
                         {selectedRule.triggerLabel}
-                      </Label>
+                      </label>
                       <Input
                         type="date"
                         value={triggerDate}
-                        onChange={(e) => setTriggerDate(e.target.value)}
+                        onChange={inputValue => setTriggerDate(inputValue)}
                         className="bg-background"
                       />
                     </div>
@@ -593,12 +550,12 @@ export function AddDeadlineDialog({
                       )}
                     </div>
                     <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
                       onClick={applyRule}
                       disabled={!computedDue}
                       className="h-7 px-2.5 text-[11px]"
+                      htmlType="button"
+                      type="tertiary" theme="outline"
+                      size="small"
                     >
                       填入下方表单
                     </Button>
@@ -608,30 +565,20 @@ export function AddDeadlineDialog({
             )}
 
             <Field label="期限名称" required error={errors.title?.message}>
-              <Input
-                placeholder="如：举证截止 / 上诉到期日"
-                {...register("title")}
-              />
+              <Controller control={control} name="title" render={({ field }) => <Input placeholder="如：举证截止 / 上诉到期日" name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} onChange={field.onChange} />} />
             </Field>
 
             <Field label="期限类型">
-              <Select
+              <> <span className="sr-only" id={selectLabelId + "-5"}>{"期限类型"}</span><Select
                 value={category}
-                onValueChange={(v) =>
-                  setValue("category", v as DeadlineCreateInput["category"])
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(deadlineCategoryLabel).map(([k, v]) => (
-                    <SelectItem key={k} value={k}>
+                onChange={v => { if (typeof v === "string") setValue("category", v as DeadlineCreateInput["category"]); }}
+                aria-labelledby={selectLabelId + "-5"}
+                className="w-full"
+                motion={false}>{Object.entries(deadlineCategoryLabel).map(([k, v]) => (
+                    <Select.Option key={k} value={k}>
                       {v}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    </Select.Option>
+                  ))}</Select></>
             </Field>
 
             <div className="space-y-1.5"><DeadlineDueFields value={dueDraft} disabled={isPending} onChange={next => {
@@ -641,33 +588,24 @@ export function AddDeadlineDialog({
             }} />{errors.dueAt?.message && <p className="text-sm text-destructive">{errors.dueAt.message}</p>}</div>
 
             <Field label="计算依据">
-              <Input
-                placeholder="如：判决书送达日 2026-05-01 + 15 日"
-                {...register("basis")}
-              />
+              <Controller control={control} name="basis" render={({ field }) => <Input placeholder="如：判决书送达日 2026-05-01 + 15 日" name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} onChange={field.onChange} />} />
             </Field>
 
             <Field label="提前提醒（天）" error={errors.remindDays?.message as string | undefined}>
-              <Input
-                type="number"
-                min={0}
-                max={60}
-                className="font-mono tabular"
-                {...register("remindDays", { valueAsNumber: true })}
-              />
+              <input type="number" min={0} max={60} className="h-8 w-full rounded-md border border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] px-3 text-sm outline-none focus:border-[var(--semi-color-focus-border)] font-mono tabular" {...register("remindDays", { valueAsNumber: true })} />
             </Field>
           </div>
 
           <DialogFooter className="border-t border-border px-6 py-4">
             <Button
-              type="button"
-              variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={isPending}
+              htmlType="button"
+              type="tertiary" theme="outline"
             >
               取消
             </Button>
-            <Button type="submit" disabled={isPending} className="gap-1.5">
+            <Button disabled={isPending} className="gap-1.5" htmlType="submit" theme="solid">
               {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               添加期限
             </Button>
@@ -696,12 +634,12 @@ export function AddHearingDialog({
   /** 各程序附加信息（审理法院等），用于预填 */
   proceduresDetail?: Record<string, { handlingAgency?: string | null; panel?: string | null; jurisdiction?: string | null }>;
 }) {
+  const selectLabelId = useId();
   const [isPending, startTransition] = useTransition();
   const [ocrLoading, setOcrLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
-    register,
     control,
     handleSubmit,
     reset,
@@ -765,11 +703,9 @@ export function AddHearingDialog({
           if (result.parties?.length) parts.push(`当事人：${result.parties.join("、")}`);
           setValue("notes", parts.join("\n"));
         }
-        toast.success(result.pageLimit ? "已识别传票首页，请核对信息；其他页未处理" : "传票识别完成，请核对信息");
+        Toast.success(result.pageLimit ? "已识别传票首页，请核对信息；其他页未处理" : "传票识别完成，请核对信息");
       } catch (err) {
-        toast.error("传票识别失败", {
-          description: err instanceof Error ? actionErrorMessage(err) : "请手动填写"
-        });
+        Notification.error({ title: "传票识别失败", content: err instanceof Error ? actionErrorMessage(err) : "请手动填写" });
       } finally {
         setOcrLoading(false);
         // reset file input so same file can be re-selected
@@ -793,15 +729,13 @@ export function AddHearingDialog({
     startTransition(async () => {
       try {
         await addHearing({ ...values, startsAt: parsed });
-        toast.success("开庭已添加");
+        Toast.success("开庭已添加");
         reset();
         setStartsAtInput("");
         setStartsAtError("");
         onOpenChange(false);
       } catch (err) {
-        toast.error("添加失败", {
-          description: actionErrorMessage(err)
-        });
+        Notification.error({ title: "添加失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -825,12 +759,12 @@ export function AddHearingDialog({
                 onChange={handleSummonsUpload}
               />
               <Button
-                type="button"
-                variant="outline"
-                size="sm"
                 className="gap-1.5"
                 disabled={ocrLoading}
                 onClick={() => fileInputRef.current?.click()}
+                htmlType="button"
+                type="tertiary" theme="outline"
+                size="small"
               >
                 {ocrLoading ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -845,30 +779,26 @@ export function AddHearingDialog({
             </div>
 
             <Field label="主题" required error={errors.title?.message}>
-              <Input placeholder="如：第一次开庭" {...register("title")} />
+              <Controller control={control} name="title" render={({ field }) => <Input placeholder="如：第一次开庭" name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} onChange={field.onChange} />} />
             </Field>
 
             {/* 所处程序 + 审理法院 一行 */}
             <div className="grid grid-cols-2 gap-3">
               <Field label="所处程序" required>
-                <Select
+                <> <span className="sr-only" id={selectLabelId + "-6"}>{"所处程序"}</span><Select
                   value={hearingProcedureId || undefined}
-                  onValueChange={(v) => {
+                  onChange={v => { if (typeof v !== "string") return;
                     setValue("procedureId", v);
                     autoTitle(v);
                   }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="选择程序" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {procedures.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
+                  aria-labelledby={selectLabelId + "-6"}
+                  placeholder="选择程序"
+                  className="w-full"
+                  motion={false}>{procedures.map((p) => (
+                      <Select.Option key={p.id} value={p.id}>
                         {p.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      </Select.Option>
+                    ))}</Select></>
               </Field>
               <Field label="审理法院">
                 <Input
@@ -885,46 +815,46 @@ export function AddHearingDialog({
                 <Input
                   type="datetime-local"
                   value={startsAtInput}
-                  onChange={(e) => {
-                    setStartsAtInput(e.target.value);
+                  onChange={inputValue => {
+                    setStartsAtInput(inputValue);
                     if (startsAtError) setStartsAtError("");
                   }}
                 />
               </Field>
               <Field label="法庭">
-                <Input placeholder="如：第三法庭" {...register("room")} />
+                <Controller control={control} name="room" render={({ field }) => <Input placeholder="如：第三法庭" name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} onChange={field.onChange} />} />
               </Field>
             </div>
 
             {/* 主审/仲裁员 + 联系方式 一行 */}
             <div className="grid grid-cols-2 gap-3">
               <Field label="主审 / 仲裁员">
-                <Input {...register("judge")} />
+                <Controller control={control} name="judge" render={({ field }) => <Input name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} onChange={field.onChange} />} />
               </Field>
               <Field label="联系方式">
-                <Input placeholder="法官/书记员电话" {...register("contact")} />
+                <Controller control={control} name="contact" render={({ field }) => <Input placeholder="法官/书记员电话" name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} onChange={field.onChange} />} />
               </Field>
             </div>
 
             <Field label="开庭地址">
-              <Input placeholder="如：XX路XX号XX法院" {...register("address")} />
+              <Controller control={control} name="address" render={({ field }) => <Input placeholder="如：XX路XX号XX法院" name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} onChange={field.onChange} />} />
             </Field>
 
             <Field label="备注">
-              <Textarea rows={4} {...register("notes")} />
+              <Controller control={control} name="notes" render={({ field }) => <TextArea rows={4} name={field.name} ref={field.ref} value={field.value ?? ""} onBlur={field.onBlur} onChange={field.onChange} />} />
             </Field>
           </div>
 
           <DialogFooter className="border-t border-border px-6 py-4">
             <Button
-              type="button"
-              variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={isPending}
+              htmlType="button"
+              type="tertiary" theme="outline"
             >
               取消
             </Button>
-            <Button type="submit" disabled={isPending} className="gap-1.5">
+            <Button disabled={isPending} className="gap-1.5" htmlType="submit" theme="solid">
               {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               添加开庭
             </Button>
@@ -950,10 +880,10 @@ function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="flex items-center gap-1 text-xs">
+      <label className="flex items-center gap-1 text-xs">
         {label}
         {required && <span className="text-destructive">*</span>}
-      </Label>
+      </label>
       {children}
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>

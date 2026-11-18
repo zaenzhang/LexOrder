@@ -251,8 +251,8 @@ export default async function MatterDetailPage({ params, searchParams }: PagePro
         materialRefreshKey={Date.now()}
         briefNode={<MatterBriefSection matterId={matter.id} refreshKey={Date.now()} />}
         contextNode={contextResult.view
-          ? <MatterContextSection matterId={matter.id} view={contextResult.view} />
-          : <section className="dos-group p-4 text-sm text-destructive" role="alert">事项上下文暂不可读取：{contextResult.error} <a className="underline" href={matterHref(matter)}>重新加载</a></section>}
+          ? <MatterContextSection key={matter.id} matterId={matter.id} view={contextResult.view} />
+          : <section key={matter.id} className="dos-group p-4 text-sm text-destructive" role="alert">事项上下文暂不可读取：{contextResult.error} <a className="underline" href={matterHref(matter)}>重新加载</a></section>}
         notes={notes}
         capabilities={{
           aiReview: aiSettings?.configured ?? false,

@@ -1,10 +1,7 @@
 "use client";
 
+import { Select, Button, Input } from "@douyinfe/semi-ui";
 import { useEffect, useId, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { actionErrorMessage } from "@/lib/action-error";
 import { listMaterialSources } from "@/server/documents/processing-actions";
 import type { EvidenceDocumentOption } from "@/server/evidence/contracts";
@@ -18,6 +15,7 @@ export function MaterialSourceLocationPicker({ matterId, document, value, onChan
   matterId: string; document: EvidenceDocumentOption; value: MaterialSourceLocation;
   onChange(value: MaterialSourceLocation): void; disabled: boolean; loadSources?: MaterialSourceLocationLoader;
 }) {
+  const selectLabelId = useId();
   const id = useId();
   const active = useRef(false);
   const sequence = useRef(0);
@@ -52,22 +50,31 @@ export function MaterialSourceLocationPicker({ matterId, document, value, onChan
 
   return <div className="space-y-2">
     {document.isPdf && document.pageCount && !value.position ? <div className="space-y-1">
-      <Label htmlFor={`${id}-page`}>页码（可选，共 {document.pageCount} 页）</Label>
-      <Input id={`${id}-page`} type="number" min={1} max={document.pageCount} value={value.page}
-        onChange={event => onChange({ page: event.target.value, position: null })} disabled={disabled} />
+      <label htmlFor={`${id}-page`} className="text-sm font-medium text-[var(--semi-color-text-1)]">页码（可选，共 {document.pageCount} 页）</label>
+      <Input
+        id={`${id}-page`}
+        type="number"
+        min={1}
+        max={document.pageCount}
+        value={value.page}
+        onChange={inputValue => onChange({ page: inputValue, position: null })}
+        disabled={disabled} />
     </div> : null}
-    <Button type="button" size="sm" variant="ghost" disabled={disabled || loading || choices !== null || !document.hasIdentity} onClick={() => void load()}>
+    <Button disabled={disabled || loading || choices !== null || !document.hasIdentity} onClick={() => void load()} htmlType="button" type="tertiary" theme="borderless" size="small">
       {loading ? "正在读取原文位置…" : error ? "重新读取原文位置" : "读取可引用的原文位置"}
     </Button>
     {choices !== null ? <div className="space-y-2">
-      <Select value={value.position ? `${value.position.runId}:${value.position.anchorId}` : "original"} onValueChange={key => {
+      <> <span className="sr-only" id={selectLabelId + "-1"}>{"原文位置"}</span><Select
+        value={value.position ? `${value.position.runId}:${value.position.anchorId}` : "original"}
+        onChange={key => { if (typeof key !== "string") return;
         onChange({ page: "", position: choices.find(choice => `${choice.runId}:${choice.anchorId}` === key) ?? null });
-      }} disabled={disabled || loading}>
-        <SelectTrigger aria-label="原文位置"><SelectValue /></SelectTrigger>
-        <SelectContent><SelectItem value="original">引用原件</SelectItem>{choices.map(choice => <SelectItem key={`${choice.runId}:${choice.anchorId}`} value={`${choice.runId}:${choice.anchorId}`}>{choice.locationLabel} · {choice.excerpt.slice(0, 55)}</SelectItem>)}</SelectContent>
-      </Select>
+      }}
+        disabled={disabled || loading}
+        aria-labelledby={selectLabelId + "-1"}
+        className="w-full"
+        motion={false}><Select.Option value="original">引用原件</Select.Option>{choices.map(choice => <Select.Option key={`${choice.runId}:${choice.anchorId}`} value={`${choice.runId}:${choice.anchorId}`}>{choice.locationLabel} · {choice.excerpt.slice(0, 55)}</Select.Option>)}</Select></>
       {!choices.length ? <p className="text-xs text-muted-foreground">暂无可引用的已处理位置，可以引用原件。</p> : null}
-      {nextOffset !== null ? <Button type="button" size="sm" variant="ghost" disabled={disabled || loading} onClick={() => void load(true)}>更多位置</Button> : null}
+      {nextOffset !== null ? <Button disabled={disabled || loading} onClick={() => void load(true)} htmlType="button" type="tertiary" theme="borderless" size="small">更多位置</Button> : null}
     </div> : null}
     {!error && value.position ? <p className="whitespace-pre-wrap break-words text-xs text-muted-foreground">{value.position.locationLabel} · {value.position.excerpt}</p> : null}
     {error ? <p role="alert" className="text-sm text-destructive">原文位置读取失败：{error}</p> : null}
