@@ -2,12 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Bell } from "lucide-react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { Badge, Button, Popover, Spin, Tag } from "@douyinfe/semi-ui";
 import {
   getNotifications,
   getUnreadCount,
@@ -42,10 +37,10 @@ const typeLabels: Record<string, string> = {
 };
 
 const priorityColors: Record<string, string> = {
-  URGENT: "text-[var(--red)]",
-  HIGH: "text-[var(--amber)]",
-  NORMAL: "",
-  LOW: "text-muted-foreground",
+  URGENT: "var(--semi-color-danger)",
+  HIGH: "var(--semi-color-warning)",
+  NORMAL: "var(--semi-color-text-0)",
+  LOW: "var(--semi-color-text-2)",
 };
 
 export function NotificationPopover() {
@@ -53,6 +48,12 @@ export function NotificationPopover() {
   const [notifications, setNotifications] = useState<Awaited<ReturnType<typeof getNotifications>>>([]);
   const [open, setOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const request = useRef(0);
+  const mutating = useRef(false);
   const router = useRouter();
 
   // 已弹过桌面通知的 id（含挂载时已存在的，避免刷新页面就刷屏）
@@ -61,13 +62,19 @@ export function NotificationPopover() {
 
   // 轮询：刷新未读数 + 对新到的未读通知弹浏览器桌面通知
   const poll = useCallback(async () => {
+    if (mutating.current) return;
+    const serial = ++request.current;
+    setLoading(true);
     try {
       const [count, list] = await Promise.all([
         getUnreadCount(),
         getNotifications({ limit: 20 })
       ]);
+      if (serial !== request.current) return;
       setUnread(count);
       setNotifications(list);
+      setLoadError("");
+      setTypeFilter(previous => previous && list.some(item => item.type === previous) ? previous : null);
 
       const unreadList = list.filter((n) => !n.read);
       if (!seededRef.current) {
@@ -98,7 +105,13 @@ export function NotificationPopover() {
           }
         }
       }
-    } catch {}
+    } catch {
+      if (serial !== request.current) return;
+      setNotifications([]);
+      setLoadError("通知读取失败，请重试。");
+    } finally {
+      if (serial === request.current) setLoading(false);
+    }
   }, [router]);
 
   useEffect(() => {
@@ -108,141 +121,102 @@ export function NotificationPopover() {
     }
     poll();
     const timer = setInterval(poll, 60_000);
-    return () => clearInterval(timer);
+    return () => { clearInterval(timer); request.current += 1; };
   }, [poll]);
 
-  const handleOpen = async (isOpen: boolean) => {
-    setOpen(isOpen);
-    if (isOpen) {
-      const list = await getNotifications({ limit: 20 });
-      setNotifications(list);
-    }
-  };
+  function handleOpen(visible: boolean) {
+    setOpen(visible);
+    if (visible) void poll();
+  }
 
-  const handleMarkRead = async (id: string, href?: string | null) => {
-    await markNotificationRead(id);
-    setUnread((prev) => Math.max(0, prev - 1));
-    setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true, readAt: new Date() } : n));
-    if (href) {
+  async function handleMarkRead(notification: (typeof notifications)[number]) {
+    if (mutating.current) return;
+    setActionError("");
+    if (!notification.read) {
+      mutating.current = true;
+      request.current += 1;
+      setLoading(false);
+      setBusy(true);
+      try {
+        const saved = await markNotificationRead(notification.id);
+        setUnread(previous => Math.max(0, previous - 1));
+        setNotifications(previous => previous.map(item => item.id === saved.id ? { ...item, read: true, readAt: saved.readAt } : item));
+      } catch {
+        setActionError("标记已读失败，请重试。");
+        return;
+      } finally {
+        mutating.current = false;
+        setBusy(false);
+      }
+    }
+    if (notification.href) {
       setOpen(false);
-      router.push(href);
+      router.push(notification.href);
     }
-  };
+  }
 
-  const handleMarkAllRead = async () => {
-    await markAllNotificationsRead();
-    setUnread(0);
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true, readAt: new Date() })));
-  };
+  async function handleMarkAllRead() {
+    if (mutating.current) return;
+    mutating.current = true;
+    request.current += 1;
+    setLoading(false);
+    setBusy(true);
+    setActionError("");
+    try {
+      await markAllNotificationsRead();
+      setUnread(0);
+      setNotifications(previous => previous.map(item => ({ ...item, read: true, readAt: new Date() })));
+    } catch {
+      setActionError("全部标记已读失败，请重试。");
+    } finally {
+      mutating.current = false;
+      setBusy(false);
+    }
+  }
 
-  return (
-    <Popover open={open} onOpenChange={handleOpen}>
-      <PopoverTrigger asChild>
-        <button
-          className="btn btn-secondary btn-icon relative"
-          aria-label={unread > 0 ? `通知（${unread} 条未读）` : "通知"}
-        >
-          <Bell strokeWidth={1.8} />
-          {unread > 0 && (
-            <span className="absolute right-[7px] top-[7px] h-[7px] w-[7px] rounded-full border-[1.5px] border-white bg-[var(--red)]" aria-hidden />
-          )}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-0">
-        <div className="flex items-center justify-between border-b px-3 py-2">
-          <span className="text-sm font-medium">通知</span>
-          {unread > 0 && (
-            <button
-              onClick={handleMarkAllRead}
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
-              全部已读
-            </button>
-          )}
+  const presentTypes = Array.from(new Set(notifications.map(item => item.type)));
+  const list = typeFilter ? notifications.filter(item => item.type === typeFilter) : notifications;
+
+  return <Popover trigger="click" visible={open} onVisibleChange={handleOpen} onEscKeyDown={() => setOpen(false)}
+    position="bottomRight" motion={false} content={
+      <section aria-label="通知列表" className="w-80">
+        <div className="flex items-center justify-between gap-2 p-3">
+          <span className="font-medium">通知</span>
+          {unread > 0 ? <Button size="small" theme="borderless" disabled={busy || loading || Boolean(loadError)} onClick={() => void handleMarkAllRead()}>全部已读</Button> : null}
         </div>
-        {(() => {
-          const presentTypes = Array.from(new Set(notifications.map((n) => n.type)));
-          if (presentTypes.length <= 1) return null;
-          return (
-            <div className="flex flex-wrap gap-1 border-b px-3 py-1.5">
-              <button
-                onClick={() => setTypeFilter(null)}
-                className={cn(
-                  "rounded-full border px-2 py-0.5 text-[10px] transition-colors",
-                  typeFilter === null
-                    ? "border-primary bg-primary/15 text-primary"
-                    : "border-border text-muted-foreground hover:border-input hover:bg-muted hover:text-foreground"
-                )}
-              >
-                全部
-              </button>
-              {presentTypes.map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTypeFilter(t === typeFilter ? null : t)}
-                  className={cn(
-                    "rounded-full border px-2 py-0.5 text-[10px] transition-colors",
-                    typeFilter === t
-                      ? "border-primary bg-primary/15 text-primary"
-                      : "border-border text-muted-foreground hover:border-input hover:bg-muted hover:text-foreground"
-                  )}
-                >
-                  {typeIcons[t] ?? "🔔"} {typeLabels[t] ?? t}
-                </button>
-              ))}
-            </div>
-          );
-        })()}
+        {presentTypes.length > 1 ? <div className="flex flex-wrap gap-1 px-3 pb-2" role="group" aria-label="通知类型">
+          <Button size="small" theme={typeFilter === null ? "light" : "borderless"} aria-pressed={typeFilter === null} onClick={() => setTypeFilter(null)}>全部</Button>
+          {presentTypes.map(type => <Button key={type} size="small" theme={typeFilter === type ? "light" : "borderless"}
+            aria-pressed={typeFilter === type} onClick={() => setTypeFilter(type === typeFilter ? null : type)}>{typeLabels[type] ?? "其他"}</Button>)}
+        </div> : null}
+        {actionError ? <p role="alert" className="px-3 pb-2 text-sm text-[var(--semi-color-danger)]">{actionError}</p> : null}
         <div className="max-h-80 overflow-y-auto">
-          {(() => {
-            const list = typeFilter
-              ? notifications.filter((n) => n.type === typeFilter)
-              : notifications;
-            if (list.length === 0) {
-              return (
-                <div className="px-3 py-8 text-center text-sm text-muted-foreground">
-                  {typeFilter ? `没有「${typeLabels[typeFilter] ?? typeFilter}」类通知` : "暂无通知"}
-                </div>
-              );
-            }
-            return list.map((n) => (
-              <button
-                key={n.id}
-                onClick={() => handleMarkRead(n.id, n.href)}
-                className={cn(
-                  "flex w-full gap-2.5 border-b px-3 py-2.5 text-left transition-colors hover:bg-muted",
-                  !n.read && "bg-primary/5"
-                )}
-              >
-                <span className="mt-0.5 text-sm">{typeIcons[n.type] ?? "🔔"}</span>
-                <div className="min-w-0 flex-1">
-                  <div className={cn("text-[13px] leading-snug", !n.read && "font-medium", priorityColors[n.priority])}>
-                    {n.title}
-                  </div>
-                  {n.content && (
-                    <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {n.content}
-                    </div>
-                  )}
-                  <div className="mt-0.5 text-[11px] text-muted-foreground/60">
-                    {formatTime(n.createdAt)}
-                  </div>
-                </div>
-                {!n.read && <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
-              </button>
-            ));
-          })()}
+          {loading ? <div role="status" className="p-3"><Spin size="small" /> 正在读取通知…</div> : null}
+          {loadError ? <div role="alert" className="p-3 text-sm">{loadError}<Button size="small" theme="borderless" disabled={loading} onClick={() => void poll()}>重试读取</Button></div> : !loading && list.length === 0 ?
+            <p className="p-6 text-center text-sm text-[var(--semi-color-text-2)]">{typeFilter ? `没有「${typeLabels[typeFilter] ?? "其他"}」类通知` : "暂无通知"}</p> : null}
+          {!loadError ? list.map(notification => <div key={notification.id} className="px-2 pb-1">
+            <Button htmlType="button" block theme="borderless" type="tertiary" disabled={busy} style={{ height: "auto", padding: 10, textAlign: "left" }}
+              onClick={() => void handleMarkRead(notification)}>
+              <span className="flex w-full items-start gap-2">
+                <span aria-hidden>{typeIcons[notification.type] ?? "🔔"}</span>
+                <span className="flex min-w-0 flex-1 flex-col gap-1 whitespace-normal break-words">
+                  <span style={{ color: priorityColors[notification.priority], fontWeight: notification.read ? 400 : 600 }}>{notification.title}</span>
+                  {notification.content ? <span className="text-xs text-[var(--semi-color-text-2)]">{notification.content}</span> : null}
+                  <span className="text-xs text-[var(--semi-color-text-2)]">{formatTime(notification.createdAt)}</span>
+                </span>
+                {!notification.read ? <Tag color="blue" size="small">未读</Tag> : null}
+              </span>
+            </Button>
+          </div>) : null}
         </div>
-        {notifications.length > 0 && (
-          <div className="border-t px-3 py-2">
-            <Link href="/notifications" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setOpen(false)}>
-              查看全部通知
-            </Link>
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
-  );
+        <div className="p-3 text-right">
+          <Link href="/notifications" onClick={() => setOpen(false)} className="text-sm text-[var(--semi-color-primary)]">查看全部通知</Link>
+        </div>
+      </section>
+    }>
+    <Button htmlType="button" theme="light" type="tertiary" aria-label={loadError ? "通知（读取失败）" : unread > 0 ? `通知（${unread} 条未读）` : "通知"}
+      icon={unread > 0 ? <Badge dot><Bell size={18} /></Badge> : <Bell size={18} />} />
+  </Popover>;
 }
 
 function formatTime(date: Date | string): string {

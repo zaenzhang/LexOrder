@@ -10,7 +10,7 @@ import { approvalHref } from "@/lib/approvals/workspace";
 import { matterHref } from "@/lib/matters/route";
 import { cn, formatDateTime } from "@/lib/utils";
 import { taskProgressLabels } from "@/lib/tasks/workflow";
-import { Badge } from "@/components/ui/badge";
+import { Tabs, Tag } from "@douyinfe/semi-ui";
 import type { WorkQueue } from "@/server/dashboard/actions";
 import type { AlertItem } from "./alerts-list";
 import { shParts } from "@/lib/ui/sh-time";
@@ -36,16 +36,21 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
           <SquareCheck className="ic" strokeWidth={1.8} />
           待我处理
         </div>
-        <div className="segmented" style={{ padding: 2 }} role="tablist">
-          {items.map(([k, label, n]) => (
-            <button key={k} type="button" role="tab" aria-selected={seg === k} className={cn("seg", seg === k && "active")} style={{ padding: "4px 11px", fontSize: 11.5 }} onClick={() => setSeg(k)}>
-              {label} <span className="count">{(k === "tasks" && !queue.tasksAvailable) || (k === "followups" && !queue.followUps.available) ? "—" : n}</span>
-            </button>
-          ))}
-        </div>
       </div>
 
-      <div style={{ flex: 1 }}>
+      <Tabs
+        type="button"
+        size="small"
+        activeKey={seg}
+        onChange={(key) => setSeg(key as Seg)}
+        tabPaneMotion={false}
+        tabList={items.map(([key, label, count]) => ({
+          itemKey: key,
+          tab: `${label} ${(key === "tasks" && !queue.tasksAvailable) || (key === "followups" && !queue.followUps.available) ? "—" : count}`
+        }))}
+        tabBarStyle={{ padding: "0 16px 12px" }}
+        style={{ flex: 1 }}
+      >
         {seg === "approvals" ? (
           queue.approvals.length === 0 ? (
             <div className="empty mo-empty-compact"><div className="empty-ic"><SquareCheck /></div><div className="mo-empty-title">暂无待你审批的申请</div></div>
@@ -66,7 +71,7 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
                       <span>{a.task === "issue" ? "待开票" : a.task === "stamp" ? "待盖章回填" : "待审批"}</span>
                     </div>
                   </div>
-                  <span className={cn("due-pill", urgent && "d-red")}>{a.waitDays === null ? "提交时间未记录" : a.waitDays > 0 ? `等待 ${a.waitDays} 天` : "今日"}</span>
+                  <Tag color={urgent ? "red" : "grey"}>{a.waitDays === null ? "提交时间未记录" : a.waitDays > 0 ? `等待 ${a.waitDays} 天` : "今日"}</Tag>
                 </Link>
               );
             })
@@ -94,12 +99,12 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
                     {t.priority >= 2 ? (<><span className="todo-sep" /><span>紧急</span></>) : null}
                   </div>
                   <div className="mt-1 flex flex-wrap gap-1">
-                    {taskProgressLabels(t.progress).map(label => <Badge key={label} variant="secondary" className="whitespace-normal">{label}</Badge>)}
+                    {taskProgressLabels(t.progress).map(label => <Tag key={label} color="grey" style={{ height: "auto", whiteSpace: "normal" }}>{label}</Tag>)}
                   </div>
                   {t.progress.availability === "AVAILABLE" && t.progress.waiting ? <div className="mt-1 text-xs text-muted-foreground"><p className="line-clamp-2 break-words">待收成果：{t.progress.waiting.expectedResult}</p><p>检查时点：{formatDateTime(t.progress.waiting.nextCheckAt)}</p></div> : null}
                   {!t.hasResponsibility ? <div className="mt-1 text-xs text-muted-foreground">查看案内原任务记录</div> : null}
                 </div>
-                <span className={cn("due-pill", t.overdue ? "d-red" : t.priority >= 2 ? "d-amber" : undefined)}>{t.overdue ? "已逾期" : t.dueAt ? fmt(t.dueAt) : "无期限"}</span>
+                <Tag color={t.overdue ? "red" : t.priority >= 2 ? "orange" : "grey"}>{t.overdue ? "已逾期" : t.dueAt ? fmt(t.dueAt) : "无期限"}</Tag>
               </Link>
             ))
           )
@@ -110,7 +115,7 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
           : queue.followUps.items.map(item => <Link key={item.id} href={personalFollowUpHref({}, { followUpId: item.id, clientId: item.client.id })} className="todo-item">
             <span className={cn("type-ic", item.overdue ? "t-red" : "t-teal")} aria-hidden><CalendarClock /></span>
             <div className="min-w-0 flex-1"><div className="todo-title truncate">{item.title}</div><div className="todo-meta"><span>{item.client.name}</span><span>{formatDateTime(item.dueAt)}</span></div></div>
-            <span className={cn("due-pill", item.overdue && "d-red")}>{item.overdue ? "已逾期" : "待跟进"}</span>
+            <Tag color={item.overdue ? "red" : "grey"}>{item.overdue ? "已逾期" : "待跟进"}</Tag>
           </Link>))}
         {seg === "alerts" ? (
           reminders.length === 0 ? (
@@ -125,12 +130,12 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
                   <div className="todo-title truncate">{a.title}</div>
                   <div className="todo-meta"><span className="truncate">{a.detail}</span></div>
                 </div>
-                <span className={cn("due-pill", a.tone === "danger" ? "d-red" : a.tone === "warn" ? "d-amber" : undefined)}>{a.source === "sms" ? "法院短信" : "保全"}</span>
+                <Tag color={a.tone === "danger" ? "red" : a.tone === "warn" ? "orange" : "grey"}>{a.source === "sms" ? "法院短信" : "保全"}</Tag>
               </Link>
             ))
           )
         ) : null}
-      </div>
+      </Tabs>
 
       <div className="panel-foot" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span className="t-xs t-mute">

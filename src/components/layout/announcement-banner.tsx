@@ -7,6 +7,7 @@
  * 关闭只对当前 tab session 生效（不持久化，避免错过新公告）。
  */
 import { useState } from "react";
+import { Button } from "@douyinfe/semi-ui";
 import Link from "next/link";
 import { Megaphone, ChevronLeft, ChevronRight, X } from "lucide-react";
 
@@ -48,35 +49,38 @@ export function AnnouncementBanner({ banners }: { banners: Banner[] }) {
         </div>
         {visible.length > 1 && (
           <div className="flex items-center gap-0.5 text-xs">
-            <button
-              type="button"
+            <Button
+              htmlType="button"
+              theme="borderless"
+              type="warning"
+              size="small"
               onClick={() => setIdx((i) => (i - 1 + visible.length) % visible.length)}
-              className="rounded p-1 hover:bg-[var(--amber-bg)]"
-              aria-label="上一条"
-            >
-              <ChevronLeft className="h-3 w-3" />
-            </button>
+              aria-label="上一条公告"
+              icon={<ChevronLeft size={14} aria-hidden />}
+            />
             <span className="font-mono">
               {Math.min(idx, visible.length - 1) + 1}/{visible.length}
             </span>
-            <button
-              type="button"
+            <Button
+              htmlType="button"
+              theme="borderless"
+              type="warning"
+              size="small"
               onClick={() => setIdx((i) => (i + 1) % visible.length)}
-              className="rounded p-1 hover:bg-[var(--amber-bg)]"
-              aria-label="下一条"
-            >
-              <ChevronRight className="h-3 w-3" />
-            </button>
+              aria-label="下一条公告"
+              icon={<ChevronRight size={14} aria-hidden />}
+            />
           </div>
         )}
-        <button
-          type="button"
+        <Button
+          htmlType="button"
+          theme="borderless"
+          type="warning"
+          size="small"
           onClick={() => setDismissed((prev) => [...prev, current.id])}
-          className="rounded p-1 hover:bg-[var(--amber-bg)]"
-          aria-label="关闭"
-        >
-          <X className="h-3 w-3" />
-        </button>
+          aria-label="关闭当前公告"
+          icon={<X size={14} aria-hidden />}
+        />
       </div>
     </div>
   );

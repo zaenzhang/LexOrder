@@ -1585,7 +1585,7 @@ B—E 只写本组路由、组件、就近样式及已归属的相关测试。�
 
 #### A 组接入约定
 
-- 使用 `import { Button, Input, Select, Modal } from "@douyinfe/semi-ui"`。按钮的原生表单类型通过 `htmlType` 指定。现有 RHF 表单从 Semi `onChange` 的首个参数取字段值，保留原校验与默认值。展示信息的受控 Modal 可参照[登录保护](../src/app/(auth)/login/login-protection-dialog.tsx)，重点核对取消、Escape 和返回焦点。
+- 使用 `import { Button, Input, Select, Modal } from "@douyinfe/semi-ui"`。按钮的原生表单类型通过 `htmlType` 指定。现有 RHF 表单从 Semi `onChange` 的首个参数取字段值，保留原校验与默认值。展示信息的受控 Modal 可参照[材料来源弹窗](../src/components/layout/search-material-source-dialog.tsx)，重点核对取消、Escape 和返回焦点。
 - 公共表单弹窗、确认与反馈的合同仍由 `src/components/patterns`、`src/components/providers.tsx` 所挂载的主机及其现有调用方管理。通用确认仍会从现有 Radix 表单弹窗内部触发，替换时由 A 与涉及的组连同嵌套调用一起验证焦点、保稿、异常反馈及取消。新增仅展示的弹窗直接组合 Semi Modal。
 - 基线固定 `@douyinfe/semi-ui@2.105.0`。应用使用 Turbopack，中文组件配置在根 Provider。已在开发环境验证登录保护键盘打开、Escape 关闭与焦点返回，以及密码图标切换。受影响文件的 ESLint、共享确认与嵌套表单弹窗的两项定点测试、Docker 内的 Next.js 生产构建及 TypeScript 检查均通过。
 - **验证记录。** 依赖审计仍报告 `22` 项高危条目，均由既有的 [picomatch 公告](https://github.com/advisories/GHSA-fc5q-39xc-vjpf) 传递产生，与 main 上一次的审计结果一致。Vitest 同时报告现有 `vitest.config.ts` 的未来原生加载器兼容性提示。WebView2 由桌面阶段验收。
@@ -1630,6 +1630,7 @@ B—E 只写本组路由、组件、就近样式及已归属的相关测试。�
 - 各组做受影响文件的 lint、类型与界面行为相关测试。长表单覆盖提交失败留稿、取消、键盘焦点、关闭返回、长内容滚动。列表和详情覆盖筛选保留、分页、空态和原有只读出口。A 汇总一次集成类型与生产构建，并核对使用方和依赖清理结果。
 - 依据现行分工，真实浏览器由用户统一验收。A 提供入口和步骤，按截图或实际操作区分通过与待验。冒烟发现的问题在本计划登记发生范围、状态和验证证据。
 - 本次协作范围为 Server UI。原有登录、权限、事务、文档版本和实际交付均沿已定业务合同。Tauri 承载继续按架构 §6.28；桌面壳、打包和 WebView2 实机验收属于后续桌面工作。合并时现有依赖审计和本轮引入的检查结果分别记录，保持 CI 检查启用。
+- **登录页冒烟问题（已修复，2026-11-18）。** 展开两步验证码时，旧卡片的垂直居中使卡片顶部和邮箱框上移约 41px。改用固定顶部后，在 1211 × 823 的真实浏览器中，展开验证码及显示字段错误均未移动卡片顶部或邮箱框。登录失败和服务异常使用 Semi Notification，三项登录定点测试通过。
 
 ## 8. 交接：完成范围、证据与未覆盖项
 

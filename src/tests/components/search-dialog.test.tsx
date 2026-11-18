@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ActionError } from "@/lib/action-error";
@@ -48,6 +49,45 @@ async function search() {
 }
 
 describe("材料搜索命中的固定来源与返回", () => {
+  function SearchHarness() {
+    const [open, setOpen] = useState(false);
+    return <><button onClick={() => setOpen(true)}>打开全局搜索</button><SearchDialog open={open} onOpenChange={setOpen} /></>;
+  }
+
+  it.each(["ctrlKey", "metaKey"] as const)("%s+K 打开并聚焦输入，Escape 回原入口", async modifier => {
+    render(<SearchHarness />);
+    const trigger = screen.getByRole("button", { name: "打开全局搜索" });
+    trigger.focus();
+    fireEvent.keyDown(document, { key: "k", [modifier]: true });
+    const input = await screen.findByLabelText("搜索关键词");
+    await waitFor(() => expect(input).toHaveFocus());
+    fireEvent.keyDown(input, { key: "Escape", keyCode: 27 });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
+  });
+
+  it("来源打开后搜索停用，双层 Escape 依次返回原命中和搜索入口", async () => {
+    render(<SearchHarness />);
+    const trigger = screen.getByRole("button", { name: "打开全局搜索" });
+    trigger.focus(); fireEvent.click(trigger);
+    const outer = screen.getByRole("dialog", { name: "全局搜索" });
+    fireEvent.change(screen.getByLabelText("搜索关键词"), { target: { value: "命中" } });
+    const hit = await screen.findByRole("option", { name: /合成命中甲/ });
+    const body = hit.parentElement!; body.scrollTop = 130;
+    fireEvent.click(hit);
+    const sourceDialog = await screen.findByRole("dialog", { name: "核对后的合成命中甲.pdf" });
+    expect(outer).toHaveAttribute("inert");
+    await waitFor(() => expect(within(sourceDialog).getByRole("button", { name: "返回搜索结果" })).toHaveFocus());
+    fireEvent.keyDown(sourceDialog, { key: "Escape", keyCode: 27 });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "核对后的合成命中甲.pdf" })).not.toBeInTheDocument());
+    expect(screen.getByRole("dialog", { name: "全局搜索" })).toBeInTheDocument();
+    expect(outer).not.toHaveAttribute("inert"); expect(hit).toHaveFocus(); expect(body.scrollTop).toBe(130);
+    expect(screen.getByLabelText("搜索关键词")).toHaveValue("命中");
+    fireEvent.keyDown(hit, { key: "Escape", keyCode: 27 });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
+  });
+
   it("固定单格用完整服务URL请求转换，返回保查询、命中焦点和历史片段", async () => {
     const location = { kind: "TABLE" as const, sheet: "明细", rowStart: 8, rowEnd: 8, columnStart: 3, columnEnd: 3 };
     const hit = { ...first, title: "合成命中甲.xlsx", anchorId: "old/cell", sourceLocation: location, pageNo: undefined };
@@ -198,7 +238,7 @@ describe("材料搜索命中的固定来源与返回", () => {
     const tab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
     input.dispatchEvent(tab); expect(tab.defaultPrevented).toBe(false);
     const more = screen.getByRole("button", { name: "继续检索" });
-    more.focus(); expect(more).toHaveFocus();
+    act(() => { more.focus(); }); expect(more).toHaveFocus();
     fireEvent.keyDown(more, { key: "Enter" });
     expect(mock.source).not.toHaveBeenCalled(); expect(mock.push).not.toHaveBeenCalled();
     fireEvent.click(more);

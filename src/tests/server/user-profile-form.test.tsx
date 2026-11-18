@@ -62,4 +62,29 @@ describe("个人资料表单", () => {
     await waitFor(() => expect(refresh).toHaveBeenCalled());
     expect(signOut).not.toHaveBeenCalled();
   });
+  it("保存失败保留姓名和手机号草稿，重试携带原版本", async () => {
+    save.mockRejectedValueOnce(new Error("版本已经变化"));
+    render(<ProfileBasicsForm profile={profile} />);
+    fireEvent.change(screen.getByLabelText("姓名"), { target: { value: "保留的姓名" } });
+    fireEvent.click(screen.getByRole("button", { name: "修改" }));
+    fireEvent.change(screen.getByLabelText("手机号"), { target: { value: "13900000000" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存基本资料" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole("button", { name: "保存基本资料" })).toHaveAttribute("aria-disabled", "false"));
+    expect(screen.getByLabelText("姓名")).toHaveValue("保留的姓名");
+    expect(screen.getByLabelText("手机号")).toHaveValue("13900000000");
+    fireEvent.click(screen.getByRole("button", { name: "保存基本资料" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+    expect(save.mock.calls[1][0]).toMatchObject({ name: "保留的姓名", phone: "13900000000", expectedUpdatedAt: profile.updatedAt });
+  });
+  it("取消手机号修改不提交已取消草稿", async () => {
+    render(<ProfileBasicsForm profile={profile} />);
+    fireEvent.click(screen.getByRole("button", { name: "修改" }));
+    fireEvent.change(screen.getByLabelText("手机号"), { target: { value: "13900000000" } });
+    fireEvent.click(screen.getByRole("button", { name: "取消手机号修改" }));
+    fireEvent.click(screen.getByRole("button", { name: "保存基本资料" }));
+    await waitFor(() => expect(save).toHaveBeenCalled());
+    expect(save.mock.calls[0][0].phone).toBeUndefined();
+  });
+
 });

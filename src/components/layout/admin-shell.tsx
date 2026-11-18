@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Avatar, Button, Nav, Tag } from "@douyinfe/semi-ui";
+import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
   Archive,
@@ -92,6 +93,7 @@ export function AdminShell({
   runtimeMode?: RuntimeMode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const personal = runtimeMode === "PERSONAL";
   const visibleNavigation = adminNavigation
     .map((group) => ({
@@ -114,37 +116,22 @@ export function AdminShell({
               <div className="brand-sub truncate">{personal ? firmName : `${firmName} · 组织 · 规则 · 接入 · 安全`}</div>
             </div>
           </Link>
-          <nav className="nav overflow-y-auto">
-            {visibleNavigation.map((group) => (
-              <div key={group.label}>
-                <div className="nav-section-label admin-nav-label">{group.label}</div>
-                {group.items.map((item) => {
-                  const active = isActive(pathname, item.href);
-                  return (
-                    <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={cn("nav-item no-underline", active && "active")}>
-                      <item.icon className="ic" strokeWidth={1.8} />
-                      <span className="truncate">{personal && item.href === "/admin" ? "设置概览" : item.label}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            ))}
-          </nav>
+          <Nav defaultOpenKeys={visibleNavigation.map(group => group.label)} aria-label="管理项目" style={{ width: "100%", flex: 1, minHeight: 0, overflowY: "auto" }} selectedKeys={visibleNavigation.flatMap(group => group.items).filter(item => isActive(pathname, item.href)).map(item => item.href)}>
+            {visibleNavigation.map(group => <Nav.Sub key={group.label} itemKey={group.label} text={group.label}>
+              {group.items.map(item => <Nav.Item key={item.href} itemKey={item.href} link={item.href} tabIndex={-1}
+                linkOptions={{ tabIndex: 0, onKeyPress: event => event.stopPropagation(), "aria-current": isActive(pathname, item.href) ? "page" : undefined,
+                  onClick: event => { if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); router.push(item.href); } }
+                }} icon={<item.icon size={18} />} text={personal && item.href === "/admin" ? "设置概览" : item.label} />)}
+            </Nav.Sub>)}
+          </Nav>
           <div className="nav-bottom">
             <div className="user-card">
-              {user.avatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={user.avatar} alt={user.name} className="h-[27px] w-[27px] rounded-full object-cover" />
-              ) : (
-                <span className="avatar av-navy">{initial}</span>
-              )}
+              <Avatar size="extra-extra-small" src={user.avatar || undefined} alt={user.name}>{initial}</Avatar>
               <div className="user-meta">
                 <div className="user-name truncate">{user.name}</div>
                 <div className="user-role truncate">{personal ? "个人工作区" : `${isSystemAdmin ? "超级管理员" : user.roleName} · 系统管理模式`}</div>
               </div>
-              {!personal && <button type="button" onClick={() => signOut({ callbackUrl: "/login" })} className="btn btn-ghost btn-icon btn-sm" aria-label="退出登录" title="退出登录">
-                <LogOut />
-              </button>}
+              {!personal && <Button htmlType="button" onClick={() => void signOut({ callbackUrl: "/login" })} theme="borderless" type="tertiary" size="small" aria-label="退出登录" title="退出登录" icon={<LogOut size={16} />} />}
             </div>
           </div>
         </div>
@@ -153,7 +140,7 @@ export function AdminShell({
       <div className="md:pl-[228px]">
         <div className="admin-strip sticky top-0 z-20">
           <ShieldCheck className="h-4 w-4 shrink-0" strokeWidth={1.8} />
-          <span className="badge">{personal ? "工作区设置" : "系统管理模式"}</span>
+          <Tag>{personal ? "工作区设置" : "系统管理模式"}</Tag>
           {!personal && <span className="hidden truncate sm:inline" style={{ color: "rgba(255,255,255,0.55)" }}>当前修改影响全所规则，保存将记录审计</span>}
           <Link href="/" className="back no-underline">
             返回业务系统

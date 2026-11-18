@@ -4,21 +4,11 @@
  * 墨案顶栏（docs/mockup/v4 .topbar）：⌘K 搜索框 / 通知 / 按页主操作 / 用户胶囊。
  */
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { Avatar, Button } from "@douyinfe/semi-ui";
 import { useWorkspaceActor } from "@/components/workspace-actor-provider";
-import { Search, ChevronDown, Plus, LogOut, Settings as SettingsIcon, Menu, ShieldCheck, ScanSearch } from "lucide-react";
-import { roleDisplayName } from "@/lib/roles/catalog";
-import { canEnterAdminWorkspace } from "@/lib/auth/system-role";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+import { Search, ChevronDown, Plus, Menu, ScanSearch } from "lucide-react";
+import { WorkspaceAccountMenu } from "./workspace-account-menu";
 import { NotificationPopover } from "@/components/layout/notification-popover";
 import { SmsPopover } from "@/components/layout/sms-popover";
 import { SearchDialog } from "@/components/layout/search-dialog";
@@ -32,7 +22,6 @@ export function Topbar({ onMobileMenuToggle, userAvatar }: { onMobileMenuToggle?
   const pageAction = useTopbarActionValue();
   const personal = user?.runtimeMode === "PERSONAL";
   const displayName = user?.name || (personal ? "本机操作者" : "");
-  const roleLabel = personal ? "个人工作区" : user?.role ? roleDisplayName(user) : "";
 
   const canCreateIntake = user ? hasCustomPermission(user as Parameters<typeof hasCustomPermission>[0], "intakes.create") : false;
   const canReadMatters = user ? hasCustomPermission(user as Parameters<typeof hasCustomPermission>[0], "matters.write") : false;
@@ -41,16 +30,14 @@ export function Topbar({ onMobileMenuToggle, userAvatar }: { onMobileMenuToggle?
   return (
     <header className="topbar ll-material">
       {onMobileMenuToggle ? (
-        <button onClick={onMobileMenuToggle} className="btn btn-secondary btn-icon md:hidden" aria-label="打开菜单">
-          <Menu strokeWidth={1.8} />
-        </button>
+        <Button htmlType="button" onClick={onMobileMenuToggle} theme="borderless" type="tertiary" className="md:hidden" aria-label="打开菜单" icon={<Menu size={18} />} />
       ) : null}
 
-      <button type="button" onClick={() => setSearchOpen(true)} className="searchbox min-w-0 flex-1 text-left font-[inherit] sm:flex-initial" aria-label="全局搜索（⌘K）">
-        <Search className="h-[15px] w-[15px] shrink-0" strokeWidth={1.8} />
-        <span className="flex-1 truncate">搜索案件、客户、材料正文…</span>
-        <span className="kbd hidden sm:inline-flex">⌘K</span>
-      </button>
+      <Button htmlType="button" onClick={() => setSearchOpen(true)} theme="light" type="tertiary"
+        className="min-w-0" aria-label="全局搜索（⌘K）" icon={<Search size={16} />}>
+        <span className="truncate">搜索案件、客户、材料正文…</span>
+        <kbd className="ml-3 hidden sm:inline">⌘K</kbd>
+      </Button>
 
       <div className="hidden flex-1 sm:block" />
 
@@ -61,61 +48,21 @@ export function Topbar({ onMobileMenuToggle, userAvatar }: { onMobileMenuToggle?
       {canCreateIntake || action ? (
         <div className="tb-actions">
           {canCreateIntake ? (
-            <Link href="/conflicts" className="btn btn-secondary" title="收案前查一查本所有没有相关记录" aria-label="冲突预检">
-              <ScanSearch strokeWidth={1.9} />
-              <span className="hidden lg:inline">冲突预检</span>
-            </Link>
+            <Button htmlType="button" onClick={() => router.push("/conflicts")} theme="light" type="tertiary" title="收案前查一查本所有没有相关记录" aria-label="冲突预检" icon={<ScanSearch size={18} />}><span className="hidden lg:inline">冲突预检</span></Button>
           ) : null}
           {action ? (
-            <button type="button" onClick={action.onClick} disabled={action.disabled} className="btn btn-primary disabled:opacity-50" aria-label={action.label}>
-              <Plus strokeWidth={2.2} />
-              <span className="hidden sm:inline">{action.label}</span>
-            </button>
+            <Button htmlType="button" onClick={action.onClick} disabled={action.disabled} theme="solid" aria-label={action.label} icon={<Plus size={18} />}><span className="hidden sm:inline">{action.label}</span></Button>
           ) : null}
         </div>
       ) : null}
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button type="button" className="ml-1 hidden h-[38px] items-center gap-2 rounded-full border border-[var(--bd-hair)] bg-card py-1 pl-1 pr-2.5 font-[inherit] shadow-[var(--sh-card)] transition-colors hover:bg-[var(--bg-hover)] sm:flex">
-            {userAvatar ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={userAvatar} alt={displayName} className="h-[27px] w-[27px] rounded-full object-cover" />
-            ) : (
-              <span className="avatar av-teal">{displayName.charAt(0) || "?"}</span>
-            )}
-            <span className="text-[13px] font-semibold text-[var(--t-primary)]">{displayName || "…"}</span>
-            <ChevronDown className="h-3 w-3 text-[var(--t-muted)]" strokeWidth={2} />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-52">
-          <DropdownMenuLabel className="text-xs font-normal text-[var(--t-muted)]">
-            {displayName ? `${displayName} · ${roleLabel}` : "加载中…"}
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/settings/profile" className="cursor-pointer">
-                <SettingsIcon />
-                个人设置
-              </Link>
-            </DropdownMenuItem>
-          {personal || canEnterAdminWorkspace(user ?? undefined) ? (
-            <DropdownMenuItem asChild>
-              <a href="/admin" target="_blank" rel="noopener" className="cursor-pointer">
-                <ShieldCheck />
-                {personal ? "工作区设置" : "管理后台"}
-              </a>
-            </DropdownMenuItem>
-          ) : null}
-          {!personal && <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => signOut({ callbackUrl: "/login" })} className="cursor-pointer text-[var(--red)] focus:text-[var(--red)]">
-              <LogOut />
-              退出登录
-            </DropdownMenuItem>
-          </>}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <WorkspaceAccountMenu position="bottomRight">
+        <Button htmlType="button" theme="borderless" type="tertiary" className="ml-1 hidden sm:inline-flex" aria-label="账户菜单" icon={
+          <Avatar size="extra-extra-small" src={userAvatar || undefined} alt={displayName}>{displayName.charAt(0) || "?"}</Avatar>
+        }>
+          {displayName || "…"}<ChevronDown size={12} className="ml-2" />
+        </Button>
+      </WorkspaceAccountMenu>
 
       <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
     </header>

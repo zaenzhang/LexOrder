@@ -17,9 +17,9 @@ describe("待我处理的审批等待标签", () => {
     };
     render(<WorkQueueCard queue={queue} alerts={[]} />);
     const unknown = screen.getByRole("link", { name: /未知时间申请/ });
-    expect(within(unknown).getByText("提交时间未记录")).not.toHaveClass("d-red");
+    expect(within(unknown).getByText("提交时间未记录").closest(".semi-tag")).not.toHaveClass("semi-tag-red-light");
     expect(within(unknown).queryByText("今日")).not.toBeInTheDocument();
     expect(within(screen.getByRole("link", { name: /今日申请/ })).getByText("今日")).toBeVisible();
-    expect(within(screen.getByRole("link", { name: /等待申请/ })).getByText("等待 2 天")).toHaveClass("d-red");
+    expect(within(screen.getByRole("link", { name: /等待申请/ })).getByText("等待 2 天").closest(".semi-tag")).toHaveClass("semi-tag-red-light");
   });
 });
