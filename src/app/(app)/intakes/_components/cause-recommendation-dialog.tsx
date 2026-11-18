@@ -9,7 +9,7 @@ import {
   DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { Button } from "@douyinfe/semi-ui";
 import type {
   CauseRecommendation,
   CauseConfidence
@@ -64,7 +64,7 @@ export function CauseRecommendationDialog({
             <div className="flex flex-col items-center gap-3 py-8 text-sm">
               <p className="text-center text-[var(--red)]">{errorMessage}</p>
               {onRetry && (
-                <Button size="sm" variant="outline" onClick={onRetry}>
+                <Button size="small" theme="outline" onClick={onRetry}>
                   重试
                 </Button>
               )}
@@ -109,9 +109,9 @@ export function CauseRecommendationDialog({
 
         <DialogFooter className="border-t border-border px-5 py-2.5">
           <Button
-            type="button"
-            variant="ghost"
-            size="sm"
+            htmlType="button"
+            theme="borderless"
+            size="small"
             onClick={() => onOpenChange(false)}
           >
             <X className="h-3.5 w-3.5" />

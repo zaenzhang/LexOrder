@@ -10,8 +10,8 @@ import type { z } from "zod";
  * 标题自动生成、委托方建档查重（身份持续唯一）、元典企业回填、起诉状 OCR 识别对方主体、
  * AI 案由推荐、委托合同加密上传。提交后自动携带全部主体发起冲突检索（与收案详情同一入口）。
  */
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useForm, useFieldArray, FormProvider, useWatch, type FieldErrors, type FieldPath } from "react-hook-form";
+import { useId, useEffect, useMemo, useRef, useState, useTransition, type ChangeEvent } from "react";
+import { useForm, useFieldArray, FormProvider, useWatch, type FieldErrors, type FieldPath, type RegisterOptions } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { useWorkspaceActor } from "@/components/workspace-actor-provider";
@@ -19,8 +19,7 @@ import { toast } from "sonner";
 import { AlertTriangle, ChevronDown, ChevronRight, FileText, Loader2, Paperclip, Plus, ScanLine, Sparkles, X } from "lucide-react";
 import type { MatterCategory, ProcedureType, LitigationStanding, FeeType, PartyRole, BarFilingType, ClientType } from "@prisma/client";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button, ConfigProvider, Input, Popover, Radio, RadioGroup, Select, TextArea } from "@douyinfe/semi-ui";
 import { ColleaguePicker } from "@/components/matters/colleague-picker";
 import {
   matterCategoryLabel,
@@ -161,6 +160,7 @@ export function IntakeWizard({
   editing?: {id:string;revision:number;values:Partial<IntakeCreateInput>};
 }) {
   const router = useRouter();
+  const fieldId = useId();
   const actor = useWorkspaceActor();
   const [step, setStep] = useState(0);
   const [isPending, startTransition] = useTransition();
@@ -170,6 +170,9 @@ export function IntakeWizard({
   const fileRef = useRef<HTMLInputElement>(null);
   const pleadingRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [colleaguesOpen, setColleaguesOpen] = useState(false);
   const [ocrPending, setOcrPending] = useState(false);
   const [aiRecOpen, setAiRecOpen] = useState(false);
   const [aiRecLoading, setAiRecLoading] = useState(false);
@@ -188,6 +191,12 @@ export function IntakeWizard({
 
   const watchedValues = useWatch({ control });
   const watch = <T = any,>(path: string) => readFormPath<T>(watchedValues, path);
+
+  // Semi 输入首参为值，RHF 的原生事件仍负责转换、校验及 dirty 状态。
+  const inputProps = (name: FieldPath<z.input<typeof intakeCreateSchema>>, options?: RegisterOptions<z.input<typeof intakeCreateSchema>>) => {
+    const field = register(name, options);
+    return { ...field, value: String(watch(name) ?? ""), onChange: (_value: string, event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => { void field.onChange(event); } };
+  };
 
   const category = watch<MatterCategory>("category") ?? "CIVIL_COMMERCIAL";
   const firstProcedureType = watch<ProcedureType | undefined>("firstProcedureType");
@@ -221,6 +230,13 @@ export function IntakeWizard({
     if (!open || editing) return;
     reset({ ...freshDefaults(), ownerUserId: actor?.id ?? "" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      setDropdownOpen(false);
+      setColleaguesOpen(false);
+    }
   }, [open]);
 
   // 客户档案入口：打开时预关联该客户（仅在尚未选择委托方时带入）
@@ -352,7 +368,7 @@ export function IntakeWizard({
   }
 
   async function performSubmit(values: IntakeCreateInput) {
-    let savedId=editing?.id;
+    let savedId: string | undefined;
     try {
       const res = editing ? await saveIntakeRevision(editing.id,editing.revision,values) : await createIntake(values);
       savedId=res.id;
@@ -600,7 +616,8 @@ export function IntakeWizard({
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!isPending) onOpenChange(o); }}>
-      <SheetContent side="right" className="mo-intake flex w-full flex-col gap-0 p-0 sm:max-w-[780px] [&>button]:hidden" onOpenAutoFocus={(e) => e.preventDefault()}>
+      <SheetContent ref={sheetRef} onEscapeKeyDown={(event) => { if (dropdownOpen || colleaguesOpen) event.preventDefault(); }} side="right" className="mo-intake flex w-full flex-col gap-0 p-0 sm:max-w-[780px] [&>button]:hidden" onOpenAutoFocus={(e) => e.preventDefault()}>
+        <ConfigProvider getPopupContainer={() => sheetRef.current!}>
         <FormProvider {...methods}>
           <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="flex min-h-0 flex-1 flex-col" noValidate>
             <div className="id-head">
@@ -609,9 +626,9 @@ export function IntakeWizard({
                   <span className="id-title">{editing?"补正收案资料":"新建收案"}</span>
                 </SheetTitle>
                 <span className="badge b-white">{editing?"保存后复核并重新提交":"提交后进入收案审批"}</span>
-                <button type="button" className="btn btn-ghost btn-sm btn-icon id-close" onClick={() => onOpenChange(false)} aria-label="关闭" disabled={isPending}>
+                <Button htmlType="button" theme="borderless" size="small" className="id-close" onClick={() => onOpenChange(false)} aria-label="关闭" disabled={isPending}>
                   <X />
-                </button>
+                </Button>
               </div>
               <SheetDescription className="sr-only">四步完成收案登记：收案信息、当事人与冲突、收费与团队、确认提交</SheetDescription>
               <div className="id-steps">
@@ -649,10 +666,10 @@ export function IntakeWizard({
                       <div className="fitem">
                         <label className="flabel">{nameLabel}</label>
                         {(() => {
-                          const titleReg = register("title");
+                          const titleReg = inputProps("title");
                           return (
                             <div className="relative">
-                              <input className="finput pr-28" placeholder="留空时按「委托方与对方 + 案由」自动生成" {...titleReg} onChange={(e) => { titleReg.onChange(e); setTitleTouched(true); }} />
+                              <Input inputStyle={{ paddingRight: 140 }} placeholder="留空时按「委托方与对方 + 案由」自动生成" {...titleReg} onChange={(value, event) => { titleReg.onChange(value, event); setTitleTouched(true); }} />
                               {!titleTouched ? <span className="t-xs t-faint pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">按当事人与案由生成</span> : null}
                             </div>
                           );
@@ -686,62 +703,52 @@ export function IntakeWizard({
                               <div className="min-w-0 flex-1">
                                 <CauseCombobox category={category} procedureType={firstProcedureType} value={watch("causeId") || ""} disabled={!firstProcedureType} placeholder={firstProcedureType ? "点击选择案由" : "请先选择代理程序"} onChange={(id, name) => { setValue("causeId", id, { shouldDirty: true }); setCauseName(name); }} />
                               </div>
-                              <button type="button" className="btn btn-secondary shrink-0" onClick={() => setAiManualOpen(true)} disabled={!firstProcedureType} title="描述案情，由 AI 推荐规范案由">
+                              <Button htmlType="button" theme="light" onClick={() => setAiManualOpen(true)} disabled={!firstProcedureType} title="描述案情，由 AI 推荐规范案由">
                                 <Sparkles />
                                 AI 推荐
-                              </button>
+                              </Button>
                             </div>
                             {causeName ? <div className="t-xs t-mute" style={{ marginTop: 5 }}>已选：{causeName}</div> : watchedCauseFree ? <div className="t-xs t-mute" style={{ marginTop: 5 }}>识别案由：{watchedCauseFree}（请选择规范案由）</div> : null}
                           </div>
                           <div className="fitem" style={{ maxWidth: 180 }}>
                             <label className="flabel">收案日期</label>
-                            <input type="date" className="finput font-mono" value={dateInput(receivedAt)} onChange={(e) => setValue("receivedAt", e.target.value ? new Date(e.target.value) : undefined, { shouldDirty: true })} />
+                            <Input type="date" value={dateInput(receivedAt)} onChange={(value) => setValue("receivedAt", value ? new Date(value) : undefined, { shouldDirty: true })} />
                           </div>
                         </div>
                         <div className="frow">
                           <div className="fitem">
                             <label className="flabel">管辖地</label>
-                            <JurisdictionSelect value={jurisdiction} onChange={handleJurisdictionChange} triggerClassName="h-9" />
+                            <JurisdictionSelect onDropdownVisibleChange={setDropdownOpen} value={jurisdiction} onChange={handleJurisdictionChange} triggerClassName="h-9" />
                           </div>
                           <div className="fitem">
-                            <label className="flabel">争议解决机构</label>
-                            <Select value={watch("firstAgency") || ""} onValueChange={handleFirstAgencyChange} disabled={agencyOpts.length === 0}>
-                              <SelectTrigger className="h-9"><SelectValue placeholder={agencyOpts.length ? "选择机构" : "请先选择程序与管辖地"} /></SelectTrigger>
-                              <SelectContent>
-                                {agencyOpts.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
+                            <label id={`${fieldId}-agency`} className="flabel">争议解决机构</label>
+                            <Select aria-labelledby={`${fieldId}-agency`} style={{ width: "100%" }} value={watch("firstAgency") || undefined} onChange={(value) => handleFirstAgencyChange(value as string)} disabled={agencyOpts.length === 0}
+                              placeholder={agencyOpts.length ? "选择机构" : "请先选择程序与管辖地"} optionList={agencyOpts.map((value) => ({ value, label: value }))} onDropdownVisibleChange={setDropdownOpen} />
                           </div>
                         </div>
                         <div className="frow">
                           <div className="fitem" style={{ maxWidth: 200 }}>
                             <label className="flabel">标的额（元）</label>
-                            <input type="number" inputMode="decimal" step="0.01" placeholder="0.00" className="finput font-mono" {...register("claimAmount", { setValueAs: (v) => (v === "" ? undefined : Number(v)) })} />
+                            <Input type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...inputProps("claimAmount", { setValueAs: (v) => (v === "" ? undefined : Number(v)) })} />
                             {errors.claimAmount?.message ? <div className="mt-1 text-[11px] text-[var(--red)]">{errors.claimAmount.message}</div> : null}
                           </div>
                           <div className="fitem">
                             <label className="flabel">标的描述（非金钱标的或其他诉求）</label>
-                            <input className="finput" placeholder="如：请求确认合同有效 / 请求停止侵害" {...register("claimDescription")} />
+                            <Input placeholder="如：请求确认合同有效 / 请求停止侵害" {...inputProps("claimDescription")} />
                           </div>
                         </div>
                         <div className="frow" style={{ marginBottom: 0 }}>
                           <div className="fitem">
-                            <label className="flabel">是否需向律协备案</label>
-                            <Select value={watch("barFiling") ?? ""} onValueChange={(v) => setValue("barFiling", v as BarFilingType, { shouldDirty: true })}>
-                              <SelectTrigger className="h-9"><SelectValue placeholder="选择" /></SelectTrigger>
-                              <SelectContent>{BAR_FILING_OPTIONS.map((b) => <SelectItem key={b} value={b}>{barFilingLabel[b]}</SelectItem>)}</SelectContent>
-                            </Select>
+                            <label id={`${fieldId}-bar-filing`} className="flabel">是否需向律协备案</label>
+                            <Select aria-labelledby={`${fieldId}-bar-filing`} style={{ width: "100%" }} value={watch("barFiling") ?? undefined} onChange={(value) => setValue("barFiling", value as BarFilingType, { shouldDirty: true })}
+                              placeholder="选择" optionList={BAR_FILING_OPTIONS.map((value) => ({ value, label: barFilingLabel[value] }))} onDropdownVisibleChange={setDropdownOpen} />
                           </div>
                           <div className="fitem">
                             <label className="flabel">是否反诉</label>
-                            <div className="chip-set">
-                              {[false, true].map((v) => (
-                                <button key={String(v)} type="button" onClick={() => setValue("counterclaim", v, { shouldDirty: true })} className={cn("chip", Boolean(watch("counterclaim")) === v && "active")}>
-                                  {Boolean(watch("counterclaim")) === v ? <span className="cd" /> : null}
-                                  {v ? "是" : "否"}
-                                </button>
-                              ))}
-                            </div>
+                            <RadioGroup aria-label="是否反诉" type="button" value={Boolean(watch("counterclaim")) ? "yes" : "no"}
+                              onChange={(event) => setValue("counterclaim", event.target.value === "yes", { shouldDirty: true })}>
+                              <Radio value="no">否</Radio><Radio value="yes">是</Radio>
+                            </RadioGroup>
                           </div>
                         </div>
                       </>
@@ -751,39 +758,37 @@ export function IntakeWizard({
                       <>
                         <div className="frow">
                           <div className="fitem">
-                            <label className="flabel">业务类型</label>
-                            <Select value={watch("businessType") || ""} onValueChange={(v) => setValue("businessType", v, { shouldDirty: true })}>
-                              <SelectTrigger className="h-9"><SelectValue placeholder="选择业务类型" /></SelectTrigger>
-                              <SelectContent>{PROJECT_BUSINESS_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-                            </Select>
+                            <label id={`${fieldId}-business-type`} className="flabel">业务类型</label>
+                            <Select aria-labelledby={`${fieldId}-business-type`} style={{ width: "100%" }} value={watch("businessType") || undefined} onChange={(value) => setValue("businessType", value as string, { shouldDirty: true })}
+                              placeholder="选择业务类型" optionList={PROJECT_BUSINESS_TYPES.map((value) => ({ value, label: value }))} onDropdownVisibleChange={setDropdownOpen} />
                           </div>
                           <div className="fitem">
                             <label className="flabel">项目金额（元）</label>
-                            <input type="number" inputMode="decimal" step="0.01" placeholder="0.00" className="finput font-mono" {...register("claimAmount", { setValueAs: (v) => (v === "" ? undefined : Number(v)) })} />
+                            <Input type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...inputProps("claimAmount", { setValueAs: (v) => (v === "" ? undefined : Number(v)) })} />
                           </div>
                           <div className="fitem" style={{ maxWidth: 160 }}>
                             <label className="flabel">收案日期</label>
-                            <input type="date" className="finput font-mono" value={dateInput(receivedAt)} onChange={(e) => setValue("receivedAt", e.target.value ? new Date(e.target.value) : undefined, { shouldDirty: true })} />
+                            <Input type="date" value={dateInput(receivedAt)} onChange={(value) => setValue("receivedAt", value ? new Date(value) : undefined, { shouldDirty: true })} />
                           </div>
                         </div>
                         <div className="frow">
                           <div className="fitem">
                             <label className="flabel">起始时间</label>
-                            <input type="date" className="finput font-mono" value={dateInput(watch("serviceStart"))} onChange={(e) => setValue("serviceStart", e.target.value ? new Date(e.target.value) : undefined, { shouldDirty: true })} />
+                            <Input type="date" value={dateInput(watch("serviceStart"))} onChange={(value) => setValue("serviceStart", value ? new Date(value) : undefined, { shouldDirty: true })} />
                           </div>
                           <div className="fitem">
                             <label className="flabel">结束时间</label>
-                            <input type="date" className="finput font-mono" value={dateInput(watch("serviceEnd"))} onChange={(e) => setValue("serviceEnd", e.target.value ? new Date(e.target.value) : undefined, { shouldDirty: true })} />
+                            <Input type="date" value={dateInput(watch("serviceEnd"))} onChange={(value) => setValue("serviceEnd", value ? new Date(value) : undefined, { shouldDirty: true })} />
                           </div>
                         </div>
                         <div className="frow" style={{ marginBottom: 0 }}>
                           <div className="fitem" style={{ flex: 2 }}>
                             <label className="flabel">服务范围 / 内容</label>
-                            <input className="finput" placeholder="如：尽职调查范围、合同审查清单、交易结构设计…" {...register("serviceScope")} />
+                            <Input placeholder="如：尽职调查范围、合同审查清单、交易结构设计…" {...inputProps("serviceScope")} />
                           </div>
                           <div className="fitem">
                             <label className="flabel">交付成果</label>
-                            <input className="finput" placeholder="如：法律意见书 / 尽调报告" {...register("deliverables")} />
+                            <Input placeholder="如：法律意见书 / 尽调报告" {...inputProps("deliverables")} />
                           </div>
                         </div>
                       </>
@@ -798,27 +803,27 @@ export function IntakeWizard({
                           </div>
                           <div className="fitem" style={{ maxWidth: 160 }}>
                             <label className="flabel">收案日期</label>
-                            <input type="date" className="finput font-mono" value={dateInput(receivedAt)} onChange={(e) => setValue("receivedAt", e.target.value ? new Date(e.target.value) : undefined, { shouldDirty: true })} />
+                            <Input type="date" value={dateInput(receivedAt)} onChange={(value) => setValue("receivedAt", value ? new Date(value) : undefined, { shouldDirty: true })} />
                           </div>
                         </div>
                         <div className="frow">
                           <div className="fitem">
                             <label className="flabel">顾问期限 · 起</label>
-                            <input type="date" className="finput font-mono" value={dateInput(watch("serviceStart"))} onChange={(e) => setValue("serviceStart", e.target.value ? new Date(e.target.value) : undefined, { shouldDirty: true })} />
+                            <Input type="date" value={dateInput(watch("serviceStart"))} onChange={(value) => setValue("serviceStart", value ? new Date(value) : undefined, { shouldDirty: true })} />
                           </div>
                           <div className="fitem">
                             <label className="flabel">顾问期限 · 止</label>
-                            <input type="date" className="finput font-mono" value={dateInput(watch("serviceEnd"))} onChange={(e) => setValue("serviceEnd", e.target.value ? new Date(e.target.value) : undefined, { shouldDirty: true })} />
+                            <Input type="date" value={dateInput(watch("serviceEnd"))} onChange={(value) => setValue("serviceEnd", value ? new Date(value) : undefined, { shouldDirty: true })} />
                           </div>
                           <div className="fitem">
                             <label className="flabel">对接电话</label>
-                            <input className="finput font-mono" placeholder="对接人电话" {...register("contactPhone")} />
+                            <Input placeholder="对接人电话" {...inputProps("contactPhone")} />
                           </div>
                         </div>
                         <div className="frow" style={{ marginBottom: 0 }}>
                           <div className="fitem">
                             <label className="flabel">服务范围 / 内容</label>
-                            <input className="finput" placeholder="如：日常法律咨询、合同审查、专项法律意见…" {...register("serviceScope")} />
+                            <Input placeholder="如：日常法律咨询、合同审查、专项法律意见…" {...inputProps("serviceScope")} />
                           </div>
                         </div>
                       </>
@@ -835,9 +840,9 @@ export function IntakeWizard({
                     <span className="req">建档时自动查重：名称 + 证件号码两级匹配</span>
                     {clientId ? (
                       <span className="aside">
-                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setValue("clientId", "", { shouldDirty: true }); setValue("parties.0.name", "", { shouldDirty: true }); setDupDismissed(false); }}>
+                        <Button htmlType="button" theme="borderless" size="small" onClick={() => { setValue("clientId", "", { shouldDirty: true }); setValue("parties.0.name", "", { shouldDirty: true }); setDupDismissed(false); }}>
                           换一个客户
-                        </button>
+                        </Button>
                       </span>
                     ) : null}
                   </div>
@@ -864,14 +869,14 @@ export function IntakeWizard({
                           )}
                           <div className="match-acts">
                             {dupResult.idNumberDuplicate && !dupResult.idNumberDuplicate.deletedAt ? (
-                              <button type="button" className="btn btn-primary btn-sm" onClick={() => { const d = dupResult.idNumberDuplicate!; pickExistingClient(d.id, d.name, d.type, true); }}>
+                              <Button htmlType="button" theme="solid" size="small" onClick={() => { const d = dupResult.idNumberDuplicate!; pickExistingClient(d.id, d.name, d.type, true); }}>
                                 关联已有客户
-                              </button>
+                              </Button>
                             ) : null}
                             {dupResult.idNumberDuplicate ? (
                               <a className="btn btn-secondary btn-sm" href={`/clients/${dupResult.idNumberDuplicate.id}`} target="_blank" rel="noreferrer">查看档案</a>
                             ) : null}
-                            {!dupResult.idNumberExists ? <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDupDismissed(true)}>仍要新建</button> : null}
+                            {!dupResult.idNumberExists ? <Button htmlType="button" theme="borderless" size="small" onClick={() => setDupDismissed(true)}>仍要新建</Button> : null}
                           </div>
                         </div>
                       </div>
@@ -880,6 +885,7 @@ export function IntakeWizard({
                     <div className="mb-2.5">
                       <label className="flabel">选择已有客户或输入新客户<span className="star">*</span></label>
                       <ClientCombobox
+                        onDropdownVisibleChange={setDropdownOpen}
                         clientId={clientId}
                         clientName={party0Name}
                         clientType={watch("parties.0.partyType") === "ORGANIZATION" ? "COMPANY" : "INDIVIDUAL"}
@@ -913,7 +919,7 @@ export function IntakeWizard({
                         defaultExpanded={!clientId}
                         roleSlot={<span className="badge b-teal" style={{ fontSize: 10 }}>{clientLabel}</span>}
                         badge={clientId ? <span className="badge b-teal" style={{ fontSize: 10 }}>已关联档案</span> : null}
-                        nameSlot={<input className="finput" value={party0Name} readOnly aria-readonly title="请在上方客户选择框中修改" />}
+                        nameSlot={<Input value={party0Name} readOnly aria-readonly title="请在上方客户选择框中修改" />}
                       />
                     ) : null}
                   </div>
@@ -934,10 +940,10 @@ export function IntakeWizard({
                             <div className="match-desc" style={{ color: "var(--t-secondary)" }}>我方为被动方，可上传对方起诉状或申请书（JPG / PNG / WebP / PDF，≤ 20MB），AI 抽取对方主体、诉求与法院，识别结果须人工核对。</div>
                             <div className="match-acts">
                               <input ref={pleadingRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePleadingFile(f); }} />
-                              <button type="button" className="btn btn-secondary btn-sm" onClick={() => pleadingRef.current?.click()} disabled={ocrPending}>
+                              <Button htmlType="button" theme="light" size="small" onClick={() => pleadingRef.current?.click()} disabled={ocrPending}>
                                 {ocrPending ? <Loader2 className="animate-spin" /> : <ScanLine />}
                                 上传识别
-                              </button>
+                              </Button>
                             </div>
                           </div>
                         </div>
@@ -955,27 +961,20 @@ export function IntakeWizard({
                             onRemove={() => removeParty(idx)}
                             errors={errors as never}
                             logoTone={role === "OPPOSING_PARTY" ? "navy" : "slate"}
-                            roleSlot={
-                              <Select value={role} onValueChange={(v) => setValue(`parties.${idx}.role`, v as PartyRole, { shouldDirty: true })}>
-                                <SelectTrigger className="h-[22px] w-auto gap-1 rounded-full px-2 text-[10.5px] font-[550]">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="OPPOSING_PARTY">相对方</SelectItem>
-                                  <SelectItem value="THIRD_PARTY">第三人</SelectItem>
-                                  <SelectItem value="OTHER">关联方</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            }
+                            roleSlot={<>
+                              <span id={`${fieldId}-role-${idx}`} className="sr-only">第 {idx} 位其他当事人角色</span>
+                              <Select aria-labelledby={`${fieldId}-role-${idx}`} size="small" value={role} onChange={(value) => setValue(`parties.${idx}.role`, value as PartyRole, { shouldDirty: true })}
+                                optionList={[{ value: "OPPOSING_PARTY", label: "相对方" }, { value: "THIRD_PARTY", label: "第三人" }, { value: "OTHER", label: "关联方" }]} onDropdownVisibleChange={setDropdownOpen} />
+                            </>}
                             standingLabel={standing ? litigationStandingLabel[standing] : null}
                             standingSlot={standingSelect(standing, oppositeStandingOptions, (v) => setValue(`parties.${idx}.standing`, v, { shouldDirty: true, shouldValidate: true }))}
                           />
                         );
                       })}
-                      <button type="button" className="btn btn-ghost btn-sm" style={{ width: "100%", border: "1px dashed var(--bd-default)", borderRadius: 10, height: 38 }} onClick={() => appendParty(emptyParty("OPPOSING_PARTY", parties.length + 1))}>
+                      <Button htmlType="button" theme="borderless" size="small" style={{ width: "100%", border: "1px dashed var(--bd-default)", borderRadius: 10, height: 38 }} onClick={() => appendParty(emptyParty("OPPOSING_PARTY", parties.length + 1))}>
                         <Plus />
                         {kind === "litigation" ? "添加诉讼对方 / 第三人" : "添加相对方"}
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 ) : null}
@@ -989,26 +988,22 @@ export function IntakeWizard({
                     <div className="frow">
                       <div className="fitem">
                         <label className="flabel">收费方式</label>
-                        <div className="chip-set">
-                          {FEE_TYPES.filter((t) => kind !== "counsel" || t !== "CONTINGENCY").map((t) => (
-                            <button key={t} type="button" onClick={() => setValue("feeType", t, { shouldDirty: true })} className={cn("chip", feeType === t && "active")}>
-                              {feeType === t ? <span className="cd" /> : null}
-                              {feeTypeLabel[t]}
-                            </button>
-                          ))}
-                        </div>
+                        <RadioGroup aria-label="收费方式" type="button" value={feeType}
+                          onChange={(event) => setValue("feeType", event.target.value as FeeType, { shouldDirty: true })}>
+                          {FEE_TYPES.filter((type) => kind !== "counsel" || type !== "CONTINGENCY").map((type) => <Radio key={type} value={type}>{feeTypeLabel[type]}</Radio>)}
+                        </RadioGroup>
                       </div>
                     </div>
                     {feeType ? (
                       <div className="frow">
                         <div className="fitem" style={{ maxWidth: 220 }}>
                           <label className="flabel">{feeType === "TIMED" ? "小时费率（元/时）" : feeType === "CONTINGENCY" ? "基础办案费（元）" : "总金额（元）"}</label>
-                          <input type="number" inputMode="decimal" step="0.01" placeholder="0.00" className="finput font-mono" {...register("feeAmount", { setValueAs: (v) => (v === "" ? undefined : Number(v)) })} />
+                          <Input type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...inputProps("feeAmount", { setValueAs: (v) => (v === "" ? undefined : Number(v)) })} />
                           {errors.feeAmount?.message ? <div className="mt-1 text-[11px] text-[var(--red)]">{errors.feeAmount.message}</div> : null}
                         </div>
                         <div className="fitem">
                           <label className="flabel">{feeType === "TIMED" ? "计费说明 / 结算周期" : "付款节点 / 分期约定"}</label>
-                          <input className="finput" placeholder={feeType === "TIMED" ? "如：按月结算，合伙人 2000 元/时" : feeType === "CONTINGENCY" ? "如：基础费签约付清；风险费到账后 7 日内支付" : "如：签约 40%，开庭前 30%，判决 30%"} {...register("feeSchedule")} />
+                          <Input placeholder={feeType === "TIMED" ? "如：按月结算，合伙人 2000 元/时" : feeType === "CONTINGENCY" ? "如：基础费签约付清；风险费到账后 7 日内支付" : "如：签约 40%，开庭前 30%，判决 30%"} {...inputProps("feeSchedule")} />
                         </div>
                       </div>
                     ) : null}
@@ -1016,7 +1011,7 @@ export function IntakeWizard({
                       <div className="frow">
                         <div className="fitem">
                           <label className="flabel">风险代理收费方式</label>
-                          <textarea rows={3} className="finput !h-auto py-2.5 leading-[1.7]" placeholder="详细描述风险代理收费方式 / 触发条件 / 计提比例" {...register("contingencyTerms")} />
+                          <TextArea rows={3} placeholder="详细描述风险代理收费方式 / 触发条件 / 计提比例" {...inputProps("contingencyTerms")} />
                           {errors.contingencyTerms?.message ? <div className="mt-1 text-[11px] text-[var(--red)]">{errors.contingencyTerms.message}</div> : null}
                         </div>
                       </div>
@@ -1025,7 +1020,7 @@ export function IntakeWizard({
                       <div className="frow" style={{ marginBottom: 0 }}>
                         <div className="fitem">
                           <label className="flabel">费用备注（可选）</label>
-                          <input className="finput" placeholder="如：含差旅 / 含诉讼费垫付" {...register("feeNote")} />
+                          <Input placeholder="如：含差旅 / 含诉讼费垫付" {...inputProps("feeNote")} />
                         </div>
                       </div>
                     ) : (
@@ -1039,25 +1034,19 @@ export function IntakeWizard({
                   <div className="fsec-body">
                     <div className="frow" style={{ marginBottom: 0 }}>
                       <div className="fitem">
-                        <label className="flabel">主办律师</label>
-                        <Select value={ownerUserId ?? ""} onValueChange={(v) => setValue("ownerUserId", v, { shouldDirty: true })}>
-                          <SelectTrigger className="h-9"><SelectValue placeholder="选择主办律师" /></SelectTrigger>
-                          <SelectContent>{colleagues.map((u) => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
-                        </Select>
+                        <label id={`${fieldId}-owner`} className="flabel">主办律师</label>
+                        <Select aria-labelledby={`${fieldId}-owner`} style={{ width: "100%" }} value={ownerUserId || undefined} onChange={(value) => setValue("ownerUserId", value as string, { shouldDirty: true })}
+                          placeholder="选择主办律师" optionList={colleagues.map((user) => ({ value: user.id, label: user.name }))} onDropdownVisibleChange={setDropdownOpen} />
                         {errors.ownerUserId?.message ? <div className="mt-1 text-[11px] text-[var(--red)]">{errors.ownerUserId.message}</div> : null}
                       </div>
                       <div className="fitem">
                         <label className="flabel">协办人员（可多选）</label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button type="button" className="finput justify-between text-left">
-                              <span className="truncate">{coUserIds.length === 0 ? <span className="t-faint">选择协办人员</span> : colleagues.filter((u) => coUserIds.includes(u.id)).map((u) => u.name).join("、")}</span>
-                              <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent align="start" portalled={false} className="w-[--radix-popover-trigger-width] p-1.5">
-                            <ColleaguePicker people={colleagues.filter((u) => u.id !== ownerUserId) as TeamColleague[]} selected={coUserIds} onChange={(ids) => setValue("coUserIds", ids, { shouldDirty: true })} />
-                          </PopoverContent>
+                        <Popover trigger="click" position="bottomLeft" visible={colleaguesOpen} onVisibleChange={setColleaguesOpen} closeOnEsc returnFocusOnClose motion={false}
+                          content={<div className="w-72 p-2"><ColleaguePicker people={colleagues.filter((u) => u.id !== ownerUserId) as TeamColleague[]} selected={coUserIds} onChange={(ids) => setValue("coUserIds", ids, { shouldDirty: true })} /></div>}>
+                          <Button htmlType="button" theme="borderless" block aria-expanded={colleaguesOpen} aria-label="选择协办人员">
+                            {coUserIds.length === 0 ? "选择协办人员" : colleagues.filter((u) => coUserIds.includes(u.id)).map((u) => u.name).join("、")}
+                            <ChevronDown className="h-4 w-4" />
+                          </Button>
                         </Popover>
                       </div>
                     </div>
@@ -1073,10 +1062,10 @@ export function IntakeWizard({
                     <span className="req">加密存储，单文件 ≤ 20MB</span>
                     <span className="aside">
                       <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
-                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => fileRef.current?.click()}>
+                      <Button htmlType="button" theme="light" size="small" onClick={() => fileRef.current?.click()}>
                         <Paperclip />
                         添加附件
-                      </button>
+                      </Button>
                     </span>
                   </div>
                   <div className="fsec-body">
@@ -1088,9 +1077,9 @@ export function IntakeWizard({
                           <FileText className="h-4 w-4 text-[var(--teal)]" />
                           <span className="min-w-0 flex-1 truncate text-[12.5px] font-[550]">{f.name}</span>
                           <span className="num-sm t-mute">{Math.max(1, Math.round(f.size / 1024))} KB</span>
-                          <button type="button" className="btn btn-ghost btn-sm btn-icon" onClick={() => setContracts((c) => c.filter((_, j) => j !== i))} aria-label={`移除 ${f.name}`}>
+                          <Button htmlType="button" theme="borderless" size="small" onClick={() => setContracts((c) => c.filter((_, j) => j !== i))} aria-label={`移除 ${f.name}`}>
                             <X />
-                          </button>
+                          </Button>
                         </div>
                       ))
                     )}
@@ -1100,7 +1089,7 @@ export function IntakeWizard({
                 <div className="fsec">
                   <div className="fsec-head"><span className="t">补充说明</span></div>
                   <div className="fsec-body">
-                    <textarea rows={4} className="finput !h-auto py-2.5 leading-[1.7]" placeholder="客户来源、核心诉求、注意事项…" {...register("description")} />
+                    <TextArea rows={4} placeholder="客户来源、核心诉求、注意事项…" {...inputProps("description")} />
                     {errors.description?.message ? <div className="mt-1 text-[11px] text-[var(--red)]">{errors.description.message}</div> : null}
                   </div>
                 </div>
@@ -1141,20 +1130,20 @@ export function IntakeWizard({
                   <Sparkles className="h-3.5 w-3.5" />
                   {editing?"保存后复核冲突并重新送审":"提交时自动进行正式冲突检索"}
                 </span>
-                <button type="button" className="btn btn-ghost" disabled={step === 0 || isPending} onClick={() => setStep((s) => Math.max(0, s - 1))}>
+                <Button htmlType="button" theme="borderless" disabled={step === 0 || isPending} onClick={() => setStep((s) => Math.max(0, s - 1))}>
                   上一步
-                </button>
+                </Button>
                 {step < STEPS.length - 1 ? (
-                  <button key="next-step" type="button" className="btn btn-primary" onClick={next}>
+                  <Button key="next-step" htmlType="button" theme="solid" onClick={next}>
                     下一步 · {STEPS[step + 1]}
                     <ChevronRight />
-                  </button>
+                  </Button>
                 ) : (
-                  <button key="submit-intake" type="submit" className="btn btn-primary" disabled={isPending}>
+                  <Button key="submit-intake" htmlType="submit" theme="solid" disabled={isPending}>
                     {isPending ? <Loader2 className="animate-spin" /> : null}
                     {editing?"保存补正":"提交审批"}
                     <ChevronRight />
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -1169,6 +1158,7 @@ export function IntakeWizard({
           contextHints={[watchedCauseFree ? `OCR 识别案由：${watchedCauseFree}` : "", watch("claimDescription") ? `诉讼请求：${watch("claimDescription")}` : "", otherParties.map(({ idx }) => watch(`parties.${idx}.name`)).filter(Boolean).length ? `对方当事人：${otherParties.map(({ idx }) => watch(`parties.${idx}.name`)).filter(Boolean).join("、")}` : ""].filter(Boolean).join("\n")}
           onSelect={handleAiRecSelect}
         />
+        </ConfigProvider>
       </SheetContent>
     </Sheet>
   );
