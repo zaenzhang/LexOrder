@@ -65,7 +65,7 @@ describe("共用 UI 的操作者来源", () => {
       ["工作台", "/"], ["案件", "/matters"], ["审批", "/approvals"], ["日程", "/schedule"],
       ["客户", "/clients"], ["财务", "/finance"], ["报表", "/reports"]
     ]) {
-      expect(screen.getByRole("link", { name, exact: true })).toHaveAttribute("href", href);
+      expect(screen.getByRole("link", { name })).toHaveAttribute("href", href);
     }
     expect(screen.getByText("个人工作区")).toBeInTheDocument();
     expect(useSession).not.toHaveBeenCalled();
