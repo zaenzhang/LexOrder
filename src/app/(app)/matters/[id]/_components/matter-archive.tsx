@@ -11,7 +11,7 @@ import Link from "next/link";
 import { FileText, Landmark, Pencil, UserRound, Users, Wallet } from "lucide-react";
 import { FieldGrid, FieldItem, InitialAvatar } from "@/components/patterns/moan";
 import { avatarTone } from "@/lib/ui/moan-tones";
-import { feeTypeLabel, litigationStandingLabel, matterCategoryKind, matterCategoryLabel, partyTypeLabel, procedureTypeLabel } from "@/lib/enums";
+import { litigationStandingLabel, matterCategoryKind, matterCategoryLabel, partyTypeLabel, procedureTypeLabel } from "@/lib/enums";
 import { clientIdTypeLabel } from "@/lib/clients/person-id";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { RelatedMattersField } from "./related-matters-field";
@@ -129,8 +129,6 @@ export function MatterArchive({
   matter,
   currentProcedure,
   parties,
-  billings,
-  contractDocs,
   canReadFinance,
   onOpenFinance,
   customFieldDefs,
@@ -146,9 +144,7 @@ export function MatterArchive({
   currentProcedure: Procedure | null;
   parties: PartyRow[];
   /** 合同与补充协议（Billing）；一案一签，追加收费＝新增一条补充协议 */
-  billings: { id: string; title: string; contractAmount: number; schedule: string | null; status: string; signedAt: Date | null }[];
   /** 委托代理合同等合同类材料 */
-  contractDocs: { id: string; name: string; createdAt: Date; mimeType: string | null }[];
   canReadFinance: boolean;
   onOpenFinance: () => void;
   customFieldDefs: React.ComponentProps<typeof CustomFieldsPanel>["defs"];
@@ -302,60 +298,11 @@ export function MatterArchive({
             </Group>
           ) : null}
 
-          <Group icon={Wallet} title="委托与收费" action={<SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={onOpenFinance}>收付与开票</SemiButton>}>
-            <FieldGrid cols={2} className="mo-field-grid-auto">
-              <FieldItem label="收费方式">{matter.intake?.feeType ? feeTypeLabel[matter.intake.feeType] : null}</FieldItem>
-              {canReadFinance ? (
-                <FieldItem label={matter.intake?.feeType === "CONTINGENCY" ? "基础办案费" : "约定收费"} mono>
-                  {matter.intake?.feeAmount ? formatCurrency(Number(matter.intake.feeAmount)) : null}
-                </FieldItem>
-              ) : null}
-              <FieldItem label="付款节点">{dash(matter.intake?.feeSchedule)}</FieldItem>
-              {matter.intake?.feeType === "CONTINGENCY" ? (
-                <FieldItem label="风险收费" wide>
-                  {matter.intake?.contingencyTerms?.trim() ? <span className="whitespace-pre-wrap">{matter.intake.contingencyTerms}</span> : null}
-                </FieldItem>
-              ) : null}
-              {matter.intake?.feeNote?.trim() ? (
-                <FieldItem label="收费说明" wide>
-                  <span className="whitespace-pre-wrap">{matter.intake.feeNote}</span>
-                </FieldItem>
-              ) : null}
-              {/* 一案一签：合同与补充协议并入本模块，不再单独成框（2026-09-18 用户确认） */}
-              {canReadFinance ? (
-                <FieldItem label="委托合同" wide>
-                  {billings.length ? (
-                    <span className="dos-ct">
-                      {billings.map((b) => (
-                        <span key={b.id} className="it">
-                          <span className="nm">{b.title}</span>
-                          <SemiTag size="small" color={b.status === "ACTIVE" ? "teal" : b.status === "CLOSED" ? "grey" : "grey"}>
-                            {b.status === "ACTIVE" ? "执行中" : b.status === "CLOSED" ? "已结束" : "草稿"}
-                          </SemiTag>
-                          <span className="amt">{formatCurrency(b.contractAmount)}</span>
-                          {b.signedAt ? <span className="mt">{formatDate(b.signedAt)} 签署</span> : null}
-                          {b.schedule ? <span className="mt">{b.schedule}</span> : null}
-                        </span>
-                      ))}
-                    </span>
-                  ) : null}
-                </FieldItem>
-              ) : null}
-              {canReadFinance ? <FieldItem label="扫描件" wide>
-                {contractDocs.length ? (
-                  <span className="dos-ct">
-                    {contractDocs.map((d) => (
-                      <a key={d.id} href={`/api/documents/${d.id}/download`} target="_blank" rel="noreferrer">
-                        <FileText className="h-3.5 w-3.5" strokeWidth={1.8} />
-                        <span className="nm">{d.name}</span>
-                        <span className="mt">{formatDate(d.createdAt)}</span>
-                      </a>
-                    ))}
-                  </span>
-                ) : null}
-              </FieldItem> : null}
-            </FieldGrid>
-          </Group>
+          {canReadFinance ? (
+            <Group icon={Wallet} title="委托与收费">
+              <SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={onOpenFinance}>查看委托与财务</SemiButton>
+            </Group>
+          ) : null}
 
           <Group
             icon={FileText}

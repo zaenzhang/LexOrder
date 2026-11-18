@@ -51,11 +51,8 @@ const matter: Props["matter"] = {
 };
 const props: Props = {
   workBoard: null,
-  matter, finance: { billings: [], entries: [], plans: [], contractDocuments: [], stats: {
-    outstanding: 0, allocated: 0, clientFunds: 0, contractAmount: 0, receivable: 0, received: 0,
-    pendingReceived: 0, refund: 0, cost: 0, commission: 0, invoiced: 0,
-  } },
-  userOptions: [{ id: "owner", name: "合成主办", role: "PRINCIPAL_LAWYER" }], documents: [], folders: [], folderDocuments: [], templates: [], colleagues: [],
+  matter,
+  userOptions: [{ id: "owner", name: "合成主办", role: "PRINCIPAL_LAWYER" }], colleagues: [],
   currentUserId: "owner", currentUserRole: "PRINCIPAL_LAWYER", canAssociateThisMatter: true, canLeadThisMatter: true, canOwnThisMatter: true,
   sealContracts: [], expresses: [], latestArchive: null, customFieldDefs: [], preservationCases: [], evidenceItems: [], notes: [],
 };

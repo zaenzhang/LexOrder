@@ -713,6 +713,7 @@ export function ProcedureWorkflowPanel({
   onAddLedger,
   materialsActions,
   materialsExtra,
+  materialStatus,
   factsNode,
   deliveryNode,
   canWriteTasks,
@@ -756,6 +757,7 @@ export function ProcedureWorkflowPanel({
   materialsActions?: React.ReactNode;
   /** 材料工作区的补充内容（AI 审查总览）。 */
   materialsExtra?: React.ReactNode;
+  materialStatus?: React.ReactNode;
   factsNode?: React.ReactNode;
   deliveryNode?: React.ReactNode;
   canWriteTasks: boolean;
@@ -933,7 +935,7 @@ export function ProcedureWorkflowPanel({
             <StageBar
               stage={selectedStage}
               procedure={procedure}
-              documents={documents}
+              documents={workPane === "materials" && !materialStatus ? documents : undefined}
               canManage={Boolean(canWriteTasks)}
               onRemoveStage={canWriteTasks && selectedStage.removable ? () => handleRemoveStage(selectedStage) : undefined}
             />
@@ -969,7 +971,7 @@ export function ProcedureWorkflowPanel({
             <Tabs.TabPane itemKey="materials" tab="材料">
               <div className="flex flex-col gap-4">
                 {!invalidStage && !invalidProcedure ? <>{materialsActions}
-                <MaterialsSection
+                {materialStatus ?? <MaterialsSection
                   procedure={procedure}
                   documents={documents}
                   stage={effectiveScope === "stage" ? selectedStage : null}
@@ -977,7 +979,7 @@ export function ProcedureWorkflowPanel({
                   canManage={canWriteMaterials}
                   onOpenTemplate={() => setTemplateOpen(true)}
                   onRequestUpload={() => setUploadSignal(value => value + 1)}
-                />
+                />}
                 {materialsExtra}</> : null}
               </div>
             </Tabs.TabPane>
@@ -1150,7 +1152,7 @@ function StageBar({
 }: {
   stage: WorkflowStage;
   procedure: WorkflowProcedure;
-  documents: WorkflowDocument[];
+  documents?: WorkflowDocument[];
   canManage: boolean;
   onRemoveStage?: () => void;
 }) {
@@ -1158,7 +1160,7 @@ function StageBar({
   const guide = stageGuideFor(stage.name);
   const src = procedure.stages.find((s) => s.id === stage.id);
   const openTasks = stage.tasks.filter((t) => !t.completed).length;
-  const docCount = documents.filter((d) => documentMatchesStage(d, stage)).length;
+  const docCount = documents?.filter((d) => documentMatchesStage(d, stage)).length;
   const tone = stage.status === "risk" ? "amber" : stage.status === "done" ? "green" : stage.status === "active" ? "teal" : "slate";
 
   return (
@@ -1183,7 +1185,7 @@ function StageBar({
             ]
               .filter(Boolean)
               .join(" · ")}
-            {` · 材料 ${docCount} 份`}
+            {docCount !== undefined ? ` · 材料 ${docCount} 份` : null}
           </div>
         </div>
         <SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={() => setGuideOpen((v) => !v)} aria-expanded={guideOpen}>

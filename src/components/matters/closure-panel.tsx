@@ -3,10 +3,27 @@ import { Disclosure } from "@/components/patterns/disclosure";
 import {useState,useTransition} from 'react';import {useRouter} from 'next/navigation';import { Select, Button, Input, TextArea, Toast } from "@douyinfe/semi-ui";
 import {getClosureBoard,saveClosure} from '@/server/archive/closure-actions';import {ArchiveWizardDialog} from '@/app/(app)/matters/[id]/_components/archive-wizard';import {formatDate} from '@/lib/utils';import {shDayKey} from '@/lib/ui/sh-time';
 import { actionErrorMessage } from "@/lib/action-error";
-export function MatterClosurePanel({matterId,data}:{matterId:string;data:Awaited<ReturnType<typeof getClosureBoard>>}){
+import { DetailSectionStatus, useDetailSection } from "@/components/patterns/detail-section-loading";
+
+type ClosureBoard = Awaited<ReturnType<typeof getClosureBoard>>;
+
+export function MatterClosurePanel({ matterId, refreshKey }: { matterId: string; refreshKey: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const section = useDetailSection(getClosureBoard, matterId, refreshKey, expanded);
+  const data = section.data;
+  const status = data?.status === "ARCHIVED" ? "卷宗已归档" : data?.blockers.length ? "仍有待处置事项" : data ? "可核对送审" : null;
+  return (
+    <Disclosure heading={status ? `结案与归档核对 · ${status}` : "结案与归档核对"} onOpenChange={setExpanded}>
+      {data ? <ClosureBoardContent matterId={matterId} data={data} />
+        : data === null ? <p role="status" className="py-4 text-sm">当前无可读的归档核对资料。</p>
+        : expanded ? <DetailSectionStatus label="归档核对" {...section} /> : null}
+    </Disclosure>
+  );
+}
+
+function ClosureBoardContent({ matterId, data }: { matterId: string; data: NonNullable<ClosureBoard> }) {
  const router=useRouter(),[pending,start]=useTransition(),[open,setOpen]=useState(false),[reason,setReason]=useState(data?.plan?.reason??''),[date,setDate]=useState(data?.plan?shDayKey(new Date(data.plan.serviceCompletedAt)):shDayKey(new Date())),[owner,setOwner]=useState(data?.plan?.financeOwnerId??'');
- if(!data)return null;
- return <Disclosure heading={<>结案与归档核对 · {data.status==='ARCHIVED'?'卷宗已归档':data.blockers.length?'仍有待处置事项':'可核对送审'}</>}><div className="mt-4 space-y-4 text-sm">
+ return <div className="mt-4 space-y-4 text-sm">
  <div className="grid gap-2 sm:grid-cols-4"><span>程序与事项：{data.blockers.length?'未完成':'已处置'}</span><span>律师服务：{data.plan?`已说明 ${formatDate(data.plan.serviceCompletedAt)}`:'未确认'}</span><span>财务：{data.financeOpen?'有未结事项':'已结清'}</span><span>卷宗：{data.status==='ARCHIVED'?'已归档':'待归档'}</span></div>
  {data.blockers.length>0&&<ul className="list-disc pl-5 text-amber-700">{data.blockers.map(b=><li key={b}>{b}</li>)}</ul>}
  {data.finance&&<p>未结应收 ¥{data.finance.outstanding} · 未分配收款 ¥{data.finance.unallocated} · 未结分成 ¥{data.finance.commissionBalance} · 发票未关联收款 ¥{data.finance.invoiceOutstanding}</p>}
@@ -18,5 +35,5 @@ export function MatterClosurePanel({matterId,data}:{matterId:string;data:Awaited
  {data.status==='ARCHIVED'&&data.canSupplement&&<Button onClick={()=>setOpen(true)} type="tertiary" theme="outline">提交补充归档</Button>}
  {data.archives.map(a=><div key={a.id} className="flex gap-3"><span>{a.archiveNo} · {a.status==='APPROVED'?'已批准':a.status==='REJECTED'?'已驳回':'待审批'}</span>{a.status==='APPROVED'&&<a className="underline" href={`/api/archive/${matterId}/export?archiveId=${a.id}`}>导出本次固定卷宗</a>}</div>)}
  <ArchiveWizardDialog matterId={matterId} open={open} onOpenChange={setOpen}/>
- </div></Disclosure>;
+ </div>;
 }

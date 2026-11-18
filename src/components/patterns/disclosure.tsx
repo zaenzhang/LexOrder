@@ -6,10 +6,11 @@ import { useId, useState, type ReactNode, type Ref } from "react";
 import { cn } from "@/lib/utils";
 import { FocusButton } from "./focus-button";
 
-export function Disclosure({ heading, headingRef, defaultOpen, className, children }: {
+export function Disclosure({ heading, headingRef, defaultOpen, onOpenChange, className, children }: {
   heading: ReactNode;
   headingRef?: Ref<HTMLButtonElement>;
   defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
   className?: string;
   children: ReactNode;
 }) {
@@ -30,7 +31,10 @@ export function Disclosure({ heading, headingRef, defaultOpen, className, childr
         className="min-w-0"
         style={{ height: "auto", minHeight: 40, justifyContent: "space-between", paddingBlock: 8 }}
         contentClassName="min-w-0 whitespace-normal break-words text-left"
-        onClick={() => setOpen(value => !value)}
+        onClick={() => {
+          setOpen(!open);
+          onOpenChange?.(!open);
+        }}
       >
         {heading}
       </FocusButton>

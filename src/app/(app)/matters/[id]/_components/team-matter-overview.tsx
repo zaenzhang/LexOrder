@@ -7,14 +7,14 @@ import { listNotes } from "@/server/notes/actions";
 import { matterStatusLabel, matterCategoryLabel, matterCategoryKind, procedureTypeLabel, litigationStandingLabel } from "@/lib/enums";
 import { avatarTone, matterStatusTone } from "@/lib/ui/moan-tones";
 import { InitialAvatar } from "@/components/patterns/moan";
-import { cn, formatDate, formatDateTime } from "@/lib/utils";
+import { formatDate, formatDateTime } from "@/lib/utils";
 import { ActionError } from "@/lib/action-error";
 import { requireSession } from "@/lib/auth/session";
 import { matterHref } from "@/lib/matters/route";
 import { hasCustomPermission } from "@/lib/roles/catalog";
 import { procedureStateLabel } from "@/lib/procedure-status";
 
-type Matter = NonNullable<Awaited<ReturnType<typeof getMatterById>>>;
+type Matter = Omit<NonNullable<Awaited<ReturnType<typeof getMatterById>>>, "businessAccess">;
 const date = (value: Date | null) => (value ? formatDate(new Date(value)) : "—");
 
 /**

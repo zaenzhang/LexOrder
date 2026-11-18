@@ -22,7 +22,8 @@ import {
   matterStatusLabel,
   procedureTypeLabel,
   matterCategoryKind,
-  matterCategoryLabel
+  matterCategoryLabel,
+  feeTypeLabel
 } from "@/lib/enums";
 import { cn } from "@/lib/utils";
 import { contactRoleLabels } from "./info-panel";
@@ -52,7 +53,9 @@ import { EvidenceItemDialog, type EvidenceItemRow } from "./evidence-panel";
 import { ArchiveStatusBanner } from "./archive-status-banner";
 import { ArchiveWizardDialog } from "./archive-wizard";
 import { TeamEditorDialog, type MatterEditorSection } from "./team-editor-dialog";
-import type { FolderPayload, FolderDocument, TemplateSummary } from "./folder-types";
+import { loadMatterDetailFinance, loadMatterMaterials } from "@/server/matters/detail-panels";
+import { ReviewSummaryCard } from "./review-summary-card";
+import { DetailSectionStatus, useDetailSection } from "@/components/patterns/detail-section-loading";
 import type { UserOption as PresUserOption } from "@/app/(app)/preservation/_components/preservation-types";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { shDayKey, shDaysFromToday, shMonthDay, shTime } from "@/lib/ui/sh-time";
@@ -77,11 +80,6 @@ type MatterPayloadBase = Prisma.MatterGetPayload<{
         contactName: true;
         contactPhone: true;
         receivedAt: true;
-        feeType: true;
-        feeAmount: true;
-        feeSchedule: true;
-        feeNote: true;
-        contingencyTerms: true;
         createdBy: { select: { name: true } };
       };
     };
@@ -104,8 +102,7 @@ type MatterPayloadBase = Prisma.MatterGetPayload<{
   };
 }>;
 
-type MatterPayload = Omit<MatterPayloadBase, "claimAmount" | "members" | "intake"> & {
-  intake: (Omit<NonNullable<MatterPayloadBase["intake"]>, "feeAmount"> & { feeAmount: number | null }) | null;
+type MatterPayload = Omit<MatterPayloadBase, "claimAmount" | "members"> & {
   claimAmount: number | null;
   members: (MatterPayloadBase["members"][number] & { user: MatterPayloadBase["members"][number]["user"] & { roleName?: string } })[];
 };
@@ -180,11 +177,7 @@ export type NotePayload = {
 
 export function MatterDetailTabs({
   matter,
-  finance,
   userOptions,
-  documents,
-  folders,
-  templates,
   colleagues,
   currentUserId,
   currentUserRole,
@@ -203,16 +196,11 @@ export function MatterDetailTabs({
   briefNode,
   contextNode,
   notes,
-  reviewNode, workBoard, closureNode, conflictNode,
+  workBoard, closureNode, conflictNode,
   capabilities = { aiReview: false, caseSearch: false }
 }: {
   matter: MatterPayload;
-  finance: FinancePayload;
   userOptions: UserOption[];
-  documents: any[];
-  folders: FolderPayload[];
-  folderDocuments: FolderDocument[];
-  templates: TemplateSummary[];
   colleagues: PresUserOption[];
   currentUserId: string;
   currentUserRole: string | null;
@@ -246,8 +234,6 @@ export function MatterDetailTabs({
   briefNode?: React.ReactNode;
   contextNode?: React.ReactNode;
   notes: WorkflowNote[];
-  /** AI 审查总览（服务端渲染节点），归入「信息总览」 */
-  reviewNode?: React.ReactNode;
   workBoard: WorkBoardData;
   closureNode?: React.ReactNode;
   conflictNode?: React.ReactNode;
@@ -405,6 +391,20 @@ export function MatterDetailTabs({
     [canWriteRecords]
   );
 
+  const canReadMaterials = allowed("documents.read");
+  const canReadFinance = allowed("finance.read");
+  const workPane = searchParams.get("workPane") ?? "materials";
+  const materialsActive = view === "work" && workPane === "materials";
+  const materialsSection = useDetailSection(loadMatterMaterials, matter.id, materialRefreshKey,
+    ((canReadMaterials || canWriteMaterials) && materialsActive) || (canReadMaterials && evidenceDocId !== undefined));
+  const financeSection = useDetailSection(loadMatterDetailFinance, matter.id, materialRefreshKey, canReadFinance && view === "money");
+  const materials = canReadMaterials || canWriteMaterials ? materialsSection.data : undefined;
+  const finance = canReadFinance ? financeSection.data : undefined;
+  const documents = canReadMaterials ? materials?.documents ?? [] : [];
+  const materialStatus = canReadMaterials || canWriteMaterials
+    ? materials ? undefined : <DetailSectionStatus label="材料" {...materialsSection} />
+    : <p role="status" className="text-sm text-muted-foreground">当前角色无权读取材料。</p>;
+
   // 当前选中程序的文档
   const procDocs = documents
         .filter((d) => !currentProcedure || d.procedureId === currentProcedure.id)
@@ -521,7 +521,6 @@ export function MatterDetailTabs({
               {overdueCount > 0 ? <SemiTag size="small" color="red">{overdueCount} 项逾期</SemiTag> : null}
               {nearestExpiry !== null ? <SemiTag size="small" color="amber">保全 {nearestExpiry < 0 ? "已过期" : `${nearestExpiry} 天后到期`}</SemiTag> : null}
               {money(matter.claimAmount) ? <SemiTag size="small" color="grey">{categoryKind === "litigation" ? "标的" : "金额"} <span className="mono">{money(matter.claimAmount)}</span></SemiTag> : null}
-              {allowed("finance.read") && money(finance.stats.contractAmount) ? <SemiTag size="small" color="grey">合同额 <span className="mono">{money(finance.stats.contractAmount)}</span></SemiTag> : null}
               {matter.intakeDate ? <SemiTag size="small" color="grey">收案 <span className="mono">{formatShortDate(matter.intakeDate)}</span></SemiTag> : null}
               {archiveBadge ? (
                 <SemiTag size="small" color={archiveBadge.color}>
@@ -646,8 +645,9 @@ export function MatterDetailTabs({
         matter={{ id: matter.id, internalCode: matter.internalCode, title: matter.title, category: matter.category }}
         procedure={currentProcedure}
         documents={procDocs}
-        folders={folders}
-        templates={templates}
+        folders={materials?.folders ?? []}
+        templates={materials?.templates ?? []}
+        materialStatus={materialStatus}
         users={colleagues}
         canManage={canAssociateThisMatter && !isArchived}
         canWriteRecords={canWriteRecords}
@@ -673,8 +673,6 @@ export function MatterDetailTabs({
             contextNode={contextNode}
             currentProcedure={currentProcedure}
             parties={parties}
-            billings={finance.billings}
-            contractDocs={finance.contractDocuments}
             canReadFinance={allowed("finance.read")}
             onOpenFinance={() => setView("money")}
             customFieldDefs={customFieldDefs}
@@ -697,7 +695,7 @@ export function MatterDetailTabs({
         materialsActions={<>
           {evidenceError ? <p role="alert" className="text-sm text-destructive">证据要点读取失败：{evidenceError} <SemiButton theme="borderless" type="primary" size="small" htmlType="button" onClick={() => router.refresh()}>重新加载</SemiButton></p> : null}
           <div className="flex flex-wrap items-center justify-between gap-2">
-            {allowed("documents.read") ? <MaterialToolsSheet
+            {canReadMaterials && materials ? <MaterialToolsSheet
               key={`${matter.id}:${currentProcedure?.id ?? "unassigned"}`}
               matterId={matter.id}
               documents={procDocs.map(document => ({ id: document.id, name: document.name, version: document.version }))}
@@ -708,23 +706,39 @@ export function MatterDetailTabs({
           </div>
           {canAssociateThisMatter && allowed("documents.write") ? <PendingMaterialUploads key={matter.id} matterId={matter.id} /> : null}
         </>}
-        materialsExtra={reviewNode}
+        materialsExtra={materials?.reviewSummary && canReadMaterials ? <ReviewSummaryCard summary={materials.reviewSummary} matterId={matter.id} /> : null}
         onCaseSearch={capabilities.caseSearch && allowed("matters.write") ? () => setCaseSearchOpen(true) : undefined}
         financeNode={
           <div className="dos-main">
-            {allowed("finance.read") ? <Link href={`/finance/reconciliation?${new URLSearchParams({ matterId: matter.id, returnTo: matterReturnTo })}`} className="btn btn-secondary btn-sm w-fit">应收与收款分配</Link> : null}
-            {allowed("finance.read") ? <FinanceHero stats={finance.stats} /> : null}
-            {allowed("finance.read") ? (
-              <BillingsCard
-                contractTotal={finance.stats.contractAmount}
-                matterId={matter.id}
-                billings={finance.billings}
-                canManage={canAssociateThisMatter && !isArchived}
-              />
-            ) : null}
-            {allowed("finance.read") ? (
-              <FinancePanel matterId={matter.id} finance={finance} userOptions={userOptions} canRequestInvoice={canAssociateThisMatter} hideStats />
-            ) : null}
+            {!canReadFinance ? <p role="status" className="text-sm text-muted-foreground">当前角色无权读取财务。</p>
+              : !finance ? <DetailSectionStatus label="财务" {...financeSection} />
+              : <>
+                <Link href={`/finance/reconciliation?${new URLSearchParams({ matterId: matter.id, returnTo: matterReturnTo })}`} className="btn btn-secondary btn-sm w-fit">应收与收款分配</Link>
+                <FinanceHero stats={finance.stats} />
+                {finance.intakeFees ? (
+                  <SemiCard title="收案收费约定">
+                    <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                      {([
+                        ["收费方式", finance.intakeFees.feeType && feeTypeLabel[finance.intakeFees.feeType]],
+                        [finance.intakeFees.feeType === "CONTINGENCY" ? "基础办案费" : "约定收费", money(finance.intakeFees.feeAmount)],
+                        ["付款节点", finance.intakeFees.feeSchedule],
+                        ["风险收费", finance.intakeFees.contingencyTerms],
+                        ["收费说明", finance.intakeFees.feeNote],
+                      ] as const).filter(([, value]) => value?.trim()).map(([label, value]) => (
+                        <div key={label}><dt className="text-muted-foreground">{label}</dt><dd className="whitespace-pre-wrap">{value}</dd></div>
+                      ))}
+                    </dl>
+                  </SemiCard>
+                ) : null}
+                <BillingsCard
+                  contractTotal={finance.stats.contractAmount}
+                  matterId={matter.id}
+                  billings={finance.billings}
+                  contractDocuments={finance.contractDocuments}
+                  canManage={canAssociateThisMatter && !isArchived}
+                />
+                <FinancePanel matterId={matter.id} finance={finance} userOptions={userOptions} canRequestInvoice={canAssociateThisMatter} hideStats />
+              </>}
           </div>
         }
         sealNode={
@@ -755,12 +769,19 @@ export function MatterDetailTabs({
           proceduresDetail={Object.fromEntries(engagedProcedures.map((p) => [p.id, { handlingAgency: p.handlingAgency, panel: p.panel, jurisdiction: p.jurisdiction }]))}
         />
       ) : null}
-      {evidenceDocId !== undefined ? (
+      {evidenceDocId !== undefined && canReadMaterials && !materials ? (
+        <WorkspaceDialog open onOpenChange={open => { if (!open) setEvidenceDocId(undefined); }}>
+          <DrawerContent>
+            <DialogHeader><DialogTitle>新增证据要点</DialogTitle></DialogHeader>
+            <DetailSectionStatus label="材料选项" {...materialsSection} />
+          </DrawerContent>
+        </WorkspaceDialog>
+      ) : evidenceDocId !== undefined ? (
         <EvidenceItemDialog
           open
           onOpenChange={(o) => { if (!o) setEvidenceDocId(undefined); }}
           matterId={matter.id}
-          documents={documents.map((d: { id: string; name: string }) => ({ id: d.id, name: d.name }))}
+          documents={documents.map(({ id, name }) => ({ id, name }))}
           defaultDocumentId={evidenceDocId}
         />
       ) : null}
@@ -899,7 +920,7 @@ function deleteProcedureWarning(procedure: ProcedureItem, label: string): string
  * 合同与补充协议：一案一签（2026-09-16 用户确认取消独立委托模块）。
  * 中途变更收费、增加代理程序＝新增一条补充协议，原合同保留，合同额自动合计。
  */
-function BillingsCard({ matterId, billings, canManage, contractTotal }: { matterId: string; billings: FinancePayload["billings"]; canManage: boolean; contractTotal: number }) {
+function BillingsCard({ matterId, billings, contractDocuments, canManage, contractTotal }: { matterId: string; billings: FinancePayload["billings"]; contractDocuments: FinancePayload["contractDocuments"]; canManage: boolean; contractTotal: number }) {
   const [addOpen, setAddOpen] = useState(false);
   const total = contractTotal;
   return (
@@ -937,6 +958,16 @@ function BillingsCard({ matterId, billings, canManage, contractTotal }: { matter
           </div>
         </>
       )}
+      {contractDocuments.length > 0 ? (
+        <div className="panel-body space-y-2">
+          <h3 className="text-sm font-medium">合同扫描件</h3>
+          <ul className="space-y-1">
+            {contractDocuments.map(document => (
+              <li key={document.id}><a className="underline" href={`/api/documents/${document.id}/download`} target="_blank" rel="noreferrer">{document.name}</a> <span className="text-muted-foreground">{formatShortDate(document.createdAt)}</span></li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {canManage ? <AddBillingSheet open={addOpen} onOpenChange={setAddOpen} matterId={matterId} /> : null}
     </section>
   );

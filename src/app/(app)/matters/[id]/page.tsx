@@ -1,19 +1,14 @@
 import { listPreservationCases } from "@/server/preservations/actions-v2";
-import {getClosureBoard} from "@/server/archive/closure-actions";
 import {MatterClosurePanel} from "@/components/matters/closure-panel";
 import {getWorkBoard} from "@/server/reminders/work-actions";
 import {readMatterReview} from "@/server/conflicts/matter-review";
 import {MatterConflictReview} from "./_components/conflict-review";
 import { hasCustomPermission } from "@/lib/roles/catalog";
-import { hasMatterBusinessAccess } from "@/lib/permissions";
-import { canReadDocument } from "@/lib/approvals/documents";
 import { TeamMatterOverview } from "./_components/team-matter-overview";
 import { notFound, redirect } from "next/navigation";
 import { getMatterById } from "@/server/matters/actions";
-import { getMatterFinance } from "@/server/finance/actions";
 import { listActiveColleagues } from "@/server/users/actions";
 import { getLatestArchiveRecord } from "@/server/archive/actions";
-import { getMatterReviewSummary } from "@/server/ai/matter-review-summary";
 import { getSession } from "@/lib/auth/session";
 import { getAiSettings } from "@/lib/ai/settings";
 import { isLocalJudgmentConfigured } from "@/lib/cncases/settings";
@@ -24,7 +19,6 @@ import { prisma } from "@/lib/prisma";
 import { nullableDecimalToNumber, serializeDecimals } from "@/lib/decimal";
 import { MatterDetailTabs } from "./_components/matter-detail-tabs";
 import { listNotes } from "@/server/notes/actions";
-import { ReviewSummaryCard } from "./_components/review-summary-card";
 import { listEvidenceItems } from "@/server/evidence/actions";
 import { getMatterContext } from "@/server/matters/context-actions";
 import { MatterContextSection } from "./_components/matter-context-section";
@@ -44,11 +38,12 @@ export default async function MatterDetailPage({ params, searchParams }: PagePro
   const route = await resolveMatterRoute(param);
   if (!route) notFound();
 
-  const [matterRaw, session] = await Promise.all([
+  const [matterDetail, session] = await Promise.all([
     getMatterById(route.id),
     getSession()
   ]);
-  if (!matterRaw) notFound();
+  if (!matterDetail) notFound();
+  const { businessAccess, ...matterRaw } = matterDetail;
 
   if (param !== route.internalCode) {
     const query = new URLSearchParams();
@@ -58,7 +53,7 @@ export default async function MatterDetailPage({ params, searchParams }: PagePro
     redirect(matterHref(route, query.size ? `?${query}` : ""));
   }
 
-  if (session?.user && !await hasMatterBusinessAccess(session.user.id, session.user.role, matterRaw.id, session.user.rolePermissions)) {
+  if (session?.user && !businessAccess) {
     return <TeamMatterOverview matter={matterRaw} />;
   }
 
@@ -70,66 +65,17 @@ export default async function MatterDetailPage({ params, searchParams }: PagePro
   const allowed = (key: import("@/lib/roles/catalog").PermissionKey) => hasCustomPermission(session.user, key);
   const matter = {
     ...matterRaw,
-    claimAmount: nullableDecimalToNumber(matterRaw.claimAmount),
-    intake: matterRaw.intake
-      ? { ...matterRaw.intake, feeAmount: nullableDecimalToNumber(matterRaw.intake.feeAmount) }
-      : matterRaw.intake
+    claimAmount: nullableDecimalToNumber(matterRaw.claimAmount)
   };
 
   const [
-    financeRaw,
     userOptions,
-    documentsRaw,
-    folders,
-    templates,
-    allColleagues,
     sealContracts,
     expresses,
     latestArchive,
     customFieldDefs,
     preservationCases
   ] = await Promise.all([
-    allowed("finance.read") ? getMatterFinance(matter.id) : Promise.resolve({ billings: [], entries: [], plans: [], contractDocuments: [], stats: { outstanding:0, allocated:0, clientFunds:0, contractAmount: 0, receivable: 0, received: 0, pendingReceived: 0, refund: 0, cost: 0, commission: 0, invoiced: 0 } }),
-    listActiveColleagues(),
-    prisma.document.findMany({
-      where: { matterId: matter.id, deletedAt: null, ...(!allowed("documents.read") ? { id: { in: [] } } : {}) },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true, name: true, category: true, mimeType: true, size: true, createdAt: true, updatedAt: true,
-        matterId: true, intakeId: true, procedureId: true, stageId: true, folderId: true, templateId: true,
-        uploadedById: true, sourceParty: true, sourceOrigin: true, tags: true,
-        ocrStatus: true, textSource: true, pageCount: true, sha256: true,
-        version: true, familyId: true, isLatest: true, status: true, archiveChecklistItemId: true,
-        uploadedBy: { select: { id: true, name: true } },
-        procedure: { select: { id: true, type: true, customLabel: true } }
-      }
-    }),
-    // v0.8: 卷宗
-    prisma.documentFolder.findMany({
-      where: { matterId: matter.id, ...(!allowed("documents.read") ? { id: { in: [] } } : {}) },
-      orderBy: [{ orderIndex: "asc" }, { createdAt: "asc" }],
-      select: { id: true, name: true, orderIndex: true, isDefault: true }
-    }),
-    // v0.8: 适用本案件类别的模板
-    prisma.documentTemplate.findMany({
-      where: {
-        enabled: true,
-        OR: [
-          { applicableCategories: { isEmpty: true } },
-          { applicableCategories: { has: matter.category } }
-        ]
-      },
-      orderBy: [{ category: "asc" }, { name: "asc" }],
-      select: {
-        id: true,
-        name: true,
-        category: true,
-        description: true,
-        applicableCategories: true,
-        variables: true,
-        isBuiltIn: true
-      }
-    }),
     listActiveColleagues(),
     // v0.11: 案件下用印申请关联的合同附件（待盖章稿 + 盖章后扫描件）
     prisma.sealRequest.findMany({
@@ -171,14 +117,6 @@ export default async function MatterDetailPage({ params, searchParams }: PagePro
     listPreservationCases({ matterId: matter.id, status: "ALL" })
   ]);
 
-  // getMatterFinance 已在 action 出口统一序列化 Decimal
-  const finance = financeRaw;
-  // Keep every authorized concrete version for exact references and the detail history.
-  const readableDocuments = await Promise.all(documentsRaw.map(document => canReadDocument(session.user.id, document)));
-  const documents = documentsRaw.filter((_, index) => readableDocuments[index]);
-
-  // v0.22: 本案 AI 审查总览（聚合 ReviewRecord）
-  const reviewSummary = allowed("documents.read") ? await getMatterReviewSummary(matter.id) : null;
   // v1.x P2: 委托与证据链（详情页区块；read 已在页面入口校验）
   const [evidenceResult, notes, contextResult] = await Promise.all([
     listEvidenceItems(matter.id).then(items => ({ items, error: null })).catch(error => ({ items: [], error: actionErrorMessage(error) })),
@@ -201,40 +139,29 @@ export default async function MatterDetailPage({ params, searchParams }: PagePro
   );
   const canOwnThisMatter = Boolean(allowed("matters.write") && session?.user.id && matter.ownerId === session.user.id);
 
-  // v0.8: 卷宗对应文档（含 templateId 标识）
-  const folderDocuments = documents.map((d) => ({
-    id: d.id,
-    name: d.name,
-    size: d.size,
-    folderId: d.folderId,
-    templateId: d.templateId,
-    createdAt: d.createdAt
-  }));
   const preservationCasesForClient = serializeDecimals(preservationCases);
 
-  const conflictReview=await readMatterReview(prisma,matter.id);
+  const refreshKey = Date.now();
+  const [conflictReview, workBoard] = await Promise.all([
+    readMatterReview(prisma, matter.id),
+    getWorkBoard({ matterId: matter.id }),
+  ]);
   return (
     <>
       {/* 墨案 04 页面骨架由 MatterDetailTabs 统一承载：
           上下文头 → 信号条 → 程序链卡 → 三栏工作区（环节导航 / 工作区 / 辅助栏） */}
       <MatterDetailTabs
-        workBoard={await getWorkBoard({matterId:matter.id})}
-        closureNode={<MatterClosurePanel matterId={matter.id} data={allowed("archive.read")?await getClosureBoard(matter.id):null}/>}
+        workBoard={workBoard}
+        closureNode={allowed("archive.read") && (matter.ownerId === session.user.id || currentMatterMember)
+          ? <MatterClosurePanel matterId={matter.id} refreshKey={refreshKey} />
+          : null}
         conflictNode={<MatterConflictReview matterId={matter.id} data={conflictReview} canWrite={canAssociateThisMatter&&matter.status!=="ARCHIVED"}/>}
         matter={matter}
-        finance={finance}
         userOptions={[
           ...userOptions,
           ...matter.members.filter((m) => !userOptions.some((u) => u.id === m.userId)).map((m) => ({ ...m.user, active: false, isTeammate: false }))
         ]}
-        documents={documents}
-        folders={folders}
-        folderDocuments={folderDocuments}
-        templates={templates.map((t) => ({
-          ...t,
-          variables: Array.isArray(t.variables) ? (t.variables as string[]) : []
-        }))}
-        colleagues={allColleagues.map((c) => ({ id: c.id, name: c.name }))}
+        colleagues={userOptions.map(({ id, name }) => ({ id, name }))}
         rolePermissions={session.user.rolePermissions}
         currentUserId={session.user.id}
         currentUserRole={session?.user.role ?? null}
@@ -248,8 +175,8 @@ export default async function MatterDetailPage({ params, searchParams }: PagePro
         preservationCases={preservationCasesForClient}
         evidenceItems={evidenceResult.items}
         evidenceError={evidenceResult.error}
-        materialRefreshKey={Date.now()}
-        briefNode={<MatterBriefSection matterId={matter.id} refreshKey={Date.now()} />}
+        materialRefreshKey={refreshKey}
+        briefNode={<MatterBriefSection matterId={matter.id} refreshKey={refreshKey} />}
         contextNode={contextResult.view
           ? <MatterContextSection key={matter.id} matterId={matter.id} view={contextResult.view} />
           : <section key={matter.id} className="dos-group p-4 text-sm text-destructive" role="alert">事项上下文暂不可读取：{contextResult.error} <a className="underline" href={matterHref(matter)}>重新加载</a></section>}
@@ -260,9 +187,6 @@ export default async function MatterDetailPage({ params, searchParams }: PagePro
           yuandian: !!yuandianSettings?.configured,
           localJudgments: localJudgmentsConfigured
         }}
-        reviewNode={
-          reviewSummary ? <ReviewSummaryCard summary={reviewSummary} matterId={matter.id} /> : undefined
-        }
       />
     </>
   );
