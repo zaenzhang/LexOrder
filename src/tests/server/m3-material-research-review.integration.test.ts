@@ -281,8 +281,17 @@ describe.skipIf(!config.url)("M3 两类真实格式工作包：真实 PG 服务�
     for (const source of r1View.sources) {
       expect(source.lawMetadata).toEqual(emptyLawMetadata());
       const original = parsedSources.find(parsed => parsed.item.documentId === source.documentId && parsed.item.anchorId === source.anchorId)!;
+      expect(await db.researchSource.findUniqueOrThrow({ where: { id: source.id } })).toMatchObject({
+        documentId: original.item.documentId, documentSha256: original.item.documentSha256,
+        parseRunId: original.item.runId, anchorId: original.item.anchorId, location: original.source.anchor.location,
+      });
+      expect(await getMaterialSource({ documentId: original.item.documentId, runId: original.item.runId, anchorId: original.item.anchorId }))
+        .toMatchObject({ status: "AVAILABLE", anchor: original.source.anchor });
       const opened = await readResearchSource(db, f.actor, f.matter.id, r1.id, source.id);
-      expect(opened).toMatchObject({ status: "AVAILABLE", documentVersion: source.version, legacy: false, locationLabel: source.locationLabel, text: original.source.anchor.text });
+      // The compact research-list label and material-reader label use different
+      // presentation wording; the resolved reader must match the actual source.
+      expect(opened).toMatchObject({ status: "AVAILABLE", documentVersion: source.version, legacy: false,
+        locationLabel: original.item.locationLabel, text: original.source.anchor.text });
     }
     const draft = await createResearchDraft(db, f.actor, { matterId: f.matter.id, researchRevisionId: r1.id, requestKey: randomUUID() });
     const draftRow = await db.document.findUniqueOrThrow({ where: { id: draft.documentId } });
