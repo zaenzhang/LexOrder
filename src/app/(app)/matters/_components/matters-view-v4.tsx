@@ -207,7 +207,7 @@ export function MattersViewV4({
               className="w-60"
               value={searchInput}
               onChange={setSearchInput}
-              prefix={<Search size={14} aria-hidden />}
+              prefix={<Search size={14} className="mx-2 shrink-0 text-[var(--semi-color-text-2)]" aria-hidden />}
               placeholder="按名称、案号、当事人搜索"
               aria-label="搜索案件"
             />
