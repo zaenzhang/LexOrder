@@ -1,17 +1,9 @@
 import { Metadata } from "next";
 import { Suspense } from "react";
-import { Loader2, ShieldCheck } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger
-} from "@/components/ui/dialog";
+import { Loader2 } from "lucide-react";
 import { PRODUCT_NAME } from "@/lib/product";
 import { LoginForm } from "./login-form";
+import { LoginProtectionDialog } from "./login-protection-dialog";
 import { isPersonalMode } from "@/lib/runtime/mode";
 import { redirect } from "next/navigation";
 
@@ -37,21 +29,7 @@ export default function LoginPage() {
           <div className="fp-body">
             <div className="fp-heading">
               <h1 className="fp-title">登录律序</h1>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button type="button" variant="ghost" size="icon" aria-label="登录保护说明" title="登录保护说明">
-                    <ShieldCheck aria-hidden data-icon="inline-start" />
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-sm">
-                  <DialogHeader>
-                    <DialogTitle>登录保护</DialogTitle>
-                    <DialogDescription>
-                      连续 5 次登录失败后，账号将锁定 15 分钟。管理员可要求两步验证。
-                    </DialogDescription>
-                  </DialogHeader>
-                </DialogContent>
-              </Dialog>
+              <LoginProtectionDialog />
             </div>
             <Suspense fallback={<LoginFallback />}>
               <LoginForm />

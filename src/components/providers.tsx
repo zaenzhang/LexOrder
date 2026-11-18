@@ -1,5 +1,8 @@
 "use client";
 
+import "@douyinfe/semi-ui/react19-adapter";
+import { ConfigProvider } from "@douyinfe/semi-ui";
+import zhCN from "@douyinfe/semi-ui/lib/es/locale/source/zh_CN";
 import { WorkspaceActorProvider } from "@/components/workspace-actor-provider";
 import type { WorkspaceActor } from "@/lib/runtime/actor";
 import { Toaster } from "@/components/ui/sonner";
@@ -11,16 +14,14 @@ export function Providers({ children, personalActor }: { children: React.ReactNo
   return (
     <WorkspaceActorProvider personalActor={personalActor}>
       <AppMotionProvider>
-        {/*
-          delayDuration：首次悬停延迟，防止扫过工具栏时误触发。
-          skipDelayDuration：一个 tooltip 关闭后的这段时间内，相邻 tooltip 立即打开，
-          让整条工具栏「跟手」，同时不牺牲首次延迟的防误触作用。
-        */}
-        <TooltipProvider delayDuration={300} skipDelayDuration={200}>
-          {children}
-        </TooltipProvider>
-        <Toaster />
-        <ConfirmHost />
+        <ConfigProvider locale={zhCN}>
+          {/* 首次悬停延迟 300ms，相邻提示可在前一个关闭后 200ms 内立即打开。 */}
+          <TooltipProvider delayDuration={300} skipDelayDuration={200}>
+            {children}
+          </TooltipProvider>
+          <Toaster />
+          <ConfirmHost />
+        </ConfigProvider>
       </AppMotionProvider>
     </WorkspaceActorProvider>
   );

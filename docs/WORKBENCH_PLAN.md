@@ -1558,7 +1558,7 @@ root 在现有 main 唯一修改 src/server/evidence/source-links.ts 的 resolve
 
 ### 7.17 Semi 迁移协作计划（2026-11-18）
 
-用户已选定 Semi Design 作为 LexOrder 的 UI 目标，本节供分派与集成使用。状态为已规划、待认领。基线核对为远端 main ab20185。WSL 主检出已有未提交的登录页调整，包含文案删减、眼睛图标、登录保护弹窗和开发角标设置。A 在建立迁移基线时先核对并带上这些明确差异。Next 自动生成的 next-env.d.ts 差异单独识别。按源码 import 清点有 159 个文件使用共享 UI、15 个文件直接导入 Radix，唯一位于公共 UI 目录之外的直接导入在全局搜索弹窗。
+用户已选定 Semi Design 作为 LexOrder 的 UI 目标，本节供分派与集成使用。A 组公共基线已在 `ui/semi-integration` 完成，B—E 待派发。起点为远端 main `ab20185`。WSL 登录页已有的文案删减、眼睛图标、登录保护入口和开发角标设置随基线提交。迁移前清点有 159 个文件使用共享 UI、15 个文件直接导入 Radix，唯一位于公共 UI 目录之外的直接导入在全局搜索弹窗。
 
 #### 分组和写入边界
 
@@ -1576,10 +1576,17 @@ B—E 只写本组路由、组件、就近样式及已归属的相关测试。�
 
 #### 起点、并行和汇合
 
-1. A 先对比最新 main、相关分支和登录页本地差异，在集成分支发布一个可复用的基线提交。采用 Semi 官方默认主题、React 19 适配入口和 Next.js 转译配置，校验现有 Turbopack 启动与代表性弹层。共用基线同时给出按钮、输入、选择、弹窗的引入示例与共享模式所属文件。文档见 [Semi Next.js 接入](https://semi.design/en-US/start/getting-started)与 [React 19 适配](https://semi.design/en-US/ecosystem/react19)。
-2. 在 A 准备基线时，B—E 可同时清点原入口、组件和定点验收场景。A 发布基线 SHA 后，四组从相同提交开独立工作树并行写入，优先做各组能完整验证的入口。页面控件采用 Semi API。现有 FormDialog、ConfirmDialog 等共享业务模式保留其业务责任，使用 Semi 实现弹层。在同一提交组内更新实际调用方，完成后移除相应旧入口。表单继续复用现有校验和 Server Actions，案件列表继续使用现有服务端筛选、分页及查询参数。
+1. A 提供 `ui/semi-integration` 的固定提交作为共用基线。默认主题使用 Next.js 转译配置，根 Provider 装载 React 19 适配入口和 `zhCN`。见 [Semi Next.js 接入](https://semi.design/en-US/start/getting-started)与 [React 19 适配](https://semi.design/en-US/ecosystem/react19)。
+2. B—E 从派发时指定的同一 A 组提交开独立工作树，优先做各组能完整验证的入口。页面控件采用 Semi API。表单继续复用现有校验和 Server Actions，案件列表继续使用现有服务端筛选、分页及查询参数。
 3. 每组提交前核对 A 的最新基线和重叠变更，交接给 A 时提供分支、提交 SHA、实际修改路径、已验证场景、待验项、待清理选择器及具体阻断。A 先接 B 的登录与导航和 C 的代表主链，确认公共行为，再按通过检查的批次汇合余下模块。已有日志及静态检查作为各组证据，完整应用构建在集成范围稳定后执行。
 4. A 统一清理 Radix 直接导入和直接依赖、失去消费者的 shadcn 配置和旧组件、失去引用的旧页面样式，并更新实际生效的界面与技术说明。对仍有消费者的工具库以实际引用为准。最终只交付已换齐的 Server 界面。
+
+#### A 组接入约定
+
+- 使用 `import { Button, Input, Select, Modal } from "@douyinfe/semi-ui"`。按钮的原生表单类型通过 `htmlType` 指定。现有 RHF 表单从 Semi `onChange` 的首个参数取字段值，保留原校验与默认值。展示信息的受控 Modal 可参照[登录保护](../src/app/(auth)/login/login-protection-dialog.tsx)，重点核对取消、Escape 和返回焦点。
+- 公共表单弹窗、确认与反馈的合同仍由 `src/components/patterns`、`src/components/providers.tsx` 所挂载的主机及其现有调用方管理。通用确认仍会从现有 Radix 表单弹窗内部触发，替换时由 A 与涉及的组连同嵌套调用一起验证焦点、保稿、异常反馈及取消。新增仅展示的弹窗直接组合 Semi Modal。
+- 基线固定 `@douyinfe/semi-ui@2.105.0`。应用使用 Turbopack，中文组件配置在根 Provider。已在开发环境验证登录保护键盘打开、Escape 关闭与焦点返回，以及密码图标切换。受影响文件的 ESLint、共享确认与嵌套表单弹窗的两项定点测试、Docker 内的 Next.js 生产构建及 TypeScript 检查均通过。
+- **验证记录。** 依赖审计仍报告 `22` 项高危条目，均由既有的 [picomatch 公告](https://github.com/advisories/GHSA-fc5q-39xc-vjpf) 传递产生，与 main 上一次的审计结果一致。Vitest 同时报告现有 `vitest.config.ts` 的未来原生加载器兼容性提示。WebView2 由桌面阶段验收。
 
 #### 验收与停点
 
