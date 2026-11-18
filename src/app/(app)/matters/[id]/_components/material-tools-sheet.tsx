@@ -2,9 +2,8 @@
 
 import { useRef, useState } from "react";
 import { ClipboardCheck, FileCog } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, Tabs, TabPane } from "@douyinfe/semi-ui";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { InputCoverageSection } from "./input-coverage-section";
 import { MaterialProcessingStatus } from "./material-processing-status";
 
@@ -40,11 +39,11 @@ export function MaterialToolsSheet({ matterId, documents, scopeLabel, canManage,
       if (!nextOpen) setCoverageVisited(false);
     }}>
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="outline" size="sm" aria-haspopup="dialog" onClick={(event) => openTool("processing", event.currentTarget)}>
-          <FileCog />处理状态
+        <Button size="small" type="tertiary" icon={<FileCog size={14} aria-hidden />} aria-haspopup="dialog" onClick={(event) => openTool("processing", event.currentTarget)}>
+          处理状态
         </Button>
-        <Button variant="outline" size="sm" aria-haspopup="dialog" onClick={(event) => openTool("coverage", event.currentTarget)}>
-          <ClipboardCheck />读取检查
+        <Button size="small" type="tertiary" icon={<ClipboardCheck size={14} aria-hidden />} aria-haspopup="dialog" onClick={(event) => openTool("coverage", event.currentTarget)}>
+          读取检查
         </Button>
       </div>
       <SheetContent className="flex w-full flex-col gap-4 overflow-y-auto sm:max-w-2xl" onCloseAutoFocus={(event) => {
@@ -55,20 +54,16 @@ export function MaterialToolsSheet({ matterId, documents, scopeLabel, canManage,
           <SheetTitle className="sr-only">材料工具</SheetTitle>
           <SheetDescription>{scopeLabel}</SheetDescription>
         </SheetHeader>
-        <Tabs value={tool} onValueChange={selectTool}>
-          <TabsList aria-label="材料工具" className="grid w-full grid-cols-2">
-            <TabsTrigger value="processing">处理状态</TabsTrigger>
-            <TabsTrigger value="coverage">读取检查</TabsTrigger>
-          </TabsList>
-          <TabsContent value="processing">
+        <Tabs activeKey={tool} onChange={selectTool} keepDOM lazyRender tabPaneMotion={false}>
+          <TabPane itemKey="processing" tab="处理状态">
             {open && tool === "processing" ? documents.length
               ? <MaterialProcessingStatus matterId={matterId} documentIds={documents.map(document => document.id)} canManage={canManage} />
               : <p role="status" className="text-sm text-muted-foreground">暂无可处理的材料。</p>
               : null}
-          </TabsContent>
-          <TabsContent value="coverage" forceMount hidden={tool !== "coverage"} className="data-[state=inactive]:hidden">
+          </TabPane>
+          <TabPane itemKey="coverage" tab="读取检查" className={tool === "coverage" ? undefined : "hidden"}>
             {open && coverageVisited ? <InputCoverageSection matterId={matterId} documents={documents} refreshKey={refreshKey} showHeading={false} /> : null}
-          </TabsContent>
+          </TabPane>
         </Tabs>
       </SheetContent>
     </Sheet>

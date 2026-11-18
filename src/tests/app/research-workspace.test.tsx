@@ -55,7 +55,8 @@ describe("研究工作区的保存与来源连续性", () => {
     fireEvent.change(await screen.findByLabelText("研究问题"), { target: { value: "保留采用前的研究问题" } });
     fireEvent.mouseDown(screen.getByRole("tab", { name: "依据与阅读" }), { button: 0 });
     fireEvent.click(screen.getByRole("button", { name: "采用已保存类案" }));
-    await selectOption("已保存类案材料", `${name} · V1`);
+    fireEvent.click(screen.getByRole("combobox", { name: "已保存类案材料" }));
+    fireEvent.click(await screen.findByRole("option", { name: /合成已保存类案[.]md · V1/ }));
     fireEvent.click(screen.getByRole("button", { name: "读取材料元信息" }));
     await screen.findByText("合成案名");
     fireEvent.click(screen.getByRole("button", { name: "加入研究" }));
