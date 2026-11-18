@@ -17,8 +17,9 @@ const choose = vi.fn(), openDocument = vi.fn();
 const scrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
 async function selectOption(label: string, option: string) {
   const trigger = screen.getByRole("combobox", { name: label });
-  fireEvent.keyDown(trigger, { key: "ArrowDown" });
-  fireEvent.keyDown(await screen.findByRole("option", { name: option }), { key: "Enter" });
+  trigger.focus();
+  fireEvent.click(trigger);
+  fireEvent.click(await screen.findByRole("option", { name: text => text.includes(option) }));
   await waitFor(() => expect(trigger).toHaveFocus());
 }
 function view(id = researchId, question = "合成旧法研究"): ResearchRevisionView {
@@ -53,7 +54,7 @@ describe("研究工作区的保存与来源连续性", () => {
     render(<ResearchWorkspace matterId={matterId} onSelectResearch={choose} onOpenDocument={openDocument} />);
     fireEvent.click(await screen.findByRole("button", { name: "新建研究" }));
     fireEvent.change(await screen.findByLabelText("研究问题"), { target: { value: "保留采用前的研究问题" } });
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "依据与阅读" }), { button: 0 });
+    fireEvent.click(screen.getByRole("tab", { name: "依据与阅读" }));
     fireEvent.click(screen.getByRole("button", { name: "采用已保存类案" }));
     fireEvent.click(screen.getByRole("combobox", { name: "已保存类案材料" }));
     fireEvent.click(await screen.findByRole("option", { name: /合成已保存类案[.]md · V1/ }));
@@ -69,7 +70,11 @@ describe("研究工作区的保存与来源连续性", () => {
     expect(mock.save).not.toHaveBeenCalled();
     expect(screen.getByLabelText("发现、限制或失败原因")).toHaveValue("保留人工批注；全文仍待取得");
     await selectOption("选择研究来源材料", `${name} · V1`);
+    fireEvent.click(screen.getByRole("tab", { name: "论证与结论" }));
+    fireEvent.click(screen.getByRole("tab", { name: "依据与阅读" }));
+    expect(screen.getByRole("combobox", { name: "选择研究来源材料" })).toHaveTextContent(name);
     fireEvent.click(screen.getByRole("button", { name: "选入" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "保存研究" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "保存研究" }));
     await waitFor(() => expect(mock.save).toHaveBeenCalledTimes(1));
     expect(mock.save.mock.calls[0][0]).toMatchObject({ question: "保留采用前的研究问题", sources: [{ documentId }],
@@ -101,6 +106,7 @@ describe("研究工作区的保存与来源连续性", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "修改研究" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "修改研究" }));
     await screen.findByText("合成修改入口读取失败");
+    await waitFor(() => expect(screen.getByRole("button", { name: "重试" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "重试" }));
     await waitFor(() => expect(mock.read).toHaveBeenCalledTimes(2));
     expect(mock.draft).toHaveBeenCalledTimes(1);
@@ -160,7 +166,7 @@ describe("研究工作区的保存与来源连续性", () => {
     fireEvent.click(await screen.findByRole("button", { name: "修改研究" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "保存新修订" })).toBeEnabled());
     fireEvent.change(screen.getByLabelText("研究问题"), { target: { value: "保留来源核对中的草稿" } });
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "依据与阅读" }), { button: 0 });
+    fireEvent.click(screen.getByRole("tab", { name: "依据与阅读" }));
     fireEvent.click(await screen.findByRole("button", { name: "查看原文" }));
     const dialog = await screen.findByRole("dialog", { name });
     expect(within(dialog).getByText(text)).toBeInTheDocument();
@@ -173,7 +179,7 @@ describe("研究工作区的保存与来源连续性", () => {
     }
     fireEvent.keyDown(dialog, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "问题与范围" }), { button: 0 });
+    fireEvent.click(screen.getByRole("tab", { name: "问题与范围" }));
     expect(screen.getByLabelText("研究问题")).toHaveValue("保留来源核对中的草稿");
     expect(mock.save).not.toHaveBeenCalled();
   });
@@ -206,7 +212,7 @@ describe("研究工作区的保存与来源连续性", () => {
       await waitFor(() => expect(screen.getByRole("button", { name: "保存新修订" })).toBeEnabled());
       fireEvent.change(screen.getByLabelText("研究问题"), { target: { value: "保留单格核对中的研究草稿" } });
     }
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "依据与阅读" }), { button: 0 });
+    fireEvent.click(screen.getByRole("tab", { name: "依据与阅读" }));
     fireEvent.click(await screen.findByRole("button", { name: "查看原文" }));
     const dialog = await screen.findByRole("dialog", { name });
     expect(within(dialog).getByText("固定 单格").textContent).toBe(" 固定\n单格 ");
@@ -218,7 +224,7 @@ describe("研究工作区的保存与来源连续性", () => {
     else { expect(mock.source).toHaveBeenCalledWith(matterId, original.id, sourceId); expect(mock.preview).not.toHaveBeenCalled(); }
     fireEvent.keyDown(dialog, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "问题与范围" }), { button: 0 });
+    fireEvent.click(screen.getByRole("tab", { name: "问题与范围" }));
     expect(screen.getByLabelText("研究问题")).toHaveValue(mode === "编辑态" ? "保留单格核对中的研究草稿" : original.content!.question);
     expect(mock.save).not.toHaveBeenCalled();
   });
@@ -243,7 +249,9 @@ describe("研究工作区的保存与来源连续性", () => {
     fireEvent.click(screen.getByRole("button", { name: "保存研究" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("核对状态已变化");
     expect(mock.save.mock.calls[0][0].issueSelection).toEqual(selection);
-    fireEvent.click(screen.getByRole("button", { name: "更新争点选项" }));
+    const refreshIssues = screen.getByRole("button", { name: "更新争点选项" });
+    await waitFor(() => expect(refreshIssues).toBeEnabled());
+    fireEvent.click(refreshIssues);
     expect(await screen.findByRole("status")).toHaveTextContent("研究输入已保留");
     expect(screen.getByLabelText("研究问题")).toHaveValue("保留已输入的研究问题");
     expect(screen.getByRole("combobox", { name: "关联争点" })).toHaveTextContent("所选争点已变化，请重新选择");

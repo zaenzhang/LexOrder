@@ -27,8 +27,9 @@ function PickerHarness({ onChange, initial = [] }: { onChange(value: ResearchSou
 
 async function choose(label: string, name: string) {
   const trigger = screen.getByRole("combobox", { name: label });
-  fireEvent.keyDown(trigger, { key: "ArrowDown" });
-  fireEvent.keyDown(await screen.findByRole("option", { name }), { key: "Enter" });
+  trigger.focus();
+  fireEvent.click(trigger);
+  fireEvent.click(await screen.findByRole("option", { name: text => text.includes(name) }));
   await waitFor(() => expect(trigger).toHaveFocus());
 }
 
@@ -88,10 +89,11 @@ describe("研究来源选择使用真实材料位置", () => {
     expect(listMaterialSources).toHaveBeenNthCalledWith(1, { matterId, documentIds: [documents[0].id], limit: 20 });
     expect(listMaterialSources).toHaveBeenNthCalledWith(2, { matterId, documentIds: [documents[1].id], limit: 20 });
     expect(screen.getByRole("combobox", { name: "选择研究来源材料" })).toHaveTextContent("合成乙材料.pdf");
-    fireEvent.keyDown(location, { key: "ArrowDown" });
-    const selected = await screen.findByRole("option", { name: "第 2 页 · 合成乙的当前片段" });
-    expect(screen.queryByRole("option", { name: "第 2 页 · 合成甲的旧请求片段" })).not.toBeInTheDocument();
-    fireEvent.keyDown(selected, { key: "Enter" });
+    location.focus();
+    fireEvent.click(location);
+    const selected = await screen.findByRole("option", { name: text => text.includes("第 2 页 · 合成乙的当前片段") });
+    expect(screen.queryByRole("option", { name: text => text.includes("第 2 页 · 合成甲的旧请求片段") })).not.toBeInTheDocument();
+    fireEvent.click(selected);
     await waitFor(() => expect(location).toHaveFocus());
     expect(screen.queryByRole("spinbutton", { name: /页码/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "选入" }));

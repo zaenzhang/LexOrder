@@ -192,15 +192,16 @@ export function PartyCard({
               </div>
             ) : null}
             <div className="fitem">
-              <label className="flabel">
+              <label htmlFor={selectLabelId + "-identity"} className="flabel">
                 {isOrg ? "统一社会信用代码" : idType === "ID_CARD" ? "身份证号" : "证件号码"}
                 <span className="star">*</span>
               </label>
               {isOrg ? (
-                <input className={cn("finput font-mono", idErr && "!border-[var(--red)]")} placeholder="18 位信用代码" {...register(`${p}.enterpriseSocialCode`)} />
+                <input id={selectLabelId + "-identity"} className={cn("finput font-mono", idErr && "!border-[var(--red)]")} placeholder="18 位信用代码" {...register(`${p}.enterpriseSocialCode`)} />
               ) : (
                 <input
                   {...idNumberField}
+                  id={selectLabelId + "-identity"}
                   className={cn("finput font-mono", (idErr || liveIdError) && "!border-[var(--red)]")}
                   placeholder={idType === "ID_CARD" ? "18 位，仅数字或末位 X" : "证件号码"}
                   inputMode={idType === "ID_CARD" ? "text" : undefined}

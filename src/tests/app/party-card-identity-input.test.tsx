@@ -30,10 +30,18 @@ beforeAll(() => {
 afterEach(cleanup);
 
 async function selectOtherIdentity() {
-  fireEvent.keyDown(screen.getByText("居民身份证").closest("button")!, { key: "ArrowDown" });
-  const option = await screen.findByRole("option", { name: "其他证件" });
-  fireEvent.keyDown(option, { key: "Enter" });
-  await waitFor(() => expect(screen.getByText("其他证件").closest("button")).toHaveFocus());
+  const trigger = screen.getByRole("combobox", { name: "证件类型" });
+  act(() => trigger.focus());
+  fireEvent.keyDown(trigger, { key: "ArrowDown", keyCode: 40 });
+  const option = await screen.findByRole("option", { name: /其他证件/ });
+  const count = screen.getAllByRole("option").length;
+  for (let index = 0; index < count && trigger.getAttribute("aria-activedescendant") !== option.id; index++) {
+    fireEvent.keyDown(trigger, { key: "ArrowDown", keyCode: 40 });
+  }
+  expect(trigger).toHaveAttribute("aria-activedescendant", option.id);
+  fireEvent.keyDown(trigger, { key: "Enter", keyCode: 13 });
+  await waitFor(() => expect(trigger).toHaveTextContent("其他证件"));
+  expect(trigger).toHaveFocus();
 }
 
 describe("收案已有自然人客户的身份补全", () => {

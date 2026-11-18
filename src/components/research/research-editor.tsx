@@ -24,15 +24,15 @@ export function ResearchEditor({ matterId, value, onChange, options, disabled, r
     const option = options?.documents.find(document => document.id === documentId);
     return option ? `${option.name} · V${option.version}` : "已选具体来源";
   }
-  return <Tabs defaultActiveKey="question" className="space-y-4" tabPaneMotion={false}>
+  return <Tabs defaultActiveKey="question" className="space-y-4" keepDOM lazyRender tabPaneMotion={false}>
 
     <Tabs.TabPane itemKey="question" tab="问题与范围" className="space-y-4">
       <div className="space-y-1.5"><label htmlFor="research-question" className="text-sm font-medium text-[var(--semi-color-text-1)]">研究问题</label><Input id="research-question" value={value.question} onChange={inputValue => update({ question: inputValue })} maxLength={300} readOnly={readOnly} disabled={disabled} /></div>
       {readOnly ? saved?.issue ? <details className="text-sm space-y-2"><summary className="cursor-pointer">关联争点：{saved.issue.title} · 修订 {saved.issue.revision}{saved.issue.changed ? "（争点已有新修订）" : saved.issue.confirmationChanged ? "（核对状态已有变化）" : ""}</summary>
         <p className="whitespace-pre-wrap break-words">{saved.issue.content}</p><p className="text-xs text-muted-foreground">采用时：{saved.issue.confirmedAt ? `已核对（${shDayKey(saved.issue.confirmedAt)}）` : "尚未核对"} · 输入固定于 {shDayKey(saved.issue.capturedAt)}</p>
         {saved.issue.sources.map(source => <div key={source.id} className="flex items-center justify-between gap-3 rounded-md border p-2"><span>{source.documentName} · V{source.documentVersion} · {source.locationLabel}</span><Button disabled={disabled} onClick={() => onOpenSource(source.id)} htmlType="button" type="tertiary" theme="outline" size="small">查看争点来源</Button></div>)}
-      </details> : null : <div className="space-y-1.5"><div className="flex items-center justify-between gap-3"><label className="text-sm font-medium text-[var(--semi-color-text-1)]">关联争点</label><Button disabled={disabled} onClick={onRefreshIssues} htmlType="button" type="tertiary" theme="borderless" size="small">更新争点选项</Button></div>
-        <> <span className="sr-only" id={selectLabelId + "-1"}>{"关联争点"}</span><Select
+      </details> : null : <div className="space-y-1.5"><div className="flex items-center justify-between gap-3"><label id={selectLabelId + "-issue"} className="text-sm font-medium text-[var(--semi-color-text-1)]">关联争点</label><Button disabled={disabled} onClick={onRefreshIssues} htmlType="button" type="tertiary" theme="borderless" size="small">更新争点选项</Button></div>
+        <Select
           disabled={disabled || !options}
           value={researchIssueSelectionKey(value.issueSelection)}
           onChange={key => { if (typeof key !== "string") return;
@@ -40,10 +40,10 @@ export function ResearchEditor({ matterId, value, onChange, options, disabled, r
           const issue = options?.issues.find(item => researchIssueSelectionKey(item.selection) === key);
           if (issue) update({ issueSelection: issue.selection });
         }}
-          aria-labelledby={selectLabelId + "-1"}
+          aria-labelledby={selectLabelId + "-issue"}
           placeholder="不关联争点"
           className="w-full"
-          motion={false}><Select.Option value="none">不关联争点</Select.Option>{value.issueSelection && !options?.issues.some(issue => researchIssueSelectionKey(issue.selection) === researchIssueSelectionKey(value.issueSelection)) ? <Select.Option value={researchIssueSelectionKey(value.issueSelection)} disabled={value.issueSelection.kind === "CURRENT"}>{value.issueSelection.kind === "CURRENT" ? "所选争点已变化，请重新选择" : "保留原研究的争点输入"}</Select.Option> : null}{options?.issues.map(issue => <Select.Option key={researchIssueSelectionKey(issue.selection)} value={researchIssueSelectionKey(issue.selection)}>{issue.title} · 修订 {issue.revision} · {issue.selection.confirmedAt ? "已核对" : "待核对"}</Select.Option>)}</Select></>
+          motion={false}><Select.Option value="none">不关联争点</Select.Option>{value.issueSelection && !options?.issues.some(issue => researchIssueSelectionKey(issue.selection) === researchIssueSelectionKey(value.issueSelection)) ? <Select.Option value={researchIssueSelectionKey(value.issueSelection)} disabled={value.issueSelection.kind === "CURRENT"}>{value.issueSelection.kind === "CURRENT" ? "所选争点已变化，请重新选择" : "保留原研究的争点输入"}</Select.Option> : null}{options?.issues.map(issue => <Select.Option key={researchIssueSelectionKey(issue.selection)} value={researchIssueSelectionKey(issue.selection)}>{issue.title} · 修订 {issue.revision} · {issue.selection.confirmedAt ? "已核对" : "待核对"}</Select.Option>)}</Select>
       </div>}
       <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1.5"><label htmlFor="research-jurisdiction" className="text-sm font-medium text-[var(--semi-color-text-1)]">法域</label><Input id="research-jurisdiction" placeholder={readOnly ? "待核实" : "未知可留空"} value={value.jurisdiction} readOnly={readOnly} disabled={disabled} onChange={inputValue => update({ jurisdiction: inputValue })} /></div>

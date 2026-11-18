@@ -114,8 +114,8 @@ describe("复核固定位置的只读呈现和窄来源选择", () => {
     const select = await screen.findByRole("combobox", { name: "原文位置" });
     expect(mocks.reviewSources).toHaveBeenCalledWith({ documentId: "document-subject", slot: "BASIS", sourceDocumentId: document.id });
     expect(mocks.materialSources).not.toHaveBeenCalled();
-    select.focus(); fireEvent.keyDown(select, { key: "Enter" });
-    fireEvent.click(await screen.findByRole("option", { name: "第 3 页 · 合成实际位置" }));
+    fireEvent.click(select);
+    fireEvent.click(await screen.findByRole("option", { name: text => text.includes("第 3 页 · 合成实际位置") }));
     expect(screen.queryByLabelText("页码（可选，共 5 页）")).not.toBeInTheDocument();
     view.unmount();
     render(<Entry review={false} />);
