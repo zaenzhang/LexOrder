@@ -791,6 +791,14 @@ Tauri 作为现有 Server 工作台的桌面宿主，沿用现有页面和登录
 
 四生产文件、不改schema/公共授权/其他保全CRUD；保留原被保全人、财产、续期和未展示字段。已完成的组件/PG与未进行的桌面验收分记于计划 §8.56。
 
+### 6.30 Semi 公共筛选、确认与复核内容合同（2026-11-18）
+
+按计划 §7.17 的 A 组第二批，固定 `@douyinfe/semi-ui@2.105.0` 与已有 React 19/中文 Provider。页面 FilterSelect 直接组合 Dropdown/Button，保留值、全部/清除的 `undefined`、不可清空和受控回读；选择时先关闭并回焦再通知原调用方，使用 `motion={false}`，向下箭头接续已有打开入口，其余菜单键盘交给 Semi。
+
+ConfirmHost 保持现有唯一请求队列和 Promise 返回合同，内部按钮及 TextArea 使用 Semi API。首次入队同步记录当前入口，排队项沿用该入口；末项关闭只在没有新请求且入口仍连接时回焦。旧请求事件不得结算后来请求。字段的标签、必填错误与快捷提交直接绑定同一 TextArea。旧 Radix 父表单仍持有焦点、Escape 和点击边界，故本批保留唯一现行弹层壳，待调用方同批迁走后替换，不建立 Radix/Semi 弹层适配或第二套队列。
+
+ReviewDialogContent 的 Tabs/TabPane 使用业务原 ID，受控值由调用方更新；显式 `keepDOM`、`lazyRender={false}` 和 `tabPaneMotion={false}` 保持原 forceMount 的草稿语义。计数使用 Semi Tag/Typography，新增内容层的高度及滚动由就近 CSS module 定义。无当前消费者的 `.rv-main` 旧规则随本批删除；其他公共组件、Sonner、依赖和 CSS 按真实引用等待分组汇合。本批没有 API、schema、业务权限或财务/归档状态变更。
+
 ## 7. 参考项目如何进入 LexOrder
 
 沿用 [来源记录](RESEARCH_AND_DECISIONS.md)，按“观察行为 → 输入输出与规则 → LexOrder 设计 → 场景验收”吸收。实际复制代码另记固定提交、文件、依赖与来源；研究范围不按协议类型排除。

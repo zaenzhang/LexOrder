@@ -20,7 +20,7 @@ function Harness({ detail = base, onDecision = vi.fn() }: { detail?: Detail; onD
   const [note, setNote] = useState("");
   return <Dialog open><IntakeApprovalDialog detail={detail} intakeDetail={intakeDetail} note={note} onNoteChange={setNote} pending={false} onDecision={onDecision} onResubmit={vi.fn()} /></Dialog>;
 }
-const tab = (name: RegExp) => fireEvent.mouseDown(screen.getByRole("tab", { name }), { button: 0, ctrlKey: false });
+const tab = (name: RegExp) => fireEvent.click(screen.getByRole("tab", { name }));
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 describe("立案审批分区审阅", () => {
   it("按实际送审时间展示提交时刻和等待天数", () => {
