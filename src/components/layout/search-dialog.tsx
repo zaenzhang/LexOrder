@@ -276,7 +276,7 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     <><Modal
       visible={open}
       title="全局搜索"
-      width={780}
+      width="min(780px, calc(100vw - 24px))"
       centered
       motion={false}
       preventScroll
@@ -299,7 +299,11 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           ref={inputRef}
           value={query}
           onChange={setQuery}
-          prefix={loading ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Search size={16} aria-hidden />}
+          prefix={
+            <span className="mx-3 inline-flex text-[var(--semi-color-text-2)]" aria-hidden>
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+            </span>
+          }
           placeholder="搜索案件、客户、材料正文、期限…"
           aria-label="搜索关键词"
           autoComplete="off"

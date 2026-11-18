@@ -106,7 +106,7 @@ describe("Semi 登录与账户设置", () => {
     render(<LoginForm />);
     fillLogin();
     fireEvent.click(screen.getByRole("button", { name: "登 录" }));
-    expect(await screen.findByText(/登录服务暂时异常/)).toBeInTheDocument();
+    expect(await screen.findByText(/登录服务暂时不可用/)).toBeInTheDocument();
     expect(screen.getByLabelText("邮箱")).toHaveValue("login@example.invalid");
     expect(screen.getByLabelText("密码")).toHaveValue("fixture-password");
     expect(mocks.enforcement).not.toHaveBeenCalled();
@@ -129,7 +129,7 @@ describe("Semi 登录与账户设置", () => {
     fireEvent.click(screen.getByRole("button", { name: "登 录" }));
     await waitFor(() => expect(mocks.signIn).toHaveBeenCalledTimes(2));
     expect(mocks.signIn).toHaveBeenLastCalledWith("credentials", expect.objectContaining({ totpCode: undefined }));
-    await screen.findByText(/邮箱或密码错误；如账号已开启/);
+    await screen.findByText(/邮箱或密码错误。如账号已开启/);
   });
 
   it("仅凭据被拒才检查强制两步绑定策略", async () => {

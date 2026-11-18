@@ -28,7 +28,7 @@ export function SearchMaterialSourceDialog({ input, onClose }: {
   }, [documentId, runId, anchorId, attempt]);
   const source = result?.status === "AVAILABLE" ? result : null;
   return <Modal visible title={source?.document.name ?? "材料命中来源"} onCancel={onClose}
-    width={900} centered motion={false} preventScroll bodyStyle={{ maxHeight: "70vh", overflowY: "auto" }}
+    width="min(900px, calc(100vw - 24px))" centered motion={false} preventScroll bodyStyle={{ maxHeight: "70vh", overflowY: "auto" }}
     footer={<div className="flex flex-wrap items-center justify-end gap-3">
       {error || result?.status === "UNAVAILABLE" ? <Button theme="outline" onClick={() => setAttempt(value => value + 1)}>重新读取来源</Button> : null}
       {source?.previewUrl ? <Typography.Text link={{ href: source.previewUrl, target: "_blank", rel: "noopener noreferrer" }}>{source.previewKind === "TABLE" ? "查看单元格转换预览" : source.previewKind === "CONVERTED" ? "另页查看转换预览" : "另页查看预览"}</Typography.Text> : null}

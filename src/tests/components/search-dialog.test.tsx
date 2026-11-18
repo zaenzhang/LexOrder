@@ -238,7 +238,7 @@ describe("材料搜索命中的固定来源与返回", () => {
     const tab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
     input.dispatchEvent(tab); expect(tab.defaultPrevented).toBe(false);
     const more = screen.getByRole("button", { name: "继续检索" });
-    more.focus(); expect(more).toHaveFocus();
+    act(() => { more.focus(); }); expect(more).toHaveFocus();
     fireEvent.keyDown(more, { key: "Enter" });
     expect(mock.source).not.toHaveBeenCalled(); expect(mock.push).not.toHaveBeenCalled();
     fireEvent.click(more);
