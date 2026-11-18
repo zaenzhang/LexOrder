@@ -2,7 +2,7 @@ import { useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ConfirmHost, confirmDialog, promptDialog } from "@/components/patterns/confirm-dialog";
-import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { FormDialogBody, FormDialogContent } from "@/components/patterns/form-dialog";
 
 afterEach(cleanup);
@@ -26,19 +26,19 @@ it("既有确认默认不变，排队请求可明确将初始焦点放到取消"
 function DraftForm({ onResult }: { onResult: (confirmed: boolean) => void }) {
   const [open, setOpen] = useState(false);
   return <>
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild><button>编辑记录</button></DialogTrigger>
+    <WorkspaceDialog open={open} onOpenChange={setOpen}>
+      <button type="button" onClick={() => setOpen(true)}>编辑记录</button>
       <FormDialogContent>
         <DialogHeader><DialogTitle>编辑原记录</DialogTitle><DialogDescription>合成表单</DialogDescription></DialogHeader>
         <FormDialogBody><input aria-label="原记录草稿" defaultValue="尚未提交" /></FormDialogBody>
         <DialogFooter><button onClick={async () => onResult(await confirmDialog({ title: "放弃更改？", initialFocus: "cancel", cancelText: "继续编辑", confirmText: "放弃更改" }))}>检查退出</button></DialogFooter>
       </FormDialogContent>
-    </Dialog>
+    </WorkspaceDialog>
     <ConfirmHost />
   </>;
 }
 
-it.each(["Escape", "cancel"] as const)("旧表单内的确认以 %s 取消后保稿并回到真实入口", async (exit) => {
+it.each(["Escape", "cancel"] as const)("表单内的确认以 %s 取消后保稿并回到真实入口", async (exit) => {
   const onResult = vi.fn();
   render(<DraftForm onResult={onResult} />);
   fireEvent.click(screen.getByRole("button", { name: "编辑记录" }));

@@ -8,7 +8,7 @@
 import type { ReactNode } from "react";
 import { Tabs, Tag, Typography } from "@douyinfe/semi-ui";
 import { AlertTriangle, SquareCheck } from "lucide-react";
-import { DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { DialogContent, DialogDescription, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { cn, formatDateTime } from "@/lib/utils";
 import styles from "./review-dialog.module.css";
 
@@ -57,14 +57,10 @@ export function ReviewDialogContent({
           <div className="min-w-0 pr-8">
             {eyebrow ? <div className="t-xs t-mute mb-1 font-semibold">{eyebrow}</div> : null}
             <div className="flex flex-wrap items-center gap-2.5">
-              <DialogTitle asChild>
-                <span className="rv-title break-words">{title}</span>
-              </DialogTitle>
+              <DialogTitle className="rv-title break-words">{title}</DialogTitle>
               {status}
             </div>
-            <DialogDescription asChild>
-              <div className="rv-code flex flex-wrap gap-x-2">{description}</div>
-            </DialogDescription>
+            <DialogDescription className="rv-code flex flex-wrap gap-x-2">{description}</DialogDescription>
           </div>
         </div>
         {summary || alert ? (
