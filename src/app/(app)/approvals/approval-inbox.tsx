@@ -284,8 +284,26 @@ export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data
 
     <form className="mb-3 flex flex-wrap items-center gap-2" onSubmit={e => { e.preventDefault(); navigate({ q: query.trim() }); }}>
       <Input aria-label="搜索审批" value={query} onChange={setQuery} placeholder="搜索申请、申请人或案件" prefix={<Search size={16} />} style={{ width: 260 }} />
-      <Select<string> value={data.query.type ?? undefined} optionList={actionOptions} onChange={value => ((v) => navigate({ type: v }))(typeof value === "string" && value ? value : undefined)} insetLabel="事项" insetLabelId="approval-type-label" aria-labelledby="approval-type-label" placeholder="全部" showClear motion={false} style={{ minWidth: 130 }} />
-      <Select<string> value={data.query.status ?? undefined} optionList={statusOptions} onChange={value => ((v) => navigate({ status: v }))(typeof value === "string" && value ? value : undefined)} insetLabel="状态" insetLabelId="approval-status-label" aria-labelledby="approval-status-label" placeholder="全部" showClear motion={false} style={{ minWidth: 130 }} />
+      <Select<string>
+        value={data.query.type ?? "all"}
+        optionList={[{ value: "all", label: "全部" }, ...actionOptions]}
+        onChange={value => navigate({ type: typeof value === "string" && value !== "all" ? value : undefined })}
+        insetLabel="事项"
+        insetLabelId="approval-type-label"
+        aria-labelledby="approval-type-label"
+        motion={false}
+        style={{ minWidth: 130 }}
+      />
+      <Select<string>
+        value={data.query.status ?? "all"}
+        optionList={[{ value: "all", label: "全部" }, ...statusOptions]}
+        onChange={value => navigate({ status: typeof value === "string" && value !== "all" ? value : undefined })}
+        insetLabel="状态"
+        insetLabelId="approval-status-label"
+        aria-labelledby="approval-status-label"
+        motion={false}
+        style={{ minWidth: 130 }}
+      />
       <label className="flex items-center gap-2 text-sm">
         {data.query.tab === "processed" ? "处理日起" : "提交日起"}
         <Input type="date" aria-label="起始日期" value={data.query.start ?? ""} onChange={e => navigate({ start: e })} />

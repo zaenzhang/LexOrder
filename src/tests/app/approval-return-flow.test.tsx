@@ -97,6 +97,22 @@ describe("审批详情读取、轮次与返回案件", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
+  it("Semi 筛选重置审批分页并保留其他条件，清空状态返回全部", async () => {
+    mocks.params = new URLSearchParams({ tab: "mine", page: "3", type: first.action, status: "APPROVED", start: "2026-11-01" }).toString();
+    render(<ApprovalInbox data={{ ...data, query: { ...data.query, page: 3, type: first.action, status: "APPROVED", start: "2026-11-01" } }} />);
+
+    const input = screen.getByRole("textbox", { name: "搜索审批" });
+    fireEvent.change(input, { target: { value: "  合成申请  " } });
+    fireEvent.submit(input.closest("form")!);
+    const url = new URL(mocks.push.mock.lastCall?.[0], "http://lexorder.invalid");
+    expect(url.pathname).toBe("/approvals");
+    expect(Object.fromEntries(url.searchParams)).toEqual({ tab: "mine", type: "INVOICE_APPROVE", status: "APPROVED", q: "合成申请", start: "2026-11-01" });
+
+    fireEvent.click(screen.getByRole("combobox", { name: "状态" }));
+    fireEvent.click(await screen.findByRole("option", { name: /^(?:tick )?全部$/ }));
+    expect(mocks.push).toHaveBeenLastCalledWith("/approvals?tab=mine&type=INVOICE_APPROVE&start=2026-11-01");
+  });
+
   it("案件用印详情直达现行审批入口，并将程序和列表位置带入获准回程", async () => {
     const seal = { id: "cseal000000000000000000001", action: "SEAL_APPROVE" as const };
     const returnTo = "/matters/LL-2026-CC-0001?view=seal&procedure=one&list=tab%3Dactive%26page%3D2";

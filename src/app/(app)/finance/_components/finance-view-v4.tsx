@@ -323,8 +323,34 @@ export function FinanceViewV4({ entries, monthly, aging, stats, invoiceRequests,
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Input value={q} onChange={setQ} placeholder="按案件、对方户名搜索" aria-label="搜索流水" prefix={<Search size={16} />} style={{ width: 240 }} />
-                <Select<string> value={typeFilter} optionList={(Object.keys(TYPE_META) as Entry["type"][]).map((t) => ({ value: t, label: TYPE_META[t].label }))} onChange={value => ((v) => setTypeFilter(v as Entry["type"] | undefined))(typeof value === "string" && value ? value : undefined)} insetLabel="类型" insetLabelId="finance-type-label" aria-labelledby="finance-type-label" placeholder="全部" showClear motion={false} style={{ minWidth: 130 }} />
-                <Select<string> value={range} optionList={[{ value: "30", label: "近 30 天" }, { value: "90", label: "近 90 天" }, { value: "365", label: "近一年" }]} onChange={value => (setRange)(typeof value === "string" && value ? value : undefined)} insetLabel="期间" insetLabelId="finance-range-label" aria-labelledby="finance-range-label" placeholder="全部" showClear motion={false} style={{ minWidth: 130 }} />
+                <Select<Entry["type"] | "all">
+                  value={typeFilter ?? "all"}
+                  optionList={[
+                    { value: "all", label: "全部" },
+                    ...(Object.keys(TYPE_META) as Entry["type"][]).map(value => ({ value, label: TYPE_META[value].label })),
+                  ]}
+                  onChange={value => setTypeFilter(typeof value === "string" && value !== "all" ? value : undefined)}
+                  insetLabel="类型"
+                  insetLabelId="finance-type-label"
+                  aria-labelledby="finance-type-label"
+                  motion={false}
+                  style={{ minWidth: 130 }}
+                />
+                <Select<string>
+                  value={range ?? "all"}
+                  optionList={[
+                    { value: "all", label: "全部" },
+                    { value: "30", label: "近 30 天" },
+                    { value: "90", label: "近 90 天" },
+                    { value: "365", label: "近一年" },
+                  ]}
+                  onChange={value => setRange(typeof value === "string" && value !== "all" ? value : undefined)}
+                  insetLabel="期间"
+                  insetLabelId="finance-range-label"
+                  aria-labelledby="finance-range-label"
+                  motion={false}
+                  style={{ minWidth: 130 }}
+                />
               </div>
             </div>
             {filtered.length === 0 ? (
