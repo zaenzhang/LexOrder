@@ -31,6 +31,31 @@ describe("收案 Semi 客户及管辖地选择", () => {
     expect(mock.create).not.toHaveBeenCalled();
   });
 
+  it("键盘可以清除已选委托方，并在清除后隐藏此选项", async () => {
+    function SelectedClient() {
+      const [clientId, setClientId] = useState("client-1");
+      return <ClientCombobox clientId={clientId} clientName={clientId ? "合成客户甲" : ""} clientType="INDIVIDUAL"
+        options={[{ id: "client-1", name: "合成客户甲", type: "INDIVIDUAL" }]}
+        onPickExisting={mock.existing} onTypeNew={mock.create} onPickYuandian={mock.enterprise}
+        onClear={() => { mock.clear(); setClientId(""); }} />;
+    }
+
+    render(<SelectedClient />);
+    const trigger = screen.getByRole("combobox", { name: "委托方客户" });
+    act(() => trigger.focus());
+    fireEvent.keyDown(trigger, { key: "ArrowDown", code: "ArrowDown", keyCode: 40 });
+    const search = await screen.findByPlaceholderText("输入姓名 / 公司名");
+    const clearOption = screen.getByRole("option", { name: /^(?:tick )?清除选择$/ });
+    fireEvent.keyDown(search, { key: "ArrowUp", code: "ArrowUp", keyCode: 38 });
+    expect(search).toHaveAttribute("aria-activedescendant", clearOption.id);
+    fireEvent.keyDown(search, { key: "Enter", code: "Enter", keyCode: 13 });
+
+    expect(mock.clear).toHaveBeenCalledOnce();
+    expect(trigger).toHaveTextContent("搜索或直接输入名称");
+    fireEvent.click(trigger);
+    expect(screen.queryByRole("option", { name: /^(?:tick )?清除选择$/ })).not.toBeInTheDocument();
+  });
+
   it("输入新客户名后明确选择新建，不发起企业服务", async () => {
     clients();
     fireEvent.click(screen.getByRole("combobox", { name: "委托方客户" }));

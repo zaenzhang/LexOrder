@@ -84,7 +84,8 @@ export function ClientCombobox({
   const choiceOptions = [
     ...(query.trim() && !hasExactMatch ? [{ value: `new:${query.trim()}`, label: `新建 ${query.trim()} 为委托方` }] : []),
     ...filtered.map(option => ({ value: `existing:${option.id}`, label: option.name })),
-    ...yuandianResults.map(candidate => ({ value: `enterprise:${candidate.id}`, label: `${candidate.name}${candidate.creditCode ? ` · ${candidate.creditCode}` : ""}（企业信息库）` }))
+    ...yuandianResults.map(candidate => ({ value: `enterprise:${candidate.id}`, label: `${candidate.name}${candidate.creditCode ? ` · ${candidate.creditCode}` : ""}（企业信息库）` })),
+    ...(!query && selectedValue ? [{ value: "clear", label: "清除选择" }] : []),
   ];
   if (!query && selectedValue && !choiceOptions.some(option => option.value === selectedValue)) {
     choiceOptions.unshift({ value: selectedValue, label: display });
@@ -96,17 +97,19 @@ export function ClientCombobox({
       ref={selectRef}
       aria-labelledby={labelId} style={{ width: "100%" }} className={triggerClassName}
       value={selectedValue} optionList={choiceOptions} placeholder="搜索或直接输入名称" disabled={disabled}
-      searchPlaceholder="输入姓名 / 公司名" searchPosition="dropdown" filter remote showClear
+      searchPlaceholder="输入姓名 / 公司名" searchPosition="dropdown" filter remote
       innerTopSlot={yuandianLoading ? <div role="status" className="flex items-center gap-2 px-3 py-2 text-sm"><Spin size="small" />正在查询企业信息</div> : undefined}
       motion={false} getPopupContainer={() => containerRef.current!}
-      onSearch={setQuery} onClear={onClear}
+      onSearch={setQuery}
       renderSelectedItem={() => display}
       emptyContent={query ? "没有匹配客户" : "开始输入以搜索 / 新建"}
       onDropdownVisibleChange={visible => { setOpen(visible); onDropdownVisibleChange?.(visible); }}
       // onSelect runs before closing clears the current enterprise candidates.
       onSelect={value => {
         if (typeof value !== "string") return;
-        if (value.startsWith("existing:")) {
+        if (value === "clear") {
+          onClear();
+        } else if (value.startsWith("existing:")) {
           const option = options.find(item => item.id === value.slice(9));
           if (option) onPickExisting(option.id, option.name);
         } else if (value.startsWith("enterprise:")) {
