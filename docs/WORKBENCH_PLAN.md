@@ -1548,6 +1548,12 @@ B提交细化提案，C已核当前 `f4e19e6` 的实际上传/解析、研究出
 
 本片不扩转派承接、历史平台、保全审批或独立模块重构；桌面及专业验收仍由用户安排。A2/B3 按原合同并行恢复，root 串行持有隔离 PG，集成结果更新原四份主文档。
 
+#### 7.16.16 B3 阻断修复：固定来源位置按结构比较（2026-11-18）
+
+root 首轮隔离 PostgreSQL 实跑 B3 两场景，上传/解析/要点成功，但 readResearchSource 对真实 DOCX TEXT 来源均返回 UNAVAILABLE。实际源码及最小复现确认：PostgreSQL JSONB 的键顺序与 Zod 输出不同，resolveReference 单侧规范化后用 JSON.stringify 比较，语义相同的 TEXT/TABLE 误判；PAGE 历史用例未揭示此问题。这是当前真实格式链的确定生产阻断。
+
+root 在现有 main 唯一修改 src/server/evidence/source-links.ts 的 resolveReference：固定位置双方沿原 sourceLocationSchema 规范后比较；已存位置不合法明确 UNAVAILABLE，保留当前读权、SHA、确切 run/anchor 和位置值核对，不改历史 JSONB/schema/授权或新增比较平台。B3 作者仍只改原两测试文件，纠正研究列表位置文字与真实来源位置文字的不同口径，补实际 researchSource 与 getMaterialSource 身份断言，不绕过失败。两类真实 PG 工作包覆盖 TEXT/TABLE/PAGE 成功，受影响既有来源用例验证错误位置/SHA/撤权仍拒绝；合同先发布，验证后随本次接管集成。
+
 ## 8. 交接：完成范围、证据与未覆盖项
 
 **阅读边界：§8.1—§8.22 为各批当时的实现、验证和交接记录；其中发行/升级/恢复的接续安排已被 §8.23 的用户最新决定覆盖，不授权继续准备或执行维护。已完成结果和未完成事实保留。**
