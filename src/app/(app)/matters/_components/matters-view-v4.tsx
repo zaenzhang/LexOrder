@@ -224,20 +224,22 @@ export function MattersViewV4({
           <Popover
             trigger="click"
             position="bottomLeft"
+            motion={false}
             visible={dateFilterOpen}
-            onVisibleChange={(open) => {
-              if (open) setDateDraft({ from: f.from ?? "", to: f.to ?? "" });
-              setDateFilterOpen(open);
-            }}
+            onVisibleChange={setDateFilterOpen}
             content={({ initialFocusRef }) => (
               <div className="w-64 space-y-2.5 p-3">
                 <label className="block text-xs">
                   起
-                  <Input ref={initialFocusRef as RefObject<HTMLInputElement> | undefined} type="date" value={dateDraft.from} onChange={(from) => setDateDraft({ ...dateDraft, from })} className="mt-1" />
+                  <input ref={initialFocusRef as RefObject<HTMLInputElement> | undefined} type="date" value={dateDraft.from}
+                    onChange={event => setDateDraft(draft => ({ ...draft, from: event.target.value }))}
+                    className="mt-1 block min-h-8 w-full rounded border border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] px-2 text-sm" />
                 </label>
                 <label className="block text-xs">
                   止
-                  <Input type="date" value={dateDraft.to} onChange={(to) => setDateDraft({ ...dateDraft, to })} className="mt-1" />
+                  <input type="date" value={dateDraft.to}
+                    onChange={event => setDateDraft(draft => ({ ...draft, to: event.target.value }))}
+                    className="mt-1 block min-h-8 w-full rounded border border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] px-2 text-sm" />
                 </label>
                 <div className="flex items-center justify-between gap-2">
                   <Button theme="borderless" type="tertiary" size="small" disabled={!f.from && !f.to && !dateDraft.from && !dateDraft.to} onClick={() => {
@@ -252,7 +254,9 @@ export function MattersViewV4({
               </div>
             )}
           >
-            <Button theme="light" type={f.from || f.to ? "primary" : "tertiary"} size="small" icon={<CalendarDays size={14} aria-hidden />}>
+            <Button theme="light" type={f.from || f.to ? "primary" : "tertiary"} size="small" icon={<CalendarDays size={14} aria-hidden />} onClick={() => {
+              if (!dateFilterOpen) setDateDraft({ from: f.from ?? "", to: f.to ?? "" });
+            }}>
               收案日期{f.from || f.to ? <span className="ml-1 font-mono">{f.from ?? "…"} ~ {f.to ?? "…"}</span> : null}
             </Button>
           </Popover>
