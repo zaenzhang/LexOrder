@@ -1,6 +1,7 @@
 "use client";
 
 import { RadioGroup, Select } from "@douyinfe/semi-ui";
+import { useId } from "react";
 
 /** 常用少量选项直接可见，长选项列表使用下拉。 */
 export type ChoiceOption<V extends string> = { value: V; label: string };
@@ -26,6 +27,7 @@ export function ChoiceField<V extends string>({
   className?: string;
   ariaLabel?: string;
 }) {
+  const accessibleLabelId = useId();
   if (options.length <= threshold) {
     return <RadioGroup
       type="button"
@@ -38,16 +40,20 @@ export function ChoiceField<V extends string>({
       className={className}
     />;
   }
-  return <Select
-    optionList={options}
-    value={value ?? undefined}
-    onChange={next => onChange(next as V)}
-    placeholder={placeholder}
-    disabled={disabled}
-    validateStatus={invalid ? "error" : "default"}
-    aria-label={ariaLabel}
-    className={className}
-    motion={false}
-    style={{ width: "100%" }}
-  />;
+  return <>
+    {ariaLabel ? <span hidden id={accessibleLabelId}>{ariaLabel}</span> : null}
+    <Select
+      optionList={options}
+      value={value ?? undefined}
+      onChange={next => onChange(next as V)}
+      placeholder={placeholder}
+      disabled={disabled}
+      validateStatus={invalid ? "error" : "default"}
+      aria-labelledby={ariaLabel ? accessibleLabelId : undefined}
+      className={className}
+      motion={false}
+      showTick={false}
+      style={{ width: "100%" }}
+      />
+  </>;
 }

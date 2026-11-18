@@ -144,6 +144,7 @@ export function LoginForm() {
       />
 
       <Checkbox
+        addonId="login-totp-label"
         checked={showTotp}
         disabled={isSubmitting}
         onChange={(event) => setShowTotp(Boolean(event.target.checked))}
@@ -161,7 +162,7 @@ export function LoginForm() {
                 {...field}
                 className={styles.input}
                 id="totpCode"
-                  disabled={isSubmitting}
+                disabled={isSubmitting}
                 size="large"
                 inputMode="numeric"
                 maxLength={16}

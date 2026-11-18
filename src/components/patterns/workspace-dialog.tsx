@@ -3,7 +3,7 @@
 import { Button, Modal } from "@douyinfe/semi-ui";
 import { IconClose } from "@douyinfe/semi-icons";
 import {
-  cloneElement, createContext, useContext, useEffect, useId, useRef,
+  cloneElement, createContext, useContext, useEffect, useId, useRef, useSyncExternalStore,
   type HTMLAttributes, type MouseEvent, type ReactElement, type ReactNode, type Ref,
 } from "react";
 import { cn } from "@/lib/utils";
@@ -34,6 +34,10 @@ function useWorkspaceDialog() {
   if (!dialog) throw new Error("WorkspaceDialog is required");
   return dialog;
 }
+
+const subscribeHydration = () => () => {};
+const clientSnapshot = () => true;
+const serverSnapshot = () => false;
 
 type FocusHandler = (event: Event) => void;
 
@@ -71,6 +75,8 @@ function DialogSurface({
   onEscapeKeyDown, onKeyDown, onKeyDownCapture, ...props
 }: SurfaceProps) {
   const { open, change, titleId, descriptionId } = useWorkspaceDialog();
+  // Semi portals contain client-only DOM. A deep link may start with an open editor.
+  const hydrated = useSyncExternalStore(subscribeHydration, clientSnapshot, serverSnapshot);
   const surface = useRef<HTMLDivElement>(null);
   const guardedEscape = useRef<KeyboardEvent | null>(null);
 
@@ -85,7 +91,7 @@ function DialogSurface({
 
   const requestCancel = (event: KeyboardEvent | MouseEvent) => {
     if ("key" in event) {
-      if (event.defaultPrevented || event === guardedEscape.current) return;
+      if (event.defaultPrevented || event.isComposing || event === guardedEscape.current) return;
       onEscapeKeyDown?.(event);
     }
     if (!event.defaultPrevented) change(false);
@@ -93,7 +99,7 @@ function DialogSurface({
 
   return (
     <Modal
-      visible={open}
+      visible={open && hydrated}
       centered
       width="100%"
       className={cn(styles.modal, edge === "left" && styles.left, edge === "right" && styles.right)}
