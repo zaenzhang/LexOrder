@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Form, Input, Select, Toast, Upload } from "@douyinfe/semi-ui";
+import { Button, Form, Input, Select, Toast } from "@douyinfe/semi-ui";
 import { getProfileIdentity, bindMyIdentity, correctUserIdentity } from "@/server/users/profile-actions";
 import { correctUserIdentityWithPhotos } from "@/server/identity-documents/actions";
 import { identityDocumentTypeLabel, identityDocumentTypes, type IdentityDocumentTypeValue } from "@/lib/identity-documents";
+import { IdentityPhotoField } from "@/components/users/identity-photo-field";
 import { actionErrorMessage } from "@/lib/action-error";
 
 type Summary = Awaited<ReturnType<typeof getProfileIdentity>>;
@@ -74,8 +75,9 @@ export function IdentityForm({ adminTargetId }: { adminTargetId?: string }) {
         {documentType === "OTHER" && <div className="space-y-2"><Form.Label name={`${prefix}-name`}>证件名称</Form.Label><Input id={`${prefix}-name`} required maxLength={60} value={documentName} onChange={setDocumentName} placeholder="请输入证件全称" /></div>}
         <div className="space-y-2"><Form.Label name={`${prefix}-number`}>证件号码</Form.Label><Input id={`${prefix}-number`} autoComplete="off" spellCheck={false} maxLength={50} required value={number} onChange={setNumber} placeholder={documentType === "PRC_RESIDENT_ID" ? "请输入18位居民身份证号码" : "请输入证件号码"} /></div>
         {adminTargetId && <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-2"><Form.Label text="新的主要证件照片（选填）" /><Upload action="" uploadTrigger="custom" fileList={[]} showUploadList={false} disabled={pending} accept="image/jpeg,image/png,image/webp" onAcceptInvalid={() => Toast.error("证件照片仅支持 JPG、PNG 或 WebP")} onFileChange={files => setPrimaryFile(files[0] ?? null)}><Button htmlType="button" disabled={pending} aria-label="选择新的主要证件照片（选填）">选择照片</Button></Upload>{primaryFile && <p className="break-all text-sm">{primaryFile.name}</p>}</div>
-          <div className="space-y-2"><Form.Label text="新的另一面／补充页（选填）" /><Upload action="" uploadTrigger="custom" fileList={[]} showUploadList={false} disabled={pending} accept="image/jpeg,image/png,image/webp" onAcceptInvalid={() => Toast.error("证件照片仅支持 JPG、PNG 或 WebP")} onFileChange={files => setSecondaryFile(files[0] ?? null)}><Button htmlType="button" disabled={pending} aria-label="选择新的另一面／补充页（选填）">选择照片</Button></Upload>{secondaryFile && <p className="break-all text-sm">{secondaryFile.name}</p>}</div>
+          <IdentityPhotoField label="新的主要证件照片（选填）" file={primaryFile} disabled={pending} onChange={setPrimaryFile} />
+          <IdentityPhotoField label="新的另一面／补充页（选填）" file={secondaryFile} disabled={pending} onChange={setSecondaryFile} />
+          <p className="sm:col-span-2 text-xs text-muted-foreground">支持 JPG、PNG 或 WebP，单张不超过 10 MB。</p>
           {primaryFile && <p className="sm:col-span-2 text-xs text-muted-foreground">保存后，现有照片将标记为已被替代并保留审计；不会物理删除。</p>}
         </div>}
         {adminTargetId ? <div className="space-y-2"><Form.Label name={`${prefix}-reason`}>核对及更正原因</Form.Label><Input id={`${prefix}-reason`} required minLength={4} maxLength={200} value={reason} onChange={setReason} placeholder="说明核对依据，勿填写完整证件号或手机号" /></div>

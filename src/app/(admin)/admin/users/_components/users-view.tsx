@@ -18,6 +18,7 @@ import {
   resetUserPassword,
   forceEnforceTotp
 } from "@/server/users/actions";
+import { AccountPasswordInput } from "@/components/users/account-password-input";
 import { ProfileBasicsForm } from "@/components/users/profile-basics-form";
 import { IdentityForm } from "@/components/users/identity-form";
 import { IdentityDocumentFields, type IdentityDocumentDraft } from "@/components/users/identity-document-fields";
@@ -491,7 +492,7 @@ function CreateUserSheet({
         <DialogHeader className="border-b border-border bg-background px-6 py-4">
           <DialogTitle>新增用户</DialogTitle>
           <DialogDescription className="text-xs">
-            登记基本资料和身份证件（类型与号码必填，照片可选、可稍后在「资料 → 身份证件」补充）；初始密码可让用户登录后自行修改
+            用户可在登录后修改初始密码。
           </DialogDescription>
         </DialogHeader>
 
@@ -509,7 +510,7 @@ function CreateUserSheet({
             </SheetField>
             <SheetField id={`${fieldPrefix}-password`} label="初始密码（至少 8 位）" required error={errors.password?.message}>
               <Controller name="password" control={control} render={({ field }) => (
-                <Input {...field} id={`${fieldPrefix}-password`} mode="password" autoComplete="new-password" disabled={isPending} validateStatus={errors.password ? "error" : "default"} aria-describedby={errors.password ? `${fieldPrefix}-password-error` : undefined} />
+                <AccountPasswordInput {...field} id={`${fieldPrefix}-password`} autoComplete="new-password" disabled={isPending} validateStatus={errors.password ? "error" : "default"} aria-describedby={errors.password ? `${fieldPrefix}-password-error` : undefined} />
               )} />
             </SheetField>
             <SheetField id={`${fieldPrefix}-role`} label="角色" required composite>
@@ -597,9 +598,8 @@ function ResetPasswordDialog({
         </DialogHeader>
         <div className="space-y-2">
           <Form.Label name="reset-user-password" required>新密码（至少 8 位）</Form.Label>
-          <Input
+          <AccountPasswordInput
             id="reset-user-password"
-            mode="password"
             autoComplete="new-password"
             disabled={isPending}
             value={pwd}

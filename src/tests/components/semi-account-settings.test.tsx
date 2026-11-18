@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 const mocks = vi.hoisted(() => ({
   signIn: vi.fn(), enforcement: vi.fn(), replace: vi.fn(), refresh: vi.fn(),
-  changePassword: vi.fn(), saveAvatar: vi.fn(), startTotp: vi.fn(), confirmTotp: vi.fn(), disableTotp: vi.fn(),
+  createUser: vi.fn(), changePassword: vi.fn(), saveAvatar: vi.fn(), startTotp: vi.fn(), confirmTotp: vi.fn(), disableTotp: vi.fn(),
   getIdentity: vi.fn(), bindIdentity: vi.fn(), correctIdentity: vi.fn(), correctPhotos: vi.fn(),
   getRecognition: vi.fn(), recognize: vi.fn(), confirm: vi.fn(),
   success: vi.fn(), error: vi.fn(), warning: vi.fn()
@@ -29,7 +29,7 @@ vi.mock("@douyinfe/semi-ui", async (importOriginal) => {
     }
   };
 });
-vi.mock("@/server/users/actions", () => ({ changeMyPassword: mocks.changePassword, saveMyAvatar: mocks.saveAvatar }));
+vi.mock("@/server/users/actions", () => ({ createUser: mocks.createUser, changeMyPassword: mocks.changePassword, saveMyAvatar: mocks.saveAvatar }));
 vi.mock("@/server/auth/totp-actions", () => ({
   checkLoginTotpEnforcement: mocks.enforcement,
   enrollStartTotp: mocks.startTotp, enrollConfirmTotp: mocks.confirmTotp, disableTotp: mocks.disableTotp
@@ -43,12 +43,14 @@ vi.mock("@/server/identity-documents/recognition", () => ({
 }));
 vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: mocks.confirm }));
 
+import { UsersView } from "@/app/(admin)/admin/users/_components/users-view";
 import { LoginForm } from "@/app/(auth)/login/login-form";
 import { ChangePasswordForm } from "@/app/(app)/settings/profile/_components/change-password-form";
 import { TotpCard } from "@/app/(app)/settings/profile/_components/totp-card";
 import { AvatarForm } from "@/app/(app)/settings/profile/_components/avatar-form";
 import { IdentityForm } from "@/components/users/identity-form";
 import { IdentityDocumentFields, type IdentityDocumentDraft } from "@/components/users/identity-document-fields";
+import { IDENTITY_IMAGE_MAX_BYTES } from "@/lib/identity-documents";
 import { WorkspaceDialog, DialogContent, DialogDescription, DialogTitle, DrawerContent } from "@/components/patterns/workspace-dialog";
 
 const scrollDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
@@ -80,10 +82,8 @@ function fillLogin() {
   fireEvent.change(screen.getByLabelText("密码"), { target: { value: "fixture-password" } });
 }
 
-function photoInput(buttonName: string) {
-  // 每个 Upload 另有一个列表替换 input；按业务入口定位普通选片 input。
-  return screen.getByRole("button", { name: buttonName }).closest(".semi-upload")!
-    .querySelector<HTMLInputElement>("input.semi-upload-hidden-input")!;
+function photoInput(fieldName: string) {
+  return screen.getByRole("group", { name: fieldName }).querySelector<HTMLInputElement>("input[type=file]")!;
 }
 
 async function chooseOtherIdentityType() {
@@ -112,6 +112,23 @@ describe("Semi 登录与账户设置", () => {
     fireEvent.click(screen.getByRole("button", { name: "隐藏密码" }));
     expect(screen.getByLabelText("密码")).toHaveAttribute("type", "password");
     expect(mocks.signIn).not.toHaveBeenCalled();
+  });
+
+  it("管理后台新增用户可用中文按钮显示和隐藏初始密码，切换时不提交表单", () => {
+    render(<UsersView users={[]} currentUserId="synthetic-admin" />);
+    fireEvent.click(screen.getByRole("button", { name: "新增用户" }));
+    const editor = within(screen.getByRole("dialog", { name: "新增用户" }));
+    const password = editor.getByLabelText("初始密码（至少 8 位）");
+    fireEvent.change(password, { target: { value: "fixture-password" } });
+    const show = editor.getByRole("button", { name: "显示密码" });
+    expect(show).toHaveAttribute("aria-controls", password.id);
+    expect(show).toHaveAttribute("type", "button");
+    fireEvent.click(show);
+    expect(password).toHaveAttribute("type", "text");
+    fireEvent.click(editor.getByRole("button", { name: "隐藏密码" }));
+    expect(password).toHaveAttribute("type", "password");
+    expect(password).toHaveValue("fixture-password");
+    expect(mocks.createUser).not.toHaveBeenCalled();
   });
 
   it("登录服务抛错保留输入，允许按原 callback 重新登录", async () => {
@@ -302,27 +319,51 @@ describe("Semi 登录与账户设置", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
-  it.each(["选择人像面照片（选填）", "选择另一面照片（选填）"])("%s 拒绝不支持的格式并提示", async (buttonName) => {
+  it.each(["人像面照片（选填）", "另一面照片（选填）"])("%s 只有一个选择动作，并拒绝不支持的格式", async (fieldName) => {
     const onChange = vi.fn();
     render(<IdentityDocumentFields value={{ documentType: "PRC_RESIDENT_ID", documentName: "", documentNumber: "", primaryFile: null, secondaryFile: null }} onChange={onChange} onRecognizedName={vi.fn()} />);
-    fireEvent.change(photoInput(buttonName), { target: { files: [new File(["synthetic-document"], "fixture.pdf", { type: "application/pdf" })] } });
+    const picker = within(screen.getByRole("group", { name: fieldName }));
+    const choose = picker.getByRole("button", { name: `选择${fieldName}` });
+    expect(picker.getAllByRole("button")).toEqual([choose]);
+    expect(within(choose).queryByRole("button")).not.toBeInTheDocument();
+    const input = photoInput(fieldName);
+    const openPicker = vi.spyOn(input, "click");
+    fireEvent.click(choose);
+    expect(openPicker).toHaveBeenCalledOnce();
+    fireEvent.change(input, { target: { files: [new File(["synthetic-document"], "fixture.pdf", { type: "application/pdf" })] } });
     await waitFor(() => expect(mocks.error).toHaveBeenCalledWith("证件照片仅支持 JPG、PNG 或 WebP"));
     expect(onChange).not.toHaveBeenCalled();
     expect(mocks.recognize).not.toHaveBeenCalled();
   });
 
-  it.each(["选择新的主要证件照片（选填）", "选择新的另一面／补充页（选填）"])("%s 拒绝格式错误，保留先前照片草稿", async (buttonName) => {
+  it.each(["新的主要证件照片（选填）", "新的另一面／补充页（选填）"])("%s 拒绝格式错误，移除前保留先前照片草稿", async (fieldName) => {
     render(<IdentityForm adminTargetId="synthetic-user" />);
     fireEvent.click(await screen.findByRole("button", { name: "登记身份证件" }));
     const file = new File(["synthetic-photo"], "fixture.png", { type: "image/png" });
-    fireEvent.change(photoInput(buttonName), { target: { files: [file] } });
+    fireEvent.change(photoInput(fieldName), { target: { files: [file] } });
     expect(await screen.findByText(file.name)).toBeInTheDocument();
-    // Semi 接受文件后会重建原生 input；再次选片使用当前 DOM 节点。
-    fireEvent.change(photoInput(buttonName), { target: { files: [new File(["synthetic-document"], "fixture.pdf", { type: "application/pdf" })] } });
+    fireEvent.change(photoInput(fieldName), { target: { files: [new File(["synthetic-document"], "fixture.pdf", { type: "application/pdf" })] } });
     await waitFor(() => expect(mocks.error).toHaveBeenCalledWith("证件照片仅支持 JPG、PNG 或 WebP"));
     expect(screen.getByText(file.name)).toBeInTheDocument();
     expect(screen.queryByText("fixture.pdf")).not.toBeInTheDocument();
+    const picker = within(screen.getByRole("group", { name: fieldName }));
+    fireEvent.click(picker.getByRole("button", { name: `移除${fieldName}` }));
+    expect(picker.queryByText(file.name)).not.toBeInTheDocument();
+    expect(picker.getByRole("button", { name: `选择${fieldName}` })).toHaveFocus();
     expect(mocks.correctPhotos).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { size: 0, message: "证件照片不能为空" },
+    { size: IDENTITY_IMAGE_MAX_BYTES + 1, message: "单张证件照片不能超过10MB" }
+  ])("拒绝不符合大小限制的证件照片（$message）", async ({ size, message }) => {
+    const onChange = vi.fn();
+    render(<IdentityDocumentFields value={{ documentType: "PRC_RESIDENT_ID", documentName: "", documentNumber: "", primaryFile: null, secondaryFile: null }} onChange={onChange} onRecognizedName={vi.fn()} />);
+    const file = new File([], "fixture.png", { type: "image/png" });
+    Object.defineProperty(file, "size", { value: size });
+    fireEvent.change(photoInput("人像面照片（选填）"), { target: { files: [file] } });
+    await waitFor(() => expect(mocks.error).toHaveBeenCalledWith(message));
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it("选择证件照片只更新本地草稿，不自动上传或调用识别", async () => {
@@ -334,8 +375,8 @@ describe("Semi 登录与账户设置", () => {
     URL.revokeObjectURL = vi.fn();
     const open = vi.spyOn(XMLHttpRequest.prototype, "open").mockImplementation(() => undefined);
     try {
-      const { container } = render(<IdentityDocumentFields value={{ documentType: "PRC_RESIDENT_ID", documentName: "", documentNumber: "", primaryFile: null, secondaryFile: null }} onChange={onChange} onRecognizedName={vi.fn()} />);
-      const input = container.querySelector('input[type="file"]')!;
+      render(<IdentityDocumentFields value={{ documentType: "PRC_RESIDENT_ID", documentName: "", documentNumber: "", primaryFile: null, secondaryFile: null }} onChange={onChange} onRecognizedName={vi.fn()} />);
+      const input = photoInput("人像面照片（选填）");
       fireEvent.change(input, { target: { files: [file] } });
       await waitFor(() => expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ primaryFile: file })));
       expect(open).not.toHaveBeenCalled();
