@@ -15,13 +15,13 @@ import {
 } from "lucide-react";
 import type { MatterStatus } from "@prisma/client";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import {
   closeMatter,
   reopenMatter,
@@ -189,7 +189,7 @@ export function LifecycleActions({
         </Dropdown>
       ) : null}
 
-      <Dialog open={dialog !== null} onOpenChange={(o) => !o && setDialog(null)}>
+      <WorkspaceDialog open={dialog !== null} onOpenChange={(o) => !o && setDialog(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{dialog === "close" ? "结案" : "暂停案件"}</DialogTitle>
@@ -227,7 +227,7 @@ export function LifecycleActions({
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </WorkspaceDialog>
 
       <ArchiveWizardDialog
         matterId={matterId}

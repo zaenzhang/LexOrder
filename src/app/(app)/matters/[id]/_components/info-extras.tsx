@@ -16,13 +16,13 @@ import {
 import { Select, Button, Input, Notification, Toast } from "@douyinfe/semi-ui";
 import { cn, formatDate } from "@/lib/utils";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import { createExpress } from "@/server/express/actions";
 import { parseExpressLabel } from "@/server/ai/parse-express";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -309,7 +309,7 @@ function AddExpressDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <WorkspaceDialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>添加快递记录</DialogTitle>
@@ -415,6 +415,6 @@ function AddExpressDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }

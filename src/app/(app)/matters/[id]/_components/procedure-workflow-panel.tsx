@@ -41,13 +41,13 @@ import type {
   ProcedureType
 } from "@prisma/client";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import { TaskWorkPanel } from "@/components/matters/task-work-panel";
 import { WorkResponsibilityPanel, type WorkBoardData, type ScheduleResponsibilityTarget, type RenderScheduleResponsibility } from "@/components/matters/work-responsibility-panel";
 import { updateDossierLocation, type DossierView, type WorkPane } from "@/lib/matters/dossier-location";
@@ -2602,7 +2602,7 @@ function StageCreateDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={open => { if (!open) void close(); }}>
+    <WorkspaceDialog open={open} onOpenChange={open => { if (!open) void close(); }}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>添加环节 · {procedureLabel}</DialogTitle>
@@ -2682,7 +2682,7 @@ function StageCreateDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 

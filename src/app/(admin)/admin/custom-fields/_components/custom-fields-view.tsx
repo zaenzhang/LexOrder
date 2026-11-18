@@ -5,13 +5,13 @@ import { useState, useTransition } from "react";
 import type { CustomFieldDef } from "@prisma/client";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogFooter
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import {
   createCustomFieldDef,
   updateCustomFieldDef,
@@ -187,7 +187,7 @@ function FieldFormDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <WorkspaceDialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{field ? "编辑字段" : "添加字段"}</DialogTitle>
@@ -242,6 +242,6 @@ function FieldFormDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }

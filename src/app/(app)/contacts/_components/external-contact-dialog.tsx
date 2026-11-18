@@ -9,11 +9,11 @@ import { Loader2 } from "lucide-react";
 import type { ExternalContactCategory } from "@prisma/client";
 
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 
 import {
   createExternalContact,
@@ -132,7 +132,7 @@ export function ExternalContactDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={value => { if (!isPending) onOpenChange(value); }}>
+    <WorkspaceDialog open={open} onOpenChange={value => { if (!isPending) onOpenChange(value); }}>
       <DialogContent ref={contentRef} className="sm:max-w-lg" onEscapeKeyDown={event => { if (categoryOpen) event.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle>{editing ? "编辑联系人" : "新增外部联系人"}</DialogTitle>
@@ -235,6 +235,6 @@ export function ExternalContactDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }

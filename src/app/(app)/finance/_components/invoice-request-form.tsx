@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Loader2, Paperclip, X } from "lucide-react";
 import { FormDialogContent, FormDialogBody } from "@/components/patterns/form-dialog";
-import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 
 import { createInvoiceRequest, getMatterInvoiceContext, prepareInvoiceRequestUpload, searchMattersForInvoice } from "@/server/finance/actions";
 import { uploadDocument } from "@/server/documents/actions";
@@ -183,7 +183,7 @@ export function InvoiceRequestForm({ matterId: fixedMatterId, onOpenChange, canC
     }
   }
   const field = (name: string) => `${prefix}-${name}`;
-  return <Dialog open onOpenChange={open => { if (!busy) onOpenChange(open); }}>
+  return <WorkspaceDialog open onOpenChange={open => { if (!busy) onOpenChange(open); }}>
     <FormDialogContent ref={popupContainer} className="max-w-2xl" onEscapeKeyDown={event => { if (busy || openDropdown.current) event.preventDefault(); }}>
       <DialogHeader className="border-b px-5 py-3"><DialogTitle>申请开票</DialogTitle><DialogDescription className="sr-only">填写购方资料并选择本次开票依据。</DialogDescription></DialogHeader>
       <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
@@ -224,5 +224,5 @@ export function InvoiceRequestForm({ matterId: fixedMatterId, onOpenChange, canC
         </DialogFooter>
       </form>
     </FormDialogContent>
-  </Dialog>;
+  </WorkspaceDialog>;
 }

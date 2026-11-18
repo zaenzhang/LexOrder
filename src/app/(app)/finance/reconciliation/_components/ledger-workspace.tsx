@@ -6,7 +6,7 @@ import { CorrectionWorkspace } from "./correction-workspace";
 import { RegistrationWorkspace } from "./registration-workspace";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/patterns/workspace-dialog";
 
 import { MetricCard } from "@/components/patterns/moan";
 import { formatDate } from "@/lib/utils";
@@ -143,7 +143,7 @@ export function LedgerWorkspace({ data, canWrite, canConfirm, canCorrect, canSet
       {!billingId && !createContract && <CorrectionWorkspace data={data} canWrite={canWrite} canCorrect={canCorrect} canSettle={canSettle} />}
     </> : null}
 
-    <Dialog open={Boolean(payment)} onOpenChange={open => { if (!open && !busy) setPayment(null); }}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>分配收款</DialogTitle><DialogDescription>同一笔款可核销应收，也可关联发票；两个维度独立计算可用余额。</DialogDescription></DialogHeader><form className="space-y-4" onSubmit={submitAllocation}>
+    <WorkspaceDialog open={Boolean(payment)} onOpenChange={open => { if (!open && !busy) setPayment(null); }}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>分配收款</DialogTitle><DialogDescription>同一笔款可核销应收，也可关联发票；两个维度独立计算可用余额。</DialogDescription></DialogHeader><form className="space-y-4" onSubmit={submitAllocation}>
       <RadioGroup disabled={busy} options={[{value:"RECEIVABLE",label:"核销应收"},...(payment?.moneyKind === "LAWYER_FEE" ? [{value:"INVOICE",label:"关联发票"}] : [])]} value={kind} onChange={event => (v => {setKind(v as typeof kind);setAmounts({});})(String(event.target.value))} type="button" />
       {targets.length ? <>
         {/* M-3a（D 批）：生成分配建议→预览→确认——按最早到期自动填满（同案同性质），未分配余额保持可见 */}
@@ -160,6 +160,6 @@ export function LedgerWorkspace({ data, canWrite, canConfirm, canCorrect, canSet
         {targets.map(t => <div key={t.id}><label htmlFor={`amount-${t.id}`}>{t.title} · 剩余 {yuan(t.remaining)}</label><Input disabled={busy} id={`amount-${t.id}`} inputMode="decimal" placeholder="本次分配金额；不分配可留空" value={amounts[t.id] ?? ""} onChange={e => setAmounts({...amounts,[t.id]:e})} /></div>)}
       </> : <p className="text-sm text-muted-foreground">暂无同案同类款项的未结清应收或发票。</p>}
       <Button htmlType="submit"  disabled={busy || !targets.length} theme="solid" type="primary">{busy ? "保存中…" : "确认分配"}</Button>
-    </form></DialogContent></Dialog>
+    </form></DialogContent></WorkspaceDialog>
   </>;
 }

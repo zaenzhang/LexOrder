@@ -7,7 +7,7 @@
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { CalendarPlus, Copy, Loader2, RefreshCw } from "lucide-react";
 import { Button, Notification, Toast } from "@douyinfe/semi-ui";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { getCalendarToken, regenerateCalendarToken } from "@/server/calendar/actions";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -18,7 +18,7 @@ export function CalendarSubscriptionDialog() {
   const dialogId = useId();
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <WorkspaceDialog open={open} onOpenChange={setOpen}>
       <Button
         theme="outline"
         type="tertiary"
@@ -50,7 +50,7 @@ export function CalendarSubscriptionDialog() {
         </DialogHeader>
         <CalendarSubscriptionContent />
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 

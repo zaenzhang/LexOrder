@@ -8,12 +8,12 @@ import { Button, Input, Notification, Select, TextArea, Toast } from "@douyinfe/
 import { FileInput } from "@/components/patterns/file-input";
 import type { FirmFileCategory } from "@prisma/client";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogFooter
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import { uploadFirmFile } from "@/server/firm-files/actions";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -118,7 +118,7 @@ export function UploadDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={next => { if (!isPending) onOpenChange(next); }}>
+    <WorkspaceDialog open={open} onOpenChange={next => { if (!isPending) onOpenChange(next); }}>
       <DialogContent ref={dialog} className="max-w-lg" onEscapeKeyDown={event => { if (openSelect.current) event.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle>上传律所资料</DialogTitle>
@@ -167,6 +167,6 @@ export function UploadDialog({
           <Button theme="solid" loading={isPending} onClick={submit} disabled={!file || !name.trim()}>上传</Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }

@@ -13,13 +13,13 @@ import { useRouter } from "next/navigation";
 import { Select, Button, Checkbox, Input, Notification, TextArea, Toast } from "@douyinfe/semi-ui";
 import { Handshake, Link2, Loader2, Plus, SquareSlash } from "lucide-react";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import {
   createEngagement,
   linkEngagementMatter,
@@ -265,7 +265,7 @@ export function EngagementPanel({
       )}
 
       {/* 新建委托 */}
-      <Dialog open={dialog === "create"} onOpenChange={o => !o && closeDialog()}>
+      <WorkspaceDialog open={dialog === "create"} onOpenChange={o => !o && closeDialog()}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>新建委托</DialogTitle>
@@ -316,10 +316,10 @@ export function EngagementPanel({
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </WorkspaceDialog>
 
       {/* 关联已有委托 */}
-      <Dialog open={dialog === "link"} onOpenChange={o => !o && closeDialog()}>
+      <WorkspaceDialog open={dialog === "link"} onOpenChange={o => !o && closeDialog()}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>关联已有委托</DialogTitle>
@@ -364,10 +364,10 @@ export function EngagementPanel({
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </WorkspaceDialog>
 
       {/* 终止委托 */}
-      <Dialog open={dialog === "terminate"} onOpenChange={o => !o && closeDialog()}>
+      <WorkspaceDialog open={dialog === "terminate"} onOpenChange={o => !o && closeDialog()}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>终止委托「{terminateTarget?.engagement.title}」</DialogTitle>
@@ -393,7 +393,7 @@ export function EngagementPanel({
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </WorkspaceDialog>
     </section>
   );
 }

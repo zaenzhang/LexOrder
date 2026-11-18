@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import { FileText, Loader2 } from "lucide-react";
 import { Banner, Button, Checkbox, Input, Select, Tag, Toast } from "@douyinfe/semi-ui";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { ContextInputPicker } from "@/components/matters/context-input-picker";
 import type { ContextInputSelection } from "@/lib/matters/context-inputs";
@@ -110,8 +110,8 @@ export function TemplatePickerDialog({ open, onOpenChange, matterId, matterCateg
     { key: "procedureId", choices: "procedures", label: "程序" },
   ] as const;
 
-  return <Dialog open={open} onOpenChange={value => { if (!value) void close(); }}>
-    <DialogContent className="max-w-4xl" onEscapeKeyDown={event => { if (pending) event.preventDefault(); }} onPointerDownOutside={event => { if (pending) event.preventDefault(); }}>
+  return <WorkspaceDialog open={open} onOpenChange={value => { if (!value) void close(); }}>
+    <DialogContent className="max-w-4xl" onEscapeKeyDown={event => { if (pending) event.preventDefault(); }}>
       <DialogHeader><DialogTitle>从模板起草</DialogTitle></DialogHeader>
       <div className="grid min-h-0 grid-cols-[220px_minmax(0,1fr)] gap-6">
         <div className="flex max-h-[60vh] flex-col gap-2 overflow-y-auto" aria-label="文书模板">
@@ -163,5 +163,5 @@ export function TemplatePickerDialog({ open, onOpenChange, matterId, matterCateg
       </div>
       <DialogFooter><Button disabled={pending} onClick={() => void close()} type="tertiary" theme="outline">取消</Button><Button disabled={!preparation || loading || pending || needsRecheck || !reviewed || missing.length > 0 || unselected.length > 0} onClick={submit} theme="solid">{pending && <Loader2 data-icon="inline-start" className="animate-spin" />}生成草稿并下载</Button></DialogFooter>
     </DialogContent>
-  </Dialog>;
+  </WorkspaceDialog>;
 }

@@ -7,12 +7,12 @@ import { Pencil, ListChecks } from "lucide-react";
 import { FieldGrid, FieldItem } from "@/components/patterns/moan";
 import { useRouter } from "next/navigation";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import { saveMatterCustomValues } from "@/server/custom-fields/actions";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -124,7 +124,7 @@ function EditDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <WorkspaceDialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>编辑自定义信息</DialogTitle>
@@ -163,6 +163,6 @@ function EditDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }

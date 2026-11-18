@@ -4,7 +4,7 @@ import { Button, Input, TextArea, Toast } from "@douyinfe/semi-ui";
 
 import { useCallback, useEffect, useRef, useState, useTransition, type FormEvent, type RefObject } from "react";
 import { Check } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
 import { fromShanghaiInput, toShanghaiInput } from "@/lib/clients/relationship";
@@ -122,7 +122,7 @@ export function ClientFollowUpRescheduleDialog({ clientId, followUpId, onClose, 
       finally { saving.current = false; }
     });
   }
-  return <Dialog open onOpenChange={open => { if (!open) void requestClose(); }}>
+  return <WorkspaceDialog open onOpenChange={open => { if (!open) void requestClose(); }}>
     <DialogContent ref={editorContent} className="max-h-[90dvh] overflow-y-auto sm:max-w-[560px]" onCloseAutoFocus={event => {
       event.preventDefault();
       const origin = trigger.current;
@@ -145,5 +145,5 @@ export function ClientFollowUpRescheduleDialog({ clientId, followUpId, onClose, 
       <div className="flex flex-wrap gap-2"><Button htmlType="button" type="tertiary" theme="outline" disabled={pending || !current} onClick={() => void readTarget(true)}>重新读取并核对</Button>{!mayEdit && <Button htmlType="button" type="tertiary" theme="outline" disabled={pending} onClick={() => void requestClose()}>返回列表</Button>}</div>
       {value && <PersonalFollowUpRescheduleHistory key={`${identity}:${current.revision}:${value.updatedAt}`} target={{ clientId, followUpId }} />}
     </DialogContent>
-  </Dialog>;
+  </WorkspaceDialog>;
 }

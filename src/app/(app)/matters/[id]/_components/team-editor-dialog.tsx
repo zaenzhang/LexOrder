@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Dialog, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogDescription, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { FormDialogBody, FormDialogContent } from "@/components/patterns/form-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { MatterBasicEditor } from "./matter-basic-editor";
@@ -47,7 +47,7 @@ function OpenEditor(props: TeamEditorDialogProps) {
   }
 
   const actions = { onStateChange: setState, onSaved: () => props.onOpenChange(false), onCancel: () => { void leave(); } };
-  return <Dialog open onOpenChange={open => { if (!open) void leave(); }}>
+  return <WorkspaceDialog open onOpenChange={open => { if (!open) void leave(); }}>
     <FormDialogContent ref={contentRef} className="max-w-3xl"
       onOpenAutoFocus={event => {
         const target = contentRef.current?.querySelector<HTMLElement>('[data-editor-autofocus="true"]');
@@ -64,5 +64,5 @@ function OpenEditor(props: TeamEditorDialogProps) {
           onOpenHandover={props.onOpenHandover ? () => { void leave(true); } : undefined} /> :
         initial.currentProcedure ? <ProcedureInfoEditor {...actions} currentProcedure={initial.currentProcedure} parties={initial.parties} category={initial.matterMeta.category} initialSection={section} /> : null}
     </FormDialogContent>
-  </Dialog>;
+  </WorkspaceDialog>;
 }

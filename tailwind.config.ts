@@ -85,8 +85,7 @@ const config: Config = {
         "accordion-up": "accordion-up 200ms ease-out"
       }
     }
-  },
-  plugins: [require("tailwindcss-animate")]
+  }
 };
 
 export default config;

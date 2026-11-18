@@ -26,7 +26,7 @@ import { approveArchiveRecord, rejectArchiveRecord } from "@/server/archive/acti
 import { approveInvoiceRequest, rejectInvoiceRequest } from "@/server/invoices/actions";
 import { approveSealRequest, rejectSealRequest, stampSealRequest, cancelSealRequest } from "@/server/seals/actions";
 
-import { Dialog } from "@/components/ui/dialog";
+import { WorkspaceDialog } from "@/components/patterns/workspace-dialog";
 import { ReviewDialogContent, ReviewEmpty, ReviewFields, ReviewFileRow, ReviewHistory, ReviewSection, ReviewStatusLine } from "@/components/patterns/review-dialog";
 import { PageHeader } from "@/components/patterns/moan";
 
@@ -343,7 +343,7 @@ export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data
       </div>
     </div>
 
-    <Dialog open={!!selected} onOpenChange={value => { if (!value) void closeDetail(); }}>{detail?.intakeDetail ? <IntakeApprovalDialog key={selected?.id} detail={detail} intakeDetail={detail.intakeDetail} note={note} onNoteChange={setNote} pending={pending} onDecision={process} onResubmit={() => applicantAction("resubmit")} returnControl={returnControl} onDirtyChange={setIntakeDirty} /> : <ReviewDialogContent
+    <WorkspaceDialog open={!!selected} onOpenChange={value => { if (!value) void closeDetail(); }}>{detail?.intakeDetail ? <IntakeApprovalDialog key={selected?.id} detail={detail} intakeDetail={detail.intakeDetail} note={note} onNoteChange={setNote} pending={pending} onDecision={process} onResubmit={() => applicantAction("resubmit")} returnControl={returnControl} onDirtyChange={setIntakeDirty} /> : <ReviewDialogContent
       key={selected?.id}
       title={detail?.title ?? "申请详情"}
       eyebrow={selected ? ACTION_LABELS[selected.action] : "审批申请"}
@@ -418,6 +418,6 @@ export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data
         {detail.canResubmit && <Button htmlType="button"  disabled={pending || reviewBusy} onClick={() => applicantAction("resubmit")} theme="solid" type="primary">重新提交审批</Button>}
         {detail.canCancel && <Button htmlType="button"  disabled={pending || reviewBusy} onClick={() => applicantAction("cancel")} theme="outline" type="tertiary">撤回用章申请</Button>}
       </> : undefined}
-    />}</Dialog>
+    />}</WorkspaceDialog>
   </div>;
 }

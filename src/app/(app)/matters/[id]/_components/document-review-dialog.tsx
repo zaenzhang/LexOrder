@@ -3,7 +3,7 @@
 import { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Loader2, Sparkles, AlertTriangle, AlertCircle, Lightbulb, FileWarning, BookmarkPlus, ChevronLeft } from "lucide-react";
 import { Button, Notification, Tag, Typography } from "@douyinfe/semi-ui";
-import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/patterns/workspace-dialog";
 import { FormDialogBody, FormDialogContent } from "@/components/patterns/form-dialog";
 import { reviewDocument } from "@/server/ai/review-document";
 import { saveReviewToMatter } from "@/server/ai/save-review";
@@ -149,7 +149,7 @@ function ReviewSession({ documentId, matterId, canStartReview, canSaveReport, on
   const result = view.kind === "detail" ? view.result : null;
   const grouped = result ? TYPE_ORDER.map(type => ({ type, items: result.items.filter(item => item.type === type) })).filter(group => group.items.length) : [];
 
-  return <Dialog open onOpenChange={nextOpen => { if (!nextOpen) close(); }}>
+  return <WorkspaceDialog open onOpenChange={nextOpen => { if (!nextOpen) close(); }}>
     <FormDialogContent className="max-w-2xl">
       <DialogHeader className="px-5 pt-4">
         <DialogTitle className="flex items-center gap-2">
@@ -210,7 +210,7 @@ function ReviewSession({ documentId, matterId, canStartReview, canSaveReport, on
         <Button disabled={saving} onClick={close} htmlType="button" type="tertiary" theme="borderless">关闭</Button>
       </DialogFooter>
     </FormDialogContent>
-  </Dialog>;
+  </WorkspaceDialog>;
 }
 
 function coverageLabel(coverage: ReviewCoverage | null) {

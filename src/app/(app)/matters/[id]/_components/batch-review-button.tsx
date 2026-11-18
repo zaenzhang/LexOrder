@@ -9,13 +9,13 @@ import {
   type BatchReviewSummary
 } from "@/server/ai/batch-review-matter";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogFooter
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -72,7 +72,7 @@ export function BatchReviewButton({ matterId }: { matterId: string }) {
         AI 复检全部
       </Button>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <WorkspaceDialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
@@ -155,7 +155,7 @@ export function BatchReviewButton({ matterId }: { matterId: string }) {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </WorkspaceDialog>
     </>
   );
 }

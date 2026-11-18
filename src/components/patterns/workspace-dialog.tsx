@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Modal } from "@douyinfe/semi-ui";
-import { IconClose } from "@douyinfe/semi-icons";
+import { X } from "lucide-react";
 import {
   cloneElement, createContext, useContext, useEffect, useId, useRef, useSyncExternalStore,
   type HTMLAttributes, type MouseEvent, type ReactElement, type ReactNode, type Ref,
@@ -150,7 +150,7 @@ function DialogSurface({
         <DialogFocus onOpen={event => onOpenAutoFocus?.(event)} onClose={event => onCloseAutoFocus?.(event)} />
         {children}
         {showClose ? <Button
-          icon={<IconClose />}
+          icon={<X size={16} aria-hidden />}
           aria-label="关闭"
           type="tertiary"
           theme="borderless"

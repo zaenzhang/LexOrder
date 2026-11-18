@@ -5,7 +5,7 @@ import { Select, Button, Input, Tag } from "@douyinfe/semi-ui";
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { DocumentCategory, DocumentSourceOrigin } from "@prisma/client";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { ContextInputPicker } from "@/components/matters/context-input-picker";
 import type { ContextInputSelection } from "@/lib/matters/context-inputs";
@@ -291,7 +291,7 @@ export function MaterialUploadDialog({ current, procedures, canWrite, scopeValid
     }
   }
 
-  return <Dialog open={context !== null} onOpenChange={open => { if (!open) void closeDialog(); }}>
+  return <WorkspaceDialog open={context !== null} onOpenChange={open => { if (!open) void closeDialog(); }}>
     <DialogContent className="max-w-5xl" onCloseAutoFocus={event => { event.preventDefault(); trigger.current?.focus({ preventScroll: true }); }}>
       <DialogHeader><DialogTitle>上传材料 · {context?.title}</DialogTitle>
         <DialogDescription>逐件核对归属和来源，文件分别保存。</DialogDescription></DialogHeader>
@@ -356,7 +356,7 @@ export function MaterialUploadDialog({ current, procedures, canWrite, scopeValid
         <Button onClick={() => void closeDialog()} disabled={busy} type="tertiary" theme="outline">关闭</Button>
         <Button onClick={() => void send()} disabled={busy || !scopeMatches || !rows.some(editable)} theme="solid">{busy ? "正在上传…" : paused ? "继续上传" : "上传"}</Button></DialogFooter>
     </DialogContent>
-  </Dialog>;
+  </WorkspaceDialog>;
 }
 
 function UploadFields({ value, onChange, procedures, opened, disabled, prefix }: {

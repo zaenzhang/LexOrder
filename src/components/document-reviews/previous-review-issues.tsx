@@ -2,7 +2,7 @@
 
 import { Button, Tag } from "@douyinfe/semi-ui";
 import { useEffect, useRef, useState } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
 import { getPreviousDocumentReviewIssue } from "@/server/document-reviews/actions";
 import { reviewIssueStateLabel, type PreviousReviewIssueSummary, type PreviousReviewIssueView } from "@/server/document-reviews/contracts";
@@ -40,7 +40,7 @@ export function PreviousReviewIssues({ documentId, items, disabled }: { document
           <span className="flex flex-wrap gap-2"><Tag color="grey" type="ghost">{reviewIssueStateLabel[item.state]}</Tag>{item.linkedToCurrent && <Tag color="grey">最近回应关联本版</Tag>}</span></span>
       </Button>)}</div>
     </details>}
-    <Dialog open={open} onOpenChange={value => { if (!value) setRequest(null); }}>
+    <WorkspaceDialog open={open} onOpenChange={value => { if (!value) setRequest(null); }}>
       <DialogContent className="max-w-4xl" onCloseAutoFocus={event => {
         const target = trigger.current?.isConnected && !trigger.current.closest('[hidden], [inert], [aria-hidden="true"]') ? trigger.current : heading.current;
         if (target?.isConnected && !target.closest('[hidden], [inert], [aria-hidden="true"]')) { event.preventDefault(); target.focus(); }
@@ -52,6 +52,6 @@ export function PreviousReviewIssues({ documentId, items, disabled }: { document
         <DialogFooter>{current?.error && <Button onClick={() => setAttempt(value => value + 1)} htmlType="button" type="tertiary" theme="outline">重新读取前版意见</Button>}
           <Button onClick={() => setRequest(null)} htmlType="button" type="tertiary" theme="outline">返回本版复核</Button></DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   </>;
 }

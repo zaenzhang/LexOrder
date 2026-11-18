@@ -5,13 +5,13 @@ import { useState, useTransition } from "react";
 import { Plus, Trash2, Loader2, Pencil, Save } from "lucide-react";
 import type { ProcedureType, StageTemplate } from "@prisma/client";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogFooter
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import { upsertStageTemplate } from "@/server/settings/actions";
 import { procedureTypeLabel } from "@/lib/enums";
 import { AdminPageHeader } from "@/components/layout/admin-page-header";
@@ -178,7 +178,7 @@ function EditTemplateDialog({
   }
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
+    <WorkspaceDialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>编辑模板 — {procedureTypeLabel[procedureType]}</DialogTitle>
@@ -238,6 +238,6 @@ function EditTemplateDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }

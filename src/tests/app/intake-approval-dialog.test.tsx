@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { Dialog } from "@/components/ui/dialog";
+import { WorkspaceDialog } from "@/components/patterns/workspace-dialog";
 import { IntakeApprovalDialog } from "@/app/(app)/approvals/intake-approval-dialog";
 import type { getApprovalDetail } from "@/server/approval-permissions/inbox";
 
@@ -18,7 +18,7 @@ const base = {
 } satisfies Detail;
 function Harness({ detail = base, onDecision = vi.fn() }: { detail?: Detail; onDecision?: (decision: "approve" | "reject" | "revision") => void }) {
   const [note, setNote] = useState("");
-  return <Dialog open><IntakeApprovalDialog detail={detail} intakeDetail={intakeDetail} note={note} onNoteChange={setNote} pending={false} onDecision={onDecision} onResubmit={vi.fn()} /></Dialog>;
+  return <WorkspaceDialog open><IntakeApprovalDialog detail={detail} intakeDetail={intakeDetail} note={note} onNoteChange={setNote} pending={false} onDecision={onDecision} onResubmit={vi.fn()} /></WorkspaceDialog>;
 }
 const tab = (name: RegExp) => fireEvent.click(screen.getByRole("tab", { name }));
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });

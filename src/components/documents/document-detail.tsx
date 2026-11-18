@@ -4,7 +4,7 @@ import { FileInput } from "@/components/patterns/file-input";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Tabs, Button, Tag, Toast, Typography } from "@douyinfe/semi-ui";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { WorkspaceDialog, DrawerContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { ContextInputPicker, ContextInputsSummary } from "@/components/matters/context-input-picker";
 import { carriedContextInputs, type ContextInputSelection } from "@/lib/matters/context-inputs";
@@ -85,10 +85,10 @@ export function DocumentDetail({ matterId, documentId, issueId, onClose, onDocum
   const office = officePreviewKind(detail?.mimeType, detail?.name);
   const previewable = canPreview(detail?.mimeType, detail?.name);
   const preview = office ? `/api/documents/${documentId}/preview` : `/api/documents/${documentId}/download?inline=1`;
-  return <Sheet open onOpenChange={open => { if (!open) void canLeave().then(allowed => { if (allowed) onClose(); }); }}>
-    <SheetContent side="right" className="flex w-full flex-col gap-4 overflow-y-auto sm:max-w-5xl">
-      <SheetHeader><SheetTitle className="break-words pr-5">{detail?.name ?? "文书版本"}</SheetTitle>
-        <SheetDescription>{detail ? `第 ${detail.version} 版 · ${detail.uploadedByName} · ${shDayKey(detail.createdAt)} ${shTime(detail.createdAt)}` : "读取指定版本及当前权限"}</SheetDescription></SheetHeader>
+  return <WorkspaceDialog open onOpenChange={open => { if (!open) void canLeave().then(allowed => { if (allowed) onClose(); }); }}>
+    <DrawerContent side="right" className="flex w-screen flex-col gap-4 overflow-y-auto sm:max-w-5xl">
+      <DialogHeader><DialogTitle className="break-words pr-5">{detail?.name ?? "文书版本"}</DialogTitle>
+        <DialogDescription>{detail ? `第 ${detail.version} 版 · ${detail.uploadedByName} · ${shDayKey(detail.createdAt)} ${shTime(detail.createdAt)}` : "读取指定版本及当前权限"}</DialogDescription></DialogHeader>
       {error && <p role="alert" className="text-sm text-destructive">{error} <Button onClick={() => void retry()} type="primary" theme="borderless">重新读取</Button></p>}
       {!detail && !error && <p role="status">正在读取文书…</p>}
       {detail && <>
@@ -122,6 +122,6 @@ export function DocumentDetail({ matterId, documentId, issueId, onClose, onDocum
           </Tabs.TabPane>
         </Tabs></div>
       </>}
-    </SheetContent>
-  </Sheet>;
+    </DrawerContent>
+  </WorkspaceDialog>;
 }

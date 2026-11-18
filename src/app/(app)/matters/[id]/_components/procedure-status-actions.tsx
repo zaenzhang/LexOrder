@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Input, TextArea, Toast } from "@douyinfe/semi-ui";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { updateProcedure } from "@/server/procedures/actions";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -46,7 +46,7 @@ export function ProcedureStatusActions({ procedure, label }: { procedure: Proced
       {procedure.status !== "IN_PROGRESS" && <Button onClick={() => open("IN_PROGRESS")} type="tertiary" theme="outline" size="small">{procedure.status === "CONCLUDED" && !unverifiedInformation ? "恢复办理" : procedure.engagement === "INFORMATIONAL" ? "记录办理中" : "开始办理"}</Button>}
       {(procedure.status !== "CONCLUDED" || !procedure.concludedAt) && <Button onClick={() => open("CONCLUDED")} type="tertiary" theme="outline" size="small">终结程序</Button>}
     </div>
-    <Dialog open={Boolean(target)} onOpenChange={open => { if (!open) void close(); }}>
+    <WorkspaceDialog open={Boolean(target)} onOpenChange={open => { if (!open) void close(); }}>
       <DialogContent className="max-w-md">
         <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{target?.label}</DialogDescription></DialogHeader>
         {target?.status === "CONCLUDED" && <div className="space-y-2"><label htmlFor="procedure-concluded-at" className="text-sm font-medium text-[var(--semi-color-text-1)]">实际终结日期</label><Input id="procedure-concluded-at" type="date" max={shDayKey(new Date())} value={date} disabled={busy} onChange={inputValue => setDate(inputValue)} /></div>}
@@ -55,6 +55,6 @@ export function ProcedureStatusActions({ procedure, label }: { procedure: Proced
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         <DialogFooter><Button disabled={busy} onClick={() => void close()} type="tertiary" theme="outline">取消</Button><Button disabled={busy} onClick={() => void save()} theme="solid">{busy ? "保存中…" : "保存状态"}</Button></DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   </>;
 }

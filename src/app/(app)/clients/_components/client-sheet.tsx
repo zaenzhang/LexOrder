@@ -11,13 +11,13 @@ import { Plus, X, Loader2, Trash2, Star, Sparkles, Search } from "lucide-react";
 import type { Client, Contact } from "@prisma/client";
 
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter
-} from "@/components/ui/sheet";
+  WorkspaceDialog,
+  DrawerContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
+} from "@/components/patterns/workspace-dialog";
 import { PERSON_ID_TYPES, clientIdTypeLabel, personIdError, sanitizePersonIdInput } from "@/lib/clients/person-id";
 import { clientCreateSchema, type ClientCreateInput } from "@/server/clients/schemas";
 import { createClient, updateClient } from "@/server/clients/actions";
@@ -231,8 +231,8 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
   }
 
   return (
-    <Sheet open={open} onOpenChange={(value) => { if (!value) void requestClose(); }}>
-      <SheetContent
+    <WorkspaceDialog open={open} onOpenChange={(value) => { if (!value) void requestClose(); }}>
+      <DrawerContent
         ref={editorContent}
         onEscapeKeyDown={event => { if (openSelect) event.preventDefault(); }}
         side="right"
@@ -242,14 +242,14 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
           onReturnFocus();
         }}
       >
-        <SheetHeader className="border-b border-border bg-background px-6 py-4">
-          <SheetTitle className="text-lg">
+        <DialogHeader className="border-b border-border bg-background px-6 py-4">
+          <DialogTitle className="text-lg">
             {isEdit ? "编辑客户" : "新建客户"}
-          </SheetTitle>
-          <SheetDescription className="text-xs">
+          </DialogTitle>
+          <DialogDescription className="text-xs">
             客户主体信息 + 联系人，联系方式细节走联系人单独维护
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </DialogHeader>
 
         <form
           onSubmit={handleSubmit(onSubmit)}
@@ -612,7 +612,7 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
           </fieldset>
 
           {/* 底栏 */}
-          <SheetFooter className="border-t border-border bg-background px-6 py-4">
+          <DialogFooter className="border-t border-border bg-background px-6 py-4">
             <Button
               htmlType="button"
               theme="outline"
@@ -629,10 +629,10 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
               {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               {isEdit ? "保存" : "创建客户"}
             </Button>
-          </SheetFooter>
+          </DialogFooter>
         </form>
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </WorkspaceDialog>
   );
 }
 

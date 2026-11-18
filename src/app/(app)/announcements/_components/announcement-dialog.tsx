@@ -6,12 +6,12 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Checkbox, Input, TextArea, Notification, Toast } from "@douyinfe/semi-ui";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import {
   createAnnouncement,
   updateAnnouncement
@@ -92,7 +92,7 @@ export function AnnouncementDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => { if (!isPending) onOpenChange(nextOpen); }}>
+    <WorkspaceDialog open={open} onOpenChange={(nextOpen) => { if (!isPending) onOpenChange(nextOpen); }}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{editing ? "编辑公告" : "发布公告"}</DialogTitle>
@@ -151,6 +151,6 @@ export function AnnouncementDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }

@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 import { Button, Checkbox, Toast } from "@douyinfe/semi-ui";
 import { ColleaguePicker } from "@/components/matters/colleague-picker";
 import { FormDialogBody } from "@/components/patterns/form-dialog";
-import { DialogFooter } from "@/components/ui/dialog";
+import { DialogFooter } from "@/components/patterns/workspace-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
 import { updateMatterTeam } from "@/server/matters/actions";
 import type { EditorFormActions, TeamEditorDialogProps } from "./matter-editor-types";

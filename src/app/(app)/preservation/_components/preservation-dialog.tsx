@@ -5,7 +5,7 @@ import { FormDialogContent as DialogContent, FormDialogBody } from "@/components
 import { useId, useRef, useState, useTransition } from "react";
 import { Button, Input, Notification, Select, TextArea, Toast } from "@douyinfe/semi-ui";
 import type { PreservationType, PropertyType } from "@prisma/client";
-import { Dialog, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/patterns/workspace-dialog";
 import {
   createPreservationCase,
   updatePreservationCase,
@@ -40,7 +40,7 @@ function startCivil(startDate: string): Date {
 
 const propertyOptions = Object.entries(PROPERTY_TYPE_CN).map(([value, label]) => ({ value: value as PropertyType, label }));
 
-// ── Case Dialog (create + edit) ──
+// ── Case WorkspaceDialog (create + edit) ──
 
 export function PreservationCaseDialog({
   open,
@@ -164,7 +164,7 @@ export function PreservationCaseDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <WorkspaceDialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent ref={dialog} className="max-w-lg" onEscapeKeyDown={event => { if (selectOpen.current) event.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle>{isEdit ? "编辑保全" : "新建保全"}</DialogTitle>
@@ -237,7 +237,7 @@ export function PreservationCaseDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 
@@ -299,7 +299,7 @@ export function AddTargetDialog({ open, onOpenChange, caseId }: { open: boolean;
   }
 
   return (
-    <Dialog open={open} onOpenChange={next => { if (!isPending) onOpenChange(next); }}>
+    <WorkspaceDialog open={open} onOpenChange={next => { if (!isPending) onOpenChange(next); }}>
       <DialogContent className="max-w-sm">
         <DialogHeader><DialogTitle>添加被保全人</DialogTitle></DialogHeader>
         <FormDialogBody>
@@ -310,7 +310,7 @@ export function AddTargetDialog({ open, onOpenChange, caseId }: { open: boolean;
           <Button theme="solid" aria-busy={isPending} onClick={handleSubmit} disabled={isPending || !name.trim()}>添加</Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 
@@ -368,7 +368,7 @@ export function AddPropertyDialog({ open, onOpenChange, targetId }: { open: bool
   }
 
   return (
-    <Dialog open={open} onOpenChange={next => { if (!isPending) onOpenChange(next); }}>
+    <WorkspaceDialog open={open} onOpenChange={next => { if (!isPending) onOpenChange(next); }}>
       <DialogContent ref={dialog} className="max-w-md" onEscapeKeyDown={event => { if (selectOpen.current) event.preventDefault(); }}>
         <DialogHeader><DialogTitle>添加保全财产</DialogTitle><DialogDescription>登记财产及法院文书载明的期限。</DialogDescription></DialogHeader>
         <FormDialogBody>
@@ -393,7 +393,7 @@ export function AddPropertyDialog({ open, onOpenChange, targetId }: { open: bool
           <Button theme="solid" aria-busy={isPending} onClick={handleSubmit} disabled={isPending}>添加</Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 
@@ -423,7 +423,7 @@ export function RenewPropertyDialog({ open, onOpenChange, property }: { open: bo
   }
 
   return (
-    <Dialog open={open} onOpenChange={next => { if (!isPending) onOpenChange(next); }}>
+    <WorkspaceDialog open={open} onOpenChange={next => { if (!isPending) onOpenChange(next); }}>
       <DialogContent className="max-w-sm">
         <DialogHeader><DialogTitle>续保</DialogTitle></DialogHeader>
         <FormDialogBody>
@@ -444,7 +444,7 @@ export function RenewPropertyDialog({ open, onOpenChange, property }: { open: bo
           <Button theme="solid" aria-busy={isPending} disabled={isPending || !validDuration} onClick={handleSubmit}>确认续保</Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 

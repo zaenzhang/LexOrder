@@ -28,13 +28,13 @@ import type {
   ProcedureMemo
 } from "@prisma/client";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import { Select, Button, Input, Notification, Tag, TextArea, Toast } from "@douyinfe/semi-ui";
 import { deadlineCategoryLabel } from "@/lib/enums";
 import { confirmDeadline, adjustDeadline } from "@/server/deadlines/confirm";
@@ -419,7 +419,7 @@ export function AdjustDeadlineDialog({ deadline, onClose }: { deadline: { id: st
   }
 
   return (
-    <Dialog open onOpenChange={(o) => { if (!o && !pending) onClose(); }}>
+    <WorkspaceDialog open onOpenChange={(o) => { if (!o && !pending) onClose(); }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>调整到期日</DialogTitle>
@@ -438,7 +438,7 @@ export function AdjustDeadlineDialog({ deadline, onClose }: { deadline: { id: st
           <Button onClick={submit} disabled={pending} theme="solid">保存调整</Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 
@@ -1164,7 +1164,7 @@ export function ImportantItemDialog({
   const submitLabel = `添加${importantTypeMeta[type].label}`;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <WorkspaceDialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[88vh] max-w-2xl flex-col gap-0 p-0">
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle>{types.includes("express") && types.length === 1 ? "添加记录 · 快递" : "添加事项"}</DialogTitle>
@@ -1491,7 +1491,7 @@ export function ImportantItemDialog({
           </DialogFooter>
         </form>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 

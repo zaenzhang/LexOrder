@@ -4,7 +4,6 @@ const { context, search, prepare, create, upload, push } = vi.hoisted(() => ({ c
 vi.mock("@/server/finance/actions", () => ({ getMatterInvoiceContext: context, searchMattersForInvoice: search, prepareInvoiceRequestUpload: prepare, createInvoiceRequest: create }));
 vi.mock("@/server/documents/actions", () => ({ uploadDocument: upload }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }), usePathname: () => "/matters/TEST-001", useSearchParams: () => new URLSearchParams("view=finance") }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
 import { InvoiceRequestSheet } from "@/app/(app)/matters/[id]/_components/invoice-request-sheet";
 import { InvoiceCreateDialog } from "@/app/(app)/finance/_components/invoice-create-dialog";
 

@@ -311,7 +311,9 @@ export function MattersViewV4({
         </div>
       </Tabs>
 
-      {canCreateIntake && <IntakeWizard open={wizardOpen} onOpenChange={closeWizard} clientOptions={clientOptions} colleagues={colleagues} initialClientId={autoOpenIntake ? initialClientId : undefined} />}
+      {canCreateIntake && <IntakeWizard open={wizardOpen} onOpenChange={closeWizard} onReturnFocus={() => {
+        if (document.activeElement === document.body) document.getElementById("workspace-top-action")?.focus({ preventScroll: true });
+      }} clientOptions={clientOptions} colleagues={colleagues} initialClientId={autoOpenIntake ? initialClientId : undefined} />}
     </div>
   );
 }

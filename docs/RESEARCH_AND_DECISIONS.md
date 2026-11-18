@@ -1254,6 +1254,8 @@ C8沿真实卡片/弹窗到Action确认编辑误调用create。只读方案/实�
 
 用户任务是从原表单取消确认后继续编辑、用键盘切换页面筛选、在复核分区间保留输入。采用 Semi 原生按钮/输入、页面 Dropdown 和保持挂载的 Tabs；保留原业务输入输出及已启用的资格守卫。实读发现 Semi 的 Modal Escape 栈仅协调 Semi，旧 Radix 父表单先在 capture 处理 Escape，另持有焦点和点击边界；将 Host 单独换壳不能可靠保留嵌套行为。本批不建临时协调器，完整外壳与其实际消费者后续原子替换。ChoiceField 的现有旧抽屉消费者也按此边界处理。
 
+收尾回看 [Semi Modal](https://semi.design/zh-CN/feedback/modal)、[Semi Steps](https://semi.design/zh-CN/navigation/steps)、[Semi Select](https://semi.design/zh-CN/input/select) 和[官方模板](https://semi.design/template/zh-CN)，并以安装版 `2.105.0` 的 Portal、焦点处理、Select ARIA 和 Steps 源码核实组合。收案采用紧凑的 Basic Steps，筛选维持同一触发入口，详情和确认按任务长度选择侧边或居中位置。真实首次加载确认 URL 直达抽屉需要等 Portal 水合，字段名使用可访问标签，内层关闭后需恢复原入口。
+
 源码和实际组件测试确认全局 ConfirmHost 没有 DialogTrigger，原关闭路径不返回真实入口：新增的父表单 Escape/取消两例在修改前均失败、焦点落到 body。采用首次入队记录真实入口、队列末项返回；不推断不存在的入口。页面筛选使用原业务值和框架菜单，补回旧有 ArrowDown 打开。复核读取安装版 Tabs CSS，验证隐藏页、原 ID、保稿和原生键盘；未把 jsdom 结果当成真实桌面排版。实施与证据统一记于计划 §7.17/§8.57。
 
 ## 4. 可选法律服务 MCP 与来源

@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation";
 import { Banner, Button, Checkbox, Input, Notification, Select, TextArea, Toast } from "@douyinfe/semi-ui";
 import { BookOpenCheck, ExternalLink, Loader2, FileCheck2, Sparkles, Upload, FileCheck } from "lucide-react";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import { archiveMatter, getArchivePrepData } from "@/server/archive/actions";
 import { uploadDocument } from "@/server/documents/actions";
 import { shDayKey } from "@/lib/ui/sh-time";
@@ -261,7 +261,7 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={(value) => { if (!isPending && !uploadingItemId) onOpenChange(value); }}>
+    <WorkspaceDialog open={open} onOpenChange={(value) => { if (!isPending && !uploadingItemId) onOpenChange(value); }}>
       <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -491,6 +491,6 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }

@@ -4,7 +4,7 @@ import { useId, useEffect, useState, useTransition } from "react";
 import type { LitigationStanding, ProcedureType } from "@prisma/client";
 import { Select, Button, Checkbox, Input, Toast } from "@douyinfe/semi-ui";
 import { Loader2 } from "lucide-react";
-import { DialogFooter } from "@/components/ui/dialog";
+import { DialogFooter } from "@/components/patterns/workspace-dialog";
 import { FormDialogBody } from "@/components/patterns/form-dialog";
 import { CauseCombobox } from "@/app/(app)/matters/_components/cause-combobox";
 import { litigationStandingLabel, matterCategoryLabel, matterCategoryKind } from "@/lib/enums";

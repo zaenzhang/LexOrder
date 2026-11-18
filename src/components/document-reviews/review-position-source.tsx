@@ -2,7 +2,7 @@
 
 import { Button, Typography } from "@douyinfe/semi-ui";
 import { useEffect, useRef, useState } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
 import { getSavedDocumentReviewPosition, previewDocumentReviewPosition } from "@/server/document-reviews/actions";
 import type { EvidenceSourceResult } from "@/server/evidence/contracts";
@@ -33,8 +33,8 @@ export function ReviewPositionSourceButton({ target, children, disabled = false 
   }, [request, identity, attempt]);
   const current = read?.request === request && open ? read : null;
   const source = current?.value?.status === "AVAILABLE" ? current.value : null;
-  return <Dialog open={open} onOpenChange={value => setRequest(value ? { target, identity } : null)}>
-    <DialogTrigger asChild><button ref={trigger} type="button" disabled={disabled} className="rounded-md border border-[var(--semi-color-border)] px-3 py-1.5 text-sm hover:bg-[var(--semi-color-fill-0)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--semi-color-primary)] disabled:opacity-50">{children}</button></DialogTrigger>
+  return <WorkspaceDialog open={open} onOpenChange={value => setRequest(value ? { target, identity } : null)}>
+    <button onClick={() => setRequest({ target, identity })} ref={trigger} type="button" disabled={disabled} className="rounded-md border border-[var(--semi-color-border)] px-3 py-1.5 text-sm hover:bg-[var(--semi-color-fill-0)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--semi-color-primary)] disabled:opacity-50">{children}</button>
     <DialogContent className="max-w-4xl" onCloseAutoFocus={event => {
       if (trigger.current?.isConnected && !trigger.current.closest('[hidden], [inert], [aria-hidden="true"]')) {
         event.preventDefault(); trigger.current.focus();
@@ -59,5 +59,5 @@ export function ReviewPositionSourceButton({ target, children, disabled = false 
         <Button onClick={() => setRequest(null)} htmlType="button" type="tertiary" theme="outline">返回复核内容</Button>
       </DialogFooter>
     </DialogContent>
-  </Dialog>;
+  </WorkspaceDialog>;
 }

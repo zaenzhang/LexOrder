@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Check, FileText, History, Loader2, Pencil, Plus } from "lucide-react";
 import { Input, Notification, TextArea, Toast } from "@douyinfe/semi-ui";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { WorkspaceDialog, DrawerContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { ContextInputPicker, ContextInputsSummary } from "@/components/matters/context-input-picker";
 import { carriedContextInputs } from "@/lib/matters/context-inputs";
@@ -262,19 +262,19 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
       </div>
     </section>
 
-      <Sheet open={editor !== null} onOpenChange={open => { if (!open) void closeEditor(); }}>
-        <SheetContent ref={editorContent} className="w-full overflow-y-auto sm:max-w-xl" onCloseAutoFocus={event => { event.preventDefault(); restoreFocus(editorTrigger.current, addTrigger.current, sectionTitle.current); }}>
-          <SheetHeader><SheetTitle>{editor?.record ? `更正${contextKindLabels[editor.record.kind]}记录（当前第 ${editor.record.version} 版）` : "记录目标或指示"}</SheetTitle><SheetDescription>{editor?.record ? `保存为第 ${editor.record.version + 1} 版，保留第 ${editor.record.version} 版；新版需重新核对确认。` : "保存后待主办或协办核对确认。"}</SheetDescription></SheetHeader>
+      <WorkspaceDialog open={editor !== null} onOpenChange={open => { if (!open) void closeEditor(); }}>
+        <DrawerContent ref={editorContent} className="w-screen overflow-y-auto sm:max-w-xl" onCloseAutoFocus={event => { event.preventDefault(); restoreFocus(editorTrigger.current, addTrigger.current, sectionTitle.current); }}>
+          <DialogHeader><DialogTitle>{editor?.record ? `更正${contextKindLabels[editor.record.kind]}记录（当前第 ${editor.record.version} 版）` : "记录目标或指示"}</DialogTitle><DialogDescription>{editor?.record ? `保存为第 ${editor.record.version + 1} 版，保留第 ${editor.record.version} 版；新版需重新核对确认。` : "保存后待主办或协办核对确认。"}</DialogDescription></DialogHeader>
           {requestedRecordId !== null ? <p role="status" className="mt-3 text-sm text-muted-foreground">关闭当前编辑后显示选中的记录，当前输入已保留。</p> : null}
           {editor ? <ContextEditor key={editor.key} matterId={matterId} state={editor} canReadFinance={Boolean(page.data?.canReadFinance)} onSaving={setEditorBusy} onDirtyChange={setEditorDirty}
             onLoadSources={request => void loadSources(editor.key, request)}
             onSaved={() => { setEditor(null); router.refresh(); }} /> : null}
-        </SheetContent>
-      </Sheet>
+        </DrawerContent>
+      </WorkspaceDialog>
 
-      <Sheet open={history !== null} onOpenChange={open => { if (!open) { historyRequest.current++; setHistory(null); } }}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-xl" onCloseAutoFocus={event => { event.preventDefault(); restoreFocus(historyTrigger.current, addTrigger.current, sectionTitle.current); }}>
-          <SheetHeader><SheetTitle ref={historyTitle} tabIndex={-1}>{history ? `${contextKindLabels[history.kind]}的历史版本` : "记录的历史版本"}</SheetTitle><SheetDescription>按版本倒序查看原记录、来源及当时的核对状态。</SheetDescription></SheetHeader>
+      <WorkspaceDialog open={history !== null} onOpenChange={open => { if (!open) { historyRequest.current++; setHistory(null); } }}>
+        <DrawerContent className="w-screen overflow-y-auto sm:max-w-xl" onCloseAutoFocus={event => { event.preventDefault(); restoreFocus(historyTrigger.current, addTrigger.current, sectionTitle.current); }}>
+          <DialogHeader><DialogTitle ref={historyTitle} tabIndex={-1}>{history ? `${contextKindLabels[history.kind]}的历史版本` : "记录的历史版本"}</DialogTitle><DialogDescription>按版本倒序查看原记录、来源及当时的核对状态。</DialogDescription></DialogHeader>
           <div className="mt-5 space-y-5">
             {historyError ? <p role="alert" className="text-sm text-destructive">{historyError}</p> : null}
             {historyLoading ? <p role="status" className="t-sm t-mute">正在读取历史…</p> : null}
@@ -282,16 +282,16 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
             {history && historyData?.nextBeforeVersion ? <button type="button" disabled={historyLoading} className="btn btn-secondary btn-sm" onClick={() => void showHistory(history, historyData.nextBeforeVersion!)}>查看更早版本</button> : null}
             {history && historyError ? <button type="button" disabled={historyLoading} className="btn btn-secondary btn-sm" onClick={() => void showHistory(history)}>重新读取历史版本</button> : null}
           </div>
-        </SheetContent>
-      </Sheet>
+        </DrawerContent>
+      </WorkspaceDialog>
 
-      <Sheet open={requestedRecordId !== null && editor === null} onOpenChange={open => { if (!open) closeExact(); }}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-xl" onCloseAutoFocus={event => {
+      <WorkspaceDialog open={requestedRecordId !== null && editor === null} onOpenChange={open => { if (!open) closeExact(); }}>
+        <DrawerContent className="w-screen overflow-y-auto sm:max-w-xl" onCloseAutoFocus={event => {
           event.preventDefault(); restoreFocus(addTrigger.current, sectionTitle.current);
         }}>
-          <SheetHeader><SheetTitle ref={exactTitle} tabIndex={-1}>{exactCurrent?.data
-            ? `${contextKindLabels[exactCurrent.data.kind]}记录（第 ${exactCurrent.data.version} 版）` : "查看指定记录"}</SheetTitle>
-            <SheetDescription>查看客户动态所指向的这版记录及来源。</SheetDescription></SheetHeader>
+          <DialogHeader><DialogTitle ref={exactTitle} tabIndex={-1}>{exactCurrent?.data
+            ? `${contextKindLabels[exactCurrent.data.kind]}记录（第 ${exactCurrent.data.version} 版）` : "查看指定记录"}</DialogTitle>
+            <DialogDescription>查看客户动态所指向的这版记录及来源。</DialogDescription></DialogHeader>
           <div className="mt-5 space-y-4">
             {!exactCurrent || exactCurrent.loading ? <p role="status" className="text-sm text-muted-foreground">正在读取指定记录…</p> : null}
             {exactCurrent?.error ? <div className="space-y-3"><p role="alert" className="text-sm text-destructive">{exactCurrent.error}</p>
@@ -299,16 +299,16 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
             {exactCurrent?.data ? <RecordContent matterId={matterId} record={exactCurrent.data} onSource={trigger => showSource(exactCurrent.data!, trigger, false, true)} /> : null}
             {historyReturnHref ? <Link className="btn btn-secondary btn-sm" href={historyReturnHref}>返回客户动态</Link> : null}
           </div>
-        </SheetContent>
-      </Sheet>
+        </DrawerContent>
+      </WorkspaceDialog>
 
-      <Sheet open={sourceVisible} onOpenChange={open => { if (!open) { sourceRequest.current++; setSource(null); } }}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-xl" onCloseAutoFocus={event => {
+      <WorkspaceDialog open={sourceVisible} onOpenChange={open => { if (!open) { sourceRequest.current++; setSource(null); } }}>
+        <DrawerContent className="w-screen overflow-y-auto sm:max-w-xl" onCloseAutoFocus={event => {
           event.preventDefault();
           restoreFocus(sourceTrigger.current, sourceFromExact.current || requestedRecordId !== null && editor === null ? exactTitle.current : null,
             sourceFromHistory.current && history !== null ? historyTitle.current : null, addTrigger.current, sectionTitle.current);
         }}>
-          <SheetHeader><SheetTitle>{source ? `${source.recordLabel}的来源` : "查看记录来源"}</SheetTitle><SheetDescription>{sourceData?.label ?? "按当前资格读取关联原记录。"}</SheetDescription></SheetHeader>
+          <DialogHeader><DialogTitle>{source ? `${source.recordLabel}的来源` : "查看记录来源"}</DialogTitle><DialogDescription>{sourceData?.label ?? "按当前资格读取关联原记录。"}</DialogDescription></DialogHeader>
           <div className="mt-5 space-y-4">
             {sourceError ? <p role="alert" className="text-sm text-destructive">{sourceError}</p> : null}
             {sourceLoading ? <p role="status" className="t-sm t-mute">正在读取来源…</p> : null}
@@ -316,8 +316,8 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
             {sourceData?.href ? <a className="btn btn-secondary" href={sourceData.href} target="_blank" rel="noopener noreferrer">打开来源原件</a> : null}
             {source && sourceError ? <button type="button" className="btn btn-secondary btn-sm" disabled={sourceLoading} onClick={() => void loadSource(source.id, source.recordLabel, source.exactRecordId)}>重新读取来源</button> : null}
           </div>
-        </SheetContent>
-      </Sheet>
+        </DrawerContent>
+      </WorkspaceDialog>
     </>
   );
 }

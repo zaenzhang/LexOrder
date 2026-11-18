@@ -2,7 +2,7 @@
 
 import { Button, Tag, Typography } from "@douyinfe/semi-ui";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { confirmDialog, promptDialog } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
 import { shDayKey, shTime } from "@/lib/ui/sh-time";
@@ -225,7 +225,7 @@ export function ResearchWorkspace({ matterId, researchId = null, issueId = null,
         onRefreshIssues={() => mutate(async () => { setOptions(await getResearchOptions(matterId)); setNotice("争点选项已更新，请核对后重新选择；研究输入已保留"); })}
         onOpenSource={id => showSource(id)} onPreviewSource={source => showSource(null, source)} />
     </> : null}
-    <Dialog open={sourceOpen} onOpenChange={open => { setSourceOpen(open); if (!open) sourceSequence.current++; }}><DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+    <WorkspaceDialog open={sourceOpen} onOpenChange={open => { setSourceOpen(open); if (!open) sourceSequence.current++; }}><DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
       <DialogHeader><DialogTitle>{source?.status === "AVAILABLE" ? source.documentName : "研究来源"}</DialogTitle><DialogDescription>核对本次选入的具体原文版本。</DialogDescription></DialogHeader>
       {sourceError ? <p role="alert" className="text-sm text-destructive">{sourceError}</p> : !source ? <p role="status">正在读取来源…</p> : source.status === "UNAVAILABLE" ? <p role="alert">来源已变化或无权读取，请返回研究核对。</p> : <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3"><span className="text-sm">V{source.documentVersion} · {source.locationLabel}{source.historicalParse ? " · 历史解析位置" : ""}</span>
@@ -238,12 +238,12 @@ export function ResearchWorkspace({ matterId, researchId = null, issueId = null,
         {source.text ? <div className="space-y-2"><p className="text-sm font-medium">已固定的抽取片段</p>
           <p className="whitespace-pre-wrap break-words rounded-md border p-3 text-sm">{source.text}</p></div> : <p className="text-sm text-muted-foreground">此引用定位到原件，未提供可显示的解析片段。</p>}
       </div>}
-    </DialogContent></Dialog>
-    <Dialog open={historyOpen} onOpenChange={open => { setHistoryOpen(open); if (!open) historySequence.current++; }}><DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+    </DialogContent></WorkspaceDialog>
+    <WorkspaceDialog open={historyOpen} onOpenChange={open => { setHistoryOpen(open); if (!open) historySequence.current++; }}><DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
       <DialogHeader><DialogTitle>研究修订</DialogTitle><DialogDescription>每次保存保留独立修订，旧稿仍引用原修订。</DialogDescription></DialogHeader>
       {historyError ? <div role="alert" className="space-y-2 text-sm"><p>{historyError}</p><Button onClick={() => showHistory()} type="tertiary" theme="outline" size="small">重试</Button></div> : null}
       {!history ? <p role="status">正在读取修订记录…</p> : <div className="divide-y">{history.records.map(item => <div key={item.id} className="flex items-center justify-between gap-3 py-3"><div className="min-w-0"><p className="text-sm font-medium break-words">修订 {item.version} · {item.content?.question ?? "来源受限"}</p><p className="text-xs text-muted-foreground">{item.authorName ?? "原作者"} · {shDayKey(item.createdAt)} · {item.checkedAt ? "已核对" : "待核对"}{item.current ? " · 当前修订" : ""}</p></div><Button disabled={pending} onClick={() => void navigate(item.id)} type="tertiary" theme="outline" size="small">查看修订</Button></div>)}
         {history.nextVersion ? <Button onClick={() => showHistory(history.nextVersion!)} type="tertiary" theme="outline" size="small">更早修订</Button> : null}</div>}
-    </DialogContent></Dialog>
+    </DialogContent></WorkspaceDialog>
   </section>;
 }

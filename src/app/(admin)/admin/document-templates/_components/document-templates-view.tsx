@@ -10,13 +10,13 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { FileText, Plus, Upload } from "lucide-react";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetFooter
-} from "@/components/ui/sheet";
+  WorkspaceDialog,
+  DrawerContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from "@/components/patterns/workspace-dialog";
 import { uploadDocumentTemplate, toggleTemplate } from "@/server/document-templates/actions";
 import { VARIABLE_LABEL_CN } from "@/app/(app)/matters/[id]/_components/folder-types";
 import { FileInput } from "@/components/patterns/file-input";
@@ -182,14 +182,14 @@ function UploadSheet({ open, onOpenChange, onDone }: { open: boolean; onOpenChan
   }
 
   return (
-    <Sheet open={open} onOpenChange={v => { onOpenChange(v); if (!v) reset(); }}>
-      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
-        <SheetHeader className="border-b border-border bg-background px-6 py-4">
-          <SheetTitle>上传文书模板</SheetTitle>
-          <SheetDescription className="text-xs">
+    <WorkspaceDialog open={open} onOpenChange={v => { onOpenChange(v); if (!v) reset(); }}>
+      <DrawerContent side="right" className="flex w-screen flex-col gap-0 p-0 sm:max-w-xl">
+        <DialogHeader className="border-b border-border bg-background px-6 py-4">
+          <DialogTitle>上传文书模板</DialogTitle>
+          <DialogDescription className="text-xs">
             仅支持 .docx；正文用双大括号占位，上传后自动提取变量清单（页眉页脚一并扫描）
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </DialogHeader>
         <form onSubmit={submit} className="flex flex-1 flex-col">
           <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
             <div className="space-y-1.5">
@@ -234,14 +234,14 @@ function UploadSheet({ open, onOpenChange, onDone }: { open: boolean; onOpenChan
               </div>
             </div>
           </div>
-          <SheetFooter className="border-t border-border bg-background px-6 py-4">
+          <DialogFooter className="border-t border-border bg-background px-6 py-4">
             <Button htmlType="button" theme="outline" onClick={() => onOpenChange(false)} disabled={pending}>取消</Button>
             <Button theme="solid" htmlType="submit" loading={pending} disabled={pending} icon={<Upload size={16} aria-hidden />}>
               上传
             </Button>
-          </SheetFooter>
+          </DialogFooter>
         </form>
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </WorkspaceDialog>
   );
 }

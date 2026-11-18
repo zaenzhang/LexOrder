@@ -4,7 +4,7 @@ import { Button, Checkbox, Input, Select, TextArea, Toast } from "@douyinfe/semi
 
 import { useEffect, useRef, useState, useTransition, type FormEvent, type RefObject } from "react";
 import { Check } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
 import { shDayKey, shTime } from "@/lib/ui/sh-time";
@@ -83,7 +83,7 @@ export function ClientActivityDialog({ clientId, mode, verifyPersonalTarget = fa
   }
   const title = verifyPersonalTarget && current?.value && !mayEdit ? "查看跟进" : mode.id ? mode.status === "CANCELLED" ? "取消跟进" : "录入跟进结果" : "记录沟通";
   const followUpTitle = verifyPersonalTarget ? current?.value?.title : mode.title;
-  return <Dialog open onOpenChange={value => { if (!value) void requestClose(); }}>
+  return <WorkspaceDialog open onOpenChange={value => { if (!value) void requestClose(); }}>
     <DialogContent ref={editorContent} onEscapeKeyDown={event => { if (channelOpen) event.preventDefault(); }} className="max-h-[90dvh] overflow-y-auto sm:max-w-[560px]" onCloseAutoFocus={event => {
       event.preventDefault();
       const origin = trigger.current;
@@ -114,5 +114,5 @@ export function ClientActivityDialog({ clientId, mode, verifyPersonalTarget = fa
       </form> : <DialogFooter><Button htmlType="button" type="tertiary" theme="outline" onClick={() => void requestClose()}>返回列表</Button></DialogFooter>}
       {verifyPersonalTarget && mode.id && current?.value && <PersonalFollowUpRescheduleHistory key={`${identity}:${attempt}:${current.value.updatedAt}`} target={{ clientId, followUpId: mode.id }} />}
     </DialogContent>
-  </Dialog>;
+  </WorkspaceDialog>;
 }

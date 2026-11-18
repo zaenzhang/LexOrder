@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { Select, Button, Checkbox, Input, Tag, TextArea, Toast } from "@douyinfe/semi-ui";
-import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { FormDialogBody, FormDialogContent } from "@/components/patterns/form-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -188,7 +188,7 @@ function CreateTaskDialog({ matterId, data, stage, onClose, onCreated, onReturnF
     }
   }
 
-  return <Dialog open onOpenChange={open => { if (!open) void close(); }}>
+  return <WorkspaceDialog open onOpenChange={open => { if (!open) void close(); }}>
     <FormDialogContent onCloseAutoFocus={event => { event.preventDefault(); if (!created.current) onReturnFocus(); }}>
       <DialogHeader><DialogTitle>{stage ? "新建环节任务" : "新建事项级任务"}</DialogTitle><DialogDescription>{stage ? `关联环节：${stage.name}` : "不关联程序或环节"}</DialogDescription></DialogHeader>
       <FormDialogBody>
@@ -205,5 +205,5 @@ function CreateTaskDialog({ matterId, data, stage, onClose, onCreated, onReturnF
       </FormDialogBody>
       <DialogFooter><Button onClick={() => void close()} disabled={busy} type="tertiary" theme="outline">取消</Button><Button form="create-matter-task" disabled={busy} htmlType="submit" theme="solid">{busy ? "正在保存…" : "创建任务"}</Button></DialogFooter>
     </FormDialogContent>
-  </Dialog>;
+  </WorkspaceDialog>;
 }

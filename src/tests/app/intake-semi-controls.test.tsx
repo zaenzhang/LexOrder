@@ -24,7 +24,7 @@ import { ExternalContactDialog } from "@/app/(app)/contacts/_components/external
 import { ClientCombobox } from "@/app/(app)/intakes/_components/client-combobox";
 import { JurisdictionSelect } from "@/app/(app)/intakes/_components/jurisdiction-select";
 import { ConflictsViewV4 } from "@/app/(app)/conflicts/_components/conflicts-view-v4";
-import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { WorkspaceDialog, DrawerContent, DialogTitle, DialogDescription } from "@/components/patterns/workspace-dialog";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -41,10 +41,10 @@ function RegionSheet() {
   const [open, setOpen] = useState(true);
   const [value, setValue] = useState("浙江省/杭州市");
   const popupOpen = useRef(false);
-  return <Sheet open={open} onOpenChange={setOpen}><SheetContent onEscapeKeyDown={event => { if (popupOpen.current) event.preventDefault(); }}>
-    <SheetTitle>程序修改</SheetTitle><SheetDescription>合成程序管辖地</SheetDescription>
+  return <WorkspaceDialog open={open} onOpenChange={setOpen}><DrawerContent onEscapeKeyDown={event => { if (popupOpen.current) event.preventDefault(); }}>
+    <DialogTitle>程序修改</DialogTitle><DialogDescription>合成程序管辖地</DialogDescription>
     <JurisdictionSelect value={value} onChange={setValue} onDropdownVisibleChange={visible => { popupOpen.current = visible; }} />
-  </SheetContent></Sheet>;
+  </DrawerContent></WorkspaceDialog>;
 }
 
 describe("Semi 收案控件与原业务身份", () => {

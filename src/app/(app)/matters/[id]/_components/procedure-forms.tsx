@@ -11,13 +11,13 @@ import { ExternalLink, Loader2, Scale, ScanText } from "lucide-react";
 import type { MatterCategory, ProcedureType } from "@prisma/client";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogFooter
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import {
   procedureCreateSchema,
   deadlineCreateSchema,
@@ -176,7 +176,7 @@ export function AddProcedureSheet({
   }
 
   return (
-    <Dialog open={open} onOpenChange={open => { if (!open) void closeProcedure(); }}>
+    <WorkspaceDialog open={open} onOpenChange={open => { if (!open) void closeProcedure(); }}>
       <DialogContent className="max-w-xl max-h-[85vh] flex flex-col gap-0 p-0">
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle>添加程序（第 {nextOrder} 个）</DialogTitle>
@@ -297,7 +297,7 @@ export function AddProcedureSheet({
           </DialogFooter>
         </form>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 
@@ -466,7 +466,7 @@ export function AddDeadlineDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={value => { if (!isPending) onOpenChange(value); }}>
+    <WorkspaceDialog open={open} onOpenChange={value => { if (!isPending) onOpenChange(value); }}>
       <DialogContent className="flex max-h-[85vh] max-w-md flex-col gap-0 p-0">
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle>添加期限</DialogTitle>
@@ -612,7 +612,7 @@ export function AddDeadlineDialog({
           </DialogFooter>
         </form>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 
@@ -741,7 +741,7 @@ export function AddHearingDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <WorkspaceDialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[85vh] max-w-md flex-col gap-0 p-0">
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle>添加开庭</DialogTitle>
@@ -861,7 +861,7 @@ export function AddHearingDialog({
           </DialogFooter>
         </form>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 

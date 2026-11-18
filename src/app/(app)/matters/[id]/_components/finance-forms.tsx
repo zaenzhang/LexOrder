@@ -10,13 +10,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Select, Button, Input, Notification, TextArea, Toast } from "@douyinfe/semi-ui";
 import { Loader2, Paperclip, FileText, Sparkles } from "lucide-react";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogFooter
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import {
   billingCreateSchema,
   feeEntryCreateSchema,
@@ -96,7 +96,7 @@ export function AddBillingSheet({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <WorkspaceDialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[88vh] w-[92vw] max-w-2xl flex-col gap-0 p-0">
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle>新增合同</DialogTitle>
@@ -177,7 +177,7 @@ export function AddBillingSheet({
           </DialogFooter>
         </form>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 
@@ -260,7 +260,7 @@ export function AddFeeEntrySheet({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <WorkspaceDialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[88vh] w-[92vw] max-w-2xl flex-col gap-0 p-0">
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle>新增收付记录</DialogTitle>
@@ -401,7 +401,7 @@ export function AddFeeEntrySheet({
           </DialogFooter>
         </form>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, type ReactNode } from "react";
+import React, { useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ContextInputSelection } from "@/lib/matters/context-inputs";
@@ -16,19 +16,6 @@ vi.mock("@/components/matters/context-input-picker", () => ({ ContextInputPicker
   onClick={() => onChange([{ recordId: `cgoal000000000000000000${suffix}`, expectedCurrentRecordId: `cgoal000000000000000000${suffix}`, expectedConfirmedAt: null }])}>采用合成指示 {suffix}</button>)}</div> }));
 vi.mock("@/app/(app)/matters/[id]/_components/material-processing-status", () => ({ MaterialProcessingStatus: ({ documentIds }: { documentIds: string[] }) =>
   <section aria-label="材料处理状态">待核对处理：{documentIds.join(",")}</section> }));
-// Row/target/result contracts use real Dialog and inputs. Select's portal/keyboard is left to browser acceptance.
-vi.mock("@/components/ui/select", async () => {
-  const { Children, isValidElement } = await import("react");
-  return {
-    Select: ({ value, onValueChange, disabled, children }: { value: string; onValueChange(value: string): void; disabled?: boolean; children: ReactNode }) => {
-      const trigger = Children.toArray(children)[0];
-      const id = isValidElement<{ id?: string }>(trigger) ? trigger.props.id : undefined;
-      return <select id={id} value={value} disabled={disabled} onChange={event => onValueChange(event.target.value)}>{children}</select>;
-    }, SelectTrigger: () => null, SelectValue: () => null, SelectContent: ({ children }: { children: ReactNode }) => <>{children}</>,
-    SelectItem: ({ value, children, disabled }: { value: string; children: ReactNode; disabled?: boolean }) => <option value={value} disabled={disabled}>{children}</option>,
-  };
-});
-
 import { MaterialUploadDialog, type UploadProcedureChoice } from "@/app/(app)/matters/[id]/_components/material-upload-dialog";
 import { DocActionsContext } from "@/app/(app)/matters/[id]/_components/doc-actions-context";
 type Props = React.ComponentProps<typeof MaterialUploadDialog>;
@@ -54,14 +41,22 @@ function editor() { return within(screen.getByRole("region", { name: "当前材�
 function choose(index: number) { fireEvent.click(within(screen.getByRole("list", { name: "本批材料" })).getAllByRole("button")[index]); }
 function upload() { fireEvent.click(screen.getByRole("button", { name: "上传" })); }
 function change(label: string, value: string) { fireEvent.change(editor().getByLabelText(label), { target: { value } }); }
+async function select(label: string, text: string, region = editor()) {
+  fireEvent.click(region.getByRole("combobox", { name: label }));
+  const listbox = await screen.findByRole("listbox");
+  if (label === "归属环节") expect(within(listbox).queryByRole("option", { name: /隐藏环节/ })).not.toBeInTheDocument();
+  fireEvent.click(within(listbox).getByRole("option", { name: new RegExp(text) }));
+  await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
+}
 function requestAt(index: number) { return mock.upload.mock.calls[index][0] as FormData; }
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   mock.confirm.mockResolvedValue(true); mock.close.mockResolvedValue(undefined);
   mock.upload.mockImplementation(async () => ({ ok: true, id: `doc-${mock.upload.mock.calls.length}` }));
   window.history.replaceState(null, "", "/matters/matter-1?procedure=procedure-a&stage=stage-stage-a");
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("G04 批量接件：逐件身份、目标与接续（组件环境）", () => {
   it("30 份同名文件分别顺序提交，单件明确失败可纠正，成功项不重发且仅打开真实保存对象", async () => {
@@ -89,23 +84,21 @@ describe("G04 批量接件：逐件身份、目标与接续（组件环境）", 
   it("共同默认只作用可编辑项；同案逐件真实程序/ACTIVE 环节/未归属、来源和 G15 选择相互独立", async () => {
     render(<Harness />); fireEvent.click(screen.getByRole("button", { name: "打开批次" })); add(["甲.txt", "乙.txt", "丙.txt"]);
     fireEvent.click(editor().getByRole("button", { name: "采用合成指示 A" }));
-    change("来源方", "原告·合成甲");
+    await select("来源方", "原告·合成甲");
     fireEvent.click(editor().getByRole("button", { name: "上传此项" }));
     await screen.findByText("3 份 · 已保存 1 份");
     choose(1); change("显示名", "乙的独立显示名"); fireEvent.click(editor().getByRole("button", { name: "采用合成指示 B" }));
     fireEvent.click(screen.getByText("共同默认值", { selector: "summary" }));
     const defaults = within(screen.getByText("共同默认值", { selector: "summary" }).parentElement!);
-    fireEvent.change(defaults.getByLabelText("材料来源"), { target: { value: "CLIENT_PROVIDED" } });
+    await select("材料来源", "当事人提供", defaults);
     fireEvent.click(defaults.getByRole("button", { name: "应用到可编辑项" }));
     expect(editor().getByLabelText("显示名")).toHaveValue("乙的独立显示名");
     expect(editor().getByText(/本件采用：cgoal.*B/)).toBeVisible();
-    expect(editor().queryByRole("option", { name: "隐藏环节" })).not.toBeInTheDocument();
-    change("来源方", "原告·合成甲"); change("归属程序", "procedure-b");
-    expect(editor().getByLabelText("归属环节")).toHaveValue("none");
-    expect(editor().getByLabelText("来源方")).toHaveValue("none");
-    expect(editor().queryByRole("option", { name: "隐藏环节" })).not.toBeInTheDocument();
-    change("归属环节", "stage-b"); change("来源方", "被告·合成乙");
-    choose(2); change("归属程序", "none");
+    await select("来源方", "原告·合成甲"); await select("归属程序", "程序 B");
+    expect(editor().getByRole("combobox", { name: "归属环节" })).toHaveTextContent("未归属环节");
+    expect(editor().getByRole("combobox", { name: "来源方" })).toHaveTextContent("不标注");
+    await select("归属环节", "环节 B"); await select("来源方", "被告·合成乙");
+    choose(2); await select("归属程序", "未归属程序");
     expect(editor().getByText("本件采用：无")).toBeVisible();
     upload(); await screen.findByText("3 份 · 已保存 3 份");
     expect(mock.upload).toHaveBeenCalledTimes(3);

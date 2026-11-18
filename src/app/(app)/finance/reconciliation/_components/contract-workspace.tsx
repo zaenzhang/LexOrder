@@ -6,7 +6,7 @@ import Link from "next/link";
 
 import { RegistrationWorkspace, type ContractEntry } from "./registration-workspace";
 import { contractHref } from "./contract-location";
-import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from "@/components/ui/dialog";
+import {WorkspaceDialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from "@/components/patterns/workspace-dialog";
 
 import {formatDate} from "@/lib/utils";
 import {amendmentLabels,amendmentTypes,scopeLabels} from "@/lib/finance/contract-labels";
@@ -65,7 +65,7 @@ export function ContractWorkspace({data,canWrite,canCorrect,selectedMatterId,bil
     <label htmlFor="contract-scope-note">合同条款或零收费豁免依据</label><TextArea id="contract-scope-note" required value={scopeNote} onChange={event=>setScopeNote(event)}/><div className="flex gap-2"><Button disabled={busy || !scopeProcedure} theme="outline" type="tertiary" size="small" htmlType="submit">保存覆盖依据</Button><Button disabled={busy} theme="borderless" type="tertiary" size="small" htmlType="button" onClick={()=>setBinding(null)}>取消</Button></div>
    </form>}
   </article>:<p role="alert" className="text-sm text-destructive">指定合同已不可用，请返回合同列表重新选择。</p>}
- <Dialog open={open} onOpenChange={v=>{if(!busy)setOpen(v);}}><DialogContent className="max-h-[88vh] overflow-y-auto"><DialogHeader><DialogTitle>新增补充协议</DialogTitle><DialogDescription>保存后先形成草稿，确认生效时复核余额。减少费用需要独立财务更正确认权限。</DialogDescription></DialogHeader><form onSubmit={submit}><fieldset disabled={busy} className="space-y-4">
+ <WorkspaceDialog open={open} onOpenChange={v=>{if(!busy)setOpen(v);}}><DialogContent className="max-h-[88vh] overflow-y-auto"><DialogHeader><DialogTitle>新增补充协议</DialogTitle><DialogDescription>保存后先形成草稿，确认生效时复核余额。减少费用需要独立财务更正确认权限。</DialogDescription></DialogHeader><form onSubmit={submit}><fieldset disabled={busy} className="space-y-4">
  <div className="rounded-md border p-3 text-sm"><label>当前合同版本</label><p className="mt-1">{source?.title} · {source&&yuan(source.resultingAmount??source.contractAmount)}</p></div>
  <RadioGroup value={type} options={amendmentTypes.map(value=>({value,label:amendmentLabels[value]}))} onChange={event => (v=>setType(v as typeof type))(String(event.target.value))} disabled={busy} type="button"/>
  <div><label htmlFor="contract-title">协议名称</label><Input id="contract-title" required value={title} onChange={e=>setTitle(e)}/></div>
@@ -79,7 +79,7 @@ export function ContractWorkspace({data,canWrite,canCorrect,selectedMatterId,bil
  <fieldset className="space-y-2 rounded border p-3"><legend>调减应收（仅费用减少时填写）</legend>{ars.map(r=><div className="space-y-2" key={r.id}><label htmlFor={`reduce-${r.id}`}>{r.title} · 原额 {yuan(r.amount)} · 已核销 {yuan(r.settledAmount)}</label><Input id={`reduce-${r.id}`} inputMode="decimal" placeholder="本期调减金额，不减少留空" value={reductions[r.id]??''} onChange={e=>setReductions({...reductions,[r.id]:e})}/>{data.allocations.filter(a=>a.receivableId===r.id&&Number(a.amount)>0).map(a=><div className="pl-3" key={a.id}><label htmlFor={`release-${a.id}`}>解除核销（有效额 {yuan(a.amount)}）</label><Input id={`release-${a.id}`} inputMode="decimal" value={reversals[a.id]??''} placeholder="仅填本次需要释放的金额" onChange={e=>setReversals({...reversals,[a.id]:e})}/></div>)}</div>)}</fieldset>
  <fieldset className="space-y-2"><legend>本次涉及程序</legend>{data.procedures.filter(p=>p.matterId===source?.matterId).map(p=><div key={p.id} className="space-y-2 rounded border p-3"><Checkbox checked={Boolean(scopes[p.id])} onChange={e=>{const next={...scopes};if(e.target.checked)next[p.id]={state:'PENDING_REVIEW',note:''};else delete next[p.id];setScopes(next);}} disabled={busy} className="flex gap-2">{p.customLabel??procedureTypeLabel[p.type]}</Checkbox>{scopes[p.id]&&<><RadioGroup value={scopes[p.id].state} options={Object.entries(scopeLabels).map(([value,label])=>({value,label}))} onChange={event => (v=>setScopes({...scopes,[p.id]:{...scopes[p.id],state:v as typeof scopes[string]['state']}}))(String(event.target.value))} disabled={busy} type="button"/><Input aria-label={`${p.customLabel??procedureTypeLabel[p.type]}范围依据`} required placeholder="服务范围、豁免或待补充说明" value={scopes[p.id].note} onChange={e=>setScopes({...scopes,[p.id]:{...scopes[p.id],note:e}})}/></>}</div>)}</fieldset>
  {error&&<p role="alert" className="text-sm text-destructive">{error}</p>}
- <Button  disabled={busy} htmlType="submit" theme="solid" type="primary">{busy?'保存中…':'保存变更草稿'}</Button></fieldset></form></DialogContent></Dialog></section>
+ <Button  disabled={busy} htmlType="submit" theme="solid" type="primary">{busy?'保存中…':'保存变更草稿'}</Button></fieldset></form></DialogContent></WorkspaceDialog></section>
  {registration&&<RegistrationWorkspace data={data} canWrite={canWrite} canConfirm={false} selectedMatterId={selectedMatterId??selected?.matterId} returnTo={returnTo} contractEntry={registration} onContractClose={()=>{setRegistration(null);if(createContract)router.replace(listHref);}} onContractSaved={(id,matterId)=>{setRegistration(null);router.replace(contractHref({matterId,billingId:id,returnTo}));}}/>}
  </>;
 }

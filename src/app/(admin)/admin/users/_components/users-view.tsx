@@ -8,21 +8,21 @@ import { z } from "zod";
 import { Plus, KeyRound, CircleOff, CircleDot, LockOpen, Search, ShieldCheck, ShieldOff, Smartphone } from "lucide-react";
 import type { SystemRole, UserRole } from "@prisma/client";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter
-} from "@/components/ui/sheet";
+  WorkspaceDialog,
+  DrawerContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
+} from "@/components/patterns/workspace-dialog";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
   DialogDescription
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import {
   createUser,
   updateUserRole,
@@ -156,7 +156,7 @@ export function UsersView({
         </table>
       </div>
 
-      <Dialog open={!!editing} onOpenChange={open => { if (!open) setEditingId(null); }}>
+      <WorkspaceDialog open={!!editing} onOpenChange={open => { if (!open) setEditingId(null); }}>
         <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-xl">
           <DialogHeader><DialogTitle>编辑账号资料</DialogTitle><DialogDescription>维护基本资料，或核对并更正身份证件及照片。</DialogDescription></DialogHeader>
           {editing && <div className="space-y-5">
@@ -165,7 +165,7 @@ export function UsersView({
             <IdentityForm key={`${editing.id}-${editing.updatedAt}`} adminTargetId={editing.id} />
           </div>}
         </DialogContent>
-      </Dialog>
+      </WorkspaceDialog>
       <CreateUserSheet customRoles={customRoles} builtinNames={builtinNames} open={sheetOpen} onOpenChange={setSheetOpen} />
       <ResetPasswordDialog
         user={resetUser}
@@ -501,14 +501,14 @@ function CreateUserSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex w-full max-w-2xl flex-col gap-0 p-0">
-        <SheetHeader className="border-b border-border bg-background px-6 py-4">
-          <SheetTitle>新增用户</SheetTitle>
-          <SheetDescription className="text-xs">
+    <WorkspaceDialog open={open} onOpenChange={onOpenChange}>
+      <DrawerContent side="right" className="flex w-screen max-w-2xl flex-col gap-0 p-0">
+        <DialogHeader className="border-b border-border bg-background px-6 py-4">
+          <DialogTitle>新增用户</DialogTitle>
+          <DialogDescription className="text-xs">
             登记基本资料和身份证件（类型与号码必填，照片可选、可稍后在「资料 → 身份证件」补充）；初始密码可让用户登录后自行修改
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
           <div className="flex-1 space-y-3 overflow-y-auto px-6 py-5">
@@ -554,7 +554,7 @@ function CreateUserSheet({
             />
           </div>
 
-          <SheetFooter className="border-t border-border bg-background px-6 py-4">
+          <DialogFooter className="border-t border-border bg-background px-6 py-4">
             <Button
               htmlType="button"
               theme="outline"
@@ -566,10 +566,10 @@ function CreateUserSheet({
             <Button theme="solid" htmlType="submit" disabled={isPending} loading={isPending}>
               创建
             </Button>
-          </SheetFooter>
+          </DialogFooter>
         </form>
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </WorkspaceDialog>
   );
 }
 
@@ -602,7 +602,7 @@ function ResetPasswordDialog({
   }
 
   return (
-    <Dialog open={!!user} onOpenChange={(o) => !o && onClose()}>
+    <WorkspaceDialog open={!!user} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>重置 {user?.name} 的密码</DialogTitle>
@@ -630,7 +630,7 @@ function ResetPasswordDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 

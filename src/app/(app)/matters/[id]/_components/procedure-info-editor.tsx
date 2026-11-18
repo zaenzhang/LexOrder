@@ -4,7 +4,7 @@ import { useId, useEffect, useMemo, useState, useTransition } from "react";
 import type { LitigationStanding, MatterCategory, PartyRole, PartyType, ProcedureType } from "@prisma/client";
 import { Select, Button, Checkbox, Input, Toast } from "@douyinfe/semi-ui";
 import { Loader2, Plus, X } from "lucide-react";
-import { DialogFooter } from "@/components/ui/dialog";
+import { DialogFooter } from "@/components/patterns/workspace-dialog";
 import { FormDialogBody } from "@/components/patterns/form-dialog";
 import { EnterpriseNameInput } from "@/components/matters/enterprise-name-input";
 import { JurisdictionSelect } from "@/app/(app)/intakes/_components/jurisdiction-select";

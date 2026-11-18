@@ -18,7 +18,7 @@ import { computeDeadlineDate } from "@/lib/deadline-rules";
 import { deadlineReminderOffsets } from "@/lib/deadline-reminders";
 import { procedureTypeLabel } from "@/lib/enums";
 import { FilterSelect } from "@/components/patterns/filter-select";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/patterns/workspace-dialog";
 import { cn } from "@/lib/utils";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { shMonthDay, shTodayCivil } from "@/lib/ui/sh-time";
@@ -306,7 +306,7 @@ export function DeadlineRulesCard({ rules, rail, headerActions }: { rules: Admin
         </div>
       </div>
 
-      <Dialog open={!!editing} onOpenChange={(o) => { if (!o) setEditing(null); }}>
+      <WorkspaceDialog open={!!editing} onOpenChange={(o) => { if (!o) setEditing(null); }}>
         <DialogContent className="mo-rules max-w-xl">
           <DialogHeader>
             <DialogTitle>{editing?.id ? "编辑期限规则" : "新建期限规则"}</DialogTitle>
@@ -367,7 +367,7 @@ export function DeadlineRulesCard({ rules, rail, headerActions }: { rules: Admin
             <Button htmlType="button" theme="solid" loading={pending} disabled={pending} onClick={submit}>{editing?.id ? "保存" : "创建"}</Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </WorkspaceDialog>
     </>
   );
 }

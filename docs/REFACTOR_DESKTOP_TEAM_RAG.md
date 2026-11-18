@@ -795,9 +795,15 @@ Tauri 作为现有 Server 工作台的桌面宿主，沿用现有页面和登录
 
 按计划 §7.17 的 A 组第二批，固定 `@douyinfe/semi-ui@2.105.0` 与已有 React 19/中文 Provider。页面 FilterSelect 直接组合 Dropdown/Button，保留值、全部/清除的 `undefined`、不可清空和受控回读；选择时先关闭并回焦再通知原调用方，使用 `motion={false}`，向下箭头接续已有打开入口，其余菜单键盘交给 Semi。
 
-ConfirmHost 保持现有唯一请求队列和 Promise 返回合同，内部按钮及 TextArea 使用 Semi API。首次入队同步记录当前入口，排队项沿用该入口；末项关闭只在没有新请求且入口仍连接时回焦。旧请求事件不得结算后来请求。字段的标签、必填错误与快捷提交直接绑定同一 TextArea。旧 Radix 父表单仍持有焦点、Escape 和点击边界，故本批保留唯一现行弹层壳，待调用方同批迁走后替换，不建立 Radix/Semi 弹层适配或第二套队列。
+ConfirmHost 保持现有唯一请求队列和 Promise 返回合同，内部按钮及 TextArea 使用 Semi API。首次入队同步记录当前入口，排队项沿用该入口；末项关闭只在没有新请求且入口仍连接时回焦。旧请求事件不得结算后来请求。字段的标签、必填错误与快捷提交直接绑定同一 TextArea。结算仍由这一套队列负责，弹层按工作区交互合同接入 Semi Modal。
 
-ReviewDialogContent 的 Tabs/TabPane 使用业务原 ID，受控值由调用方更新；显式 `keepDOM`、`lazyRender={false}` 和 `tabPaneMotion={false}` 保持原 forceMount 的草稿语义。计数使用 Semi Tag/Typography，新增内容层的高度及滚动由就近 CSS module 定义。无当前消费者的 `.rv-main` 旧规则随本批删除；其他公共组件、Sonner、依赖和 CSS 按真实引用等待分组汇合。本批没有 API、schema、业务权限或财务/归档状态变更。
+ReviewDialogContent 的 Tabs/TabPane 使用业务原 ID，受控值由调用方更新；显式 `keepDOM`、`lazyRender={false}` 和 `tabPaneMotion={false}` 保持原 forceMount 的草稿语义。计数使用 Semi Tag/Typography，新增内容层的高度及滚动由就近 CSS module 定义。复核布局自身负责分区滚动和材料、意见、提交动作的位置。本批没有 API、schema、业务权限或财务/归档状态变更。
+
+### 6.31 Server 工作区弹层与动效（2026-11-18）
+
+工作区的居中对话框和侧边编辑面板复用 [WorkspaceDialog](../src/components/patterns/workspace-dialog.tsx)，由 Semi Modal 提供遮罩、焦点循环和弹层顺序，业务组件负责返回入口、草稿确认和提交状态。安装版 SideSheet 缺少这一轮所需的焦点循环和回焦合同。默认遮罩不触发关闭。嵌套 Select 优先消耗 Escape，确认层按既有队列落焦和返回。通过 URL 打开编辑时，Portal 在 React 完成水合后挂载。
+
+短弹窗和侧边面板分别使用 120ms 与 160ms 的入场过渡。关闭立即还原焦点，不等待离场动画。CSS 尊重 `prefers-reduced-motion`。高频筛选和复核页签即时更新。短状态反馈使用 Semi Toast，需阅读说明、重试或保留错误详情的反馈使用 Semi Notification。原生文件控件保留选取、校验及 `FormData` 语义，界面使用同一主题。[迁移证据](WORKBENCH_PLAN.md#717-semi-迁移协作计划2026-11-18)
 
 ## 7. 参考项目如何进入 LexOrder
 

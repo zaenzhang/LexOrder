@@ -2,12 +2,12 @@
 
 import { Download, ExternalLink, FileText } from "lucide-react";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import { Typography } from "@douyinfe/semi-ui";
 
 type PreviewableFile = {
@@ -49,7 +49,7 @@ export function PreviewDialog({
     isInlineText(file.mimeType);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <WorkspaceDialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[88vh] w-[92vw] max-w-5xl flex-col gap-0 p-0">
         <DialogHeader className="border-b border-border px-5 py-3">
           <DialogTitle className="flex items-center gap-2 text-base">
@@ -103,6 +103,6 @@ export function PreviewDialog({
           )}
         </div>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }

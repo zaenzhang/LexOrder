@@ -5,13 +5,13 @@ import { useEffect, useState } from "react";
 import { Sparkles, Loader2, X } from "lucide-react";
 import type { MatterCategory, ProcedureType } from "@prisma/client";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogFooter
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import {
   recommendCause,
   type CauseRecommendation
@@ -86,7 +86,7 @@ export function CauseAiManualDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <WorkspaceDialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg gap-0 p-0">
         <DialogHeader className="border-b border-border px-5 py-3">
           <DialogTitle className="flex items-center gap-2 text-base">
@@ -190,7 +190,7 @@ export function CauseAiManualDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 

@@ -4,7 +4,7 @@ import { Banner, Select, Button, Checkbox, Input, Tag, TextArea, Toast } from "@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, FileText, Plus } from "lucide-react";
 
-import { Dialog, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 
 import { FormDialogBody, FormDialogContent } from "@/components/patterns/form-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
@@ -253,9 +253,9 @@ export function DeliveryPanel({ matterId, initialDeliveryId, initialEventId, ini
       <Button size="small" theme="outline" type="tertiary" disabled={loading || !nextCursor} onClick={() => { setPreviousCursors(value => [...value, cursor]); setCursor(nextCursor!); }} htmlType="button">下一页</Button>
     </div>}
 
-    <Dialog open={mode !== null} onOpenChange={open => { if (!open) void close(); }}>
+    <WorkspaceDialog open={mode !== null} onOpenChange={open => { if (!open) void close(); }}>
       <FormDialogContent ref={popupContainer} className="max-w-3xl" aria-describedby={undefined} onCloseAutoFocus={event => { event.preventDefault(); trigger.current?.focus(); }}
-        onEscapeKeyDown={event => { if (busy || openDropdown.current) event.preventDefault(); }} onInteractOutside={event => { if (busy) event.preventDefault(); }}>
+        onEscapeKeyDown={event => { if (busy || openDropdown.current) event.preventDefault(); }}>
         <DialogHeader className="px-6 pt-5"><DialogTitle>{title}</DialogTitle></DialogHeader>
         <FormDialogBody className="flex flex-col gap-5 px-6 py-5">
           {error && <Banner type="danger" closeIcon={null} description={error} />}
@@ -344,6 +344,6 @@ export function DeliveryPanel({ matterId, initialDeliveryId, initialEventId, ini
           </>}
         </DialogFooter>
       </FormDialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   </section>;
 }

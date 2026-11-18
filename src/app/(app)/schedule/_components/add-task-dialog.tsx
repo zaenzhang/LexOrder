@@ -9,12 +9,12 @@ import { useRouter } from "next/navigation";
 import { Loader2, Clock } from "lucide-react";
 
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 
 import { createTask } from "@/server/tasks/actions";
 import { civilKey, shParts, WEEKDAY_CN } from "@/lib/ui/sh-time";
@@ -101,7 +101,7 @@ export function AddTaskDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={value => { if (!isPending) onOpenChange(value); }}>
+    <WorkspaceDialog open={open} onOpenChange={value => { if (!isPending) onOpenChange(value); }}>
       <DialogContent ref={editorContent} className="max-w-md" onEscapeKeyDown={event => { if (openSelect) event.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -199,6 +199,6 @@ export function AddTaskDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }

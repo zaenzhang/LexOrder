@@ -18,7 +18,7 @@ import { useRouter } from "next/navigation";
 import { useWorkspaceActor } from "@/components/workspace-actor-provider";
 import { AlertTriangle, ChevronRight, FileText, Loader2, Paperclip, Plus, ScanLine, Sparkles, X } from "lucide-react";
 import type { MatterCategory, ProcedureType, LitigationStanding, FeeType, PartyRole, BarFilingType, ClientType } from "@prisma/client";
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { WorkspaceDialog, DrawerContent, DialogDescription, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { ColleaguePicker } from "@/components/matters/colleague-picker";
 import {
   matterCategoryLabel,
@@ -55,6 +55,7 @@ import { CauseRecommendationDialog } from "./cause-recommendation-dialog";
 import { JurisdictionSelect } from "./jurisdiction-select";
 import type { TeamColleague } from "@/lib/teams/colleagues";
 import { ChoiceField } from "@/components/patterns/choice-field";
+import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { shDayKey } from "@/lib/ui/sh-time";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -146,6 +147,7 @@ export function IntakeWizard({
   colleagues,
   onSubmitted,
   initialClientId,
+  onReturnFocus,
   editing
 }: {
   open: boolean;
@@ -156,6 +158,7 @@ export function IntakeWizard({
   onSubmitted?: (intakeId: string) => void;
   /** 从客户档案「为此客户新建收案」进入时预关联的客户 */
   initialClientId?: string;
+  onReturnFocus?: () => void;
   editing?: {id:string;revision:number;values:Partial<IntakeCreateInput>};
 }) {
   const router = useRouter();
@@ -170,6 +173,7 @@ export function IntakeWizard({
   const bodyRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const fieldId = useId();
+  const askingToClose = useRef(false);
   const [openPopup, setOpenPopup] = useState<string | null>(null);
   const trackPopup = (key: string, visible: boolean) => setOpenPopup(current => visible ? key : current === key ? null : current);
   const [ocrPending, setOcrPending] = useState(false);
@@ -185,7 +189,7 @@ export function IntakeWizard({
     mode: "onChange",
     defaultValues: { ...freshDefaults(), ownerUserId: actor?.id ?? "", ...editing?.values }
   });
-  const { control, handleSubmit, getValues, setValue, reset, trigger, formState: { errors } } = methods;
+  const { control, handleSubmit, getValues, setValue, reset, trigger, formState: { errors, isDirty } } = methods;
   const { fields: parties, append: appendParty, remove: removeParty } = useFieldArray({ control, name: "parties" });
 
   const watchedValues = useWatch({ control });
@@ -604,24 +608,38 @@ export function IntakeWizard({
 
   const clientLabel = kind === "counsel" ? "顾问单位" : kind === "project" ? "委托方" : "委托方";
 
+  async function requestClose() {
+    if (isPending || askingToClose.current) return;
+    if (isDirty) {
+      askingToClose.current = true;
+      const discard = await confirmDialog({
+        title: "放弃未保存的收案资料？",
+        confirmText: "放弃修改",
+        cancelText: "继续填写",
+        initialFocus: "cancel",
+        danger: true
+      });
+      askingToClose.current = false;
+      if (!discard) return;
+    }
+    onOpenChange(false);
+  }
+
   return (
-    <Sheet open={open} onOpenChange={(o) => { if (!isPending) onOpenChange(o); }}>
-      <SheetContent ref={sheetRef} onEscapeKeyDown={event => { if (openPopup) event.preventDefault(); }} side="right" className="mo-intake flex w-full flex-col gap-0 p-0 sm:max-w-[780px] [&>button]:hidden" onOpenAutoFocus={(e) => e.preventDefault()}>
+    <WorkspaceDialog open={open} onOpenChange={next => { if (!next) void requestClose(); }}>
+      <DrawerContent ref={sheetRef} onEscapeKeyDown={event => { if (openPopup) event.preventDefault(); }} side="right" className="mo-intake flex w-screen flex-col gap-0 p-0 sm:max-w-[780px]" showClose={false} onCloseAutoFocus={onReturnFocus}>
         <FormProvider {...methods}>
           <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="flex min-h-0 flex-1 flex-col" noValidate>
             <div className="id-head">
               <div className="id-top">
-                <SheetTitle asChild>
-                  <span className="id-title">{editing?"补正收案资料":"新建收案"}</span>
-                </SheetTitle>
-                <span className="badge b-white">{editing?"保存后复核并重新提交":"提交后进入收案审批"}</span>
-                <Button theme="borderless" htmlType="button" onClick={() => onOpenChange(false)} aria-label="关闭" disabled={isPending}>
+                <DialogTitle className="id-title">{editing?"补正收案资料":"新建收案"}</DialogTitle>
+                <Button className="ml-auto" type="tertiary" theme="borderless" htmlType="button" onClick={() => void requestClose()} aria-label="关闭" disabled={isPending}>
                   <X />
                 </Button>
               </div>
-              <SheetDescription className="sr-only">四步完成收案登记：收案信息、当事人与冲突、收费与团队、确认提交</SheetDescription>
-              <Steps current={step} size="small" className="mt-4" onChange={index => { if (index < step && !isPending) setStep(index); }}>
-                {STEPS.map(title => <Steps.Step key={title} title={title} role="button" aria-label={title} />)}
+              <DialogDescription className="sr-only">四步完成收案登记：收案信息、当事人与冲突、收费与团队、确认提交</DialogDescription>
+              <Steps type="basic" current={step} size="small" aria-label="收案步骤" className="mb-4 mt-4" onChange={index => { if (index < step && !isPending) setStep(index); }}>
+                {STEPS.map((title, index) => <Steps.Step key={title} title={title} role={index < step && !isPending ? "button" : undefined} aria-label={title} />)}
               </Steps>
             </div>
 
@@ -643,9 +661,9 @@ export function IntakeWizard({
                   <div className="fsec-body">
                     <div className="frow">
                       <div className="fitem">
-                        <label className="flabel">{nameLabel}</label>
+                        <label className="flabel" htmlFor={`${fieldId}-name`}>{nameLabel}</label>
                         <Controller name="title" control={control} render={({ field }) => (
-                          <Input name={field.name} value={typeof field.value === "string" ? field.value : ""} onBlur={field.onBlur} ref={field.ref}
+                          <Input id={`${fieldId}-name`} name={field.name} value={typeof field.value === "string" ? field.value : ""} onBlur={field.onBlur} ref={field.ref}
                             placeholder="留空时按「委托方与对方 + 案由」自动生成"
                             onChange={value => { field.onChange(value); setTitleTouched(true); }} />
                         )} />
@@ -686,8 +704,8 @@ export function IntakeWizard({
                             {causeName ? <div className="t-xs t-mute" style={{ marginTop: 5 }}>已选：{causeName}</div> : watchedCauseFree ? <div className="t-xs t-mute" style={{ marginTop: 5 }}>识别案由：{watchedCauseFree}（请选择规范案由）</div> : null}
                           </div>
                           <div className="fitem" style={{ maxWidth: 180 }}>
-                            <label className="flabel">收案日期</label>
-                            <Input type="date" className="font-mono" value={dateInput(receivedAt)} onChange={(value) => setValue("receivedAt", value ? new Date(value) : undefined, { shouldDirty: true })} />
+                            <label className="flabel" htmlFor={`${fieldId}-received-at`}>收案日期</label>
+                            <Input id={`${fieldId}-received-at`} type="date" className="font-mono" value={dateInput(receivedAt)} onChange={(value) => setValue("receivedAt", value ? new Date(value) : undefined, { shouldDirty: true })} />
                           </div>
                         </div>
                         <div className="frow">
@@ -705,13 +723,13 @@ export function IntakeWizard({
                         </div>
                         <div className="frow">
                           <div className="fitem" style={{ maxWidth: 200 }}>
-                            <label className="flabel">标的额（元）</label>
-                            <Controller name="claimAmount" control={control} render={({ field }) => <Input type="number" inputMode="decimal" step="0.01" placeholder="0.00" name={field.name} value={typeof field.value === "number" || typeof field.value === "string" ? field.value : ""} onBlur={field.onBlur} ref={field.ref} onChange={value => field.onChange(value === "" ? undefined : Number(value))} />} />
+                            <label className="flabel" htmlFor={`${fieldId}-amount`}>标的额（元）</label>
+                            <Controller name="claimAmount" control={control} render={({ field }) => <Input id={`${fieldId}-amount`} type="number" inputMode="decimal" step="0.01" placeholder="0.00" name={field.name} value={typeof field.value === "number" || typeof field.value === "string" ? field.value : ""} onBlur={field.onBlur} ref={field.ref} onChange={value => field.onChange(value === "" ? undefined : Number(value))} />} />
                             {errors.claimAmount?.message ? <div className="mt-1 text-[11px] text-[var(--red)]">{errors.claimAmount.message}</div> : null}
                           </div>
                           <div className="fitem">
-                            <label className="flabel">标的描述（非金钱标的或其他诉求）</label>
-                            <Controller name="claimDescription" control={control} render={({ field }) => <Input placeholder="如：请求确认合同有效 / 请求停止侵害" name={field.name} value={field.value ?? ""} onBlur={field.onBlur} ref={field.ref} onChange={field.onChange} />} />
+                            <label className="flabel" htmlFor={`${fieldId}-claim`}>标的描述（非金钱标的或其他诉求）</label>
+                            <Controller name="claimDescription" control={control} render={({ field }) => <Input id={`${fieldId}-claim`} placeholder="如：请求确认合同有效 / 请求停止侵害" name={field.name} value={field.value ?? ""} onBlur={field.onBlur} ref={field.ref} onChange={field.onChange} />} />
                           </div>
                         </div>
                         <div className="frow" style={{ marginBottom: 0 }}>
@@ -752,8 +770,8 @@ export function IntakeWizard({
                             <Controller name="claimAmount" control={control} render={({ field }) => <Input type="number" inputMode="decimal" step="0.01" placeholder="0.00" name={field.name} value={typeof field.value === "number" || typeof field.value === "string" ? field.value : ""} onBlur={field.onBlur} ref={field.ref} onChange={value => field.onChange(value === "" ? undefined : Number(value))} />} />
                           </div>
                           <div className="fitem" style={{ maxWidth: 160 }}>
-                            <label className="flabel">收案日期</label>
-                            <Input type="date" className="font-mono" value={dateInput(receivedAt)} onChange={(value) => setValue("receivedAt", value ? new Date(value) : undefined, { shouldDirty: true })} />
+                            <label className="flabel" htmlFor={`${fieldId}-received-at`}>收案日期</label>
+                            <Input id={`${fieldId}-received-at`} type="date" className="font-mono" value={dateInput(receivedAt)} onChange={(value) => setValue("receivedAt", value ? new Date(value) : undefined, { shouldDirty: true })} />
                           </div>
                         </div>
                         <div className="frow">
@@ -787,8 +805,8 @@ export function IntakeWizard({
                             <ChoiceField ariaLabel="顾问类型" placeholder="选择顾问类型" options={COUNSEL_TYPES.map((t) => ({ value: t, label: t }))} value={watch<string | undefined>("counselType")} onChange={(t) => setValue("counselType", t, { shouldDirty: true })} />
                           </div>
                           <div className="fitem" style={{ maxWidth: 160 }}>
-                            <label className="flabel">收案日期</label>
-                            <Input type="date" className="font-mono" value={dateInput(receivedAt)} onChange={(value) => setValue("receivedAt", value ? new Date(value) : undefined, { shouldDirty: true })} />
+                            <label className="flabel" htmlFor={`${fieldId}-received-at`}>收案日期</label>
+                            <Input id={`${fieldId}-received-at`} type="date" className="font-mono" value={dateInput(receivedAt)} onChange={(value) => setValue("receivedAt", value ? new Date(value) : undefined, { shouldDirty: true })} />
                           </div>
                         </div>
                         <div className="frow">
@@ -1151,7 +1169,7 @@ export function IntakeWizard({
           contextHints={[watchedCauseFree ? `OCR 识别案由：${watchedCauseFree}` : "", watch("claimDescription") ? `诉讼请求：${watch("claimDescription")}` : "", otherParties.map(({ idx }) => watch(`parties.${idx}.name`)).filter(Boolean).length ? `对方当事人：${otherParties.map(({ idx }) => watch(`parties.${idx}.name`)).filter(Boolean).join("、")}` : ""].filter(Boolean).join("\n")}
           onSelect={handleAiRecSelect}
         />
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </WorkspaceDialog>
   );
 }

@@ -7,12 +7,12 @@ import { useRef, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FileText, Loader2, Paperclip, Link2 } from "lucide-react";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogFooter,
   DialogHeader,
   DialogDescription,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 
 import { listActiveSealPurposes } from "@/server/approval-permissions/actions";
 import { createSealRequest } from "@/server/seals/actions";
@@ -156,7 +156,7 @@ export function SealRequestSheet({
   };
 
   return (
-    <Dialog open={open} onOpenChange={value => { if (!pending) onOpenChange(value); }}>
+    <WorkspaceDialog open={open} onOpenChange={value => { if (!pending) onOpenChange(value); }}>
       <DialogContent ref={popupContainer} className="max-w-3xl" onEscapeKeyDown={event => { if (pending || openDropdown.current) event.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle>新建用章申请</DialogTitle>
@@ -368,6 +368,6 @@ export function SealRequestSheet({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }

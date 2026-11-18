@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { ClipboardCheck, FileCog } from "lucide-react";
 import { Button, Tabs, TabPane } from "@douyinfe/semi-ui";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { WorkspaceDialog, DrawerContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { InputCoverageSection } from "./input-coverage-section";
 import { MaterialProcessingStatus } from "./material-processing-status";
 
@@ -34,7 +34,7 @@ export function MaterialToolsSheet({ matterId, documents, scopeLabel, canManage,
   }
 
   return (
-    <Sheet open={open} onOpenChange={(nextOpen) => {
+    <WorkspaceDialog open={open} onOpenChange={(nextOpen) => {
       setOpen(nextOpen);
       if (!nextOpen) setCoverageVisited(false);
     }}>
@@ -46,14 +46,14 @@ export function MaterialToolsSheet({ matterId, documents, scopeLabel, canManage,
           读取检查
         </Button>
       </div>
-      <SheetContent className="flex w-full flex-col gap-4 overflow-y-auto sm:max-w-2xl" onCloseAutoFocus={(event) => {
+      <DrawerContent className="flex w-screen flex-col gap-4 overflow-y-auto sm:max-w-2xl" onCloseAutoFocus={(event) => {
         event.preventDefault();
         if (trigger.current?.isConnected) trigger.current.focus();
       }}>
-        <SheetHeader>
-          <SheetTitle className="sr-only">材料工具</SheetTitle>
-          <SheetDescription>{scopeLabel}</SheetDescription>
-        </SheetHeader>
+        <DialogHeader>
+          <DialogTitle className="sr-only">材料工具</DialogTitle>
+          <DialogDescription>{scopeLabel}</DialogDescription>
+        </DialogHeader>
         <Tabs activeKey={tool} onChange={selectTool} keepDOM lazyRender tabPaneMotion={false}>
           <TabPane itemKey="processing" tab="处理状态">
             {open && tool === "processing" ? documents.length
@@ -65,7 +65,7 @@ export function MaterialToolsSheet({ matterId, documents, scopeLabel, canManage,
             {open && coverageVisited ? <InputCoverageSection matterId={matterId} documents={documents} refreshKey={refreshKey} showHeading={false} /> : null}
           </TabPane>
         </Tabs>
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </WorkspaceDialog>
   );
 }

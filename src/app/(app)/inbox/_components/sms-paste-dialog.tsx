@@ -7,12 +7,12 @@ import { FormDialogContent as DialogContent } from "@/components/patterns/form-d
 import { useState, useMemo, useTransition } from "react";
 import { CalendarClock, FileDown, Inbox, KeyRound, Loader2, Sparkles } from "lucide-react";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogDescription
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import { parseSms, splitSmsBatch } from "@/lib/sms-parser";
 import { parseAndSaveSms } from "@/server/sms/actions";
 import { SMS_TYPE_CN, SMS_TYPE_ACCENT } from "./sms-types";
@@ -65,7 +65,7 @@ export function SmsPasteDialog({
   };
 
   return (
-    <Dialog
+    <WorkspaceDialog
       open={open}
       onOpenChange={(o) => {
         if (!o) requestClose();
@@ -201,6 +201,6 @@ export function SmsPasteDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Plus, Pencil } from "lucide-react";
 import type { listTeams } from "@/server/teams/actions";
 import { saveTeam } from "@/server/teams/actions";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
+import { WorkspaceDialog, DrawerContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/patterns/workspace-dialog";
 import { AdminPageHeader } from "@/components/layout/admin-page-header";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -61,9 +61,9 @@ function TeamEditor({ team, users, onClose }: { team: Team | null; users: User[]
       } catch (err) { setError(err instanceof Error ? actionErrorMessage(err) : "保存失败，请稍后重试"); }
     });
   }
-  return <Sheet open onOpenChange={(open) => { if (!open && !pending) onClose(); }}>
-    <SheetContent className="flex w-full flex-col sm:max-w-xl">
-      <SheetHeader><SheetTitle>{team ? "编辑律师团队" : "新建律师团队"}</SheetTitle><SheetDescription>负责人和获授权成员可查看整个团队的案件，业务经办权限保持独立。</SheetDescription></SheetHeader>
+  return <WorkspaceDialog open onOpenChange={(open) => { if (!open && !pending) onClose(); }}>
+    <DrawerContent className="flex w-screen flex-col sm:max-w-xl">
+      <DialogHeader><DialogTitle>{team ? "编辑律师团队" : "新建律师团队"}</DialogTitle><DialogDescription>负责人和获授权成员可查看整个团队的案件，业务经办权限保持独立。</DialogDescription></DialogHeader>
       <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
         <fieldset disabled={pending} className="min-h-0 flex-1 space-y-5 overflow-y-auto py-5">
           <div className="space-y-2"><Form.Label name="team-name">团队名称</Form.Label><Input id="team-name" required maxLength={60} value={name} onChange={(value) => setName(value)} placeholder="例如：商事争议团队" /></div>
@@ -83,8 +83,8 @@ function TeamEditor({ team, users, onClose }: { team: Team | null; users: User[]
           <p className="text-xs leading-relaxed text-muted-foreground">移出成员或停用团队后，团队查看范围立即调整，个人已有经办权限保留；保存后如涉及成员移出、负责人更换或停用，将提示复核受限案件访问。</p>
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         </fieldset>
-        <SheetFooter className="border-t pt-4"><Button htmlType="button" theme="outline" disabled={pending} onClick={onClose}>取消</Button><Button theme="solid" htmlType="submit" disabled={pending || !name.trim() || !leaderId}>{pending ? "正在保存…" : "保存团队"}</Button></SheetFooter>
+        <DialogFooter className="border-t pt-4"><Button htmlType="button" theme="outline" disabled={pending} onClick={onClose}>取消</Button><Button theme="solid" htmlType="submit" disabled={pending || !name.trim() || !leaderId}>{pending ? "正在保存…" : "保存团队"}</Button></DialogFooter>
       </form>
-    </SheetContent>
-  </Sheet>;
+    </DrawerContent>
+  </WorkspaceDialog>;
 }

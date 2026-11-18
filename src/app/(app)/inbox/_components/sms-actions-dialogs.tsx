@@ -8,12 +8,12 @@ import { deadlineDueDraft, deadlineDueFromDraft } from "@/lib/deadline-due";
 import { useId, useRef, useState, useTransition } from "react";
 import { Loader2, Gavel, Clock, FileDigit } from "lucide-react";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import {
   backfillCaseNumberFromSms,
   generateHearingFromSms,
@@ -96,7 +96,7 @@ export function GenerateHearingDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={next => { if (!pending) onOpenChange(next); }}>
+    <WorkspaceDialog open={open} onOpenChange={next => { if (!pending) onOpenChange(next); }}>
       <DialogContent ref={dialogRef} onEscapeKeyDown={event => { if (pickerOpen) event.preventDefault(); }} className="max-h-[88vh] w-[92vw] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -176,7 +176,7 @@ export function GenerateHearingDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 
@@ -298,7 +298,7 @@ export function GenerateDeadlineDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={next => { if (!pending) onOpenChange(next); }}>
+    <WorkspaceDialog open={open} onOpenChange={next => { if (!pending) onOpenChange(next); }}>
       <DialogContent ref={dialogRef} onEscapeKeyDown={event => { if (openSelect) event.preventDefault(); }} className="max-h-[88vh] w-[92vw] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -388,7 +388,7 @@ export function GenerateDeadlineDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 
@@ -438,7 +438,7 @@ export function BackfillCaseNumberDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={next => { if (!pending) onOpenChange(next); }}>
+    <WorkspaceDialog open={open} onOpenChange={next => { if (!pending) onOpenChange(next); }}>
       <DialogContent ref={dialogRef} onEscapeKeyDown={event => { if (openSelect) event.preventDefault(); }} className="w-[92vw] max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -496,7 +496,7 @@ export function BackfillCaseNumberDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 

@@ -3,7 +3,7 @@
 import { forwardRef, useCallback, useEffect, useId, useImperativeHandle, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Tabs, Select, Button, Checkbox, Input, Tag, TextArea, Toast } from "@douyinfe/semi-ui";
-import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { FormDialogBody, FormDialogContent } from "@/components/patterns/form-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -69,7 +69,7 @@ export function TaskDetailDialog({ taskId, expectedMatterId, open, onOpenChange,
   }
 
   return activeTask ? <TaskDetail key={`${activeTask.expectedMatterId ?? ""}:${activeTask.id}`} ref={detailRef} taskId={activeTask.id} expectedMatterId={activeTask.expectedMatterId} onClose={() => void close()} onChanged={onChanged} onReturnFocus={() => {
-    // 换到另一任务时旧 Dialog 也会卸载，不得把焦点从新详情抢回列表。
+    // 换到另一任务时旧 WorkspaceDialog 也会卸载，不得把焦点从新详情抢回列表。
     if (!activeTaskRef.current) onReturnFocus?.(activeTask.id);
   }} /> : null;
 }
@@ -241,7 +241,7 @@ const TaskDetail = forwardRef<TaskDetailHandle, { taskId: string; expectedMatter
   const history = task?.waitings.filter(item => item.endedAt) ?? [];
   const disabled = busy || loading;
 
-  return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+  return <WorkspaceDialog open onOpenChange={open => { if (!open) onClose(); }}>
     <FormDialogContent className="max-w-3xl" onCloseAutoFocus={event => { event.preventDefault(); onReturnFocus(); }}>
       <DialogHeader>
         <div className="flex items-start gap-3"><DialogTitle className="min-w-0 flex-1">{task?.title ?? "任务详情"}</DialogTitle>{task && <Tag color={task.responsibility.state === "DONE" ? "green" : "grey"}>{taskStateLabels[task.responsibility.state]}</Tag>}</div>
@@ -352,5 +352,5 @@ const TaskDetail = forwardRef<TaskDetailHandle, { taskId: string; expectedMatter
       </FormDialogBody>
       <DialogFooter>{busy && <span role="status" className="mr-auto text-sm text-muted-foreground">正在保存…</span>}<Button disabled={busy} onClick={onClose} type="tertiary" theme="outline">关闭详情</Button></DialogFooter>
     </FormDialogContent>
-  </Dialog>;
+  </WorkspaceDialog>;
 });

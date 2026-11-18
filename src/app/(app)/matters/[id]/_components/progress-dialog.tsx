@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Select, Button, Input, TextArea, Toast } from "@douyinfe/semi-ui";
 import { Loader2 } from "lucide-react";
 import { createNote, updateNote, type NoteCreateInput } from "@/server/notes/actions";
-import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { FormDialogBody, FormDialogContent } from "@/components/patterns/form-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { JUDGMENT_NOTE_TAG, stageNoteTag, type WorkflowNote } from "./procedure-workflow-panel";
@@ -100,7 +100,7 @@ export function ProgressDialog({ open, onOpenChange, matterId, initialMode = "re
     });
   }
 
-  return <Dialog open={open} onOpenChange={next => { if (!next) void close(); }}>
+  return <WorkspaceDialog open={open} onOpenChange={next => { if (!next) void close(); }}>
     <FormDialogContent className="sm:max-w-[560px]" onCloseAutoFocus={event => {
       event.preventDefault();
       const target = returnTarget?.isConnected && !returnTarget.closest("[hidden]") ? returnTarget : document.querySelector<HTMLElement>('[aria-label="记录"]');
@@ -141,5 +141,5 @@ export function ProgressDialog({ open, onOpenChange, matterId, initialMode = "re
         <Button onClick={submit} disabled={pending || !canWrite} htmlType="button" theme="solid">{pending ? <Loader2 className="animate-spin" /> : null}保存</Button>
       </DialogFooter>
     </FormDialogContent>
-  </Dialog>;
+  </WorkspaceDialog>;
 }

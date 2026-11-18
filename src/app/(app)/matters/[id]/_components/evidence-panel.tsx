@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Select, Button, Input, Notification, Tag, TextArea, Toast, Typography } from "@douyinfe/semi-ui";
 import { Loader2, Unlink } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import {
   addEvidenceSource, confirmEvidenceItem, createEvidenceItem, getEvidenceItem,
@@ -108,7 +108,7 @@ function SourceButton({ itemId, revision, source }: { itemId: string; revision?:
         {source.documentName} · 第 {source.documentVersion} 版 · {source.locationLabel}
       </span>
     </button>
-    <Dialog open={preview !== null} onOpenChange={open => { if (!open) setPreview(null); }}>
+    <WorkspaceDialog open={preview !== null} onOpenChange={open => { if (!open) setPreview(null); }}>
       <DialogContent className="max-w-4xl" onCloseAutoFocus={event => {
         event.preventDefault();
         triggerRef.current?.focus({ preventScroll: true });
@@ -127,7 +127,7 @@ function SourceButton({ itemId, revision, source }: { itemId: string; revision?:
           <Button onClick={() => setPreview(null)} type="tertiary" theme="outline">返回要点</Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   </>;
 }
 
@@ -236,7 +236,7 @@ function EvidenceDetailDialog({ initial, onClose, onReturnFocus }: { initial: Ed
     if (!date.success) { setError(date.error.issues[0].message); return; }
     change(() => updateEvidenceItem({ evidenceItemId: item.id, expectedRevision: item.revision, title, content, kind, eventDate: date.data }), "要点修改已保存，记录待核对");
   }
-  return <Dialog open onOpenChange={open => { if (!open) void close(); }}>
+  return <WorkspaceDialog open onOpenChange={open => { if (!open) void close(); }}>
     <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto" onCloseAutoFocus={event => { event.preventDefault(); onReturnFocus(); }}>
       <DialogHeader><DialogTitle>证据要点</DialogTitle><DialogDescription>
         第 {item.revision} 版 · {item.confirmedAt ? `记录已由 ${item.confirmedByName ?? "记录的核对人"} 核对 · ${formatDate(new Date(item.confirmedAt))}` : "记录待核对"}
@@ -282,7 +282,7 @@ function EvidenceDetailDialog({ initial, onClose, onReturnFocus }: { initial: Ed
         </> : null}
       </DialogFooter>
     </DialogContent>
-  </Dialog>;
+  </WorkspaceDialog>;
 }
 
 function SourceAdder({ item, documents, disabled, onAdded, onBusyChange }: { item: EvidenceItemView; documents: EvidenceDocumentOption[]; disabled: boolean; onAdded: () => Promise<void>; onBusyChange: (busy: boolean) => void }) {
@@ -330,7 +330,7 @@ export function EvidenceItemDialog({ open, onOpenChange, matterId, documents, de
   documents: { id: string; name: string }[]; defaultDocumentId: string | null;
 }) {
   const [saving, setSaving] = useState(false);
-  return <Dialog open={open} onOpenChange={next => { if (!saving) onOpenChange(next); }}>{open ? <EvidenceCreateForm key={matterId} matterId={matterId} documents={documents} defaultDocumentId={defaultDocumentId} onClose={() => onOpenChange(false)} onBusyChange={setSaving} /> : null}</Dialog>;
+  return <WorkspaceDialog open={open} onOpenChange={next => { if (!saving) onOpenChange(next); }}>{open ? <EvidenceCreateForm key={matterId} matterId={matterId} documents={documents} defaultDocumentId={defaultDocumentId} onClose={() => onOpenChange(false)} onBusyChange={setSaving} /> : null}</WorkspaceDialog>;
 }
 
 function EvidenceCreateForm({ matterId, documents, defaultDocumentId, onClose, onBusyChange }: {
@@ -371,7 +371,7 @@ function EvidenceCreateForm({ matterId, documents, defaultDocumentId, onClose, o
       finally { if (active.current) onBusyChange(false); }
     });
   }
-  return <DialogContent onEscapeKeyDown={event => { if (pending) event.preventDefault(); }} onInteractOutside={event => { if (pending) event.preventDefault(); }}>
+  return <DialogContent onEscapeKeyDown={event => { if (pending) event.preventDefault(); }}>
     <DialogHeader><DialogTitle>添加证据要点</DialogTitle><DialogDescription>保存后可继续编辑、关联来源并核对记录。</DialogDescription></DialogHeader>
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
       <div className="space-y-1.5"><label htmlFor={id + "-title"} className="text-sm font-medium text-[var(--semi-color-text-1)]">标题</label><Input id={id + "-title"} value={title} onChange={inputValue => setTitle(inputValue)} maxLength={200} disabled={pending} /></div>

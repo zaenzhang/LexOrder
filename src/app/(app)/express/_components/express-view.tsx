@@ -7,13 +7,13 @@ import { Package, Search, RefreshCw, Trash2, Briefcase, ArrowDownToLine, ArrowUp
 import type { Prisma, ExpressDirection } from "@prisma/client";
 
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogDescription
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 
 import { MatterCombobox } from "@/app/(app)/approvals/seals/_components/matter-combobox";
 import { cn, formatDateTime } from "@/lib/utils";
@@ -273,7 +273,7 @@ function Card({ e }: { e: Row }) {
         </Button>
       </div>
 
-      <Dialog open={tracesOpen} onOpenChange={setTracesOpen}>
+      <WorkspaceDialog open={tracesOpen} onOpenChange={setTracesOpen}>
         <DialogContent className="max-h-[80vh] w-[92vw] max-w-2xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
@@ -300,7 +300,7 @@ function Card({ e }: { e: Row }) {
             ))}
           </ol>
         </DialogContent>
-      </Dialog>
+      </WorkspaceDialog>
     </div>
   );
 }
@@ -382,7 +382,7 @@ function NewExpressDialog({
   };
 
   return (
-    <Dialog
+    <WorkspaceDialog
       open={open}
       onOpenChange={(o) => {
         if (pending) return;
@@ -499,6 +499,6 @@ function NewExpressDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
