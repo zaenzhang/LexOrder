@@ -134,7 +134,9 @@ describe("Semi 收件箱操作（真实控件，服务替身）", () => {
     fireEvent.click(await screen.findByRole("option", { name: /SYN-01 合成案件/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent("合成关联失败");
     expect(screen.getByRole("combobox", { name: "指派案件" })).toHaveTextContent("合成案件");
-    fireEvent.click(screen.getByRole("button", { name: "重试关联" }));
+    const retry = screen.getByRole("button", { name: "重试关联" });
+    await waitFor(() => expect(retry).toBeEnabled());
+    fireEvent.click(retry);
     await waitFor(() => expect(mock.match).toHaveBeenCalledTimes(2));
     expect(mock.match.mock.calls.map(call => call[0])).toEqual([{ smsId: sms.id, matterId: matter.id }, { smsId: sms.id, matterId: matter.id }]);
   });

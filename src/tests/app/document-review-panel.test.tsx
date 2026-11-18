@@ -240,6 +240,7 @@ describe("具体文书复核面板", () => {
     expect(heading).not.toHaveAttribute("tabindex", "-1");
     fireEvent.click(heading);
     const trigger = screen.getByRole("button", { name: /合成前版原稿.*合成前版问题/ });
+    await waitFor(() => expect(trigger).toBeEnabled());
     trigger.focus(); fireEvent.click(trigger);
     const dialog = await screen.findByRole("dialog", { name: "前版复核意见" });
     expect(await within(dialog).findByText("合成前版问题")).toBeInTheDocument();
