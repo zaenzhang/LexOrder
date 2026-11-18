@@ -11,7 +11,7 @@ import type { z } from "zod";
  * AI 案由推荐、委托合同加密上传。提交后自动携带全部主体发起冲突检索（与收案详情同一入口）。
  */
 import { useId, useEffect, useMemo, useRef, useState, useTransition, type ChangeEvent } from "react";
-import { useForm, useFieldArray, FormProvider, useWatch, type FieldErrors, type FieldPath, type RegisterOptions } from "react-hook-form";
+import { Controller, useForm, useFieldArray, FormProvider, useWatch, type FieldErrors, type FieldPath, type RegisterOptions } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { useWorkspaceActor } from "@/components/workspace-actor-provider";
@@ -195,7 +195,7 @@ export function IntakeWizard({
   // Semi 输入首参为值，RHF 的原生事件仍负责转换、校验及 dirty 状态。
   const inputProps = (name: FieldPath<z.input<typeof intakeCreateSchema>>, options?: RegisterOptions<z.input<typeof intakeCreateSchema>>) => {
     const field = register(name, options);
-    return { ...field, value: watch(name) ?? "", onChange: (_value: string, event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => { void field.onChange(event); } };
+    return { ...field, value: watch(name) ?? "", onChange: (_value: string, event: ChangeEvent<HTMLInputElement>) => { void field.onChange(event); } };
   };
 
   const category = watch<MatterCategory>("category") ?? "CIVIL_COMMERCIAL";
@@ -1011,7 +1011,7 @@ export function IntakeWizard({
                       <div className="frow">
                         <div className="fitem">
                           <label className="flabel">风险代理收费方式</label>
-                          <TextArea rows={3} placeholder="详细描述风险代理收费方式 / 触发条件 / 计提比例" {...inputProps("contingencyTerms")} />
+                          <Controller name="contingencyTerms" control={control} render={({ field }) => <TextArea rows={3} placeholder="详细描述风险代理收费方式 / 触发条件 / 计提比例" {...field} value={field.value ?? ""} />} />
                           {errors.contingencyTerms?.message ? <div className="mt-1 text-[11px] text-[var(--red)]">{errors.contingencyTerms.message}</div> : null}
                         </div>
                       </div>
@@ -1089,7 +1089,7 @@ export function IntakeWizard({
                 <div className="fsec">
                   <div className="fsec-head"><span className="t">补充说明</span></div>
                   <div className="fsec-body">
-                    <TextArea rows={4} placeholder="客户来源、核心诉求、注意事项…" {...inputProps("description")} />
+                    <Controller name="description" control={control} render={({ field }) => <TextArea rows={4} placeholder="客户来源、核心诉求、注意事项…" {...field} value={field.value ?? ""} />} />
                     {errors.description?.message ? <div className="mt-1 text-[11px] text-[var(--red)]">{errors.description.message}</div> : null}
                   </div>
                 </div>

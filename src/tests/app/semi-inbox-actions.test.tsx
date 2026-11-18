@@ -5,7 +5,6 @@ import { BackfillCaseNumberDialog, GenerateDeadlineDialog, GenerateHearingDialog
 import { InboxView } from "@/app/(app)/inbox/_components/inbox-view";
 import { SmsSuggestions } from "@/app/(app)/inbox/_components/sms-suggestions";
 import type { SmsRow } from "@/app/(app)/inbox/_components/sms-types";
-import { parseSms } from "@/lib/sms-parser";
 
 const mock = vi.hoisted(() => ({ paste: vi.fn(), hearing: vi.fn(), deadline: vi.fn(), backfill: vi.fn(), match: vi.fn(), decide: vi.fn(), targets: vi.fn(), refresh: vi.fn(), close: vi.fn(), error: vi.fn() }));
 vi.mock("@/server/sms/actions", () => ({ parseAndSaveSms: mock.paste, generateHearingFromSms: mock.hearing, generateDeadlineFromSms: mock.deadline, backfillCaseNumberFromSms: mock.backfill, matchSmsToMatter: mock.match, extractSmsAttachments: vi.fn(), markSmsProcessed: vi.fn(), deleteSms: vi.fn(), uploadSmsInboundFile: vi.fn() }));
@@ -22,7 +21,12 @@ const matter: NonNullable<SmsRow["matchedMatter"]> = { id: "cmtestmatter00000000
 ] };
 const sms: SmsRow = {
   id: "cmtestsms000000000000001", rawText: "合成法院短信", rawTextHash: "synthetic-hash", receivedAt: now, receivedById: "cmtestuser00000000000001", receivedBy: { id: "cmtestuser00000000000001", name: "合成人员" },
-  parsedJson: { ...parseSms("合成法院短信"), caseNumbers: ["（2026）合民初1号", "（2026）合民终2号"], hearingDate: "2026-11-20 09:30", dates: ["2026-11-20"], summary: "合成送达内容" }, smsType: "HEARING_NOTICE", matchedMatterId: matter.id, matchedMatter: matter, matchedBy: "AUTO_CASE_NUMBER",
+  parsedJson: {
+    smsType: "HEARING_NOTICE", court: "合成法院", caseNumbers: ["（2026）合民初1号", "（2026）合民终2号"],
+    hearingDate: "2026-11-20 09:30", dates: ["2026-11-20"], summary: "合成送达内容",
+    filingDate: null, judgmentDate: null, appealDeadline: null, courtRoom: null, judge: null, clerk: null,
+    phones: [], amounts: [], urls: [], platforms: [], importantItems: [], credentials: [], documentLinks: [], attachmentResults: []
+  }, smsType: "HEARING_NOTICE", matchedMatterId: matter.id, matchedMatter: matter, matchedBy: "AUTO_CASE_NUMBER",
   generatedHearingId: null, generatedDeadlineId: null, processed: false, processedAt: null, needsManualAction: false, processingState: "READY_FOR_REVIEW", processingNote: null, inboundFiles: [], suggestions: [], createdAt: now, updatedAt: now
 };
 beforeEach(() => {
