@@ -167,7 +167,7 @@ export function ExternalContactDialog({
                 style={{ width: "100%" }}
                 motion={false}
                 onDropdownVisibleChange={setCategoryOpen}
-                getPopupContainer={() => dialogContent.current ?? document.body}
+                getPopupContainer={() => dialogContent.current!}
               />
             </div>
           </div>

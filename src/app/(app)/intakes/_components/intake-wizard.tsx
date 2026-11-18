@@ -195,7 +195,7 @@ export function IntakeWizard({
   // Semi 输入首参为值，RHF 的原生事件仍负责转换、校验及 dirty 状态。
   const inputProps = (name: FieldPath<z.input<typeof intakeCreateSchema>>, options?: RegisterOptions<z.input<typeof intakeCreateSchema>>) => {
     const field = register(name, options);
-    return { ...field, value: String(watch(name) ?? ""), onChange: (_value: string, event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => { void field.onChange(event); } };
+    return { ...field, value: watch(name) ?? "", onChange: (_value: string, event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => { void field.onChange(event); } };
   };
 
   const category = watch<MatterCategory>("category") ?? "CIVIL_COMMERCIAL";

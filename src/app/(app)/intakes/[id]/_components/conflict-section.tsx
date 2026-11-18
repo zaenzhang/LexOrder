@@ -193,7 +193,7 @@ export function ConflictSection({
               <span className="font-mono text-foreground">{latestCheck.hits.length}</span>
             </span>
             <Tag
-              theme="outline"
+              type="ghost"
               className={cn(
                 "ml-1 text-[10px]",
                 latestCheck.conclusion === "SAME_SUBJECT" && "border-destructive/40 text-destructive",

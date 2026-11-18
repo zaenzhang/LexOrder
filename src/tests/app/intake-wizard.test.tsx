@@ -207,7 +207,12 @@ describe("向导完成度与真实表单校验", () => {
     await nextTo(3);
     expect(screen.getByText("总金额（元）", { selector: "label" })).not.toHaveTextContent("*");
     expect(screen.getByText("主办律师", { selector: "label" })).not.toHaveTextContent("*");
-    fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "" } });
+    const amount = screen.getByRole("spinbutton");
+    fireEvent.change(amount, { target: { value: "0.0" } });
+    expect(amount).toHaveDisplayValue("0.0");
+    fireEvent.change(amount, { target: { value: "1.20" } });
+    expect(amount).toHaveDisplayValue("1.20");
+    fireEvent.change(amount, { target: { value: "" } });
     await nextTo(4);
     expect(summary("收费约定")).toHaveTextContent(/^固定收费$/);
     expect(footer()).not.toHaveTextContent("待检查");

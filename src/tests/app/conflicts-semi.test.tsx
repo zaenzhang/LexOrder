@@ -72,7 +72,7 @@ describe("冲突预检 Semi 控件（服务动作替身）", () => {
     expect(screen.getAllByRole("link", { name: "查看案件" })).toHaveLength(1);
     expect(screen.getByText("你不是该案成员，如需了解请联系主办律师")).toBeInTheDocument();
     expect(screen.getByText("收案内容不因预检开放，如需了解请联系登记人")).toBeInTheDocument();
-    const subject = screen.getByText("相关记录 3 处 · 名称相同").closest(".hit-card")!;
+    const subject = screen.getByText("相关记录 3 处 · 名称相同").closest<HTMLElement>(".hit-card")!;
     expect(within(subject).getByText("合成待办收案")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("button", { name: "新建预检" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "新建预检" }));
