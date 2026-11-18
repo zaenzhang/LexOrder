@@ -17,6 +17,8 @@
 
 案件文书交互预览已获用户认可。可以下载[独立 HTML](evidence/2026-11-18-document-preview/lexorder-case-documents-preview.html)后用浏览器打开，也可以查看[案件材料截图](evidence/2026-11-18-document-preview/lexorder-case-documents-preview.png)和[文书模板截图](evidence/2026-11-18-document-preview/lexorder-case-templates-preview.png)。设计见[需求 §9.4.9](PRODUCT_REQUIREMENTS_ACCEPTANCE.md#949-案件内的文书模板与连续编辑g052026-11-18)，真实演练与模拟验证见[计划 §8.55](WORKBENCH_PLAN.md#855-案件流程演练与文书交互预览2026-11-18)。
 
+**本次 Semi 迁移分派见[协作计划 §7.17](WORKBENCH_PLAN.md#717-semi-迁移协作计划2026-11-18)。** 集成人先定公共基线，四个页面组按独占文件并行迁移。
+
 ## 维护方式
 
 - 产品行为与技能改需求，技术与运行说明改架构，状态与证据改实施计划，项目来源改研究依据；不再新增同义方案、独立交接摘要或重复清单。保留 RQ/SK/W、子任务、AC 及 H/A 来源编号，不为清理重排标识。

@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  devIndicators: false,
   // dev 与 build 分开输出，避免生产构建覆盖正在运行的开发缓存导致页面不渲染
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
   output: process.env.LEXORDER_STANDALONE === "1" ? "standalone" : undefined,

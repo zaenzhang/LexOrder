@@ -6,7 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2, AlertCircle, Mail, LockKeyhole, ShieldCheck } from "lucide-react";
+import { Loader2, AlertCircle, Eye, EyeOff, Mail, LockKeyhole, ShieldCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { checkLoginTotpEnforcement } from "@/server/auth/totp-actions";
 
@@ -25,6 +26,8 @@ export function LoginForm() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showTotp, setShowTotp] = useState(false);
+  const PasswordIcon = showPassword ? EyeOff : Eye;
+  const passwordToggleLabel = showPassword ? "隐藏密码" : "显示密码";
 
   const {
     register,
@@ -103,14 +106,18 @@ export function LoginForm() {
             className="h-full min-w-0 flex-1 border-0 bg-transparent text-[13.5px] text-[var(--t-primary)] outline-none"
             {...register("password")}
           />
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="shrink-0"
+            aria-label={passwordToggleLabel}
+            aria-controls="password"
+            title={passwordToggleLabel}
             onClick={() => setShowPassword((v) => !v)}
-            aria-label={showPassword ? "隐藏密码" : "显示密码"}
-            className="ml-auto shrink-0 border-0 bg-transparent text-[12px] text-[var(--t-faint)] hover:text-[var(--t-secondary)]"
           >
-            {showPassword ? "隐藏" : "显示"}
-          </button>
+            <PasswordIcon aria-hidden data-icon="inline-start" />
+          </Button>
         </div>
         {errors.password ? <p className="mt-1.5 text-[11.5px] text-[var(--red)]">{errors.password.message}</p> : null}
       </div>

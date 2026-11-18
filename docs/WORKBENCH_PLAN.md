@@ -1556,6 +1556,37 @@ root 首轮隔离 PostgreSQL 实跑 B3 两场景，上传/解析/要点成功，
 
 root 在现有 main 唯一修改 src/server/evidence/source-links.ts 的 resolveReference：固定位置双方沿原 sourceLocationSchema 规范后比较；已存位置不合法明确 UNAVAILABLE，保留当前读权、SHA、确切 run/anchor 和位置值核对，不改历史 JSONB/schema/授权或新增比较平台。B3 作者仍只改原两测试文件，纠正研究列表位置文字与真实来源位置文字的不同口径，补实际 researchSource 与 getMaterialSource 身份断言，不绕过失败。两类真实 PG 工作包覆盖 TEXT/TABLE/PAGE 成功，受影响既有来源用例验证错误位置/SHA/撤权仍拒绝；合同先发布，验证后随本次接管集成。
 
+### 7.17 Semi 迁移协作计划（2026-11-18）
+
+用户已选定 Semi Design 作为 LexOrder 的 UI 目标，本节供分派与集成使用。状态为已规划、待认领。基线核对为远端 main ab20185。WSL 主检出已有未提交的登录页调整，包含文案删减、眼睛图标、登录保护弹窗和开发角标设置。A 在建立迁移基线时先核对并带上这些明确差异。Next 自动生成的 next-env.d.ts 差异单独识别。按源码 import 清点有 159 个文件使用共享 UI、15 个文件直接导入 Radix，唯一位于公共 UI 目录之外的直接导入在全局搜索弹窗。
+
+#### 分组和写入边界
+
+A 组指定一名集成人。B—E 各由一名负责人领取；需要组内再分工时以实际路由和不重叠文件为边界。每组使用独立 WSL 工作树，同一检出一名写者。
+
+| 组 | 分支 | 独占文件与范围 | 交付与重点验证 |
+| --- | --- | --- | --- |
+| A 接入与集成 | ui/semi-integration | package.json、package-lock.json、next.config.mjs、components.json、AGENTS.md、主文档；根 src/app/layout.tsx、globals.css、moan.css、moan-pages.css；src/components/providers.tsx、workspace-actor-provider.tsx、ui/、patterns/ 中的共享实现 | 固定 Semi 版本，接入 React 19 适配与默认主题并校验样式顺序。定义确有复用需求的业务弹窗、确认、反馈和表单组合。维护合并记录，最后删除失去引用的旧实现和依赖 |
+| B 登录、导航与设置 | ui/semi-shell | src/app/(auth)/、src/app/(app)/ 顶层页面和布局、settings/、notifications/、announcements/、policy/、tools/；src/components/layout/、dashboard/、users/ | 接续已做的登录页。迁移全局搜索、工作台导航和设置控件，验证登录保护、密码显示、两步验证码、搜索键盘打开及关闭返回，处理目录外的直接 Radix 导入 |
+| C 案件、材料与研究 | ui/semi-matters | src/app/(app)/ 下的 matters/、preservation/、firm-resources/；src/components/ 下的 matters/、documents/、document-reviews/、research/ | 首条业务链以案件筛选和服务端分页进入详情，再走材料、研究或编辑弹窗的保存与返回。核对当前程序/材料、固定版本引用、空态、长表单滚动、保稿以及只读入口 |
+| D 收案、客户与任务 | ui/semi-intake | src/app/(app)/ 下的 intakes/、clients/、contacts/、conflicts/、inbox/、schedule/；src/components/intakes/、clients/ | 覆盖独立收案、联系人和冲突筛选、任务/日程、客户跟进。核对保存失败后的输入、原记录改期、所选对象与返回位置 |
+| E 财务、审批与交付归档 | ui/semi-operations | src/app/(app)/ 下的 finance/、approvals/、archive/、seals/、express/、reports/；src/components/deliveries/ | 核对审批与实际执行区分、财务确认、交付材料选择与移除、归档入口。危险操作沿现有确认语义，验证无权限、取消和失败反馈 |
+
+B—E 只写本组路由、组件、就近样式及已归属的相关测试。跨组共享组件保持原有业务输入输出，发现需要变更时，把具体调用点与拟调整合同交给文件所属组；无明确归属的文件由 A 分配。各组把拟删除的共享 CSS 选择器报给 A，A 检查剩余引用后统一清理。公共文件、全局样式和依赖锁由 A 合并。
+
+#### 起点、并行和汇合
+
+1. A 先对比最新 main、相关分支和登录页本地差异，在集成分支发布一个可复用的基线提交。采用 Semi 官方默认主题、React 19 适配入口和 Next.js 转译配置，校验现有 Turbopack 启动与代表性弹层。共用基线同时给出按钮、输入、选择、弹窗的引入示例与共享模式所属文件。文档见 [Semi Next.js 接入](https://semi.design/en-US/start/getting-started)与 [React 19 适配](https://semi.design/en-US/ecosystem/react19)。
+2. 在 A 准备基线时，B—E 可同时清点原入口、组件和定点验收场景。A 发布基线 SHA 后，四组从相同提交开独立工作树并行写入，优先做各组能完整验证的入口。页面控件采用 Semi API。现有 FormDialog、ConfirmDialog 等共享业务模式保留其业务责任，使用 Semi 实现弹层。在同一提交组内更新实际调用方，完成后移除相应旧入口。表单继续复用现有校验和 Server Actions，案件列表继续使用现有服务端筛选、分页及查询参数。
+3. 每组提交前核对 A 的最新基线和重叠变更，交接给 A 时提供分支、提交 SHA、实际修改路径、已验证场景、待验项、待清理选择器及具体阻断。A 先接 B 的登录与导航和 C 的代表主链，确认公共行为，再按通过检查的批次汇合余下模块。已有日志及静态检查作为各组证据，完整应用构建在集成范围稳定后执行。
+4. A 统一清理 Radix 直接导入和直接依赖、失去消费者的 shadcn 配置和旧组件、失去引用的旧页面样式，并更新实际生效的界面与技术说明。对仍有消费者的工具库以实际引用为准。最终只交付已换齐的 Server 界面。
+
+#### 验收与停点
+
+- 各组做受影响文件的 lint、类型与界面行为相关测试。长表单覆盖提交失败留稿、取消、键盘焦点、关闭返回、长内容滚动。列表和详情覆盖筛选保留、分页、空态和原有只读出口。A 汇总一次集成类型与生产构建，并核对使用方和依赖清理结果。
+- 依据现行分工，真实浏览器由用户统一验收。A 提供入口和步骤，按截图或实际操作区分通过与待验。冒烟发现的问题在本计划登记发生范围、状态和验证证据。
+- 本次协作范围为 Server UI。原有登录、权限、事务、文档版本和实际交付均沿已定业务合同。Tauri 承载继续按架构 §6.28；桌面壳、打包和 WebView2 实机验收属于后续桌面工作。合并时现有依赖审计和本轮引入的检查结果分别记录，保持 CI 检查启用。
+
 ## 8. 交接：完成范围、证据与未覆盖项
 
 **阅读边界：§8.1—§8.22 为各批当时的实现、验证和交接记录；其中发行/升级/恢复的接续安排已被 §8.23 的用户最新决定覆盖，不授权继续准备或执行维护。已完成结果和未完成事实保留。**
