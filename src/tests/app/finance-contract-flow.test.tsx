@@ -4,7 +4,14 @@ const { ledger, session, register, sign, amendment, workspace, push, replace, re
 vi.mock("@/lib/auth/session", () => ({ requireSession: session }));
 vi.mock("@/server/finance/ledger-actions", () => ({ getFinanceLedger: ledger, registerBilling: register, signBilling: sign, draftAmendment: amendment, bindContractScope: vi.fn(), activateAmendment: vi.fn(), cancelAmendment: vi.fn(), registerExpense: vi.fn(), registerReceipt: vi.fn(), confirmReceipt: vi.fn(), rejectReceipt: vi.fn(), confirmDueCondition: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, replace, refresh }) }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { success: vi.fn() }),
+    Notification: Object.assign(semi.Notification, { success: vi.fn() })
+  };
+});
 vi.mock("@/app/(app)/finance/reconciliation/_components/ledger-workspace", () => ({ LedgerWorkspace: (props: unknown) => { workspace(props); return <div>合成财务工作区</div>; } }));
 import ReconciliationPage from "@/app/(app)/finance/reconciliation/page";
 import { ContractWorkspace } from "@/app/(app)/finance/reconciliation/_components/contract-workspace";

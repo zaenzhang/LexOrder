@@ -5,7 +5,14 @@ const { approve, detail, error, success, refresh } = vi.hoisted(() => ({
   approve: vi.fn(), detail: vi.fn(), error: vi.fn(), success: vi.fn(), refresh: vi.fn()
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push: vi.fn(), replace: vi.fn() }), useSearchParams: () => new URLSearchParams(window.location.search) }));
-vi.mock("sonner", () => ({ toast: { error, success } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { success }),
+    Notification: Object.assign(semi.Notification, { error, success })
+  };
+});
 vi.mock("@/server/approval-permissions/inbox", () => ({ getApprovalDetail: detail }));
 vi.mock("@/app/(app)/approvals/approval-create-menu", () => ({ ApprovalCreateMenu: () => null }));
 vi.mock("@/app/(app)/approvals/legacy-seal-classification", () => ({ LegacySealClassification: () => null }));
@@ -56,7 +63,7 @@ describe("缺陷修复界面流程", () => {
     const issue = await screen.findByRole("button", { name: "完成开票" });
     await waitFor(() => expect(issue).toBeEnabled());
     fireEvent.click(issue);
-    expect(error).toHaveBeenCalledWith("请上传电子发票");
+    expect(error).toHaveBeenCalledWith(expect.objectContaining({ title: "请上传电子发票" }));
     expect(approve).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "驳回" })).not.toBeInTheDocument();
   });
@@ -74,7 +81,7 @@ describe("缺陷修复界面流程", () => {
     const upload = await screen.findByLabelText("电子发票（上传后记为已开具）");
     fireEvent.change(upload, { target: { files: [new File(["pdf"], "invoice.pdf", { type: "application/pdf" })] } });
     fireEvent.click(screen.getByRole("button", { name: "审批通过" }));
-    expect(error).toHaveBeenCalledWith("上传电子发票时必须填写发票号码");
+    expect(error).toHaveBeenCalledWith(expect.objectContaining({ title: "上传电子发票时必须填写发票号码" }));
     expect(approve).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText("发票号码"), { target: { value: "INV-001" } });
     fireEvent.click(screen.getByRole("button", { name: "审批通过" }));
@@ -94,15 +101,17 @@ describe("缺陷修复界面流程", () => {
     expect(submit).toBeDisabled();
     fireEvent.click(screen.getByRole("checkbox", { name: "核验清单项：委托手续" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "核验文件：送审材料.pdf" }));
-    fireEvent.click(screen.getByRole("checkbox", { name: "复核：核对原件" }));
-    fireEvent.click(screen.getByRole("checkbox", { name: "核准归档缺项或不适用例外" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "核对原件" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "核准缺项或不适用例外" }));
     expect(submit).toBeDisabled();
     fireEvent.change(screen.getByRole("textbox", { name: "审批意见或驳回原因" }), { target: { value: "已核对例外理由" } });
-    fireEvent.mouseDown(screen.getByRole("tab", { name: /^附件/ }), { button: 0, ctrlKey: false });
-    fireEvent.mouseDown(screen.getByRole("tab", { name: /^处理记录/ }), { button: 0, ctrlKey: false });
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "资料与核验" }), { button: 0, ctrlKey: false });
+    fireEvent.click(screen.getByRole("tab", { name: /^附件/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /^处理记录/ }));
+    expect(screen.getByRole("tab", { name: /^处理记录/ })).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(screen.getByRole("tab", { name: "资料与核验" }));
+    expect(screen.getByRole("tab", { name: "资料与核验" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("checkbox", { name: "核验清单项：委托手续" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "核准归档缺项或不适用例外" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "核准缺项或不适用例外" })).toBeChecked();
     expect(screen.getByRole("textbox")).toHaveValue("已核对例外理由");
     expect(submit).toBeEnabled();
     fireEvent.click(submit);
@@ -117,7 +126,7 @@ describe("缺陷修复界面流程", () => {
     await waitFor(() => expect(submit).toBeEnabled());
     expect(screen.queryByRole("button", { name: "驳回" })).not.toBeInTheDocument();
     fireEvent.click(submit);
-    expect(error).toHaveBeenCalledWith("请上传盖章后的 PDF 扫描件");
+    expect(error).toHaveBeenCalledWith(expect.objectContaining({ title: "请上传盖章后的 PDF 扫描件" }));
     expect(stampSealRequest).not.toHaveBeenCalled();
   });
   it("审计界面只保留管理后台版本", () => {

@@ -1,5 +1,5 @@
 "use client";
-import { Button, Input, TextArea, Select, Popover, Steps } from "@douyinfe/semi-ui";
+import { Button, Input, TextArea, Select, Popover, Steps, Notification, Spin, Toast } from "@douyinfe/semi-ui";
 
 import type { z } from "zod";
 
@@ -16,7 +16,6 @@ import { useForm, useFieldArray, FormProvider, useWatch, Controller, type FieldE
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { useWorkspaceActor } from "@/components/workspace-actor-provider";
-import { toast } from "sonner";
 import { AlertTriangle, ChevronRight, FileText, Loader2, Paperclip, Plus, ScanLine, Sparkles, X } from "lucide-react";
 import type { MatterCategory, ProcedureType, LitigationStanding, FeeType, PartyRole, BarFilingType, ClientType } from "@prisma/client";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
@@ -398,7 +397,7 @@ export function IntakeWizard({
       // 由律师手动检索后再送审（此前仍尝试自动送审，只靠服务端报错兜底）。
       const conflictHit = conflictHits > 0;
       if(res.workflowEnabled&&!editing&&conflictCheckRan&&!conflictHit) await resubmitIntake(res.id);
-      toast.success(editing
+      Toast.success(editing
         ? "补正已保存，请在详情复核检索后重新提交"
         : conflictHit
           ? `收案已保存为草稿${contracts.length > 0 ? `，上传 ${contracts.length} 份合同` : ""}${conflictText}。请先在收案详情作出冲突结论，再提交送审。`
@@ -413,7 +412,7 @@ export function IntakeWizard({
       }
       router.refresh();
     } catch (err) {
-      toast.error(editing?"补正未完成":"收案未送审", { description: actionErrorMessage(err) });
+      Notification.error({ title: editing?"补正未完成":"收案未送审", content: actionErrorMessage(err), duration: 6 });
       if(savedId){onOpenChange(false);router.push(`/intakes/${savedId}`);router.refresh();}
     }
   }
@@ -424,7 +423,7 @@ export function IntakeWizard({
     const client = all.find((p) => p.role === "CLIENT_PARTY");
     if (!client || !client.name?.trim()) {
       setStep(1);
-      toast.warning("请填写委托方", { description: "委托方名称为必填" });
+      Notification.warning({ title: "请填写委托方", content: "委托方名称为必填", duration: 6 });
       return;
     }
     // 主体类型 → 客户类型：此前只把 ORGANIZATION 视为机构，选「公司 / 合伙企业」等会被建成自然人客户、丢失信用代码
@@ -460,26 +459,26 @@ export function IntakeWizard({
   function onInvalid(formErrors: FieldErrors<z.input<typeof intakeCreateSchema>>) {
     const keys = Object.keys(formErrors);
     if (keys.length) setStep(Math.min(...keys.map(stepForField)));
-    toast.warning("请检查表单内容", { description: firstFormErrorMessage(formErrors) ?? "请检查表单中的红色提示" });
+    Notification.warning({ title: "请检查表单内容", content: firstFormErrorMessage(formErrors) ?? "请检查表单中的红色提示", duration: 6 });
   }
 
   async function next() {
     if (step === 1) {
       const client = (getValues("parties") ?? [])[0];
       if (!client?.name?.trim()) {
-        toast.warning("请填写委托方名称");
+        Toast.warning("请填写委托方名称");
         return;
       }
     }
     const ok = await trigger(STEP_FIELDS[step], { shouldFocus: true });
     if (ok) setStep((s) => Math.min(s + 1, STEPS.length - 1));
-    else toast.warning("本步还有信息需要检查", { description: firstFormErrorMessage(methods.formState.errors) ?? "请按红色提示修正" });
+    else Notification.warning({ title: "本步还有信息需要检查", content: firstFormErrorMessage(methods.formState.errors) ?? "请按红色提示修正", duration: 6 });
   }
 
   function handleFiles(list: FileList | null) {
     if (!list) return;
     const arr = Array.from(list).filter((f) => f.size <= 20 * 1024 * 1024);
-    if (arr.length < list.length) toast.warning("跳过了超过 20MB 的文件");
+    if (arr.length < list.length) Toast.warning("跳过了超过 20MB 的文件");
     setContracts((prev) => [...prev, ...arr]);
     if (fileRef.current) fileRef.current.value = "";
   }
@@ -514,7 +513,7 @@ export function IntakeWizard({
       if (typeof res.claimAmount === "number" && !watch("claimAmount")) setValue("claimAmount", res.claimAmount, { shouldDirty: true });
       if (res.claimDescription && !watch("claimDescription")) setValue("claimDescription", res.claimDescription, { shouldDirty: true });
       if (res.court && !watch("firstAgency")) setValue("firstAgency", res.court, { shouldDirty: true });
-      toast.success(`已识别 ${res.plaintiffs.length} 个起诉方 / ${res.thirdParties.length} 个第三人`, { description: "请人工核对字段是否准确" });
+      Notification.success({ title: `已识别 ${res.plaintiffs.length} 个起诉方 / ${res.thirdParties.length} 个第三人`, content: "请人工核对字段是否准确", duration: 6 });
 
       const situationParts: string[] = [];
       if (res.cause) situationParts.push(`OCR 识别案由：${res.cause}`);
@@ -525,7 +524,7 @@ export function IntakeWizard({
       const situationText = situationParts.join("\n");
       if (situationText && !watch("causeId")) triggerCauseRecommendation(category, situationText, firstProcedureType);
     } catch (err) {
-      toast.error("识别失败", { description: actionErrorMessage(err) });
+      Notification.error({ title: "识别失败", content: actionErrorMessage(err), duration: 6 });
     } finally {
       setOcrPending(false);
       if (pleadingRef.current) pleadingRef.current.value = "";
@@ -551,7 +550,7 @@ export function IntakeWizard({
     setValue("causeId", causeId, { shouldDirty: true });
     setCauseName(causeNm);
     setAiRecOpen(false);
-    toast.success("已选用 AI 推荐案由", { description: causeNm });
+    Notification.success({ title: "已选用 AI 推荐案由", content: causeNm, duration: 6 });
   }
 
   async function handlePickYuandian(candidate: EnterpriseSearchItem) {
@@ -560,19 +559,22 @@ export function IntakeWizard({
     setValue("parties.0.name", candidate.name, { shouldDirty: true });
     setValue("parties.0.enterpriseName", candidate.name, { shouldDirty: true });
     setValue("parties.0.enterpriseSocialCode", candidate.creditCode, { shouldDirty: true, shouldValidate: true });
-    const tid = toast.loading("正在获取企业详细信息…", { duration: 10_000 });
+    const tid = Toast.info({ content: "正在获取企业详细信息…", duration: 10, icon: <Spin size="small" /> });
     try {
       const res = await getEnterpriseDetail(candidate.id);
       if (res.info) {
         setValue("parties.0.address", res.info.address, { shouldDirty: true });
         setValue("parties.0.legalRep", res.info.legalRep, { shouldDirty: true });
         if (res.info.legalRep && !watch("parties.0.contactName")) setValue("parties.0.contactName", res.info.legalRep, { shouldDirty: true });
-        toast.success(res.info.legalRep ? `已填充：法定代表人 ${res.info.legalRep}` : "已填充企业信息", { id: tid });
+        Toast.close(tid);
+        Toast.success(res.info.legalRep ? `已填充：法定代表人 ${res.info.legalRep}` : "已填充企业信息");
       } else {
-        toast.info("未查到详细信息，已填充基础信息", { id: tid });
+        Toast.close(tid);
+        Toast.info("未查到详细信息，已填充基础信息");
       }
     } catch {
-      toast.error("获取企业详情失败，请手动补充", { id: tid });
+      Toast.close(tid);
+      Notification.error({ title: "获取企业详情失败，请手动补充", duration: 6 });
     }
   }
 

@@ -1,10 +1,9 @@
 "use client";
-import { Select, Button, Input, RadioGroup, TextArea } from "@douyinfe/semi-ui";
+import { Select, Button, Input, RadioGroup, TextArea, Toast } from "@douyinfe/semi-ui";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { contractHref } from "./contract-location";
-import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 import { formatDate } from "@/lib/utils";
@@ -44,7 +43,7 @@ export function RegistrationWorkspace({data,canWrite,canConfirm,selectedMatterId
     setError("");setDialogOpen(true);setMode(next);setTarget(id);setMatterId(selectedMatterId??"");setTitle("");setAmount("");setMoneyKind(next==="expense"?"OTHER":"LAWYER_FEE");setDay(formatDate(new Date()));setDraft(false);setNote("");setCounterparty("");setParts([newPart()]);
   }
   async function run(work:()=>Promise<{ok:boolean;message?:string}>,success:string) {
-    setBusy(true);setError("");try{const result=await work();if(!result.ok)throw new Error(result.message);toast.success(success);setDialogOpen(false);
+    setBusy(true);setError("");try{const result=await work();if(!result.ok)throw new Error(result.message);Toast.success(success);setDialogOpen(false);
       // M-3e（D 批）：从案件入口进入时，保存成功后留在案件上下文并回原案页，不再停在全局对账页
       if(contractEntry)return;
       if(returnTo){router.push(returnTo);return;}

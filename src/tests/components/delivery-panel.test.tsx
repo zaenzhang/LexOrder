@@ -11,7 +11,14 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/server/matters/context-actions", () => ({ getMatterContextInputOptions: mocks.contextOptions, getMatterContextInputChoice: mocks.contextChoice, getMatterContextHistory: mocks.contextHistory }));
 vi.mock("@/server/deliveries/actions", () => mocks);
 vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: mocks.confirmDialog }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { success: vi.fn() }),
+    Notification: Object.assign(semi.Notification, { success: vi.fn() })
+  };
+});
 
 const matterId = "cmatterdelivery000000000001", deliveryId = "cdelivery00000000000000001";
 const oldId = "cdocdelivery00000000000001", newerId = "cdocdelivery00000000000002";

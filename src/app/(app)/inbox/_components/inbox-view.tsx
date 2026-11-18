@@ -3,8 +3,7 @@
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { Inbox, Gavel, Clock, CheckCircle2, Trash2, Link as LinkIcon, Briefcase, ExternalLink, Phone, Loader2, Sparkles, AlertCircle, ArrowRight, CalendarClock, FileCheck2, FileDigit, FileDown, KeyRound, Upload } from "lucide-react";
-import { toast } from "sonner";
-import { Button, Select, Tabs, Tag } from "@douyinfe/semi-ui";
+import { Button, Select, Tabs, Tag, Notification, Toast } from "@douyinfe/semi-ui";
 import { cn, formatDateTime } from "@/lib/utils";
 import {
   extractSmsAttachments,
@@ -216,9 +215,9 @@ function SmsCard({
     startTransition(async () => {
       try {
         await markSmsProcessed({ id: sms.id });
-        toast.success("已标记处理");
+        Toast.success("已标记处理");
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "失败");
+        Notification.error({ title: e instanceof Error ? actionErrorMessage(e) : "失败", duration: 6 });
       }
     });
 
@@ -227,9 +226,9 @@ function SmsCard({
     startTransition(async () => {
       try {
         await deleteSms({ id: sms.id });
-        toast.success("已删除");
+        Toast.success("已删除");
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "失败");
+        Notification.error({ title: e instanceof Error ? actionErrorMessage(e) : "失败", duration: 6 });
       }
     });
   };
@@ -250,15 +249,13 @@ function SmsCard({
         const res = await extractSmsAttachments({ id: sms.id });
         const downloaded = res.attachmentResults.filter((r) => r.status === "DOWNLOADED").length;
         const needsManual = res.attachmentResults.filter((r) => r.status === "LOGIN_REQUIRED").length;
-        toast.success(
-          downloaded > 0
+        Toast.success(downloaded > 0
             ? `已提取 ${downloaded} 个附件`
             : needsManual > 0
               ? "送达入口需要人工处理"
-              : "附件提取已完成"
-        );
+              : "附件提取已完成");
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "提取失败");
+        Notification.error({ title: e instanceof Error ? actionErrorMessage(e) : "提取失败", duration: 6 });
       }
     });
 
@@ -426,13 +423,13 @@ function SmsCard({
                 files.forEach((f) => fd.append("files", f));
                 uploadSmsInboundFile(fd)
                   .then((res) => {
-                    if (res.saved.length || res.replenished.length) toast.success(`新增 ${res.saved.length} 个，补存原件 ${res.replenished.length} 个，入卷 ${res.filedFiles} 个`);
-                    if (res.skippedDuplicates.length) toast.info(`重复跳过：${res.skippedDuplicates.join("、")}`);
-                    for (const failure of res.failed) toast.error(`${failure.name}：${failure.message}`);
-                    if (res.warning) toast.warning(res.warning);
+                    if (res.saved.length || res.replenished.length) Toast.success(`新增 ${res.saved.length} 个，补存原件 ${res.replenished.length} 个，入卷 ${res.filedFiles} 个`);
+                    if (res.skippedDuplicates.length) Toast.info(`重复跳过：${res.skippedDuplicates.join("、")}`);
+                    for (const failure of res.failed) Notification.error({ title: `${failure.name}：${failure.message}`, duration: 6 });
+                    if (res.warning) Toast.warning(res.warning);
                     startTransition(() => router.refresh());
                   })
-                  .catch((err) => toast.error(err instanceof Error ? actionErrorMessage(err) : "补传失败"))
+                  .catch((err) => Notification.error({ title: err instanceof Error ? actionErrorMessage(err) : "补传失败", duration: 6 }))
                   .finally(() => setUploading(false));
               }}
             />
@@ -710,7 +707,7 @@ function MatterPicker({ sms, matters }: { sms: SmsRow; matters: MatterOption[] }
     startTransition(async () => {
       try {
         await matchSmsToMatter({ smsId: sms.id, matterId });
-        toast.success("已关联案件");
+        Toast.success("已关联案件");
       } catch (e) {
         setError(e instanceof Error ? actionErrorMessage(e) : "关联失败，请重试");
       }

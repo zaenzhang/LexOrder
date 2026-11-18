@@ -1,8 +1,7 @@
 "use client";
-import { Select, Button, Input, RadioGroup } from "@douyinfe/semi-ui";
+import { Select, Button, Input, RadioGroup, Notification, Toast } from "@douyinfe/semi-ui";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 import { formatDate } from "@/lib/utils";
@@ -39,8 +38,8 @@ export function CorrectionWorkspace({data,canWrite,canCorrect,canSettle}:{data:D
         : mode==="decision"&&request ? await decideCorrection({id:request.id,revision:request.revision,decision,note:reason})
         : mode==="settle"&&commission ? await settleCommission({commissionEntryId:commission.id,revision:commission.revision,kind,amount,occurredAt:new Date(`${date}T00:00:00+08:00`),voucherReference:voucher,note:reason}) : null;
       if(!result?.ok)throw new Error(result?.message??"请选择账务对象");
-      toast.success(mode==="request"?"已提交，确认前不改变余额":"处理已保存");setDialogOpen(false);router.refresh();
-    } catch(e) {toast.error(e instanceof Error ? actionErrorMessage(e) :"保存失败");}finally{setBusy(false);}
+      Toast.success(mode==="request"?"已提交，确认前不改变余额":"处理已保存");setDialogOpen(false);router.refresh();
+    } catch(e) {Notification.error({ title: e instanceof Error ? actionErrorMessage(e) :"保存失败", duration: 6 });}finally{setBusy(false);}
   }
   const amountFields=(title:string,items:{id:string;label:string;amount:string}[],values:Record<string,string>,change:(v:Record<string,string>)=>void)=><fieldset className="space-y-2 rounded-lg border p-3"><legend className="px-1 text-sm font-medium">{title}</legend>{items.map(i=><div key={i.id}><label htmlFor={`${title}-${i.id}`}>{i.label} · 当前 {yuan(i.amount)}</label><Input id={`${title}-${i.id}`} inputMode="decimal" placeholder="本次金额，不处理留空" value={values[i.id]??""} onChange={e=>change({...values,[i.id]:e})}/></div>)}{!items.length&&<p className="text-sm text-muted-foreground">暂无关联记录</p>}</fieldset>;
   return <>

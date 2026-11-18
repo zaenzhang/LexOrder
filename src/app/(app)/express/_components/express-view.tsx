@@ -1,11 +1,10 @@
 "use client";
 
-import { Tabs, Select, Button, Input, RadioGroup, Tag } from "@douyinfe/semi-ui";
+import { Tabs, Select, Button, Input, RadioGroup, Tag, Notification, Toast } from "@douyinfe/semi-ui";
 import { useRef, useState, useMemo, useTransition } from "react";
 import Link from "next/link";
 import { Package, Search, RefreshCw, Trash2, Briefcase, ArrowDownToLine, ArrowUpFromLine, ExternalLink, AlertTriangle } from "lucide-react";
 import type { Prisma, ExpressDirection } from "@prisma/client";
-import { toast } from "sonner";
 
 import {
   Dialog,
@@ -160,9 +159,9 @@ function Card({ e }: { e: Row }) {
     startTransition(async () => {
       try {
         const r = await refreshExpress({ id: e.id });
-        toast.success(`已更新：${r.state}（${r.provider}）`);
+        Toast.success(`已更新：${r.state}（${r.provider}）`);
       } catch (err) {
-        toast.error(err instanceof Error ? actionErrorMessage(err) : "刷新失败");
+        Notification.error({ title: err instanceof Error ? actionErrorMessage(err) : "刷新失败", duration: 6 });
       }
     });
 
@@ -171,9 +170,9 @@ function Card({ e }: { e: Row }) {
     startTransition(async () => {
       try {
         await deleteExpress({ id: e.id });
-        toast.success("已删除");
+        Toast.success("已删除");
       } catch (err) {
-        toast.error(err instanceof Error ? actionErrorMessage(err) : "失败");
+        Notification.error({ title: err instanceof Error ? actionErrorMessage(err) : "失败", duration: 6 });
       }
     });
   };
@@ -351,11 +350,11 @@ function NewExpressDialog({
 
   const submit = () => {
     if (!trackingNo.trim()) {
-      toast.error("快递单号必填");
+      Notification.error({ title: "快递单号必填", duration: 6 });
       return;
     }
     if (!purpose.trim()) {
-      toast.error("用途必填");
+      Notification.error({ title: "用途必填", duration: 6 });
       return;
     }
     startTransition(async () => {
@@ -370,14 +369,14 @@ function NewExpressDialog({
           recipientPhone: recipientPhone.trim()
         });
         if (res.firstState) {
-          toast.success(`已创建并查询：${res.firstState}`);
+          Toast.success(`已创建并查询：${res.firstState}`);
         } else {
-          toast.success(configured ? "已创建（首次查询失败，可稍后刷新）" : "已创建（未配置 API，状态稍后手动查）");
+          Toast.success(configured ? "已创建（首次查询失败，可稍后刷新）" : "已创建（未配置 API，状态稍后手动查）");
         }
         reset();
         onOpenChange(false);
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "失败");
+        Notification.error({ title: e instanceof Error ? actionErrorMessage(e) : "失败", duration: 6 });
       }
     });
   };

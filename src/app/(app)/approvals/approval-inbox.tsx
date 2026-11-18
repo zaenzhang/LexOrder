@@ -1,11 +1,10 @@
 "use client";
-import { Pagination, Tabs, Select, Button, Checkbox, Input, TextArea } from "@douyinfe/semi-ui";
+import { Pagination, Tabs, Select, Button, Checkbox, Input, TextArea, Notification, Toast } from "@douyinfe/semi-ui";
 import {ExecutionTerminationPanel} from "@/components/matters/execution-termination-panel";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { ApprovalAction } from "@prisma/client";
-import { toast } from "sonner";
 import { AlertTriangle, BookOpenCheck, ChevronRight, Clock3, FileCheck2, FileText, Paperclip, History, Search, ShieldCheck } from "lucide-react";
 import { ACTION_LABELS } from "@/lib/approvals/rules";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -189,12 +188,12 @@ export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data
 
   function process(decision: "approve" | "reject" | "revision") {
     if (!selected || !detail?.task || detail.task==="terminate" || pending || reviewBusy) return;
-    if (reviewDirty) { toast.error("请先保存复核内容，再处理审批"); return; }
+    if (reviewDirty) { Notification.error({ title: "请先保存复核内容，再处理审批", duration: 6 }); return; }
     const r = selected;
     const sequence = openSequence.current;
-    if (decision === "approve" && (detail.task === "issue" || detail.task === "stamp") && !file) { toast.error(detail.task === "issue" ? "请上传电子发票" : "请上传盖章后的 PDF 扫描件"); return; }
-    if (decision === "approve" && r.action === "INVOICE_APPROVE" && file && !invoiceNo.trim()) { toast.error("上传电子发票时必须填写发票号码"); return; }
-    if (decision !== "approve" && !note.trim()) { toast.error("请填写原因"); return; }
+    if (decision === "approve" && (detail.task === "issue" || detail.task === "stamp") && !file) { Notification.error({ title: detail.task === "issue" ? "请上传电子发票" : "请上传盖章后的 PDF 扫描件", duration: 6 }); return; }
+    if (decision === "approve" && r.action === "INVOICE_APPROVE" && file && !invoiceNo.trim()) { Notification.error({ title: "上传电子发票时必须填写发票号码", duration: 6 }); return; }
+    if (decision !== "approve" && !note.trim()) { Notification.error({ title: "请填写原因", duration: 6 }); return; }
     start(async () => {
       try {
         if (detail.task === "stamp") {
@@ -217,11 +216,11 @@ export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data
         } else {
           if (decision === "approve") await approveSealRequest({ id: r.id, note }); else await rejectSealRequest({ id: r.id, reason: note });
         }
-        toast.success("处理完成，可在“我已处理”中查阅");
+        Toast.success("处理完成，可在“我已处理”中查阅");
         if (openSequence.current === sequence && dialogState.current.selected?.id === r.id && dialogState.current.selected?.action === r.action) finishDetail();
         router.refresh();
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "处理失败");
+        Notification.error({ title: e instanceof Error ? actionErrorMessage(e) : "处理失败", duration: 6 });
         // 状态或权限已变化时重读详情，不能保留失效的处理按钮。
         try { setDetail(await getApprovalDetail({ ...r, returnTo })); } catch { finishDetail(); }
         router.refresh();
@@ -230,9 +229,9 @@ export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data
   }
   function applicantAction(action: "resubmit" | "cancel") {
     if (!selected || pending || reviewBusy) return;
-    if (reviewDirty) { toast.error("请先保存复核内容，再处理审批"); return; }
+    if (reviewDirty) { Notification.error({ title: "请先保存复核内容，再处理审批", duration: 6 }); return; }
     const id = selected.id;
-    start(async () => { try { if (action === "resubmit") { if (selected.action === "DOCUMENT_APPROVE") await submitDocumentForReview(id); else await resubmitIntake(id); } else await cancelSealRequest({ id }); toast.success(action === "resubmit" ? "已重新提交" : "已撤回申请"); finishDetail(); router.refresh(); } catch (e) { toast.error(e instanceof Error ? actionErrorMessage(e) : "操作失败"); } });
+    start(async () => { try { if (action === "resubmit") { if (selected.action === "DOCUMENT_APPROVE") await submitDocumentForReview(id); else await resubmitIntake(id); } else await cancelSealRequest({ id }); Toast.success(action === "resubmit" ? "已重新提交" : "已撤回申请"); finishDetail(); router.refresh(); } catch (e) { Notification.error({ title: e instanceof Error ? actionErrorMessage(e) : "操作失败", duration: 6 }); } });
   }
   const tabs = Object.entries(WORKSPACE_TABS).filter(([key]) => key !== "all" || data.canViewAll) as [WorkspaceTab, string][];
   function toggleVerification(id: string, checked: boolean) {
@@ -378,8 +377,20 @@ export function ApprovalInbox({ data, initialSelection, returnTo }: { data: Data
             </ReviewSection>
             {detail.archiveReview.excludedDocuments.length > 0 && <ReviewSection title={`本案另有 ${detail.archiveReview.excludedDocuments.length} 份材料未纳入本次归档`} icon={<AlertTriangle />}><div className="panel-body"><p className="t-xs t-mute">这些文件只展示名称，不因归档审批开放内容。请判断是否属于无关草稿、重复件，或应退回补充。</p><ul className="mt-2 max-h-28 list-disc space-y-1 overflow-y-auto pl-5 text-[12px]">{detail.archiveReview.excludedDocuments.map(document => <li key={document.id}>{document.folderName ? `${document.folderName} / ` : ""}{document.name}</li>)}</ul></div></ReviewSection>}
             <ReviewSection title="人工核验事项" icon={<ShieldCheck />}>
-              {detail.archiveReview.manualChecks.map(item => <Checkbox disabled={pending} className="mt-0.5" aria-label={`复核：${item.label}`} checked={verified.has(`manual:${item.id}`)} onChange={event => (value => toggleVerification(`manual:${item.id}`, value === true))(event.target.checked === true)} key={item.id} style={{ alignItems: "flex-start" }}><span className="v"><span className="font-semibold">{item.label}</span>{item.note && <span className="t-xs t-mute mt-1 block">申请人说明：{item.note}</span>}</span></Checkbox>)}
-              {detail.archiveReview.hasExceptions && <Checkbox disabled={pending} className="mt-0.5" aria-label="核准归档缺项或不适用例外" checked={exceptionApproved} onChange={event => (value => setExceptionApproved(value === true))(event.target.checked === true)} style={{ alignItems: "flex-start" }}><span className="v"><span className="font-semibold">核准缺项或不适用例外</span><span className="t-xs t-mute mt-1 block">勾选后还须在审批意见中说明接受理由。</span></span></Checkbox>}
+              {detail.archiveReview.manualChecks.map(item => (
+                <Checkbox key={item.id} disabled={pending} checked={verified.has(`manual:${item.id}`)}
+                  extra={item.note ? `申请人说明：${item.note}` : undefined}
+                  onChange={event => toggleVerification(`manual:${item.id}`, event.target.checked === true)}>
+                  {item.label}
+                </Checkbox>
+              ))}
+              {detail.archiveReview.hasExceptions && (
+                <Checkbox disabled={pending} checked={exceptionApproved}
+                  extra="请在审批意见中说明接受理由。"
+                  onChange={event => setExceptionApproved(event.target.checked === true)}>
+                  核准缺项或不适用例外
+                </Checkbox>
+              )}
             </ReviewSection>
           </>)}
         </> },

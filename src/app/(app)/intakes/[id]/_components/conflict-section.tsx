@@ -1,9 +1,8 @@
 "use client";
-import { Button, Tag, TextArea } from "@douyinfe/semi-ui";
+import { Button, Tag, TextArea, Notification, Toast } from "@douyinfe/semi-ui";
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { toast } from "sonner";
 import {
   AlertTriangle,
   ShieldCheck,
@@ -111,20 +110,16 @@ export function ConflictSection({
 
   function handleRunCheck() {
     if (queries.length === 0) {
-      toast.warning("没有可检索的当事人", { description: "请先在收案中添加委托方或对方" });
+      Notification.warning({ title: "没有可检索的当事人", content: "请先在收案中添加委托方或对方", duration: 6 });
       return;
     }
 
     startTransition(async () => {
       try {
         const res = await runCheckAndSave({ intakeId, queries });
-        toast.success("冲突检索完成", {
-          description: `命中 ${res.hits.length} 条，请逐条核查`
-        });
+        Notification.success({ title: "冲突检索完成", content: `命中 ${res.hits.length} 条，请逐条核查`, duration: 6 });
       } catch (err) {
-        toast.error("检索失败", {
-          description: actionErrorMessage(err)
-        });
+        Notification.error({ title: "检索失败", content: actionErrorMessage(err), duration: 6 });
       }
     });
   }
@@ -132,9 +127,7 @@ export function ConflictSection({
   function handleSetConclusion(conclusion: ConflictConclusion) {
     if (!latestCheck) return;
     if (conclusion === "DIFFERENT" && needsHighRiskNote && !conclusionNote.trim()) {
-      toast.warning("请先补充承接理由", {
-        description: "存在高风险或阻塞命中时，需要写明排除理由或书面同意留痕"
-      });
+      Notification.warning({ title: "请先补充承接理由", content: "存在高风险或阻塞命中时，需要写明排除理由或书面同意留痕", duration: 6 });
       return;
     }
     startTransition(async () => {
@@ -144,11 +137,9 @@ export function ConflictSection({
           conclusion,
           note: conclusionNote
         });
-        toast.success("结论已保存");
+        Toast.success("结论已保存");
       } catch (err) {
-        toast.error("保存失败", {
-          description: actionErrorMessage(err)
-        });
+        Notification.error({ title: "保存失败", content: actionErrorMessage(err), duration: 6 });
       }
     });
   }

@@ -6,8 +6,7 @@
  */
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { CalendarPlus, Copy, Loader2, RefreshCw } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@douyinfe/semi-ui";
+import { Button, Notification, Toast } from "@douyinfe/semi-ui";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getCalendarToken, regenerateCalendarToken } from "@/server/calendar/actions";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
@@ -69,7 +68,7 @@ function CalendarSubscriptionContent() {
         if (!cancelled) setToken(res.token);
       })
       .catch(() => {
-        if (!cancelled) toast.error("获取订阅链接失败");
+        if (!cancelled) Notification.error({ title: "获取订阅链接失败", duration: 6 });
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -87,8 +86,8 @@ function CalendarSubscriptionContent() {
     if (!url) return;
     navigator.clipboard
       .writeText(url)
-      .then(() => toast.success("订阅链接已复制"))
-      .catch(() => toast.error("复制失败，请手动选中复制"));
+      .then(() => Toast.success("订阅链接已复制"))
+      .catch(() => Notification.error({ title: "复制失败，请手动选中复制", duration: 6 }));
   }
 
   async function regenerate() {
@@ -101,9 +100,9 @@ function CalendarSubscriptionContent() {
       try {
         const res = await regenerateCalendarToken();
         setToken(res.token);
-        toast.success("已重置订阅链接");
+        Toast.success("已重置订阅链接");
       } catch (err) {
-        toast.error("重置失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "重置失败", content: actionErrorMessage(err), duration: 6 });
       }
     });
   }

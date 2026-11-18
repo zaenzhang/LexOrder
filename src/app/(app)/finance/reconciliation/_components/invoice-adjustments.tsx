@@ -1,9 +1,8 @@
 "use client";
 
-import { Button, Input, Modal, Select, TextArea } from "@douyinfe/semi-ui";
+import { Button, Input, Modal, Select, TextArea, Notification, Toast } from "@douyinfe/semi-ui";
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { adjustInvoice, type getFinanceLedger } from "@/server/finance/ledger-actions";
 import { shDayKey } from "@/lib/ui/sh-time";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -40,8 +39,8 @@ export function InvoiceAdjustments({ data, canCorrect }: { data: Data; canCorrec
           reversals: Object.entries(reversals).filter(([, value]) => value.trim()).map(([linkId, value]) => ({ id: linkId, amount: value })),
         });
         if (!result.ok) throw new Error(result.message);
-        toast.success("发票更正已留痕"); setOpen(false); router.refresh();
-      } catch (error) { toast.error(error instanceof Error ? actionErrorMessage(error) : "登记失败"); }
+        Toast.success("发票更正已留痕"); setOpen(false); router.refresh();
+      } catch (error) { Notification.error({ title: error instanceof Error ? actionErrorMessage(error) : "登记失败", duration: 6 }); }
     });
   }
 

@@ -1,13 +1,12 @@
 "use client";
 
-import { Button, Input, Select, TextArea } from "@douyinfe/semi-ui";
+import { Button, Input, Select, TextArea, Notification, Toast } from "@douyinfe/semi-ui";
 
 import { DeadlineDueFields } from "@/components/matters/deadline-due-fields";
 import { deadlineDueDraft, deadlineDueFromDraft } from "@/lib/deadline-due";
 
 import { useId, useRef, useState, useTransition } from "react";
 import { Loader2, Gavel, Clock, FileDigit } from "lucide-react";
-import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -69,12 +68,12 @@ export function GenerateHearingDialog({
 
   const submit = () => {
     if (!procedureId) {
-      toast.error("请选择程序");
+      Notification.error({ title: "请选择程序", duration: 6 });
       return;
     }
     const d = dateStr ? parseLocalInput(dateStr) : null;
     if (!d) {
-      toast.error("请填写有效的开庭时间");
+      Notification.error({ title: "请填写有效的开庭时间", duration: 6 });
       return;
     }
     startTransition(async () => {
@@ -88,10 +87,10 @@ export function GenerateHearingDialog({
           judge: judge.trim(),
           notes: notes.trim()
         });
-        toast.success("已生成开庭并标记此短信处理完成");
+        Toast.success("已生成开庭并标记此短信处理完成");
         onOpenChange(false);
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "失败");
+        Notification.error({ title: e instanceof Error ? actionErrorMessage(e) : "失败", duration: 6 });
       }
     });
   };
@@ -276,7 +275,7 @@ export function GenerateDeadlineDialog({
 
   const submit = () => {
     if (!procedureId) {
-      toast.error("请选择程序");
+      Notification.error({ title: "请选择程序", duration: 6 });
       return;
     }
     startTransition(async () => {
@@ -290,10 +289,10 @@ export function GenerateDeadlineDialog({
           basis: basis.trim(),
           remindDays
         });
-        toast.success("已生成期限并标记此短信处理完成");
+        Toast.success("已生成期限并标记此短信处理完成");
         onOpenChange(false);
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "失败");
+        Notification.error({ title: e instanceof Error ? actionErrorMessage(e) : "失败", duration: 6 });
       }
     });
   };
@@ -424,16 +423,16 @@ export function BackfillCaseNumberDialog({
 
   const submit = () => {
     if (!caseNumber || !procedureId) {
-      toast.error("请选择案号和目标程序");
+      Notification.error({ title: "请选择案号和目标程序", duration: 6 });
       return;
     }
     startTransition(async () => {
       try {
         await backfillCaseNumberFromSms({ smsId: sms.id, procedureId, caseNumber });
-        toast.success(`案号已回填：${caseNumber}`);
+        Toast.success(`案号已回填：${caseNumber}`);
         onOpenChange(false);
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "回填失败");
+        Notification.error({ title: e instanceof Error ? actionErrorMessage(e) : "回填失败", duration: 6 });
       }
     });
   };

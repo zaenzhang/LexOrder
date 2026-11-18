@@ -1,9 +1,8 @@
 "use client";
 
-import { Banner, Select, Button, Checkbox, Input, Tag, TextArea } from "@douyinfe/semi-ui";
+import { Banner, Select, Button, Checkbox, Input, Tag, TextArea, Toast } from "@douyinfe/semi-ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, FileText, Plus } from "lucide-react";
-import { toast } from "sonner";
 
 import { Dialog, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -184,7 +183,7 @@ export function DeliveryPanel({ matterId, initialDeliveryId, initialEventId, ini
       const input = { ...draft, matterId, requestKey: key };
       try { result = await prepareDelivery(input); }
       catch (err) { result = await findDeliveryByRequest(input); if (!result) throw err; }
-      setDirty(false); openDetail(result.id); setRefresh(value => value + 1); toast.success("交付清单已固定保存");
+      setDirty(false); openDetail(result.id); setRefresh(value => value + 1); Toast.success("交付清单已固定保存");
     } catch (err) { setError(actionErrorMessage(err) || "保存失败，输入已保留"); }
     finally { setBusy(false); }
   }
@@ -195,7 +194,7 @@ export function DeliveryPanel({ matterId, initialDeliveryId, initialEventId, ini
     try {
       const result = await createClientBrief({ matterId, requestKey: key, ...brief });
       setDirty(false); setMode(null); setRefresh(value => value + 1);
-      toast.success("简报已保存为草稿，请核对并按原流程送审");
+      Toast.success("简报已保存为草稿，请核对并按原流程送审");
       callbacks.current.onDocumentOpen?.(result.id);
     } catch (err) { setError(actionErrorMessage(err) || "保存失败，输入已保留"); }
     finally { setBusy(false); }
@@ -211,7 +210,7 @@ export function DeliveryPanel({ matterId, initialDeliveryId, initialEventId, ini
       try { result = await registerDeliveryEvent(input); }
       catch (err) { result = await findDeliveryEventByRequest(input); if (!result) throw err; }
       setDirty(false); setMode("detail"); setRefresh(value => value + 1);
-      callbacks.current.onLocationChange?.(result.deliveryId, result.id); toast.success("实际发生情况已登记");
+      callbacks.current.onLocationChange?.(result.deliveryId, result.id); Toast.success("实际发生情况已登记");
     } catch (err) { setError(actionErrorMessage(err) || "登记失败，输入已保留"); }
     finally { setBusy(false); }
   }
@@ -224,7 +223,7 @@ export function DeliveryPanel({ matterId, initialDeliveryId, initialEventId, ini
       if (!response.ok) { const result = await response.json(); throw new Error(result.error || "导出未完成"); }
       const blob = await response.blob(), url = URL.createObjectURL(blob), link = document.createElement("a");
       link.href = url; link.download = `${detail.purpose}_交付材料.zip`; link.click(); URL.revokeObjectURL(url);
-      setRefresh(value => value + 1); toast.success("已导出，实际发送后请另行登记");
+      setRefresh(value => value + 1); Toast.success("已导出，实际发送后请另行登记");
     } catch (err) { setError(actionErrorMessage(err) || "导出失败，固定清单仍保留"); }
     finally { setBusy(false); }
   }

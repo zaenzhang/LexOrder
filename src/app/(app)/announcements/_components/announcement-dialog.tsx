@@ -4,8 +4,7 @@ import { FormDialogContent as DialogContent, FormDialogBody } from "@/components
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
-import { Button, Checkbox, Input, TextArea } from "@douyinfe/semi-ui";
+import { Button, Checkbox, Input, TextArea, Notification, Toast } from "@douyinfe/semi-ui";
 import {
   Dialog,
   DialogDescription,
@@ -66,7 +65,7 @@ export function AnnouncementDialog({
 
   function handleSave() {
     if (!title.trim() || !content.trim()) {
-      toast.error("标题和内容必填");
+      Notification.error({ title: "标题和内容必填", duration: 6 });
       return;
     }
     startTransition(async () => {
@@ -79,17 +78,15 @@ export function AnnouncementDialog({
         };
         if (editing) {
           await updateAnnouncement({ ...payload, id: editing.id });
-          toast.success("已更新");
+          Toast.success("已更新");
         } else {
           await createAnnouncement(payload);
-          toast.success("已发布");
+          Toast.success("已发布");
         }
         onOpenChange(false);
         router.refresh();
       } catch (err) {
-        toast.error("保存失败", {
-          description: actionErrorMessage(err)
-        });
+        Notification.error({ title: "保存失败", content: actionErrorMessage(err), duration: 6 });
       }
     });
   }

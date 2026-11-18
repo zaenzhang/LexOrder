@@ -2,10 +2,10 @@
 
 import { FormDialogContent as DialogContent, FormDialogBody } from "@/components/patterns/form-dialog";
 
-import { useState, useTransition, useRef } from "react";
+import { useId, useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Upload } from "lucide-react";
-import { toast } from "sonner";
+import { Button, Input, Notification, Select, TextArea, Toast } from "@douyinfe/semi-ui";
+import { FileInput } from "@/components/patterns/file-input";
 import type { FirmFileCategory } from "@prisma/client";
 import {
   Dialog,
@@ -14,17 +14,6 @@ import {
   DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
 import { uploadFirmFile } from "@/server/firm-files/actions";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -57,7 +46,10 @@ export function UploadDialog({
   existingFiles: ExistingFile[];
 }) {
   const router = useRouter();
+  const fieldId = useId();
   const fileRef = useRef<HTMLInputElement>(null);
+  const dialog = useRef<HTMLDivElement>(null);
+  const openSelect = useRef<"category" | "supersedes" | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -82,12 +74,13 @@ export function UploadDialog({
   }
 
   function submit() {
+    if (isPending) return;
     if (!file) {
-      toast.warning("请选择文件");
+      Toast.warning("请选择文件");
       return;
     }
     if (!name.trim()) {
-      toast.warning("名称必填");
+      Toast.warning("名称必填");
       return;
     }
     startTransition(async () => {
@@ -100,137 +93,78 @@ export function UploadDialog({
         fd.set("tags", tags);
         if (supersedesId !== NONE_VALUE) fd.set("supersedesId", supersedesId);
         const res = await uploadFirmFile(fd);
-        toast.success(
-          supersedesId !== NONE_VALUE
+        Toast.success(supersedesId !== NONE_VALUE
             ? `已上传并替代旧版：${res.name}`
-            : `已上传：${res.name}`
-        );
+            : `已上传：${res.name}`);
         reset();
         onOpenChange(false);
         router.refresh();
       } catch (err) {
-        toast.error("上传失败", {
-          description: actionErrorMessage(err)
-        });
+        Notification.error({ title: "上传失败", content: actionErrorMessage(err), duration: 6 });
       }
     });
   }
 
-  // 可被替代的旧版：仅显示同分类且没有更新版本的
-  const replaceableFiles = existingFiles.filter(
-    (f) => !f.hasNewerVersion
-  );
+  const replaceableFiles = existingFiles.filter(file => !file.hasNewerVersion);
+  const selectPopupProps = {
+    disabled: isPending,
+    className: "w-full",
+    motion: false as const,
+    getPopupContainer: () => dialog.current!
+  };
+
+  function trackSelect(field: "category" | "supersedes", visible: boolean) {
+    if (visible || openSelect.current === field) openSelect.current = visible ? field : null;
+  }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+    <Dialog open={open} onOpenChange={next => { if (!isPending) onOpenChange(next); }}>
+      <DialogContent ref={dialog} className="max-w-lg" onEscapeKeyDown={event => { if (openSelect.current) event.preventDefault(); }}>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-base">
-            <Upload className="h-4 w-4 text-primary" />
-            上传律所资料
-          </DialogTitle>
-          <DialogDescription className="text-xs">
-            单文件 ≤ 50MB；全所共享可见
-          </DialogDescription>
+          <DialogTitle>上传律所资料</DialogTitle>
+          <DialogDescription>全所共享 · 单文件不超过 50 MB</DialogDescription>
         </DialogHeader>
         <FormDialogBody>
-
-        <div className="space-y-3">
-          <div>
-            <Label className="text-[11px]">文件 *</Label>
-            <Input
-              ref={fileRef}
-              type="file"
-              onChange={(e) => handleFilePick(e.target.files?.[0] ?? null)}
-              className="mt-1"
-            />
-            {file && (
-              <p className="mt-1 text-[10px] text-muted-foreground">
-                {file.name} · {(file.size / 1024 / 1024).toFixed(2)}MB
-              </p>
+          <fieldset className="space-y-4" disabled={isPending}>
+            <div className="space-y-1.5">
+              <label htmlFor={`${fieldId}-file`} className="block text-sm font-medium">文件</label>
+              <FileInput id={`${fieldId}-file`} ref={fileRef} disabled={isPending} aria-required
+                onChange={event => handleFilePick(event.currentTarget.files?.[0] ?? null)} />
+            </div>
+            <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-3">
+              <div className="space-y-1.5">
+                <label htmlFor={`${fieldId}-name`} className="block text-sm font-medium">名称</label>
+                <Input id={`${fieldId}-name`} value={name} onChange={setName} aria-required />
+              </div>
+              <div className="space-y-1.5">
+                <label id={`${fieldId}-category-label`} htmlFor={`${fieldId}-category`} className="block text-sm font-medium">分类</label>
+                <Select<FirmFileCategory> {...selectPopupProps} id={`${fieldId}-category`}
+                  aria-labelledby={`${fieldId}-category-label`} value={category} optionList={CATEGORY_OPTIONS}
+                  onChange={value => { if (typeof value === "string") setCategory(value); }} onDropdownVisibleChange={value => trackSelect("category", value)} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor={`${fieldId}-description`} className="block text-sm font-medium">描述</label>
+              <TextArea id={`${fieldId}-description`} value={description} onChange={setDescription} rows={2} />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor={`${fieldId}-tags`} className="block text-sm font-medium">标签</label>
+              <Input id={`${fieldId}-tags`} value={tags} onChange={setTags} placeholder="用逗号或空格分隔" />
+            </div>
+            {replaceableFiles.length > 0 && (
+              <div className="space-y-1.5">
+                <label id={`${fieldId}-supersedes-label`} htmlFor={`${fieldId}-supersedes`} className="block text-sm font-medium">版本关系</label>
+                <Select<string> {...selectPopupProps} id={`${fieldId}-supersedes`} aria-labelledby={`${fieldId}-supersedes-label`}
+                  value={supersedesId} filter
+                  onChange={value => { if (typeof value === "string") setSupersedesId(value); }} onDropdownVisibleChange={value => trackSelect("supersedes", value)}
+                  optionList={[{ value: NONE_VALUE, label: "新增资料" }, ...replaceableFiles.map(file => ({ value: file.id, label: `替代 ${file.name}` }))]} />
+              </div>
             )}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <Label className="text-[11px]">名称 *</Label>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="如：员工手册 v2.4"
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label className="text-[11px]">分类 *</Label>
-              <Select
-                value={category}
-                onValueChange={(v) => setCategory(v as FirmFileCategory)}
-              >
-                <SelectTrigger className="mt-1 h-9 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORY_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div>
-            <Label className="text-[11px]">描述（可选）</Label>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="简短说明用途、适用场景"
-              rows={2}
-              className="mt-1 resize-none text-sm"
-            />
-          </div>
-
-          <div>
-            <Label className="text-[11px]">标签（逗号 / 空格分隔）</Label>
-            <Input
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              placeholder="如：合伙人,薪酬,2024"
-              className="mt-1"
-            />
-          </div>
-
-          <div>
-            <Label className="text-[11px]">
-              替代哪个旧版？（可选；选了之后旧版会被标&ldquo;旧版&rdquo;）
-            </Label>
-            <Select value={supersedesId} onValueChange={setSupersedesId}>
-              <SelectTrigger className="mt-1 h-9 text-xs">
-                <SelectValue placeholder="不替代任何文件（新增）" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE_VALUE}>不替代任何文件（新增）</SelectItem>
-                {replaceableFiles.map((f) => (
-                  <SelectItem key={f.id} value={f.id}>
-                    {f.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
+          </fieldset>
         </FormDialogBody>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            取消
-          </Button>
-          <Button onClick={submit} disabled={isPending || !file}>
-            {isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-            上传
-          </Button>
+          <Button theme="light" type="tertiary" onClick={() => onOpenChange(false)} disabled={isPending}>取消</Button>
+          <Button theme="solid" loading={isPending} onClick={submit} disabled={!file || !name.trim()}>上传</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

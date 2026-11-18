@@ -2,13 +2,11 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
-import { FolderArchive, Search, Download, Trash2, History, X, Tag, Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import { FolderArchive, Search, Download, Trash2, History, X, Tag as TagIcon } from "lucide-react";
+import { Button, Checkbox, Input, Notification, Tag, Toast, Typography } from "@douyinfe/semi-ui";
 import type { FirmFileCategory } from "@prisma/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { deleteFirmFile } from "@/server/firm-files/actions";
-import { cn, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import { UploadDialog } from "./upload-dialog";
 import { PreviewDialog } from "./preview-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
@@ -30,15 +28,15 @@ type FileEntry = {
   supersedesCount: number;
 };
 
-const CATEGORY_META: Record<FirmFileCategory, { label: string; color: string }> = {
-  POLICY: { label: "制度", color: "#6C3FC5" },
-  GUIDE: { label: "指引", color: "#1E56C8" },
-  TEMPLATE: { label: "参考模板", color: "#1A7F45" },
-  REFERENCE: { label: "其他文件", color: "#96650B" },
-  CONTRACT: { label: "合同", color: "#1E56C8" },
-  LETTER: { label: "函件", color: "#1A7F45" },
-  LICENSE: { label: "证照", color: "#96650B" },
-  OTHER_FIRM: { label: "其他", color: "#6C3FC5" }
+const CATEGORY_META: Record<FirmFileCategory, { label: string; color: "violet" | "blue" | "green" | "amber" }> = {
+  POLICY: { label: "制度", color: "violet" },
+  GUIDE: { label: "指引", color: "blue" },
+  TEMPLATE: { label: "参考模板", color: "green" },
+  REFERENCE: { label: "其他文件", color: "amber" },
+  CONTRACT: { label: "合同", color: "blue" },
+  LETTER: { label: "函件", color: "green" },
+  LICENSE: { label: "证照", color: "amber" },
+  OTHER_FIRM: { label: "其他", color: "violet" }
 };
 
 /** 律所文书页展示的分类 */
@@ -126,10 +124,10 @@ export function FirmFilesView({
     startTransition(async () => {
       try {
         await deleteFirmFile({ id: f.id });
-        toast.success("已删除");
+        Toast.success("已删除");
         router.refresh();
       } catch (err) {
-        toast.error("删除失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "删除失败", content: actionErrorMessage(err), duration: 6 });
       } finally {
         setPendingId(null);
       }
@@ -174,45 +172,19 @@ export function FirmFilesView({
             value={currentCategory ?? "ALL"}
             onChange={(k) => navigate({ category: k === "ALL" ? undefined : (k as typeof activeCategories[number]) })}
           />
-          <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={includeSuperseded}
-              onChange={(e) =>
-                navigate({ includeOld: e.target.checked ? "1" : undefined })
-              }
-              className="h-3.5 w-3.5 accent-primary"
-            />
-            包含旧版
-          </label>
+          <Checkbox className="ml-auto" checked={includeSuperseded}
+            onChange={event => navigate({ includeOld: event.target.checked ? "1" : undefined })}>包含旧版</Checkbox>
         </div>
         )}
 
         <form onSubmit={handleSearch} className="flex items-center gap-1.5">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="按名称 / 描述 / 标签搜索"
-              className="pl-8 text-xs"
-            />
-            {currentSearch && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearch("");
-                  navigate({ q: undefined });
-                }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-          <Button type="submit" size="sm" variant="outline">
-            搜索
-          </Button>
+          <Input className="max-w-md flex-1" value={search} onChange={setSearch} prefix={<Search size={16} />}
+            aria-label="搜索律所资料" placeholder="名称 / 描述 / 标签" />
+          <Button htmlType="submit" theme="light">搜索</Button>
+          {currentSearch && (
+            <Button aria-label="清除搜索" theme="borderless" type="tertiary" icon={<X size={16} />}
+              onClick={() => { setSearch(""); navigate({ q: undefined }); }} />
+          )}
         </form>
       </div>
 
@@ -235,47 +207,20 @@ export function FirmFilesView({
             return (
               <li
                 key={f.id}
-                className={cn(
-                  "group rounded-xl border bg-card p-3",
-                  f.hasNewerVersion
-                    ? "border-[var(--amber-line)] bg-[var(--amber-bg)]"
-                    : "border-border"
-                )}
+                className="rounded-lg border border-border bg-card p-3"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 overflow-hidden">
                     {/* 第一行：文件名 + 标签 + 大小 / 时间 */}
                     <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setPreviewFile(f)}
-                        className="truncate text-left text-sm font-medium text-foreground transition-colors hover:text-primary hover:underline"
-                        title="点击预览"
-                      >
+                      <Button theme="borderless" noHorizontalPadding onClick={() => setPreviewFile(f)} title={f.name}
+                        className="max-w-full min-w-0" contentClassName="truncate text-left">
                         {f.name}
-                      </button>
-                      <span
-                        className="shrink-0 rounded border px-1.5 py-0.5 text-[10px]"
-                        style={{
-                          borderColor: `${meta.color}40`,
-                          color: meta.color,
-                          backgroundColor: `${meta.color}10`
-                        }}
-                      >
-                        {meta.label}
-                      </span>
-                      {f.hasNewerVersion && (
-                        <span className="shrink-0 rounded border border-[var(--amber-line)] bg-[var(--amber-bg)] px-1 py-0.5 text-[9px] text-[var(--amber)]">
-                          旧版
-                        </span>
-                      )}
+                      </Button>
+                      <Tag color={meta.color}>{meta.label}</Tag>
+                      {f.hasNewerVersion && <Tag color="amber">旧版</Tag>}
                       {f.supersedesCount > 0 && (
-                        <span
-                          className="shrink-0 inline-flex items-center gap-0.5 rounded border border-[var(--violet-line)] bg-[var(--violet-bg)] px-1 py-0.5 text-[9px] text-[var(--violet)]"
-                          title={`已替代 ${f.supersedesCount} 个旧版`}
-                        >
-                          <History className="h-2.5 w-2.5" />v{f.supersedesCount + 1}
-                        </span>
+                        <Tag color="violet" prefixIcon={<History size={12} />}>已替代 {f.supersedesCount} 个旧版</Tag>
                       )}
                       <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[10px] text-muted-foreground">
                         <span className="font-mono tabular">{formatBytes(f.size)}</span>
@@ -287,45 +232,23 @@ export function FirmFilesView({
                           <>
                             <span className="opacity-50">·</span>
                             <span className="flex items-center gap-0.5">
-                              <Tag className="h-2.5 w-2.5" />
+                              <TagIcon className="h-2.5 w-2.5" />
                               {f.tags.join(" / ")}
                             </span>
                           </>
                         )}
                       </span>
                     </div>
-                    {/* 第二行：简介；没填时给个 placeholder，避免视觉空缺 */}
-                    <p
-                      className={cn(
-                        "mt-1.5 line-clamp-2 text-[11.5px] leading-relaxed",
-                        f.description ? "text-muted-foreground" : "text-muted-foreground/50"
-                      )}
-                    >
-                      {f.description || "（未填写简介）"}
-                    </p>
+                    {f.description && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{f.description}</p>}
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    <a
-                      href={`/api/firm-files/${f.id}/download`}
-                      className="rounded-md p-1.5 text-muted-foreground hover:bg-popover hover:text-primary"
-                      title="下载"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                    </a>
+                    <Typography.Text link={{ href: `/api/firm-files/${f.id}/download` }} icon={<Download size={14} />}>
+                      下载
+                    </Typography.Text>
                     {canUpload && (
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(f)}
-                        disabled={pendingId === f.id || isPending}
-                        className="rounded-md p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-popover hover:text-destructive group-hover:opacity-100"
-                        title="删除"
-                      >
-                        {pendingId === f.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-3.5 w-3.5" />
-                        )}
-                      </button>
+                      <Button theme="borderless" type="danger" icon={<Trash2 size={16} />} aria-label={`删除 ${f.name}`} title="删除"
+                        loading={isPending && pendingId === f.id} disabled={isPending && pendingId !== f.id}
+                        onClick={() => { if (!isPending) void handleDelete(f); }} />
                     )}
                   </div>
                 </div>

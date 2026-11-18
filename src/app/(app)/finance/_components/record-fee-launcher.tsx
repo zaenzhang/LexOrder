@@ -1,13 +1,12 @@
 "use client";
 
 /** 财务页「登记收付」：先选案件，再打开案件内同一张收付登记表（沿用 createFeeEntry 校验与权限） */
-import { Button, Input, Modal } from "@douyinfe/semi-ui";
+import { Button, Input, Modal, Notification } from "@douyinfe/semi-ui";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition, useRef} from "react";
 import { Loader2, Search } from "lucide-react";
 import { searchMattersForInvoice, getMatterFinance } from "@/server/finance/actions";
 import { AddFeeEntrySheet } from "@/app/(app)/matters/[id]/_components/finance-forms";
-import { toast } from "sonner";
 import { actionErrorMessage } from "@/lib/action-error";
 
 export function RecordFeeLauncher({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
@@ -41,7 +40,7 @@ export function RecordFeeLauncher({ open, onOpenChange }: { open: boolean; onOpe
       if(fin.ledgerReady){router.push(`/finance/reconciliation?matterId=${id}`);return;}
       setPicked({ id, billings: fin.billings.map((b) => ({ id: b.id, title: b.title })) });
     } catch (err) {
-      toast.error("无法读取该案件财务信息", { description: actionErrorMessage(err) });
+      Notification.error({ title: "无法读取该案件财务信息", content: actionErrorMessage(err), duration: 6 });
     }
   }
 

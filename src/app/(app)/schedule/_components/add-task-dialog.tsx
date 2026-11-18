@@ -1,12 +1,11 @@
 "use client";
 
-import { Button, Checkbox, Input, RadioGroup, Select, TextArea } from "@douyinfe/semi-ui";
+import { Button, Checkbox, Input, RadioGroup, Select, TextArea, Notification, Toast } from "@douyinfe/semi-ui";
 
 import { FormDialogContent as DialogContent, FormDialogBody } from "@/components/patterns/form-dialog";
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { Loader2, Clock } from "lucide-react";
 
 import {
@@ -61,15 +60,15 @@ export function AddTaskDialog({
   function submit() {
     if (isPending) return;
     if (!matterId) {
-      toast.warning("请选择关联案件");
+      Toast.warning("请选择关联案件");
       return;
     }
     if (!title.trim()) {
-      toast.warning("请填写事项标题");
+      Toast.warning("请填写事项标题");
       return;
     }
     if (!date) {
-      toast.warning("缺少日期");
+      Toast.warning("缺少日期");
       return;
     }
 
@@ -92,13 +91,11 @@ export function AddTaskDialog({
           assigneeId: "",
           stageId: ""
         });
-        toast.success("任务已创建");
+        Toast.success("任务已创建");
         onOpenChange(false);
         router.refresh();
       } catch (err) {
-        toast.error("创建失败", {
-          description: actionErrorMessage(err)
-        });
+        Notification.error({ title: "创建失败", content: actionErrorMessage(err), duration: 6 });
       }
     });
   }

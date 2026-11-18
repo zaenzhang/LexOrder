@@ -8,7 +8,14 @@ import type { WorkQueue } from "@/server/dashboard/actions";
 
 const mock = vi.hoisted(() => ({ list: vi.fn(), exact: vi.fn(), save: vi.fn(), reschedule: vi.fn(), history: vi.fn() }));
 vi.mock("@/server/clients/relationship-actions", () => ({ getPersonalFollowUps: mock.list, getPersonalFollowUp: mock.exact, recordClientActivity: mock.save, rescheduleClientFollowUp: mock.reschedule, getPersonalFollowUpRescheduleHistory: mock.history }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { success: vi.fn() }),
+    Notification: Object.assign(semi.Notification, { success: vi.fn() })
+  };
+});
 
 const first: PersonalFollowUp = { id: "cmtestfollowup000000000001", title: "核对原件", client: { id: "cmtestclient00000000000001", name: "合成甲客户" }, dueAt: "2027-01-02T02:00:00.000Z", updatedAt: "2026-11-17T10:00:00.007Z", assigneeName: "合成律师", status: "OPEN", overdue: false, canClose: true };
 const second: PersonalFollowUp = { ...first, id: "cmtestfollowup000000000002", title: "确认授权", client: { id: "cmtestclient00000000000002", name: "合成乙客户" } };

@@ -3,11 +3,10 @@
  * 归档借阅面板（F-6）：我的借阅（查阅/归还）+ 待我审批（批准天数/驳回理由）
  * + 申请借阅（搜索归档号/案号/案名 → 事由）。审批人视图同页就地下钻。
  */
-import { Button, Input, Modal, Radio, TextArea } from "@douyinfe/semi-ui";
+import { Button, Input, Modal, Radio, TextArea, Notification, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { BookOpen, Loader2, Search } from "lucide-react";
-import { toast } from "sonner";
 
 import { confirmDialog, promptDialog } from "@/components/patterns/confirm-dialog";
 import { formatDate } from "@/lib/utils";
@@ -99,9 +98,9 @@ function ReturnButton({ id }: { id: string }) {
       onClick={() => startTransition(async () => {
         try {
           await returnArchiveBorrow(id);
-          toast.success("已标记归还，查阅资格即时不生效");
+          Toast.success("已标记归还，查阅资格即时不生效");
         } catch (err) {
-          toast.error("操作失败", { description: actionErrorMessage(err) });
+          Notification.error({ title: "操作失败", content: actionErrorMessage(err), duration: 6 });
         }
       })} htmlType="button"
     >
@@ -123,7 +122,7 @@ function DecideRow({ row }: { row: BorrowRow }) {
           });
           if (!ok) return;
           await decideArchiveBorrow({ id: row.id, revision: row.revision, decision: "APPROVED", days: 30 });
-          toast.success("已批准借阅");
+          Toast.success("已批准借阅");
         } else {
           const reason = await promptDialog({
             title: `驳回借阅：${row.archiveRecord.matter.title}`,
@@ -137,10 +136,10 @@ function DecideRow({ row }: { row: BorrowRow }) {
           });
           if (!reason?.trim()) return;
           await decideArchiveBorrow({ id: row.id, revision: row.revision, decision: "REJECTED", rejectReason: reason });
-          toast.success("已驳回");
+          Toast.success("已驳回");
         }
       } catch (err) {
-        toast.error("操作失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "操作失败", content: actionErrorMessage(err), duration: 6 });
       }
     });
   }
@@ -169,9 +168,9 @@ function BorrowApplyDialog({ open, onOpenChange }: { open: boolean; onOpenChange
       try {
         const r = await searchArchiveForBorrow(q);
         setResults(r);
-        if (r.length === 0) toast.info("未找到匹配的已归档案卷");
+        if (r.length === 0) Toast.info("未找到匹配的已归档案卷");
       } catch (err) {
-        toast.error("检索失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "检索失败", content: actionErrorMessage(err), duration: 6 });
       }
     });
   }
@@ -181,11 +180,11 @@ function BorrowApplyDialog({ open, onOpenChange }: { open: boolean; onOpenChange
     startTransition(async () => {
       try {
         await createArchiveBorrow({ archiveRecordId: picked, reason, scope: "WHOLE_VOLUME" });
-        toast.success("借阅申请已提交，等待审批");
+        Toast.success("借阅申请已提交，等待审批");
         setQ(""); setResults([]); setPicked(""); setReason("");
         onOpenChange(false);
       } catch (err) {
-        toast.error("提交失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "提交失败", content: actionErrorMessage(err), duration: 6 });
       }
     });
   }

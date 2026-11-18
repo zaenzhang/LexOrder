@@ -1,11 +1,10 @@
 "use client";
-import { Button, Modal } from "@douyinfe/semi-ui";
+import { Button, Modal, Notification } from "@douyinfe/semi-ui";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { approvalHref } from "@/lib/approvals/workspace";
 import { FilePlus2, Receipt, Stamp } from "lucide-react";
-import { toast } from "sonner";
 
 import { getApprovalCreateOptions } from "@/server/approval-permissions/create-options";
 import { IntakeWizard } from "@/app/(app)/intakes/_components/intake-wizard";
@@ -23,7 +22,7 @@ export function ApprovalCreateMenu() {
   const [pending, start] = useTransition();
   const autoOpened = useRef(false);
   const launch = useCallback((value: NonNullable<typeof kind>) => {
-    start(async () => { try { setOptions(await getApprovalCreateOptions()); setMenu(false); setKind(value); } catch (e) { toast.error(e instanceof Error ? actionErrorMessage(e) : "无法加载申请表"); } });
+    start(async () => { try { setOptions(await getApprovalCreateOptions()); setMenu(false); setKind(value); } catch (e) { Notification.error({ title: e instanceof Error ? actionErrorMessage(e) : "无法加载申请表", duration: 6 }); } });
   }, []);
   const isNewSeal = params.get("new") === "seal";
   useEffect(() => { if (isNewSeal && !autoOpened.current) { autoOpened.current = true; launch("seal"); } }, [isNewSeal, launch]);

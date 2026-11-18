@@ -1,11 +1,10 @@
 "use client";
 
-import { Button, Input } from "@douyinfe/semi-ui";
+import { Button, Input, Notification } from "@douyinfe/semi-ui";
 
 import { useState, useTransition, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { toast } from "sonner";
 import { Search, X } from "lucide-react";
 import type { Client, ClientType, Contact } from "@prisma/client";
 import { PageHeader, Pager, Segmented } from "@/components/patterns/moan";
@@ -105,7 +104,7 @@ export function ClientsView({ initialData, initialFilters, canCreate, editableCl
         setEditingClient(fullClient);
         setSheetOpen(true);
       } catch (err) {
-        toast.error("无法打开客户编辑", { description: actionErrorMessage(err) });
+        Notification.error({ title: "无法打开客户编辑", content: actionErrorMessage(err), duration: 6 });
       } finally {
         setLoadingClientId(null);
       }

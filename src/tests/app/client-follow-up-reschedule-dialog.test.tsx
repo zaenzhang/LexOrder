@@ -7,7 +7,14 @@ import type { PersonalFollowUp, PersonalFollowUpHistoryPage } from "@/lib/client
 
 const mock = vi.hoisted(() => ({ exact: vi.fn(), reschedule: vi.fn(), history: vi.fn(), save: vi.fn(), close: vi.fn(), saved: vi.fn() }));
 vi.mock("@/server/clients/relationship-actions", () => ({ getPersonalFollowUp: mock.exact, rescheduleClientFollowUp: mock.reschedule, getPersonalFollowUpRescheduleHistory: mock.history, recordClientActivity: mock.save }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { success: vi.fn() }),
+    Notification: Object.assign(semi.Notification, { success: vi.fn() })
+  };
+});
 const item: PersonalFollowUp = { id: "cmtestfollowup000000000001", client: { id: "cmtestclient00000000000001", name: "合成改期客户" }, title: "合成核对材料", dueAt: "2027-01-02T02:00:47.123Z", updatedAt: "2026-11-18T02:00:00.007Z", assigneeName: "合成本人", status: "OPEN", overdue: false, canClose: true };
 const target = { clientId: item.client.id, followUpId: item.id };
 const empty = { items: [], nextCursor: null };

@@ -7,7 +7,14 @@ import { ConfirmHost } from "@/components/patterns/confirm-dialog";
 const mock = vi.hoisted(() => ({ save: vi.fn(), refresh: vi.fn() }));
 vi.mock("@/server/clients/relationship-actions", () => ({ recordClientActivity: mock.save, getClientCommunicationPage: vi.fn(), getClientFollowUpPage: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mock.refresh }) }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { success: vi.fn() }),
+    Notification: Object.assign(semi.Notification, { success: vi.fn() })
+  };
+});
 const view: ClientRelationshipView = { canWrite: true, activityCount: 0, openCount: 1, activities: [], followUps: [{ id: "cmtestfollowup000000000001", title: "核对材料", dueAt: "2027-01-02T02:00:00Z", assigneeName: "验收律师", overdue: false, canClose: true }] };
 
 function renderPanel(data: ClientRelationshipView | null = view) {

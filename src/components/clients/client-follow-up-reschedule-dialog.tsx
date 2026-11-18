@@ -1,10 +1,9 @@
 "use client";
 
-import { Button, Input, TextArea } from "@douyinfe/semi-ui";
+import { Button, Input, TextArea, Toast } from "@douyinfe/semi-ui";
 
 import { useCallback, useEffect, useRef, useState, useTransition, type FormEvent, type RefObject } from "react";
 import { Check } from "lucide-react";
-import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -118,7 +117,7 @@ export function ClientFollowUpRescheduleDialog({ clientId, followUpId, onClose, 
       try {
         await rescheduleClientFollowUp(input);
         if (!mounted.current || currentIdentity.current !== identity) return;
-        toast.success("跟进已改期，原因已保存"); onSaved();
+        Toast.success("跟进已改期，原因已保存"); onSaved();
       } catch (cause) { if (mounted.current && currentIdentity.current === identity) setError(actionErrorMessage(cause) || "保存失败，请重新核对或重试"); }
       finally { saving.current = false; }
     });

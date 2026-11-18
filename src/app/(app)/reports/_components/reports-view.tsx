@@ -1,10 +1,9 @@
 "use client";
 
-import { Button, Input } from "@douyinfe/semi-ui";
+import { Button, Input, Notification, Toast } from "@douyinfe/semi-ui";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { toast } from "sonner";
 import type { LucideIcon } from "lucide-react";
 import { Wallet, Briefcase, Archive, CheckCircle2, Download, CircleAlert, Send, Loader2, Printer } from "lucide-react";
 import { matterCategoryLabel, matterCategoryColor } from "@/lib/enums";
@@ -64,11 +63,9 @@ export function ReportsView({
     startScanning(async () => {
       try {
         const r = await triggerArchiveOverdueScanNow();
-        toast.success(
-          `归档逾期扫描完成：${r.scanned} 候选 / ${r.notified} 通知 / ${r.suppressed} 抑制`
-        );
+        Toast.success(`归档逾期扫描完成：${r.scanned} 候选 / ${r.notified} 通知 / ${r.suppressed} 抑制`);
       } catch (err) {
-        toast.error("扫描失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "扫描失败", content: actionErrorMessage(err), duration: 6 });
       }
     });
   }
@@ -79,15 +76,12 @@ export function ReportsView({
       try {
         const res = await pushWeeklyReportToAll();
         if (res.failed.length === 0) {
-          toast.success(`已推送本周报告（${res.weekLabel}），共 ${res.succeeded} 人`);
+          Toast.success(`已推送本周报告（${res.weekLabel}），共 ${res.succeeded} 人`);
         } else {
-          toast.warning(
-            `部分成功：${res.succeeded} 成功，${res.failed.length} 失败`,
-            { description: res.failed.map((f) => f.error).slice(0, 3).join("；") }
-          );
+          Notification.warning({ title: `部分成功：${res.succeeded} 成功，${res.failed.length} 失败`, content: res.failed.map((f) => f.error).slice(0, 3).join("；"), duration: 6 });
         }
       } catch (err) {
-        toast.error("推送失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "推送失败", content: actionErrorMessage(err), duration: 6 });
       }
     });
   }

@@ -9,7 +9,14 @@ vi.mock("@/server/tasks/actions", () => ({ createTask: mock.create }));
 vi.mock("@/server/calendar/actions", () => ({ getCalendarToken: mock.token, regenerateCalendarToken: mock.regenerate }));
 vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: mock.confirm }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mock.refresh }) }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: mock.error, warning: mock.warning } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { success: vi.fn(), warning: mock.warning }),
+    Notification: Object.assign(semi.Notification, { success: vi.fn(), error: mock.error, warning: mock.warning })
+  };
+});
 
 const matters = [{ id: "cmtestmatter000000000001", internalCode: "SYN-01", title: "合成案件一" }, { id: "cmtestmatter000000000002", internalCode: "SYN-02", title: "合成案件二" }];
 function task() { return <AddTaskDialog open onOpenChange={mock.close} date={civilFromKey("2026-11-18")} matters={matters} />; }
@@ -59,7 +66,7 @@ describe("Semi 日程入口（真实控件，Server Action 替身）", () => {
     expect(mock.close).not.toHaveBeenCalled();
     await act(async () => { reject(new Error("合成网络中断")); });
     await waitFor(() => expect(screen.getByRole("button", { name: "创建任务" })).toBeEnabled());
-    expect(mock.error).toHaveBeenCalledWith("创建失败", { description: "合成网络中断" });
+    expect(mock.error).toHaveBeenCalledWith(expect.objectContaining({ title: "创建失败", content: "合成网络中断" }));
     expect(screen.getByLabelText(/事项标题/)).toHaveValue("合成起草任务");
     expect(screen.getByLabelText("描述（可选）")).toHaveValue("合成留存说明");
     expect(screen.getByRole("combobox", { name: /关联案件/ })).toHaveTextContent("合成案件二");
@@ -91,7 +98,7 @@ describe("Semi 日程入口（真实控件，Server Action 替身）", () => {
     trigger.focus();
     fireEvent.click(trigger);
     await screen.findByRole("alert");
-    expect(mock.error).toHaveBeenCalledWith("获取订阅链接失败");
+    expect(mock.error).toHaveBeenCalledWith(expect.objectContaining({ title: "获取订阅链接失败" }));
     fireEvent.click(screen.getByRole("button", { name: "重试" }));
     expect(await screen.findByText(/\/api\/calendar\/synthetic-calendar-token/)).toBeVisible();
     expect(mock.token).toHaveBeenCalledTimes(2);
@@ -111,7 +118,7 @@ describe("Semi 日程入口（真实控件，Server Action 替身）", () => {
     await waitFor(() => expect(mock.confirm).toHaveBeenCalledOnce());
     expect(mock.regenerate).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "重置链接" }));
-    await waitFor(() => expect(mock.error).toHaveBeenCalledWith("重置失败", { description: "合成重置失败" }));
+    await waitFor(() => expect(mock.error).toHaveBeenCalledWith(expect.objectContaining({ title: "重置失败", content: "合成重置失败" })));
     expect(within(screen.getByRole("dialog")).getByText(/\/api\/calendar\/synthetic-original-token/)).toBeVisible();
   });
 });

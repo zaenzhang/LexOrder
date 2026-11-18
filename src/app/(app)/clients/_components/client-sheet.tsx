@@ -1,13 +1,12 @@
 "use client";
 
-import { Button, Checkbox, Input, Select, Tag, TextArea } from "@douyinfe/semi-ui";
+import { Button, Checkbox, Input, Select, Tag, TextArea, Notification, Toast } from "@douyinfe/semi-ui";
 
 import type { z } from "zod";
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { Controller, useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
 import { Plus, X, Loader2, Trash2, Star, Sparkles, Search } from "lucide-react";
 import type { Client, Contact } from "@prisma/client";
 
@@ -160,16 +159,14 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
       try {
         if (isEdit && editingClient) {
           await updateClient({ id: editingClient.id, ...values });
-          toast.success("客户已更新");
+          Toast.success("客户已更新");
         } else {
           await createClient(values);
-          toast.success("客户已创建");
+          Toast.success("客户已创建");
         }
         onOpenChange(false);
       } catch (err) {
-        toast.error("保存失败", {
-          description: err instanceof Error ? actionErrorMessage(err) : "请稍后重试"
-        });
+        Notification.error({ title: "保存失败", content: err instanceof Error ? actionErrorMessage(err) : "请稍后重试", duration: 6 });
       }
     });
   }
@@ -194,27 +191,23 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
   function handleAILookup() {
     const name = (getValues("name") || "").trim();
     if (!name) {
-      toast.warning("请先填写客户名称再点击 AI 查找");
+      Toast.warning("请先填写客户名称再点击 AI 查找");
       return;
     }
     startAiSearch(async () => {
       try {
         const r = await searchEnterpriseCandidates(name);
         if (!r.configured) {
-          toast.error("元典 API 未配置", {
-            description: "请在 管理后台 → AI 与外部服务 中配置 API Key"
-          });
+          Notification.error({ title: "元典 API 未配置", content: "请在 管理后台 → AI 与外部服务 中配置 API Key", duration: 6 });
           return;
         }
         if (r.items.length === 0) {
-          toast.info("未找到候选企业", { description: "试试更完整的名称或简称" });
+          Notification.info({ title: "未找到候选企业", content: "试试更完整的名称或简称", duration: 6 });
           return;
         }
         setCandidates(r.items);
       } catch (err) {
-        toast.error("查找失败", {
-          description: actionErrorMessage(err)
-        });
+        Notification.error({ title: "查找失败", content: actionErrorMessage(err), duration: 6 });
       }
     });
   }
@@ -229,12 +222,10 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
         if (r.configured && r.info) {
           if (r.info.legalRep) setValue("legalRep", r.info.legalRep, { shouldDirty: true });
           if (r.info.address) setValue("address", r.info.address, { shouldDirty: true });
-          toast.success(`已回填：${item.name}`);
+          Toast.success(`已回填：${item.name}`);
         }
       } catch (err) {
-        toast.warning("法代 / 地址自动填充失败，可手动补充", {
-          description: actionErrorMessage(err)
-        });
+        Notification.warning({ title: "法代 / 地址自动填充失败，可手动补充", content: actionErrorMessage(err), duration: 6 });
       }
     });
   }

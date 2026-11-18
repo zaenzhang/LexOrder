@@ -1,12 +1,11 @@
 "use client";
 
-import { Select, Button, Checkbox, Input, RadioGroup, TextArea } from "@douyinfe/semi-ui";
+import { Select, Button, Checkbox, Input, RadioGroup, TextArea, Notification, Toast } from "@douyinfe/semi-ui";
 import { FormDialogContent as DialogContent, FormDialogBody, FormSection } from "@/components/patterns/form-dialog";
 
 import { useRef, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FileText, Loader2, Paperclip, Link2 } from "lucide-react";
-import { toast } from "sonner";
 import {
   Dialog,
   DialogFooter,
@@ -50,7 +49,7 @@ export function SealRequestSheet({
 }) {
   const [purposeConfigId, setPurposeConfigId] = useState("");
   const [purposes, setPurposes] = useState<Awaited<ReturnType<typeof listActiveSealPurposes>>>([]);
-  useEffect(() => { if (open) listActiveSealPurposes().then(setPurposes).catch(() => toast.error("无法读取用章事项，请重新打开申请")); }, [open]);
+  useEffect(() => { if (open) listActiveSealPurposes().then(setPurposes).catch(() => Notification.error({ title: "无法读取用章事项，请重新打开申请", duration: 6 })); }, [open]);
   const popupContainer = useRef<HTMLDivElement>(null);
   const openDropdown = useRef(false);
   const [sealType, setSealType] = useState<string>("");
@@ -94,32 +93,32 @@ export function SealRequestSheet({
 
   const submit = () => {
     if (!sealType) {
-      toast.error("请选择章种类");
+      Notification.error({ title: "请选择章种类", duration: 6 });
       return;
     }
     // 事项决定审批路由与可用印章，服务端无条件必填；提前拦截避免填完全表才在提交时报错
     if (!purposeConfigId) {
-      toast.error(purposes.length ? "请选择用章事项" : "管理员尚未配置用章事项，请联系管理员在管理后台配置后再提交");
+      Notification.error({ title: purposes.length ? "请选择用章事项" : "管理员尚未配置用章事项，请联系管理员在管理后台配置后再提交", duration: 6 });
       return;
     }
     if (!purpose.trim()) {
-      toast.error("请填写本次用印说明");
+      Notification.error({ title: "请填写本次用印说明", duration: 6 });
       return;
     }
     if (purpose.length > 60) {
-      toast.error("本次用印说明限 60 字");
+      Notification.error({ title: "本次用印说明限 60 字", duration: 6 });
       return;
     }
     if (!documentTitle.trim()) {
-      toast.error("请填写文件标题");
+      Notification.error({ title: "请填写文件标题", duration: 6 });
       return;
     }
     if (!hasExisting && !file) {
-      toast.error("请上传待盖章稿");
+      Notification.error({ title: "请上传待盖章稿", duration: 6 });
       return;
     }
     if (!hasExisting && file && !isPdfFile(file)) {
-      toast.error("需上传 pdf 格式文件");
+      Notification.error({ title: "需上传 pdf 格式文件", duration: 6 });
       return;
     }
 
@@ -146,12 +145,12 @@ export function SealRequestSheet({
     startTransition(async () => {
       try {
         const res = await createSealRequest(fd);
-        toast.success(`已提交 ${res.code}${alsoLegalRep && sealType !== "LEGAL_REP_SEAL" ? "（含法人章配套申请）" : ""}`);
+        Toast.success(`已提交 ${res.code}${alsoLegalRep && sealType !== "LEGAL_REP_SEAL" ? "（含法人章配套申请）" : ""}`);
         reset();
         onOpenChange(false);
         if (onSubmitted) onSubmitted(res.id); else router.refresh();
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "提交失败");
+        Notification.error({ title: e instanceof Error ? actionErrorMessage(e) : "提交失败", duration: 6 });
       }
     });
   };
@@ -344,7 +343,7 @@ export function SealRequestSheet({
                     onChange={(e) => {
                       const picked = e.target.files?.[0] ?? null;
                       if (picked && !isPdfFile(picked)) {
-                        toast.error("需上传 pdf 格式文件");
+                        Notification.error({ title: "需上传 pdf 格式文件", duration: 6 });
                         e.target.value = "";
                         setFile(null);
                         return;

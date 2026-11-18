@@ -1,11 +1,10 @@
 "use client";
-import { Button, Input, TextArea, Select } from "@douyinfe/semi-ui";
+import { Button, Input, TextArea, Select, Notification, Toast } from "@douyinfe/semi-ui";
 
 import { FormDialogContent as DialogContent, FormDialogBody } from "@/components/patterns/form-dialog";
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import type { ExternalContactCategory } from "@prisma/client";
 
@@ -109,7 +108,7 @@ export function ExternalContactDialog({
   function handleSave() {
     if (isPending) return;
     if (!form.name.trim()) {
-      toast.error("姓名必填");
+      Notification.error({ title: "姓名必填", duration: 6 });
       return;
     }
     startTransition(async () => {
@@ -117,21 +116,17 @@ export function ExternalContactDialog({
         const payload = { ...form, tags: editing?.tags ?? [] };
         if (editing) {
           await updateExternalContact({ ...payload, id: editing.id });
-          toast.success("已更新");
+          Toast.success("已更新");
         } else {
           const created = await createExternalContact(payload);
-          toast.success(
-            created.status === "PENDING_REVIEW"
+          Toast.success(created.status === "PENDING_REVIEW"
               ? runtimeMode === "PERSONAL" ? "已保存，待本人确认" : "已提交审核，管理员通过后展示"
-              : "已添加"
-          );
+              : "已添加");
         }
         onOpenChange(false);
         router.refresh();
       } catch (err) {
-        toast.error("保存失败", {
-          description: actionErrorMessage(err)
-        });
+        Notification.error({ title: "保存失败", content: actionErrorMessage(err), duration: 6 });
       }
     });
   }

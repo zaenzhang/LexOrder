@@ -8,7 +8,14 @@ const mock = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn(), confirm: vi.f
 vi.mock("@/server/preservations/actions-v2", () => ({
   createPreservationCase: mock.create, updatePreservationCase: mock.update, deletePreservationCase: vi.fn(), addProperty: vi.fn(), addTarget: vi.fn(), renewProperty: vi.fn(),
 }));
-vi.mock("sonner", () => ({ toast: { error: mock.error, success: vi.fn() } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { success: vi.fn() }),
+    Notification: Object.assign(semi.Notification, { error: mock.error, success: vi.fn() })
+  };
+});
 vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: mock.confirm }));
 vi.mock("@/components/layout/topbar-action", () => ({ useTopbarAction: vi.fn() }));
 

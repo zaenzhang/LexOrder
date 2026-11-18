@@ -1,12 +1,11 @@
 "use client";
-import { Tabs, Select, Button, Input, RadioGroup } from "@douyinfe/semi-ui";
+import { Tabs, Select, Button, Input, RadioGroup, Notification, Toast } from "@douyinfe/semi-ui";
 import {InvoiceAdjustments} from "./invoice-adjustments";
 import { ContractWorkspace } from "./contract-workspace";
 import { CorrectionWorkspace } from "./correction-workspace";
 import { RegistrationWorkspace } from "./registration-workspace";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 import { MetricCard } from "@/components/patterns/moan";
@@ -62,8 +61,8 @@ export function LedgerWorkspace({ data, canWrite, canConfirm, canCorrect, canSet
     try {
       const result = await allocateLedger({ paymentId: payment.id, revision: payment.revision, kind, items: targets.filter(t => amounts[t.id]?.trim()).map(t => ({targetId:t.id,amount:amounts[t.id]})) });
       if(!result.ok)throw new Error(result.message);
-      toast.success(kind === "RECEIVABLE" ? "已分配收款" : "已关联票款"); setPayment(null); router.refresh();
-    } catch(e) { toast.error(e instanceof Error ? actionErrorMessage(e) : "分配失败"); } finally { setBusy(false); }
+      Toast.success(kind === "RECEIVABLE" ? "已分配收款" : "已关联票款"); setPayment(null); router.refresh();
+    } catch(e) { Notification.error({ title: e instanceof Error ? actionErrorMessage(e) : "分配失败", duration: 6 }); } finally { setBusy(false); }
   }
   if (!data.ready) return <p className="rounded-xl border bg-card p-5 text-sm">应收与收款分配尚未启用，请待财务流程更新完成后使用。</p>;
 
@@ -156,7 +155,7 @@ export function LedgerWorkspace({ data, canWrite, canConfirm, canCorrect, canSet
             if (take > 0) { next[t.id] = take.toFixed(2); left = Math.round((left - take) * 100) / 100; }
           }
           setAmounts(next);
-          toast.info(left > 0 ? `已按到期顺序填满，剩余 ¥${left.toFixed(2)} 未分配（无更多未结清应收）` : "已按最早到期顺序填满本次收款");
+          Toast.info(left > 0 ? `已按到期顺序填满，剩余 ¥${left.toFixed(2)} 未分配（无更多未结清应收）` : "已按最早到期顺序填满本次收款");
         }} size="small" theme="outline" type="tertiary">按最早到期自动填满</Button>
         {targets.map(t => <div key={t.id}><label htmlFor={`amount-${t.id}`}>{t.title} · 剩余 {yuan(t.remaining)}</label><Input disabled={busy} id={`amount-${t.id}`} inputMode="decimal" placeholder="本次分配金额；不分配可留空" value={amounts[t.id] ?? ""} onChange={e => setAmounts({...amounts,[t.id]:e})} /></div>)}
       </> : <p className="text-sm text-muted-foreground">暂无同案同类款项的未结清应收或发票。</p>}

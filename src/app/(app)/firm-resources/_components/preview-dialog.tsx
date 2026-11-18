@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { Typography } from "@douyinfe/semi-ui";
 
 type PreviewableFile = {
   id: string;
@@ -56,25 +56,19 @@ export function PreviewDialog({
             <FileText className="h-4 w-4 text-primary" />
             <span className="truncate">{file.name}</span>
           </DialogTitle>
-          <DialogDescription className="flex items-center justify-between text-[11px]">
-            <span className="font-mono text-muted-foreground">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <DialogDescription>
               {file.mimeType ?? "未知类型"} · {(file.size / 1024).toFixed(1)} KB
-            </span>
-            <span className="flex items-center gap-1.5">
-              <a href={previewUrl} target="_blank" rel="noreferrer">
-                <Button type="button" variant="ghost" size="sm" className="h-7 gap-1">
-                  <ExternalLink className="h-3 w-3" />
+            </DialogDescription>
+            <div className="flex items-center gap-3">
+              {canInlinePreview && (
+                <Typography.Text link={{ href: previewUrl, target: "_blank", rel: "noreferrer" }} icon={<ExternalLink size={14} />}>
                   新窗口打开
-                </Button>
-              </a>
-              <a href={downloadUrl}>
-                <Button type="button" variant="outline" size="sm" className="h-7 gap-1">
-                  <Download className="h-3 w-3" />
-                  下载
-                </Button>
-              </a>
-            </span>
-          </DialogDescription>
+                </Typography.Text>
+              )}
+              <Typography.Text link={{ href: downloadUrl }} icon={<Download size={14} />}>下载文件</Typography.Text>
+            </div>
+          </div>
         </DialogHeader>
 
         <div className="flex-1 overflow-hidden bg-muted/40">
@@ -104,15 +98,7 @@ export function PreviewDialog({
                   ({file.mimeType ?? "未知类型"})
                 </span>
               </p>
-              <p className="text-[11px]">
-                Office 文档（docx / xlsx / pptx）需先下载后用本地应用打开
-              </p>
-              <a href={downloadUrl}>
-                <Button type="button" variant="outline" size="sm" className="gap-1.5">
-                  <Download className="h-3.5 w-3.5" />
-                  下载文件
-                </Button>
-              </a>
+              <p>下载文件后用本地应用打开。</p>
             </div>
           )}
         </div>
