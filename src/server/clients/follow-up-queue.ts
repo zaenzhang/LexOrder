@@ -8,7 +8,7 @@ import { personalFollowUpQuerySchema, personalFollowUpTargetSchema, type Persona
 import { clientRelationshipFilter, canCloseClientFollowUp, type RelationshipUser } from "./relationship-access";
 
 const PAGE_SIZE = 20;
-const rowSelect = { id: true, title: true, dueAt: true, status: true, clientId: true, assigneeId: true,
+const rowSelect = { id: true, title: true, dueAt: true, updatedAt: true, status: true, clientId: true, assigneeId: true,
   client: { select: { id: true, name: true } }, assignee: { select: { name: true } } } satisfies Prisma.ClientFollowUpSelect;
 type Row = Prisma.ClientFollowUpGetPayload<{ select: typeof rowSelect }>;
 
@@ -27,7 +27,7 @@ async function writableClientIds(db: Prisma.TransactionClient, user: Relationshi
   return new Set(rows.map(row => row.id));
 }
 function present(row: Row, user: RelationshipUser, writable: Set<string>, now: Date) {
-  return { id: row.id, title: row.title, dueAt: row.dueAt.toISOString(), status: row.status, client: row.client,
+  return { id: row.id, title: row.title, dueAt: row.dueAt.toISOString(), updatedAt: row.updatedAt.toISOString(), status: row.status, client: row.client,
     assigneeName: row.assignee.name, overdue: row.dueAt < now,
     canClose: row.status === "OPEN" && writable.has(row.clientId) && canCloseClientFollowUp(user, row.assigneeId) };
 }

@@ -2,8 +2,50 @@ import { createHash } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import { ActionError } from "@/lib/action-error";
 import { clientActivitySchema, type ClientActivityInput } from "@/lib/clients/relationship";
+import { clientFollowUpRescheduleAuditSchema, clientFollowUpRescheduleSchema, type ClientFollowUpRescheduleInput } from "@/lib/clients/follow-ups";
 import { auditTx } from "@/server/audit";
 import { canCloseClientFollowUp, liveRelationshipWriter, lockClientRelationship, type RelationshipUser } from "./relationship-access";
+
+/** Only the assignee can reschedule the same open follow-up. The existing customer lock also serializes completion and merge. */
+export async function rescheduleClientFollowUpRecord(db: PrismaClient, user: RelationshipUser, input: ClientFollowUpRescheduleInput) {
+  const data = clientFollowUpRescheduleSchema.parse(input);
+  return db.$transaction(async tx => {
+    const liveUser = await liveRelationshipWriter(tx, user);
+    await lockClientRelationship(tx, liveUser, data.clientId);
+    const row = await tx.clientFollowUp.findUnique({ where: { id: data.followUpId } });
+    if (!row || row.clientId !== data.clientId || row.assigneeId !== liveUser.id) throw new ActionError("跟进不存在、所属客户已变化或不是本人负责，请重新读取并核对");
+    const previous = await tx.auditLog.findFirst({ where: {
+      userId: liveUser.id, action: "CLIENT_FOLLOWUP_RESCHEDULE", targetType: "ClientFollowUp", targetId: row.id,
+      detail: { path: ["requestKey"], equals: data.requestKey },
+    }, select: { detail: true } });
+    if (previous) {
+      const parsed = clientFollowUpRescheduleAuditSchema.safeParse(previous.detail);
+      if (!parsed.success) throw new ActionError("改期记录无法核对，请重新读取并核对");
+      const receipt = parsed.data;
+      if (receipt.clientId !== data.clientId || receipt.followUpId !== data.followUpId || receipt.expectedUpdatedAt !== data.expectedUpdatedAt
+        || receipt.dueAt !== data.dueAt || receipt.reason !== data.reason || receipt.requestKey !== data.requestKey) {
+        throw new ActionError("此改期请求已保存但内容不同，请重新读取并核对后再保存");
+      }
+      if (row.status !== "OPEN" || row.dueAt.toISOString() !== receipt.afterDueAt || row.updatedAt.toISOString() !== receipt.afterUpdatedAt) {
+        throw new ActionError("此改期曾保存，但跟进随后已变化或结束，请重新读取并核对");
+      }
+      return { ok: true as const, id: row.id, dueAt: receipt.afterDueAt, updatedAt: receipt.afterUpdatedAt, replayed: true };
+    }
+    if (row.status !== "OPEN") throw new ActionError("该跟进已结束，不能改期，请重新读取并核对");
+    if (row.updatedAt.toISOString() !== data.expectedUpdatedAt) throw new ActionError("该跟进已变化，请重新读取并核对后再保存");
+    if (row.dueAt.toISOString() === data.dueAt) throw new ActionError("跟进时间没有变化，无需改期");
+    const updatedAt = new Date(Math.max(Date.now(), row.updatedAt.getTime() + 1));
+    const changed = await tx.clientFollowUp.updateMany({
+      where: { id: row.id, clientId: data.clientId, assigneeId: liveUser.id, status: "OPEN", updatedAt: row.updatedAt },
+      data: { dueAt: new Date(data.dueAt), updatedAt },
+    });
+    if (changed.count !== 1) throw new ActionError("该跟进已变化，请重新读取并核对后再保存");
+    await auditTx(tx, { userId: liveUser.id, action: "CLIENT_FOLLOWUP_RESCHEDULE", targetType: "ClientFollowUp", targetId: row.id,
+      detail: { ...data, beforeDueAt: row.dueAt.toISOString(), afterDueAt: data.dueAt,
+        beforeUpdatedAt: row.updatedAt.toISOString(), afterUpdatedAt: updatedAt.toISOString() } });
+    return { ok: true as const, id: row.id, dueAt: data.dueAt, updatedAt: updatedAt.toISOString(), replayed: false };
+  }, { timeout: 20_000 });
+}
 
 /** 真实事务边界；请求去重、任务状态、结果、下一项及审计一起提交。 */
 export async function saveClientActivity(db: PrismaClient, user: RelationshipUser, input: ClientActivityInput) {

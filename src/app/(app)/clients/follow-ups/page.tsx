@@ -8,5 +8,5 @@ export default async function ClientFollowUpsPage({ searchParams }: { searchPara
   const { user } = await requireSession("clients.read");
   const location = personalFollowUpLocation(await searchParams);
   const data = await readPersonalFollowUps(prisma, user.id, location.query ?? {});
-  return <PersonalFollowUpQueue initialData={data} initialTarget={location.error ? null : location.target} locationError={location.error} />;
+  return <PersonalFollowUpQueue initialData={data} initialTarget={location.error ? null : location.target} initialMode={location.mode} locationError={location.error} />;
 }

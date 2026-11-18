@@ -5,9 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/session";
 import type { ClientActivityInput, ClientRelationshipView } from "@/lib/clients/relationship";
 import type { ClientPageInput } from "@/lib/clients/history";
-import { saveClientActivity } from "./relationship-service";
-import { readClientRelationship, readClientCommunicationPage, readClientFollowUpPage } from "./history-service";
-import type { PersonalFollowUpQuery, PersonalFollowUpTarget } from "@/lib/clients/follow-ups";
+import { rescheduleClientFollowUpRecord, saveClientActivity } from "./relationship-service";
+import { readClientRelationship, readClientCommunicationPage, readClientFollowUpPage, readPersonalFollowUpRescheduleHistory } from "./history-service";
+import type { ClientFollowUpRescheduleInput, PersonalFollowUpHistoryQuery, PersonalFollowUpQuery, PersonalFollowUpTarget } from "@/lib/clients/follow-ups";
 import { readPersonalFollowUp, readPersonalFollowUps } from "./follow-up-queue";
 
 export async function getPersonalFollowUps(input: PersonalFollowUpQuery) {
@@ -18,6 +18,21 @@ export async function getPersonalFollowUps(input: PersonalFollowUpQuery) {
 export async function getPersonalFollowUp(input: PersonalFollowUpTarget) {
   const { user } = await requireSession("clients.read");
   return readPersonalFollowUp(prisma, user.id, input);
+}
+
+export async function getPersonalFollowUpRescheduleHistory(input: PersonalFollowUpHistoryQuery) {
+  const { user } = await requireSession("clients.read");
+  return readPersonalFollowUpRescheduleHistory(prisma, user, input);
+}
+
+export async function rescheduleClientFollowUp(input: ClientFollowUpRescheduleInput) {
+  const { user } = await requireSession("clients.write");
+  const result = await rescheduleClientFollowUpRecord(prisma, user, input);
+  revalidatePath(`/clients/${input.clientId}`);
+  revalidatePath("/clients");
+  revalidatePath("/");
+  revalidatePath("/clients/follow-ups");
+  return result;
 }
 
 export async function getClientRelationship(clientId: string): Promise<ClientRelationshipView | null> {

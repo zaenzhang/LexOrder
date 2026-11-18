@@ -58,11 +58,24 @@ describe("本人跟进定位与客户档案返回", () => {
   it("精确 ID 必须成对有效，坏位置不能回退成另一条目标", () => {
     const target = { followUpId: "cmtestfollowup000000000001", clientId: "cmtestclient00000000000001" };
     const url = new URL(personalFollowUpHref({ filter: "today", page: 2 }, target), "https://example.test");
-    expect(personalFollowUpLocation(Object.fromEntries(url.searchParams))).toEqual({ query: { filter: "today", page: 2 }, target, error: "" });
+    expect(personalFollowUpLocation(Object.fromEntries(url.searchParams))).toEqual({ query: { filter: "today", page: 2 }, target, mode: "result", error: "" });
     for (const invalid of [{ followUp: target.followUpId }, { followUp: [target.followUpId, target.followUpId], client: target.clientId }, { followUp: "wrong", client: target.clientId }]) {
       expect(personalFollowUpLocation(invalid)).toMatchObject({ target: null, error: "跟进位置无效，请从列表重新打开" });
     }
     expect(personalFollowUpLocation({ page: "1e2" }).query).toBeNull();
+  });
+  it("改期只有完整客户和跟进身份可携带模式，重复、未知及缺目标模式整体验证失败", () => {
+    const target = { followUpId: "cmtestfollowup000000000001", clientId: "cmtestclient00000000000001" };
+    const url = new URL(personalFollowUpHref({ filter: "overdue", page: 3 }, target, "reschedule"), "https://example.test");
+    expect(personalFollowUpLocation(Object.fromEntries(url.searchParams))).toEqual({ query: { filter: "overdue", page: 3 }, target, mode: "reschedule", error: "" });
+    for (const mode of ["result", "cancel", "unknown", "", ["reschedule", "reschedule"]]) {
+      expect(personalFollowUpLocation({ followUp: target.followUpId, client: target.clientId, mode })).toMatchObject({ target: null, error: "跟进位置无效，请从列表重新打开" });
+    }
+    expect(personalFollowUpLocation({ mode: "reschedule" }).error).toBeTruthy();
+    expect(personalFollowUpLocation({ followUp: target.followUpId, mode: "reschedule" }).target).toBeNull();
+    expect(clientListReturnHref(url.pathname + url.search)).toBe("/clients");
+    expect(clientListReturnHref("/clients/follow-ups?filter=today&mode=reschedule")).toBe("/clients");
+    expect(personalFollowUpHref({ filter: "overdue", page: 3 }, undefined, "reschedule")).toBe("/clients/follow-ups?filter=overdue&page=3");
   });
 });
 

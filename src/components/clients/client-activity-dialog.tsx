@@ -15,6 +15,7 @@ import { shDayKey, shTime } from "@/lib/ui/sh-time";
 import { clientChannelLabels, fromShanghaiInput, toShanghaiInput, type ClientActivityInput } from "@/lib/clients/relationship";
 import type { PersonalFollowUp } from "@/lib/clients/follow-ups";
 import { getPersonalFollowUp, recordClientActivity } from "@/server/clients/relationship-actions";
+import { PersonalFollowUpRescheduleHistory } from "./client-follow-up-reschedule-dialog";
 
 export type ClientActivityMode = { id?: string; title?: string; status: "COMPLETED" | "CANCELLED" };
 type Props = {
@@ -36,7 +37,7 @@ export function ClientActivityDialog({ clientId, mode, verifyPersonalTarget = fa
   const [read, setRead] = useState<{ identity: string; value?: PersonalFollowUp; error?: string } | null>(null);
   const [attempt, setAttempt] = useState(0);
   const editorContent = useRef<HTMLDivElement>(null), closePending = useRef(false), saving = useRef(false), mounted = useRef(true);
-  const identity = `${clientId}:${mode.id ?? ""}`;
+  const identity = `${clientId}:${mode.id ?? ""}:result`;
   const current = read?.identity === identity ? read : null;
   const mayEdit = !verifyPersonalTarget || Boolean(current?.value?.canClose);
   const dirty = Boolean(content || scheduleNext || nextTitle || nextDueAt || occurredAt !== initialOccurredAt || channel !== (mode.status === "CANCELLED" ? "OTHER" : "PHONE"));
@@ -114,6 +115,7 @@ export function ClientActivityDialog({ clientId, mode, verifyPersonalTarget = fa
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         <DialogFooter><Button type="button" variant="outline" disabled={pending} onClick={() => void requestClose()}>返回</Button><Button type="submit" disabled={pending}>{pending ? <Loader2 className="animate-spin" /> : <Check />}保存{mode.status === "CANCELLED" ? "取消原因" : mode.id ? "结果" : "沟通"}</Button></DialogFooter>
       </form> : <DialogFooter><Button variant="outline" onClick={() => void requestClose()}>返回列表</Button></DialogFooter>}
+      {verifyPersonalTarget && mode.id && current?.value && <PersonalFollowUpRescheduleHistory key={`${identity}:${attempt}:${current.value.updatedAt}`} target={{ clientId, followUpId: mode.id }} />}
     </DialogContent>
   </Dialog>;
 }

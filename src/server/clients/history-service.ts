@@ -5,10 +5,11 @@ import { hasCustomPermission, type RoleUser } from "@/lib/roles/catalog";
 import { resolveRoleUser } from "@/lib/roles/service";
 import { clientPageInputSchema, clientHistoryInputSchema, CLIENT_HISTORY_PAGE_SIZE, CLIENT_MATTER_PAGE_SIZE, type ClientPageInput, type ClientMatterPage, type ClientHistoryFilters, type ClientHistoryInput, type ClientHistoryItem, type ClientHistoryPage, type ClientHistoryMatter, type ClientHistoryMatterPage, type HistorySource } from "@/lib/clients/history";
 import { clientChannelLabels, type ClientRelationshipView, type ClientCommunicationPage, type ClientFollowUpPage } from "@/lib/clients/relationship";
+import { clientFollowUpRescheduleAuditSchema, personalFollowUpHistoryQuerySchema, type PersonalFollowUpHistoryPage, type PersonalFollowUpHistoryQuery } from "@/lib/clients/follow-ups";
 import { contextKindLabels } from "@/lib/matters/context";
 import { intakeStatusLabel, procedureTypeLabel } from "@/lib/enums";
 import { matterHref } from "@/lib/matters/route";
-import { shDayBoundary, shDayKey, shParts } from "@/lib/ui/sh-time";
+import { shDayBoundary, shDayKey, shParts, shTime } from "@/lib/ui/sh-time";
 import { readFinanceFacts } from "@/server/finance/facts";
 import { contextAccess, readContextRecordsForHistory } from "@/server/matters/context-service";
 import { assertDeliveryAuthority, assertDeliveryDocuments, deliveryDocumentSelect } from "@/server/deliveries/service";
@@ -154,6 +155,34 @@ export async function readClientFollowUpPage(db: PrismaClient, actor: ClientHist
   }, { timeout: 20_000 });
 }
 
+/** Audit cursors identify a page only; every page rechecks the current customer and personal follow-up relation. */
+export async function readPersonalFollowUpRescheduleHistory(db: PrismaClient, actor: ClientHistoryActor, input: PersonalFollowUpHistoryQuery): Promise<PersonalFollowUpHistoryPage> {
+  const data = personalFollowUpHistoryQuerySchema.parse(input);
+  return db.$transaction(async tx => {
+    const access = await clientHistoryAccess(tx, actor, data.clientId);
+    const rights = await relationshipRights(tx, access);
+    const followUp = await tx.clientFollowUp.findUnique({ where: { id: data.followUpId }, select: { clientId: true, assigneeId: true } });
+    if (!rights.canRead || !followUp || followUp.assigneeId !== access.user.id || followUp.clientId !== data.clientId) {
+      throw new ActionError("跟进不存在、所属客户已变化或当前无权读取，请刷新列表");
+    }
+    // A merge preserves followUpId. Old detail.clientId is historical data, never the access predicate.
+    const where = { action: "CLIENT_FOLLOWUP_RESCHEDULE", targetType: "ClientFollowUp", targetId: data.followUpId };
+    const anchor = data.cursor ? await tx.auditLog.findFirst({ where: { ...where, id: data.cursor }, select: { id: true, createdAt: true } }) : null;
+    if (data.cursor && !anchor) throw new ActionError("改期记录位置无效，请重新展开记录");
+    const rows = await tx.auditLog.findMany({ where: { ...where, ...(anchor ? { OR: [
+      { createdAt: { lt: anchor.createdAt } }, { createdAt: anchor.createdAt, id: { lt: anchor.id } },
+    ] } : {}) }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 21,
+    select: { id: true, detail: true, createdAt: true, user: { select: { name: true } } } });
+    const items = rows.slice(0, 20).map(row => {
+      const receipt = clientFollowUpRescheduleAuditSchema.safeParse(row.detail);
+      if (!receipt.success || receipt.data.followUpId !== data.followUpId) throw new ActionError("改期记录内容无法核对，请联系负责人核实");
+      return { id: row.id, beforeDueAt: receipt.data.beforeDueAt, afterDueAt: receipt.data.afterDueAt,
+        reason: receipt.data.reason, actorName: row.user?.name ?? null, at: row.createdAt.toISOString() };
+    });
+    return { items, nextCursor: rows.length > 20 ? items.at(-1)!.id : null };
+  }, { isolationLevel: "RepeatableRead", timeout: 20_000 });
+}
+
 type Candidate = HistoryPosition & { item?: ClientHistoryItem; matterId?: string; matterTitle?: string; href?: string; deliveryId?: string };
 const SCAN_CHUNK = 40, SCAN_BUDGET = 200;
 const matterSelect = { id: true, internalCode: true, title: true } as const;
@@ -203,7 +232,7 @@ async function candidates(tx: Prisma.TransactionClient, access: Access, canRelat
     includes("FOLLOW_UP") && canRelationships && !filters.matterId ? tx.clientFollowUp.findMany({ where: { clientId: client.id, ...boundary("createdAt", "FOLLOW_UP") },
       take, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { id: true, title: true, dueAt: true, status: true, createdAt: true, createdBy: { select: { name: true } } } })
       .then(rows => rows.map(row => event("FOLLOW_UP", row.id, row.createdAt, row.createdAt, `安排跟进：${row.title}`,
-        `${row.createdBy.name} · 约定 ${shDayKey(row.dueAt)} · ${{ OPEN: "待跟进", COMPLETED: "已完成", CANCELLED: "已取消" }[row.status]}`, null,
+        `${row.createdBy.name} · 当前安排 ${shDayKey(row.dueAt)} ${shTime(row.dueAt)} · ${{ OPEN: "待跟进", COMPLETED: "已完成", CANCELLED: "已取消" }[row.status]}`, null,
         `${clientHref}#client-relationship-title`, "沟通与跟进"))) : [],
     includes("INTAKE") && canMatters ? tx.intake.findMany({ where: { clientId: client.id, ...(filters.matterId ? { matter: { id: filters.matterId } } : {}),
       AND: [intakeReadVisibilityFilter(user.id, user.role, user.rolePermissions), boundary("createdAt", "INTAKE")] },

@@ -3,23 +3,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PersonalFollowUpQueue } from "@/components/clients/personal-follow-up-queue";
 import { WorkQueueCard } from "@/components/dashboard/work-queue-card";
 import { ConfirmHost } from "@/components/patterns/confirm-dialog";
-import type { PersonalFollowUp, PersonalFollowUpPage, PersonalFollowUpTarget } from "@/lib/clients/follow-ups";
+import type { PersonalFollowUp, PersonalFollowUpMode, PersonalFollowUpPage, PersonalFollowUpTarget } from "@/lib/clients/follow-ups";
 import type { WorkQueue } from "@/server/dashboard/actions";
 
-const mock = vi.hoisted(() => ({ list: vi.fn(), exact: vi.fn(), save: vi.fn() }));
-vi.mock("@/server/clients/relationship-actions", () => ({ getPersonalFollowUps: mock.list, getPersonalFollowUp: mock.exact, recordClientActivity: mock.save }));
+const mock = vi.hoisted(() => ({ list: vi.fn(), exact: vi.fn(), save: vi.fn(), reschedule: vi.fn(), history: vi.fn() }));
+vi.mock("@/server/clients/relationship-actions", () => ({ getPersonalFollowUps: mock.list, getPersonalFollowUp: mock.exact, recordClientActivity: mock.save, rescheduleClientFollowUp: mock.reschedule, getPersonalFollowUpRescheduleHistory: mock.history }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
 
-const first: PersonalFollowUp = { id: "cmtestfollowup000000000001", title: "核对原件", client: { id: "cmtestclient00000000000001", name: "合成甲客户" }, dueAt: "2027-01-02T02:00:00.000Z", assigneeName: "合成律师", status: "OPEN", overdue: false, canClose: true };
+const first: PersonalFollowUp = { id: "cmtestfollowup000000000001", title: "核对原件", client: { id: "cmtestclient00000000000001", name: "合成甲客户" }, dueAt: "2027-01-02T02:00:00.000Z", updatedAt: "2026-11-17T10:00:00.007Z", assigneeName: "合成律师", status: "OPEN", overdue: false, canClose: true };
 const second: PersonalFollowUp = { ...first, id: "cmtestfollowup000000000002", title: "确认授权", client: { id: "cmtestclient00000000000002", name: "合成乙客户" } };
 const page: PersonalFollowUpPage = { available: true, items: [first], total: 1, page: 1, pageSize: 20, filter: "all", observedAt: "2026-11-17T10:00:00.000Z" };
 const target = (item: PersonalFollowUp): PersonalFollowUpTarget => ({ followUpId: item.id, clientId: item.client.id });
-const view = (data = page, initialTarget: PersonalFollowUpTarget | null = null) => <><PersonalFollowUpQueue initialData={data} initialTarget={initialTarget} /><ConfirmHost /></>;
+const view = (data = page, initialTarget: PersonalFollowUpTarget | null = null, initialMode: PersonalFollowUpMode = "result") => <><PersonalFollowUpQueue initialData={data} initialTarget={initialTarget} initialMode={initialMode} /><ConfirmHost /></>;
 const query = () => new URLSearchParams(window.location.search);
 
 beforeEach(() => {
-  mock.list.mockReset(); mock.exact.mockReset(); mock.save.mockReset();
+  mock.list.mockReset(); mock.exact.mockReset(); mock.save.mockReset(); mock.reschedule.mockReset(); mock.history.mockReset();
   mock.exact.mockResolvedValue(first);
+  mock.history.mockResolvedValue({ items: [], nextCursor: null });
   window.history.replaceState(null, "", "/clients/follow-ups");
   vi.stubGlobal("ResizeObserver", class { observe = vi.fn(); unobserve = vi.fn(); disconnect = vi.fn(); });
 });
@@ -163,6 +164,60 @@ describe("本人待跟进原位办理（组件环境，服务动作替身）", (
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     fireEvent.click(await screen.findByRole("button", { name: "继续编辑" }));
     await waitFor(() => expect(content).toHaveValue("合成未完成草稿"));
+    expect(mock.exact).toHaveBeenCalledOnce();
+  });
+
+  it("同一目标的改期模式保留完整 URL 身份，迟到结果模式与前后退不覆盖草稿", async () => {
+    const rendered = render(view({ ...page, filter: "overdue", page: 2, total: 21 }, target(first), "reschedule"));
+    const reason = await screen.findByLabelText("改期原因 *");
+    fireEvent.change(reason, { target: { value: "合成改期草稿" } });
+    expect(query().get("mode")).toBe("reschedule");
+    rendered.rerender(view({ ...page, filter: "overdue", page: 2, total: 21 }, target(first), "result"));
+    expect(reason).toHaveValue("合成改期草稿");
+    expect(query().get("mode")).toBe("reschedule");
+    await act(async () => { window.history.pushState(null, "", `/clients/follow-ups?followUp=${second.id}&client=${second.client.id}`); window.dispatchEvent(new PopStateEvent("popstate")); });
+    expect(query().get("followUp")).toBe(first.id); expect(query().get("client")).toBe(first.client.id); expect(query().get("mode")).toBe("reschedule");
+    expect(reason).toHaveValue("合成改期草稿"); expect(mock.exact).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
+    fireEvent.click(await screen.findByRole("button", { name: "放弃更改" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    rendered.rerender(view({ ...page, filter: "overdue", page: 2, total: 21 }, target(first), "reschedule"));
+    await act(async () => {});
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(query().has("followUp")).toBe(false); expect(query().has("client")).toBe(false); expect(query().has("mode")).toBe(false);
+    expect(query().get("filter")).toBe("overdue"); expect(query().get("page")).toBe("2");
+  });
+
+  it("改期成功清除目标与模式、重读夹取末页并回到稳定标题", async () => {
+    mock.reschedule.mockResolvedValue({ ok: true }); mock.list.mockResolvedValue({ ...page, items: [], total: 0, filter: "overdue" });
+    const rendered = render(view({ ...page, filter: "overdue", page: 2, total: 21 }));
+    fireEvent.click(screen.getByRole("button", { name: `改期：${first.title}` }));
+    const date = await screen.findByLabelText("新的跟进时间（北京时间）*");
+    fireEvent.change(date, { target: { value: "2027-01-03T10:00" } });
+    fireEvent.change(screen.getByLabelText("改期原因 *"), { target: { value: "合成约定变更" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存改期" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(mock.list).toHaveBeenCalledWith({ filter: "overdue", page: 2 }));
+    await screen.findByText("第 1 / 1 页 · 北京时间");
+    expect(query().toString()).toBe("filter=overdue");
+    rendered.rerender(view({ ...page, items: [], total: 0, filter: "overdue" }, target(first), "reschedule"));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("heading", { name: "客户待跟进列表" })).toHaveFocus());
+  });
+
+  it("列表请求途中接受新改期身份后，迟到旧列表响应不能覆盖草稿或 URL", async () => {
+    let resolveList!: (value: PersonalFollowUpPage) => void;
+    mock.list.mockImplementationOnce(() => new Promise(resolve => { resolveList = resolve; }));
+    const rendered = render(view());
+    fireEvent.click(screen.getByRole("button", { name: "今日" }));
+    await waitFor(() => expect(mock.list).toHaveBeenCalledWith({ filter: "today", page: 1 }));
+    rendered.rerender(view({ ...page, filter: "overdue", page: 2, total: 21 }, target(first), "reschedule"));
+    const reason = await screen.findByLabelText("改期原因 *");
+    fireEvent.change(reason, { target: { value: "合成等待期间的新稿" } });
+    await act(async () => { resolveList({ ...page, filter: "today", items: [second] }); });
+    expect(screen.getByLabelText("改期原因 *")).toBe(reason); expect(reason).toHaveValue("合成等待期间的新稿");
+    expect(query().get("followUp")).toBe(first.id); expect(query().get("client")).toBe(first.client.id); expect(query().get("mode")).toBe("reschedule");
+    expect(query().get("filter")).toBe("overdue"); expect(query().get("page")).toBe("2");
     expect(mock.exact).toHaveBeenCalledOnce();
   });
 });

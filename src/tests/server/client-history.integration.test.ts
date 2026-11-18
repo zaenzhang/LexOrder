@@ -22,6 +22,7 @@ import { getClientHistoryPage, getClientHistoryMatterPage } from "@/server/clien
 import { getClientInsights } from "@/server/clients/insights";
 import { mergeClients } from "@/server/clients/dedup";
 import { saveMatterContext } from "@/server/matters/context-service";
+import { rescheduleClientFollowUpRecord } from "@/server/clients/relationship-service";
 
 const users: string[] = [], clients: string[] = [], matters: string[] = [], roles: string[] = [];
 const at = new Date("2026-05-01T02:00:00.000Z");
@@ -76,6 +77,18 @@ describe.skipIf(!config.url)("M2 客户连续记录：真实 PostgreSQL 读取",
     await db.user.updateMany({ where: { id: { in: users } }, data: { active: false } });
     await db.roleDefinition.updateMany({ where: { id: { in: roles } }, data: { active: false } });
     await db.$disconnect(); vi.unstubAllEnvs();
+  });
+
+  it("FOLLOW_UP 改期保留原创建事件、ID 与 source，摘要明确表示当前安排", async () => {
+    const f = await fixture(), original = await activity(f.client.id, f.actor.id);
+    const followUp = await db.clientFollowUp.create({ data: { clientId: f.client.id, title: "合成 A2 原始安排", sourceActivityId: original.id, dueAt: new Date("2027-01-01T00:00:47.123Z"), createdAt: at, createdById: f.actor.id, assigneeId: f.actor.id } });
+    const query = { clientId: f.client.id, source: "FOLLOW_UP" as const }, before = (await readClientHistory(db, f.actor, query)).items[0];
+    expect(before).toMatchObject({ id: followUp.id, key: `FOLLOW_UP:${followUp.id}`, source: "FOLLOW_UP", at: at.toISOString(), recordedAt: at.toISOString() });
+    await rescheduleClientFollowUpRecord(db, f.actor, { clientId: f.client.id, followUpId: followUp.id, expectedUpdatedAt: followUp.updatedAt.toISOString(), dueAt: "2027-02-02T03:45:00.000Z", reason: "合成客户另约时间", requestKey: randomUUID() });
+    const after = (await readClientHistory(db, f.actor, query)).items;
+    expect(after).toHaveLength(1); expect({ ...after[0], meta: before.meta }).toEqual(before);
+    expect(after[0].meta).toContain("当前安排 2027-02-02 11:45");
+    expect((await db.clientFollowUp.findUniqueOrThrow({ where: { id: followUp.id } })).sourceActivityId).toBe(original.id);
   });
 
   it("超过旧 50/100 窗口并同时间排序，软删除锚点后仍可继续", async () => {
