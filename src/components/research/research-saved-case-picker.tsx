@@ -1,10 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useEffect, useId, useRef, useState } from "react";
+import { Button, Modal, Select } from "@douyinfe/semi-ui";
 import { actionErrorMessage } from "@/lib/action-error";
 import { getSavedCaseResearchInput } from "@/server/research/actions";
 import { queryAccessLabels, queryOutcomeLabels, type ResearchContent, type ResearchOptions, type SavedCaseResearchInput } from "@/server/research/contracts";
@@ -13,20 +10,22 @@ export function ResearchSavedCasePicker({ matterId, options, value, onChange, di
   matterId: string; options: ResearchOptions; value: ResearchContent; onChange(value: ResearchContent): void; disabled: boolean;
 }) {
   const [open, setOpen] = useState(false), [documentId, setDocumentId] = useState("");
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const [input, setInput] = useState<SavedCaseResearchInput | null>(null);
   const [loading, setLoading] = useState(false), [error, setError] = useState<string | null>(null);
   const sequence = useRef(0);
+  const labelId = useId();
   const documents = options.documents.filter(document => document.hasIdentity && options.savedCaseDocumentIds.includes(document.id));
 
   useEffect(() => {
     sequence.current += 1;
-    setOpen(false); setDocumentId(""); setInput(null); setLoading(false); setError(null);
+    setOpen(false); setOptionsOpen(false); setDocumentId(""); setInput(null); setLoading(false); setError(null);
     return () => { sequence.current += 1; };
   }, [matterId, disabled]);
 
   function changeOpen(next: boolean) {
     sequence.current += 1;
-    setOpen(next); setDocumentId(""); setInput(null); setLoading(false); setError(null);
+    setOpen(next); setOptionsOpen(false); setDocumentId(""); setInput(null); setLoading(false); setError(null);
   }
   function selectDocument(id: string) {
     sequence.current += 1;
@@ -60,18 +59,42 @@ export function ResearchSavedCasePicker({ matterId, options, value, onChange, di
     onChange({ ...value, sources: [...value.sources, input.source], queryLog: [...value.queryLog, input.query] });
     changeOpen(false);
   }
-  return <Dialog open={open && !disabled} onOpenChange={changeOpen}>
-    <DialogTrigger asChild><Button type="button" size="sm" variant="outline" disabled={disabled}>采用已保存类案</Button></DialogTrigger>
-    <DialogContent className="max-w-2xl">
-      <DialogHeader><DialogTitle>采用已保存类案</DialogTitle><DialogDescription>选择本事项内的一份固定材料版本，核对后将来源与阅读记录加入当前研究草稿。</DialogDescription></DialogHeader>
+  return <>
+    <Button htmlType="button" size="small" type="tertiary" aria-haspopup="dialog" aria-expanded={open && !disabled} disabled={disabled} onClick={() => changeOpen(true)}>
+      采用已保存类案
+    </Button>
+    <Modal
+      title="采用已保存类案"
+      visible={open && !disabled}
+      width="min(42rem, calc(100vw - 2rem))"
+      centered
+      motion={false}
+      okText="加入研究"
+      cancelText="取消"
+      okButtonProps={{ disabled: !input || loading || disabled }}
+      bodyStyle={{ maxHeight: "65vh", overflowY: "auto" }}
+      onOk={adopt}
+      onCancel={() => changeOpen(false)}
+    >
+      <p className="mb-3 text-sm text-muted-foreground">选择本事项内的一份固定材料版本，核对后将来源与阅读记录加入当前研究草稿。</p>
       {documents.length ? <div className="space-y-3">
-        <div className="space-y-1.5"><Label>已保存类案材料</Label>
-          <Select value={documentId} onValueChange={selectDocument} disabled={disabled}>
-            <SelectTrigger aria-label="已保存类案材料"><SelectValue placeholder="选择具体材料版本" /></SelectTrigger>
-            <SelectContent>{documents.map(document => <SelectItem key={document.id} value={document.id}>{document.name} · V{document.version}</SelectItem>)}</SelectContent>
-          </Select>
+        <div className="space-y-1.5" onKeyDown={event => {
+          if (optionsOpen && event.key === "Escape") event.stopPropagation();
+        }}>
+          <p id={labelId} className="text-sm font-medium">已保存类案材料</p>
+          <Select<string>
+            aria-labelledby={labelId}
+            motion={false}
+            value={documentId || undefined}
+            onChange={next => { if (typeof next === "string") selectDocument(next); }}
+            onDropdownVisibleChange={setOptionsOpen}
+            disabled={disabled}
+            placeholder="选择具体材料版本"
+            optionList={documents.map(document => ({ value: document.id, label: `${document.name} · V${document.version}` }))}
+            className="w-full"
+          />
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={read} disabled={!documentId || loading || disabled}>{loading ? "正在读取材料…" : error ? "重新读取材料" : "读取材料元信息"}</Button>
+        <Button htmlType="button" type="tertiary" size="small" onClick={read} disabled={!documentId || loading || disabled}>{loading ? "正在读取材料…" : error ? "重新读取材料" : "读取材料元信息"}</Button>
       </div> : <p className="text-sm text-muted-foreground">没有可自动识别的已保存类案。缺少保存记录的材料仍可在研究中手工选入。</p>}
       {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
       {input ? <div className="space-y-3 text-sm">
@@ -83,8 +106,6 @@ export function ResearchSavedCasePicker({ matterId, options, value, onChange, di
         </dl>
         <p className="whitespace-pre-wrap break-words text-muted-foreground">{input.query.notes}</p>
       </div> : null}
-      <DialogFooter><Button type="button" variant="outline" onClick={() => changeOpen(false)}>取消</Button>
-        <Button type="button" disabled={!input || loading || disabled} onClick={adopt}>加入研究</Button></DialogFooter>
-    </DialogContent>
-  </Dialog>;
+    </Modal>
+  </>;
 }

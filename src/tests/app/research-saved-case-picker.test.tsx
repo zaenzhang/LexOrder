@@ -17,14 +17,15 @@ function input(index = 0): SavedCaseResearchInput {
 }
 async function choose(index = 0) {
   const trigger = screen.getByRole("combobox", { name: "已保存类案材料" });
-  fireEvent.keyDown(trigger, { key: "ArrowDown" });
-  fireEvent.keyDown(await screen.findByRole("option", { name: `合成类案${index + 1}.md · V${index + 1}` }), { key: "Enter" });
-  await waitFor(() => expect(trigger).toHaveFocus());
+  fireEvent.click(trigger);
+  fireEvent.click(await screen.findByRole("option", { name: name => name.endsWith(`合成类案${index + 1}.md · V${index + 1}`) }));
 }
 async function openAndRead(index = 0) {
-  fireEvent.click(screen.getByRole("button", { name: "采用已保存类案" }));
+  const trigger = screen.getByRole("button", { name: "采用已保存类案" });
+  act(() => { trigger.focus(); });
+  fireEvent.click(trigger);
   await choose(index);
-  fireEvent.click(screen.getByRole("button", { name: "读取材料元信息" }));
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "读取材料元信息" })); });
 }
 const scrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
 beforeEach(() => {
@@ -40,6 +41,30 @@ afterEach(() => {
 });
 
 describe("采用已保存类案弹窗", () => {
+  it("键盘可选择固定版本，Escape 先关选项再关弹窗", async () => {
+    render(<ResearchSavedCasePicker matterId={matterId} options={options} value={draft()} onChange={vi.fn()} disabled={false} />);
+    const open = screen.getByRole("button", { name: "采用已保存类案" });
+    open.focus();
+    fireEvent.click(open);
+    const dialog = screen.getByRole("dialog", { name: "采用已保存类案" });
+    const select = within(dialog).getByRole("combobox", { name: "已保存类案材料" });
+    act(() => { select.focus(); });
+    fireEvent.keyDown(select, { key: "ArrowDown", keyCode: 40 });
+    await waitFor(() => expect(select).toHaveAttribute("aria-expanded", "true"));
+    fireEvent.keyDown(select, { key: "Escape", keyCode: 27 });
+    await waitFor(() => expect(select).toHaveAttribute("aria-expanded", "false"));
+    expect(dialog).toBeInTheDocument();
+
+    fireEvent.keyDown(select, { key: "ArrowDown", keyCode: 40 });
+    await waitFor(() => expect(select).toHaveAttribute("aria-expanded", "true"));
+    fireEvent.keyDown(select, { key: "Enter", keyCode: 13 });
+    expect(within(dialog).getByRole("button", { name: "读取材料元信息" })).toBeEnabled();
+
+    fireEvent.keyDown(select, { key: "Escape", keyCode: 27 });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(open).toHaveFocus();
+  });
+
   it("确认前不改草稿；返回后按最新正文及集合原子加入来源/阅读，所载链接没有可执行入口", async () => {
     const pending = Promise.withResolvers<SavedCaseResearchInput>(), changed = vi.fn();
     vi.mocked(getSavedCaseResearchInput).mockReturnValueOnce(pending.promise);
@@ -55,7 +80,7 @@ describe("采用已保存类案弹窗", () => {
     expect(changed).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "加入研究" }));
     expect(changed).toHaveBeenCalledExactlyOnceWith({ ...latest, sources: [...latest.sources, input().source], queryLog: [...latest.queryLog, input().query] });
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await waitFor(() => expect(screen.getByRole("button", { name: "采用已保存类案" })).toHaveFocus());
   });
 
@@ -96,7 +121,8 @@ describe("采用已保存类案弹窗", () => {
     if (change === "unmount") rendered.unmount();
     else rendered.rerender(<ResearchSavedCasePicker {...props} disabled={change === "disabled"} matterId={change === "matter" ? "cm00000000000000000000009" : matterId} />);
     await act(async () => { pending.resolve(input()); });
-    expect(changed).not.toHaveBeenCalled(); expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(changed).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
   it.each(["source", "query", "sourceLimit", "queryLimit"] as const)("%s 已存在或超限时保留全部输入，不发生半次添加", async constraint => {

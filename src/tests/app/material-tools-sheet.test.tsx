@@ -61,10 +61,10 @@ describe("材料工具按需展开（组件环境）", () => {
     fireEvent.click(selected);
     expect(selected).toBeChecked();
     expect(mock.statuses).not.toHaveBeenCalled();
-    fireEvent.mouseDown(within(sheet).getByRole("tab", { name: "处理状态" }), { button: 0, ctrlKey: false });
+    fireEvent.click(within(sheet).getByRole("tab", { name: "处理状态" }));
     expect(within(sheet).queryByRole("checkbox")).not.toBeInTheDocument();
     await waitFor(() => expect(mock.statuses).toHaveBeenCalledTimes(1));
-    fireEvent.mouseDown(within(sheet).getByRole("tab", { name: "读取检查" }), { button: 0, ctrlKey: false });
+    fireEvent.click(within(sheet).getByRole("tab", { name: "读取检查" }));
     expect(within(sheet).getByRole("checkbox", { name: "合成材料 · 第 2 版" })).toBeChecked();
     expect(within(sheet).queryByRole("region", { name: "材料处理状态" })).not.toBeInTheDocument();
     expect(mock.coverage).not.toHaveBeenCalled();
@@ -82,7 +82,7 @@ describe("材料工具按需展开（组件环境）", () => {
     expect(screen.getByRole("checkbox", { name: "合成材料 · 第 3 版" })).not.toBeChecked();
     view.rerender(<MaterialToolsSheet {...props} documents={[]} scopeLabel="当前事项材料" />);
     expect(screen.getByText("暂无可选择的材料。")).toBeVisible();
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "处理状态" }), { button: 0, ctrlKey: false });
+    fireEvent.click(screen.getByRole("tab", { name: "处理状态" }));
     expect(screen.getByText("暂无可处理的材料。")).toBeVisible();
     expect(mock.statuses).not.toHaveBeenCalled();
   });

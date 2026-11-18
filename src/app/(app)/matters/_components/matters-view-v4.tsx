@@ -5,22 +5,17 @@
  * 布局 = 效果图：22px 页头 + 统计副文 + 导出/新建按钮 / 带计数的胶囊分段 /
  * 搜索 + 筛选胶囊 + 排序工具栏 / 档案架表格 / 分页栏。URL 为唯一筛选状态源。
  */
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useId, useState, useTransition, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Archive, ArrowDownUp, ChevronDown, Columns3, Download, Search } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { PageHeader, Pager, Segmented } from "@/components/patterns/moan";
-import { FilterSelect } from "@/components/patterns/filter-select";
+import { Button, Checkbox, Input, Pagination, Popover, Select, Tabs } from "@douyinfe/semi-ui";
+import { Archive, CalendarDays, Columns3, Download, Search } from "lucide-react";
+import { PageHeader } from "@/components/patterns/moan";
 import type { MatterCategory } from "@prisma/client";
 import { matterCategoryLabel } from "@/lib/enums";
-import { MATTER_COLUMNS, MockupMattersTable, type MatterColumn, type MatterRow } from "./matters-table";
+import { MATTER_COLUMNS, MattersTable, type MatterColumn, type MatterRow } from "./matters-table";
 import { IntakesTable, type IntakeRow } from "./intakes-table";
 import { IntakeWizard } from "@/app/(app)/intakes/_components/intake-wizard";
-import { cn } from "@/lib/utils";
 import { useTopbarAction } from "@/components/layout/topbar-action";
 
 type Tab = "intake" | "active" | "archived" | "revision" | "all";
@@ -95,7 +90,6 @@ export function MattersViewV4({
   const total = data?.total ?? 0;
   const page = data?.page ?? 1;
   const pageSize = data?.pageSize ?? 12;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const buildUrl = useCallback((o: Partial<Record<string, string | number | undefined>> & { page?: number }) => {
     const p = new URLSearchParams();
@@ -104,7 +98,7 @@ export function MattersViewV4({
     if (((o.scope as string) ?? f.scope ?? "all") !== "all") p.set("scope", String((o.scope as string) ?? f.scope));
     if ((o.teamId as string) ?? f.teamId) p.set("teamId", String((o.teamId as string) ?? f.teamId));
     if ((o.ownerId as string) ?? f.ownerId) p.set("ownerId", String((o.ownerId as string) ?? f.ownerId));
-    const search = o.search !== undefined ? String(o.search) : searchInput;
+    const search = o.search !== undefined ? String(o.search) : f.search;
     if (search) p.set("search", search);
     const cat = o.category !== undefined ? String(o.category) : f.category;
     if (cat && cat !== "ALL") p.set("category", cat);
@@ -121,7 +115,7 @@ export function MattersViewV4({
     if (pg > 1) p.set("page", String(pg));
     const qs = p.toString();
     return `/matters${qs ? `?${qs}` : ""}`;
-  }, [tab, f, searchInput]);
+  }, [tab, f]);
 
   function go(o: Parameters<typeof buildUrl>[0]) {
     startTransition(() => router.replace(buildUrl(o)));
@@ -137,7 +131,7 @@ export function MattersViewV4({
     }
   }
 
-  const appliedListQuery = new URL(buildUrl({ search: f.search, page }), "https://lexorder.invalid").searchParams;
+  const appliedListQuery = new URL(buildUrl({ page }), "https://lexorder.invalid").searchParams;
   const exportUrl = (() => {
     const p = new URLSearchParams(appliedListQuery);
     p.delete("page");
@@ -169,6 +163,7 @@ export function MattersViewV4({
   const currentSort = f.sortBy ?? (tab === "archived" ? "archivedAt" : tab === "active" ? "hearing" : "intakeDate");
   const sortOptions = SORTS.filter((o) => (o.value === "archivedAt" ? tab === "archived" : o.value === "hearing" ? tab === "active" || tab === "all" : !(o.value === "claimAmount" && tab === "archived")));
   const scopeLabel: Record<string, string> = { all: "全部可见", mine: "我经办", team: "按团队" };
+  const lastPage = Math.ceil(total / pageSize);
 
   return (
     <div className="mo-list">
@@ -193,109 +188,154 @@ export function MattersViewV4({
         }
       />
 
-      <Segmented
-        className="mb-3"
-        items={TABS.map((t) => ({ key: t.key, label: t.label, count: typeof tabCounts?.[t.key] === "number" ? tabCounts[t.key] : null }))}
-        value={tab}
+      <Tabs
+        type="button"
+        size="small"
+        tabBarClassName="mb-3"
+        activeKey={tab}
+        keepDOM
+        tabList={TABS.map(({ key, label }) => ({
+          itemKey: key,
+          tab: <>{label}{typeof tabCounts?.[key] === "number" && <span className="ml-1 tabular-nums">{tabCounts[key]}</span>}</>
+        }))}
         onChange={(key) => go({ tab: key, page: 1 })}
-      />
-
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <form className="mo-toolbar-input" onSubmit={(e) => { e.preventDefault(); go({ search: searchInput, page: 1 }); }}>
-          <Search aria-hidden />
-          <input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="按名称、案号、当事人搜索" aria-label="搜索案件" />
-        </form>
-        <FilterSelect label="案件类别" value={f.category !== "ALL" ? f.category : undefined} options={CATEGORIES.filter((c) => c !== "ALL").map((c) => ({ value: c, label: matterCategoryLabel[c as MatterCategory] }))} onChange={(v) => go({ category: v ?? "ALL", page: 1 })} />
-        {f.scope === "team" && readableTeams.length > 0 ? (
-          <FilterSelect label="团队" value={f.teamId} allLabel="全部获权团队" options={readableTeams.map((t) => ({ value: t.id, label: t.name }))} onChange={(v) => go({ teamId: v ?? "", page: 1 })} />
-        ) : null}
-        <FilterSelect label="主办" value={f.ownerId} options={colleagues.map((u) => ({ value: u.id, label: u.name }))} onChange={(v) => go({ ownerId: v ?? "", page: 1 })} />
-        <FilterSelect label="范围" clearable={false} value={f.scope ?? "all"} options={Object.entries(scopeLabel).map(([value, label]) => ({ value, label }))} onChange={(v) => go({ scope: v ?? "all", teamId: "", page: 1 })} />
-        {showStatus ? (
-          <FilterSelect label="状态" value={f.status && f.status !== "ALL" ? f.status : undefined} options={[{ value: "active", label: "办理中" }, { value: "closed", label: "已结案" }, { value: "archived", label: "已归档" }]} onChange={(v) => go({ status: v ?? "ALL", page: 1 })} />
-        ) : null}
-        <Popover open={dateFilterOpen} onOpenChange={(open) => {
-          if (open) setDateDraft({ from: f.from ?? "", to: f.to ?? "" });
-          setDateFilterOpen(open);
-        }}>
-          <PopoverTrigger asChild>
-            <button type="button" className={cn("mo-filter-btn", (f.from || f.to) && "on")}>
-              收案日期
-              {f.from || f.to ? <span className="fv font-mono">{f.from ?? "…"} ~ {f.to ?? "…"}</span> : <ChevronDown aria-hidden />}
-            </button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-72">
-            <div className="space-y-2.5">
-              <label className="block text-[12px] text-[var(--t-secondary)]">
-                起
-                <Input type="date" value={dateDraft.from} onChange={(e) => setDateDraft({ ...dateDraft, from: e.target.value })} className="mt-1" />
-              </label>
-              <label className="block text-[12px] text-[var(--t-secondary)]">
-                止
-                <Input type="date" value={dateDraft.to} onChange={(e) => setDateDraft({ ...dateDraft, to: e.target.value })} className="mt-1" />
-              </label>
-              <div className="flex items-center justify-between gap-2">
-                <Button type="button" variant="ghost" size="sm" disabled={!f.from && !f.to && !dateDraft.from && !dateDraft.to} onClick={() => {
-                  setDateDraft({ from: "", to: "" });
-                  go({ from: "", to: "", page: 1 });
-                }}>清除日期</Button>
-                <Button type="button" size="sm" onClick={() => {
-                  go({ ...dateDraft, page: 1 });
-                  setDateFilterOpen(false);
-                }}>应用</Button>
+      >
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <form onSubmit={(e) => { e.preventDefault(); go({ search: searchInput, page: 1 }); }}>
+            <Input
+              size="small"
+              className="w-60"
+              value={searchInput}
+              onChange={setSearchInput}
+              prefix={<Search size={14} className="mx-2 shrink-0 text-[var(--semi-color-text-2)]" aria-hidden />}
+              placeholder="按名称、案号、当事人搜索"
+              aria-label="搜索案件"
+            />
+          </form>
+          <MatterListSelect label="案件类别" value={f.category !== "ALL" ? f.category : undefined} options={CATEGORIES.filter((c) => c !== "ALL").map((c) => ({ value: c, label: matterCategoryLabel[c as MatterCategory] }))} onChange={(v) => go({ category: v || "ALL", page: 1 })} />
+          {f.scope === "team" && readableTeams.length > 0 ? (
+            <MatterListSelect label="团队" value={f.teamId} allLabel="全部获权团队" options={readableTeams.map((t) => ({ value: t.id, label: t.name }))} onChange={(v) => go({ teamId: v, page: 1 })} />
+          ) : null}
+          <MatterListSelect label="主办" value={f.ownerId} options={colleagues.map((u) => ({ value: u.id, label: u.name }))} onChange={(v) => go({ ownerId: v, page: 1 })} />
+          <MatterListSelect label="范围" required value={f.scope ?? "all"} options={Object.entries(scopeLabel).map(([value, label]) => ({ value, label }))} onChange={(v) => go({ scope: v, teamId: "", page: 1 })} />
+          {showStatus ? (
+            <MatterListSelect label="状态" value={f.status && f.status !== "ALL" ? f.status : undefined} options={[{ value: "active", label: "办理中" }, { value: "closed", label: "已结案" }, { value: "archived", label: "已归档" }]} onChange={(v) => go({ status: v || "ALL", page: 1 })} />
+          ) : null}
+          <Popover
+            trigger="click"
+            position="bottomLeft"
+            visible={dateFilterOpen}
+            onVisibleChange={(open) => {
+              if (open) setDateDraft({ from: f.from ?? "", to: f.to ?? "" });
+              setDateFilterOpen(open);
+            }}
+            content={({ initialFocusRef }) => (
+              <div className="w-64 space-y-2.5 p-3">
+                <label className="block text-xs">
+                  起
+                  <Input ref={initialFocusRef as RefObject<HTMLInputElement> | undefined} type="date" value={dateDraft.from} onChange={(from) => setDateDraft({ ...dateDraft, from })} className="mt-1" />
+                </label>
+                <label className="block text-xs">
+                  止
+                  <Input type="date" value={dateDraft.to} onChange={(to) => setDateDraft({ ...dateDraft, to })} className="mt-1" />
+                </label>
+                <div className="flex items-center justify-between gap-2">
+                  <Button theme="borderless" type="tertiary" size="small" disabled={!f.from && !f.to && !dateDraft.from && !dateDraft.to} onClick={() => {
+                    setDateDraft({ from: "", to: "" });
+                    go({ from: "", to: "", page: 1 });
+                  }}>清除日期</Button>
+                  <Button theme="solid" size="small" onClick={() => {
+                    go({ ...dateDraft, page: 1 });
+                    setDateFilterOpen(false);
+                  }}>应用</Button>
+                </div>
               </div>
-            </div>
-          </PopoverContent>
-        </Popover>
+            )}
+          >
+            <Button theme="light" type={f.from || f.to ? "primary" : "tertiary"} size="small" icon={<CalendarDays size={14} aria-hidden />}>
+              收案日期{f.from || f.to ? <span className="ml-1 font-mono">{f.from ?? "…"} ~ {f.to ?? "…"}</span> : null}
+            </Button>
+          </Popover>
 
-        <div className="ml-auto flex items-center gap-2">
-          <FilterSelect
-            label="排序："
-            clearable={false}
-            icon={<ArrowDownUp aria-hidden />}
-            value={currentSort}
-            options={sortOptions.map((o) => ({ value: o.value, label: o.label.replace("按", "") }))}
-            onChange={(v) => go({ sortBy: v, page: 1 })}
-          />
-          <button type="button" className="mo-filter-btn" onClick={() => go({ sortDir: f.sortDir === "asc" ? "desc" : "asc", page: 1 })} title="切换升序 / 降序" aria-label="切换排序方向">
-            {f.sortDir === "asc" ? "升序" : "降序"}
-          </button>
-          {!isIntakeTab ? (
-            <Popover>
-              <PopoverTrigger asChild>
-                <button type="button" className="mo-filter-btn">
-                  <Columns3 aria-hidden />
+          <div className="ml-auto flex items-center gap-2">
+            <MatterListSelect
+              label="排序"
+              required
+              value={currentSort}
+              options={sortOptions.map((o) => ({ value: o.value, label: o.label.replace("按", "") }))}
+              onChange={(v) => go({ sortBy: v, page: 1 })}
+            />
+            <Button theme="light" type="tertiary" size="small" onClick={() => go({ sortDir: f.sortDir === "asc" ? "desc" : "asc", page: 1 })} title="切换升序 / 降序" aria-label="切换排序方向">
+              {f.sortDir === "asc" ? "升序" : "降序"}
+            </Button>
+            {!isIntakeTab ? (
+              <Popover
+                trigger="click"
+                position="bottomRight"
+                content={
+                  <div className="grid min-w-40 gap-2 p-3">
+                    {MATTER_COLUMNS.map((c) => (
+                      <Checkbox key={c.key} checked={columns.includes(c.key)} onChange={() => toggleColumn(c.key)}>
+                        {c.label}
+                      </Checkbox>
+                    ))}
+                  </div>
+                }
+              >
+                <Button theme="light" type="tertiary" size="small" icon={<Columns3 size={14} aria-hidden />}>
                   列设置
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-48 p-2">
-                <div className="px-1.5 pb-1.5 text-[11px] text-[var(--t-muted)]">显示列（保存在本机）</div>
-                {MATTER_COLUMNS.map((c) => (
-                  <label key={c.key} className="flex cursor-pointer items-center gap-2 rounded-[6px] px-1.5 py-1.5 text-[12.5px] hover:bg-[var(--bg-hover)]">
-                    <Checkbox checked={columns.includes(c.key)} onCheckedChange={() => toggleColumn(c.key)} />
-                    {c.label}
-                  </label>
-                ))}
-              </PopoverContent>
-            </Popover>
+                </Button>
+              </Popover>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="card overflow-hidden">
+          {isIntakeTab ? (
+            <IntakesTable items={intakeData?.items ?? []} kind={tab === "revision" ? "revision" : "intake"} />
+          ) : (
+            <MattersTable items={matterData?.items ?? []} columns={columns} listQuery={appliedListQuery.toString()} />
+          )}
+          {total > 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--bd-hair)] px-4 py-2">
+              <span className="text-xs text-muted-foreground">
+                {page <= lastPage ? <>第 {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} 条 · 共 {total} 件</> : <>第 {page} 页无结果 · 共 {total} 件</>}
+              </span>
+              {page > lastPage ? (
+                <Button size="small" onClick={() => go({ page: lastPage })}>前往最后一页</Button>
+              ) : (
+                <Pagination currentPage={page} pageSize={pageSize} total={total} hideOnSinglePage onPageChange={(nextPage) => go({ page: nextPage })} />
+              )}
+            </div>
           ) : null}
         </div>
-      </div>
-
-      <div className="card overflow-hidden">
-        {isIntakeTab ? (
-          <IntakesTable items={intakeData?.items ?? []} kind={tab === "revision" ? "revision" : "intake"} />
-        ) : (
-          <MockupMattersTable items={matterData?.items ?? []} columns={columns} listQuery={appliedListQuery.toString()} />
-        )}
-        {total > 0 ? (
-          <div className="border-t border-[var(--bd-hair)]">
-            <Pager page={page} totalPages={totalPages} summary={<>第 {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} 条 · 共 {total} 件</>} onChange={(p) => go({ page: p })} />
-          </div>
-        ) : null}
-      </div>
+      </Tabs>
 
       {canCreateIntake && <IntakeWizard open={wizardOpen} onOpenChange={closeWizard} clientOptions={clientOptions} colleagues={colleagues} initialClientId={autoOpenIntake ? initialClientId : undefined} />}
     </div>
+  );
+}
+
+function MatterListSelect({ label, value, options, onChange, allLabel = "全部", required = false }: {
+  label: string;
+  value: string | undefined;
+  options: { label: string; value: string }[];
+  onChange: (value: string) => void;
+  allLabel?: string;
+  required?: boolean;
+}) {
+  const labelId = useId();
+  return (
+    <Select<string>
+      size="small"
+      motion={false}
+      insetLabel={label}
+      insetLabelId={labelId}
+      aria-labelledby={labelId}
+      value={value ?? ""}
+      optionList={required ? options : [{ label: allLabel, value: "" }, ...options]}
+      onChange={(next) => { if (typeof next === "string") onChange(next); }}
+      dropdownMatchSelectWidth={false}
+    />
   );
 }
