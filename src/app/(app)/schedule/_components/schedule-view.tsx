@@ -5,16 +5,9 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AlertTriangle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Gavel, Plus } from "lucide-react";
-import { PageHeader, RiskLadder } from "@/components/patterns/moan";
+import { PageHeader, RiskLadder, Segmented } from "@/components/patterns/moan";
 import { useTopbarAction } from "@/components/layout/topbar-action";
-import { Button, RadioGroup, Tag, Typography } from "@douyinfe/semi-ui";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from "@/components/ui/dialog";
+import { Button, Modal, Tag, Typography } from "@douyinfe/semi-ui";
 import { cn } from "@/lib/utils";
 import type { ScheduleItem } from "@/server/schedule/query";
 import { deadlineCategoryLabel, procedureTypeLabel } from "@/lib/enums";
@@ -25,9 +18,9 @@ import { SH_TZ, civilFromKey, civilKey, shDayKey, shDaysFromToday, shParts, shTi
 
 /* 墨案 09：事件配色——开庭蓝、法定期限红、所内提醒琥珀、任务 teal */
 const TYPE_META = {
-  hearing: { icon: Gavel, label: "开庭", color: "#1E56C8" },
-  deadline: { icon: AlertTriangle, label: "期限", color: "#B42318" },
-  task: { icon: ClipboardList, label: "任务", color: "#007B7F" }
+  hearing: { icon: Gavel, label: "开庭", color: "blue" },
+  deadline: { icon: AlertTriangle, label: "期限", color: "red" },
+  task: { icon: ClipboardList, label: "任务", color: "cyan" }
 } as const;
 const typeMeta = TYPE_META;
 
@@ -86,9 +79,15 @@ export function ScheduleView({
         actions={
           <>
             <CalendarSubscriptionDialog />
-            <RadioGroup aria-label="日程视图" type="button" buttonSize="small"
-              options={[{ value: "week", label: "周" }, { value: "calendar", label: "月历" }, { value: "list", label: "列表" }]}
-              value={view} onChange={(event) => setView(event.target.value as View)} />
+            <Segmented
+              items={[
+                { key: "week", label: "周" },
+                { key: "calendar", label: "月历" },
+                { key: "list", label: "列表" }
+              ]}
+              value={view}
+              onChange={setView}
+            />
           </>
         }
       />
@@ -188,10 +187,10 @@ function CalendarView({
       <div className="panel-head">
         <div className="cal-head">
           <span className="cal-month">{year} 年 {month + 1} 月</span>
-          <div className="flex gap-1">
-            <Button theme="borderless" size="small" onClick={() => onOffsetChange(monthOffset - 1)} aria-label="上一月"><ChevronLeft className="h-3.5 w-3.5" /></Button>
-            <Button theme="borderless" size="small" onClick={() => onOffsetChange(0)}>今天</Button>
-            <Button theme="borderless" size="small" onClick={() => onOffsetChange(monthOffset + 1)} aria-label="下一月"><ChevronRight className="h-3.5 w-3.5" /></Button>
+          <div className="flex items-center gap-1">
+            <Button theme="borderless" type="tertiary" size="small" onClick={() => onOffsetChange(monthOffset - 1)} aria-label="上一月" icon={<ChevronLeft className="h-3.5 w-3.5" />} />
+            <Button theme="borderless" type="tertiary" size="small" onClick={() => onOffsetChange(0)}>今天</Button>
+            <Button theme="borderless" type="tertiary" size="small" onClick={() => onOffsetChange(monthOffset + 1)} aria-label="下一月" icon={<ChevronRight className="h-3.5 w-3.5" />} />
           </div>
         </div>
         <Legend />
@@ -207,17 +206,17 @@ function CalendarView({
                 <span className="d">{cell.out ? `${cell.date.getMonth() + 1}-${cell.date.getDate()}` : cell.date.getDate()}</span>
                 <Button
                   theme="borderless"
+                  type="tertiary"
                   size="small"
                   onClick={() => onAddDay(cell.date)}
-                  className="opacity-0 focus:opacity-100 group-hover:opacity-100"
+                  className="opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-100"
                   aria-label={`添加 ${cell.date.getMonth() + 1} 月 ${cell.date.getDate()} 日的任务`}
-                >
-                  <Plus className="h-3 w-3" />
-                </Button>
+                  icon={<Plus className="h-3 w-3" />}
+                />
               </div>
               {dayItems.slice(0, VISIBLE_ITEMS_PER_DAY).map((it) => <EventChip key={it.id} item={it} onSelect={onSelectItem} />)}
               {dayItems.length > VISIBLE_ITEMS_PER_DAY ? (
-                <Button theme="borderless" size="small" onClick={() => onSelectItem(dayItems[VISIBLE_ITEMS_PER_DAY])}>+{dayItems.length - VISIBLE_ITEMS_PER_DAY} 隐藏</Button>
+                <Button theme="borderless" type="tertiary" size="small" onClick={() => onSelectItem(dayItems[VISIBLE_ITEMS_PER_DAY])}>+{dayItems.length - VISIBLE_ITEMS_PER_DAY} 隐藏</Button>
               ) : null}
               {isToday && dayItems.length === 0 ? <div className="more">今天 · 无日程</div> : null}
             </div>
@@ -256,10 +255,10 @@ function WeekView({
       <div className="panel-head">
         <div className="cal-head">
           <span className="cal-month">{monday.getMonth() + 1} 月 {monday.getDate()} 日 – {sunday.getMonth() + 1} 月 {sunday.getDate()} 日</span>
-          <div className="flex gap-1">
-            <Button theme="borderless" size="small" onClick={() => onOffsetChange(weekOffset - 1)} aria-label="上一周"><ChevronLeft className="h-3.5 w-3.5" /></Button>
-            <Button theme="borderless" size="small" onClick={() => onOffsetChange(0)}>本周</Button>
-            <Button theme="borderless" size="small" onClick={() => onOffsetChange(weekOffset + 1)} aria-label="下一周"><ChevronRight className="h-3.5 w-3.5" /></Button>
+          <div className="flex items-center gap-1">
+            <Button theme="borderless" type="tertiary" size="small" onClick={() => onOffsetChange(weekOffset - 1)} aria-label="上一周" icon={<ChevronLeft className="h-3.5 w-3.5" />} />
+            <Button theme="borderless" type="tertiary" size="small" onClick={() => onOffsetChange(0)}>本周</Button>
+            <Button theme="borderless" type="tertiary" size="small" onClick={() => onOffsetChange(weekOffset + 1)} aria-label="下一周" icon={<ChevronRight className="h-3.5 w-3.5" />} />
           </div>
         </div>
         <Legend />
@@ -277,7 +276,7 @@ function WeekView({
           const dayItems = itemsByKey.get(key) ?? [];
           return (
             <div key={key} className={cn("cell group", key === todayKey && "today")} style={{ minHeight: 420 }}>
-              <Button theme="borderless" size="small" onClick={() => onAddDay(d)} className="opacity-0 focus:opacity-100 group-hover:opacity-100">+ 添加任务</Button>
+              <Button theme="borderless" type="tertiary" size="small" onClick={() => onAddDay(d)} className="opacity-0 focus:opacity-100 group-hover:opacity-100" icon={<Plus className="h-3 w-3" />}>添加任务</Button>
               {dayItems.length === 0 ? <div className="more">无日程</div> : dayItems.map((it) => <EventChip key={it.id} item={it} onSelect={onSelectItem} />)}
             </div>
           );
@@ -373,7 +372,7 @@ function ScheduleSideRail({
             <Clock3 className="ic" strokeWidth={1.8} />
             今日 · {todayTitle}
           </div>
-          {todayItems.length ? <span className="mo-count">{todayItems.length}</span> : null}
+          {todayItems.length ? <Tag size="small">{todayItems.length}</Tag> : null}
         </div>
         {todayItems.length === 0 ? (
           <div style={{ padding: "8px 14px 12px" }}>
@@ -415,7 +414,7 @@ function ScheduleSideRail({
             <CalendarDays className="ic" strokeWidth={1.8} />
             即将到来
           </div>
-          <Button theme="borderless" size="small" onClick={onSwitchToList}>列表视图 →</Button>
+          <Button theme="borderless" type="tertiary" size="small" onClick={onSwitchToList}>列表视图 →</Button>
         </div>
         {upcoming.length === 0 ? (
           <div className="empty mo-empty-compact"><div className="mo-empty-title">暂无即将到来的日程</div></div>
@@ -442,78 +441,63 @@ function ScheduleItemDialog({
   const Icon = meta.icon;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        {item && (
-          <>
-            <DialogHeader>
-              <div className="mb-2 flex items-center gap-2">
-                <span
-                  className="rounded-md p-1.5"
-                  style={{ backgroundColor: `${meta.color}18`, color: meta.color }}
+    <Modal
+      visible={open}
+      onCancel={() => onOpenChange(false)}
+      title={item?.title}
+      width={560}
+      motion={false}
+      bodyStyle={{ maxHeight: "70dvh", overflowY: "auto" }}
+      footer={
+        <div className="flex items-center justify-end gap-4">
+          <Button theme="outline" type="tertiary" onClick={() => onOpenChange(false)}>关闭</Button>
+          {item && <Typography.Text link={{ href: item.href ?? matterHref(item.matter) }}>查看案件</Typography.Text>}
+        </div>
+      }
+    >
+      {item && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Tag color={meta.color} prefixIcon={<Icon className="h-3.5 w-3.5" />}>{meta.label}</Tag>
+            {item.completed && <Tag>已完成</Tag>}
+          </div>
+
+          <div className="space-y-2">
+            <DetailLine label="时间" value={item.deadlineId ? formatDeadlineDue(item.occurredAt, item.duePrecision ?? null) : `${formatFullDate(item.occurredAt)} ${scheduleTime(item)}`} />
+            <DetailLine label="客户" value={item.clientName ?? "未填写客户"} />
+            <DetailLine
+              label="关联案件"
+              value={
+                <Link
+                  href={item.href ?? matterHref(item.matter)}
+                  className="font-medium text-primary underline-offset-4 hover:underline"
                 >
-                  <Icon className="h-4 w-4" />
-                </span>
-                <Tag
-                  type="light"
-                  className="text-[10px]"
-                  style={{ borderColor: `${meta.color}55`, color: meta.color }}
-                >
-                  {meta.label}
-                </Tag>
-                {item.completed && (
-                  <Tag type="light" className="text-[10px]">
-                    已完成
-                  </Tag>
-                )}
+                  {item.matter.title}
+                </Link>
+              }
+            />
+            {item.procedureLabel && (
+              <DetailLine label="程序" value={formatProcedureLabel(item.procedureLabel)} />
+            )}
+            {item.type === "deadline" && item.category && (
+              <DetailLine label="期限类型" value={deadlineCategoryLabel[item.category as keyof typeof deadlineCategoryLabel] ?? "类型待核实"} />
+            )}
+            {item.type === "deadline" && item.remindDays !== undefined && (
+              <DetailLine label="提醒" value={`提前 ${item.remindDays} 天`} />
+            )}
+            {item.type === "task" && item.priority !== undefined && (
+              <DetailLine label="优先级" value={priorityLabel(item.priority)} />
+            )}
+            {item.description && (
+              <div className="space-y-1 border-t border-border pt-2">
+                <div className="text-[11px] text-muted-foreground">详情</div>
+                <p className="whitespace-pre-wrap text-sm leading-6">{item.description}</p>
               </div>
-              <DialogTitle className="text-base leading-6">{item.title}</DialogTitle>
-            </DialogHeader>
-
-            <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
-              <DetailLine label="时间" value={item.deadlineId ? formatDeadlineDue(item.occurredAt, item.duePrecision ?? null) : `${formatFullDate(item.occurredAt)} ${scheduleTime(item)}`} />
-              <DetailLine label="客户" value={item.clientName ?? "未填写客户"} />
-              <DetailLine
-                label="关联案件"
-                value={
-                  <Link
-                    href={item.href??matterHref(item.matter)}
-                    className="font-medium text-primary underline-offset-4 hover:underline"
-                  >
-                    {item.matter.title}
-                  </Link>
-                }
-              />
-              {item.procedureLabel && (
-                <DetailLine label="程序" value={formatProcedureLabel(item.procedureLabel)} />
-              )}
-              {item.type === "deadline" && item.category && (
-                <DetailLine label="期限类型" value={deadlineCategoryLabel[item.category as keyof typeof deadlineCategoryLabel] ?? "类型待核实"} />
-              )}
-              {item.type === "deadline" && item.remindDays !== undefined && (
-                <DetailLine label="提醒" value={`提前 ${item.remindDays} 天`} />
-              )}
-              {item.type === "task" && item.priority !== undefined && (
-                <DetailLine label="优先级" value={priorityLabel(item.priority)} />
-              )}
-              {item.description && (
-                <div className="space-y-1 border-t border-border pt-2">
-                  <div className="text-[11px] text-muted-foreground">详情</div>
-                  <p className="whitespace-pre-wrap text-sm leading-6">{item.description}</p>
-                </div>
-              )}
-            </div>
-
-            <DialogFooter>
-              <Button theme="outline" onClick={() => onOpenChange(false)}>
-                关闭
-              </Button>
-              <Typography.Text type="primary" strong><Link href={item.href??matterHref(item.matter)}>查看案件</Link></Typography.Text>
-            </DialogFooter>
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
+            )}
+          </div>
+        </div>
+      )}
+    </Modal>
   );
 }
 

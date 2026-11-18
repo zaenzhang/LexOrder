@@ -1,11 +1,12 @@
 "use client";
 
+import { Button, Tag } from "@douyinfe/semi-ui";
 import {RevisionHistory} from "@/app/(app)/intakes/[id]/_components/revision-history";
 import { useState } from "react";
 
 import { AlertTriangle, FileText, Scale, Users, Wallet, Building2, BriefcaseBusiness, ChevronRight } from "lucide-react";
 import styles from "./intake-approval.module.css";
-import { Badge } from "@/components/ui/badge";
+
 import { conflictMatchKind, conflictMatchKinds, conflictMatchedFieldLabel, conflictPartyRoleLabel, conflictSeverityLabel, type IntakeReviewField } from "@/lib/approvals/intake-detail";
 import type { getApprovalDetail } from "@/server/approval-permissions/inbox";
 import { formatDateTime } from "@/lib/utils";
@@ -32,7 +33,7 @@ function splitEmpty(fields: IntakeReviewField[]) {
 
 function EmptyToggle({ count, open, onToggle }: { count: number; open: boolean; onToggle: () => void }) {
   if (!count) return null;
-  return <button type="button" onClick={onToggle} aria-expanded={open} className="ml-auto text-[11px] font-normal text-[var(--t-faint)] hover:text-[var(--teal-deep)]">{open ? "收起未填写项" : `未填写 ${count} 项`}</button>;
+  return <Button htmlType="button" onClick={onToggle} aria-expanded={open} className="ml-auto text-[11px] font-normal text-[var(--t-faint)] hover:text-[var(--teal-deep)]" theme="borderless" type="tertiary">{open ? "收起未填写项" : `未填写 ${count} 项`}</Button>;
 }
 
 function ReviewSection({ section }: { section: Detail["sections"][number] }) {
@@ -88,7 +89,7 @@ export function IntakeApprovalContent({ detail, view = "all", onOpenConflicts }:
       return blocks;
     })()}
     {view === "overview" && <section className="rv-section">
-      <div className="rv-sec-head"><AlertTriangle className="h-[14px] w-[14px] text-[var(--red)]" />冲突核查摘要{onOpenConflicts && <button type="button" onClick={onOpenConflicts} className="ml-auto text-[11px] font-[550] text-[var(--teal-deep)]">查看完整检索记录 →</button>}</div>
+      <div className="rv-sec-head"><AlertTriangle className="h-[14px] w-[14px] text-[var(--red)]" />冲突核查摘要{onOpenConflicts && <Button htmlType="button" onClick={onOpenConflicts} className="ml-auto text-[11px] font-[550] text-[var(--teal-deep)]" theme="borderless" type="tertiary">查看完整检索记录 →</Button>}</div>
       <div className="conf-sum">
         <div className="cs-ic" style={!latest || latest.hits.length ? undefined : { background: "var(--green-bg)", color: "var(--green)" }}><AlertTriangle /></div>
         <div style={{ flex: 1 }}>
@@ -109,11 +110,11 @@ export function IntakeApprovalContent({ detail, view = "all", onOpenConflicts }:
           {!check.coversCurrentParties && <p className="rounded-md bg-[var(--amber-bg)] p-3 text-sm text-[var(--amber)]">检索资料不完整或当事人已变更，请重新检索后提交审批。</p>}
           <div className={styles.checkConclusion}><div><span>当前保存结论</span><strong>{check.conclusion}</strong></div><div><span>结论来源</span><strong>{check.source}</strong></div>{check.decidedBy && <p>结论记录人：{check.decidedBy} · {dateText(check.decidedAt)}</p>}<p>说明：{check.note || "未记录"}</p></div>
           <div className="space-y-2"><h4 className="text-sm font-medium">本案核查对象</h4>
-            <div className={styles.queries}>{detail.currentParties.map((q, i) => <div key={i}><Badge variant="outline">{roleText(q.role)}</Badge><strong>{q.name || "未填写名称"}</strong><p>证件条件：<IntakeReviewValue label={`本案当事人 ${i + 1} 的证件条件`} value={q.idNumber || "未填写"} /></p></div>)}</div>
+            <div className={styles.queries}>{detail.currentParties.map((q, i) => <div key={i}><Tag color="grey" type="ghost">{roleText(q.role)}</Tag><strong>{q.name || "未填写名称"}</strong><p>证件条件：<IntakeReviewValue label={`本案当事人 ${i + 1} 的证件条件`} value={q.idNumber || "未填写"} /></p></div>)}</div>
           </div>
           <details className={styles.emptyFields}><summary>查看本次检索条件</summary>
             {!check.queries.length && <p className="mt-2 text-sm text-muted-foreground">检索条件不完整，请重新检索。</p>}
-            <div className={styles.queries}>{check.queries.map((q, i) => <div key={i}>{roleText(q.role) && <Badge variant="outline">{roleText(q.role)}</Badge>}<strong>{q.name || "未填写名称"}</strong><p>证件条件：<IntakeReviewValue label={`检索对象 ${i + 1} 的证件条件`} value={q.idNumber || "未填写"} /></p></div>)}</div>
+            <div className={styles.queries}>{check.queries.map((q, i) => <div key={i}>{roleText(q.role) && <Tag color="grey" type="ghost">{roleText(q.role)}</Tag>}<strong>{q.name || "未填写名称"}</strong><p>证件条件：<IntakeReviewValue label={`检索对象 ${i + 1} 的证件条件`} value={q.idNumber || "未填写"} /></p></div>)}</div>
           </details>
           {!!check.sameNameClients.length && <div className="text-sm"><h4 className="font-medium">历史客户库同名提示（不等同利益冲突）</h4>{check.sameNameClients.map((c, i) => <p key={i}>{c.name || "姓名未记录"}</p>)}</div>}
           {!!check.idMatchedClients.length && <div className="text-sm"><h4 className="font-medium">历史客户库证件匹配提示（需核对主体身份）</h4>{check.idMatchedClients.map((c, i) => <p key={i}>{c.name} · <IntakeReviewValue label="客户库匹配证件" value={c.idNumber || "未记录"} /></p>)}</div>}
@@ -131,7 +132,7 @@ function ConflictResults({ hits }: { hits: Detail["checks"][number]["hits"] }) {
     <p className="text-xs leading-relaxed text-muted-foreground">以下为当次保存的匹配记录，数量不等于主体数或已确认的冲突数；关联案件摘要为当前档案信息。</p>
     {!hits.length && <p className={styles.noMatches}>本次未命中历史案件；仍需人工核对名称别名、主体身份及尚未录入的代理关系。</p>}
     {groups.filter(group => group.hits.length).map(group => <section key={group.key} className="space-y-3" aria-label={`${group.label}结果`}>
-      <h4 className={styles.resultHeading}>{group.label}<Badge variant="secondary">{group.hits.length} 条</Badge></h4>
+      <h4 className={styles.resultHeading}>{group.label}<Tag color="grey" type="light">{group.hits.length} 条</Tag></h4>
       {group.hits.map(hit => <article key={hit.id} className={styles.hit}>
         <div className={styles.matchComparison}>
           <div><span>检索条件 · {conflictMatchedFieldLabel[hit.matchedField] ?? "历史匹配字段"}</span><strong><IntakeReviewValue label="命中值" value={hit.matchedValue || "未记录"} /></strong></div>
@@ -139,7 +140,7 @@ function ConflictResults({ hits }: { hits: Detail["checks"][number]["hits"] }) {
         </div>
         {hit.intake ? <div className={styles.matchedMatter}><span>在办收案（尚未转为案件）</span><strong>{hit.intake.title}</strong><div><p>登记人：{hit.intake.registrant}</p><p>收案状态：{hit.intake.status}</p></div></div> : hit.matter ? <div className={styles.matchedMatter}><span>关联案件 · 当前档案</span><strong>{hit.matter.code} · {hit.matter.title}</strong><div><p>主办律师：{hit.matter.ownerName}</p><p>命中主体在该案的角色：{hit.matter.roles}</p></div></div> : <p className="text-muted-foreground">关联档案无法核实，请根据原命中理由联系经办人员核查。</p>}
         <div className={styles.matchReason}><span>当次检索依据</span><p className="whitespace-pre-wrap break-words">{hit.reason || "历史记录未保存命中理由"}</p></div>
-        <div className="flex flex-wrap items-center gap-2"><Badge variant="outline" className={hit.severity === "BLOCKING" || hit.severity === "HIGH" ? "border-destructive/25 bg-destructive/5 text-destructive" : "border-[var(--amber-line)] bg-[var(--amber-bg)] text-[var(--amber)]"}>系统提示 · {conflictSeverityLabel[hit.severity]}</Badge>
+        <div className="flex flex-wrap items-center gap-2"><Tag color={hit.severity === "BLOCKING" || hit.severity === "HIGH" ? "red" : "amber"} type="light">系统提示 · {conflictSeverityLabel[hit.severity]}</Tag>
           {group.key === "similar" && hit.matchedRatio != null && <span className="text-muted-foreground">名称匹配比例 {(hit.matchedRatio * 100).toFixed(0)}% · 不代表同一主体概率</span>}
         </div>
       </article>)}

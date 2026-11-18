@@ -31,6 +31,31 @@ describe("收案 Semi 客户及管辖地选择", () => {
     expect(mock.create).not.toHaveBeenCalled();
   });
 
+  it("键盘可以清除已选委托方，并在清除后隐藏此选项", async () => {
+    function SelectedClient() {
+      const [clientId, setClientId] = useState("client-1");
+      return <ClientCombobox clientId={clientId} clientName={clientId ? "合成客户甲" : ""} clientType="INDIVIDUAL"
+        options={[{ id: "client-1", name: "合成客户甲", type: "INDIVIDUAL" }]}
+        onPickExisting={mock.existing} onTypeNew={mock.create} onPickYuandian={mock.enterprise}
+        onClear={() => { mock.clear(); setClientId(""); }} />;
+    }
+
+    render(<SelectedClient />);
+    const trigger = screen.getByRole("combobox", { name: "委托方客户" });
+    act(() => trigger.focus());
+    fireEvent.keyDown(trigger, { key: "ArrowDown", code: "ArrowDown", keyCode: 40 });
+    const search = await screen.findByPlaceholderText("输入姓名 / 公司名");
+    const clearOption = screen.getByRole("option", { name: /^(?:tick )?清除选择$/ });
+    fireEvent.keyDown(search, { key: "ArrowUp", code: "ArrowUp", keyCode: 38 });
+    expect(search).toHaveAttribute("aria-activedescendant", clearOption.id);
+    fireEvent.keyDown(search, { key: "Enter", code: "Enter", keyCode: 13 });
+
+    expect(mock.clear).toHaveBeenCalledOnce();
+    expect(trigger).toHaveTextContent("搜索或直接输入名称");
+    fireEvent.click(trigger);
+    expect(screen.queryByRole("option", { name: /^(?:tick )?清除选择$/ })).not.toBeInTheDocument();
+  });
+
   it("输入新客户名后明确选择新建，不发起企业服务", async () => {
     clients();
     fireEvent.click(screen.getByRole("combobox", { name: "委托方客户" }));
@@ -53,6 +78,7 @@ describe("收案 Semi 客户及管辖地选择", () => {
     fireEvent.change(search, { target: { value: "合成查询企业" } });
     await waitFor(() => expect(mock.search).toHaveBeenCalledWith("合成查询企业"));
     expect(screen.getByRole("status")).toHaveTextContent("正在查询企业信息");
+    expect(screen.getByRole("option", { name: /新建 合成查询企业 为委托方/ })).toBeVisible();
     fireEvent.keyDown(search, { key: "Escape", code: "Escape", keyCode: 27 });
     await waitFor(() => expect(trigger).toHaveAttribute("aria-expanded", "false"));
     await act(async () => resolve({ configured: true, items: [{ id: "enterprise-late", name: "迟到的合成企业", creditCode: "SYNTHETIC" }] }));
@@ -62,18 +88,36 @@ describe("收案 Semi 客户及管辖地选择", () => {
     expect(mock.enterprise).not.toHaveBeenCalled();
   });
 
+  it("企业候选在关闭清查询前按原 ID 与信用代码交回", async () => {
+    const candidate = { id: "enterprise-selected", name: "合成待选企业", creditCode: "SYNTHETIC-SELECTED" };
+    mock.search.mockResolvedValue({ configured: true, items: [candidate] });
+    render(<ClientCombobox clientId="" clientName="" clientType="COMPANY" options={[]}
+      onPickExisting={mock.existing} onTypeNew={mock.create} onPickYuandian={mock.enterprise} onClear={mock.clear} />);
+    const trigger = screen.getByRole("combobox", { name: "委托方客户" });
+    fireEvent.click(trigger);
+    fireEvent.change(await screen.findByPlaceholderText("输入姓名 / 公司名"), { target: { value: "合成待选企业" } });
+    fireEvent.click(await screen.findByRole("option", { name: /SYNTHETIC-SELECTED/ }));
+    expect(mock.enterprise).toHaveBeenCalledExactlyOnceWith(candidate);
+    expect(mock.existing).not.toHaveBeenCalled();
+    expect(mock.create).not.toHaveBeenCalled();
+    await waitFor(() => expect(trigger).toHaveAttribute("aria-expanded", "false"));
+  });
+
   it("管辖地允许只选省，再选择市；原路径串保持不变", async () => {
     function Wrapper() {
       const [value, setValue] = useState("");
       return <><JurisdictionSelect value={value} onChange={setValue} /><output aria-label="当前管辖地">{value}</output></>;
     }
     render(<Wrapper />);
-    fireEvent.click(screen.getByRole("combobox", { name: "管辖地" }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: /浙江省/ }));
+    fireEvent.click(screen.getByRole("button", { name: "选择管辖地" }));
+    fireEvent.click(await screen.findByRole("combobox", { name: "省 / 直辖市" }));
+    fireEvent.click(await screen.findByRole("option", { name: /浙江省/ }));
     await waitFor(() => expect(screen.getByLabelText("当前管辖地")).toHaveTextContent(/^浙江省$/));
-    fireEvent.click(await screen.findByRole("menuitem", { name: /杭州市/ }));
+    fireEvent.click(screen.getByRole("combobox", { name: "市" }));
+    fireEvent.click(await screen.findByRole("option", { name: /杭州市/ }));
     await waitFor(() => expect(screen.getByLabelText("当前管辖地")).toHaveTextContent(/^浙江省\/杭州市$/));
-    fireEvent.click(await screen.findByRole("menuitem", { name: /上城区/ }));
+    fireEvent.click(screen.getByRole("combobox", { name: "区 / 县（可选）" }));
+    fireEvent.click(await screen.findByRole("option", { name: /上城区/ }));
     await waitFor(() => expect(screen.getByLabelText("当前管辖地")).toHaveTextContent(/^浙江省\/杭州市\/上城区$/));
   });
 });

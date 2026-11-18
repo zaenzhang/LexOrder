@@ -44,12 +44,12 @@ describe("通讯录 Semi 控件（服务动作替身）", () => {
     mock.update.mockRejectedValueOnce(new Error("save failed"));
     const close = vi.fn();
     render(<ExternalContactDialog open onOpenChange={close} editing={contact} />);
-    fireEvent.change(screen.getByLabelText("姓名 *"), { target: { value: "修改后合成联系人" } });
+    fireEvent.change(screen.getByLabelText("姓名"), { target: { value: "修改后合成联系人" } });
     fireEvent.change(screen.getByLabelText("备注"), { target: { value: "修改后备注" } });
     fireEvent.click(screen.getByRole("button", { name: "更新" }));
     await waitFor(() => expect(mock.error).toHaveBeenCalledWith("保存失败", expect.any(Object)));
     expect(close).not.toHaveBeenCalled();
-    expect(screen.getByLabelText("姓名 *")).toHaveValue("修改后合成联系人");
+    expect(screen.getByLabelText("姓名")).toHaveValue("修改后合成联系人");
     expect(screen.getByLabelText("备注")).toHaveValue("修改后备注");
     expect(mock.update).toHaveBeenCalledWith({
       id: contact.id, name: "修改后合成联系人", category: "COURT", organization: contact.organization,
@@ -64,7 +64,7 @@ describe("通讯录 Semi 控件（服务动作替身）", () => {
   it("类别下拉留在表单内，Escape 先关闭下拉，创建仍按服务端状态待审核", async () => {
     const close = vi.fn();
     render(<ExternalContactDialog open onOpenChange={close} editing={null} />);
-    fireEvent.change(screen.getByLabelText("姓名 *"), { target: { value: "合成仲裁联系人" } });
+    fireEvent.change(screen.getByLabelText("姓名"), { target: { value: "合成仲裁联系人" } });
     const category = screen.getByRole("combobox", { name: "类别 *" });
     fireEvent.click(category);
     const option = await screen.findByRole("option", { name: /仲裁/ });
@@ -87,12 +87,16 @@ describe("通讯录 Semi 控件（服务动作替身）", () => {
     render(<ExternalContactDialog open onOpenChange={close} editing={contact} />);
     fireEvent.click(screen.getByRole("button", { name: "更新" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "取消" })).toBeDisabled());
-    expect(screen.getByLabelText("姓名 *")).toBeDisabled();
+    expect(screen.getByLabelText("姓名")).toBeDisabled();
+    expect(screen.getByLabelText("备注")).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "类别 *" })).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(screen.getByRole("button", { name: "更新" }));
+    expect(mock.update).toHaveBeenCalledOnce();
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape", code: "Escape" });
     expect(close).not.toHaveBeenCalled();
     await act(async () => fail(new Error("save failed")));
-    await waitFor(() => expect(screen.getByLabelText("姓名 *")).toBeEnabled());
-    expect(screen.getByLabelText("姓名 *")).toHaveValue(contact.name);
+    await waitFor(() => expect(screen.getByLabelText("姓名")).toBeEnabled());
+    expect(screen.getByLabelText("姓名")).toHaveValue(contact.name);
     expect(close).not.toHaveBeenCalled();
   });
 
@@ -105,9 +109,9 @@ describe("通讯录 Semi 控件（服务动作替身）", () => {
     fireEvent.click(screen.getByRole("radio", { name: "鉴定专家" }));
     expect(screen.queryByText(contact.name)).not.toBeInTheDocument();
     expect(screen.getByText(other.name)).toBeInTheDocument();
-    fireEvent.change(screen.getByRole("textbox", { name: "搜索外部联系人" }), { target: { value: "不匹配" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "搜索联系人" }), { target: { value: "不匹配" } });
     expect(screen.getByText("暂无匹配联系人")).toBeInTheDocument();
-    fireEvent.change(screen.getByRole("textbox", { name: "搜索外部联系人" }), { target: { value: "鉴定所" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "搜索联系人" }), { target: { value: "鉴定所" } });
     expect(screen.getByText(other.name)).toBeInTheDocument();
   });
 

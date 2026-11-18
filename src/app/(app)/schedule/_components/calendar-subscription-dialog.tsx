@@ -15,17 +15,34 @@ import { actionErrorMessage } from "@/lib/action-error";
 
 export function CalendarSubscriptionDialog() {
   const [open, setOpen] = useState(false);
-  const trigger = useRef<HTMLButtonElement>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
   const dialogId = useId();
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <Button theme="outline" size="small" aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? dialogId : undefined}
-        onClick={(event) => { trigger.current = event.currentTarget; setOpen(true); }}>
-        <CalendarPlus className="h-3.5 w-3.5" strokeWidth={1.8} />
+      <Button
+        theme="outline"
+        type="tertiary"
+        size="small"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls={open ? dialogId : undefined}
+        icon={<CalendarPlus className="h-3.5 w-3.5" strokeWidth={1.8} />}
+        onClick={(event) => {
+          triggerRef.current = event.currentTarget;
+          setOpen(true);
+        }}
+      >
         订阅日历
       </Button>
-      <DialogContent id={dialogId} className="max-h-[85dvh] overflow-y-auto" onCloseAutoFocus={(event) => { event.preventDefault(); trigger.current?.focus(); }}>
+      <DialogContent
+        id={dialogId}
+        className="max-h-[85dvh] overflow-y-auto"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          triggerRef.current?.focus();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>订阅日历</DialogTitle>
           <DialogDescription>
@@ -110,23 +127,26 @@ function CalendarSubscriptionContent() {
           <code className="block w-full min-w-0 break-all rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-[11.5px]">
             {url}
           </code>
-          <Button theme="outline" size="small" onClick={copyUrl} className="h-8 gap-1.5">
-            <Copy className="h-3.5 w-3.5" />
+          <Button theme="outline" type="tertiary" size="small" onClick={copyUrl} disabled={pending} icon={<Copy className="h-3.5 w-3.5" />}>
             复制链接
           </Button>
           <Button
             theme="outline"
+            type="tertiary"
             size="small"
             onClick={regenerate}
             disabled={pending}
-            className="h-8 gap-1.5 text-muted-foreground"
+            loading={pending}
+            icon={<RefreshCw className="h-3.5 w-3.5" />}
           >
-            {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
             重置链接
           </Button>
         </div>
       ) : (
-        <div className="space-y-2"><p role="alert" className="text-sm text-destructive">订阅链接不可用。</p><Button theme="outline" size="small" onClick={() => setReload((value) => value + 1)}>重试</Button></div>
+        <div className="space-y-2">
+          <p role="alert" className="text-sm text-destructive">订阅链接不可用。</p>
+          <Button theme="outline" type="tertiary" size="small" onClick={() => setReload(value => value + 1)}>重试</Button>
+        </div>
       )}
     </div>
   );

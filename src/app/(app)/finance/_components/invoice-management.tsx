@@ -1,9 +1,10 @@
 "use client";
+import { Button } from "@douyinfe/semi-ui";
 import { useState } from "react";
 import Link from "next/link";
 import { Receipt, Clock, CheckCircle2, XCircle, Download, FileText, FileCheck2 } from "lucide-react";
 import type { InvoiceRequestStatus } from "@prisma/client";
-import { Button } from "@/components/ui/button";
+
 import { invoiceRequestStatusLabel, invoiceRequestStatusColor } from "@/lib/enums";
 import { formatCurrency, cn } from "@/lib/utils";
 import { approvalHref } from "@/lib/approvals/workspace";
@@ -51,20 +52,20 @@ export function InvoiceManagementSection({
               : requests.filter((r) => r.status === t.key).length;
           const active = filter === t.key;
           return (
-            <button
+            <Button
               key={t.key}
-              type="button"
+              htmlType="button"
               onClick={() => setFilter(t.key)}
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors",
                 active
                   ? "bg-primary/15 text-primary"
                   : "text-muted-foreground hover:bg-popover/50 hover:text-foreground"
-              )}
+              )} theme="borderless" type="tertiary"
             >
               {t.label}
               <span className="font-mono text-[10px] tabular opacity-70">{count}</span>
-            </button>
+            </Button>
           );
         })}
       </div>
@@ -199,7 +200,7 @@ export function InvoiceManagementSection({
                         电子发票
                       </a>
                     )}
-                    <Button size="sm" variant="outline" asChild><Link href={approvalHref("INVOICE_APPROVE", r.id)}>{canApprove && r.status === "PENDING" ? "前往审批工作台" : canApprove && r.status === "APPROVED" ? "前往开票回填" : "查看审批记录"}</Link></Button>
+                    <Link className="text-primary underline underline-offset-4" href={approvalHref("INVOICE_APPROVE", r.id)}>{canApprove && r.status === "PENDING" ? "前往审批工作台" : canApprove && r.status === "APPROVED" ? "前往开票回填" : "查看审批记录"}</Link>
                   </div>
                 </li>
               );
@@ -207,7 +208,6 @@ export function InvoiceManagementSection({
           </ul>
         )}
       </section>
-
 
     </div>
   );

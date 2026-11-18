@@ -20,6 +20,7 @@ describe("收案补正动作的 Semi 控件", () => {
     mock.withdraw.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; })).mockResolvedValue(undefined);
     render(<RevisionControls id="intake-original" status="PENDING_CONFIRMATION" />);
     const trigger = screen.getByRole("button", { name: "撤回补正" });
+    act(() => trigger.focus());
     fireEvent.click(trigger);
     fireEvent.change(screen.getByRole("textbox", { name: "撤回原因" }), { target: { value: "合成：需要补充资料" } });
     fireEvent.click(screen.getByRole("button", { name: "撤回申请" }));
@@ -29,6 +30,9 @@ describe("收案补正动作的 Semi 控件", () => {
     await act(async () => reject(new Error("合成失败")));
     expect(screen.getByRole("textbox", { name: "撤回原因" })).toHaveValue("合成：需要补充资料");
     expect(mock.refresh).not.toHaveBeenCalled();
+    // Semi Modal suppresses another confirmation click in its 100 ms debounce window.
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 110)); });
+    expect(screen.getByRole("button", { name: "撤回申请" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "撤回申请" }));
     await waitFor(() => expect(mock.withdraw).toHaveBeenCalledTimes(2));
     expect(mock.withdraw.mock.calls[1]).toEqual(mock.withdraw.mock.calls[0]);
@@ -40,6 +44,7 @@ describe("收案补正动作的 Semi 控件", () => {
     mock.void.mockRejectedValue(new Error("合成作废失败"));
     render(<RevisionControls id="intake-original" status="INTAKE" />);
     const trigger = screen.getByRole("button", { name: "作废草稿" });
+    act(() => trigger.focus());
     fireEvent.click(trigger);
     fireEvent.keyDown(screen.getByRole("textbox", { name: "作废原因" }), { key: "Escape", keyCode: 27 });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());

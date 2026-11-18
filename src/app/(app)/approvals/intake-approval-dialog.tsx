@@ -1,5 +1,6 @@
 "use client";
 
+import { Button, Checkbox, TextArea } from "@douyinfe/semi-ui";
 import { useEffect, useState, type ReactNode } from "react";
 import { Check, Paperclip } from "lucide-react";
 import { APPROVAL_STATUS_LABELS } from "@/lib/approvals/workspace";
@@ -73,27 +74,25 @@ export function IntakeApprovalDialog({ detail, intakeDetail, note, onNoteChange,
       sidebar={detail.task ? <>
         <ReviewStatusLine tone="amber" title="等待你的审批" desc={`你有本事项的收案审批授权${waited !== null ? ` · 已等待 ${waited} 天` : ""}`} />
         <label htmlFor="intake-approval-note" className="op-label">审批意见</label>
-        <textarea id="intake-approval-note" className="op-area" aria-label="审批意见或驳回原因" placeholder="请记录核查意见；驳回或退回补正时必填" value={note} onChange={event => onNoteChange(event.target.value)} maxLength={500} disabled={pending} />
+        <TextArea id="intake-approval-note" aria-label="审批意见或驳回原因" placeholder="请记录核查意见；驳回或退回补正时必填" value={note} onChange={event => onNoteChange(event)} maxLength={500} disabled={pending} />
         <div className="t-xs t-faint mt-1 text-right font-mono">{note.length} / 500</div>
-        <label className="op-check cursor-pointer">
-          <input type="checkbox" className="sr-only" checked={checkedMaterials} onChange={e => setCheckedMaterials(e.target.checked)} />
-          <span className={`box ${checkedMaterials ? "checked" : ""}`} aria-hidden>{checkedMaterials ? <Check strokeWidth={3.4} /> : null}</span>
+        <Checkbox checked={checkedMaterials} onChange={e => setCheckedMaterials(e.target.checked === true)} disabled={pending} className="my-3">
+
           <span>已核对申请资料与附件（{detail.attachments.length} 件），冲突检索结论为<b>「{latest?.conclusion ?? "尚未核查"}」</b>。</span>
-        </label>
-        <label className="op-check cursor-pointer">
-          <input type="checkbox" className="sr-only" checked={checkedConvert} onChange={e => setCheckedConvert(e.target.checked)} />
-          <span className={`box ${checkedConvert ? "checked" : ""}`} aria-hidden>{checkedConvert ? <Check strokeWidth={3.4} /> : null}</span>
+        </Checkbox>
+        <Checkbox checked={checkedConvert} onChange={e => setCheckedConvert(e.target.checked === true)} disabled={pending} className="my-3">
+
           <span>同意按申请登记当事人、收费与承办团队转入正式案件。</span>
-        </label>
+        </Checkbox>
         <div className="side-note" style={{ marginTop: 16 }}><span>系统检索供核查参考，最终判断及理由由审批人确认。审批结果与意见同事务写入审计日志，处理后不可重复审批。</span></div>
       </> : <>
         <ReviewStatusLine tone={detail.status === "REJECTED" ? "red" : "slate"} title={APPROVAL_STATUS_LABELS[detail.status] ?? "状态待核实"} desc={detail.canResubmit ? "补充完善申请资料后，可重新提交审批。" : "当前为只读查阅；后续进度会继续记录在此申请中。"} />
       </>}
       footer={detail.task ? <>
-        <button type="button" className="btn btn-danger" disabled={pending} onClick={() => onDecision("reject")}>驳回</button>
-        <button type="button" className="btn btn-secondary" disabled={pending} onClick={() => onDecision("revision")}>退回补正</button>
-        <button type="button" className="btn btn-approve" disabled={pending || !checkedMaterials || !checkedConvert} title={!checkedMaterials || !checkedConvert ? "请先勾选核对确认项" : undefined} onClick={() => onDecision("approve")}><Check />{pending ? "处理中…" : "审批通过"}</button>
-      </> : detail.canResubmit ? <button type="button" className="btn btn-primary" disabled={pending} onClick={onResubmit}>重新提交审批</button> : undefined}
+        <Button htmlType="button"  disabled={pending} onClick={() => onDecision("reject")} theme="solid" type="danger">驳回</Button>
+        <Button htmlType="button"  disabled={pending} onClick={() => onDecision("revision")} theme="outline" type="tertiary">退回补正</Button>
+        <Button htmlType="button"  disabled={pending || !checkedMaterials || !checkedConvert} title={!checkedMaterials || !checkedConvert ? "请先勾选核对确认项" : undefined} onClick={() => onDecision("approve")} theme="solid" type="primary"><Check />{pending ? "处理中…" : "审批通过"}</Button>
+      </> : detail.canResubmit ? <Button htmlType="button"  disabled={pending} onClick={onResubmit} theme="solid" type="primary">重新提交审批</Button> : undefined}
     />
   );
 }

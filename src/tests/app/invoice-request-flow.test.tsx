@@ -1,25 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
 const { context, search, prepare, create, upload, push } = vi.hoisted(() => ({ context: vi.fn(), search: vi.fn(), prepare: vi.fn(), create: vi.fn(), upload: vi.fn(), push: vi.fn() }));
 vi.mock("@/server/finance/actions", () => ({ getMatterInvoiceContext: context, searchMattersForInvoice: search, prepareInvoiceRequestUpload: prepare, createInvoiceRequest: create }));
 vi.mock("@/server/documents/actions", () => ({ uploadDocument: upload }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }), usePathname: () => "/matters/TEST-001", useSearchParams: () => new URLSearchParams("view=finance") }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
-// 此组只验证表单的案件/购方/附件状态。Radix 浮层与键盘交互由浏览器验收覆盖。
-vi.mock("@/components/ui/select", async () => {
-  const { Children, isValidElement } = await import("react");
-  const childrenOnly = ({ children }: { children: ReactNode }) => <>{children}</>;
-  return {
-    Select: ({ value, onValueChange, disabled, children }: { value: string; onValueChange: (value: string) => void; disabled?: boolean; children: ReactNode }) => {
-      const trigger = Children.toArray(children)[0];
-      const id = isValidElement<{ id?: string }>(trigger) ? trigger.props.id : undefined;
-      return <select id={id} disabled={disabled} value={value} onChange={event => onValueChange(event.target.value)}><option value="">请选择</option>{children}</select>;
-    },
-    SelectTrigger: () => null, SelectValue: () => null, SelectContent: childrenOnly, SelectGroup: childrenOnly,
-    SelectItem: ({ value, children }: { value: string; children: ReactNode }) => <option value={value}>{children}</option>,
-  };
-});
 import { InvoiceRequestSheet } from "@/app/(app)/matters/[id]/_components/invoice-request-sheet";
 import { InvoiceCreateDialog } from "@/app/(app)/finance/_components/invoice-create-dialog";
 
@@ -39,8 +24,8 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 async function choose(label: string, option: string) {
-  const target = await screen.findByRole("option", { name: option });
-  fireEvent.change(screen.getByRole("combobox", { name: label }), { target: { value: (target as HTMLOptionElement).value } });
+  fireEvent.click(screen.getByRole("combobox", { name: label }));
+  fireEvent.click(await screen.findByRole("option", { name: new RegExp(option.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }));
 }
 async function fillBase() {
   fireEvent.change(await screen.findByLabelText("开票金额（元） *"), { target: { value: "120" } });

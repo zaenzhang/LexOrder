@@ -1,8 +1,9 @@
 "use client";
 
+import { Select, Button, Checkbox, Input, RadioGroup, TextArea } from "@douyinfe/semi-ui";
 import { FormDialogContent as DialogContent, FormDialogBody, FormSection } from "@/components/patterns/form-dialog";
 
-import { useState, useTransition, useEffect } from "react";
+import { useRef, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { FileText, Loader2, Paperclip, Link2 } from "lucide-react";
 import { toast } from "sonner";
@@ -13,12 +14,7 @@ import {
   DialogDescription,
   DialogTitle
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { RadioChips } from "@/components/ui/radio-chips";
+
 import { listActiveSealPurposes } from "@/server/approval-permissions/actions";
 import { createSealRequest } from "@/server/seals/actions";
 import {
@@ -28,7 +24,6 @@ import {
 } from "./seal-types";
 import { MatterCombobox } from "./matter-combobox";
 import { actionErrorMessage } from "@/lib/action-error";
-
 
 function isPdfFile(file: File) {
   return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
@@ -56,6 +51,8 @@ export function SealRequestSheet({
   const [purposeConfigId, setPurposeConfigId] = useState("");
   const [purposes, setPurposes] = useState<Awaited<ReturnType<typeof listActiveSealPurposes>>>([]);
   useEffect(() => { if (open) listActiveSealPurposes().then(setPurposes).catch(() => toast.error("无法读取用章事项，请重新打开申请")); }, [open]);
+  const popupContainer = useRef<HTMLDivElement>(null);
+  const openDropdown = useRef(false);
   const [sealType, setSealType] = useState<string>("");
   const [matterId, setMatterId] = useState<string>("");
   /** 本次用印说明：一句话，说明这次为什么盖章；分类由上方「用章事项」承担（2026-09-19 去重） */
@@ -160,8 +157,8 @@ export function SealRequestSheet({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+    <Dialog open={open} onOpenChange={value => { if (!pending) onOpenChange(value); }}>
+      <DialogContent ref={popupContainer} className="max-w-3xl" onEscapeKeyDown={event => { if (pending || openDropdown.current) event.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle>新建用章申请</DialogTitle>
           <DialogDescription>填写用印事项并核对待盖章文件，提交后可在审批工作台跟进。</DialogDescription>
@@ -188,16 +185,16 @@ export function SealRequestSheet({
           )}
 
           <div className="md:col-span-2">
-            <Label className="text-xs">章种类 *</Label>
-            <RadioChips
+            <label className="text-xs">章种类 *</label>
+            <RadioGroup disabled={pending}
               className="mt-2"
-              items={enabledConfigs.map((c) => ({
+              options={enabledConfigs.map((c) => ({
                 value: c.type as string,
                 label: SEAL_TYPE_CN[c.type] ?? c.type,
                 description: c.description ?? undefined
               }))}
               value={sealType}
-              onChange={(v) => {
+              onChange={event => ((v) => {
                 setSealType(v);
                 // 事项与章型必须适配：切换章型后当前事项若不再允许，原生 select 会显示空白但 state 仍留旧值，提交才报错
                 setPurposeConfigId((cur) => {
@@ -205,7 +202,7 @@ export function SealRequestSheet({
                   const curPurpose = purposes.find((p) => p.id === cur);
                   return curPurpose && curPurpose.allowedSealTypes.some((t) => t === v) ? cur : "";
                 });
-              }}
+              })(String(event.target.value))} type="button"
             />
             {sealType && (
               <p className="mt-1.5 text-[11px] text-muted-foreground">
@@ -213,21 +210,18 @@ export function SealRequestSheet({
               </p>
             )}
             {sealType && sealType !== "LEGAL_REP_SEAL" && (
-              <label className="mt-2 flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border bg-background px-2.5 py-1.5 text-[12px]">
-                <Checkbox
-                  checked={alsoLegalRep}
-                  onCheckedChange={(v) => setAlsoLegalRep(v === true)}
-                />
+              <Checkbox disabled={pending} checked={alsoLegalRep} onChange={event => ((v) => setAlsoLegalRep(v === true))(event.target.checked === true)} className="mt-2">
+
                 <span>同时加盖 <strong className="text-foreground">法定代表人章</strong></span>
                 <span className="text-[11px] text-muted-foreground">
                   会自动建一条配套的法人章审批，与本章并行
                 </span>
-              </label>
+              </Checkbox>
             )}
           </div>
 
           <div>
-            <Label className="text-xs">关联案件 (可选)</Label>
+            <label className="text-xs">关联案件 (可选)</label>
             <div className="mt-1">
               {preset?.matterId ? (
                 // 从案件详情页发起时，case 已锁定，不展示可切换的下拉
@@ -238,7 +232,7 @@ export function SealRequestSheet({
                   </span>
                 </div>
               ) : (
-                <MatterCombobox
+                <MatterCombobox disabled={pending} onDropdownVisibleChange={visible => { openDropdown.current = visible; }}
                   matters={matters}
                   value={matterId}
                   onChange={setMatterId}
@@ -249,19 +243,18 @@ export function SealRequestSheet({
           </div>
 
           <div className="md:col-span-2">
-            <Label className="block text-xs">用章事项
-              <select className="my-2 h-9 w-full rounded-md border bg-background px-2 text-sm" value={purposeConfigId} onChange={e => setPurposeConfigId(e.target.value)}>
-                <option value="">请选择</option>{purposes.filter(p => !sealType || p.allowedSealTypes.some(t => t === sealType)).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </Label>
+            <label id="seal-purpose-config-label" className="block text-xs">用章事项</label>
+              <Select<string> aria-labelledby="seal-purpose-config-label" disabled={pending} getPopupContainer={() => popupContainer.current!} onDropdownVisibleChange={visible => { openDropdown.current = visible; }} value={purposeConfigId} onChange={value => (e => setPurposeConfigId(e))(String(value ?? ""))} className="my-2" style={{ width: "100%" }} motion={false}>
+                <Select.Option value="">请选择</Select.Option>{purposes.filter(p => !sealType || p.allowedSealTypes.some(t => t === sealType)).map(p => <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>)}
+              </Select>
             {!purposes.length && <p className="mb-2 text-xs text-muted-foreground">管理员尚未配置用章事项：事项为必选项，未配置前无法提交用章申请，请联系管理员在管理后台配置。</p>}
-            <Label className="text-xs" htmlFor="seal-purpose">本次用印说明 *</Label>
-            <Input
+            <label className="text-xs" htmlFor="seal-purpose">本次用印说明 *</label>
+            <Input disabled={pending}
               id="seal-purpose"
               className="mt-2"
               maxLength={60}
               value={purpose}
-              onChange={(e) => setPurpose(e.target.value)}
+              onChange={(e) => setPurpose(e)}
               placeholder="一句话说明这次为什么盖章，如：向华东置业发送催告履行律师函"
             />
           </div>
@@ -270,53 +263,50 @@ export function SealRequestSheet({
         <FormSection title="文件信息" description="核对文件名称、数量与盖章要求">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
-            <Label className="text-xs">文件标题 *</Label>
-            <Input
+            <label className="text-xs">文件标题 *</label>
+            <Input disabled={pending}
               value={documentTitle}
-              onChange={(e) => setDocumentTitle(e.target.value)}
+              onChange={(e) => setDocumentTitle(e)}
               className="mt-1"
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">页数</Label>
-              <Input
+              <label className="text-xs">页数</label>
+              <Input disabled={pending}
                 type="number"
                 min={1}
                 value={pageCount}
-                onChange={(e) => setPageCount(Math.max(1, parseInt(e.target.value) || 1))}
+                onChange={(e) => setPageCount(Math.max(1, parseInt(e) || 1))}
                 className="mt-1"
               />
             </div>
             <div>
-              <Label className="text-xs">份数</Label>
-              <Input
+              <label className="text-xs">份数</label>
+              <Input disabled={pending}
                 type="number"
                 min={1}
                 value={copies}
-                onChange={(e) => setCopies(Math.max(1, parseInt(e.target.value) || 1))}
+                onChange={(e) => setCopies(Math.max(1, parseInt(e) || 1))}
                 className="mt-1"
               />
             </div>
           </div>
 
           <div className="flex items-center justify-between md:col-span-2">
-            <label className="flex items-center gap-2 text-[12px]">
-              <Checkbox
-                checked={crossPage}
-                onCheckedChange={(v) => setCrossPage(v === true)}
-              />
+            <Checkbox disabled={pending} checked={crossPage} onChange={event => ((v) => setCrossPage(v === true))(event.target.checked === true)} className="flex items-center gap-2 text-[12px]">
+
               需要骑缝章
-            </label>
-            <RadioChips
-              size="sm"
-              items={[
+            </Checkbox>
+            <RadioGroup disabled={pending}
+              buttonSize="small"
+              options={[
                 { value: "NORMAL", label: "普通" },
-                { value: "URGENT", label: "紧急", accent: "#B42318" }
+                { value: "URGENT", label: "紧急" }
               ]}
               value={urgency}
-              onChange={(v) => setUrgency(v as "NORMAL" | "URGENT")}
+              onChange={event => ((v) => setUrgency(v as "NORMAL" | "URGENT"))(String(event.target.value))} type="button"
             />
           </div>
 
@@ -324,10 +314,10 @@ export function SealRequestSheet({
         <FormSection title="材料与说明">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
-            <Label className="text-xs">备注</Label>
-            <Textarea
+            <label className="text-xs">备注</label>
+            <TextArea disabled={pending}
               value={requestNote}
-              onChange={(e) => setRequestNote(e.target.value)}
+              onChange={(e) => setRequestNote(e)}
               rows={2}
               className="mt-1 text-[12px]"
             />
@@ -335,7 +325,7 @@ export function SealRequestSheet({
 
           {!hasExisting && (
             <div className="md:col-span-2">
-              <Label className="text-xs">待盖章稿 *</Label>
+              <label className="text-xs">待盖章稿 *</label>
               <div className="mt-1">
                 <label className="flex cursor-pointer items-center gap-2 rounded border border-dashed border-border px-3 py-3 text-[12px] text-muted-foreground hover:bg-muted/30">
                   <Paperclip className="h-3.5 w-3.5" />
@@ -347,7 +337,7 @@ export function SealRequestSheet({
                   ) : (
                     "选择 PDF 文件"
                   )}
-                  <input
+                  <input disabled={pending}
                     type="file"
                     accept="application/pdf,.pdf"
                     className="hidden"
@@ -370,10 +360,10 @@ export function SealRequestSheet({
         </div>
         </FormDialogBody>
         <DialogFooter className="mt-6">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button theme="outline" type="tertiary" disabled={pending} onClick={() => onOpenChange(false)} htmlType="button">
             取消
           </Button>
-          <Button onClick={submit} disabled={pending}>
+          <Button onClick={submit} disabled={pending} theme="solid" type="primary" htmlType="button">
             {pending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
             提交申请
           </Button>

@@ -6,7 +6,7 @@ const mock = vi.hoisted(() => ({
   actor: null as { id: string } | null,
   create: vi.fn(), revision: vi.fn(), resubmit: vi.fn(), upload: vi.fn(), conflicts: vi.fn(),
   duplicate: vi.fn(), enterpriseSearch: vi.fn(), enterpriseDetail: vi.fn(),
-  closed: vi.fn(), warning: vi.fn(), submitted: vi.fn(), push: vi.fn(), refresh: vi.fn()
+  warning: vi.fn(), submitted: vi.fn(), closed: vi.fn(), push: vi.fn(), refresh: vi.fn()
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mock.push, refresh: mock.refresh }) }));
 vi.mock("@/components/workspace-actor-provider", () => ({ useWorkspaceActor: () => mock.actor }));
@@ -99,6 +99,10 @@ beforeEach(() => {
   mock.duplicate.mockResolvedValue({ idNumberExists: false, nameDuplicates: [] });
   mock.enterpriseSearch.mockResolvedValue({ configured: false, items: [] });
   mock.enterpriseDetail.mockResolvedValue({ configured: false, info: null });
+  vi.stubGlobal("matchMedia", vi.fn().mockImplementation(query => ({
+    matches: false, media: query, onchange: null,
+    addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn()
+  })));
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   HTMLElement.prototype.scrollIntoView = vi.fn();
   HTMLElement.prototype.scrollTo = vi.fn();
@@ -281,49 +285,52 @@ describe("委托方地位与确认摘要", () => {
     const description = screen.getByPlaceholderText("客户来源、核心诉求、注意事项…");
     fireEvent.change(description, { target: { value: "合".repeat(2001) } });
     fireEvent.click(screen.getByRole("button", { name: "保存补正" }));
-    await waitFor(() => expect(within(description.closest<HTMLElement>(".fsec-body")!).getByText(/2000/)).toBeVisible());
+    await waitFor(() => expect(within(description.closest(".fsec-body") as HTMLElement).getByText(/2000/)).toBeVisible());
     expect(footer()).toHaveTextContent("第 4 / 4 步 · 全部 1 项待检查");
     expect(description).toBeVisible();
+    await waitFor(() => expect(description).toHaveFocus());
     expect(mock.revision).not.toHaveBeenCalled();
     fireEvent.change(description, { target: { value: "合成补充说明" } });
     await waitFor(() => {
-      expect(within(description.closest<HTMLElement>(".fsec-body")!).queryByText(/2000/)).not.toBeInTheDocument();
+      expect(within(description.closest(".fsec-body") as HTMLElement).queryByText(/2000/)).not.toBeInTheDocument();
       expect(footer()).not.toHaveTextContent("待检查");
     });
   });
 });
 
 
-describe("Semi 收案控件接线", () => {
-  it("下拉在收案抽屉内，Escape 先收选单再关闭表单", async () => {
-    renderWizard({ ownerUserId: ownerId });
-    await nextTo(2);
-    await nextTo(3);
-    const select = screen.getByRole("combobox", { name: "主办律师" });
-    fireEvent.click(select);
-    const option = await screen.findByRole("option", { name: /合成主办律师/ });
-    expect(screen.getByRole("dialog", { name: "补正收案资料" })).toContainElement(option);
-    fireEvent.keyDown(select, { key: "Escape", keyCode: 27 });
-    await waitFor(() => expect(select).toHaveAttribute("aria-expanded", "false"));
-    expect(mock.closed).not.toHaveBeenCalled();
-    fireEvent.keyDown(select, { key: "Escape", keyCode: 27 });
-    expect(mock.closed).toHaveBeenCalledWith(false);
+describe("Semi 向导弹层与保存接续", () => {
+  it("备案下拉第一下 Escape 只关闭选项，第二下才交给父抽屉", async () => {
+    const close = vi.fn();
+    render(<IntakeWizard open onOpenChange={close} clientOptions={[]} colleagues={[]}
+      editing={{ id: intakeId, revision: 1, values: values() }} />);
+    const filing = screen.getByRole("combobox", { name: "是否需向律协备案" });
+    fireEvent.click(filing);
+    await screen.findByRole("listbox");
+    fireEvent.keyDown(filing, { key: "Escape", keyCode: 27, which: 27 });
+    await waitFor(() => expect(filing).toHaveAttribute("aria-expanded", "false"));
+    expect(close).not.toHaveBeenCalled();
+    fireEvent.keyDown(filing, { key: "Escape", keyCode: 27, which: 27 });
+    expect(close).toHaveBeenCalledWith(false);
   });
 
-  it("保存失败保留当前补充说明，重试仍提交原收案与版本", async () => {
+  it("保存失败保留 Semi 选择及草稿，重试仍保存原收案与修订", async () => {
     mock.revision.mockRejectedValueOnce(new Error("合成保存失败"));
     renderWizard();
+    fireEvent.click(screen.getByRole("combobox", { name: "是否需向律协备案" }));
+    fireEvent.click(await screen.findByRole("option", { name: /需要，涉重大案件/ }));
     await toConfirmation();
-    fireEvent.change(screen.getByPlaceholderText("客户来源、核心诉求、注意事项…"), { target: { value: "合成保留的补充说明" } });
+    fireEvent.change(screen.getByPlaceholderText("客户来源、核心诉求、注意事项…"), { target: { value: "合成失败后保留的说明" } });
     fireEvent.click(screen.getByRole("button", { name: "保存补正" }));
     await waitFor(() => expect(mock.revision).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.getByRole("button", { name: "保存补正" })).toBeEnabled());
-    expect(screen.getByPlaceholderText("客户来源、核心诉求、注意事项…")).toHaveValue("合成保留的补充说明");
+    await waitFor(() => expect(screen.getByRole("button", { name: "保存补正" })).not.toBeDisabled());
+    expect(mock.submitted).not.toHaveBeenCalled();
     expect(mock.closed).not.toHaveBeenCalled();
-    const first = mock.revision.mock.calls[0];
+    expect(mock.push).not.toHaveBeenCalled();
+    expect(mock.refresh).not.toHaveBeenCalled();
+    expect(screen.getByPlaceholderText("客户来源、核心诉求、注意事项…")).toHaveValue("合成失败后保留的说明");
     fireEvent.click(screen.getByRole("button", { name: "保存补正" }));
-    await waitFor(() => expect(mock.revision).toHaveBeenCalledTimes(2));
-    expect(mock.revision.mock.calls[1]).toEqual(first);
     await waitFor(() => expect(mock.submitted).toHaveBeenCalledWith(intakeId));
+    expect(mock.revision).toHaveBeenNthCalledWith(2, intakeId, 1, expect.objectContaining({ barFiling: "MAJOR", description: "合成失败后保留的说明" }));
   });
 });

@@ -1,7 +1,8 @@
 "use client";
+import { Button } from "@douyinfe/semi-ui";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+
 import { recognizeInvoiceFromImage, type RecognizedInvoice } from "@/server/ai/actions";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -27,7 +28,7 @@ export function InvoiceRecognition({ file, onNumber, requestedAmount }: { file: 
     finally { if (generation.current === current) setPending(false); }
   }
   const amount = result?.totalWithTax ?? result?.totalAmount;
-  return <div className="space-y-2"><Button type="button" variant="outline" size="sm" disabled={!file || pending || file.size > 6 * 1024 * 1024} onClick={recognize}>{pending ? "正在识别…" : "识别发票信息"}</Button>
+  return <div className="space-y-2"><Button htmlType="button" theme="outline" type="tertiary" size="small" disabled={!file || pending || file.size > 6 * 1024 * 1024} onClick={recognize}>{pending ? "正在识别…" : "识别发票信息"}</Button>
     <p className="text-xs text-muted-foreground">可使用已配置的智能识别服务读取所选发票（限 6MB），也可直接手填号码。</p>
     {result && <div className="space-y-1 rounded-lg bg-muted/40 p-3 text-sm"><p>发票号码：{result.invoiceNumber || "未识别"}</p><p>购方：{result.buyerName || "未识别"}</p><p>销方：{result.sellerName || "未识别"}</p><p>金额：{amount ?? "未识别"}</p>{typeof amount === "number" && requestedAmount && Math.abs(amount - Number(requestedAmount)) > 0.01 && <p className="text-destructive">识别金额与申请金额不一致，请核对。</p>}</div>}
   </div>;

@@ -68,13 +68,13 @@ describe("Semi 收件箱操作（真实控件，服务替身）", () => {
     render(<GenerateHearingDialog open onOpenChange={mock.close} sms={sms} matter={matter} />);
     fireEvent.click(screen.getByRole("combobox", { name: /关联程序/ }));
     fireEvent.click(await screen.findByRole("option", { name: /合成第二程序/ }));
-    fireEvent.change(screen.getByLabelText("标题"), { target: { value: "合成询问" } });
-    fireEvent.change(screen.getByLabelText("开庭时间"), { target: { value: "2026-11-21T15:20" } });
+    fireEvent.change(screen.getByLabelText(/^标题/), { target: { value: "合成询问" } });
+    fireEvent.change(screen.getByLabelText(/^开庭时间/), { target: { value: "2026-11-21T15:20" } });
     fireEvent.change(screen.getByLabelText("备注"), { target: { value: "合成待核对说明" } });
     fireEvent.click(screen.getByRole("button", { name: "生成开庭" }));
     await waitFor(() => expect(mock.error).toHaveBeenCalledWith("合成庭期失败"));
     expect(mock.close).not.toHaveBeenCalled();
-    expect(screen.getByLabelText("标题")).toHaveValue("合成询问");
+    expect(screen.getByLabelText(/^标题/)).toHaveValue("合成询问");
     expect(screen.getByRole("combobox", { name: /关联程序/ })).toHaveTextContent("合成第二程序");
     await waitFor(() => expect(screen.getByRole("button", { name: "生成开庭" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "生成开庭" }));

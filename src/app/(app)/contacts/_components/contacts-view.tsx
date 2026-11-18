@@ -1,11 +1,12 @@
 "use client";
+import { Avatar, Button, Input, RadioGroup } from "@douyinfe/semi-ui";
 import { customOrLegacy, hasCustomPermission, scopeFor, type RoleGrant } from "@/lib/roles/catalog";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Archive, Check, XCircle } from "lucide-react";
 import type { ExternalContactCategory, ExternalContactStatus } from "@prisma/client";
-import { Avatar, Button, Input, RadioGroup, Tag } from "@douyinfe/semi-ui";
+
 import { userRoleLabel } from "@/lib/enums";
 import { ExternalContactDialog } from "./external-contact-dialog";
 import {
@@ -167,42 +168,35 @@ export function ContactsView({
           <h2 className="flex items-center gap-2 text-sm font-medium">
             外部联系人 ({externalContacts.length})
             {canReviewContacts && pendingCount > 0 && (
-              <Tag color="orange">
+              <span className="rounded-full border border-[var(--amber-line)] bg-[var(--amber-bg)] px-2 py-0.5 text-[10px] font-medium text-[var(--amber)]">
                 {personal ? "待确认" : "待审核"} {pendingCount}
-              </Tag>
+              </span>
             )}
           </h2>
-          <Button
-            htmlType="button"
+          <Button theme="outline" htmlType="button"
             size="small"
-            theme="solid"
             onClick={() => {
               setEditing(null);
               setDialogOpen(true);
             }}
-            icon={<Plus className="h-3.5 w-3.5" />}
+            className="gap-1.5"
           >
+            <Plus className="h-3.5 w-3.5" />
             新增
           </Button>
         </header>
 
         <div className="flex flex-wrap items-center gap-2">
-          <RadioGroup
-            type="button"
-            buttonSize="small"
-            aria-label="联系人类别"
-            options={[{ value: "ALL", label: "全部" }, ...(Object.keys(EXT_CATEGORY_LABEL) as ExternalContactCategory[]).map((c) => ({ value: c, label: EXT_CATEGORY_LABEL[c] }))]}
-            value={filter}
-            onChange={(event) => setFilter(event.target.value as ExternalContactCategory | "ALL")}
+          <RadioGroup type="button" buttonSize="small" aria-label="联系人类别" value={filter}
+            options={[{ value: "ALL", label: "全部" }, ...(Object.keys(EXT_CATEGORY_LABEL) as ExternalContactCategory[]).map(value => ({ value, label: EXT_CATEGORY_LABEL[value] }))]}
+            onChange={event => setFilter(event.target.value as ExternalContactCategory | "ALL")}
           />
           <Input
-            aria-label="搜索外部联系人"
+            type="text"
             value={search}
-            onChange={setSearch}
-            placeholder="搜索姓名 / 单位 / 电话"
-            showClear
-            size="small"
-            style={{ marginLeft: "auto", width: 240 }}
+            onChange={(value) => setSearch(value)}
+            aria-label="搜索联系人" placeholder="搜索姓名 / 单位 / 电话"
+            className="ml-auto w-48"
           />
         </div>
 
@@ -224,13 +218,13 @@ export function ContactsView({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{c.name}</span>
-                      <Tag>
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
                         {EXT_CATEGORY_LABEL[c.category]}
-                      </Tag>
+                      </span>
                       {c.status === "PENDING_REVIEW" && (
-                        <Tag color="orange">
+                        <span className="rounded-full border border-[var(--amber-line)] bg-[var(--amber-bg)] px-2 py-0.5 text-[10px] font-medium text-[var(--amber)]">
                           {personal ? "待确认" : "待审核"}
-                        </Tag>
+                        </span>
                       )}
                       {c.title && (
                         <span className="text-[11px] text-muted-foreground">{c.title}</span>
@@ -263,21 +257,22 @@ export function ContactsView({
                           <Button
                             htmlType="button"
                             theme="borderless"
-                            type="primary"
                             size="small"
                             onClick={() => handleApprove(c)}
-                            icon={<Check className="h-3 w-3" />}
+                            className="gap-1"
                           >
+                            <Check className="h-3 w-3" />
                             {personal ? "本人确认" : "通过"}
                           </Button>
                           <Button
                             htmlType="button"
                             theme="borderless"
-                            type="danger"
                             size="small"
+                            type="danger"
                             onClick={() => handleReject(c)}
-                            icon={<XCircle className="h-3 w-3" />}
+                            className="gap-1"
                           >
+                            <XCircle className="h-3 w-3" />
                             驳回
                           </Button>
                         </div>
@@ -287,24 +282,24 @@ export function ContactsView({
                           <Button
                             htmlType="button"
                             theme="borderless"
-                            type="tertiary"
                             size="small"
                             aria-label={`编辑联系人 ${c.name}`}
                             onClick={() => {
                               setEditing(c);
                               setDialogOpen(true);
                             }}
-                            icon={<Pencil className="h-3 w-3" />}
-                          />
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
                           <Button
                             htmlType="button"
                             theme="borderless"
-                            type="danger"
                             size="small"
                             aria-label={`归档联系人 ${c.name}`}
                             onClick={() => handleArchive(c)}
-                            icon={<Archive className="h-3 w-3" />}
-                          />
+                          >
+                            <Archive className="h-3 w-3" />
+                          </Button>
                         </>
                       )}
                     </div>

@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { Inbox, Gavel, Clock, CheckCircle2, Trash2, Briefcase, ExternalLink, Phone, Loader2, Sparkles, AlertCircle, ArrowRight, CalendarClock, FileCheck2, FileDigit, FileDown, KeyRound, Upload } from "lucide-react";
+import { Inbox, Gavel, Clock, CheckCircle2, Trash2, Link as LinkIcon, Briefcase, ExternalLink, Phone, Loader2, Sparkles, AlertCircle, ArrowRight, CalendarClock, FileCheck2, FileDigit, FileDown, KeyRound, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { Button, Select, Tabs, TabPane } from "@douyinfe/semi-ui";
+import { Button, Select, Tabs, Tag } from "@douyinfe/semi-ui";
 import { cn, formatDateTime } from "@/lib/utils";
 import {
   extractSmsAttachments,
@@ -106,50 +106,51 @@ export function InboxView({
         sub="粘贴 12368 / 法院短信 → 自动解析 → 一键生成开庭 / 期限"
       />
 
-      <Tabs activeKey={tab} onChange={(key) => setTab(key as Tab)}>
-        {[
-          { key: "unprocessed", label: "待处理", count: unprocessed.length },
-          { key: "needsManual", label: "待人工", count: needsManual.length },
-          { key: "needsMatch", label: "待匹配", count: (needsMatch ?? []).length },
-          { key: "processed", label: "已处理", count: processed.length }
-        ].map(({ key, label, count }) => (
-          <TabPane key={key} itemKey={key} tab={<>{label}<Count n={count} hot={key !== "processed" && count > 0} /></>}>
-            {tab === key ? (
-              <div className="space-y-2">
-                {rows.length === 0 ? (
-                  <div className="ll-surface rounded-lg border border-border p-12 text-center text-sm text-muted-foreground">
-                    <Inbox className="mx-auto mb-2 h-6 w-6 opacity-40" />
-                    {tab === "unprocessed"
-                      ? "无待处理短信"
-                      : tab === "needsManual"
-                        ? "没有需要人工处理的电子送达"
-                        : tab === "needsMatch"
-                          ? "没有待匹配案件的来件（文件已安全保存在您的私有来件区）"
-                          : "暂无已处理记录"}
-                  </div>
-                ) : (
-                  rows.map((sms) => (
-                    <SmsCard
-                      key={sms.id}
-                      domId={`sms-${sms.id}`}
-                      sms={sms}
-                      matters={matters}
-                      onGenerateHearing={() => {
-                        if (sms.matchedMatter) setHearingTarget({ sms, matter: sms.matchedMatter });
-                      }}
-                      onGenerateDeadline={() => {
-                        if (sms.matchedMatter) setDeadlineTarget({ sms, matter: sms.matchedMatter });
-                      }}
-                      onBackfillCaseNumber={() => {
-                        if (sms.matchedMatter) setBackfillTarget({ sms, matter: sms.matchedMatter });
-                      }}
-                    />
-                  ))
-                )}
-              </div>
-            ) : null}
-          </TabPane>
-        ))}
+      <Tabs
+        activeKey={tab}
+        onChange={value => setTab(value as Tab)}
+        tabPaneMotion={false}
+        tabList={[
+          { itemKey: "unprocessed", tab: <>待处理 <Count n={unprocessed.length} hot /></> },
+          { itemKey: "needsManual", tab: <>待人工 <Count n={needsManual.length} hot /></> },
+          { itemKey: "needsMatch", tab: <>待匹配 <Count n={(needsMatch ?? []).length} hot /></> },
+          { itemKey: "processed", tab: <>已处理 <Count n={processed.length} /></> }
+        ]}
+      >
+      <Tabs.TabPane itemKey={tab}>
+      <div className="space-y-2">
+        {rows.length === 0 ? (
+          <div className="ll-surface rounded-lg border border-border p-12 text-center text-sm text-muted-foreground">
+            <Inbox className="mx-auto mb-2 h-6 w-6 opacity-40" />
+            {tab === "unprocessed"
+              ? "无待处理短信"
+              : tab === "needsManual"
+                ? "没有需要人工处理的电子送达"
+                : tab === "needsMatch"
+                  ? "没有待匹配案件的来件（文件已安全保存在您的私有来件区）"
+                  : "暂无已处理记录"}
+          </div>
+        ) : (
+          rows.map((sms) => (
+            <SmsCard
+              key={sms.id}
+              domId={`sms-${sms.id}`}
+              sms={sms}
+              matters={matters}
+              onGenerateHearing={() => {
+                if (sms.matchedMatter) setHearingTarget({ sms, matter: sms.matchedMatter });
+              }}
+              onGenerateDeadline={() => {
+                if (sms.matchedMatter) setDeadlineTarget({ sms, matter: sms.matchedMatter });
+              }}
+              onBackfillCaseNumber={() => {
+                if (sms.matchedMatter) setBackfillTarget({ sms, matter: sms.matchedMatter });
+              }}
+            />
+          ))
+        )}
+      </div>
+      </Tabs.TabPane>
       </Tabs>
 
       <SmsPasteDialog open={pasteOpen} onOpenChange={setPasteOpen} />
@@ -183,17 +184,7 @@ export function InboxView({
 }
 
 function Count({ n, hot }: { n: number; hot?: boolean }) {
-  if (n === 0) return null;
-  return (
-    <span
-      className={cn(
-        "ml-1 inline-flex items-center justify-center rounded-full px-1.5 font-mono text-[10px]",
-        hot ? "bg-[var(--amber-bg)] text-[var(--amber)]" : "bg-muted/60 text-muted-foreground"
-      )}
-    >
-      {n}
-    </span>
-  );
+  return n ? <Tag size="small" color={hot ? "amber" : "grey"}>{n}</Tag> : null;
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -415,11 +406,12 @@ function SmsCard({
           <span className="text-[11px] text-muted-foreground">
             收件人可把实际取得的原件补传回本条来件；同内容补传可接续尚未入卷的文件。
           </span>
-          <Button theme="outline" size="small" disabled={uploading || pending} loading={uploading} icon={<Upload className="h-3 w-3" />} onClick={() => uploadInput.current?.click()}>
+          <Button htmlType="button" theme="outline" type="tertiary" size="small" disabled={uploading || pending} loading={uploading} icon={<Upload className="h-3 w-3" />} onClick={() => uploadInput.current?.click()}>
             补传文件
           </Button>
             <input
               ref={uploadInput}
+              aria-label="补传来件原件"
               type="file"
               multiple
               disabled={uploading || pending}
@@ -528,10 +520,7 @@ function SmsCard({
           <MatterPicker sms={sms} matters={matters} />
         )}
 
-        <Button
-          theme="borderless" size="small"
-          onClick={() => setShowRaw((v) => !v)}
-        >
+        <Button htmlType="button" size="small" theme="borderless" type="tertiary" onClick={() => setShowRaw(v => !v)}>
           {showRaw ? "收起原文" : "查看原文"}
         </Button>
 
@@ -541,7 +530,7 @@ function SmsCard({
               {sms.smsType === "HEARING_NOTICE" && (
                 <Button
                   size="small"
-                  theme="outline"
+                  theme="outline" type="tertiary"
                   onClick={onGenerateHearing}
                   className="h-7 gap-1 text-[11px]"
                 >
@@ -551,7 +540,7 @@ function SmsCard({
               )}
               <Button
                 size="small"
-                theme="outline"
+                theme="outline" type="tertiary"
                 onClick={onGenerateDeadline}
                 className="h-7 gap-1 text-[11px]"
               >
@@ -561,7 +550,7 @@ function SmsCard({
               {canBackfillCaseNumber && (
                 <Button
                   size="small"
-                  theme="outline"
+                  theme="outline" type="tertiary"
                   onClick={onBackfillCaseNumber}
                   className="h-7 gap-1 text-[11px]"
                   title="把短信解析出的案号回填到缺案号的程序"
@@ -575,7 +564,7 @@ function SmsCard({
           {parsed.urls.length > 0 && (
             <Button
               size="small"
-              theme="outline"
+              theme="outline" type="tertiary"
               onClick={onExtractAttachments}
               disabled={pending}
               className="h-7 gap-1 text-[11px]"
@@ -588,7 +577,7 @@ function SmsCard({
           {!sms.processed && (
             <Button
               size="small"
-              theme="borderless"
+              theme="borderless" type="tertiary"
               onClick={onMarkProcessed}
               disabled={pending}
               className="h-7 gap-1 text-[11px]"
@@ -598,13 +587,15 @@ function SmsCard({
             </Button>
           )}
           <Button
-            theme="borderless" type="danger" size="small" aria-label="删除短信"
+            htmlType="button"
+            theme="borderless"
+            type="danger"
+            size="small"
             onClick={onDelete}
             disabled={pending}
-            title="删除"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+            aria-label="删除短信"
+            icon={<Trash2 className="h-3.5 w-3.5" />}
+          />
         </div>
       </div>
 
@@ -706,42 +697,44 @@ function UrgencyBadge({ level }: { level: "HIGH" | "MEDIUM" | "LOW" }) {
   );
 }
 
-// 从当前可见案件中选择；失败后保留目标，可直接重试同一关联。
+// 保留失败时的选择供重试；已关联案件仍只取服务端确认后的记录。
 function MatterPicker({ sms, matters }: { sms: SmsRow; matters: MatterOption[] }) {
+  const labelId = useId();
   const [targetId, setTargetId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  function onPick(matterId: string) {
+  const onPick = (matterId: string) => {
     setTargetId(matterId);
     setError(null);
     startTransition(async () => {
       try {
         await matchSmsToMatter({ smsId: sms.id, matterId });
         toast.success("已关联案件");
-      } catch (error) {
-        setError(error instanceof Error ? actionErrorMessage(error) : "关联失败，请重试");
+      } catch (e) {
+        setError(e instanceof Error ? actionErrorMessage(e) : "关联失败，请重试");
       }
     });
-  }
+  };
 
-  return <div className="space-y-1">
-    <span id={`sms-${sms.id}-matter-label`} className="sr-only">指派案件</span>
-    <Select
-      aria-labelledby={`sms-${sms.id}-matter-label`}
-      placeholder="指派案件"
-      searchPlaceholder="搜索编号或案件名..."
-      filter
-      motion={false}
-      value={targetId || undefined}
-      disabled={pending}
-      loading={pending}
-      size="small"
-      style={{ width: 280 }}
-      optionList={matters.map(matter => ({ value: matter.id, label: `${matter.internalCode} ${matter.title}` }))}
-      onChange={value => onPick(value as string)}
-      emptyContent="未找到"
-    />
-    {error ? <div className="flex items-center gap-2"><p role="alert" className="text-xs text-destructive">{error}</p><Button size="small" theme="borderless" onClick={() => onPick(targetId)} disabled={pending}>重试关联</Button></div> : null}
+  return <div className="space-y-1"><span id={labelId} className="sr-only">指派案件</span><Select
+    aria-labelledby={labelId}
+    placeholder="指派案件"
+    searchPlaceholder="搜索编号或案件名..."
+    prefix={<LinkIcon className="h-3 w-3" />}
+    style={{ width: 320 }}
+    filter
+    motion={false}
+    value={targetId || undefined}
+    loading={pending}
+    disabled={pending}
+    emptyContent="未找到"
+    optionList={matters.map(matter => ({ value: matter.id, label: `${matter.internalCode} ${matter.title}` }))}
+    onChange={value => { if (typeof value === "string") onPick(value); }}
+  />
+    {error && <div className="flex items-center gap-2">
+      <p role="alert" className="text-xs text-destructive">{error}</p>
+      <Button htmlType="button" size="small" theme="borderless" onClick={() => onPick(targetId)} disabled={pending}>重试关联</Button>
+    </div>}
   </div>;
 }

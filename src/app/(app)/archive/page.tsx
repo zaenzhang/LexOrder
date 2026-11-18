@@ -12,9 +12,7 @@ import { isSystemAdmin } from "@/lib/auth/system-role";
 import { matterCategoryLabel } from "@/lib/enums";
 import { matterHref } from "@/lib/matters/route";
 import { PageHeader } from "@/components/patterns/moan";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { ArchiveSearchForm } from "./_components/archive-search-form";
 import { ActionError } from "@/lib/action-error";
 import { archiveListSchema } from "@/server/archive/list-cursor";
 
@@ -57,14 +55,9 @@ export default async function ArchivePage({ searchParams }: { searchParams: Prom
 
       <BorrowPanel mine={page.borrows.mine} pending={page.borrows.pending} canApply={!page.hasArchiveRead} />
 
-      {page.hasArchiveRead && <form action="/archive" method="get" className="flex items-end gap-2">
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5"><Label htmlFor="archive-query">归档号、案号或案件名称</Label>
-          <Input id="archive-query" name="q" defaultValue={query} maxLength={200} />
-        </div>
-        <Button type="submit">查找归档</Button>
-      </form>}
+      {page.hasArchiveRead && <ArchiveSearchForm key={query} query={query} />}
       {pageError && <div role="alert" className="flex items-center justify-between gap-3 rounded-md border p-4">
-        <p>{pageError}</p><Button variant="outline" asChild><Link href={archiveHref()}>从第一页查找</Link></Button>
+        <p>{pageError}</p><Link className="text-primary underline underline-offset-4" href={archiveHref()}>从第一页查找</Link>
       </div>}
 
       {result && (items.length === 0 ? (
@@ -142,8 +135,8 @@ export default async function ArchivePage({ searchParams }: { searchParams: Prom
       {result && <nav aria-label="归档记录分页" className="flex items-center justify-between gap-3">
         <span className="text-sm text-muted-foreground">按归档日期从新到旧排列</span>
         <div className="flex gap-2">
-          {params.cursor && <Button variant="outline" asChild><Link href={archiveHref()}>回到第一页</Link></Button>}
-          {result.nextCursor && <Button variant="outline" asChild><Link href={archiveHref(result.nextCursor)}>下一页归档记录</Link></Button>}
+          {params.cursor && <Link className="text-primary underline underline-offset-4" href={archiveHref()}>回到第一页</Link>}
+          {result.nextCursor && <Link className="text-primary underline underline-offset-4" href={archiveHref(result.nextCursor)}>下一页归档记录</Link>}
         </div>
       </nav>}
     </div>

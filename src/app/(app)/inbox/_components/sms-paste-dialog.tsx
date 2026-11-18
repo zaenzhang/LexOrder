@@ -1,5 +1,7 @@
 "use client";
 
+import { Button, Checkbox, TextArea } from "@douyinfe/semi-ui";
+
 import { FormDialogContent as DialogContent } from "@/components/patterns/form-dialog";
 
 import { useState, useMemo, useTransition } from "react";
@@ -12,7 +14,6 @@ import {
   DialogTitle,
   DialogDescription
 } from "@/components/ui/dialog";
-import { Button, Checkbox, TextArea } from "@douyinfe/semi-ui";
 import { parseSms, splitSmsBatch } from "@/lib/sms-parser";
 import { parseAndSaveSms } from "@/server/sms/actions";
 import { SMS_TYPE_CN, SMS_TYPE_ACCENT } from "./sms-types";
@@ -30,6 +31,13 @@ export function SmsPasteDialog({
   const [useAi, setUseAi] = useState(false);
   const [extractAttachments, setExtractAttachments] = useState(false);
   const [pending, startTransition] = useTransition();
+
+  function requestClose() {
+    if (pending) return;
+    setText("");
+    setExtractAttachments(false);
+    onOpenChange(false);
+  }
 
   // 实时预览
   const preview = useMemo(() => {
@@ -61,12 +69,7 @@ export function SmsPasteDialog({
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (pending) return;
-        if (!o) {
-          setText("");
-          setExtractAttachments(false);
-        }
-        onOpenChange(o);
+        if (!o) requestClose();
       }}
     >
       <DialogContent className="max-w-3xl">
@@ -82,51 +85,48 @@ export function SmsPasteDialog({
 
         <div className="flex-1 space-y-3 overflow-y-auto px-6 py-5">
           <TextArea
-            aria-label="短信原文"
             value={text}
             onChange={setText}
+            disabled={pending}
+            aria-label="法院短信原文"
             placeholder="原文粘贴在此..."
             rows={8}
             className="text-[12px] leading-relaxed"
-            disabled={pending}
             autoFocus
           />
 
           <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-              <Checkbox
+            <Checkbox
+                className="text-[12px]"
                 checked={batch}
-                onChange={(event) => setBatch(Boolean(event.target.checked))}
                 disabled={pending}
+                onChange={event => setBatch(event.target.checked === true)}
               >
-                <span>多条短信（按空行分隔）—— 一次提交，逐条解析与匹配</span>
-              </Checkbox>
-            </div>
-            <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-              <Checkbox
+              <span>多条短信（按空行分隔）—— 一次提交，逐条解析与匹配</span>
+            </Checkbox>
+            <Checkbox
+                className="text-[12px]"
                 checked={useAi}
-                onChange={(event) => setUseAi(Boolean(event.target.checked))}
                 disabled={pending}
+                onChange={event => setUseAi(event.target.checked === true)}
               >
-                <span>
-                  用 AI 增强解析 <Sparkles className="inline h-3 w-3 text-primary" /> ——
-                  补 <span className="text-foreground/80">摘要 / 律师动作 / 紧急程度</span>
-                  （需先到 管理后台 → AI 与外部服务 配置）
-                </span>
-              </Checkbox>
-            </div>
-            <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-              <Checkbox
+              <span>
+                用 AI 增强解析 <Sparkles className="inline h-3 w-3 text-primary" /> ——
+                补 <span className="text-foreground/80">摘要 / 律师动作 / 紧急程度</span>
+                （需先到 管理后台 → AI 与外部服务 配置）
+              </span>
+            </Checkbox>
+            <Checkbox
+                className="text-[12px]"
                 checked={extractAttachments}
-                onChange={(event) => setExtractAttachments(Boolean(event.target.checked))}
                 disabled={pending}
+                onChange={event => setExtractAttachments(event.target.checked === true)}
               >
               <span>
                 尝试提取电子送达附件 <FileDown className="inline h-3 w-3 text-primary" /> ——
                 已匹配案件时保存为案件材料；需登录或验证码的平台会标记待处理
               </span>
-              </Checkbox>
-            </div>
+            </Checkbox>
           </div>
 
           {preview.length > 0 && (
@@ -193,10 +193,10 @@ export function SmsPasteDialog({
         </div>
 
         <DialogFooter className="border-t border-border px-6 py-4">
-          <Button theme="outline" onClick={() => onOpenChange(false)} disabled={pending}>
+          <Button theme="outline" type="tertiary" onClick={requestClose} disabled={pending}>
             取消
           </Button>
-          <Button theme="solid" onClick={submit} disabled={pending || !text.trim()}>
+          <Button onClick={submit} disabled={pending || !text.trim()}>
             {pending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
             解析并保存
           </Button>

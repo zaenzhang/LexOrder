@@ -95,8 +95,8 @@ export function ClientDetailTabs({
     <div onClickCapture={followSource}>
       <Tabs activeKey={tab} onChange={select} keepDOM lazyRender={false} tabPaneMotion={false} aria-label="客户详情分区">
         {SECTIONS.map(section => (
-          <Tabs.TabPane key={section.id} itemKey={section.id} tab={section.label} className="min-w-0">
-            {sections[section.id]}
+          <Tabs.TabPane key={section.id} itemKey={section.id} tab={section.label}>
+            <div hidden={tab !== section.id} className="min-w-0">{sections[section.id]}</div>
           </Tabs.TabPane>
         ))}
       </Tabs>

@@ -1,4 +1,5 @@
 "use client";
+import { Button, Input } from "@douyinfe/semi-ui";
 
 /**
  * 工作区「冲突预检」（2026-09-14 用户确认）：
@@ -13,8 +14,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Briefcase, FileClock, Info, Plus, Search, ShieldAlert, ShieldCheck, TriangleAlert, Users, X } from "lucide-react";
-import { Button, Input, RadioGroup } from "@douyinfe/semi-ui";
+import { Briefcase, FileClock, Info, Loader2, Plus, Search, ShieldAlert, ShieldCheck, TriangleAlert, Users, X } from "lucide-react";
 import type { ConflictSeverity, MatterCategory, MatterStatus, PartyRole, LitigationStanding } from "@prisma/client";
 import { runCheckAndSave } from "@/server/conflicts/actions";
 import { matterHref } from "@/lib/matters/route";
@@ -123,10 +123,12 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
   const attention = hits.filter((h) => h.severity === "BLOCKING" || h.severity === "HIGH").length;
 
   function update(key: string, patch: Partial<QueryRow>) {
+    if (pending) return;
     setQueries((qs) => qs.map((q) => (q.key === key ? { ...q, ...patch } : q)));
   }
 
   function reset() {
+    if (pending) return;
     setQueries([emptyRow("CLIENT_PARTY")]);
     setResults(null);
     setSearchedQueries([]);
@@ -190,17 +192,15 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
               <div style={{ flex: 1, minWidth: 0 }}>
                 {q.editing ? (
                   <div className="grid gap-2.5 md:grid-cols-[auto_1fr_1fr]">
-                    <RadioGroup
-                      type="button"
-                      buttonSize="small"
-                      aria-label="检索主体角色"
-                      value={q.role}
-                      options={ROLE_OPTS.map(({ value, label }) => ({ value, label }))}
-                      disabled={pending}
-                      onChange={(event) => update(q.key, { role: event.target.value as QueryRole })}
-                    />
-                    <Input autoFocus={!q.name} value={q.name} onChange={(name) => update(q.key, { name })} onEnterPress={run} disabled={pending} placeholder="姓名 / 名称，如：华东置业集团有限公司" aria-label="主体名称" />
-                    <Input value={q.idNumber} onChange={(idNumber) => update(q.key, { idNumber: idNumber.toUpperCase().replace(/\s+/g, "") })} onEnterPress={run} disabled={pending} placeholder="身份证 / 统一社会信用代码（选填，精确匹配）" aria-label="证件号码" />
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {ROLE_OPTS.map((o) => (
+                        <Button key={o.value} htmlType="button" disabled={pending} aria-pressed={q.role === o.value} onClick={() => update(q.key, { role: o.value })} size="small" theme={q.role === o.value ? "solid" : "outline"}>
+                          {o.label}
+                        </Button>
+                      ))}
+                    </div>
+                    <Input disabled={pending} autoFocus={!q.name} value={q.name} onChange={(value) => update(q.key, { name: value })} onKeyDown={(e) => { if (e.key === "Enter") run(); }} placeholder="姓名 / 名称，如：华东置业集团有限公司" aria-label="主体名称" />
+                    <Input disabled={pending} value={q.idNumber} onChange={(value) => update(q.key, { idNumber: value.toUpperCase().replace(/\s+/g, "") })} onKeyDown={(e) => { if (e.key === "Enter") run(); }} placeholder="身份证 / 统一社会信用代码（选填，精确匹配）" aria-label="证件号码" className="font-mono" />
                   </div>
                 ) : (
                   <>
@@ -222,11 +222,13 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-1">
-                <Button htmlType="button" theme="borderless" type="tertiary" size="small" disabled={pending} onClick={() => update(q.key, { editing: !q.editing })}>
+                <Button theme="borderless" htmlType="button" disabled={pending} onClick={() => update(q.key, { editing: !q.editing })}>
                   {q.editing ? "完成" : "修改"}
                 </Button>
                 {queries.length > 1 ? (
-                  <Button htmlType="button" theme="borderless" type="tertiary" size="small" disabled={pending} aria-label="移除该主体" onClick={() => setQueries((qs) => qs.filter((x) => x.key !== q.key))} icon={<X className="h-4 w-4" />} />
+                  <Button theme="borderless" htmlType="button" disabled={pending} aria-label="移除该主体" onClick={() => setQueries((qs) => qs.filter((x) => x.key !== q.key))}>
+                    <X />
+                  </Button>
                 ) : null}
               </div>
             </div>
@@ -234,13 +236,15 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
         })}
 
         <div className="subject" style={{ borderTop: "1px dashed var(--bd-subtle)" }}>
-          <Button htmlType="button" theme="borderless" block disabled={pending} icon={<Plus className="h-4 w-4" />} onClick={() => setQueries((qs) => [...qs, emptyRow("OPPOSING_PARTY")])}>
+          <Button theme="borderless" htmlType="button" disabled={pending} block onClick={() => setQueries((qs) => [...qs, emptyRow("OPPOSING_PARTY")])}>
+            <Plus />
             添加检索主体（自然人 / 机构）
           </Button>
         </div>
 
         <div className="run-bar" style={{ padding: "0 16px 16px" }}>
-          <Button htmlType="button" theme="solid" onClick={run} disabled={pending} loading={pending} icon={<Search className="h-4 w-4" />}>
+          <Button theme="solid" htmlType="button" onClick={run} disabled={pending}>
+            {pending ? <Loader2 className="animate-spin" /> : <Search />}
             {hasRun ? "重新预检" : "开始预检"}
           </Button>
           <span className="run-note">
@@ -398,7 +402,7 @@ function TargetRow({ target }: { target: TargetGroup }) {
       </div>
       <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] t-faint">
         {href ? (
-          <Link href={href} className="text-[var(--semi-color-link)] hover:underline">查看案件</Link>
+          <Link href={href} className="btn btn-ghost btn-sm">查看案件</Link>
         ) : (
           <span className="inline-flex items-center gap-1"><Info className="h-3 w-3" />{m ? "你不是该案成员，如需了解请联系主办律师" : "收案内容不因预检开放，如需了解请联系登记人"}</span>
         )}

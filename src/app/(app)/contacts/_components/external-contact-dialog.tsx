@@ -1,18 +1,21 @@
 "use client";
+import { Button, Input, TextArea, Select } from "@douyinfe/semi-ui";
 
 import { FormDialogContent as DialogContent, FormDialogBody } from "@/components/patterns/form-dialog";
 
-import { useEffect, useId, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import type { ExternalContactCategory } from "@prisma/client";
-import { Button, Input, Select, TextArea } from "@douyinfe/semi-ui";
+
 import {
   Dialog,
   DialogFooter,
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
+
 import {
   createExternalContact,
   updateExternalContact
@@ -57,9 +60,7 @@ export function ExternalContactDialog({
   runtimeMode?: RuntimeMode;
 }) {
   const router = useRouter();
-  const formId = useId();
-  const dialogContent = useRef<HTMLDivElement>(null);
-  const [categoryOpen, setCategoryOpen] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
   const [form, setForm] = useState({
     name: "",
     category: "COURT" as ExternalContactCategory,
@@ -72,10 +73,11 @@ export function ExternalContactDialog({
     notes: ""
   });
   const [isPending, startTransition] = useTransition();
+  const [categoryOpen, setCategoryOpen] = useState(false);
 
   useEffect(() => {
-    if (!open) setCategoryOpen(false);
     if (open) {
+      setCategoryOpen(false);
       if (editing) {
         setForm({
           name: editing.name,
@@ -135,8 +137,8 @@ export function ExternalContactDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(value) => { if (!isPending) onOpenChange(value); }}>
-      <DialogContent ref={dialogContent} className="sm:max-w-lg" onEscapeKeyDown={(event) => { if (categoryOpen) event.preventDefault(); }}>
+    <Dialog open={open} onOpenChange={value => { if (!isPending) onOpenChange(value); }}>
+      <DialogContent ref={contentRef} className="sm:max-w-lg" onEscapeKeyDown={event => { if (categoryOpen) event.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle>{editing ? "编辑联系人" : "新增外部联系人"}</DialogTitle>
         </DialogHeader>
@@ -145,109 +147,95 @@ export function ExternalContactDialog({
         <fieldset disabled={isPending} className="space-y-3 py-2">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label htmlFor={`${formId}-name`} className="text-xs">姓名 *</label>
+              <label className="text-xs">姓名 *</label>
               <Input
-                id={`${formId}-name`}
-                value={form.name}
-                onChange={(name) => setForm({ ...form, name })}
+                aria-label="姓名" value={form.name}
+                onChange={(value) => setForm({ ...form, name: value })}
               />
             </div>
             <div className="space-y-1.5">
-              <label id={`${formId}-category-label`} htmlFor={`${formId}-category`} className="text-xs">类别 *</label>
-              <Select
-                id={`${formId}-category`}
-                aria-labelledby={`${formId}-category-label`}
-                aria-required
-                value={form.category}
-                onChange={(v) =>
-                  setForm({ ...form, category: v as ExternalContactCategory })
-                }
-                optionList={CATEGORY_OPTIONS}
-                disabled={isPending}
-                style={{ width: "100%" }}
-                motion={false}
-                onDropdownVisibleChange={setCategoryOpen}
-                getPopupContainer={() => dialogContent.current!}
+              <label id="external-contact-category" className="text-xs">类别 *</label>
+              <Select<ExternalContactCategory>
+                style={{ width: "100%" }} value={form.category} disabled={isPending}
+                aria-labelledby="external-contact-category" optionList={CATEGORY_OPTIONS}
+                motion={false} getPopupContainer={() => contentRef.current!} onDropdownVisibleChange={setCategoryOpen}
+                onChange={value => { if (typeof value === "string") setForm({ ...form, category: value }); }}
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label htmlFor={`${formId}-organization`} className="text-xs">单位 / 机构</label>
+              <label className="text-xs">单位 / 机构</label>
               <Input
-                id={`${formId}-organization`}
-                value={form.organization}
-                onChange={(organization) => setForm({ ...form, organization })}
+                aria-label="单位" value={form.organization}
+                onChange={(value) => setForm({ ...form, organization: value })}
                 placeholder="如：上海市浦东新区人民法院"
               />
             </div>
             <div className="space-y-1.5">
-              <label htmlFor={`${formId}-title`} className="text-xs">职务 / 庭室</label>
+              <label className="text-xs">职务 / 庭室</label>
               <Input
-                id={`${formId}-title`}
-                value={form.title}
-                onChange={(title) => setForm({ ...form, title })}
+                aria-label="职务" value={form.title}
+                onChange={(value) => setForm({ ...form, title: value })}
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label htmlFor={`${formId}-phone`} className="text-xs">手机</label>
+              <label className="text-xs">手机</label>
               <Input
-                id={`${formId}-phone`}
-                value={form.phone}
-                onChange={(phone) => setForm({ ...form, phone })}
+                aria-label="电话" value={form.phone}
+                onChange={(value) => setForm({ ...form, phone: value })}
+                className="font-mono"
               />
             </div>
             <div className="space-y-1.5">
-              <label htmlFor={`${formId}-email`} className="text-xs">邮箱</label>
+              <label className="text-xs">邮箱</label>
               <Input
-                id={`${formId}-email`}
                 type="email"
-                value={form.email}
-                onChange={(email) => setForm({ ...form, email })}
+                aria-label="邮箱" value={form.email}
+                onChange={(value) => setForm({ ...form, email: value })}
+                className="font-mono"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label htmlFor={`${formId}-wechat`} className="text-xs">微信</label>
+              <label className="text-xs">微信</label>
               <Input
-                id={`${formId}-wechat`}
-                value={form.wechat}
-                onChange={(wechat) => setForm({ ...form, wechat })}
+                aria-label="微信" value={form.wechat}
+                onChange={(value) => setForm({ ...form, wechat: value })}
               />
             </div>
             <div className="space-y-1.5">
-              <label htmlFor={`${formId}-address`} className="text-xs">地址</label>
+              <label className="text-xs">地址</label>
               <Input
-                id={`${formId}-address`}
-                value={form.address}
-                onChange={(address) => setForm({ ...form, address })}
+                aria-label="地址" value={form.address}
+                onChange={(value) => setForm({ ...form, address: value })}
               />
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor={`${formId}-notes`} className="text-xs">备注</label>
+            <label className="text-xs">备注</label>
             <TextArea
-              id={`${formId}-notes`}
               rows={2}
-              value={form.notes}
-              onChange={(notes) => setForm({ ...form, notes })}
+              aria-label="备注" value={form.notes}
+              onChange={(value) => setForm({ ...form, notes: value })}
             />
           </div>
         </fieldset>
 
         </FormDialogBody>
         <DialogFooter>
-          <Button htmlType="button" theme="borderless" type="tertiary" onClick={() => onOpenChange(false)} disabled={isPending}>
+          <Button htmlType="button" theme="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
             取消
           </Button>
-          <Button htmlType="button" theme="solid" onClick={handleSave} loading={isPending} disabled={isPending}>
+          <Button htmlType="button" theme="solid" onClick={handleSave} disabled={isPending}>
+            {isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
             {editing ? "更新" : "保存"}
           </Button>
         </DialogFooter>

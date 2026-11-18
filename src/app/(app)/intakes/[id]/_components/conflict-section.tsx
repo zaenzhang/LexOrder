@@ -1,4 +1,5 @@
 "use client";
+import { Button, Tag, TextArea } from "@douyinfe/semi-ui";
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
@@ -22,7 +23,7 @@ import type {
   PartyRole,
   LitigationStanding
 } from "@prisma/client";
-import { Button, Tag, TextArea } from "@douyinfe/semi-ui";
+
 import { runCheckAndSave, setConflictConclusion } from "@/server/conflicts/actions";
 import { conflictConclusionLabel, litigationStandingLabel, matterCategoryLabel, matterStatusLabel } from "@/lib/enums";
 import type { buildIntakeConflictQueries } from "@/lib/approvals/intake-detail";
@@ -165,7 +166,7 @@ export function ConflictSection({
           </p>
         </div>
 
-        <Button
+        <Button htmlType="button"
           onClick={handleRunCheck} hidden={!canRunCheck}
           disabled={isPending}
           size="small"
@@ -193,13 +194,9 @@ export function ConflictSection({
               <span className="font-mono text-foreground">{latestCheck.hits.length}</span>
             </span>
             <Tag
-              type="ghost"
-              className={cn(
-                "ml-1 text-[10px]",
-                latestCheck.conclusion === "SAME_SUBJECT" && "border-destructive/40 text-destructive",
-                latestCheck.conclusion === "DIFFERENT" && "border-[#1A7F45]/40 text-[#1A7F45]",
-                latestCheck.conclusion === "NEED_INFO" && "border-[var(--amber-line)] text-[var(--amber)]"
-              )}
+              type="light"
+              className="ml-1"
+              color={latestCheck.conclusion === "SAME_SUBJECT" ? "red" : latestCheck.conclusion === "DIFFERENT" ? "green" : latestCheck.conclusion === "NEED_INFO" ? "amber" : "grey"}
             >
               {latestCheck.note?.startsWith("系统自动标记：")?"未命中（系统自动提示）":conflictConclusionLabel[latestCheck.conclusion]}
             </Tag>
@@ -282,31 +279,30 @@ export function ConflictSection({
               </div>
               <TextArea
                 value={conclusionNote}
-                onChange={setConclusionNote}
+                onChange={(value) => setConclusionNote(value)}
                 placeholder="补充说明（如：经核对确认非同一主体；或已披露风险并取得书面同意）"
                 rows={2}
-                className="mb-2 text-[12px]"
+                className="mb-2"
               />
               <div className="flex flex-wrap gap-2">
-                <Button
+                <Button htmlType="button"
                   theme="outline"
+                  type="danger"
                   size="small"
                   onClick={() => handleSetConclusion("SAME_SUBJECT")}
                   disabled={isPending}
-                  type="danger"
                 >
                   有冲突（不承接）
                 </Button>
-                <Button
+                <Button htmlType="button"
                   theme="outline"
                   size="small"
                   onClick={() => handleSetConclusion("DIFFERENT")}
                   disabled={isPending}
-                  type="primary"
                 >
                   可承接
                 </Button>
-                <Button
+                <Button htmlType="button"
                   theme="outline"
                   size="small"
                   onClick={() => handleSetConclusion("NEED_INFO")}

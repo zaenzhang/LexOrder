@@ -1,8 +1,9 @@
 "use client";
 
+import { Select, Button } from "@douyinfe/semi-ui";
 import { useState } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+
 import {
   Wallet,
   Coins,
@@ -20,13 +21,7 @@ import {
   Tooltip,
   CartesianGrid
 } from "recharts";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
+
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 const feeTypeLabel = {
@@ -149,13 +144,13 @@ export function FinanceView({
               </Link>
             </p>
         </div>
-          <Button size="sm" className="w-fit gap-1.5" onClick={() => setInvoiceCreateOpen(true)}>
+          <Button size="small" className="w-fit gap-1.5" onClick={() => setInvoiceCreateOpen(true)} theme="solid" type="primary" htmlType="button">
             <Receipt className="h-3.5 w-3.5" />
             申请开票
           </Button>
       </header>
 
-      <div className="ll-segmented w-fit">
+      <div className="flex w-fit items-center gap-1">
         <TabBtn active={tab === "overview"} onClick={() => setTab("overview")}>
           <Wallet className="h-3.5 w-3.5" strokeWidth={1.8} />
           总览
@@ -319,21 +314,13 @@ export function FinanceView({
             收付流水{" "}
             <span className="text-muted-foreground">({filtered.length})</span>
           </h2>
-          <Select
-            value={typeFilter}
-            onValueChange={(v) => setTypeFilter(v as typeof typeFilter)}
-          >
-            <SelectTrigger className="h-8 w-32 rounded-full bg-card text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
+          <Select<string> insetLabel="流水类型" insetLabelId="finance-legacy-type-label" aria-labelledby="finance-legacy-type-label" value={typeFilter} onChange={value => ((v) => setTypeFilter(v as typeof typeFilter))(String(value ?? ""))} style={{ minWidth: 160 }} motion={false}>
               {TYPE_FILTERS.map((t) => (
-                <SelectItem key={t} value={t}>
+                <Select.Option key={t} value={t}>
                   {t === "ALL" ? "全部" : feeTypeLabel[t]}
-                </SelectItem>
+                </Select.Option>
               ))}
-            </SelectContent>
-          </Select>
+            </Select>
         </header>
 
         {filtered.length === 0 ? (
@@ -428,13 +415,13 @@ function TabBtn({
   children: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
+    <Button
+      htmlType="button"
       onClick={onClick}
-      className={"ll-seg " + (active ? "ll-seg-active text-primary" : "")}
+      aria-pressed={active} theme={active ? "solid" : "borderless"}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 
