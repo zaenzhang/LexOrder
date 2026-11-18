@@ -51,13 +51,24 @@ export function FilterSelect({
             {options.map((o) => <Dropdown.Item key={o.value} active={o.value === value} onClick={() => choose(o.value)}>{o.label}</Dropdown.Item>)}
           </Dropdown.Menu>}
         >
-          <Button data-filter-trigger htmlType="button" type={on ? "primary" : "tertiary"} aria-label={current ? `${label} ${current.label}` : label} aria-haspopup="menu" aria-expanded={open} onKeyDown={event => {
-            // 保留原筛选的 ArrowDown 打开入口，菜单内导航由 Semi 处理。
-            if (event.key === "ArrowDown" && !open) {
-              event.preventDefault();
-              event.currentTarget.click();
-            }
-          }}>
+          <Button
+            data-filter-trigger
+            htmlType="button"
+            type={on ? "primary" : "tertiary"}
+            aria-label={current ? `${label} ${current.label}` : label}
+            aria-haspopup="menu"
+            aria-expanded={open}
+            onClick={() => { if (open) setOpen(false); }}
+            onKeyDown={event => {
+              // Semi 已为 Enter 和空格触发 click，取消原生按钮的第二次激活。
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+              } else if (event.key === "ArrowDown" && !open) {
+                event.preventDefault();
+                event.currentTarget.click();
+              }
+            }}
+          >
             <span className="inline-flex items-center gap-1.5">
               {icon}
               {label}

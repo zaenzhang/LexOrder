@@ -14,6 +14,31 @@ function ControlledFilter({ initial, clearable = true, onChange = () => {} }: { 
 }
 
 describe("公共 Semi 页面筛选", () => {
+  it.each(["click", "Enter", " "])("用 %s 重复激活筛选入口后关闭菜单并返回焦点", async (activation) => {
+    const onChange = vi.fn();
+    render(<ControlledFilter onChange={onChange} />);
+    const trigger = screen.getByRole("button", { name: "状态" });
+    function activateTrigger() {
+      trigger.focus();
+      if (activation === "click") {
+        fireEvent.mouseDown(trigger);
+        fireEvent.click(trigger);
+      } else {
+        const event = createEvent.keyDown(trigger, { key: activation });
+        fireEvent(trigger, event);
+        if (!event.defaultPrevented) fireEvent.click(trigger);
+      }
+    }
+
+    activateTrigger();
+    await waitFor(() => expect(trigger).toHaveAttribute("aria-expanded", "true"));
+    activateTrigger();
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(trigger).toHaveFocus();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it("选择真实业务值后立即关闭，清除返回 undefined 并保留焦点", async () => {
     const onChange = vi.fn();
     render(<ControlledFilter onChange={onChange} />);
