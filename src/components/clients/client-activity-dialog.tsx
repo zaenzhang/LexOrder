@@ -1,14 +1,11 @@
 "use client";
 
+import { Button, Checkbox, Input, Select, TextArea } from "@douyinfe/semi-ui";
+
 import { useEffect, useRef, useState, useTransition, type FormEvent, type RefObject } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { Check } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Button } from "@/components/ui/button";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
 import { shDayKey, shTime } from "@/lib/ui/sh-time";
@@ -34,6 +31,7 @@ export function ClientActivityDialog({ clientId, mode, verifyPersonalTarget = fa
   const [occurredAt, setOccurredAt] = useState(initialOccurredAt);
   const [scheduleNext, setScheduleNext] = useState(false), [nextTitle, setNextTitle] = useState(""), [nextDueAt, setNextDueAt] = useState("");
   const [error, setError] = useState("");
+  const [channelOpen, setChannelOpen] = useState(false);
   const [read, setRead] = useState<{ identity: string; value?: PersonalFollowUp; error?: string } | null>(null);
   const [attempt, setAttempt] = useState(0);
   const editorContent = useRef<HTMLDivElement>(null), closePending = useRef(false), saving = useRef(false), mounted = useRef(true);
@@ -87,7 +85,7 @@ export function ClientActivityDialog({ clientId, mode, verifyPersonalTarget = fa
   const title = verifyPersonalTarget && current?.value && !mayEdit ? "查看跟进" : mode.id ? mode.status === "CANCELLED" ? "取消跟进" : "录入跟进结果" : "记录沟通";
   const followUpTitle = verifyPersonalTarget ? current?.value?.title : mode.title;
   return <Dialog open onOpenChange={value => { if (!value) void requestClose(); }}>
-    <DialogContent ref={editorContent} className="max-h-[90dvh] overflow-y-auto sm:max-w-[560px]" onCloseAutoFocus={event => {
+    <DialogContent ref={editorContent} onEscapeKeyDown={event => { if (channelOpen) event.preventDefault(); }} className="max-h-[90dvh] overflow-y-auto sm:max-w-[560px]" onCloseAutoFocus={event => {
       event.preventDefault();
       const origin = trigger.current;
       const target = origin?.isConnected && !origin.matches(":disabled") && !origin.closest('[hidden], [inert]') ? origin : fallback.current;
@@ -96,25 +94,25 @@ export function ClientActivityDialog({ clientId, mode, verifyPersonalTarget = fa
       <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{followUpTitle ? `${current?.value ? `${current.value.client.name} · ` : ""}${followUpTitle}` : verifyPersonalTarget ? "核对当前跟进及办理资格" : "保留本次沟通内容，并按需要安排下一次跟进。"}</DialogDescription></DialogHeader>
       {current?.value && <p className="text-sm text-muted-foreground"><time dateTime={current.value.dueAt}>{shDayKey(current.value.dueAt)} {shTime(current.value.dueAt)}（北京时间）</time> · {current.value.status === "OPEN" ? "待跟进" : current.value.status === "COMPLETED" ? "已完成" : "已取消"}</p>}
       {verifyPersonalTarget && !current && <p role="status">正在读取跟进…</p>}
-      {current?.error && <div className="space-y-3"><p role="alert" className="text-sm text-destructive">{current.error}</p><Button variant="outline" onClick={() => setAttempt(value => value + 1)}>重新读取跟进</Button></div>}
+      {current?.error && <div className="space-y-3"><p role="alert" className="text-sm text-destructive">{current.error}</p><Button htmlType="button" type="tertiary" theme="outline" onClick={() => setAttempt(value => value + 1)}>重新读取跟进</Button></div>}
       {current?.value && !mayEdit && <p role="status">{current.value.status === "COMPLETED" ? "此跟进已完成。" : current.value.status === "CANCELLED" ? "此跟进已取消。" : "当前仅可查看此跟进，不能录入结果。"}</p>}
       {mayEdit ? <form onSubmit={submit} className="space-y-4">
         <fieldset disabled={pending} className="space-y-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5"><Label htmlFor="crm-channel">沟通方式</Label><select id="crm-channel" value={channel} onChange={event => setChannel(event.target.value as ClientActivityInput["channel"])} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">{Object.entries(clientChannelLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div>
-            <div className="space-y-1.5"><Label htmlFor="crm-occurred">发生时间（北京时间）</Label><Input id="crm-occurred" type="datetime-local" required value={occurredAt} onChange={event => setOccurredAt(event.target.value)} /></div>
+            <div className="space-y-1.5"><label id="crm-channel-label" htmlFor="crm-channel">沟通方式</label><Select onDropdownVisibleChange={setChannelOpen} id="crm-channel" aria-labelledby="crm-channel-label" value={channel} onChange={value => setChannel(value as ClientActivityInput["channel"])} disabled={pending} style={{ width: "100%" }} motion={false} getPopupContainer={() => editorContent.current!} optionList={Object.entries(clientChannelLabels).map(([value, label]) => ({ value, label }))} /></div>
+            <div className="space-y-1.5"><label htmlFor="crm-occurred">发生时间（北京时间）</label><Input id="crm-occurred" type="datetime-local" required value={occurredAt} onChange={value => setOccurredAt(value)} /></div>
           </div>
-          <div className="space-y-1.5"><Label htmlFor="crm-content">{mode.status === "CANCELLED" ? "取消原因" : mode.id ? "跟进结果" : "沟通内容"} *</Label><Textarea id="crm-content" rows={5} required maxLength={8000} value={content} onChange={event => setContent(event.target.value)} placeholder="记录事实、客户需求与已约定事项" /></div>
-          <label className="flex items-center gap-2 text-sm"><Checkbox checked={scheduleNext} onCheckedChange={value => setScheduleNext(value === true)} />安排下次跟进</label>
+          <div className="space-y-1.5"><label htmlFor="crm-content">{mode.status === "CANCELLED" ? "取消原因" : mode.id ? "跟进结果" : "沟通内容"} *</label><TextArea id="crm-content" rows={5} required maxLength={8000} value={content} onChange={value => setContent(value)} placeholder="记录事实、客户需求与已约定事项" /></div>
+          <Checkbox checked={scheduleNext} disabled={pending} onChange={event => setScheduleNext(event.target.checked === true)}>安排下次跟进</Checkbox>
           {scheduleNext && <div className="space-y-3 rounded-lg border p-3">
-            <div className="space-y-1.5"><Label htmlFor="crm-next-title">下次跟进事项 *</Label><Input id="crm-next-title" required maxLength={200} value={nextTitle} onChange={event => setNextTitle(event.target.value)} /></div>
-            <div className="space-y-1.5"><Label htmlFor="crm-next-due">跟进时间（北京时间）*</Label><Input id="crm-next-due" type="datetime-local" required value={nextDueAt} onChange={event => setNextDueAt(event.target.value)} /></div>
+            <div className="space-y-1.5"><label htmlFor="crm-next-title">下次跟进事项 *</label><Input id="crm-next-title" required maxLength={200} value={nextTitle} onChange={value => setNextTitle(value)} /></div>
+            <div className="space-y-1.5"><label htmlFor="crm-next-due">跟进时间（北京时间）*</label><Input id="crm-next-due" type="datetime-local" required value={nextDueAt} onChange={value => setNextDueAt(value)} /></div>
             <p className="text-xs text-muted-foreground">此项由你负责，可在客户详情中录入结果。</p>
           </div>}
         </fieldset>
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-        <DialogFooter><Button type="button" variant="outline" disabled={pending} onClick={() => void requestClose()}>返回</Button><Button type="submit" disabled={pending}>{pending ? <Loader2 className="animate-spin" /> : <Check />}保存{mode.status === "CANCELLED" ? "取消原因" : mode.id ? "结果" : "沟通"}</Button></DialogFooter>
-      </form> : <DialogFooter><Button variant="outline" onClick={() => void requestClose()}>返回列表</Button></DialogFooter>}
+        <DialogFooter><Button htmlType="button" type="tertiary" theme="outline" disabled={pending} onClick={() => void requestClose()}>返回</Button><Button htmlType="submit" theme="solid" icon={<Check size={16} />} loading={pending} disabled={pending}>保存{mode.status === "CANCELLED" ? "取消原因" : mode.id ? "结果" : "沟通"}</Button></DialogFooter>
+      </form> : <DialogFooter><Button htmlType="button" type="tertiary" theme="outline" onClick={() => void requestClose()}>返回列表</Button></DialogFooter>}
       {verifyPersonalTarget && mode.id && current?.value && <PersonalFollowUpRescheduleHistory key={`${identity}:${attempt}:${current.value.updatedAt}`} target={{ clientId, followUpId: mode.id }} />}
     </DialogContent>
   </Dialog>;

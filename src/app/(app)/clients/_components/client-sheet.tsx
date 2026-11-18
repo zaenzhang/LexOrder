@@ -1,25 +1,15 @@
 "use client";
 
+import { Button, Checkbox, Input, Select, Tag, TextArea } from "@douyinfe/semi-ui";
+
 import type { z } from "zod";
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
-import { useForm, useFieldArray, useWatch } from "react-hook-form";
+import { Controller, useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Plus, X, Loader2, Trash2, Star, Sparkles, Search } from "lucide-react";
+import { Plus, X, Trash2, Star, Sparkles, Search } from "lucide-react";
 import type { Client, Contact } from "@prisma/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -79,10 +69,10 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
   const editorContent = useRef<HTMLDivElement>(null);
   const tagInput = useRef<HTMLInputElement>(null);
   const closePending = useRef(false);
+  const [openSelect, setOpenSelect] = useState<string | null>(null);
   const isEdit = !!editingClient;
 
   const {
-    register,
     control,
     handleSubmit,
     getValues,
@@ -253,6 +243,7 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
       <SheetContent
         ref={editorContent}
         side="right"
+        onEscapeKeyDown={event => { if (openSelect) event.preventDefault(); }}
         className="flex w-full max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl"
         onCloseAutoFocus={(event) => {
           event.preventDefault();
@@ -276,21 +267,21 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
             {/* 基本信息 */}
             <Section title="基本信息">
               <Field id={`${formId}-name`} label="客户名称" required error={errors.name?.message}>
-                <Input
+                <Controller name="name" control={control} render={({ field: inputField }) => (<Input
                   id={`${formId}-name`}
                   aria-invalid={!!errors.name}
                   aria-describedby={errors.name ? `${formId}-name-error` : undefined}
                   placeholder={
                     watchedType === "INDIVIDUAL" ? "张三" : "上海某某有限公司"
                   }
-                  {...register("name")}
-                />
+                  {...inputField}
+                />)} />
               </Field>
 
               <Field id={`${formId}-type`} label="类型" required>
-                <Select
+                <Select onDropdownVisibleChange={visible => setOpenSelect(visible ? "type" : null)} id={`${formId}-type`} aria-labelledby={`${formId}-type-label`} style={{ width: "100%" }} motion={false} disabled={isPending} getPopupContainer={() => editorContent.current!}
                   value={watchedType}
-                  onValueChange={(v) => {
+                  onChange={(v) => {
                     setValue("type", v as ClientCreateInput["type"], { shouldDirty: true });
                     // 证件类型随主体类型联动默认值（可手动改选护照/其他）
                     // 自然人不能使用信用代码，单位不能使用个人证件：跨类切换时重置
@@ -302,36 +293,26 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
                     }
                   }}
                 >
-                  <SelectTrigger id={`${formId}-type`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="INDIVIDUAL">自然人</SelectItem>
-                    <SelectItem value="COMPANY">公司</SelectItem>
-                    <SelectItem value="ORGANIZATION">其他组织</SelectItem>
-                  </SelectContent>
+                  <Select.Option value="INDIVIDUAL">自然人</Select.Option>
+                  <Select.Option value="COMPANY">公司</Select.Option>
+                  <Select.Option value="ORGANIZATION">其他组织</Select.Option>
                 </Select>
               </Field>
 
               <Field id={`${formId}-idType`} label="证件类型" required>
-                <Select
+                <Select onDropdownVisibleChange={visible => setOpenSelect(visible ? "idType" : null)} id={`${formId}-idType`} aria-labelledby={`${formId}-idType-label`} style={{ width: "100%" }} motion={false} disabled={isPending} getPopupContainer={() => editorContent.current!}
                   value={watch<ClientCreateInput["idType"]>("idType") || (watchedType === "INDIVIDUAL" ? "ID_CARD" : "USCC")}
-                  onValueChange={(v) => {
+                  onChange={(v) => {
                     setValue("idType", v as NonNullable<ClientCreateInput["idType"]>, { shouldDirty: true });
-                    if (watchedType === "INDIVIDUAL") setValue("idNumber", sanitizePersonIdInput(v, watch("idNumber") ?? ""), { shouldDirty: true });
+                    if (watchedType === "INDIVIDUAL") setValue("idNumber", sanitizePersonIdInput(String(v), watch("idNumber") ?? ""), { shouldDirty: true });
                   }}
                 >
-                  <SelectTrigger id={`${formId}-idType`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(watchedType === "INDIVIDUAL"
-                      ? PERSON_ID_TYPES.map((t) => [t, clientIdTypeLabel[t]])
-                      : [["USCC", "统一社会信用代码"], ["OTHER", "其他编号"]]
-                    ).map(([v, label]) => (
-                      <SelectItem key={v} value={v}>{label}</SelectItem>
-                    ))}
-                  </SelectContent>
+                  {(watchedType === "INDIVIDUAL"
+                    ? PERSON_ID_TYPES.map((t) => [t, clientIdTypeLabel[t]])
+                    : [["USCC", "统一社会信用代码"], ["OTHER", "其他编号"]]
+                  ).map(([v, label]) => (
+                    <Select.Option key={v} value={v}>{label}</Select.Option>
+                  ))}
                 </Select>
               </Field>
 
@@ -350,7 +331,7 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
                       inputMode={personIdType === "ID_CARD" ? "numeric" : undefined}
                       placeholder={personIdType === "ID_CARD" ? "18 位，仅数字或 X" : "证件号码"}
                       value={watchedIdNumber}
-                      onChange={(e) => setValue("idNumber", sanitizePersonIdInput(personIdType, e.target.value), { shouldDirty: true, shouldValidate: !!errors.idNumber })}
+                      onChange={(value) => setValue("idNumber", sanitizePersonIdInput(personIdType, value), { shouldDirty: true, shouldValidate: !!errors.idNumber })}
                     />
                     {watchedIdNumber && personIdError(personIdType, watchedIdNumber) ? (
                       <p className="text-[11px] text-[var(--amber,#b7791f)]">{personIdError(personIdType, watchedIdNumber)}</p>
@@ -359,28 +340,25 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
                 ) : (
                   <div className="space-y-1">
                     <div className="flex gap-1">
-                      <Input
+                      <Controller name="idNumber" control={control} render={({ field: inputField }) => (<Input
                         id={`${formId}-idNumber`}
                         aria-invalid={!!errors.idNumber}
                         aria-describedby={errors.idNumber ? `${formId}-idNumber-error` : undefined}
                         className="flex-1 font-mono"
                         placeholder="18 位信用代码"
-                        {...register("idNumber")}
-                      />
+                        {...inputField}
+                      />)} />
                       <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
+                        htmlType="button"
+                        type="tertiary" theme="outline"
+                        size="small"
+                        icon={<Sparkles size={14} />}
+                        loading={aiSearching}
                         onClick={handleAILookup}
                         disabled={aiSearching || aiFilling}
-                        className="h-9 shrink-0 gap-1"
+                        className="shrink-0"
                         title="按客户名称在元典搜索，自动回填信用代码 / 法代 / 注册地址"
                       >
-                        {aiSearching ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <Sparkles className="h-3 w-3" />
-                        )}
                         AI 查找
                       </Button>
                     </div>
@@ -392,27 +370,27 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
                         <ul className="space-y-1">
                           {candidates.map((c) => (
                             <li key={c.id}>
-                              <button
-                                type="button"
+                              <Button
+                                htmlType="button"
                                 onClick={() => handlePickCandidate(c)}
                                 disabled={aiFilling}
-                                className="w-full rounded border border-border bg-background px-2 py-1.5 text-left text-xs transition-colors hover:border-input hover:bg-muted hover:text-foreground disabled:opacity-50"
+                                block theme="borderless" style={{ height: "auto" }} contentClassName="flex flex-col items-start py-1"
                               >
                                 <div className="font-medium">{c.name}</div>
                                 <div className="font-mono text-[10px] text-muted-foreground">
                                   {c.creditCode}
                                 </div>
-                              </button>
+                              </Button>
                             </li>
                           ))}
                         </ul>
-                        <button
-                          type="button"
+                        <Button
+                          htmlType="button"
                           onClick={() => setCandidates(null)}
-                          className="mt-1 w-full text-[10px] text-muted-foreground hover:text-foreground"
+                          block theme="borderless" type="tertiary" size="small"
                         >
                           关闭
-                        </button>
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -420,59 +398,54 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
               </Field>
 
               <Field id={`${formId}-phone`} label="主要联系电话">
-                <Input id={`${formId}-phone`} className="font-mono" placeholder="11 位手机号" {...register("phone")} />
+                <Controller name="phone" control={control} render={({ field: inputField }) => (<Input id={`${formId}-phone`} className="font-mono" placeholder="11 位手机号" {...inputField} />)} />
               </Field>
 
               <Field id={`${formId}-email`} label="邮箱" error={errors.email?.message}>
-                <Input id={`${formId}-email`} aria-invalid={!!errors.email} aria-describedby={errors.email ? `${formId}-email-error` : undefined} type="email" placeholder="contact@example.com" {...register("email")} />
+                <Controller name="email" control={control} render={({ field: inputField }) => (<Input id={`${formId}-email`} aria-invalid={!!errors.email} aria-describedby={errors.email ? `${formId}-email-error` : undefined} type="email" placeholder="contact@example.com" {...inputField} />)} />
               </Field>
 
               <Field id={`${formId}-address`} label="地址">
-                <Input id={`${formId}-address`} placeholder="详细地址" {...register("address")} />
+                <Controller name="address" control={control} render={({ field: inputField }) => (<Input id={`${formId}-address`} placeholder="详细地址" {...inputField} />)} />
               </Field>
 
               {watchedType !== "INDIVIDUAL" && (
                 <Field id={`${formId}-legalRep`} label="法定代表人">
-                  <Input id={`${formId}-legalRep`} placeholder="法定代表人姓名" {...register("legalRep")} />
+                  <Controller name="legalRep" control={control} render={({ field: inputField }) => (<Input id={`${formId}-legalRep`} placeholder="法定代表人姓名" {...inputField} />)} />
                 </Field>
               )}
 
               <Field id={`${formId}-source`} label="案源">
-                <Input id={`${formId}-source`} placeholder="介绍人 / 公开来源 / 老客户复购" {...register("source")} />
+                <Controller name="source" control={control} render={({ field: inputField }) => (<Input id={`${formId}-source`} placeholder="介绍人 / 公开来源 / 老客户复购" {...inputField} />)} />
               </Field>
 
               <Field id={`${formId}-cooperationStatus`} label="合作状态">
-                <Select
+                <Select onDropdownVisibleChange={visible => setOpenSelect(visible ? "cooperationStatus" : null)} id={`${formId}-cooperationStatus`} aria-labelledby={`${formId}-cooperationStatus-label`} style={{ width: "100%" }} motion={false} disabled={isPending} getPopupContainer={() => editorContent.current!}
                   value={watch("cooperationStatus")}
-                  onValueChange={(v) =>
+                  onChange={(v) =>
                     setValue("cooperationStatus", v as ClientCreateInput["cooperationStatus"], {
                       shouldDirty: true
                     })
                   }
                 >
-                  <SelectTrigger id={`${formId}-cooperationStatus`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {COOPERATION_STATUS_OPTIONS.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {cooperationStatusLabel[s]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+                  {COOPERATION_STATUS_OPTIONS.map((s) => (
+                    <Select.Option key={s} value={s}>
+                      {cooperationStatusLabel[s]}
+                    </Select.Option>
+                  ))}
                 </Select>
               </Field>
 
               <Field id={`${formId}-industry`} label="所属行业">
-                <Input id={`${formId}-industry`} placeholder="如 制造业 / 互联网 / 房地产" {...register("industry")} />
+                <Controller name="industry" control={control} render={({ field: inputField }) => (<Input id={`${formId}-industry`} placeholder="如 制造业 / 互联网 / 房地产" {...inputField} />)} />
               </Field>
 
               {watchedType === "INDIVIDUAL" && (
                 <>
                   <Field id={`${formId}-gender`} label="性别">
-                    <Select
+                    <Select onDropdownVisibleChange={visible => setOpenSelect(visible ? "gender" : null)} id={`${formId}-gender`} aria-labelledby={`${formId}-gender-label`} style={{ width: "100%" }} motion={false} disabled={isPending} getPopupContainer={() => editorContent.current!}
                       value={watch("gender") || "UNSET"}
-                      onValueChange={(v) =>
+                      onChange={(v) =>
                         setValue(
                           "gender",
                           v === "UNSET" ? "" : (v as "MALE" | "FEMALE"),
@@ -480,22 +453,17 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
                         )
                       }
                     >
-                      <SelectTrigger id={`${formId}-gender`}>
-                        <SelectValue placeholder="未填" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="UNSET">未填</SelectItem>
-                        {GENDER_OPTIONS.map((g) => (
-                          <SelectItem key={g} value={g}>
-                            {genderLabel[g]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
+                      <Select.Option value="UNSET">未填</Select.Option>
+                      {GENDER_OPTIONS.map((g) => (
+                        <Select.Option key={g} value={g}>
+                          {genderLabel[g]}
+                        </Select.Option>
+                      ))}
                     </Select>
                   </Field>
 
                   <Field id={`${formId}-ethnicity`} label="民族">
-                    <Input id={`${formId}-ethnicity`} placeholder="如 汉族" {...register("ethnicity")} />
+                    <Controller name="ethnicity" control={control} render={({ field: inputField }) => (<Input id={`${formId}-ethnicity`} placeholder="如 汉族" {...inputField} />)} />
                   </Field>
                 </>
               )}
@@ -511,7 +479,7 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
               </Field>
 
               <Field id={`${formId}-notes`} label="备注" full>
-                <Textarea id={`${formId}-notes`} rows={3} placeholder="可选" {...register("notes")} />
+                <Controller name="notes" control={control} render={({ field: inputField }) => (<TextArea id={`${formId}-notes`} rows={3} placeholder="可选" {...inputField} />)} />
               </Field>
             </Section>
 
@@ -520,9 +488,10 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
               title="联系人"
               action={
                 <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
+                  htmlType="button"
+                  type="tertiary" theme="outline"
+                  size="small"
+                  icon={<Plus size={14} />}
                   onClick={() =>
                     append({
                       name: "",
@@ -534,9 +503,7 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
                       notes: ""
                     })
                   }
-                  className="h-7 gap-1"
                 >
-                  <Plus className="h-3.5 w-3.5" />
                   添加联系人
                 </Button>
               }
@@ -552,33 +519,30 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
                         联系人 {idx + 1}
                       </span>
                       <div className="flex items-center gap-2">
-                        <label className="flex cursor-pointer items-center gap-1 text-xs text-muted-foreground">
-                          <Checkbox
-                            checked={watch(`contacts.${idx}.isPrimary`)}
-                            onCheckedChange={(c) => {
-                              if (c) {
-                                // 单选：取消其他主联系人
-                                fields.forEach((_, i) => {
-                                  setValue(`contacts.${i}.isPrimary`, i === idx, { shouldDirty: true });
-                                });
-                              } else {
-                                setValue(`contacts.${idx}.isPrimary`, false, { shouldDirty: true });
-                              }
-                            }}
-                          />
-                          <Star className="h-3 w-3" /> 主要联系人
-                        </label>
+                        <Checkbox className="text-xs" disabled={isPending}
+                          checked={watch(`contacts.${idx}.isPrimary`)}
+                          onChange={(event) => {
+                            if (event.target.checked) {
+                              // 单选：取消其他主联系人
+                              fields.forEach((_, i) => {
+                                setValue(`contacts.${i}.isPrimary`, i === idx, { shouldDirty: true });
+                              });
+                            } else {
+                              setValue(`contacts.${idx}.isPrimary`, false, { shouldDirty: true });
+                            }
+                          }}
+                        >
+                          <Star className="mr-1 inline h-3 w-3" />主要联系人
+                        </Checkbox>
                         {fields.length > 1 && (
                           <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
+                            htmlType="button"
+                            type="danger" theme="borderless"
+                            size="small"
+                            icon={<Trash2 size={14} />}
                             onClick={() => remove(idx)}
                             aria-label={`删除联系人 ${watch(`contacts.${idx}.name`) || idx + 1}`}
-                            className="h-7 w-7 p-0 text-destructive"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          />
                         )}
                       </div>
                     </div>
@@ -590,46 +554,46 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
                         required
                         error={errors.contacts?.[idx]?.name?.message}
                       >
-                        <Input
+                        <Controller name={`contacts.${idx}.name`} control={control} render={({ field: inputField }) => (<Input
                           id={`${formId}-${field.id}-name`}
                           aria-invalid={!!errors.contacts?.[idx]?.name}
                           aria-describedby={errors.contacts?.[idx]?.name ? `${formId}-${field.id}-name-error` : undefined}
                           placeholder="姓名"
-                          {...register(`contacts.${idx}.name`)}
-                        />
+                          {...inputField}
+                        />)} />
                       </Field>
                       <Field id={`${formId}-${field.id}-title`} label="职务">
-                        <Input
+                        <Controller name={`contacts.${idx}.title`} control={control} render={({ field: inputField }) => (<Input
                           id={`${formId}-${field.id}-title`}
                           placeholder="法定代表人 / 总经理 / 法务"
-                          {...register(`contacts.${idx}.title`)}
-                        />
+                          {...inputField}
+                        />)} />
                       </Field>
                       <Field id={`${formId}-${field.id}-phone`} label="电话">
-                        <Input
+                        <Controller name={`contacts.${idx}.phone`} control={control} render={({ field: inputField }) => (<Input
                           id={`${formId}-${field.id}-phone`}
                           className="font-mono"
-                          {...register(`contacts.${idx}.phone`)}
-                        />
+                          {...inputField}
+                        />)} />
                       </Field>
                       <Field
                         id={`${formId}-${field.id}-email`}
                         label="邮箱"
                         error={errors.contacts?.[idx]?.email?.message}
                       >
-                        <Input
+                        <Controller name={`contacts.${idx}.email`} control={control} render={({ field: inputField }) => (<Input
                           id={`${formId}-${field.id}-email`}
                           aria-invalid={!!errors.contacts?.[idx]?.email}
                           aria-describedby={errors.contacts?.[idx]?.email ? `${formId}-${field.id}-email-error` : undefined}
                           type="email"
-                          {...register(`contacts.${idx}.email`)}
-                        />
+                          {...inputField}
+                        />)} />
                       </Field>
                       <Field id={`${formId}-${field.id}-wechat`} label="微信">
-                        <Input id={`${formId}-${field.id}-wechat`} {...register(`contacts.${idx}.wechat`)} />
+                        <Controller name={`contacts.${idx}.wechat`} control={control} render={({ field: inputField }) => (<Input id={`${formId}-${field.id}-wechat`} {...inputField} />)} />
                       </Field>
                       <Field id={`${formId}-${field.id}-notes`} label="备注">
-                        <Input id={`${formId}-${field.id}-notes`} {...register(`contacts.${idx}.notes`)} />
+                        <Controller name={`contacts.${idx}.notes`} control={control} render={({ field: inputField }) => (<Input id={`${formId}-${field.id}-notes`} {...inputField} />)} />
                       </Field>
                     </div>
                   </div>
@@ -641,19 +605,18 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
           {/* 底栏 */}
           <SheetFooter className="border-t border-border bg-background px-6 py-4">
             <Button
-              type="button"
-              variant="outline"
+              htmlType="button"
+              type="tertiary" theme="outline"
               onClick={() => { void requestClose(); }}
               disabled={isPending}
             >
               取消
             </Button>
             <Button
-              type="submit"
+              htmlType="submit" theme="solid"
               disabled={isPending}
-              className="gap-1.5 "
+              loading={isPending}
             >
-              {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               {isEdit ? "保存" : "创建客户"}
             </Button>
           </SheetFooter>
@@ -705,10 +668,10 @@ function Field({
 }) {
   return (
     <div className={cn("space-y-1.5", full && "col-span-2")}>
-      <Label htmlFor={id} className="flex items-center gap-1 text-xs">
+      <label id={`${id}-label`} htmlFor={id} className="flex items-center gap-1 text-xs">
         {label}
         {required && <span className="text-destructive">*</span>}
-      </Label>
+      </label>
       {children}
       {error && <p id={`${id}-error`} className="text-xs text-destructive">{error}</p>}
     </div>
@@ -728,37 +691,36 @@ function TagInput({
   onAdd: (t: string) => void;
   onRemove: (t: string) => void;
 }) {
+  const [input, setInput] = useState("");
   return (
-    <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-2 py-1.5 focus-within:border-primary">
+    <div className="flex flex-wrap items-center gap-1.5">
       {tags.map((t) => (
-        <span
-          key={t}
-          className="inline-flex items-center gap-1 rounded-md bg-primary/15 px-2 py-0.5 text-xs text-primary"
-        >
+        <Tag key={t} size="large">
           {t}
-          <button
-            type="button"
+          <Button
+            htmlType="button"
             onClick={() => onRemove(t)}
-            className="hover:text-foreground"
+            theme="borderless" type="tertiary" size="small"
+            icon={<X size={12} />}
             aria-label={`移除 ${t}`}
-          >
-            <X className="h-3 w-3" />
-          </button>
-        </span>
+          />
+        </Tag>
       ))}
-      <input
+      <Input
         id={id}
+        value={input}
+        onChange={setInput}
         ref={inputRef}
         type="text"
         placeholder={tags.length === 0 ? "输入后回车添加标签" : ""}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
-            onAdd((e.target as HTMLInputElement).value);
-            (e.target as HTMLInputElement).value = "";
+            onAdd(input);
+            setInput("");
           }
         }}
-        className="flex-1 min-w-24 border-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+        className="min-w-24 flex-1"
       />
     </div>
   );

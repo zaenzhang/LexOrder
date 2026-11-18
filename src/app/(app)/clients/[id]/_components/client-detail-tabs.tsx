@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs } from "@douyinfe/semi-ui";
 import { useTopbarAction } from "@/components/layout/topbar-action";
 
 const SECTIONS = [
@@ -93,14 +93,11 @@ export function ClientDetailTabs({
 
   return (
     <div onClickCapture={followSource}>
-      <Tabs value={tab} onValueChange={select}>
-        <TabsList aria-label="客户详情分区" className="flex w-full flex-wrap justify-start">
-          {SECTIONS.map(section => <TabsTrigger key={section.id} value={section.id}>{section.label}</TabsTrigger>)}
-        </TabsList>
+      <Tabs activeKey={tab} onChange={select} keepDOM lazyRender={false} tabPaneMotion={false} aria-label="客户详情分区">
         {SECTIONS.map(section => (
-          <TabsContent key={section.id} value={section.id} forceMount hidden={tab !== section.id} className="min-w-0 data-[state=inactive]:hidden">
+          <Tabs.TabPane key={section.id} itemKey={section.id} tab={section.label} className="min-w-0">
             {sections[section.id]}
-          </TabsContent>
+          </Tabs.TabPane>
         ))}
       </Tabs>
     </div>

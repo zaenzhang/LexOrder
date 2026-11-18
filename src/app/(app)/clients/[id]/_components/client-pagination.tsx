@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@douyinfe/semi-ui";
+
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { actionErrorMessage } from "@/lib/action-error";
 import type { ClientPageInput } from "@/lib/clients/history";
@@ -50,12 +52,12 @@ export function ClientPagination({ controls, label }: { controls: Controls; labe
   return <div className="mt-3 space-y-2">
     {controls.pending ? <p className="t-xs t-mute" role="status">正在加载{label}…</p> : null}
     {controls.error ? <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-[var(--red)]">
-      <span>{controls.error}</span><button type="button" className="btn btn-secondary btn-sm" onClick={controls.retry}>重试{label}</button>
+      <span>{controls.error}</span><Button htmlType="button" theme="outline" type="tertiary" size="small" onClick={controls.retry}>重试{label}</Button>
     </div> : null}
     <div className="flex flex-wrap items-center gap-2">
-      <button type="button" className="btn btn-secondary btn-sm" disabled={controls.pending || !controls.hasPrevious} aria-label={`${label}上一页`} onClick={controls.previous}>上一页</button>
-      <button type="button" className="btn btn-secondary btn-sm" disabled={controls.pending || !controls.page?.nextCursor} aria-label={`${label}下一页`} onClick={controls.next}>下一页</button>
-      <button type="button" className="btn btn-ghost btn-sm" aria-label={`刷新${label}`} onClick={controls.refresh}>刷新</button>
+      <Button htmlType="button" theme="outline" type="tertiary" size="small" disabled={controls.pending || !controls.hasPrevious} aria-label={`${label}上一页`} onClick={controls.previous}>上一页</Button>
+      <Button htmlType="button" theme="outline" type="tertiary" size="small" disabled={controls.pending || !controls.page?.nextCursor} aria-label={`${label}下一页`} onClick={controls.next}>下一页</Button>
+      <Button htmlType="button" theme="borderless" type="tertiary" size="small" aria-label={`刷新${label}`} onClick={controls.refresh}>刷新</Button>
     </div>
   </div>;
 }

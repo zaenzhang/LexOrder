@@ -1,13 +1,11 @@
 "use client";
 
+import { Button, Input, TextArea } from "@douyinfe/semi-ui";
+
 import { useCallback, useEffect, useRef, useState, useTransition, type FormEvent, type RefObject } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { Check } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
 import { fromShanghaiInput, toShanghaiInput } from "@/lib/clients/relationship";
@@ -38,21 +36,21 @@ export function PersonalFollowUpRescheduleHistory({ target }: { target: Personal
     } finally { if (mounted.current && token === sequence.current && currentIdentity.current === identity) setPending(false); }
   }
   return <section className="space-y-3 border-t pt-3" aria-label="跟进改期记录">
-    <Button type="button" variant="ghost" aria-expanded={expanded} onClick={() => {
+    <Button htmlType="button" type="tertiary" theme="borderless" aria-expanded={expanded} onClick={() => {
       if (expanded) { sequence.current++; setExpanded(false); setData(null); setError(""); setPending(false); }
       else { setExpanded(true); void load(0, [undefined]); }
     }}>改期记录</Button>
     {expanded && <div className="space-y-3">
       {pending && <p role="status" className="text-sm text-muted-foreground">正在读取改期记录…</p>}
-      {error && <div className="space-y-2"><p role="alert" className="text-sm text-destructive">{error}</p><Button type="button" variant="outline" onClick={() => void load(page)}>重试改期记录</Button></div>}
+      {error && <div className="space-y-2"><p role="alert" className="text-sm text-destructive">{error}</p><Button htmlType="button" type="tertiary" theme="outline" onClick={() => void load(page)}>重试改期记录</Button></div>}
       {data && (data.items.length ? <ol className="space-y-3">{data.items.map(item => <li key={item.id} className="space-y-1 rounded-md border p-3 text-sm">
         <p><time dateTime={item.beforeDueAt}>{displayTime(item.beforeDueAt)}</time> → <time dateTime={item.afterDueAt}>{displayTime(item.afterDueAt)}</time></p>
         <p className="whitespace-pre-wrap break-words">{item.reason}</p>
         <p className="text-xs text-muted-foreground">{item.actorName ?? "未记录操作人"} · <time dateTime={item.at}>{displayTime(item.at)}</time>（北京时间）</p>
       </li>)}</ol> : <p className="text-sm text-muted-foreground">暂无改期记录。</p>)}
       {data && <div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground">改期记录第 {page + 1} 页</span><div className="flex gap-2">
-        <Button type="button" variant="outline" disabled={pending || page === 0} onClick={() => void load(page - 1)}>上一页改期记录</Button>
-        <Button type="button" variant="outline" disabled={pending || !data.nextCursor} onClick={() => void load(page + 1, [...cursors.slice(0, page + 1), data.nextCursor!])}>下一页改期记录</Button>
+        <Button htmlType="button" type="tertiary" theme="outline" disabled={pending || page === 0} onClick={() => void load(page - 1)}>上一页改期记录</Button>
+        <Button htmlType="button" type="tertiary" theme="outline" disabled={pending || !data.nextCursor} onClick={() => void load(page + 1, [...cursors.slice(0, page + 1), data.nextCursor!])}>下一页改期记录</Button>
       </div></div>}
     </div>}
   </section>;
@@ -138,14 +136,14 @@ export function ClientFollowUpRescheduleDialog({ clientId, followUpId, onClose, 
       {value && !mayEdit && <p role="status">{value.status === "OPEN" ? "当前仅可查看此跟进，不能改期。" : "此跟进已结束，不能改期。"}</p>}
       {mayEdit && activeDraft && <form onSubmit={submit} className="space-y-4">
         <fieldset disabled={pending} className="space-y-4">
-          <div className="space-y-1.5"><Label htmlFor="crm-reschedule-due">新的跟进时间（北京时间）*</Label><Input id="crm-reschedule-due" type="datetime-local" required value={activeDraft.dueAt} onChange={event => setDraft(previous => ({ ...previous, dueAt: event.target.value }))} /></div>
-          <div className="space-y-1.5"><Label htmlFor="crm-reschedule-reason">改期原因 *</Label><Textarea id="crm-reschedule-reason" required maxLength={1000} rows={4} value={activeDraft.reason} onChange={event => setDraft(previous => ({ ...previous, reason: event.target.value }))} /></div>
+          <div className="space-y-1.5"><label htmlFor="crm-reschedule-due">新的跟进时间（北京时间）*</label><Input id="crm-reschedule-due" type="datetime-local" required value={activeDraft.dueAt} onChange={value => setDraft(previous => ({ ...previous, dueAt: value }))} /></div>
+          <div className="space-y-1.5"><label htmlFor="crm-reschedule-reason">改期原因 *</label><TextArea id="crm-reschedule-reason" required maxLength={1000} rows={4} value={activeDraft.reason} onChange={value => setDraft(previous => ({ ...previous, reason: value }))} /></div>
         </fieldset>
         {!changedTime && <p className="text-xs text-muted-foreground">请选择与当前安排不同的跟进时间。</p>}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-        <DialogFooter><Button type="button" variant="outline" disabled={pending} onClick={() => void requestClose()}>返回</Button><Button type="submit" disabled={pending || !changedTime || !activeDraft.reason.trim()}>{pending ? <Loader2 className="animate-spin" /> : <Check />}保存改期</Button></DialogFooter>
+        <DialogFooter><Button htmlType="button" type="tertiary" theme="outline" disabled={pending} onClick={() => void requestClose()}>返回</Button><Button htmlType="submit" theme="solid" icon={<Check size={16} />} loading={pending} disabled={pending || !changedTime || !activeDraft.reason.trim()}>保存改期</Button></DialogFooter>
       </form>}
-      <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={pending || !current} onClick={() => void readTarget(true)}>重新读取并核对</Button>{!mayEdit && <Button type="button" variant="outline" disabled={pending} onClick={() => void requestClose()}>返回列表</Button>}</div>
+      <div className="flex flex-wrap gap-2"><Button htmlType="button" type="tertiary" theme="outline" disabled={pending || !current} onClick={() => void readTarget(true)}>重新读取并核对</Button>{!mayEdit && <Button htmlType="button" type="tertiary" theme="outline" disabled={pending} onClick={() => void requestClose()}>返回列表</Button>}</div>
       {value && <PersonalFollowUpRescheduleHistory key={`${identity}:${current.revision}:${value.updatedAt}`} target={{ clientId, followUpId }} />}
     </DialogContent>
   </Dialog>;

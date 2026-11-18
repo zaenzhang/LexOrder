@@ -1,16 +1,15 @@
 "use client";
 
+import { Button, Checkbox, Input, Radio } from "@douyinfe/semi-ui";
+
 /** 墨案 10 客户详情的交互零件：疑似重复横幅 + 合并向导、添加联系人 */
-import { useId, useState, useTransition } from "react";
+import { useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { GitMerge, Loader2, Plus, ScanSearch } from "lucide-react";
+import { GitMerge, Plus, ScanSearch } from "lucide-react";
 import { mergeClientsByCode } from "@/server/clients/dedup";
 import { addContact } from "@/server/clients/actions";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { actionErrorMessage } from "@/lib/action-error";
 
 export function MergeBanner({
@@ -30,6 +29,7 @@ export function MergeBanner({
   const [code, setCode] = useState(suspects[0]?.internalCode ?? "");
   const [basis, setBasis] = useState("");
   const [pending, start] = useTransition();
+  const trigger = useRef<HTMLButtonElement>(null);
   if (!canMerge || dismissed) {
     return canMerge ? null : null;
   }
@@ -64,19 +64,18 @@ export function MergeBanner({
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDismissed(true)}>忽略本次</button>
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => setOpen(true)}>查看合并建议</button>
+            <Button htmlType="button" theme="borderless" type="tertiary" size="small" onClick={() => setDismissed(true)}>忽略本次</Button>
+            <Button htmlType="button" theme="solid" size="small" onClick={event => { trigger.current = event.currentTarget; setOpen(true); }}>查看合并建议</Button>
           </div>
         </div>
       ) : null}
       {!s ? (
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(true)} data-merge-trigger>
-          <GitMerge />
+        <Button htmlType="button" theme="borderless" type="tertiary" size="small" icon={<GitMerge size={14} />} onClick={event => { trigger.current = event.currentTarget; setOpen(true); }} data-merge-trigger>
           合并重复档案
-        </button>
+        </Button>
       ) : null}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-[520px]">
+      <Dialog open={open} onOpenChange={value => { if (!pending) setOpen(value); }}>
+        <DialogContent className="sm:max-w-[520px]" onCloseAutoFocus={event => { event.preventDefault(); trigger.current?.focus({ preventScroll: true }); }}>
           <DialogHeader>
             <DialogTitle>合并客户档案</DialogTitle>
             <DialogDescription>将另一档案并入「{keepName}」。联系人、收案与案件关联转移至本档案；历史冲突核查、审批与正式成果中的身份快照保持原貌。</DialogDescription>
@@ -84,32 +83,30 @@ export function MergeBanner({
           <div className="space-y-3">
             {suspects.length > 0 ? (
               <div className="space-y-1.5">
-                <Label>疑似重复档案</Label>
+                <label>疑似重复档案</label>
                 {suspects.map((x) => (
-                  <label key={x.id} className="flex cursor-pointer items-center gap-2 rounded-[8px] border border-[var(--bd-hair)] px-3 py-2 text-[12.5px] hover:bg-[var(--bg-hover)]">
-                    <input type="radio" name="merge-suspect" checked={code === (x.internalCode ?? "")} onChange={() => setCode(x.internalCode ?? "")} disabled={!x.internalCode} />
+                  <Radio key={x.id} name="merge-suspect" checked={code === (x.internalCode ?? "")} onChange={() => setCode(x.internalCode ?? "")} disabled={pending || !x.internalCode}>
                     <span className="min-w-0 flex-1 truncate font-[550]">{x.name}</span>
                     <span className="badge b-amber">{x.reason}</span>
                     <span className="font-mono text-[11px] text-[var(--t-muted)]">{x.internalCode ?? "无编号"}</span>
-                  </label>
+                  </Radio>
                 ))}
               </div>
             ) : null}
             <div className="space-y-1.5">
-              <Label htmlFor="merge-code">被合并客户编号</Label>
-              <Input id="merge-code" value={code} onChange={(e) => setCode(e.target.value)} placeholder="KH-2026-0001" className="font-mono" />
+              <label htmlFor="merge-code">被合并客户编号</label>
+              <Input id="merge-code" value={code} onChange={(value) => setCode(value)} placeholder="KH-2026-0001" className="font-mono" />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="merge-basis">合并依据（记入审计）</Label>
-              <Input id="merge-basis" value={basis} onChange={(e) => setBasis(e.target.value)} placeholder="如：统一社会信用代码一致，同一主体重复建档" />
+              <label htmlFor="merge-basis">合并依据（记入审计）</label>
+              <Input id="merge-basis" value={basis} onChange={(value) => setBasis(value)} placeholder="如：统一社会信用代码一致，同一主体重复建档" />
             </div>
           </div>
           <DialogFooter>
-            <button type="button" className="btn btn-secondary" onClick={() => setOpen(false)} disabled={pending}>取消</button>
-            <button type="button" className="btn btn-primary" onClick={submit} disabled={pending}>
-              {pending ? <Loader2 className="animate-spin" /> : <GitMerge />}
+            <Button htmlType="button" theme="outline" type="tertiary" onClick={() => setOpen(false)} disabled={pending}>取消</Button>
+            <Button htmlType="button" theme="solid" icon={<GitMerge size={16} />} loading={pending} onClick={submit} disabled={pending}>
               确认合并
-            </button>
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -122,6 +119,7 @@ export function AddContactButton({ clientId }: { clientId: string }) {
   const formId = useId();
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
+  const trigger = useRef<HTMLButtonElement>(null);
   const [form, setForm] = useState({ name: "", title: "", phone: "", email: "", isPrimary: false });
   function submit() {
     if (!form.name.trim()) {
@@ -141,27 +139,24 @@ export function AddContactButton({ clientId }: { clientId: string }) {
     });
   }
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button type="button" className="btn btn-ghost btn-sm">
-          <Plus />
+    <Dialog open={open} onOpenChange={value => { if (!pending) setOpen(value); }}>
+        <Button htmlType="button" theme="borderless" type="tertiary" size="small" icon={<Plus size={14} />} onClick={event => { trigger.current = event.currentTarget; setOpen(true); }}>
           添加联系人
-        </button>
-      </DialogTrigger>
-        <DialogContent className="sm:max-w-[460px]">
+        </Button>
+        <DialogContent className="sm:max-w-[460px]" onCloseAutoFocus={event => { event.preventDefault(); trigger.current?.focus({ preventScroll: true }); }}>
           <DialogHeader>
             <DialogTitle>添加联系人</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5"><Label htmlFor={`${formId}-name`}>姓名 *</Label><Input id={`${formId}-name`} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-            <div className="space-y-1.5"><Label htmlFor={`${formId}-title`}>职务 / 对接事项</Label><Input id={`${formId}-title`} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="如：财务对接" /></div>
-            <div className="space-y-1.5"><Label htmlFor={`${formId}-phone`}>电话</Label><Input id={`${formId}-phone`} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="font-mono" /></div>
-            <div className="space-y-1.5"><Label htmlFor={`${formId}-email`}>邮箱</Label><Input id={`${formId}-email`} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-            <label className="col-span-2 flex items-center gap-2 text-[12.5px]"><Checkbox checked={form.isPrimary} onCheckedChange={(v) => setForm({ ...form, isPrimary: v === true })} />设为主要联系人</label>
+            <div className="space-y-1.5"><label htmlFor={`${formId}-name`}>姓名 *</label><Input id={`${formId}-name`} value={form.name} onChange={(value) => setForm({ ...form, name: value })} /></div>
+            <div className="space-y-1.5"><label htmlFor={`${formId}-title`}>职务 / 对接事项</label><Input id={`${formId}-title`} value={form.title} onChange={(value) => setForm({ ...form, title: value })} placeholder="如：财务对接" /></div>
+            <div className="space-y-1.5"><label htmlFor={`${formId}-phone`}>电话</label><Input id={`${formId}-phone`} value={form.phone} onChange={(value) => setForm({ ...form, phone: value })} className="font-mono" /></div>
+            <div className="space-y-1.5"><label htmlFor={`${formId}-email`}>邮箱</label><Input id={`${formId}-email`} value={form.email} onChange={(value) => setForm({ ...form, email: value })} /></div>
+            <Checkbox className="col-span-2" checked={form.isPrimary} disabled={pending} onChange={(event) => setForm({ ...form, isPrimary: event.target.checked === true })}>设为主要联系人</Checkbox>
           </div>
           <DialogFooter>
-            <button type="button" className="btn btn-secondary" onClick={() => setOpen(false)} disabled={pending}>取消</button>
-            <button type="button" className="btn btn-primary" onClick={submit} disabled={pending}>{pending ? <Loader2 className="animate-spin" /> : null}添加</button>
+            <Button htmlType="button" theme="outline" type="tertiary" onClick={() => setOpen(false)} disabled={pending}>取消</Button>
+            <Button htmlType="button" theme="solid" onClick={submit} loading={pending} disabled={pending}>添加</Button>
           </DialogFooter>
         </DialogContent>
     </Dialog>

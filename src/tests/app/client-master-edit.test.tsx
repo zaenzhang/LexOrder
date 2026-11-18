@@ -167,6 +167,31 @@ describe("Server 客户编辑入口（组件环境）", () => {
     await waitFor(() => expect(screen.getByLabelText(/^客户名称\s*\*$/)).toHaveValue(client.name));
   });
 
+  it("Semi 主体下拉在客户抽屉内选择，Escape 分层关闭并保留草稿", async () => {
+    renderPage(<ClientsView initialData={initialData} initialFilters={filters} canCreate editableClientIds={[id]} />);
+    fireEvent.click(screen.getAllByRole("button", { name: `编辑 ${client.name}` })[0]);
+    const editor = await screen.findByRole("dialog", { name: "编辑客户" });
+    const type = within(editor).getByRole("combobox", { name: /^类型\s*\*$/ });
+    fireEvent.focus(type);
+    fireEvent.keyDown(type, { key: "Enter", keyCode: 13 });
+    const individual = await within(editor).findByRole("option", { name: /自然人/ });
+    fireEvent.click(individual);
+    expect(type).toHaveTextContent("自然人");
+    expect(within(editor).getByRole("combobox", { name: /^证件类型\s*\*$/ })).toHaveTextContent("居民身份证");
+    const name = within(editor).getByLabelText(/^客户名称\s*\*$/);
+    fireEvent.change(name, { target: { value: "仍在编辑的合成客户" } });
+    fireEvent.keyDown(type, { key: "Enter", keyCode: 13 });
+    await within(editor).findByRole("listbox");
+    fireEvent.keyDown(type, { key: "Escape", keyCode: 27 });
+    await waitFor(() => expect(within(editor).queryByRole("listbox")).not.toBeInTheDocument());
+    expect(editor).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "放弃更改" })).not.toBeInTheDocument();
+    expect(name).toHaveValue("仍在编辑的合成客户");
+    fireEvent.keyDown(editor, { key: "Escape", keyCode: 27 });
+    expect(await screen.findByRole("button", { name: "继续编辑" })).toHaveFocus();
+    expect(mock.update).not.toHaveBeenCalled();
+  });
+
   it("新建时未添加的标签也受 Esc 保护，放弃后回到顶栏入口", async () => {
     renderPage(<ClientsView initialData={initialData} initialFilters={filters} canCreate editableClientIds={[id]} />);
     const trigger = screen.getByRole("button", { name: "新建客户" });

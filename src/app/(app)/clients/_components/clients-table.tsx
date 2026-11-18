@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@douyinfe/semi-ui";
+
 import Link from "next/link";
 import { Building2, User, Briefcase, Pencil, Phone, Mail } from "lucide-react";
 import type { Client, ClientCooperationStatus, ClientType, Contact } from "@prisma/client";
@@ -117,9 +119,7 @@ export function ClientsTable({
                     <span className="font-mono text-[11px] text-[var(--t-muted)]"> / {c._count.intakes}</span>
                   </td>
                   {canEditAny ? <td className="text-right">
-                    {editableClientIds.includes(c.id) ? <button type="button" className="btn btn-ghost btn-sm btn-icon opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100" onClick={event => onEdit(c, event.currentTarget)} aria-label={`编辑 ${c.name}`} disabled={!!loadingClientId} aria-busy={loadingClientId === c.id}>
-                      <Pencil />
-                    </button> : null}
+                    {editableClientIds.includes(c.id) ? <Button htmlType="button" className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100" theme="borderless" type="tertiary" size="small" icon={<Pencil size={14} />} onClick={event => onEdit(c, event.currentTarget)} aria-label={`编辑 ${c.name}`} disabled={!!loadingClientId} aria-busy={loadingClientId === c.id} /> : null}
                   </td> : null}
                 </tr>
               );
@@ -152,9 +152,7 @@ export function ClientsTable({
                     </div>
                   )}
                 </Link>
-                {editableClientIds.includes(c.id) ? <button type="button" className="btn btn-ghost btn-sm btn-icon shrink-0" onClick={event => onEdit(c, event.currentTarget)} aria-label={`编辑 ${c.name}`} disabled={!!loadingClientId} aria-busy={loadingClientId === c.id}>
-                  <Pencil />
-                </button> : null}
+                {editableClientIds.includes(c.id) ? <Button htmlType="button" className="shrink-0" theme="borderless" type="tertiary" size="small" icon={<Pencil size={14} />} onClick={event => onEdit(c, event.currentTarget)} aria-label={`编辑 ${c.name}`} disabled={!!loadingClientId} aria-busy={loadingClientId === c.id} /> : null}
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                 <CoopBadge status={c.cooperationStatus} />

@@ -1,9 +1,10 @@
 "use client";
 
+import { Button } from "@douyinfe/semi-ui";
+
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarClock, Check, MessageSquare, Plus, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { clientChannelLabels, type ClientRelationshipView, type ClientCommunicationPage, type ClientFollowUpPage } from "@/lib/clients/relationship";
 import { shDayKey, shTime } from "@/lib/ui/sh-time";
 import { getClientCommunicationPage, getClientFollowUpPage } from "@/server/clients/relationship-actions";
@@ -23,7 +24,6 @@ export function ClientRelationshipPanel({ clientId, view }: { clientId: string; 
   const followUps = followUpPager.page;
   const [mode, setMode] = useState<ClientActivityMode | null>(null);
   const editorTrigger = useRef<HTMLButtonElement | null>(null);
-  const recordTrigger = useRef<HTMLButtonElement>(null);
   const sectionTitle = useRef<HTMLHeadingElement>(null);
   function begin(nextMode: ClientActivityMode, trigger: HTMLButtonElement) {
     editorTrigger.current = trigger;
@@ -40,7 +40,7 @@ export function ClientRelationshipPanel({ clientId, view }: { clientId: string; 
     <section className="card min-w-0 overflow-hidden" aria-labelledby="client-relationship-title">
       <div className="panel-head flex-wrap gap-2">
         <h2 ref={sectionTitle} tabIndex={-1} id="client-relationship-title" className="panel-title"><MessageSquare className="ic" strokeWidth={1.8} />沟通与跟进</h2>
-        {view?.canWrite && activities?.canWrite && followUps?.canWrite ? <button ref={recordTrigger} type="button" className="btn btn-secondary btn-sm" onClick={event => begin({ status: "COMPLETED" }, event.currentTarget)}><Plus />记录沟通</button> : null}
+        {view?.canWrite && activities?.canWrite && followUps?.canWrite ? <Button htmlType="button" theme="outline" type="tertiary" size="small" icon={<Plus size={14} />} onClick={event => begin({ status: "COMPLETED" }, event.currentTarget)}>记录沟通</Button> : null}
       </div>
       {!view ? <div className="panel-body t-sm t-mute">沟通记录仅向客户经办人员及获授权的管理人员开放。</div> : (
         <div className="panel-body grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
@@ -56,8 +56,8 @@ export function ClientRelationshipPanel({ clientId, view }: { clientId: string; 
                   </div>
                 </div>
                 {item.canClose ? <div className="flex flex-wrap gap-1">
-                  <button type="button" className="btn btn-secondary btn-sm" aria-label={`录入结果：${item.title}`} onClick={event => begin({ id: item.id, title: item.title, status: "COMPLETED" }, event.currentTarget)}><Check />录入结果</button>
-                  <button type="button" className="btn btn-ghost btn-sm" aria-label={`取消跟进：${item.title}`} onClick={event => begin({ id: item.id, title: item.title, status: "CANCELLED" }, event.currentTarget)}><X />取消</button>
+                  <Button htmlType="button" theme="outline" type="tertiary" size="small" icon={<Check size={14} />} aria-label={`录入结果：${item.title}`} onClick={event => begin({ id: item.id, title: item.title, status: "COMPLETED" }, event.currentTarget)}>录入结果</Button>
+                  <Button htmlType="button" theme="borderless" type="tertiary" size="small" icon={<X size={14} />} aria-label={`取消跟进：${item.title}`} onClick={event => begin({ id: item.id, title: item.title, status: "CANCELLED" }, event.currentTarget)}>取消</Button>
                 </div> : null}
               </li>)}
             </ul>}
@@ -90,10 +90,10 @@ function CommunicationContent({ activityId, content }: { activityId: string; con
   return <div>
     <p id={contentId} className={`whitespace-pre-wrap break-words text-sm leading-relaxed${isLong && !expanded ? " line-clamp-4" : ""}`}>{content}</p>
     {isLong ? <Button
-      type="button"
-      variant="link"
-      size="sm"
-      className="mt-0.5 h-auto px-0"
+      htmlType="button"
+      theme="borderless" noHorizontalPadding
+      size="small"
+      className="mt-0.5"
       aria-expanded={expanded}
       aria-controls={contentId}
       onClick={() => setExpanded(value => !value)}

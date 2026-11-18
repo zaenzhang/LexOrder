@@ -1,5 +1,7 @@
 "use client";
 
+import { Button, Input } from "@douyinfe/semi-ui";
+
 import { useState, useTransition, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -137,15 +139,13 @@ export function ClientsView({ initialData, initialFilters, canCreate, editableCl
       />
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <form className="mo-toolbar-input" onSubmit={handleSearchSubmit}>
-          <Search aria-hidden />
-          <input ref={searchInput} value={search} onChange={(e) => setSearch(e.target.value)} onBlur={handleSearchBlur} placeholder="搜索客户名称 / 证件号 / 电话 / 邮箱" aria-label="搜索客户" />
+        <form className="w-full min-w-0 sm:w-80" onSubmit={handleSearchSubmit}>
+          <Input ref={searchInput} prefix={<Search aria-hidden size={16} className="ml-3" />} value={search} onChange={setSearch} onBlur={handleSearchBlur} placeholder="搜索客户名称 / 证件号 / 电话 / 邮箱" aria-label="搜索客户" />
         </form>
         {search || type !== "ALL" ? (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={clearFilters}>
-            <X />
+          <Button htmlType="button" theme="borderless" type="tertiary" size="small" icon={<X size={14} />} onClick={clearFilters}>
             清除筛选
-          </button>
+          </Button>
         ) : null}
       </div>
 
