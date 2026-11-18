@@ -126,7 +126,7 @@ describe("审批详情读取、轮次与返回案件", () => {
     const { unmount } = render(<ApprovalsPanel matterId="cmatter000000000000000001" matterTitle="合成案件" canRequest={false} returnTo={returnTo}
       sealContracts={[{ id: seal.id, code: "SYNTHETIC-001", documentTitle: "合成用印申请", status: "PENDING", createdAt: new Date("2026-11-16T08:00:00Z"),
         draftDoc: { id: "cdocument0000000000000001", name: "合成材料.pdf", size: 10, createdAt: new Date("2026-11-16T08:00:00Z") }, stampedDoc: null }]} />);
-    const target = new URL(screen.getByRole("link", { name: "详情" }).getAttribute("href")!, "http://lexorder.invalid");
+    const target = new URL(screen.getByRole("link", { name: "合成用印申请" }).getAttribute("href")!, "http://lexorder.invalid");
     expect(target.pathname).toBe("/approvals");
     expect(target.searchParams.get("type")).toBe(seal.action);
     expect(target.searchParams.get("id")).toBe(seal.id);

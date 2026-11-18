@@ -539,8 +539,6 @@
 /* 视图页签 */
 
 /* 办案视图 */
-.mo-dossier .dos-work { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; align-items: start; }
-.mo-dossier .dos-main > .dos-work { margin: 0; }
 .mo-dossier .dos-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .mo-dossier .dos-rail { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 
@@ -595,7 +593,6 @@
 /* 材料视图 */
 
 @media (max-width: 1180px) {
-  .mo-dossier .dos-work { grid-template-columns: minmax(0, 1fr); }
   .mo-dossier .dos-rail { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); align-items: start; }
 }
 @media (max-width: 900px) {
@@ -659,7 +656,7 @@
   min-width: 0;
 }
 
-/* 区块：去灰边框、柔和阴影、宋体标题 + 图标方块 */
+/* 案件详情区块。 */
 .mo-dossier .dos-main .card, .mo-dossier .dos-rail .card { border-color: var(--semi-color-border); border-radius: var(--semi-border-radius-large); box-shadow: none; }
 .mo-dossier .dos-main .panel-head { padding: 13px 18px; }
 .mo-dossier .dos-main .panel-title { font-family: var(--font-sans); font-size: 15.5px; font-weight: 700; color: var(--semi-color-text-0); gap: 9px; }
@@ -912,7 +909,53 @@
   color: var(--semi-color-text-2);
 }
 .mo-dossier .dos-fin-hero > .dossier-section-heading {
-  margin: -16px -18px 16px;
+  margin: -18px -20px 16px;
+}
+.mo-dossier .dos-fin-cell {
+  border: 0;
+  border-radius: var(--semi-border-radius-medium);
+  background: var(--semi-color-fill-0);
+}
+.mo-dossier .dossier-property-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 176px), 1fr));
+  gap: 12px 20px;
+  padding: 14px 16px;
+  border: 0;
+  background: var(--semi-color-fill-0);
+}
+.mo-dossier .dossier-property-grid .mo-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: none;
+}
+.mo-dossier .dossier-property-grid :is(.mo-field-k, .mo-field-v) {
+  padding: 0;
+  text-align: start;
+}
+.mo-dossier .dossier-property-grid .mo-field-k {
+  align-self: start;
+  width: auto;
+  border: 0;
+  background: transparent;
+}
+.mo-dossier .dossier-property-grid .mo-field-v {
+  font-weight: 500;
+}
+.dossier-next-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 216px), 1fr));
+  gap: 16px;
+}
+.mo-dossier .dossier-overview-rail .rail-sec-head {
+  flex-wrap: wrap;
+}
+.mo-dossier .dossier-overview-rail .dos-glance-row .semi-button-content {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.mo-dossier .dossier-overview-rail .dos-glance-row .m {
+  font-weight: 400;
 }
 @media (max-width: 1000px) {
   .dossier-overview-grid {
@@ -926,4 +969,35 @@
   .mo-dossier .dossier-identity .ctx-actions {
     justify-content: flex-start;
   }
+}
+
+/* 案卷资料首屏只展示标题与可扫描的事实摘要。 */
+.dossier-context-card,
+.dossier-records-card {
+  scroll-margin-top: 120px;
+}
+.dossier-context-card #matter-context {
+  scroll-margin-top: 120px;
+}
+.dossier-folder-label {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-weight: 600;
+}
+.dossier-folder-label > span {
+  overflow-wrap: anywhere;
+  color: var(--semi-color-text-2);
+  font-size: var(--workspace-text-secondary);
+  font-weight: 400;
+}
+.dossier-folder-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+.mo-dossier .dossier-file-folders .dos-vs-body {
+  padding: 4px 0;
 }

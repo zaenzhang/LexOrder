@@ -627,7 +627,6 @@ export function MatterDetailTabs({
                 </List.Item>;
               }} />}
           </section>
-          {!invalidProcedure && !currentProcedure && (preservationCases.length > 0 || canAssociateThisMatter) ? <MatterPreservationContent matter={{ id: matter.id, internalCode: matter.internalCode, title: matter.title, category: matter.category }} cases={preservationCases} users={colleagues} canManage={canAssociateThisMatter && !isArchived} /> : null}
           <MatterArchive
             matter={matter}
             contextNode={contextNode}
@@ -643,6 +642,7 @@ export function MatterDetailTabs({
             canManageRelated={canAssociateThisMatter && !isArchived}
             onEdit={openMatterEditor}
           />
+          {!invalidProcedure && !currentProcedure && (preservationCases.length > 0 || canAssociateThisMatter) ? <MatterPreservationContent matter={{ id: matter.id, internalCode: matter.internalCode, title: matter.title, category: matter.category }} cases={preservationCases} users={colleagues} canManage={canAssociateThisMatter && !isArchived} /> : null}
           {closureNode}
         </>}
         archiveRailTop={<><TeamRailCard matter={matter} canManage={canOwnThisMatter} onManage={() => openMatterEditor("team")} />{conflictNode}</>}
@@ -676,7 +676,7 @@ export function MatterDetailTabs({
                 <FinanceHero stats={finance.stats} action={
                   <Link href={`/finance/reconciliation?${new URLSearchParams({ matterId: matter.id, returnTo: matterReturnTo })}`} className="workspace-action-link">应收与收款分配</Link>
                 } />
-                <FinancePanel matterId={matter.id} finance={finance} userOptions={userOptions} canRequestInvoice={canAssociateThisMatter} hideStats />
+                <FinancePanel matterId={matter.id} finance={finance} canRequestInvoice={canAssociateThisMatter} />
                 {finance.intakeFees ? (
                   <SemiCard title="收案收费约定">
                     <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
@@ -940,7 +940,7 @@ function FinanceHero({ stats, action }: { stats: FinancePayload["stats"]; action
   const base = stats.receivable;
   const received = base > 0 ? Math.min(100, Math.round((stats.allocated / base) * 100)) : 0;
   const pending = base > 0 ? Math.min(100 - received, Math.round((outstanding / base) * 100)) : 0;
-  const money = (n: number) => (n > 0 ? `¥${n.toLocaleString("zh-CN")}` : "—");
+  const money = (n: number) => `¥${n.toLocaleString("zh-CN")}`;
   const cells: [string, number, string][] = [
     ["合同额", stats.contractAmount, ""],
     ["已收", stats.received, "green"],

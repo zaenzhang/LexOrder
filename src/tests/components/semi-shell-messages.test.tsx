@@ -103,6 +103,7 @@ describe("Semi 通知入口与当前回执", () => {
     const trigger = await screen.findByRole("button", { name: "通知（2 条未读）" });
     mock.notifications.mockReturnValueOnce(new Promise<Notification[]>(resolve => { finish = resolve; }));
     fireEvent.click(trigger);
+    await screen.findByText("正在读取通知…");
     // 读取中保留已有已授权行，标记原行会使该次旧读取失效。
     fireEvent.click(await screen.findByRole("button", { name: /合成通知乙/ }));
     await screen.findByRole("button", { name: "通知（1 条未读）" });

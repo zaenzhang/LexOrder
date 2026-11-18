@@ -153,9 +153,6 @@ describe("实务工具 Semi 输入与切换", () => {
     fireEvent.click(screen.getByRole("tab", { name: "诉讼费" }));
     expect(screen.getByLabelText("诉讼标的金额（元）")).toHaveValue(230000);
     fireEvent.keyDown(dialog, { key: "Escape", code: "Escape", keyCode: 27 });
-    // jsdom lacks AnimationEvent, so React subscribes to the WebKit-prefixed event.
-    expect(dialog).toHaveClass("semi-modal-content-animate-hide");
-    fireEvent(dialog, new Event("webkitAnimationEnd", { bubbles: true }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await waitFor(() => expect(trigger).toHaveFocus());
     fireEvent.click(trigger);

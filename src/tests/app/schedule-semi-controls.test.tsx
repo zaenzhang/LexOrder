@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mock = vi.hoisted(() => ({ token: vi.fn(), regenerate: vi.fn(), copy: vi.fn(), error: vi.fn(), success: vi.fn() }));
-vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams("view=list") }));
+vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams("view=list"), useRouter: () => ({ replace: vi.fn() }) }));
 vi.mock("@/components/layout/topbar-action", () => ({ useTopbarAction: vi.fn() }));
 vi.mock("@/server/calendar/actions", () => ({ getCalendarToken: mock.token, regenerateCalendarToken: mock.regenerate }));
 vi.mock("@douyinfe/semi-ui", async importOriginal => {

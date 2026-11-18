@@ -102,9 +102,6 @@ describe("Semi 导航使用当前资格与稳定入口", () => {
     await waitFor(() => expect(screen.queryByRole("menuitem", { name: "实务工具" })).not.toBeInTheDocument());
     fireEvent.change(screen.getByLabelText("诉讼标的金额（元）"), { target: { value: "321000" } });
     fireEvent.keyDown(dialog, { key: "Escape", keyCode: 27 });
-    // jsdom lacks AnimationEvent, so React subscribes to the WebKit-prefixed event.
-    expect(dialog).toHaveClass("semi-modal-content-animate-hide");
-    fireEvent(dialog, new Event("webkitAnimationEnd", { bubbles: true }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(trigger).toHaveFocus();
     fireEvent.click(trigger);

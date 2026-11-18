@@ -1,14 +1,14 @@
 "use client";
 
 import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
-import { Button as SemiButton } from "@douyinfe/semi-ui";
+import { Button as SemiButton, Collapse } from "@douyinfe/semi-ui";
 
 /**
  * 案卷工作台「案件档案」页签（默认首屏，docs/UI-MATTER-DOSSIER-PLAN.md 第二版）：
  * 基本信息 → 当事人完整卡片 → 本程序信息 → 委托与收费 → 承办团队 → 自定义字段。
  */
 import Link from "next/link";
-import { IconArticle as FileText, IconApartment as Landmark, IconEdit as Pencil, IconUser as UserRound, IconUserGroup as Users, IconCoinMoney as Wallet } from "@douyinfe/semi-icons";
+import { IconEdit as Pencil, IconUserGroup as Users } from "@douyinfe/semi-icons";
 import { FieldGrid, FieldItem, InitialAvatar } from "@/components/patterns/workspace-surfaces";
 import { avatarTone } from "@/lib/ui/status-tones";
 import { litigationStandingLabel, matterCategoryKind, matterCategoryLabel, partyTypeLabel, procedureTypeLabel } from "@/lib/enums";
@@ -33,21 +33,6 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 const dash = (v: string | null | undefined) => v?.trim() || null;
-
-/** 案件要素卡内部的分区带：小图标 + 标题 + 右侧操作，字段用自适应网格铺满整行 */
-function Group({ icon: Icon, title, hint, action, children }: { icon: typeof FileText; title: string; hint?: string; action?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <section className="dos-group" aria-label={title}>
-      <div className="dos-group-h">
-        <Icon className="ic" />
-        <span className="t">{title}</span>
-        {hint ? <span className="h">{hint}</span> : null}
-        {action ? <span className="a">{action}</span> : null}
-      </div>
-      <div className="dos-group-b">{children}</div>
-    </section>
-  );
-}
 
 const CLAIMANT_STANDINGS = ["PLAINTIFF", "JOINT_PLAINTIFF", "APPELLANT", "RETRIAL_APPLICANT", "ENFORCEMENT_APPLICANT", "ARBITRATION_CLAIMANT", "ADMIN_RECONSIDERATION_APPLICANT", "ADMIN_PLAINTIFF"];
 const RESPONDENT_STANDINGS = ["DEFENDANT", "JOINT_DEFENDANT", "APPELLEE", "RETRIAL_RESPONDENT", "EXECUTED_PERSON", "ARBITRATION_RESPONDENT", "ADMIN_RECONSIDERATION_RESPONDENT", "ADMIN_DEFENDANT"];
@@ -192,18 +177,17 @@ export function MatterArchive({
 
   return (
     <>
-      {/* 一、当事人对阵：这页的主视觉——谁告谁、在哪审（2026-09-16 重排） */}
-      <section className="card dos-vs" aria-label="当事人">
-        <div className="panel-head">
-          <div className="panel-title">
-            <UserRound aria-hidden className="ic" />
-            当事人
-            <span className="t-xs t-mute" style={{ fontWeight: 400 }}>
-              共 {parties.length} 方{procLabel ? ` · ${procLabel}` : ""}
-            </span>
-          </div>
-          {currentProcedure && canEditProcedure ? editButton("parties", "编辑当事人") : null}
-        </div>
+      {contextNode ? <div className="card dossier-context-card">{contextNode}</div> : null}
+      <section className="card dossier-records-card" aria-labelledby="dossier-records-heading">
+        <header className="dossier-section-heading">
+          <h2 id="dossier-records-heading">案卷资料</h2>
+          {canReadFinance ? <SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={onOpenFinance}>查看委托与财务</SemiButton> : null}
+        </header>
+        <Collapse className="dossier-file-folders" defaultActiveKey={[]} expandIconPosition="right" motion={false}>
+          <Collapse.Panel itemKey="parties" header={
+            <span className="dossier-folder-label">当事人 <span>{parties.length ? `${parties.length} 方` : "未登记"}</span></span>
+          }>
+            {currentProcedure && canEditProcedure ? <div className="dossier-folder-actions">{editButton("parties", "编辑当事人")}</div> : null}
         <div className="dos-vs-body">
           <div className="dos-vs-side">
             <div className="dos-vs-h ours">我方</div>
@@ -226,13 +210,15 @@ export function MatterArchive({
             <div className="dos-party-list">{others.map(partyCard)}</div>
           </div>
         ) : null}
-      </section>
+          </Collapse.Panel>
 
-      {/* 二、案件要素：一张卡片内按主题分区，字段自适应铺满（2026-09-16 重排，避免两栏高度不齐与留白） */}
-      <div className="card dos-facts">
-          {contextNode}
-          <Group icon={FileText} title={isCriminal ? "指控与请求" : kind === "litigation" ? "案由与请求" : "服务内容"} action={canEdit ? editButton("matter", "编辑案件信息") : null}>
-            <FieldGrid cols={2} className="mo-field-grid-auto">
+          <Collapse.Panel itemKey="request" header={
+            <span className="dossier-folder-label">{isCriminal ? "指控与请求" : kind === "litigation" ? "案由与请求" : "服务内容"}
+              <span>{matter.cause?.name || matter.causeFreeText || matterCategoryLabel[matter.category]}</span>
+            </span>
+          }>
+            {canEdit ? <div className="dossier-folder-actions">{editButton("matter", "编辑案件信息")}</div> : null}
+            <FieldGrid cols={2} className="dossier-property-grid">
               <FieldItem label="案件类别">{matterCategoryLabel[matter.category]}</FieldItem>
               <FieldItem label={isCriminal ? "涉嫌罪名" : kind === "litigation" ? "案由" : kind === "counsel" ? "顾问类型" : "业务类型"}>
                 {kind === "litigation" ? dash(matter.cause?.name ?? matter.causeFreeText) : dash(kind === "counsel" ? matter.counselType : matter.businessType)}
@@ -262,11 +248,14 @@ export function MatterArchive({
                 </>
               )}
             </FieldGrid>
-          </Group>
+          </Collapse.Panel>
 
           {kind === "litigation" && currentProcedure ? (
-            <Group icon={Landmark} title="管辖与承办" hint={procLabel ?? undefined} action={canEditProcedure ? editButton("procedure", "编辑程序信息") : null}>
-              <FieldGrid cols={2} className="mo-field-grid-auto">
+            <Collapse.Panel itemKey="jurisdiction" header={
+              <span className="dossier-folder-label">管辖与承办 <span>{currentProcedure.handlingAgency || procLabel}</span></span>
+            }>
+              {canEditProcedure ? <div className="dossier-folder-actions">{editButton("procedure", "编辑程序信息")}</div> : null}
+              <FieldGrid cols={2} className="dossier-property-grid">
                 <FieldItem label="案号" mono>{dash(currentProcedure.caseNumber)}</FieldItem>
                 <FieldItem label={isArbitration ? "仲裁机构" : isCriminal ? "办案机关" : "受理机构"}>{dash(currentProcedure.handlingAgency)}</FieldItem>
                 <FieldItem label="管辖地">{dash(currentProcedure.jurisdiction)}</FieldItem>
@@ -295,21 +284,18 @@ export function MatterArchive({
                   </>
                 ) : null}
               </FieldGrid>
-            </Group>
+            </Collapse.Panel>
           ) : null}
 
-          {canReadFinance ? (
-            <Group icon={Wallet} title="委托与收费">
-              <SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={onOpenFinance}>查看委托与财务</SemiButton>
-            </Group>
-          ) : null}
-
-          <Group
-            icon={FileText}
-            title="收案与登记"
-            action={customFieldDefs.length > 0 && canEditCustom ? <CustomFieldsPanel matterId={matter.id} defs={customFieldDefs} values={customValues} canEdit editOnly /> : null}
-          >
-            <FieldGrid cols={2} className="mo-field-grid-auto">
+          <Collapse.Panel itemKey="intake" header={
+            <span className="dossier-folder-label">收案与登记
+              <span>{matter.intakeDate ? formatDate(matter.intakeDate) : "未登记日期"}</span>
+            </span>
+          }>
+            {customFieldDefs.length > 0 && canEditCustom ? <div className="dossier-folder-actions">
+              <CustomFieldsPanel matterId={matter.id} defs={customFieldDefs} values={customValues} canEdit editOnly />
+            </div> : null}
+            <FieldGrid cols={2} className="dossier-property-grid">
               <FieldItem label="收案日期" mono>{matter.intakeDate ? formatDate(matter.intakeDate) : null}</FieldItem>
               <FieldItem label="登记人">{dash([matter.intake?.receivedAt ? formatDate(matter.intake.receivedAt) : null, matter.intake?.createdBy?.name].filter(Boolean).join(" · "))}</FieldItem>
               <FieldItem label="联系人">{dash([matter.intake?.contactName, matter.intake?.contactPhone].filter(Boolean).join(" · "))}</FieldItem>
@@ -327,8 +313,9 @@ export function MatterArchive({
                 <RelatedMattersField matterId={matter.id} related={related} canManage={canManageRelated} />
               </FieldItem>
             </FieldGrid>
-          </Group>
-      </div>
+          </Collapse.Panel>
+        </Collapse>
+      </section>
     </>
   );
 }

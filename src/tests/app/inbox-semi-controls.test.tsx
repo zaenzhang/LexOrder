@@ -86,6 +86,7 @@ describe("收件箱 Semi 控件接线（真实组件，服务动作受控）", (
     expect(close).not.toHaveBeenCalled();
     expect(screen.getByRole("textbox", { name: "法院短信原文" })).toHaveValue("合成短信第一条\n\n合成短信第二条");
     expect(screen.getByRole("checkbox", { name: /多条短信/ })).toBeChecked();
+    await waitFor(() => expect(screen.getByRole("button", { name: "解析并保存" })).toHaveAttribute("aria-disabled", "false"));
     fireEvent.click(screen.getByRole("button", { name: "解析并保存" }));
     await waitFor(() => expect(close).toHaveBeenCalledWith(false));
     expect(mock.parse.mock.calls[1][0]).toEqual(mock.parse.mock.calls[0][0]);
@@ -132,6 +133,7 @@ describe("收件箱 Semi 控件接线（真实组件，服务动作受控）", (
     await waitFor(() => expect(mock.error).toHaveBeenCalledWith(expect.objectContaining({ title: "程序已变化，请核对" })));
     expect(close).not.toHaveBeenCalled();
     expect(screen.getByLabelText("开庭时间 *")).toHaveValue("2027-02-05T09:30");
+    await waitFor(() => expect(screen.getByRole("button", { name: "生成开庭" })).toHaveAttribute("aria-disabled", "false"));
     fireEvent.click(screen.getByRole("button", { name: "生成开庭" }));
     await waitFor(() => expect(mock.hearing).toHaveBeenCalledTimes(2));
     expect(mock.hearing.mock.calls[1][0]).toEqual(mock.hearing.mock.calls[0][0]);
@@ -159,6 +161,7 @@ describe("收件箱 Semi 控件接线（真实组件，服务动作受控）", (
     await waitFor(() => expect(screen.getByRole("button", { name: "采用" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "采用" }));
     expect(await screen.findByText("当前目标已变化，请核对")).toBeVisible();
+    await waitFor(() => expect(screen.getByRole("button", { name: "采用" })).toHaveAttribute("aria-disabled", "false"));
     fireEvent.click(screen.getByRole("button", { name: "采用" }));
     await waitFor(() => expect(mock.decide).toHaveBeenCalledTimes(2));
     expect(mock.decide.mock.calls[1][0]).toEqual(mock.decide.mock.calls[0][0]);
@@ -173,6 +176,7 @@ describe("收件箱 Semi 控件接线（真实组件，服务动作受控）", (
     expect(await screen.findByRole("alert")).toHaveTextContent("该案件已不可关联");
     expect(screen.getByRole("combobox", { name: "指派案件" })).toHaveTextContent("TEST-002 合成事项");
     expect(screen.queryByRole("link", { name: /TEST-002/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "重试关联" })).toHaveAttribute("aria-disabled", "false"));
     fireEvent.click(screen.getByRole("button", { name: "重试关联" }));
     await waitFor(() => expect(mock.match).toHaveBeenCalledTimes(2));
     expect(mock.match.mock.calls[0][0]).toEqual({ smsId: SMS, matterId: second.id });

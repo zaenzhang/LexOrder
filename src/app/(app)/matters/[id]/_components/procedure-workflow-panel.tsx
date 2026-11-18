@@ -955,9 +955,11 @@ export function ProcedureWorkflowPanel({
 
   return (
     <>
-      <div className="dossier-view-tabs" role="group" aria-label="案件视图">
+      <div role="group" aria-label="案件视图">
         <Tabs
           type="line"
+          tabBarClassName="dossier-view-tabs"
+          tabPaneMotion={false}
           activeKey={view}
           onChange={key => selectView(key as DossierView)}
           tabList={VIEWS.filter(item => item.show).map(item => ({
@@ -968,9 +970,7 @@ export function ProcedureWorkflowPanel({
               {item.count ? <SemiTag size="small" color={item.hot ? "red" : "grey"}>{item.count}</SemiTag> : null}
             </span>,
           }))}
-        />
-      </div>
-
+        >
       <div className={view === "archive" ? "dossier-overview-grid" : "dossier-single-view"}>
         <div className="dos-main">
       {view === "archive" ? archiveNode : null}
@@ -1087,6 +1087,8 @@ export function ProcedureWorkflowPanel({
             {archiveRailTop}
           </aside>
         ) : null}
+      </div>
+        </Tabs>
       </div>
 
       <MaterialUploadDialog
@@ -2014,8 +2016,8 @@ function ArchiveGlance({
       <div className="card">
         <div className="rail-sec-head">
           <ListChecks aria-hidden className="h-[15px] w-[15px] text-[var(--semi-color-text-2)]" />
-          近期日程与审批
-          <SemiButton theme="borderless" type="primary" size="small" htmlType="button" onClick={() => onOpenWork("tasks")}>查看全部任务与日程</SemiButton>
+          近期提醒
+          <SemiButton theme="borderless" type="primary" size="small" htmlType="button" aria-label="查看全部任务与日程" onClick={() => onOpenWork("tasks")}>全部日程</SemiButton>
         </div>
         {actions.length === 0 && waiting.length === 0 ? (
           <div className="panel-body t-xs t-mute">{canReadSchedule ? "当前范围没有未结日程或审批" : "无日程查看权限"}</div>
@@ -2048,8 +2050,8 @@ function ArchiveGlance({
         <div className="rail-sec-head">
           <BookOpen aria-hidden className="h-[15px] w-[15px] text-[var(--semi-color-text-2)]" />
           最近记录
-          {logItems.length > 0 ? <SemiButton theme="borderless" type="primary" size="small" htmlType="button" onClick={() => onOpenWork("records")}>
-            查看全部记录 <span className="mono">{logItems.length}</span>
+          {logItems.length > 0 ? <SemiButton theme="borderless" type="primary" size="small" htmlType="button" aria-label={`查看全部记录 ${logItems.length}`} onClick={() => onOpenWork("records")}>
+            全部记录 <span className="mono">{logItems.length}</span>
           </SemiButton> : null}
         </div>
         {logItems.length === 0 ? (
@@ -2216,10 +2218,12 @@ export function MatterPreservationContent({
     <>
     {cases.length === 0 ? (
       canManage ? (
-        <Button className="self-start" onClick={() => setCreateOpen(true)} htmlType="button" type="tertiary" theme="outline" size="small">
-          <Plus aria-hidden />
-          新建保全
-        </Button>
+        <section className="card" aria-label="事项级保全">
+          <header className="dossier-section-heading">
+            <h2>事项级保全 <span className="dossier-count">暂无记录</span></h2>
+            <Button onClick={() => setCreateOpen(true)} htmlType="button" type="tertiary" theme="outline" icon={<Plus aria-hidden />}>新建保全</Button>
+          </header>
+        </section>
       ) : null
     ) : (
     <div className="card">

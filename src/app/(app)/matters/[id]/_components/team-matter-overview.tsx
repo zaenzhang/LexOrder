@@ -1,5 +1,5 @@
 import { MatterListBack } from "./matter-list-back";
-import { Card as SemiCard, Tag as SemiTag } from "@/components/patterns/semi-surfaces";
+import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
 import { statusTagColor } from "@/lib/ui/status-tones";
 import { IconBook as BookOpen, IconCalendarClock as CalendarClock, IconEyeOpened as Eye, IconApartment as Landmark, IconUserGroup as Users } from "@douyinfe/semi-icons";
 import type { getMatterById } from "@/server/matters/actions";
@@ -48,8 +48,7 @@ export async function TeamMatterOverview({ matter, listQuery = null }: { matter:
     <div className="mo-matter mo-dossier">
       {/* ① 案卷头 */}
       <div className="mb-2"><MatterListBack listQuery={listQuery} /></div>
-      <section className="dos-head" aria-label="案卷头">
-        <SemiCard bodyStyle={{ padding: 0 }}>
+      <section className="dos-head dossier-identity" aria-label="案卷头">
         <div className="dos-head-top">
           <div className="min-w-0 flex-1">
             <div className="dos-eyebrow">
@@ -83,7 +82,6 @@ export async function TeamMatterOverview({ matter, listQuery = null }: { matter:
             </div>
           </div>
         </div>
-        </SemiCard>
       </section>
 
       {/* ② 程序栏：只读，不能切换或新增 */}
@@ -114,7 +112,7 @@ export async function TeamMatterOverview({ matter, listQuery = null }: { matter:
         </div>
       </section>
 
-      <div className="dos-work">
+      <div className="dossier-overview-grid">
         <div className="dos-main">
           {matter.procedures.map((proc) => {
             const stages = proc.stages.filter(stage => stage.status === "ACTIVE");
@@ -209,7 +207,7 @@ export async function TeamMatterOverview({ matter, listQuery = null }: { matter:
           </section>
         </div>
 
-        <aside className="dos-rail">
+        <aside className="dos-rail dossier-overview-rail">
           <section className="card">
             <div className="rail-sec-head">
               <Users aria-hidden className="h-[15px] w-[15px] text-[var(--semi-color-text-2)]" />

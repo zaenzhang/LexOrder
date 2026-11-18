@@ -96,7 +96,7 @@ function BriefContent({ brief, onOpenTask, getProcedureLabel, onOpenDeadline, on
           <p className="t-xs t-mute">暂无可显示的任务、期限或客户跟进。</p>
           {onCreateTask ? <SemiButton htmlType="button" size="small" theme="solid" type="primary" onClick={onCreateTask}>新建任务</SemiButton> : null}
         </div> : null}
-        <div className="space-y-3">
+        <div className="dossier-next-grid">
           {brief.nextActions.length > 0 ? (
             <div>
               <h4 className="mb-1 t-xs t-mute">待办任务</h4>
@@ -163,16 +163,19 @@ function BriefContent({ brief, onOpenTask, getProcedureLabel, onOpenDeadline, on
         </div>
       </div>
 
-      <dl className="grid gap-x-5 gap-y-3 border-t border-[var(--semi-color-border)] pt-3 sm:grid-cols-2">
-        <div className="min-w-0">
-          <dt className="t-xs t-mute">服务范围</dt>
-          <dd className="mt-1 whitespace-pre-wrap break-words">{brief.serviceScope || "未登记"}</dd>
-        </div>
-        <div className="min-w-0">
-          <dt className="t-xs t-mute">约定成果</dt>
-          <dd className="mt-1 whitespace-pre-wrap break-words">{brief.deliverables || "未登记"}</dd>
-        </div>
-      </dl>
+      {brief.serviceScope || brief.deliverables ? (
+        <dl className="grid gap-x-5 gap-y-3 border-t border-[var(--semi-color-border)] pt-3 sm:grid-cols-2">
+          <div className="min-w-0">
+            <dt className="t-xs t-mute">服务范围</dt>
+            <dd className="mt-1 whitespace-pre-wrap break-words">{brief.serviceScope || "未登记"}</dd>
+          </div>
+          <div className="min-w-0">
+            <dt className="t-xs t-mute">约定成果</dt>
+            <dd className="mt-1 whitespace-pre-wrap break-words">{brief.deliverables || "未登记"}</dd>
+          </div>
+        </dl>
+
+      ) : null}
 
       <div className="border-t border-[var(--semi-color-border)] pt-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
