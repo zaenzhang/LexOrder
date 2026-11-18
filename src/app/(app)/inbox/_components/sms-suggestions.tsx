@@ -5,10 +5,7 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button, Input, Select } from "@douyinfe/semi-ui";
 import { actionErrorMessage } from "@/lib/action-error";
 import { formatDateTime } from "@/lib/utils";
 import { matterHref } from "@/lib/matters/route";
@@ -58,7 +55,7 @@ export function SmsSuggestions({ sms, busy }: { sms: SmsRow; busy: boolean }) {
   return <section className="mt-3 space-y-3 border-t border-border pt-3" aria-label="来件整理建议">
     <div className="flex flex-wrap items-center gap-2">
       <span className="text-sm font-medium">整理建议 · {waiting.length} 项待确认</span>
-      {analyzable ? <Button size="sm" variant="outline" disabled={locked} onClick={() => startTransition(async () => {
+      {analyzable ? <Button size="small" theme="outline" disabled={locked} onClick={() => startTransition(async () => {
         try {
           const result = await analyzeSmsInboundFiles({ smsId: sms.id });
           const successful = result.results.filter(row => row.state === "ANALYZED").length;
@@ -66,14 +63,14 @@ export function SmsSuggestions({ sms, busy }: { sms: SmsRow; busy: boolean }) {
           router.refresh();
         } catch (error) { setMessage(error instanceof Error ? actionErrorMessage(error) : "分析失败"); }
       })}>阅读并整理</Button> : null}
-      {needsFiling ? <Button size="sm" variant="outline" disabled={locked} onClick={() => startTransition(async () => {
+      {needsFiling ? <Button size="small" theme="outline" disabled={locked} onClick={() => startTransition(async () => {
         try {
           const result = await retrySmsSuggestionFiling(sms.id);
           setMessage(result.warning ?? result.remaining.processingNote ?? `本次入卷 ${result.filedFiles} 个；仍有 ${result.remaining.remainingFiles} 个文件待处理`);
           router.refresh();
         } catch (error) { setMessage(error instanceof Error ? actionErrorMessage(error) : "入卷失败，请重试"); }
       })}>继续入卷</Button> : null}
-      {waiting.length > 1 ? <Button size="sm" disabled={locked || !batch.every(ready)} onClick={() => decide(batch, "ACCEPTED")}>{waiting.length > 50 ? "采用前 50 项已核对建议" : "采用全部已核对建议"}</Button> : null}
+      {waiting.length > 1 ? <Button size="small" disabled={locked || !batch.every(ready)} onClick={() => decide(batch, "ACCEPTED")}>{waiting.length > 50 ? "采用前 50 项已核对建议" : "采用全部已核对建议"}</Button> : null}
     </div>
     {message ? <p role="status" className="text-sm text-muted-foreground">{message}</p> : null}
     {!message && sms.processingNote ? <p role="status" className="text-sm text-muted-foreground">{sms.processingNote}</p> : null}
@@ -86,8 +83,8 @@ export function SmsSuggestions({ sms, busy }: { sms: SmsRow; busy: boolean }) {
             {row.kind === "FIELD_CHANGE" ? `${row.fieldKey === "caseNumber" ? "案号" : "法院"}：${row.currentValue || "（空）"} → ${row.suggestedValue}` : row.suggestedValue}
           </div>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={locked} onClick={() => decide([row], "REJECTED")}>不采用</Button>
-            <Button size="sm" disabled={locked || !ready(row)} onClick={() => decide([row], "ACCEPTED")}>采用</Button>
+            <Button size="small" theme="outline" disabled={locked} onClick={() => decide([row], "REJECTED")}>不采用</Button>
+            <Button size="small" disabled={locked || !ready(row)} onClick={() => decide([row], "ACCEPTED")}>采用</Button>
           </div>
         </div>
         {(source || row.sourceExcerpt || row.sourcePage) ? <div className="text-xs text-muted-foreground">
@@ -148,31 +145,27 @@ function EventChoiceEditor({ sms, row, disabled, onChange }: { sms: SmsRow; row:
   const prefix = `suggestion-${row.id}`;
   return <div className="space-y-3">
     <div className="grid grid-cols-2 gap-3">
-      <div className="space-y-1"><Label htmlFor={`${prefix}-procedure`}>程序</Label>
-        <Select value={procedureId} onValueChange={value => { setProcedureId(value); setTargetId(""); }} disabled={disabled}>
-          <SelectTrigger id={`${prefix}-procedure`}><SelectValue placeholder="选择实际程序" /></SelectTrigger>
-          <SelectContent>{procedures.map(procedure => <SelectItem key={procedure.id} value={procedure.id}>{procedure.customLabel ?? procedureTypeLabel[procedure.type]}{procedure.caseNumber ? ` · ${procedure.caseNumber}` : ""}</SelectItem>)}</SelectContent>
-        </Select>
+      <div className="space-y-1"><label id={`${prefix}-procedure-label`} htmlFor={`${prefix}-procedure`}>程序</label>
+        <Select id={`${prefix}-procedure`} aria-labelledby={`${prefix}-procedure-label`} className="w-full" motion={false} placeholder="选择实际程序" value={procedureId || undefined} onChange={value => { setProcedureId(value as string); setTargetId(""); }} disabled={disabled}
+          optionList={procedures.map(procedure => ({ value: procedure.id, label: `${procedure.customLabel ?? procedureTypeLabel[procedure.type]}${procedure.caseNumber ? ` · ${procedure.caseNumber}` : ""}` }))} />
       </div>
-      <div className="space-y-1"><Label htmlFor={`${prefix}-mode`}>采用方式</Label>
-        <Select value={mode} onValueChange={value => { setMode(value as "CREATE" | "LINK"); setTargetId(""); }} disabled={disabled || !procedureId}>
-          <SelectTrigger id={`${prefix}-mode`}><SelectValue placeholder="核对后选择" /></SelectTrigger>
-          <SelectContent><SelectItem value="CREATE">新建事项</SelectItem><SelectItem value="LINK">关联已有事项</SelectItem></SelectContent>
-        </Select>
+      <div className="space-y-1"><label id={`${prefix}-mode-label`} htmlFor={`${prefix}-mode`}>采用方式</label>
+        <Select id={`${prefix}-mode`} aria-labelledby={`${prefix}-mode-label`} className="w-full" motion={false} placeholder="核对后选择" value={mode || undefined} onChange={value => { setMode(value as "CREATE" | "LINK"); setTargetId(""); }} disabled={disabled || !procedureId}
+          optionList={[{ value: "CREATE", label: "新建事项" }, { value: "LINK", label: "关联已有事项" }]} />
       </div>
     </div>
     {mode === "CREATE" ? <div className="space-y-2">
-      <div className="space-y-1"><Label htmlFor={`${prefix}-title`}>事项标题</Label><Input id={`${prefix}-title`} value={title} disabled={disabled} onChange={event => setTitle(event.target.value)} /></div>
+      <div className="space-y-1"><label htmlFor={`${prefix}-title`}>事项标题</label><Input id={`${prefix}-title`} value={title} disabled={disabled} onChange={setTitle} /></div>
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1"><Label htmlFor={`${prefix}-date`}>实际日期</Label><Input type="date" id={`${prefix}-date`} value={dateText} disabled={disabled} onChange={event => setDateText(event.target.value)} /></div>
-        <div className="space-y-1"><Label htmlFor={`${prefix}-time`}>实际时刻（北京时间）</Label><Input type="time" id={`${prefix}-time`} value={timeText} disabled={disabled} onChange={event => setTimeText(event.target.value)} /></div>
+        <div className="space-y-1"><label htmlFor={`${prefix}-date`}>实际日期</label><Input type="date" id={`${prefix}-date`} value={dateText} disabled={disabled} onChange={setDateText} /></div>
+        <div className="space-y-1"><label htmlFor={`${prefix}-time`}>实际时刻（北京时间）</label><Input type="time" id={`${prefix}-time`} value={timeText} disabled={disabled} onChange={setTimeText} /></div>
       </div>
       {!timeText ? <p className="text-xs text-muted-foreground">时刻未确定时先保留本建议。只有日期的期限，可到 <Link className="underline" href={matterHref(sms.matchedMatter, `?view=work&workPane=tasks&procedure=${procedureId}`)} target="_blank">本程序的期限与庭期</Link> 手工登记，再返回此处关联已有事项。</p> : null}
     </div> : null}
     {mode === "LINK" ? <div className="space-y-2">
-      <div className="flex gap-2"><Input aria-label="查找同日已有事项" placeholder="在来源日期内按标题查找" value={query} disabled={disabled} onChange={event => setQuery(event.target.value)} /><Button variant="outline" size="sm" disabled={disabled || loading} onClick={() => { setSearch(query); setReload(value => value + 1); }}>查找</Button></div>
+      <div className="flex gap-2"><Input aria-label="查找同日已有事项" placeholder="在来源日期内按标题查找" value={query} disabled={disabled} onChange={setQuery} /><Button theme="outline" size="small" disabled={disabled || loading} onClick={() => { setSearch(query); setReload(value => value + 1); }}>查找</Button></div>
       {loading ? <p className="text-sm text-muted-foreground">正在读取实际事项…</p> : error ? <p role="alert" className="text-sm text-destructive">{error}</p> : targets ? <>
-        {targets.targets.length ? <Select value={targetId} onValueChange={setTargetId} disabled={disabled}><SelectTrigger aria-label="已有事项"><SelectValue placeholder="选择并核对原事项" /></SelectTrigger><SelectContent>{targets.targets.map(target => <SelectItem key={target.id} value={target.id}>{target.title} · {row.kind === "DEADLINE" ? formatDeadlineDue(target.at, target.duePrecision) : formatDateTime(target.at)}</SelectItem>)}</SelectContent></Select> : <p className="text-sm text-muted-foreground">所选程序在来源日期没有符合条件的事项；可核对程序、缩小查询或先手工登记。</p>}
+        {targets.targets.length ? <><span id={`${prefix}-target-label`} className="sr-only">已有事项</span><Select aria-labelledby={`${prefix}-target-label`} className="w-full" motion={false} placeholder="选择并核对原事项" value={targetId || undefined} onChange={value => setTargetId(value as string)} disabled={disabled} optionList={targets.targets.map(target => ({ value: target.id, label: `${target.title} · ${row.kind === "DEADLINE" ? formatDeadlineDue(target.at, target.duePrecision) : formatDateTime(target.at)}` }))} /></> : <p className="text-sm text-muted-foreground">所选程序在来源日期没有符合条件的事项；可核对程序、缩小查询或先手工登记。</p>}
         {targets.truncated ? <p className="text-xs text-muted-foreground">显示前100项，请按标题继续查找。</p> : null}
       </> : null}
     </div> : null}

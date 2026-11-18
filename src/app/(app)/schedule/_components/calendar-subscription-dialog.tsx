@@ -4,25 +4,28 @@
  * 日程页订阅日历弹窗；仅打开时加载订阅链接。
  * 展示当前用户的 ICS 订阅 URL，可复制 / 重置；URL 即凭证。
  */
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { CalendarPlus, Copy, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Button } from "@douyinfe/semi-ui";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getCalendarToken, regenerateCalendarToken } from "@/server/calendar/actions";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
 
 export function CalendarSubscriptionDialog() {
+  const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const dialogId = useId();
+
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <CalendarPlus className="h-3.5 w-3.5" strokeWidth={1.8} />
-          订阅日历
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-h-[85dvh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={setOpen}>
+      <Button theme="outline" size="small" aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? dialogId : undefined}
+        onClick={(event) => { trigger.current = event.currentTarget; setOpen(true); }}>
+        <CalendarPlus className="h-3.5 w-3.5" strokeWidth={1.8} />
+        订阅日历
+      </Button>
+      <DialogContent id={dialogId} className="max-h-[85dvh] overflow-y-auto" onCloseAutoFocus={(event) => { event.preventDefault(); trigger.current?.focus(); }}>
         <DialogHeader>
           <DialogTitle>订阅日历</DialogTitle>
           <DialogDescription>
@@ -39,9 +42,11 @@ function CalendarSubscriptionContent() {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [pending, startTransition] = useTransition();
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     getCalendarToken()
       .then((res) => {
         if (!cancelled) setToken(res.token);
@@ -55,7 +60,7 @@ function CalendarSubscriptionContent() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reload]);
 
   const url = token
     ? `${typeof window !== "undefined" ? window.location.origin : ""}/api/calendar/${token}`
@@ -105,13 +110,13 @@ function CalendarSubscriptionContent() {
           <code className="block w-full min-w-0 break-all rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-[11.5px]">
             {url}
           </code>
-          <Button variant="outline" size="sm" onClick={copyUrl} className="h-8 gap-1.5">
+          <Button theme="outline" size="small" onClick={copyUrl} className="h-8 gap-1.5">
             <Copy className="h-3.5 w-3.5" />
             复制链接
           </Button>
           <Button
-            variant="outline"
-            size="sm"
+            theme="outline"
+            size="small"
             onClick={regenerate}
             disabled={pending}
             className="h-8 gap-1.5 text-muted-foreground"
@@ -121,7 +126,7 @@ function CalendarSubscriptionContent() {
           </Button>
         </div>
       ) : (
-        <p className="text-sm text-destructive">订阅链接不可用，请刷新重试。</p>
+        <div className="space-y-2"><p role="alert" className="text-sm text-destructive">订阅链接不可用。</p><Button theme="outline" size="small" onClick={() => setReload((value) => value + 1)}>重试</Button></div>
       )}
     </div>
   );

@@ -5,25 +5,9 @@ import { FormDialogContent as DialogContent, FormDialogBody } from "@/components
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Clock } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
+import { Clock } from "lucide-react";
+import { Button, Checkbox, Input, RadioGroup, Select, TextArea } from "@douyinfe/semi-ui";
+import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { createTask } from "@/server/tasks/actions";
 import { civilKey, shParts, WEEKDAY_CN } from "@/lib/ui/sh-time";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -50,10 +34,13 @@ export function AddTaskDialog({
   const [allDay, setAllDay] = useState(false);
   const [time, setTime] = useState("09:00");
   const requestKey = useRef(crypto.randomUUID());
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const [matterPickerOpen, setMatterPickerOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     requestKey.current = crypto.randomUUID();
+    setMatterPickerOpen(false);
     setMatterId("");
     setTitle("");
     setDescription("");
@@ -107,12 +94,10 @@ export function AddTaskDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!isPending) onOpenChange(nextOpen); }}>
+      <DialogContent ref={dialogRef} className="max-w-md" onEscapeKeyDown={(event) => { if (matterPickerOpen) event.preventDefault(); }}>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            新建任务
-          </DialogTitle>
+          <DialogTitle>新建任务</DialogTitle>
           <DialogDescription className="text-xs">
             {date
               ? (() => {
@@ -123,114 +108,49 @@ export function AddTaskDialog({
           </DialogDescription>
         </DialogHeader>
         <FormDialogBody>
-
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label className="text-xs">
-              关联案件 <span className="text-destructive">*</span>
-            </Label>
-            <Select value={matterId} onValueChange={setMatterId}>
-              <SelectTrigger>
-                <SelectValue placeholder="请选择" />
-              </SelectTrigger>
-              <SelectContent className="max-h-64">
-                {matters.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    <span className="font-mono text-[10.5px] text-muted-foreground">
-                      {m.internalCode}
-                    </span>
-                    <span className="ml-2">{m.title}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs">
-              事项标题 <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              placeholder="如：起草起诉状 / 提交证据清单"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="flex items-center gap-1 text-xs">
-              <Clock className="h-3 w-3" />
-              时间
-            </Label>
-            <div className="flex items-center gap-2">
-              <input
-                type="time"
-                step={300}
-                value={time}
-                disabled={allDay}
-                onChange={(e) => setTime(e.target.value)}
-                className="h-9 rounded-md border border-input bg-background px-2 font-mono text-sm tabular disabled:opacity-50"
+          <form id="schedule-add-task" onSubmit={(event) => { event.preventDefault(); if (!isPending) submit(); }} className="space-y-3">
+            <div className="space-y-1.5">
+              <label id="schedule-task-matter-label" className="text-xs">关联案件 <span className="text-destructive">*</span></label>
+              <Select
+                aria-labelledby="schedule-task-matter-label"
+                value={matterId || undefined}
+                onChange={(value) => setMatterId(value as string)}
+                disabled={isPending}
+                placeholder="请选择"
+                filter
+                optionList={matters.map((matter) => ({ value: matter.id, label: `${matter.internalCode} ${matter.title}` }))}
+                style={{ width: "100%" }}
+                motion={false}
+                getPopupContainer={() => dialogRef.current!}
+                onDropdownVisibleChange={setMatterPickerOpen}
               />
-              <label className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-                <input
-                  type="checkbox"
-                  checked={allDay}
-                  onChange={(e) => setAllDay(e.target.checked)}
-                  className="h-3.5 w-3.5"
-                />
-                全天
-              </label>
             </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs">描述（可选）</Label>
-            <Textarea
-              rows={2}
-              placeholder="事项详情、相关材料等"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs">优先级</Label>
-            <div className="flex gap-2">
-              {[
-                { value: 0, label: "普通" },
-                { value: 1, label: "高" },
-                { value: 2, label: "紧急" }
-              ].map((p) => (
-                <button
-                  key={p.value}
-                  type="button"
-                  onClick={() => setPriority(p.value as 0 | 1 | 2)}
-                  className={
-                    priority === p.value
-                      ? "rounded-md border border-primary bg-primary/15 px-3 py-1 text-xs text-primary"
-                      : "rounded-md border border-border bg-background px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-input hover:bg-muted hover:text-foreground"
-                  }
-                >
-                  {p.label}
-                </button>
-              ))}
+            <div className="space-y-1.5">
+              <label htmlFor="schedule-task-title" className="text-xs">事项标题 <span className="text-destructive">*</span></label>
+              <Input id="schedule-task-title" placeholder="如：起草起诉状 / 提交证据清单" value={title} onChange={setTitle} disabled={isPending} />
             </div>
-          </div>
-        </div>
-
+            <div className="space-y-1.5">
+              <label htmlFor="schedule-task-time" className="flex items-center gap-1 text-xs"><Clock className="h-3 w-3" />时间</label>
+              <div className="flex items-center gap-2">
+                <Input id="schedule-task-time" type="time" step={300} value={time} disabled={allDay || isPending} onChange={setTime} style={{ width: 140 }} />
+                <Checkbox checked={allDay} onChange={(event) => setAllDay(Boolean(event.target.checked))} disabled={isPending}>全天</Checkbox>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="schedule-task-description" className="text-xs">描述（可选）</label>
+              <TextArea id="schedule-task-description" rows={2} placeholder="事项详情、相关材料等" value={description} onChange={setDescription} disabled={isPending} />
+            </div>
+            <div className="space-y-1.5">
+              <div id="schedule-task-priority-label" className="text-xs">优先级</div>
+              <RadioGroup aria-labelledby="schedule-task-priority-label" type="button" buttonSize="small" value={priority} onChange={(event) => setPriority(event.target.value as 0 | 1 | 2)} disabled={isPending} options={[
+                { value: 0, label: "普通" }, { value: 1, label: "高" }, { value: 2, label: "紧急" }
+              ]} />
+            </div>
+          </form>
         </FormDialogBody>
         <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={isPending}
-          >
-            取消
-          </Button>
-          <Button onClick={submit} disabled={isPending} className="gap-1.5">
-            {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            创建任务
-          </Button>
+          <Button theme="outline" onClick={() => onOpenChange(false)} disabled={isPending}>取消</Button>
+          <Button htmlType="submit" form="schedule-add-task" theme="solid" loading={isPending} disabled={isPending}>创建任务</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
