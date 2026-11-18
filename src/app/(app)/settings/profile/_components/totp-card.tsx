@@ -8,8 +8,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, ShieldOff } from "lucide-react";
-import { toast } from "sonner";
-import { Banner, Button, Card, Form, Input, Tag } from "@douyinfe/semi-ui";
+import { Banner, Button, Card, Form, Input, Notification, Tag, Toast } from "@douyinfe/semi-ui";
 import { enrollStartTotp, enrollConfirmTotp, disableTotp } from "@/server/auth/totp-actions";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -31,31 +30,31 @@ export function TotpCard({ enabled }: { enabled: boolean }) {
         setCode("");
         setRecoveryCodes(null);
       } catch (e) {
-        toast.error("生成密钥失败", { description: actionErrorMessage(e) });
+        Notification.error({ title: "生成密钥失败", content: actionErrorMessage(e) });
       }
     });
   }
 
   function confirm() {
     if (!/^\d{6}$/.test(code.trim())) {
-      toast.error("请输入 6 位动态码");
+      Toast.error("请输入 6 位动态码");
       return;
     }
     startTransition(async () => {
       try {
         const res = await enrollConfirmTotp({ code: code.trim() });
         if (!res.ok) {
-          toast.error("验证失败", { description: res.message });
+          Notification.error({ title: "验证失败", content: res.message });
           return;
         }
         setRecoveryCodes(res.recoveryCodes);
         setEnrolling(false);
         setSecretInfo(null);
         setCode("");
-        toast.success("双步验证已开启");
+        Toast.success("双步验证已开启");
         router.refresh();
       } catch (e) {
-        toast.error("确认失败", { description: actionErrorMessage(e) });
+        Notification.error({ title: "确认失败", content: actionErrorMessage(e) });
       }
     });
   }
@@ -65,15 +64,15 @@ export function TotpCard({ enabled }: { enabled: boolean }) {
       try {
         const res = await disableTotp({ code: disableCode.trim() });
         if (!res.ok) {
-          toast.error("关闭失败", { description: res.message });
+          Notification.error({ title: "关闭失败", content: res.message });
           return;
         }
         setShowDisable(false);
         setDisableCode("");
-        toast.success("双步验证已关闭");
+        Toast.success("双步验证已关闭");
         router.refresh();
       } catch (e) {
-        toast.error("关闭失败", { description: actionErrorMessage(e) });
+        Notification.error({ title: "关闭失败", content: actionErrorMessage(e) });
       }
     });
   }

@@ -1,12 +1,9 @@
 "use client";
 
+import { Button, Checkbox, Form, Input, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles, CheckCircle2, AlertTriangle, Loader2, Trash2, ExternalLink } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   saveAiSettingsAction,
   clearAiKeyAction,
@@ -83,7 +80,7 @@ export function AiSettingsForm({
     setBaseUrl(p.baseUrl);
     setTextModel(p.text);
     setVisionModel(p.vision);
-    toast.info(`已应用 ${p.name} 默认配置，请填入对应 API key`);
+    Toast.info(`已应用 ${p.name} 默认配置，请填入对应 API key`);
   };
 
   const save = () => {
@@ -96,12 +93,12 @@ export function AiSettingsForm({
           textModel,
           visionModel
         });
-        toast.success("配置已保存");
+        Toast.success("配置已保存");
         setApiKey(""); // 不在前端持久 key
         setTestResult(null);
         router.refresh();
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "保存失败");
+        Toast.error(e instanceof Error ? actionErrorMessage(e) : "保存失败");
       }
     });
   };
@@ -111,11 +108,11 @@ export function AiSettingsForm({
     startTransition(async () => {
       try {
         await clearAiKeyAction({ confirm: true });
-        toast.success("API key 已清除");
+        Toast.success("API key 已清除");
         setTestResult(null);
         router.refresh();
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "失败");
+        Toast.error(e instanceof Error ? actionErrorMessage(e) : "失败");
       }
     });
   };
@@ -148,7 +145,7 @@ export function AiSettingsForm({
 
         <p className="mb-4 text-[12px] text-muted-foreground">支持 OpenAI 兼容接口。</p>
         {initial.configurationError && <p role="alert" className="mb-3 text-sm text-destructive">{initial.configurationError}</p>}
-        <label className="mb-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} />启用 AI 服务</label>
+        <Checkbox className="mb-4" checked={enabled} onChange={e => setEnabled((e.target.checked === true))}>启用 AI 服务</Checkbox>
 
         {/* Provider 预设 */}
         <fieldset className="mb-4">
@@ -169,19 +166,19 @@ export function AiSettingsForm({
 
         <div className="space-y-3">
           <div>
-            <Label htmlFor="ai-api-key" className="text-[11px]">
+            <Form.Label name="ai-api-key" className="text-[11px]">
               接口密钥（API Key）
               {initial.credentialSaved && (
                 <span className="ml-2 font-mono text-[10px] text-muted-foreground">
                   当前：{initial.apiKeyMasked}（留空保留原值）
                 </span>
               )}
-            </Label>
+            </Form.Label>
             <Input
               id="ai-api-key"
               type="password"
               value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
+              onChange={(value) => setApiKey(value)}
               placeholder={initial.credentialSaved ? "如需更换粘贴新 key" : "粘贴 API key"}
               className="mt-1 font-mono"
               autoComplete="off"
@@ -189,11 +186,11 @@ export function AiSettingsForm({
           </div>
 
           <div>
-            <Label htmlFor="ai-base-url" className="text-[11px]">接口地址（Base URL）</Label>
+            <Form.Label name="ai-base-url" className="text-[11px]">接口地址（Base URL）</Form.Label>
             <Input
               id="ai-base-url"
               value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
+              onChange={(value) => setBaseUrl(value)}
               placeholder={defaults.baseUrl}
               className="mt-1 font-mono text-[12px]"
             />
@@ -201,22 +198,22 @@ export function AiSettingsForm({
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <Label htmlFor="ai-text-model" className="text-[11px]">文本模型</Label>
+              <Form.Label name="ai-text-model" className="text-[11px]">文本模型</Form.Label>
               <Input
                 id="ai-text-model"
                 value={textModel}
-                onChange={(e) => setTextModel(e.target.value)}
+                onChange={(value) => setTextModel(value)}
                 placeholder={defaults.textModel}
                 className="mt-1 font-mono text-[12px]"
               />
               <p className="mt-1 text-[10px] text-muted-foreground">用于法院短信 AI 解析等</p>
             </div>
             <div>
-              <Label htmlFor="ai-vision-model" className="text-[11px]">视觉模型</Label>
+              <Form.Label name="ai-vision-model" className="text-[11px]">视觉模型</Form.Label>
               <Input
                 id="ai-vision-model"
                 value={visionModel}
-                onChange={(e) => setVisionModel(e.target.value)}
+                onChange={(value) => setVisionModel(value)}
                 placeholder={defaults.visionModel}
                 className="mt-1 font-mono text-[12px]"
               />
@@ -226,12 +223,12 @@ export function AiSettingsForm({
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Button onClick={save} disabled={pending} className="gap-1.5">
+          <Button theme="solid" onClick={save} disabled={pending} className="gap-1.5">
             {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             保存配置
           </Button>
           <Button
-            variant="outline"
+            theme="outline"
             onClick={runTest}
             disabled={testing || pending || changed || !initial.configured}
             className="gap-1.5"
@@ -241,7 +238,7 @@ export function AiSettingsForm({
           </Button>
           {initial.credentialSaved && (
             <Button
-              variant="ghost"
+              theme="borderless" type="tertiary"
               onClick={clearKey}
               disabled={pending}
               className="ml-auto gap-1 text-destructive"

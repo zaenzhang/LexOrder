@@ -2,9 +2,7 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
-import { Button, Form, Input, Upload } from "@douyinfe/semi-ui";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button, Form, Input, Select, Toast, Upload } from "@douyinfe/semi-ui";
 import { getProfileIdentity, bindMyIdentity, correctUserIdentity } from "@/server/users/profile-actions";
 import { correctUserIdentityWithPhotos } from "@/server/identity-documents/actions";
 import { identityDocumentTypeLabel, identityDocumentTypes, type IdentityDocumentTypeValue } from "@/lib/identity-documents";
@@ -58,12 +56,12 @@ export function IdentityForm({ adminTargetId }: { adminTargetId?: string }) {
           ? await correctUserIdentity({ id: adminTargetId, ...identity, reason, expectedUpdatedAt: summary.updatedAt })
           : await bindMyIdentity({ ...identity, currentPassword: password, expectedUpdatedAt: summary.updatedAt });
         setSummary(updated); setEditing(false); setNumber(""); setDocumentName(""); setPrimaryFile(null); setSecondaryFile(null); setPassword(""); setReason("");
-        toast.success(adminTargetId ? "身份信息已更新并记录核对原因" : "身份证件已登记");
+        Toast.success(adminTargetId ? "身份信息已更新并记录核对原因" : "身份证件已登记");
         router.refresh();
       } catch (e) {
         const message = e instanceof Error ? actionErrorMessage(e) : "登记失败";
         setSaveError(message);
-        toast.error(message);
+        Toast.error(message);
       }
     });
   }
@@ -72,12 +70,12 @@ export function IdentityForm({ adminTargetId }: { adminTargetId?: string }) {
     // 不用 <form>：本组件在个人设置中位于基本资料表单内部，嵌套表单非法；回车在外层拦截后直接提交
     <div className="space-y-3 rounded-lg border bg-background p-4" onKeyDown={(event) => { if (event.key === "Enter" && event.target instanceof HTMLInputElement && event.target.type !== "file") { event.preventDefault(); event.stopPropagation(); if (!pending) save(); } }}>
       <fieldset disabled={pending} className="space-y-3">
-        <div className="space-y-2"><Form.Label id={`${prefix}-type-label`} text="证件类型" /><Select value={documentType} disabled={pending} onValueChange={value => { setDocumentType(value as IdentityDocumentTypeValue); if (value !== "OTHER") setDocumentName(""); }}><SelectTrigger aria-labelledby={`${prefix}-type-label`}><SelectValue /></SelectTrigger><SelectContent>{identityDocumentTypes.map(type => <SelectItem key={type} value={type}>{identityDocumentTypeLabel[type]}</SelectItem>)}</SelectContent></Select></div>
+        <div className="space-y-2"><Form.Label id={`${prefix}-type-label`} text="证件类型" /><Select aria-labelledby={`${prefix}-type-label`} value={documentType} disabled={pending} onChange={value => { setDocumentType(value as IdentityDocumentTypeValue); if (value !== "OTHER") setDocumentName(""); }}>{identityDocumentTypes.map(type => <Select.Option key={type} value={type} showTick={false}>{identityDocumentTypeLabel[type]}</Select.Option>)}</Select></div>
         {documentType === "OTHER" && <div className="space-y-2"><Form.Label name={`${prefix}-name`}>证件名称</Form.Label><Input id={`${prefix}-name`} required maxLength={60} value={documentName} onChange={setDocumentName} placeholder="请输入证件全称" /></div>}
         <div className="space-y-2"><Form.Label name={`${prefix}-number`}>证件号码</Form.Label><Input id={`${prefix}-number`} autoComplete="off" spellCheck={false} maxLength={50} required value={number} onChange={setNumber} placeholder={documentType === "PRC_RESIDENT_ID" ? "请输入18位居民身份证号码" : "请输入证件号码"} /></div>
         {adminTargetId && <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-2"><Form.Label text="新的主要证件照片（选填）" /><Upload action="" uploadTrigger="custom" fileList={[]} showUploadList={false} disabled={pending} accept="image/jpeg,image/png,image/webp" onAcceptInvalid={() => toast.error("证件照片仅支持 JPG、PNG 或 WebP")} onFileChange={files => setPrimaryFile(files[0] ?? null)}><Button htmlType="button" disabled={pending} aria-label="选择新的主要证件照片（选填）">选择照片</Button></Upload>{primaryFile && <p className="break-all text-sm">{primaryFile.name}</p>}</div>
-          <div className="space-y-2"><Form.Label text="新的另一面／补充页（选填）" /><Upload action="" uploadTrigger="custom" fileList={[]} showUploadList={false} disabled={pending} accept="image/jpeg,image/png,image/webp" onAcceptInvalid={() => toast.error("证件照片仅支持 JPG、PNG 或 WebP")} onFileChange={files => setSecondaryFile(files[0] ?? null)}><Button htmlType="button" disabled={pending} aria-label="选择新的另一面／补充页（选填）">选择照片</Button></Upload>{secondaryFile && <p className="break-all text-sm">{secondaryFile.name}</p>}</div>
+          <div className="space-y-2"><Form.Label text="新的主要证件照片（选填）" /><Upload action="" uploadTrigger="custom" fileList={[]} showUploadList={false} disabled={pending} accept="image/jpeg,image/png,image/webp" onAcceptInvalid={() => Toast.error("证件照片仅支持 JPG、PNG 或 WebP")} onFileChange={files => setPrimaryFile(files[0] ?? null)}><Button htmlType="button" disabled={pending} aria-label="选择新的主要证件照片（选填）">选择照片</Button></Upload>{primaryFile && <p className="break-all text-sm">{primaryFile.name}</p>}</div>
+          <div className="space-y-2"><Form.Label text="新的另一面／补充页（选填）" /><Upload action="" uploadTrigger="custom" fileList={[]} showUploadList={false} disabled={pending} accept="image/jpeg,image/png,image/webp" onAcceptInvalid={() => Toast.error("证件照片仅支持 JPG、PNG 或 WebP")} onFileChange={files => setSecondaryFile(files[0] ?? null)}><Button htmlType="button" disabled={pending} aria-label="选择新的另一面／补充页（选填）">选择照片</Button></Upload>{secondaryFile && <p className="break-all text-sm">{secondaryFile.name}</p>}</div>
           {primaryFile && <p className="sm:col-span-2 text-xs text-muted-foreground">保存后，现有照片将标记为已被替代并保留审计；不会物理删除。</p>}
         </div>}
         {adminTargetId ? <div className="space-y-2"><Form.Label name={`${prefix}-reason`}>核对及更正原因</Form.Label><Input id={`${prefix}-reason`} required minLength={4} maxLength={200} value={reason} onChange={setReason} placeholder="说明核对依据，勿填写完整证件号或手机号" /></div>

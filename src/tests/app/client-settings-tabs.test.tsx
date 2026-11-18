@@ -6,7 +6,6 @@ const mock = vi.hoisted(() => ({ history: vi.fn(), saveAi: vi.fn(), refresh: vi.
 vi.mock("@/server/clients/history-actions", () => ({ getClientHistoryPage: mock.history, getClientHistoryMatterPage: vi.fn() }));
 vi.mock("@/server/settings/ai-actions", () => ({ saveAiSettingsAction: mock.saveAi, clearAiKeyAction: vi.fn(), testAiConnection: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mock.refresh }), useSearchParams: () => new URLSearchParams(window.location.search) }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 import { ClientDetailTabs } from "@/app/(app)/clients/[id]/_components/client-detail-tabs";
 import { ClientHistoryPanel } from "@/app/(app)/clients/[id]/_components/client-history-panel";
@@ -88,13 +87,13 @@ describe("客户与服务分区状态（组件环境）", () => {
       database: <p>合成法库区域</p>, mcp: <p>合成 MCP 区域</p>, calls: <p>合成调用记录</p>
     }} />);
     fireEvent.change(screen.getByLabelText("接口密钥（API Key）"), { target: { value: "synthetic-unsaved-key" } });
-    selectTab("OCR");
+    fireEvent.click(screen.getByRole("tab", { name: "OCR" }));
     fireEvent.change(screen.getByLabelText("OCR 网关地址（可选）"), { target: { value: "https://example.test/ocr" } });
     expect(screen.getByLabelText("接口密钥（API Key）")).not.toBeVisible();
-    selectTab("模型");
+    fireEvent.click(screen.getByRole("tab", { name: "模型" }));
     expect(screen.getByLabelText("接口密钥（API Key）")).toHaveValue("synthetic-unsaved-key");
     expect(screen.getByLabelText("接口密钥（API Key）")).toBeVisible();
-    selectTab("OCR");
+    fireEvent.click(screen.getByRole("tab", { name: "OCR" }));
     expect(screen.getByLabelText("OCR 网关地址（可选）")).toHaveValue("https://example.test/ocr");
     expect(window.location.search).toBe("?tab=ocr");
     expect(mock.saveAi).not.toHaveBeenCalled();

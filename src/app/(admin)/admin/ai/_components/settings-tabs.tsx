@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs } from "@douyinfe/semi-ui";
 
 const SECTIONS = [
   { id: "models", label: "模型" },
@@ -36,15 +36,14 @@ export function SettingsTabs({ initialTab, sections }: { initialTab?: string; se
   }
 
   return (
-    <Tabs value={tab} onValueChange={select}>
-      <TabsList aria-label="服务配置分区" className="flex w-full flex-wrap justify-start">
-        {SECTIONS.map(section => <TabsTrigger key={section.id} value={section.id}>{section.label}</TabsTrigger>)}
-      </TabsList>
-      {SECTIONS.map(section => (
-        <TabsContent key={section.id} value={section.id} forceMount hidden={tab !== section.id} className="min-w-0 data-[state=inactive]:hidden">
-          {sections[section.id]}
-        </TabsContent>
-      ))}
-    </Tabs>
+    <section aria-label="服务配置分区">
+      <Tabs activeKey={tab} onChange={select} keepDOM tabPaneMotion={false} contentStyle={{ paddingTop: 16 }}>
+        {SECTIONS.map(section => (
+          <Tabs.TabPane key={section.id} itemKey={section.id} tab={section.label}>
+            <div hidden={tab !== section.id} className="min-w-0">{sections[section.id]}</div>
+          </Tabs.TabPane>
+        ))}
+      </Tabs>
+    </section>
   );
 }

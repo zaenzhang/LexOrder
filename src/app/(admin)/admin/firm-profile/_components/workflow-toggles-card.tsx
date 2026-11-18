@@ -4,10 +4,9 @@
  * v1.0: 工作流开关卡片（系统后台，仅超级管理员）。
  * 目前只有一个开关：外部联系人审核流（默认关——小所信任环境直接通过）。
  */
+import { Notification, Switch, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
-import { Loader2, SlidersHorizontal } from "lucide-react";
-import { toast } from "sonner";
-import { Checkbox } from "@/components/ui/checkbox";
+import { SlidersHorizontal } from "lucide-react";
 import { saveWorkflowTogglesAction } from "@/server/settings/workflow-toggles-actions";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -27,10 +26,10 @@ export function WorkflowTogglesCard({
     startTransition(async () => {
       try {
         await saveWorkflowTogglesAction({ externalContactReview: next });
-        toast.success(next ? "已开启联系人审核" : "已关闭联系人审核（新增直接通过）");
+        Toast.success(next ? "已开启联系人审核" : "已关闭联系人审核（新增直接通过）");
       } catch (err) {
         setExternalContactReview(prev);
-        toast.error("保存失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "保存失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -40,25 +39,19 @@ export function WorkflowTogglesCard({
       <div className="mb-1 flex items-center gap-2">
         <SlidersHorizontal className="h-4 w-4 text-primary" strokeWidth={1.8} />
         <h2 className="text-base font-semibold">工作流开关</h2>
-        {pending && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
       </div>
       <p className="mb-4 text-[12px] text-muted-foreground">
         按团队规模选择流程松紧；改动即时生效。
       </p>
-      <label className="flex items-start gap-2.5 text-sm">
-        <Checkbox
-          checked={externalContactReview}
-          onCheckedChange={(v) => toggle(v === true)}
-          className="mt-0.5"
-        />
-        <span>
-          <span className="font-medium">外部联系人需管理员审核</span>
-          <span className="mt-0.5 block text-[12px] leading-5 text-muted-foreground">
-            关闭（默认）：任何人新增法院/仲裁机构等外部联系人后全所直接可见。
-            开启：普通律师新增的联系人需管理员/主任律师审核后展示。
-          </span>
-        </span>
-      </label>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <label htmlFor="external-contact-review" className="text-sm font-medium">外部联系人需管理员审核</label>
+          <p id="external-contact-review-help" className="mt-1 text-xs leading-5 text-muted-foreground">
+            开启后，普通律师新增的外部联系人须经管理员或主任律师审核，才会对全所显示。
+          </p>
+        </div>
+        <Switch id="external-contact-review" aria-describedby="external-contact-review-help" loading={pending} disabled={pending} checked={externalContactReview} onChange={toggle} />
+      </div>
     </section>
   );
 }

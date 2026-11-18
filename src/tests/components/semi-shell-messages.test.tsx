@@ -15,7 +15,10 @@ vi.mock("@/server/notifications/actions", () => ({
   markNotificationRead: mock.mark, markAllNotificationsRead: mock.markAll,
 }));
 vi.mock("@/server/sms/actions", () => ({ listSmsMessages: mock.sms, markSmsProcessed: mock.markSms, parseAndSaveSms: mock.parseSms }));
-vi.mock("sonner", () => ({ toast: { error: mock.error, success: mock.success } }));
+vi.mock("@douyinfe/semi-ui", async (importOriginal) => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return { ...semi, Toast: { ...semi.Toast, error: mock.error } };
+});
 
 import { NotificationPopover } from "@/components/layout/notification-popover";
 import { SmsPopover } from "@/components/layout/sms-popover";

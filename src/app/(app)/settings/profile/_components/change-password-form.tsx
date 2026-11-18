@@ -4,8 +4,7 @@ import { useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { toast } from "sonner";
-import { Button, Form, Input } from "@douyinfe/semi-ui";
+import { Button, Form, Input, Notification, Toast } from "@douyinfe/semi-ui";
 import { changeMyPassword } from "@/server/users/actions";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -41,10 +40,10 @@ export function ChangePasswordForm() {
           currentPassword: values.currentPassword,
           newPassword: values.newPassword
         });
-        toast.success("密码已修改");
+        Toast.success("密码已修改");
         reset();
       } catch (err) {
-        toast.error("修改失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "修改失败", content: actionErrorMessage(err) });
       }
     });
   }

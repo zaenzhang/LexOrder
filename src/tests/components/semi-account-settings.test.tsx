@@ -14,7 +14,21 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams("callbackUrl=%2Fmatters")
 }));
 vi.mock("next-auth/react", () => ({ signIn: mocks.signIn }));
-vi.mock("sonner", () => ({ toast: { success: mocks.success, error: mocks.error, warning: mocks.warning } }));
+vi.mock("@douyinfe/semi-ui", async (importOriginal) => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: { ...semi.Toast, success: mocks.success, error: mocks.error, warning: mocks.warning },
+    Notification: {
+      ...semi.Notification,
+      close: semi.Notification.close.bind(semi.Notification),
+      error: (options: Parameters<typeof semi.Notification.error>[0]) => {
+        if (options.title === "登录失败") return semi.Notification.error(options);
+        return mocks.error(options);
+      }
+    }
+  };
+});
 vi.mock("@/server/users/actions", () => ({ changeMyPassword: mocks.changePassword, saveMyAvatar: mocks.saveAvatar }));
 vi.mock("@/server/auth/totp-actions", () => ({
   checkLoginTotpEnforcement: mocks.enforcement,
@@ -35,8 +49,7 @@ import { TotpCard } from "@/app/(app)/settings/profile/_components/totp-card";
 import { AvatarForm } from "@/app/(app)/settings/profile/_components/avatar-form";
 import { IdentityForm } from "@/components/users/identity-form";
 import { IdentityDocumentFields, type IdentityDocumentDraft } from "@/components/users/identity-document-fields";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { WorkspaceDialog, DialogContent, DialogDescription, DialogTitle, DrawerContent } from "@/components/patterns/workspace-dialog";
 
 const scrollDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
 
@@ -75,14 +88,14 @@ function photoInput(buttonName: string) {
 
 async function chooseOtherIdentityType() {
   const select = screen.getByRole("combobox", { name: "证件类型" });
-  fireEvent.keyDown(select, { key: "Enter" });
-  const listbox = await screen.findByRole("listbox");
-  await waitFor(() => expect(screen.getByRole("option", { name: "中华人民共和国居民身份证" })).toHaveFocus());
-  fireEvent.keyDown(listbox, { key: "End" });
-  const other = screen.getByRole("option", { name: "其他身份证件" });
-  await waitFor(() => expect(other).toHaveFocus());
-  fireEvent.keyDown(other, { key: "Enter" });
-  await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
+  fireEvent.focus(select);
+  fireEvent.keyDown(select, { key: "Enter", keyCode: 13 });
+  await waitFor(() => expect(select).toHaveAttribute("aria-expanded", "true"));
+  const other = await screen.findByRole("option", { name: "其他身份证件" });
+  fireEvent.keyDown(select, { key: "ArrowUp", keyCode: 38 });
+  expect(select).toHaveAttribute("aria-activedescendant", other.id);
+  fireEvent.keyDown(select, { key: "Enter", keyCode: 13 });
+  await waitFor(() => expect(select).toHaveAttribute("aria-expanded", "false"));
   expect(select).toHaveTextContent("其他身份证件");
   return select;
 }
@@ -153,7 +166,7 @@ describe("Semi 登录与账户设置", () => {
     expect(mocks.changePassword).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText("确认新密码"), { target: { value: "new-fixture" } });
     fireEvent.click(screen.getByRole("button", { name: "修改密码" }));
-    await waitFor(() => expect(mocks.error).toHaveBeenCalledWith("修改失败", expect.anything()));
+    await waitFor(() => expect(mocks.error).toHaveBeenCalledWith(expect.objectContaining({ title: "修改失败", content: expect.any(String) })));
     expect(screen.getByLabelText("当前密码")).toHaveValue("old-fixture");
     expect(screen.getByLabelText("新密码（至少 8 位）")).toHaveValue("new-fixture");
     await waitFor(() => expect(screen.getByRole("button", { name: "修改密码" })).toHaveAttribute("aria-disabled", "false"));
@@ -170,7 +183,7 @@ describe("Semi 登录与账户设置", () => {
     const code = await screen.findByLabelText("第 2 步：输入 App 显示的 6 位动态码确认");
     fireEvent.change(code, { target: { value: "123456" } });
     fireEvent.click(screen.getByRole("button", { name: "确认并开启" }));
-    await waitFor(() => expect(mocks.error).toHaveBeenCalledWith("验证失败", { description: "动态码无效" }));
+    await waitFor(() => expect(mocks.error).toHaveBeenCalledWith({ title: "验证失败", content: "动态码无效" }));
     expect(code).toHaveValue("123456");
     expect(screen.queryByText("恢复码（仅此一次展示）")).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("button", { name: "确认并开启" })).toHaveAttribute("aria-disabled", "false"));
@@ -188,7 +201,7 @@ describe("Semi 登录与账户设置", () => {
     fireEvent.click(screen.getByRole("button", { name: "关闭" }));
     fireEvent.change(screen.getByLabelText("动态码或恢复码"), { target: { value: "fixture-recovery" } });
     fireEvent.click(screen.getByRole("button", { name: "确认关闭" }));
-    await waitFor(() => expect(mocks.error).toHaveBeenCalledWith("关闭失败", { description: "动态码无效" }));
+    await waitFor(() => expect(mocks.error).toHaveBeenCalledWith({ title: "关闭失败", content: "动态码无效" }));
     expect(screen.getByLabelText("动态码或恢复码")).toHaveValue("fixture-recovery");
     await waitFor(() => expect(screen.getByRole("button", { name: "取消" })).toHaveAttribute("aria-disabled", "false"));
     fireEvent.click(screen.getByRole("button", { name: "取消" }));
@@ -222,13 +235,13 @@ describe("Semi 登录与账户设置", () => {
   it("账号 Dialog 内下拉 Escape 只关闭选项，保留证件与核对原因草稿", async () => {
     function AccountDialog() {
       const [open, setOpen] = useState(true);
-      return <Dialog open={open} onOpenChange={setOpen}>
+      return <WorkspaceDialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogTitle>编辑账号资料</DialogTitle>
           <DialogDescription>维护基本资料，或核对并更正身份证件及照片。</DialogDescription>
           <IdentityForm adminTargetId="synthetic-user" />
         </DialogContent>
-      </Dialog>;
+      </WorkspaceDialog>;
     }
     render(<AccountDialog />);
     fireEvent.click(await screen.findByRole("button", { name: "登记身份证件" }));
@@ -236,9 +249,11 @@ describe("Semi 登录与账户设置", () => {
     fireEvent.change(screen.getByLabelText("证件名称"), { target: { value: "合成证件" } });
     fireEvent.change(screen.getByLabelText("证件号码"), { target: { value: "SYNTHETIC-01" } });
     fireEvent.change(screen.getByLabelText("核对及更正原因"), { target: { value: "已核对合成原件" } });
-    fireEvent.keyDown(select, { key: "Enter" });
-    fireEvent.keyDown(await screen.findByRole("listbox"), { key: "Escape" });
-    await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
+    fireEvent.focus(select);
+    fireEvent.keyDown(select, { key: "Enter", keyCode: 13 });
+    await waitFor(() => expect(select).toHaveAttribute("aria-expanded", "true"));
+    fireEvent.keyDown(select, { key: "Escape", keyCode: 27 });
+    await waitFor(() => expect(select).toHaveAttribute("aria-expanded", "false"));
     expect(screen.getByRole("dialog", { name: "编辑账号资料" })).toBeInTheDocument();
     expect(select).toHaveTextContent("其他身份证件");
     expect(screen.getByLabelText("证件名称")).toHaveValue("合成证件");
@@ -255,26 +270,28 @@ describe("Semi 登录与账户设置", () => {
     function CreateUserSheet() {
       const [open, setOpen] = useState(true);
       const [identity, setIdentity] = useState<IdentityDocumentDraft>({ documentType: "PRC_RESIDENT_ID", documentName: "", documentNumber: "", primaryFile: null, secondaryFile: null });
-      return <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right">
-          <SheetTitle>新增用户</SheetTitle>
-          <SheetDescription>登记基本资料和身份证件。</SheetDescription>
+      return <WorkspaceDialog open={open} onOpenChange={setOpen}>
+        <DrawerContent side="right">
+          <DialogTitle>新增用户</DialogTitle>
+          <DialogDescription>登记基本资料和身份证件。</DialogDescription>
           <form onSubmit={outerSubmit}>
             <label htmlFor="fixture-name">姓名</label><input id="fixture-name" />
             <IdentityDocumentFields value={identity} onChange={setIdentity} onRecognizedName={vi.fn()} />
             <button type="submit">创建</button>
           </form>
-        </SheetContent>
-      </Sheet>;
+        </DrawerContent>
+      </WorkspaceDialog>;
     }
     render(<CreateUserSheet />);
     fireEvent.change(screen.getByLabelText("姓名"), { target: { value: "合成用户" } });
     const select = await chooseOtherIdentityType();
     fireEvent.change(screen.getByLabelText("证件名称"), { target: { value: "合成证件" } });
     fireEvent.change(screen.getByLabelText("证件号码"), { target: { value: "SYNTHETIC-02" } });
-    fireEvent.keyDown(select, { key: "Enter" });
-    fireEvent.keyDown(await screen.findByRole("listbox"), { key: "Escape" });
-    await waitFor(() => expect(screen.queryByRole("listbox")).not.toBeInTheDocument());
+    fireEvent.focus(select);
+    fireEvent.keyDown(select, { key: "Enter", keyCode: 13 });
+    await waitFor(() => expect(select).toHaveAttribute("aria-expanded", "true"));
+    fireEvent.keyDown(select, { key: "Escape", keyCode: 27 });
+    await waitFor(() => expect(select).toHaveAttribute("aria-expanded", "false"));
     expect(screen.getByRole("dialog", { name: "新增用户" })).toBeInTheDocument();
     expect(screen.getByLabelText("姓名")).toHaveValue("合成用户");
     expect(select).toHaveTextContent("其他身份证件");

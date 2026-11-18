@@ -1,13 +1,10 @@
 "use client";
 
+import { Button, Form, Input, Toast } from "@douyinfe/semi-ui";
 import { useRef, useState, useTransition } from "react";
 import { Building2, Hash, ImageUp, Loader2, Trash2 } from "lucide-react";
-import { toast } from "sonner";
 
 import { PRODUCT_NAME } from "@/lib/product";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { renderCaseNoTemplate } from "@/lib/matters/firm-caseno";
 import { shParts } from "@/lib/ui/sh-time";
 import { saveFirmProfileAction } from "@/server/settings/firm-profile-actions";
@@ -56,16 +53,16 @@ export function FirmProfileForm({ initial }: { initial: Initial }) {
   const onPickLogo = (file: File | undefined) => {
     if (!file) return;
     if (!/^image\//.test(file.type)) {
-      toast.error("请选择图片文件（PNG / JPG / WebP / SVG）");
+      Toast.error("请选择图片文件（PNG / JPG / WebP / SVG）");
       return;
     }
     if (file.size > LOGO_MAX_BYTES) {
-      toast.error("Logo 过大，请控制在约 180KB 以内");
+      Toast.error("Logo 过大，请控制在约 180KB 以内");
       return;
     }
     const reader = new FileReader();
     reader.onload = () => setLogoDataUrl(reader.result as string);
-    reader.onerror = () => toast.error("读取图片失败");
+    reader.onerror = () => Toast.error("读取图片失败");
     reader.readAsDataURL(file);
   };
 
@@ -81,9 +78,9 @@ export function FirmProfileForm({ initial }: { initial: Initial }) {
           logoDataUrl,
           categoryWords: words
         });
-        toast.success("律所信息已保存");
+        Toast.success("律所信息已保存");
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "保存失败");
+        Toast.error(e instanceof Error ? actionErrorMessage(e) : "保存失败");
       }
     });
   };
@@ -145,19 +142,19 @@ export function FirmProfileForm({ initial }: { initial: Initial }) {
 
           <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <Label className="text-[11px]">律所名称</Label>
+              <Form.Label name="firm-profile-name" className="text-[11px]">律所名称</Form.Label>
               <Input
-                value={firmName}
-                onChange={(e) => setFirmName(e.target.value)}
+                id="firm-profile-name" value={firmName}
+                onChange={(value) => setFirmName(value)}
                 placeholder="如：星澜律师事务所"
                 className="mt-1"
               />
             </div>
             <div>
-              <Label className="text-[11px]">副标题</Label>
+              <Form.Label name="firm-profile-subtitle" className="text-[11px]">副标题</Form.Label>
               <Input
-                value={firmSubtitle}
-                onChange={(e) => setFirmSubtitle(e.target.value)}
+                id="firm-profile-subtitle" value={firmSubtitle}
+                onChange={(value) => setFirmSubtitle(value)}
                 placeholder="如：律师工作台"
                 className="mt-1"
               />
@@ -178,10 +175,10 @@ export function FirmProfileForm({ initial }: { initial: Initial }) {
         </p>
         <div className="flex items-end gap-4">
           <div className="w-40">
-            <Label className="text-[11px]">编号前缀</Label>
+            <Form.Label name="firm-case-prefix" className="text-[11px]">编号前缀</Form.Label>
             <Input
-              value={prefix}
-              onChange={(e) => setPrefix(e.target.value)}
+              id="firm-case-prefix" value={prefix}
+              onChange={(value) => setPrefix(value)}
               placeholder="LL"
               className="mt-1 font-mono"
             />
@@ -215,19 +212,19 @@ export function FirmProfileForm({ initial }: { initial: Initial }) {
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div>
-            <Label className="text-[11px]">所简称（{"{所}"}）</Label>
+            <Form.Label name="firm-case-short-name" className="text-[11px]">所简称（{"{所}"}）</Form.Label>
             <Input
-              value={shortName}
-              onChange={(e) => setShortName(e.target.value)}
+              id="firm-case-short-name" value={shortName}
+              onChange={(value) => setShortName(value)}
               placeholder="如：普"
               className="mt-1"
             />
           </div>
           <div>
-            <Label className="text-[11px]">案号模板</Label>
+            <Form.Label name="firm-case-number-template" className="text-[11px]">案号模板</Form.Label>
             <Input
-              value={template}
-              onChange={(e) => setTemplate(e.target.value)}
+              id="firm-case-number-template" value={template}
+              onChange={(value) => setTemplate(value)}
               placeholder="{年}-{所}{类词}-{序3}"
               className="mt-1 font-mono"
             />
@@ -240,7 +237,7 @@ export function FirmProfileForm({ initial }: { initial: Initial }) {
         </div>
 
         <div className="mt-4">
-          <Label className="text-[11px] text-muted-foreground">类别词（{"{类词}"}）映射</Label>
+          <Form.Label className="text-[11px] text-muted-foreground">类别词（{"{类词}"}）映射</Form.Label>
           <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
             {initial.categories.map((c) => (
               <div key={c.key} className="rounded-md border border-border bg-card p-2">
@@ -250,7 +247,7 @@ export function FirmProfileForm({ initial }: { initial: Initial }) {
                 </div>
                 <Input
                   value={words[c.key] ?? ""}
-                  onChange={(e) => setWords((w) => ({ ...w, [c.key]: e.target.value }))}
+                  onChange={(value) => setWords((w) => ({ ...w, [c.key]: value }))}
                   placeholder={c.word}
                   className="h-8 text-[12px]"
                 />
@@ -264,7 +261,7 @@ export function FirmProfileForm({ initial }: { initial: Initial }) {
         <p className="text-[11px] text-muted-foreground">
           修改前缀 / 模板不影响已生成的历史编号；仅对之后新建的案件生效。
         </p>
-        <Button onClick={save} disabled={pending} className="gap-1.5">
+        <Button theme="solid" onClick={save} disabled={pending} className="gap-1.5">
           {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           保存
         </Button>

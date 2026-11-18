@@ -1,23 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { Button, Form, Input, Notification, Select, Tag, Toast } from "@douyinfe/semi-ui";
+import { useId, useState, useTransition } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { toast } from "sonner";
-import { Plus, KeyRound, CircleOff, CircleDot, Loader2, LockOpen, ShieldCheck, ShieldOff, Smartphone } from "lucide-react";
+import { Plus, KeyRound, CircleOff, CircleDot, LockOpen, Search, ShieldCheck, ShieldOff, Smartphone } from "lucide-react";
 import type { SystemRole, UserRole } from "@prisma/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -108,16 +97,33 @@ export function UsersView({
   const editing = users.find(user => user.id === editingId) ?? null;
   const [sheetOpen, setSheetOpen] = useState(false);
   const [resetUser, setResetUser] = useState<UserRow | null>(null);
+  const searchText = query.trim().toLowerCase();
+  const visibleUsers = users.filter(user => {
+    if (status !== "all" && user.active !== (status === "active")) return false;
+    const assignment = user.roleName ?? userRoleLabel[user.role];
+    const admin = user.systemRole === "SUPER_ADMIN" ? "系统超级管理员" : "普通账号";
+    const approvals = user.approvalMemberships.map(({ group }) => group.name).join(" ");
+    return `${user.name} ${user.email} ${assignment} ${admin} ${approvals}`.toLowerCase().includes(searchText);
+  });
 
   return (
     <div className="space-y-4">
       <AdminPageHeader
         title="用户与岗位"
         sub={<>共 <b>{users.length}</b> 个账号 · 岗位决定功能范围，审批资格在「审批权限」单独分配</>}
-        actions={<Button onClick={() => setSheetOpen(true)} size="sm"><Plus />新增用户</Button>}
+        actions={<Button theme="solid" onClick={() => setSheetOpen(true)} size="small"><Plus />新增用户</Button>}
       />
 
-      <div className="flex gap-3"><Input aria-label="搜索账号" placeholder="按姓名、邮箱、角色或权限组搜索" value={query} onChange={e => setQuery(e.target.value)} /><select aria-label="账号状态" className="rounded-md border bg-background px-3 text-sm" value={status} onChange={e => setStatus(e.target.value)}><option value="all">全部状态</option><option value="active">已启用</option><option value="inactive">已停用</option></select><a className="shrink-0 text-sm text-primary self-center" href="/admin/roles">管理角色</a><a className="shrink-0 text-sm text-primary self-center" href="/admin/approval-permissions">管理审批权限</a></div>
+      <div className="flex flex-wrap items-center gap-3">
+        <Input className="min-w-56 flex-1" aria-label="搜索账号" placeholder="按姓名、邮箱、角色或权限组搜索" value={query} onChange={setQuery} prefix={<Search size={14} aria-hidden />} />
+        <Select<string> insetLabel="状态" insetLabelId="user-list-status-label" aria-labelledby="user-list-status-label" value={status} onChange={value => setStatus(String(value))} motion={false}>
+          <Select.Option value="all">全部状态</Select.Option>
+          <Select.Option value="active">已启用</Select.Option>
+          <Select.Option value="inactive">已停用</Select.Option>
+        </Select>
+        <a className="shrink-0 text-sm text-primary" href="/admin/roles">管理角色</a>
+        <a className="shrink-0 text-sm text-primary" href="/admin/approval-permissions">管理审批权限</a>
+      </div>
       <div className="overflow-x-auto card">
         <table className="w-full text-sm">
           <thead className="border-b border-border bg-popover">
@@ -133,7 +139,10 @@ export function UsersView({
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {users.filter(u => (status === "all" || u.active === (status === "active")) && `${u.name} ${u.email} ${u.roleName ?? userRoleLabel[u.role]} ${u.systemRole === "SUPER_ADMIN" ? "系统超级管理员" : "普通账号"} ${u.approvalMemberships.map(m => m.group.name).join(" ")}`.toLowerCase().includes(query.toLowerCase())).map((u) => (
+            {visibleUsers.length === 0 && (
+              <tr><td colSpan={8} className="p-8 text-center text-muted-foreground">{users.length ? "没有匹配的账号" : "暂无账号"}</td></tr>
+            )}
+            {visibleUsers.map((u) => (
               <UserRow
                 key={u.id}
                 user={u}
@@ -190,9 +199,9 @@ function UserRow({
     startTransition(async () => {
       try {
         await updateUserRole({ id: user.id, ...assignment(value), expectedRole: user.role, expectedRoleDefinitionId: user.roleDefinitionId ?? null });
-        toast.success("角色已更新");
+        Toast.success("角色已更新");
       } catch (err) {
-        toast.error("更新失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "更新失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -203,9 +212,9 @@ function UserRow({
     startTransition(async () => {
       try {
         await unlockUserLogin({ id: user.id });
-        toast.success("已解除锁定");
+        Toast.success("已解除锁定");
       } catch (err) {
-        toast.error("操作失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "操作失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -218,9 +227,9 @@ function UserRow({
     startTransition(async () => {
       try {
         const res = await setUserActive({ id: user.id, active: !user.active });
-        toast.success(res.active ? "已激活" : "已禁用");
+        Toast.success(res.active ? "已激活" : "已禁用");
       } catch (err) {
-        toast.error("操作失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "操作失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -232,9 +241,9 @@ function UserRow({
     startTransition(async () => {
       try {
         await updateUserSystemRole({ id: user.id, systemRole: next, expectedSystemRole: user.systemRole });
-        toast.success(next === "SUPER_ADMIN" ? "已授予系统管理资格" : "已撤销系统管理资格");
+        Toast.success(next === "SUPER_ADMIN" ? "已授予系统管理资格" : "已撤销系统管理资格");
       } catch (err) {
-        toast.error("操作失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "操作失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -254,9 +263,9 @@ function UserRow({
     startTransition(async () => {
       try {
         await setUserManagerAuthorized({ id: user.id, managerAuthorized: next, expectedManagerAuthorized: user.managerAuthorized === true });
-        toast.success(next ? "已授予业务管理权" : "已撤销业务管理权");
+        Toast.success(next ? "已授予业务管理权" : "已撤销业务管理权");
       } catch (err) {
-        toast.error("操作失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "操作失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -265,7 +274,7 @@ function UserRow({
   async function handleToggleTotpEnforce() {
     const next = !user.totpEnforced;
     if (isSelf && next && !user.totpEnabled) {
-      toast.warning("你自己尚未绑定动态码：强制后将无法登录，请先在「个人设置 → 登录安全」完成绑定");
+      Toast.warning("你自己尚未绑定动态码：强制后将无法登录，请先在「个人设置 → 登录安全」完成绑定");
       return;
     }
     const warning = next
@@ -277,9 +286,9 @@ function UserRow({
     startTransition(async () => {
       try {
         const res = await forceEnforceTotp({ id: user.id, enabled: next });
-        toast.success(res.enforced ? "已要求开启双步验证" : "已解除强制要求");
+        Toast.success(res.enforced ? "已要求开启双步验证" : "已解除强制要求");
       } catch (err) {
-        toast.error("操作失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "操作失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -296,40 +305,37 @@ function UserRow({
       </td>
       <td className="px-5 py-3">
         {isSelf ? (
-          <Badge variant="secondary" className="text-[10px]">
+          <Tag color="grey">
             {user.roleName ?? userRoleLabel[user.role]}（自己）
-          </Badge>
+          </Tag>
         ) : (
-          <Select
+          <Select<string>
+            className="w-36"
+            insetLabelId={`user-role-${user.id}`}
+            aria-labelledby={`user-role-${user.id}`}
+            insetLabel={<span className="sr-only">{user.name}的岗位</span>}
             value={user.roleDefinitionId ?? user.role}
-            onValueChange={(v) => handleRoleChange(v)}
+            onChange={value => void handleRoleChange(String(value))}
             disabled={isPending}
+            motion={false}
           >
-            <SelectTrigger className="h-8 w-32 bg-background text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
               {ROLES.map((r) => (
-                <SelectItem key={r} value={r}>
+                <Select.Option key={r} value={r}>
                   {builtinNames[r] ?? userRoleLabel[r]}
-                </SelectItem>
+                </Select.Option>
               ))}
-              {customRoles.filter(r => r.active || r.id === user.roleDefinitionId).map(r => <SelectItem key={r.id} value={r.id} disabled={!r.active}>{r.name}{!r.active ? "（已停用）" : ""}</SelectItem>)}
-            </SelectContent>
-          </Select>
+              {customRoles.filter(r => r.active || r.id === user.roleDefinitionId).map(r => <Select.Option key={r.id} value={r.id} disabled={!r.active}>{r.name}{!r.active ? "（已停用）" : ""}</Select.Option>)}
+            </Select>
         )}
       </td>
       <td className="px-5 py-3">
         <div className="flex flex-col items-start gap-1">
-          <Badge variant={user.systemRole === "SUPER_ADMIN" ? "secondary" : "outline"} className="text-[10px]">
+          <Tag color={user.systemRole === "SUPER_ADMIN" ? "violet" : "grey"}>
             {user.systemRole === "SUPER_ADMIN" ? "系统超级管理员" : "无"}
-          </Badge>
-          <Badge
-            variant={user.managerAuthorized || user.role === "PRINCIPAL_LAWYER" ? "secondary" : "outline"}
-            className={`text-[10px] ${user.managerAuthorized && user.role !== "PRINCIPAL_LAWYER" ? "text-[#1A7F45]" : "text-muted-foreground"}`}
-          >
+          </Tag>
+          <Tag color={user.managerAuthorized || user.role === "PRINCIPAL_LAWYER" ? "blue" : "grey"}>
             {user.role === "PRINCIPAL_LAWYER" ? "岗位自带" : user.managerAuthorized ? "业务管理权" : "无业务管理权"}
-          </Badge>
+          </Tag>
         </div>
       </td>
       <td className="whitespace-nowrap px-5 py-3 font-mono text-xs tabular text-muted-foreground">
@@ -341,36 +347,27 @@ function UserRow({
           : "从未登录"}
       </td>
       <td className="px-5 py-3">
-        <Badge
-          variant={user.active ? "secondary" : "outline"}
-          className="text-[10px]"
-        >
+        <Tag color={user.active ? "green" : "grey"}>
           {user.active ? "已激活" : "已禁用"}
-        </Badge>
+        </Tag>
         {(!user.active||!user.roleActive)&&Boolean(user.openResponsibilityCount)&&<p className="mt-1 text-xs text-amber-700">{user.openResponsibilityCount} 项责任待交接</p>}
       </td>
       <td className="px-5 py-3">
         <div className="flex flex-col items-start gap-1">
-          <Badge
-            variant={user.totpEnabled ? "secondary" : "outline"}
-            className={`text-[10px] ${user.totpEnabled ? "text-[#1A7F45]" : "text-muted-foreground"}`}
-          >
-            <Smartphone className="mr-1 h-3 w-3" />
+          <Tag color={user.totpEnabled ? "green" : "grey"} prefixIcon={<Smartphone size={12} aria-hidden />}>
             {user.totpEnabled ? "双步已绑定" : "双步未开启"}
-          </Badge>
+          </Tag>
           {user.totpEnforced && (
-            <span className="rounded-full border border-[#96650B]/35 bg-[#96650B]/10 px-1.5 py-px text-[10px] text-[#7A5205]">
-              已强制要求
-            </span>
+            <Tag color="amber">已强制要求</Tag>
           )}
         </div>
       </td>
       <td className="px-5 py-3">
         <div className="flex gap-1">
-          <Button variant="ghost" size="sm" onClick={onEdit}>资料</Button>
+          <Button theme="borderless" type="tertiary" size="small" onClick={onEdit}>资料</Button>
           <Button
-            variant="ghost"
-            size="sm"
+            theme="borderless" type="tertiary"
+            size="small"
             onClick={onResetPassword}
             disabled={isPending}
             className="h-7 gap-1 text-xs"
@@ -379,8 +376,8 @@ function UserRow({
             改密码
           </Button>
           <Button
-            variant="ghost"
-            size="sm"
+            theme="borderless" type="tertiary"
+            size="small"
             onClick={handleToggleTotpEnforce}
             disabled={isPending}
             className="h-7 gap-1 text-xs"
@@ -389,24 +386,24 @@ function UserRow({
             {user.totpEnforced ? "解除强制" : "强制双步"}
           </Button>
           {user.role !== "PRINCIPAL_LAWYER" && (
-            <Button variant="ghost" size="sm" onClick={handleManagerAuthorizationChange} disabled={isPending} className="h-7 gap-1 text-xs">
+            <Button theme="borderless" type="tertiary" size="small" onClick={handleManagerAuthorizationChange} disabled={isPending} className="h-7 gap-1 text-xs">
               {user.managerAuthorized ? "撤管理权" : "授管理权"}
             </Button>
           )}
           {!isSelf && (
             <>
-              <Button variant="ghost" size="sm" onClick={handleSystemRoleChange} disabled={isPending} className="h-7 gap-1 text-xs">
+              <Button theme="borderless" type="tertiary" size="small" onClick={handleSystemRoleChange} disabled={isPending} className="h-7 gap-1 text-xs">
                 {user.systemRole === "SUPER_ADMIN" ? <ShieldOff className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
                 {user.systemRole === "SUPER_ADMIN" ? "撤销管理" : "授予管理"}
               </Button>
               {user.lockedUntil && new Date(user.lockedUntil) > new Date() && (
-                <Button variant="ghost" size="sm" onClick={handleUnlock} disabled={isPending} className="h-7 gap-1 text-xs text-[var(--amber)]">
+                <Button theme="borderless" type="tertiary" size="small" onClick={handleUnlock} disabled={isPending} className="h-7 gap-1 text-xs text-[var(--amber)]">
                   <LockOpen className="h-3.5 w-3.5" />解锁
                 </Button>
               )}
               <Button
-                variant="ghost"
-                size="sm"
+                theme="borderless" type="tertiary"
+                size="small"
                 onClick={handleToggleActive}
                 disabled={isPending}
                 className={`h-7 gap-1 text-xs ${user.active ? "text-destructive" : "text-[#1A7F45]"}`}
@@ -440,9 +437,9 @@ function CreateUserSheet({
     primaryFile: null,
     secondaryFile: null
   });
+  const fieldPrefix = useId();
   const [identityErrors, setIdentityErrors] = useState<Partial<Record<"documentType" | "documentName" | "documentNumber" | "primaryFile", string>>>({});
   const {
-    register,
     control,
     handleSubmit,
     setValue,
@@ -492,13 +489,13 @@ function CreateUserSheet({
         if (identity.primaryFile) formData.set("identityImagePrimary", identity.primaryFile);
         if (identity.secondaryFile) formData.set("identityImageSecondary", identity.secondaryFile);
         await createUser(formData);
-        toast.success("用户已创建");
+        Toast.success("用户已创建");
         reset();
         setIdentity({ documentType: "PRC_RESIDENT_ID", documentName: "", documentNumber: "", primaryFile: null, secondaryFile: null });
         setIdentityErrors({});
         onOpenChange(false);
       } catch (err) {
-        toast.error("创建失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "创建失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -513,39 +510,39 @@ function CreateUserSheet({
           </SheetDescription>
         </SheetHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-1 flex-col">
+        <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
           <div className="flex-1 space-y-3 overflow-y-auto px-6 py-5">
-            <SheetField label="姓名" required error={errors.name?.message}>
-              <Input {...register("name")} />
+            <SheetField id={`${fieldPrefix}-name`} label="姓名" required error={errors.name?.message}>
+              <Controller name="name" control={control} render={({ field }) => (
+                <Input {...field} id={`${fieldPrefix}-name`} autoComplete="name" disabled={isPending} validateStatus={errors.name ? "error" : "default"} aria-describedby={errors.name ? `${fieldPrefix}-name-error` : undefined} />
+              )} />
             </SheetField>
-            <SheetField label="邮箱" required error={errors.email?.message}>
-              <Input type="email" className="font-mono" {...register("email")} />
+            <SheetField id={`${fieldPrefix}-email`} label="邮箱" required error={errors.email?.message}>
+              <Controller name="email" control={control} render={({ field }) => (
+                <Input {...field} id={`${fieldPrefix}-email`} type="email" autoComplete="email" disabled={isPending} validateStatus={errors.email ? "error" : "default"} aria-describedby={errors.email ? `${fieldPrefix}-email-error` : undefined} />
+              )} />
             </SheetField>
-            <SheetField label="初始密码（至少 8 位）" required error={errors.password?.message}>
-              <Input type="password" className="font-mono" {...register("password")} />
+            <SheetField id={`${fieldPrefix}-password`} label="初始密码（至少 8 位）" required error={errors.password?.message}>
+              <Controller name="password" control={control} render={({ field }) => (
+                <Input {...field} id={`${fieldPrefix}-password`} mode="password" autoComplete="new-password" disabled={isPending} validateStatus={errors.password ? "error" : "default"} aria-describedby={errors.password ? `${fieldPrefix}-password-error` : undefined} />
+              )} />
             </SheetField>
-            <SheetField label="角色" required>
-              <Select
+            <SheetField id={`${fieldPrefix}-role`} label="角色" required composite>
+              <Select<string>
+                aria-labelledby={`${fieldPrefix}-role-label`}
+                className="w-full"
                 value={role}
-                onValueChange={(v) =>
-                  setValue("role", v as CreateValues["role"], { shouldDirty: true })
-                }
+                disabled={isPending}
+                onChange={value => setValue("role", String(value), { shouldDirty: true })}
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ROLES.map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {builtinNames[r] ?? userRoleLabel[r]}
-                    </SelectItem>
-                  ))}
-                  {customRoles.filter(r => r.active).map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
-                </SelectContent>
+                {ROLES.map(role => <Select.Option key={role} value={role}>{builtinNames[role] ?? userRoleLabel[role]}</Select.Option>)}
+                {customRoles.filter(r => r.active).map(r => <Select.Option key={r.id} value={r.id}>{r.name}</Select.Option>)}
               </Select>
             </SheetField>
-            <SheetField label="电话">
-              <Input className="font-mono" {...register("phone")} />
+            <SheetField id={`${fieldPrefix}-phone`} label="电话" error={errors.phone?.message}>
+              <Controller name="phone" control={control} render={({ field }) => (
+                <Input {...field} id={`${fieldPrefix}-phone`} type="tel" autoComplete="tel" disabled={isPending} validateStatus={errors.phone ? "error" : "default"} aria-describedby={errors.phone ? `${fieldPrefix}-phone-error` : undefined} />
+              )} />
             </SheetField>
             {Object.keys(identityErrors).length > 0 && <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">请补全并核对身份证件信息。</div>}
             <IdentityDocumentFields
@@ -559,15 +556,14 @@ function CreateUserSheet({
 
           <SheetFooter className="border-t border-border bg-background px-6 py-4">
             <Button
-              type="button"
-              variant="outline"
+              htmlType="button"
+              theme="outline"
               onClick={() => onOpenChange(false)}
               disabled={isPending}
             >
               取消
             </Button>
-            <Button type="submit" disabled={isPending} className="gap-1.5">
-              {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            <Button theme="solid" htmlType="submit" disabled={isPending} loading={isPending}>
               创建
             </Button>
           </SheetFooter>
@@ -590,17 +586,17 @@ function ResetPasswordDialog({
   function handleReset() {
     if (!user) return;
     if (pwd.length < 8) {
-      toast.warning("密码至少 8 位");
+      Toast.warning("密码至少 8 位");
       return;
     }
     startTransition(async () => {
       try {
         await resetUserPassword({ id: user.id, newPassword: pwd });
-        toast.success(`已重置 ${user.name} 的密码`);
+        Toast.success(`已重置 ${user.name} 的密码`);
         setPwd("");
         onClose();
       } catch (err) {
-        toast.error("失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -615,20 +611,21 @@ function ResetPasswordDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
-          <Label className="text-xs">新密码（至少 8 位）</Label>
+          <Form.Label name="reset-user-password" required>新密码（至少 8 位）</Form.Label>
           <Input
-            type="password"
-            className="font-mono"
+            id="reset-user-password"
+            mode="password"
+            autoComplete="new-password"
+            disabled={isPending}
             value={pwd}
-            onChange={(e) => setPwd(e.target.value)}
+            onChange={setPwd}
           />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isPending}>
+          <Button theme="outline" onClick={onClose} disabled={isPending}>
             取消
           </Button>
-          <Button onClick={handleReset} disabled={isPending}>
-            {isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+          <Button type="danger" theme="solid" onClick={handleReset} loading={isPending} disabled={isPending}>
             重置
           </Button>
         </DialogFooter>
@@ -638,24 +635,25 @@ function ResetPasswordDialog({
 }
 
 function SheetField({
+  id,
   label,
   required,
+  composite,
   error,
   children
 }: {
+  id: string;
   label: string;
   required?: boolean;
+  composite?: boolean;
   error?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="flex items-center gap-1 text-xs">
-        {label}
-        {required && <span className="text-destructive">*</span>}
-      </Label>
+      <Form.Label name={composite ? undefined : id} id={`${id}-label`} text={label} required={required} />
       {children}
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && <p id={`${id}-error`} className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }

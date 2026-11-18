@@ -3,11 +3,9 @@
  * 法定放假安排卡（F-5）：按年查看已录入安排，批量录入当年国务院通知
  * （每行「YYYY-MM-DD 名称」，调休上班日行尾加 /调休）。仅超级管理员可保存。
  */
+import { Button, Notification, TextArea, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import { CalendarDays, Loader2 } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { saveHolidayBatch } from "@/server/calendar/holiday-actions";
 import { formatDate } from "@/lib/utils";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -33,20 +31,20 @@ export function HolidayCard({ year, rows, canEdit }: { year: number; rows: Holid
   function save() {
     const { entries, error } = parseLines(text);
     if (error) {
-      toast.error("格式有误", { description: error });
+      Notification.error({ title: "格式有误", content: error });
       return;
     }
     if (entries.length === 0) {
-      toast.error("请先按行录入安排");
+      Toast.error("请先按行录入安排");
       return;
     }
     startTransition(async () => {
       try {
         const r = await saveHolidayBatch({ entries });
-        toast.success(`已保存 ${r.count} 条`);
+        Toast.success(`已保存 ${r.count} 条`);
         setText("");
       } catch (err) {
-        toast.error("保存失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "保存失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -76,15 +74,15 @@ export function HolidayCard({ year, rows, canEdit }: { year: number; rows: Holid
         )}
         {canEdit ? (
           <>
-            <Textarea
+            <TextArea
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(value) => setText(value)}
               rows={4}
               placeholder={"每行一条：YYYY-MM-DD 名称\n如：2026-10-01 国庆节\n调休上班日：2026-09-27 上班 /调休"}
               className="text-xs font-mono"
             />
             <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-end" }}>
-              <Button size="sm" onClick={save} disabled={isPending} className="gap-1.5">
+              <Button theme="solid" size="small" onClick={save} disabled={isPending} className="gap-1.5">
                 {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}保存本批
               </Button>
             </div>
