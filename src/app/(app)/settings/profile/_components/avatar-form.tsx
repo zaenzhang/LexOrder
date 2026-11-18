@@ -2,8 +2,9 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ImageUp, Loader2, Trash2 } from "lucide-react";
+import { ImageUp, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { Avatar, Button, Tag } from "@douyinfe/semi-ui";
 import { saveMyAvatar } from "@/server/users/actions";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -29,7 +30,6 @@ export function AvatarForm({ name, role, initialAvatar }: { name: string; role?:
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result as string;
-      setAvatar(dataUrl);
       save(dataUrl);
     };
     reader.onerror = () => toast.error("读取图片失败");
@@ -40,6 +40,7 @@ export function AvatarForm({ name, role, initialAvatar }: { name: string; role?:
     startTransition(async () => {
       try {
         await saveMyAvatar({ avatar: value });
+        setAvatar(value);
         toast.success(value ? "头像已更新" : "头像已清除");
         router.refresh();
       } catch (e) {
@@ -50,59 +51,18 @@ export function AvatarForm({ name, role, initialAvatar }: { name: string; role?:
 
   return (
     <div className="flex flex-col items-center gap-3 text-center">
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp,image/svg+xml"
-        className="hidden"
-        onChange={(e) => onPick(e.target.files?.[0])}
-      />
-      <button
-        type="button"
-        onClick={() => fileRef.current?.click()}
-        disabled={pending}
-        title="点击更换头像"
-        className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border border-border bg-primary/10 transition-shadow hover:shadow-md disabled:opacity-50"
-      >
-        {avatar ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatar} alt={name} className="h-full w-full object-cover" />
-        ) : (
-          <span className="text-3xl font-semibold text-primary">{initial}</span>
-        )}
-      </button>
+      <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" disabled={pending}
+        onChange={event => { onPick(event.target.files?.[0]); event.target.value = ""; }} />
+      <Button htmlType="button" theme="borderless" type="tertiary" onClick={() => fileRef.current?.click()}
+        disabled={pending} aria-label="更换头像" title="点击更换头像" style={{ width: 88, height: 88, padding: 4 }}>
+        <Avatar size="extra-large" src={avatar ?? undefined} alt={name}>{initial}</Avatar>
+      </Button>
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          disabled={pending}
-          className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-[12px] hover:bg-muted/60 disabled:opacity-50"
-        >
-          {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <ImageUp className="h-3 w-3" />}
-          上传头像
-        </button>
-        {avatar && (
-          <button
-            type="button"
-            onClick={() => {
-              setAvatar(null);
-              if (fileRef.current) fileRef.current.value = "";
-              save(null);
-            }}
-            disabled={pending}
-            className="inline-flex items-center gap-1 rounded-[6px] px-2 py-1 text-[12px] text-destructive hover:underline disabled:opacity-50"
-          >
-            <Trash2 className="h-3 w-3" />
-            清除
-          </button>
-        )}
+        <Button htmlType="button" size="small" onClick={() => fileRef.current?.click()} disabled={pending} loading={pending} icon={<ImageUp size={14} aria-hidden />}>上传头像</Button>
+        {avatar && <Button htmlType="button" size="small" type="danger" theme="borderless" onClick={() => save(null)} disabled={pending} icon={<Trash2 size={14} aria-hidden />}>清除</Button>}
       </div>
-      {role && <span className="badge b-teal">{role}</span>}
-      <p className="text-[11px] leading-relaxed text-muted-foreground">
-        未上传时显示姓名首字「{initial}」
-        <br />
-        建议方形图片，≤ 180KB
-      </p>
+      {role && <Tag color="cyan">{role}</Tag>}
+      <p className="text-xs leading-relaxed text-[var(--semi-color-text-2)]">未上传时显示姓名首字「{initial}」<br />建议方形图片，≤ 180KB</p>
     </div>
   );
 }

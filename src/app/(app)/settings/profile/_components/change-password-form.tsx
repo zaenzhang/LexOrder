@@ -1,14 +1,11 @@
 "use client";
 
 import { useTransition } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button, Form, Input } from "@douyinfe/semi-ui";
 import { changeMyPassword } from "@/server/users/actions";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -28,7 +25,7 @@ type FormValues = z.infer<typeof schema>;
 export function ChangePasswordForm() {
   const [isPending, startTransition] = useTransition();
   const {
-    register,
+    control,
     handleSubmit,
     reset,
     formState: { errors }
@@ -53,38 +50,21 @@ export function ChangePasswordForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="max-w-md space-y-4">
-      <Field label="当前密码" error={errors.currentPassword?.message}>
-        <Input type="password" autoComplete="current-password" {...register("currentPassword")} />
-      </Field>
-      <Field label="新密码（至少 8 位）" error={errors.newPassword?.message}>
-        <Input type="password" autoComplete="new-password" {...register("newPassword")} />
-      </Field>
-      <Field label="确认新密码" error={errors.confirmPassword?.message}>
-        <Input type="password" autoComplete="new-password" {...register("confirmPassword")} />
-      </Field>
-      <Button type="submit" disabled={isPending} className="gap-1.5">
-        {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-        修改密码
-      </Button>
+    <form noValidate onSubmit={handleSubmit(onSubmit)} className="max-w-md space-y-4">
+      {([
+        { name: "currentPassword", label: "当前密码", autoComplete: "current-password" },
+        { name: "newPassword", label: "新密码（至少 8 位）", autoComplete: "new-password" },
+        { name: "confirmPassword", label: "确认新密码", autoComplete: "new-password" }
+      ] as const).map(({ name, label, autoComplete }) => <div key={name}>
+        <Form.Label name={`change-password-${name}`} text={label} />
+        <Controller name={name} control={control} render={({ field }) => (
+          <Input {...field} id={`change-password-${name}`} type="password" autoComplete={autoComplete}
+            disabled={isPending} aria-invalid={!!errors[name]} validateStatus={errors[name] ? "error" : "default"}
+            aria-describedby={errors[name] ? `change-password-${name}-error` : undefined} />
+        )} />
+        {errors[name] && <p id={`change-password-${name}-error`} role="alert" className="mt-1 text-sm text-[var(--semi-color-danger)]">{errors[name]?.message}</p>}
+      </div>)}
+      <Button htmlType="submit" theme="solid" loading={isPending} disabled={isPending}>修改密码</Button>
     </form>
-  );
-}
-
-function Field({
-  label,
-  error,
-  children
-}: {
-  label: string;
-  error?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs">{label}</Label>
-      {children}
-      {error && <p className="text-xs text-destructive">{error}</p>}
-    </div>
   );
 }

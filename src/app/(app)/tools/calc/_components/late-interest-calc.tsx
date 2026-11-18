@@ -1,26 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Button, Input } from "@douyinfe/semi-ui";
 import { Coins, Info, Calculator } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { calcLateInterest, numberToChinese } from "@/lib/legal-calc";
-import { shDayKey, shTodayCivil, civilFromKey } from "@/lib/ui/sh-time";
+import { shDayKey, civilKey, civilFromKey } from "@/lib/ui/sh-time";
 
-export function LateInterestCalc() {
-  // 日历日统一「上海日键 + 本地正午」载体；迟延天数按正午时刻差计算，与浏览器时区无关
-  const todayCivil = shTodayCivil();
-  const halfYearAgo = new Date(todayCivil);
-  halfYearAgo.setMonth(halfYearAgo.getMonth() - 6);
-
+export function useLateInterestCalculator(active = true) {
+  const datesInitialized = useRef(false);
   const [principal, setPrincipal] = useState("100000");
-  const [dueDate, setDueDate] = useState(shDayKey(halfYearAgo));
-  const [paidDate, setPaidDate] = useState(shDayKey(new Date()));
+  const [dueDate, setDueDate] = useState("");
+  const [paidDate, setPaidDate] = useState("");
   const [lprPercent, setLprPercent] = useState("3.45");
   const [extraPercent, setExtraPercent] = useState("5");
 
   const [result, setResult] = useState<ReturnType<typeof calcLateInterest> | null>(null);
+
+  useEffect(() => {
+    if (!active || datesInitialized.current) return;
+    datesInitialized.current = true;
+    // 首次打开时取上海当天；日历月计算仍使用本地正午载体。
+    const todayKey = shDayKey(new Date());
+    const halfYearAgo = civilFromKey(todayKey);
+    halfYearAgo.setMonth(halfYearAgo.getMonth() - 6);
+    setDueDate(civilKey(halfYearAgo));
+    setPaidDate(todayKey);
+  }, [active]);
 
   function compute() {
     const p = parseFloat(principal) || 0;
@@ -39,6 +44,12 @@ export function LateInterestCalc() {
     );
   }
 
+  return { principal, setPrincipal, dueDate, setDueDate, paidDate, setPaidDate, lprPercent, setLprPercent, extraPercent, setExtraPercent, result, compute };
+}
+
+export function LateInterestCalc({ calculator }: { calculator: ReturnType<typeof useLateInterestCalculator> }) {
+  const { principal, setPrincipal, dueDate, setDueDate, paidDate, setPaidDate, lprPercent, setLprPercent, extraPercent, setExtraPercent, result, compute } = calculator;
+
   return (
     <section className="ll-surface rounded-lg border border-border p-5">
       <header className="mb-4 flex items-center gap-2">
@@ -51,50 +62,55 @@ export function LateInterestCalc() {
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div>
-          <Label className="text-[11px]">判决金额（元）</Label>
+          <label htmlFor="late-principal" className="text-sm">判决金额（元）</label>
           <Input
             type="number"
+            id="late-principal"
             value={principal}
-            onChange={(e) => setPrincipal(e.target.value)}
+            onChange={setPrincipal}
             className="mt-1 font-mono text-[14px]"
           />
         </div>
         <div>
-          <Label className="text-[11px]">应履行日期</Label>
+          <label htmlFor="late-due" className="text-sm">应履行日期</label>
           <Input
             type="date"
+            id="late-due"
             value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
+            onChange={setDueDate}
             className="mt-1"
           />
         </div>
         <div>
-          <Label className="text-[11px]">实际履行日期（或截至日）</Label>
+          <label htmlFor="late-paid" className="text-sm">实际履行日期（或截至日）</label>
           <Input
             type="date"
+            id="late-paid"
             value={paidDate}
-            onChange={(e) => setPaidDate(e.target.value)}
+            onChange={setPaidDate}
             className="mt-1"
           />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
-            <Label className="text-[11px]">一年期 LPR（%）</Label>
+            <label htmlFor="late-lpr" className="text-sm">一年期 LPR（%）</label>
             <Input
               type="number"
               step="0.01"
+              id="late-lpr"
               value={lprPercent}
-              onChange={(e) => setLprPercent(e.target.value)}
+              onChange={setLprPercent}
               className="mt-1 font-mono"
             />
           </div>
           <div>
-            <Label className="text-[11px]">加成（%）</Label>
+            <label htmlFor="late-extra" className="text-sm">加成（%）</label>
             <Input
               type="number"
               step="0.5"
+              id="late-extra"
               value={extraPercent}
-              onChange={(e) => setExtraPercent(e.target.value)}
+              onChange={setExtraPercent}
               className="mt-1 font-mono"
             />
           </div>
@@ -102,8 +118,7 @@ export function LateInterestCalc() {
       </div>
 
       <div className="mt-4 flex justify-end">
-        <Button onClick={compute} className="h-9 gap-1.5">
-          <Calculator className="h-3.5 w-3.5" />
+        <Button htmlType="button" theme="solid" onClick={compute} icon={<Calculator size={16} aria-hidden />}>
           计算
         </Button>
       </div>
@@ -111,16 +126,16 @@ export function LateInterestCalc() {
       {result && (
         <>
           <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-            <ResultCard label="迟延天数" value={`${result.daysLate} 天`} accent="#68747F" />
+            <ResultCard label="迟延天数" value={`${result.daysLate} 天`} accent="var(--semi-color-text-1)" />
             <ResultCard
               label="年利率"
               value={`${(result.yearlyRate * 100).toFixed(2)}%`}
-              accent="#96650B"
+              accent="var(--semi-color-warning)"
             />
             <ResultCard
               label="加倍利息（推荐采用）"
               value={`¥${result.interest.toLocaleString()}`}
-              accent="#B42318"
+              accent="var(--semi-color-danger)"
             />
           </div>
           <div className="mt-3 rounded-md border border-border bg-muted/20 p-3 text-[12px]">

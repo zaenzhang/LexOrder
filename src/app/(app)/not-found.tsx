@@ -1,4 +1,6 @@
-import Link from "next/link";
+"use client";
+
+import { Typography } from "@douyinfe/semi-ui";
 
 /** 业务区 404：记录不存在或当前账号无权查看（不区分两者，避免泄露记录是否存在） */
 export default function AppNotFound() {
@@ -11,8 +13,8 @@ export default function AppNotFound() {
           该记录可能已被删除、链接有误，或当前账号没有查看权限。需要处理审批事项时，请从「审批」工作台进入。
         </p>
         <div className="mt-5 flex justify-center gap-2">
-          <Link href="/" className="btn btn-primary btn-sm">返回工作台</Link>
-          <Link href="/approvals" className="btn btn-secondary btn-sm">进入审批</Link>
+          <Typography.Text link={{ href: "/" }}>返回工作台</Typography.Text>
+          <Typography.Text link={{ href: "/approvals" }}>进入审批</Typography.Text>
         </div>
       </div>
     </div>

@@ -3,9 +3,7 @@
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button, Form, Input, Upload } from "@douyinfe/semi-ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getProfileIdentity, bindMyIdentity, correctUserIdentity } from "@/server/users/profile-actions";
 import { correctUserIdentityWithPhotos } from "@/server/identity-documents/actions";
@@ -72,21 +70,21 @@ export function IdentityForm({ adminTargetId }: { adminTargetId?: string }) {
 
   const editForm = editing && summary ? (
     // 不用 <form>：本组件在个人设置中位于基本资料表单内部，嵌套表单非法；回车在外层拦截后直接提交
-    <div className="space-y-3 rounded-lg border bg-background p-4" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); save(); } }}>
+    <div className="space-y-3 rounded-lg border bg-background p-4" onKeyDown={(event) => { if (event.key === "Enter" && event.target instanceof HTMLInputElement && event.target.type !== "file") { event.preventDefault(); event.stopPropagation(); if (!pending) save(); } }}>
       <fieldset disabled={pending} className="space-y-3">
-        <div className="space-y-2"><Label>证件类型</Label><Select value={documentType} onValueChange={value => { setDocumentType(value as IdentityDocumentTypeValue); if (value !== "OTHER") setDocumentName(""); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{identityDocumentTypes.map(type => <SelectItem key={type} value={type}>{identityDocumentTypeLabel[type]}</SelectItem>)}</SelectContent></Select></div>
-        {documentType === "OTHER" && <div className="space-y-2"><Label htmlFor={`${prefix}-name`}>证件名称</Label><Input id={`${prefix}-name`} required maxLength={60} value={documentName} onChange={e => setDocumentName(e.target.value)} placeholder="请输入证件全称" /></div>}
-        <div className="space-y-2"><Label htmlFor={`${prefix}-number`}>证件号码</Label><Input id={`${prefix}-number`} autoComplete="off" spellCheck={false} maxLength={50} required value={number} onChange={e => setNumber(e.target.value)} placeholder={documentType === "PRC_RESIDENT_ID" ? "请输入18位居民身份证号码" : "请输入证件号码"} /></div>
+        <div className="space-y-2"><Form.Label id={`${prefix}-type-label`} text="证件类型" /><Select value={documentType} disabled={pending} onValueChange={value => { setDocumentType(value as IdentityDocumentTypeValue); if (value !== "OTHER") setDocumentName(""); }}><SelectTrigger aria-labelledby={`${prefix}-type-label`}><SelectValue /></SelectTrigger><SelectContent>{identityDocumentTypes.map(type => <SelectItem key={type} value={type}>{identityDocumentTypeLabel[type]}</SelectItem>)}</SelectContent></Select></div>
+        {documentType === "OTHER" && <div className="space-y-2"><Form.Label name={`${prefix}-name`}>证件名称</Form.Label><Input id={`${prefix}-name`} required maxLength={60} value={documentName} onChange={setDocumentName} placeholder="请输入证件全称" /></div>}
+        <div className="space-y-2"><Form.Label name={`${prefix}-number`}>证件号码</Form.Label><Input id={`${prefix}-number`} autoComplete="off" spellCheck={false} maxLength={50} required value={number} onChange={setNumber} placeholder={documentType === "PRC_RESIDENT_ID" ? "请输入18位居民身份证号码" : "请输入证件号码"} /></div>
         {adminTargetId && <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-2"><Label htmlFor={`${prefix}-photo-primary`}>新的主要证件照片（选填）</Label><Input id={`${prefix}-photo-primary`} type="file" accept="image/jpeg,image/png,image/webp" onChange={event => setPrimaryFile(event.target.files?.[0] ?? null)} /></div>
-          <div className="space-y-2"><Label htmlFor={`${prefix}-photo-secondary`}>新的另一面／补充页（选填）</Label><Input id={`${prefix}-photo-secondary`} type="file" accept="image/jpeg,image/png,image/webp" onChange={event => setSecondaryFile(event.target.files?.[0] ?? null)} /></div>
+          <div className="space-y-2"><Form.Label text="新的主要证件照片（选填）" /><Upload action="" uploadTrigger="custom" fileList={[]} showUploadList={false} disabled={pending} accept="image/jpeg,image/png,image/webp" onAcceptInvalid={() => toast.error("证件照片仅支持 JPG、PNG 或 WebP")} onFileChange={files => setPrimaryFile(files[0] ?? null)}><Button htmlType="button" disabled={pending} aria-label="选择新的主要证件照片（选填）">选择照片</Button></Upload>{primaryFile && <p className="break-all text-sm">{primaryFile.name}</p>}</div>
+          <div className="space-y-2"><Form.Label text="新的另一面／补充页（选填）" /><Upload action="" uploadTrigger="custom" fileList={[]} showUploadList={false} disabled={pending} accept="image/jpeg,image/png,image/webp" onAcceptInvalid={() => toast.error("证件照片仅支持 JPG、PNG 或 WebP")} onFileChange={files => setSecondaryFile(files[0] ?? null)}><Button htmlType="button" disabled={pending} aria-label="选择新的另一面／补充页（选填）">选择照片</Button></Upload>{secondaryFile && <p className="break-all text-sm">{secondaryFile.name}</p>}</div>
           {primaryFile && <p className="sm:col-span-2 text-xs text-muted-foreground">保存后，现有照片将标记为已被替代并保留审计；不会物理删除。</p>}
         </div>}
-        {adminTargetId ? <div className="space-y-2"><Label htmlFor={`${prefix}-reason`}>核对及更正原因</Label><Input id={`${prefix}-reason`} required minLength={4} maxLength={200} value={reason} onChange={e => setReason(e.target.value)} placeholder="说明核对依据，勿填写完整证件号或手机号" /></div>
-          : <div className="space-y-2"><Label htmlFor={`${prefix}-password`}>当前密码</Label><Input id={`${prefix}-password`} type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} /></div>}
+        {adminTargetId ? <div className="space-y-2"><Form.Label name={`${prefix}-reason`}>核对及更正原因</Form.Label><Input id={`${prefix}-reason`} required minLength={4} maxLength={200} value={reason} onChange={setReason} placeholder="说明核对依据，勿填写完整证件号或手机号" /></div>
+          : <div className="space-y-2"><Form.Label name={`${prefix}-password`}>当前密码</Form.Label><Input id={`${prefix}-password`} type="password" autoComplete="current-password" required value={password} onChange={setPassword} /></div>}
         <p className="text-xs text-muted-foreground">{adminTargetId ? "请依据证件原件核对，变更原因将保存在审计记录中。" : "请核对证件属于本人。登记后本人不能更换或清空。"}</p>
         {saveError && <p role="alert" className="text-sm text-destructive">{saveError}</p>}
-        <div className="flex gap-2"><Button type="button" onClick={() => save()}>{pending ? "正在保存…" : "确认登记"}</Button><Button type="button" variant="ghost" onClick={() => { setEditing(false); setNumber(""); setDocumentName(""); setPrimaryFile(null); setSecondaryFile(null); setPassword(""); setReason(""); }}>取消</Button></div>
+        <div className="flex gap-2"><Button htmlType="button" theme="solid" loading={pending} disabled={pending} onClick={() => save()}>{pending ? "正在保存…" : "确认登记"}</Button><Button htmlType="button" theme="borderless" type="tertiary" onClick={() => { setEditing(false); setNumber(""); setDocumentName(""); setPrimaryFile(null); setSecondaryFile(null); setPassword(""); setReason(""); }}>取消</Button></div>
       </fieldset>
     </div>
   ) : null;
@@ -95,33 +93,33 @@ export function IdentityForm({ adminTargetId }: { adminTargetId?: string }) {
   if (adminTargetId) {
     return <section className="space-y-4 border-t pt-5">
       <div><h3 className="text-sm font-semibold">身份信息</h3><p className="mt-1 text-xs leading-relaxed text-muted-foreground">证件类型和号码用于人员核对。登记不代表已完成实名认证；修改联系方式不会影响历史案件归属。</p></div>
-      {error ? <div role="alert" className="space-y-2"><p className="text-sm text-destructive">{error}</p><Button type="button" variant="outline" size="sm" onClick={() => void load()}>重新读取</Button></div> : !summary ? <p className="text-sm text-muted-foreground">正在读取身份信息…</p> : <>
+      {error ? <div role="alert" className="space-y-2"><p className="text-sm text-destructive">{error}</p><Button htmlType="button" theme="outline" size="small" onClick={() => void load()}>重新读取</Button></div> : !summary ? <p className="text-sm text-muted-foreground">正在读取身份信息…</p> : <>
         <div className="flex flex-wrap items-center gap-3"><span className="text-sm">{summary.documentTypeLabel ?? "身份证件"}</span><span className="font-mono text-sm">{summary.number ?? "未登记"}</span>
-          {!editing && <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => { setSaveError(""); setDocumentType(summary.documentType ?? "PRC_RESIDENT_ID"); setDocumentName(summary.documentType === "OTHER" ? summary.documentTypeLabel ?? "" : ""); setEditing(true); }}>{summary.number ? "更正身份证件" : "登记身份证件"}</Button>}
+          {!editing && <Button htmlType="button" size="small" theme="outline" disabled={pending} onClick={() => { setSaveError(""); setDocumentType(summary.documentType ?? "PRC_RESIDENT_ID"); setDocumentName(summary.documentType === "OTHER" ? summary.documentTypeLabel ?? "" : ""); setEditing(true); }}>{summary.number ? "更正身份证件" : "登记身份证件"}</Button>}
         </div>
         {summary.photos.length > 0 && <div className="flex flex-wrap gap-2">{summary.photos.map((photo, index) => <a key={photo.id} href={`/api/users/${summary.userId}/identity-documents/${photo.id}`} target="_blank" rel="noreferrer" className="text-xs text-primary underline-offset-4 hover:underline">查看证件照片{index + 1}</a>)}</div>}
         {summary.number && <p className="text-xs text-muted-foreground">已登记。证件信息如有错误，请在上方更正并记录原因。</p>}
         {editForm}
-        <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => { void load(); }}>刷新身份信息</Button>
+        <Button htmlType="button" size="small" theme="borderless" type="tertiary" disabled={pending} onClick={() => { void load(); }}>刷新身份信息</Button>
       </>}
     </section>;
   }
 
   // 个人设置：并入基本资料字段列的「证件号码」行（无上传，登记需当前密码）
   return <div className="space-y-2">
-    {error ? <div role="alert" className="flex items-center gap-2"><p className="text-sm text-destructive">{error}</p><Button type="button" variant="ghost" size="sm" onClick={() => void load()}>重新读取</Button></div>
+    {error ? <div role="alert" className="flex items-center gap-2"><p className="text-sm text-destructive">{error}</p><Button htmlType="button" theme="borderless" type="tertiary" size="small" onClick={() => void load()}>重新读取</Button></div>
       : !summary ? <>
-        <Label>证件号码</Label>
+        <Form.Label>证件号码</Form.Label>
         <div className="flex min-h-10 items-center rounded-md border px-3"><span className="text-sm text-muted-foreground">正在读取…</span></div>
       </> : !editing ? <>
-        <Label>证件号码</Label>
+        <Form.Label>证件号码</Form.Label>
         <div className="flex min-h-10 items-center justify-between gap-2 rounded-md border px-3">
           {summary.number ? (
             <span className="min-w-0 truncate font-mono text-sm">{summary.number}<span className="ml-2 font-sans text-xs text-muted-foreground">{summary.documentTypeLabel}</span></span>
           ) : (
             <span className="text-sm text-muted-foreground">未登记</span>
           )}
-          {!summary.number && <Button type="button" variant="ghost" size="sm" onClick={() => { setSaveError(""); setDocumentType(summary.documentType ?? "PRC_RESIDENT_ID"); setDocumentName(summary.documentType === "OTHER" ? summary.documentTypeLabel ?? "" : ""); setEditing(true); }}>登记</Button>}
+          {!summary.number && <Button htmlType="button" theme="borderless" type="tertiary" size="small" onClick={() => { setSaveError(""); setDocumentType(summary.documentType ?? "PRC_RESIDENT_ID"); setDocumentName(summary.documentType === "OTHER" ? summary.documentTypeLabel ?? "" : ""); setEditing(true); }}>登记</Button>}
         </div>
         {summary.number && <p className="text-xs text-muted-foreground">如需更正，请联系管理员核对。</p>}
         {summary.photos.length > 0 && <div className="flex flex-wrap gap-2">{summary.photos.map((photo, index) => <a key={photo.id} href={`/api/users/${summary.userId}/identity-documents/${photo.id}`} target="_blank" rel="noreferrer" className="text-xs text-primary underline-offset-4 hover:underline">查看证件照片{index + 1}</a>)}</div>}

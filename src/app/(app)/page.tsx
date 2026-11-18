@@ -14,6 +14,7 @@ import { RevenueChart } from "@/components/dashboard/revenue-chart";
 import { CategoryChart } from "@/components/dashboard/category-chart";
 import { ClientSourceCard } from "@/components/dashboard/client-source-card";
 import { WorkQueueCard } from "@/components/dashboard/work-queue-card";
+import { EmailReminderNotice } from "@/components/dashboard/email-reminder-notice";
 import { loadAlerts } from "@/components/dashboard/alerts-list";
 import { matterHref } from "@/lib/matters/route";
 import {
@@ -65,13 +66,7 @@ export default async function DashboardPage() {
     <div className="mo-dash">
       {/* 邮件配置提示只向可进入提醒维护的身份展示。 */}
       {session?.user && canEnterAdminWorkspace(session.user) && !isEmailConfigured() ? (
-        <div className="card" style={{ borderColor: "var(--amber-line)", background: "var(--amber-bg)", display: "flex", alignItems: "center", gap: 10, padding: "10px 14px" }}>
-          <TriangleAlert className="shrink-0" width={16} height={16} strokeWidth={1.8} style={{ color: "var(--amber)" }} />
-          <span className="t-sm" style={{ flex: 1 }}>
-            邮件提醒未启用，提醒仍可在站内查看。
-          </span>
-          <Link href="/admin/reminders" className="btn btn-ghost btn-sm shrink-0">提醒维护</Link>
-        </div>
+        <EmailReminderNotice />
       ) : null}
       {/* ① 今日行动与风险 */}
       <section className="hero">

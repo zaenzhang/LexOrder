@@ -5,12 +5,7 @@ import { FormDialogContent as DialogContent, FormDialogBody } from "@/components
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button, Checkbox, Input, TextArea } from "@douyinfe/semi-ui";
 import {
   Dialog,
   DialogDescription,
@@ -100,46 +95,50 @@ export function AnnouncementDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!isPending) onOpenChange(nextOpen); }}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{editing ? "编辑公告" : "发布公告"}</DialogTitle>
           <DialogDescription className="text-xs">
-            置顶公告会显示在全站顶部 公告栏，设置过期日期后 公告栏 自动消失（列表仍保留）。
+            置顶公告显示在顶部公告栏；到期后退出公告栏，列表仍保留。
           </DialogDescription>
         </DialogHeader>
         <FormDialogBody>
 
         <div className="space-y-3 py-2">
           <div className="space-y-1.5">
-            <Label className="text-xs">标题 *</Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} />
+            <label htmlFor="announcement-title" className="text-sm">标题 *</label>
+            <Input id="announcement-title" value={title} onChange={setTitle} maxLength={120} disabled={isPending} />
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs">内容 *</Label>
-            <Textarea
+            <label htmlFor="announcement-content" className="text-sm">内容 *</label>
+            <TextArea
+              id="announcement-content"
               value={content}
-              onChange={(e) => setContent(e.target.value)}
+              onChange={setContent}
+              disabled={isPending}
               rows={6}
               placeholder="支持普通文本换行"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <label className="flex items-center gap-2 text-xs">
-              <Checkbox
-                checked={pinned}
-                onCheckedChange={(c) => setPinned(c === true)}
-              />
-              置顶（顶部 公告栏）
-            </label>
+            <Checkbox
+              checked={pinned}
+              onChange={(event) => setPinned(event.target.checked === true)}
+              disabled={isPending}
+            >
+              置顶到公告栏
+            </Checkbox>
             <div className="space-y-1.5">
-              <Label className="text-xs">过期日期（可选）</Label>
+              <label htmlFor="announcement-expires" className="text-sm">过期日期（可选）</label>
               <Input
+                id="announcement-expires"
                 type="date"
                 value={expiresAt}
-                onChange={(e) => setExpiresAt(e.target.value)}
+                onChange={setExpiresAt}
+                disabled={isPending}
               />
             </div>
           </div>
@@ -147,11 +146,10 @@ export function AnnouncementDialog({
 
         </FormDialogBody>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+          <Button htmlType="button" theme="outline" type="tertiary" onClick={() => onOpenChange(false)} disabled={isPending}>
             取消
           </Button>
-          <Button onClick={handleSave} disabled={isPending}>
-            {isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+          <Button htmlType="button" theme="solid" onClick={handleSave} loading={isPending} disabled={isPending}>
             {editing ? "更新" : "发布"}
           </Button>
         </DialogFooter>

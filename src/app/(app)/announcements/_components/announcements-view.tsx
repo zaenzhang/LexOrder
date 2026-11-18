@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pin, Pencil, Archive } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, Tag } from "@douyinfe/semi-ui";
 import { formatDate } from "@/lib/utils";
 import { AnnouncementDialog } from "./announcement-dialog";
 import { archiveAnnouncement } from "@/server/announcements/actions";
@@ -56,7 +56,7 @@ export function AnnouncementsView({
         <div>
           <h1 className="mo-ph-title">公告指引</h1>
           <p className="mo-ph-sub">
-            共 {active.length} 条公告 · 置顶公告会显示在全站顶部 公告栏
+            共 {active.length} 条公告
           </p>
         </div>
       </header>
@@ -73,42 +73,37 @@ export function AnnouncementsView({
             return (
               <li key={a.id} className="ll-surface p-4">
                 <header className="mb-1.5 flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
                     {a.pinned && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-[var(--amber-bg)] px-2 py-0.5 text-[10px] font-medium text-[var(--amber)]">
-                        <Pin className="h-2.5 w-2.5" />置顶
-                      </span>
+                      <Tag color="orange" prefixIcon={<Pin size={12} aria-hidden />}>置顶</Tag>
                     )}
-                    <h3 className="text-sm font-medium">{a.title}</h3>
+                    <h3 className="min-w-0 break-words text-sm font-medium">{a.title}</h3>
                     {expired && (
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
-                        已过期
-                      </span>
+                      <Tag color="grey">已过期</Tag>
                     )}
                   </div>
                   {canEdit && (
                     <div className="flex items-center gap-1">
                       <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
+                        htmlType="button"
+                        theme="borderless"
+                        size="small"
                         onClick={() => {
                           setEditing(a);
                           setDialogOpen(true);
                         }}
-                        className="h-7 px-2 text-[11px] text-muted-foreground hover:text-primary"
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </Button>
+                        aria-label={`编辑公告：${a.title}`}
+                        icon={<Pencil size={14} aria-hidden />}
+                      />
                       <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
+                        htmlType="button"
+                        theme="borderless"
+                        size="small"
                         onClick={() => handleArchive(a)}
-                        className="h-7 px-2 text-[11px] text-muted-foreground hover:text-destructive"
-                      >
-                        <Archive className="h-3 w-3" />
-                      </Button>
+                        type="danger"
+                        aria-label={`归档公告：${a.title}`}
+                        icon={<Archive size={14} aria-hidden />}
+                      />
                     </div>
                   )}
                 </header>

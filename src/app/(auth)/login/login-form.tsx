@@ -1,14 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2, AlertCircle, Eye, EyeOff, Mail, LockKeyhole, ShieldCheck } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { Eye, EyeOff, Mail, LockKeyhole, ShieldCheck } from "lucide-react";
+import { Banner, Button, Checkbox, Form, Input } from "@douyinfe/semi-ui";
 import { checkLoginTotpEnforcement } from "@/server/auth/totp-actions";
 
 const schema = z.object({
@@ -28,137 +27,89 @@ export function LoginForm() {
   const [showTotp, setShowTotp] = useState(false);
   const PasswordIcon = showPassword ? EyeOff : Eye;
   const passwordToggleLabel = showPassword ? "隐藏密码" : "显示密码";
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting }
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema)
+  const { control, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { email: "", password: "", totpCode: "" }
   });
 
   async function onSubmit(values: FormValues) {
     setAuthError(null);
-    const res = await signIn("credentials", {
-      email: values.email,
-      password: values.password,
-      totpCode: values.totpCode || undefined,
-      redirect: false
-    });
+    let res;
+    try {
+      res = await signIn("credentials", {
+        email: values.email,
+        password: values.password,
+        totpCode: showTotp ? values.totpCode || undefined : undefined,
+        redirect: false
+      });
+    } catch {
+      setAuthError("登录服务暂时异常，请稍后重试或联系管理员；这不代表密码错误。");
+      return;
+    }
     if (res?.ok) {
       router.replace(callbackUrl);
       router.refresh();
-    } else {
-      if (res?.error !== "CredentialsSignin") {
-        setAuthError("登录服务暂时异常，请稍后重试或联系管理员；这不代表密码错误。");
+      return;
+    }
+    if (res?.error !== "CredentialsSignin") {
+      setAuthError("登录服务暂时异常，请稍后重试或联系管理员；这不代表密码错误。");
+      return;
+    }
+    // 仅在凭据被拒后查询绑定策略，不通过预检暴露账号是否存在。
+    try {
+      if (await checkLoginTotpEnforcement(values.email)) {
+        setAuthError("该账号已被管理员要求开启双步验证，且尚未完成绑定，暂无法登录。请联系管理员协助完成绑定。");
         return;
       }
-      // 凭据被拒时区分策略性拦截：被管理员要求开启双步验证但尚未绑定的账号
-      // 在完成绑定前无法登录（authorize 恒拒）。仅在已失败后查询，避免账号探测。
-      try {
-        const enforced = await checkLoginTotpEnforcement(values.email);
-        if (enforced) {
-          setAuthError("该账号已被管理员要求开启双步验证，且尚未完成绑定，暂无法登录。请联系管理员协助完成绑定。");
-          return;
-        }
-      } catch {
-        // 预检不可用时不影响通用错误提示
-      }
-      setAuthError(showTotp ? "邮箱、密码或两步验证码错误" : "邮箱或密码错误；如账号已开启两步验证，请勾选「使用两步验证码」后填写。");
+    } catch {
+      // 预检不可用时保留通用错误提示。
     }
+    setAuthError(showTotp ? "邮箱、密码或两步验证码错误" : "邮箱或密码错误；如账号已开启两步验证，请勾选「使用两步验证码」后填写。");
   }
 
   return (
-    <form method="post" onSubmit={handleSubmit(onSubmit)} noValidate>
-      {authError ? (
-        <div role="alert" className="mb-4 flex gap-2 rounded-[10px] border border-[var(--red-line)] bg-[var(--red-bg)] px-3 py-2.5 text-[12.5px] leading-relaxed text-[var(--red)]">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{authError}</span>
-        </div>
-      ) : null}
-
-      <div className="fp-field">
-        <label htmlFor="email" className="fp-label">邮箱</label>
-        <div className={cn("fp-input", errors.email && "!border-[var(--red)]")}>
-          <Mail aria-hidden />
-          <input
-            id="email"
-            type="email"
-            autoComplete="email"
-            placeholder="name@firm.cn"
-            aria-invalid={!!errors.email}
-            className="h-full min-w-0 flex-1 border-0 bg-transparent text-[13.5px] text-[var(--t-primary)] outline-none placeholder:text-[var(--t-faint)]"
-            {...register("email")}
-          />
-        </div>
-        {errors.email ? <p className="mt-1.5 text-[11.5px] text-[var(--red)]">{errors.email.message}</p> : null}
+    <form method="post" onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
+      {authError && <Banner type="danger" description={<span role="alert">{authError}</span>} closeIcon={null} />}
+      <div>
+        <Form.Label name="email" text="邮箱" />
+        <Controller name="email" control={control} render={({ field }) => (
+          <Input {...field} id="email" type="email" autoComplete="email" placeholder="name@firm.cn"
+            prefix={<Mail size={16} aria-hidden />} size="large" disabled={isSubmitting}
+            aria-invalid={!!errors.email} aria-describedby={errors.email ? "email-error" : undefined}
+            validateStatus={errors.email ? "error" : "default"} />
+        )} />
+        {errors.email && <p id="email-error" role="alert" className="mt-1 text-sm text-[var(--semi-color-danger)]">{errors.email.message}</p>}
       </div>
-
-      <div className="fp-field">
-        <label htmlFor="password" className="fp-label">密码</label>
-        <div className={cn("fp-input", errors.password && "!border-[var(--red)]")}>
-          <LockKeyhole aria-hidden />
-          <input
-            id="password"
-            type={showPassword ? "text" : "password"}
-            autoComplete="current-password"
-            aria-invalid={!!errors.password}
-            className="h-full min-w-0 flex-1 border-0 bg-transparent text-[13.5px] text-[var(--t-primary)] outline-none"
-            {...register("password")}
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="shrink-0"
-            aria-label={passwordToggleLabel}
-            aria-controls="password"
-            title={passwordToggleLabel}
-            onClick={() => setShowPassword((v) => !v)}
-          >
-            <PasswordIcon aria-hidden data-icon="inline-start" />
-          </Button>
-        </div>
-        {errors.password ? <p className="mt-1.5 text-[11.5px] text-[var(--red)]">{errors.password.message}</p> : null}
+      <div>
+        <Form.Label name="password" text="密码" />
+        <Controller name="password" control={control} render={({ field }) => (
+          <Input {...field} id="password" type={showPassword ? "text" : "password"} autoComplete="current-password"
+            prefix={<LockKeyhole size={16} aria-hidden />} size="large" disabled={isSubmitting}
+            aria-invalid={!!errors.password} aria-describedby={errors.password ? "password-error" : undefined}
+            validateStatus={errors.password ? "error" : "default"}
+            suffix={<Button htmlType="button" theme="borderless" type="tertiary" aria-label={passwordToggleLabel}
+              aria-controls="password" title={passwordToggleLabel} disabled={isSubmitting}
+              icon={<PasswordIcon size={16} aria-hidden />} onClick={() => setShowPassword(value => !value)} />} />
+        )} />
+        {errors.password && <p id="password-error" role="alert" className="mt-1 text-sm text-[var(--semi-color-danger)]">{errors.password.message}</p>}
       </div>
-
-      {showTotp ? (
-        <div className="fp-field">
-          <label htmlFor="totpCode" className="fp-label">两步验证码</label>
-          <div className="fp-input">
-            <ShieldCheck aria-hidden />
-            <input
-              id="totpCode"
-              inputMode="numeric"
-              maxLength={16}
-              autoFocus
-              placeholder="6 位动态码或恢复码"
-              autoComplete="one-time-code"
-              className="h-full min-w-0 flex-1 border-0 bg-transparent font-mono text-[13.5px] tracking-[0.08em] text-[var(--t-primary)] outline-none placeholder:font-sans placeholder:tracking-normal placeholder:text-[var(--t-faint)]"
-              {...register("totpCode")}
-            />
-          </div>
-        </div>
-      ) : null}
-
-      <div className="fp-row">
-        <button type="button" onClick={() => setShowTotp((v) => !v)} className="fp-check border-0 bg-transparent p-0 font-[inherit]" aria-expanded={showTotp}>
-          <span className={cn("fp-box", !showTotp && "!border !border-[var(--bd-strong)] !bg-card")}>
-            {showTotp ? (
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" aria-hidden>
-                <path d="M4 12.5l5 5L20 7" />
-              </svg>
-            ) : null}
-          </span>
+      {showTotp && <div>
+        <Form.Label name="totpCode" text="两步验证码" />
+        <Controller name="totpCode" control={control} render={({ field }) => (
+          <Input {...field} id="totpCode" inputMode="numeric" maxLength={16} autoFocus
+            placeholder="6 位动态码或恢复码" autoComplete="one-time-code" size="large"
+            prefix={<ShieldCheck size={16} aria-hidden />} disabled={isSubmitting} />
+        )} />
+      </div>}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Checkbox checked={showTotp} disabled={isSubmitting} onChange={event => setShowTotp(!!event.target.checked)}>
           使用两步验证码
-        </button>
-        <span className="fp-link" title="本系统为自部署实例，密码由所内管理员在管理后台重置">忘记密码？请联系管理员</span>
+        </Checkbox>
+        <span className="text-sm text-[var(--semi-color-text-2)]" title="本系统为自部署实例，密码由所内管理员在管理后台重置">忘记密码？请联系管理员</span>
       </div>
-
-      <button type="submit" className="btn btn-primary btn-login" disabled={isSubmitting}>
-        {isSubmitting ? <Loader2 className="animate-spin" /> : null}
+      <Button htmlType="submit" theme="solid" type="primary" size="large" block loading={isSubmitting} disabled={isSubmitting}>
         {isSubmitting ? "登录中…" : "登 录"}
-      </button>
+      </Button>
     </form>
   );
 }

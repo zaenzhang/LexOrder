@@ -7,16 +7,15 @@ import { deadlineDays, deadlineRelative, formatDeadlineDue, type DeadlineDuePrec
  * 「跳转案件」、键盘 ↑↓ 选择 · ↵ 打开 · Tab 遍历控件；底部注明权限口径与识别失败数。
  * 数据与授权过滤全部在 server/search/actions.ts（候选逐条 canReadDocument）。
  */
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { cloneElement, Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useRouter } from "next/navigation";
-import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { Button, Input, Modal, Tabs, Tag } from "@douyinfe/semi-ui";
 import { Building2, Clock, FileText, Folder, Inbox, Loader2, Lock, Search, Sparkle } from "lucide-react";
 import { continueGlobalSearch, globalSearch, type GlobalSearchResult, type SearchResultItem } from "@/server/search/actions";
 import type { MaterialSourceInput } from "@/server/documents/material-processing";
 import { SearchMaterialSourceDialog } from "./search-material-source-dialog";
 import { documentSourceChip } from "@/lib/ui/moan-tones";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 
 type GroupKey = "documents" | "matters" | "clients" | "deadlines" | "intakes";
 type Scope = "all" | GroupKey;
@@ -231,11 +230,14 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     } else if (item.href) window.open(item.href, "_blank", "noopener,noreferrer");
   }
 
-  function returnToResult() {
+  useLayoutEffect(() => {
+    if (source || !sourceTrigger.current) return;
+    const trigger = sourceTrigger.current;
+    sourceTrigger.current = null;
     const body = bodyRef.current;
-    if (!body?.closest('[role="dialog"][data-state="open"]')) return;
-    (sourceTrigger.current?.isConnected && body.contains(sourceTrigger.current) ? sourceTrigger.current : inputRef.current)?.focus({ preventScroll: true });
-  }
+    if (!open || !body) return;
+    (trigger.isConnected && body.contains(trigger) ? trigger : inputRef.current)?.focus({ preventScroll: true });
+  }, [source, open]);
 
   useEffect(() => {
     if (skipRelocationScroll.current) { skipRelocationScroll.current = false; return; }
@@ -251,6 +253,7 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
   function onKeyDown(e: React.KeyboardEvent) {
     if (source) return;
+    if (e.target instanceof HTMLElement && e.target.closest('[role="tab"]')) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setSel((s) => Math.min(flat.length - 1, s + 1));
@@ -270,66 +273,54 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const total = GROUPS.reduce((n, g) => n + counts[g.key], 0);
 
   return (
-    <><DialogPrimitive.Root
-      open={open}
-      onOpenChange={(v) => {
-        onOpenChange(v);
-        if (!v) { setScope("all"); setSource(null); }
+    <><Modal
+      visible={open}
+      title="全局搜索"
+      width={780}
+      centered
+      motion={false}
+      preventScroll
+      footer={null}
+      closable={!source}
+      maskClosable={!source}
+      onCancel={() => {
+        if (source) return;
+        onOpenChange(false);
+        setScope("all");
       }}
+      modalRender={node => cloneElement(node as ReactElement<{ inert?: boolean; "aria-hidden"?: boolean; onKeyDown?: typeof onKeyDown }>, {
+        inert: source ? true : undefined,
+        "aria-hidden": source ? true : undefined,
+        onKeyDown,
+      })}
     >
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="overlay-dim !z-50" />
-        <DialogPrimitive.Content
-          className="mo-search"
-          onKeyDown={onKeyDown}
-          aria-describedby={undefined}
-        >
-          <div className="dialog palette mo-palette">
-            <DialogPrimitive.Title className="sr-only">全局搜索</DialogPrimitive.Title>
-            <div className="gs-input">
-              {loading ? <Loader2 className="animate-spin" aria-hidden /> : <Search aria-hidden />}
-              <input
-                ref={inputRef}
-                className="q mo-gs-q"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="搜索案件、客户、材料正文、期限…"
-                aria-label="搜索关键词"
-                autoComplete="off"
-              />
-              <DialogPrimitive.Close className="kbd" aria-label="关闭搜索">Esc</DialogPrimitive.Close>
-            </div>
-
-            <div className="gs-filters" role="tablist" aria-label="搜索范围">
-              {SCOPE_ORDER.map((s) => {
-                const label = s === "all" ? "全部" : GROUPS.find((g) => g.key === s)!.label;
-                return (
-                  <button
-                    key={s}
-                    type="button"
-                    role="tab"
-                    aria-selected={scope === s}
-                    className={cn("gs-chip", scope === s && "active")}
-                    onClick={() => {
-                      chooseScope(s);
-                    }}
-                  >
-                    {label}
-                    {s !== "all" && results ? <span className="c">{pages[s]?.failed ? "—" : counts[s]}</span> : null}
-                  </button>
-                );
-              })}
-              <span className="t-xs t-faint mo-gs-scope-note">标题 + 全文（含 OCR 识别文字）</span>
-            </div>
-
-            <div className="gs-body" ref={bodyRef}>
+      <div className="mo-search space-y-3">
+        <Input
+          ref={inputRef}
+          value={query}
+          onChange={setQuery}
+          prefix={loading ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Search size={16} aria-hidden />}
+          placeholder="搜索案件、客户、材料正文、期限…"
+          aria-label="搜索关键词"
+          autoComplete="off"
+          autoFocus
+          showClear
+        />
+        <Tabs type="button" size="small" activeKey={scope} onChange={value => chooseScope(value as Scope)}>
+          {SCOPE_ORDER.map(value => <Tabs.TabPane itemKey={value} key={value} tab={
+            <span>{value === "all" ? "全部" : GROUPS.find(group => group.key === value)!.label}
+              {value !== "all" && results ? ` ${pages[value]?.failed ? "—" : counts[value]}` : ""}
+            </span>
+          } />)}
+        </Tabs>
+            <div className="gs-body" ref={bodyRef} style={{ maxHeight: "55vh", overflowY: "auto" }}>
               {!q ? (
                 <div className="mo-gs-empty">
                   <div className="mo-empty-title">输入关键词开始检索</div>
                   <div className="mo-empty-desc">可搜案件名称 / 所内编号、客户名称 / 证件号 / 电话、材料名称与正文、期限事项、在途收案。</div>
                 </div>
               ) : searchError ? (
-                <div role="alert" className="p-4 text-sm">搜索读取失败，请重试。<Button variant="outline" size="sm" className="ml-2" onClick={() => setSearchRetry(value => value + 1)}>重新检索</Button></div>
+                <div role="alert" className="p-4 text-sm">搜索读取失败，请重试。<Button theme="outline" size="small" className="ml-2" onClick={() => setSearchRetry(value => value + 1)}>重新检索</Button></div>
               ) : results && visible.length === 0 && !loading ? (
                 <div className="mo-gs-empty">
                   <div className="mo-empty-title">{total === 0 ? "未找到相关结果" : "该范围下没有结果"}</div>
@@ -344,9 +335,7 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                     <div className="gs-group">
                       {group.label} · {pages[group.key]?.failed ? "读取失败" : `已显示 ${counts[group.key]} 条`}
                       {scope === "all" && counts[group.key] > items.length ? (
-                        <button type="button" className="mo-gs-more" onClick={() => chooseScope(group.key)}>
-                          查看此范围 →
-                        </button>
+                        <Button htmlType="button" size="small" theme="borderless" onClick={() => chooseScope(group.key)}>查看此范围 →</Button>
                       ) : null}
                     </div>
                     {items.map((item, i) => {
@@ -372,9 +361,7 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                             <div className="gs-title">
                               <Highlight text={item.title} q={q} />
                               {item.ocr ? (
-                                <span className="badge b-violet" style={{ fontSize: 9.5, padding: "0 6px", marginLeft: 6 }}>
-                                  <Sparkle style={{ width: 8, height: 8 }} /> OCR
-                                </span>
+                                <Tag color="violet" size="small" prefixIcon={<Sparkle size={10} />} className="ml-2">OCR</Tag>
                               ) : null}
                             </div>
                             {item.type === "document" && item.snippet ? (
@@ -407,27 +394,28 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                             </div>
                           </div>
                           {item.matterLink && item.type !== "matter" ? (
-                            <button
-                              type="button"
-                              className="badge b-blue mo-gs-jump"
+                            <Button
+                              htmlType="button"
+                              theme="light"
+                              size="small"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 go(item.matterLink!);
                               }}
                             >
                               {item.type === "document" && !item.code ? "打开收案" : "跳转案件"}
-                            </button>
+                            </Button>
                           ) : null}
                         </div>
                       );
                     })}
                     {pages[group.key]?.failed ? <div role="alert" className="flex flex-wrap items-center gap-2 px-4 py-3 text-sm">
                       <span>此范围读取失败，先前结果已隐藏。</span>
-                      <Button variant="outline" size="sm" disabled={pages[group.key]?.loading} onClick={() => void continueGroup(group.key)}>重试此批</Button>
-                      <Button variant="ghost" size="sm" disabled={pages[group.key]?.loading} onClick={() => void continueGroup(group.key, true)}>从头检索</Button>
+                      <Button theme="outline" size="small" disabled={pages[group.key]?.loading} onClick={() => void continueGroup(group.key)}>重试此批</Button>
+                      <Button theme="borderless" size="small" disabled={pages[group.key]?.loading} onClick={() => void continueGroup(group.key, true)}>从头检索</Button>
                     </div> : results?.nextCursorByGroup[group.key] ? <div className="flex items-center gap-2 px-4 py-3">
                       {!items.length ? <span className="text-sm text-muted-foreground">本批没有可展示结果。</span> : null}
-                      <Button variant="outline" size="sm" disabled={pages[group.key]?.loading || loading} onClick={() => { if (scope === "all") chooseScope(group.key); void continueGroup(group.key); }}>
+                      <Button theme="outline" size="small" disabled={pages[group.key]?.loading || loading} onClick={() => { if (scope === "all") chooseScope(group.key); void continueGroup(group.key); }}>
                         {pages[group.key]?.loading ? "正在检索…" : "继续检索"}
                       </Button>
                     </div> : null}
@@ -446,12 +434,10 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 {results && results.documentsFailedCount > 0 ? ` · 另有 ${results.documentsFailedCount} 份材料识别失败未纳入全文` : ""}
               </span>
             </div>
-          </div>
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+      </div>
+    </Modal>
       {open && source && <SearchMaterialSourceDialog key={`${source.documentId}:${source.runId}:${source.anchorId}`} input={source}
-        onClose={() => setSource(null)} onReturnFocus={returnToResult} />}
+        onClose={() => setSource(null)} />}
     </>
   );
 }

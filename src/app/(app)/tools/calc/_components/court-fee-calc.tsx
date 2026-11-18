@@ -1,13 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { Button, Input, RadioGroup } from "@douyinfe/semi-ui";
 import { Scale, Calculator } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { RadioChips } from "@/components/ui/radio-chips";
 import { calcCourtFee, numberToChinese, type CourtFeeCaseType } from "@/lib/legal-calc";
-import { cn } from "@/lib/utils";
 
 const CASE_TYPES: { value: CourtFeeCaseType; label: string }[] = [
   { value: "PROPERTY", label: "财产案件" },
@@ -17,7 +13,7 @@ const CASE_TYPES: { value: CourtFeeCaseType; label: string }[] = [
   { value: "OTHER", label: "其他非财产" }
 ];
 
-export function CourtFeeCalc() {
+export function useCourtFeeCalculator() {
   const [caseType, setCaseType] = useState<CourtFeeCaseType>("PROPERTY");
   const [amountInput, setAmountInput] = useState("100000");
   const [result, setResult] = useState<ReturnType<typeof calcCourtFee> | null>(null);
@@ -27,6 +23,12 @@ export function CourtFeeCalc() {
   function compute() {
     setResult(calcCourtFee({ caseType, amount: showAmount ? amount : undefined }));
   }
+
+  return { caseType, setCaseType, amountInput, setAmountInput, result, showAmount, amount, compute };
+}
+
+export function CourtFeeCalc({ calculator }: { calculator: ReturnType<typeof useCourtFeeCalculator> }) {
+  const { caseType, setCaseType, amountInput, setAmountInput, result, showAmount, amount, compute } = calculator;
 
   return (
     <section className="ll-surface rounded-lg border border-border p-5">
@@ -40,25 +42,28 @@ export function CourtFeeCalc() {
 
       <div className="space-y-3">
         <div>
-          <Label className="text-[11px]">案件类型</Label>
-          <RadioChips
-            size="sm"
+          <div className="text-sm">案件类型</div>
+          <RadioGroup
+            aria-label="案件类型"
+            type="button"
+            buttonSize="small"
             className="mt-2"
-            items={CASE_TYPES}
+            options={CASE_TYPES}
             value={caseType}
-            onChange={(v) => setCaseType(v as CourtFeeCaseType)}
+            onChange={(event) => setCaseType(event.target.value as CourtFeeCaseType)}
           />
         </div>
 
         {showAmount && (
           <div>
-            <Label className="text-[11px]">
+            <label htmlFor="court-fee-amount" className="text-sm">
               {caseType === "DIVORCE" ? "财产分割金额（元，可填 0）" : "诉讼标的金额（元）"}
-            </Label>
+            </label>
             <Input
+              id="court-fee-amount"
               type="number"
               value={amountInput}
-              onChange={(e) => setAmountInput(e.target.value)}
+              onChange={setAmountInput}
               className="mt-1 font-mono text-[14px]"
               placeholder="如 100000"
             />
@@ -72,8 +77,7 @@ export function CourtFeeCalc() {
       </div>
 
       <div className="mt-4 flex justify-end">
-        <Button onClick={compute} className="h-9 gap-1.5">
-          <Calculator className="h-3.5 w-3.5" />
+        <Button htmlType="button" theme="solid" onClick={compute} icon={<Calculator size={16} aria-hidden />}>
           计算
         </Button>
       </div>
@@ -81,8 +85,8 @@ export function CourtFeeCalc() {
       {result && (
         <>
           <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-            <ResultCard label="普通程序" value={result.fee} accent="#4F46E5" />
-            <ResultCard label="简易程序（减半）" value={result.feeSimplified} accent="#1A7F45" />
+            <ResultCard label="普通程序" value={result.fee} accent="var(--semi-color-primary)" />
+            <ResultCard label="简易程序（减半）" value={result.feeSimplified} accent="var(--semi-color-success)" />
           </div>
           <p className="mt-3 text-[11px] text-muted-foreground">{result.note}</p>
         </>
@@ -93,7 +97,7 @@ export function CourtFeeCalc() {
 
 function ResultCard({ label, value, accent }: { label: string; value: number; accent: string }) {
   return (
-    <div className={cn("rounded-lg border border-border bg-muted/20 p-4")}>
+    <div className="rounded-lg border border-border bg-muted/20 p-4">
       <div className="text-[10px] tracking-wider text-muted-foreground">{label}</div>
       <div
         className="mt-1 font-mono text-[26px] font-medium tabular"

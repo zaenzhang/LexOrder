@@ -1,24 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Button, Checkbox, Input, RadioGroup } from "@douyinfe/semi-ui";
 import { CalendarDays, ArrowRight, Calculator } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { RadioChips } from "@/components/ui/radio-chips";
 import { daysBetween, addDays } from "@/lib/legal-calc";
 import { shDayKey, civilFromKey, civilKey } from "@/lib/ui/sh-time";
 
 type Mode = "between" | "add";
 
-export function DaysCalc() {
+export function useDaysCalculator(active = true) {
+  const datesInitialized = useRef(false);
   const [mode, setMode] = useState<Mode>("between");
 
   // 模式 1：两日期之间（日历日一律用「上海日键 + 本地正午」载体，与浏览器时区无关）
-  const todayKey = shDayKey(new Date());
-  const [dateA, setDateA] = useState(todayKey);
-  const [dateB, setDateB] = useState(todayKey);
+  const [dateA, setDateA] = useState("");
+  const [dateB, setDateB] = useState("");
   const [excludeWeekend, setExcludeWeekend] = useState(false);
 
   const [between, setBetween] = useState<number | null>(null);
@@ -31,9 +27,20 @@ export function DaysCalc() {
   }
 
   // 模式 2：加减天数
-  const [baseDate, setBaseDate] = useState(todayKey);
+  const [baseDate, setBaseDate] = useState("");
   const [offset, setOffset] = useState("15");
   const [targetDate, setTargetDate] = useState<Date | null>(null);
+
+  useEffect(() => {
+    if (!active || datesInitialized.current) return;
+    datesInitialized.current = true;
+    // 工作台提前挂载工具草稿，默认日期要等本工具首次打开时再取。
+    const todayKey = shDayKey(new Date());
+    setDateA(todayKey);
+    setDateB(todayKey);
+    setBaseDate(todayKey);
+  }, [active]);
+
   function computeTarget() {
     const n = parseInt(offset);
     if (!baseDate || isNaN(n)) {
@@ -42,6 +49,12 @@ export function DaysCalc() {
     }
     setTargetDate(addDays(civilFromKey(baseDate), n));
   }
+
+  return { mode, setMode, dateA, setDateA, dateB, setDateB, excludeWeekend, setExcludeWeekend, between, computeBetween, baseDate, setBaseDate, offset, setOffset, targetDate, computeTarget };
+}
+
+export function DaysCalc({ calculator }: { calculator: ReturnType<typeof useDaysCalculator> }) {
+  const { mode, setMode, dateA, setDateA, dateB, setDateB, excludeWeekend, setExcludeWeekend, between, computeBetween, baseDate, setBaseDate, offset, setOffset, targetDate, computeTarget } = calculator;
 
   return (
     <section className="ll-surface rounded-lg border border-border p-5">
@@ -53,49 +66,51 @@ export function DaysCalc() {
         </span>
       </header>
 
-      <RadioChips
-        size="sm"
-        items={[
+      <RadioGroup
+        aria-label="天数计算方式"
+        type="button"
+        buttonSize="small"
+        options={[
           { value: "between", label: "两日期之间" },
           { value: "add", label: "加减天数" }
         ]}
         value={mode}
-        onChange={(v) => setMode(v as Mode)}
+        onChange={(event) => setMode(event.target.value as Mode)}
       />
 
       {mode === "between" ? (
         <div className="mt-4 space-y-3">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <Label className="text-[11px]">起始日</Label>
+              <label htmlFor="days-start" className="text-sm">起始日</label>
               <Input
+                id="days-start"
                 type="date"
                 value={dateA}
-                onChange={(e) => setDateA(e.target.value)}
+                onChange={setDateA}
                 className="mt-1"
               />
             </div>
             <div>
-              <Label className="text-[11px]">截止日</Label>
+              <label htmlFor="days-end" className="text-sm">截止日</label>
               <Input
+                id="days-end"
                 type="date"
                 value={dateB}
-                onChange={(e) => setDateB(e.target.value)}
+                onChange={setDateB}
                 className="mt-1"
               />
             </div>
           </div>
 
           <div className="flex items-center justify-between gap-3">
-            <label className="flex items-center gap-2 text-[12px] text-muted-foreground">
-              <Checkbox
-                checked={excludeWeekend}
-                onCheckedChange={(v) => setExcludeWeekend(v === true)}
-              />
+            <Checkbox
+              checked={excludeWeekend}
+              onChange={(event) => setExcludeWeekend(event.target.checked === true)}
+            >
               仅算工作日（排除周末，不含法定节假日）
-            </label>
-            <Button onClick={computeBetween} className="h-9 gap-1.5">
-              <Calculator className="h-3.5 w-3.5" />
+            </Checkbox>
+            <Button htmlType="button" theme="solid" onClick={computeBetween} icon={<Calculator size={16} aria-hidden />}>
               计算
             </Button>
           </div>
@@ -116,28 +131,29 @@ export function DaysCalc() {
         <div className="mt-4 space-y-3">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <Label className="text-[11px]">基准日</Label>
+              <label htmlFor="days-base" className="text-sm">基准日</label>
               <Input
+                id="days-base"
                 type="date"
                 value={baseDate}
-                onChange={(e) => setBaseDate(e.target.value)}
+                onChange={setBaseDate}
                 className="mt-1"
               />
             </div>
             <div>
-              <Label className="text-[11px]">加减天数（可负）</Label>
+              <label htmlFor="days-offset" className="text-sm">加减天数（可负）</label>
               <Input
+                id="days-offset"
                 type="number"
                 value={offset}
-                onChange={(e) => setOffset(e.target.value)}
+                onChange={setOffset}
                 className="mt-1 font-mono"
               />
             </div>
           </div>
 
           <div className="flex justify-end">
-            <Button onClick={computeTarget} className="h-9 gap-1.5">
-              <Calculator className="h-3.5 w-3.5" />
+            <Button htmlType="button" theme="solid" onClick={computeTarget} icon={<Calculator size={16} aria-hidden />}>
               计算
             </Button>
           </div>
