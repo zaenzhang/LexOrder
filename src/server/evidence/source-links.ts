@@ -105,9 +105,11 @@ export async function resolveReference(userId: string, matterId: string, referen
   const document = reader.documentFor(reference);
   if (!document) return { status: "UNAVAILABLE" };
   if (reference.parseRunId && reference.anchorId) {
+    const savedLocation = sourceLocationSchema.safeParse(reference.location);
+    if (!savedLocation.success) return { status: "UNAVAILABLE" };
     const result = await readMaterialSource(userId, { documentId: reference.documentId, runId: reference.parseRunId, anchorId: reference.anchorId }, db);
     if (result.status !== "AVAILABLE" || result.document.sha256 !== reference.documentSha256 ||
-      JSON.stringify(sourceLocationSchema.parse(result.anchor.location)) !== JSON.stringify(reference.location)) return { status: "UNAVAILABLE" };
+      JSON.stringify(sourceLocationSchema.parse(result.anchor.location)) !== JSON.stringify(savedLocation.data)) return { status: "UNAVAILABLE" };
     return { status: "AVAILABLE", documentName: document.name, documentVersion: document.version,
       locationLabel: result.locationLabel, previewKind: result.previewKind, previewUrl: result.previewUrl, downloadUrl: result.downloadUrl,
       text: result.anchor.text, legacy: false, historicalParse: !result.run.isCurrent };
