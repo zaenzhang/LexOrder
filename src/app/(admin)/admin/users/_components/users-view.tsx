@@ -7,22 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Plus, KeyRound, CircleOff, CircleDot, LockOpen, Search, ShieldCheck, ShieldOff, Smartphone } from "lucide-react";
 import type { SystemRole, UserRole } from "@prisma/client";
-import {
-  WorkspaceDialog,
-  DrawerContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter
-} from "@/components/patterns/workspace-dialog";
-import {
-  WorkspaceDialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription
-} from "@/components/patterns/workspace-dialog";
+import { WorkspaceDialog, DrawerContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogContent } from "@/components/patterns/workspace-dialog";
 import {
   createUser,
   updateUserRole,

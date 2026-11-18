@@ -12,18 +12,20 @@ import styles from "./workspace-dialog.module.css";
 const WorkspaceDialogContext = createContext<{
   open: boolean;
   change: (open: boolean) => void;
+  dismissOnBackdrop: boolean;
   titleId: string;
   descriptionId: string;
 } | null>(null);
 
-export function WorkspaceDialog({ open, onOpenChange, children }: {
+export function WorkspaceDialog({ open, onOpenChange, dismissOnBackdrop = false, children }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  dismissOnBackdrop?: boolean;
   children: ReactNode;
 }) {
   const id = useId();
   return (
-    <WorkspaceDialogContext.Provider value={{ open, change: onOpenChange, titleId: `${id}-title`, descriptionId: `${id}-description` }}>
+    <WorkspaceDialogContext.Provider value={{ open, change: onOpenChange, dismissOnBackdrop, titleId: `${id}-title`, descriptionId: `${id}-description` }}>
       {children}
     </WorkspaceDialogContext.Provider>
   );
@@ -74,7 +76,7 @@ function DialogSurface({
   children, className, ref, edge, showClose = true, onOpenAutoFocus, onCloseAutoFocus,
   onEscapeKeyDown, onKeyDown, onKeyDownCapture, ...props
 }: SurfaceProps) {
-  const { open, change, titleId, descriptionId } = useWorkspaceDialog();
+  const { open, change, dismissOnBackdrop, titleId, descriptionId } = useWorkspaceDialog();
   // Semi portals contain client-only DOM. A deep link may start with an open editor.
   const hydrated = useSyncExternalStore(subscribeHydration, clientSnapshot, serverSnapshot);
   const surface = useRef<HTMLDivElement>(null);
@@ -107,7 +109,7 @@ function DialogSurface({
       header={null}
       footer={null}
       closable={false}
-      maskClosable={false}
+      maskClosable={dismissOnBackdrop}
       preventScroll
       motion={false}
       onCancel={requestCancel}
@@ -118,6 +120,19 @@ function DialogSurface({
           "aria-labelledby": props["aria-labelledby"] ?? titleId,
           "aria-describedby": "aria-describedby" in props ? props["aria-describedby"] : descriptionId,
           id: props.id,
+          onKeyDownCapture: event => {
+            if (event.key === "Escape" && containsEvent(event.target)) {
+              const trigger = (event.target as Element).closest('[role="combobox"][aria-expanded="true"], [aria-haspopup][aria-expanded="true"]');
+              guardedEscape.current = trigger ? event.nativeEvent : null;
+            }
+            onKeyDownCapture?.(event);
+          },
+          onKeyDown: event => {
+            onKeyDown?.(event);
+            if (event.key !== "Escape" || !containsEvent(event.target)) return;
+            event.stopPropagation();
+            requestCancel(event.nativeEvent);
+          },
           ref: element => {
             const modalRef = modal.props.ref;
             if (typeof modalRef === "function") modalRef(element);
@@ -134,19 +149,7 @@ function DialogSurface({
           ? "flex h-dvh w-[min(100vw,420px)] flex-col gap-4 overflow-y-auto p-6"
           : "grid max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-lg gap-4 overflow-y-auto p-6",
         className
-      )} onKeyDownCapture={event => {
-        if (event.key === "Escape" && containsEvent(event.target)) {
-          const focused = event.target as Element;
-          const expanded = focused.closest('[role="combobox"][aria-expanded="true"], [aria-haspopup][aria-expanded="true"]');
-          guardedEscape.current = expanded ? event.nativeEvent : null;
-        }
-        onKeyDownCapture?.(event);
-      }} onKeyDown={event => {
-        onKeyDown?.(event);
-        if (event.key !== "Escape" || !containsEvent(event.target)) return;
-        event.stopPropagation();
-        requestCancel(event.nativeEvent);
-      }}>
+      )}>
         <DialogFocus onOpen={event => onOpenAutoFocus?.(event)} onClose={event => onCloseAutoFocus?.(event)} />
         {children}
         {showClose ? <Button

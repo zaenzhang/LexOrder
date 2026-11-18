@@ -1,4 +1,3 @@
-import { Tag } from "@douyinfe/semi-ui";
 import Link from "next/link";
 import { BookOpen, CalendarClock, ChevronLeft, Eye, Landmark, Users } from "lucide-react";
 import type { getMatterById } from "@/server/matters/actions";
@@ -99,7 +98,7 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
                     <span className={cn("badge", proc.status === "CONCLUDED" ? "b-slate" : proc.status === "IN_PROGRESS" ? "b-teal" : "b-white")} style={{ fontSize: 10 }}>
                       {procedureStateLabel(proc)}
                     </span>
-                    {proc.engagement === "INFORMATIONAL" && <Tag color="grey">信息记录</Tag>}
+                    {proc.engagement === "INFORMATIONAL" && <span className="badge b-slate">信息记录</span>}
                   </span>
                   <span className="no">{proc.caseNumber || "案号未登记"}</span>
                   <span className="ag">{proc.handlingAgency || "受理机构未登记"}</span>
