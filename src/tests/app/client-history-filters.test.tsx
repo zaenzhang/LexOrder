@@ -51,8 +51,10 @@ describe("客户动态筛选（组件环境）", () => {
     rendered.rerender(cloneElement(view));
     expect(screen.getByRole("button", { name: "筛选动态日期：2026-07-01 至 2026-07-02" })).toBe(dateTrigger);
     await waitFor(() => expect(mocks.history).toHaveBeenCalledWith(expect.objectContaining({ from: "2026-07-01", to: "2026-07-02" })));
-    fireEvent.keyDown(screen.getByRole("combobox", { name: "动态类型" }), { key: "Enter" });
-    fireEvent.click(await screen.findByRole("option", { name: "事项沟通" }));
+    const source = screen.getByRole("combobox", { name: "动态类型" });
+    fireEvent.focus(source);
+    fireEvent.keyDown(source, { key: "Enter", keyCode: 13 });
+    fireEvent.click(await screen.findByRole("option", { name: /事项沟通/ }));
     rendered.rerender(cloneElement(view));
     expect(new URLSearchParams(window.location.search).get("historySource")).toBe("NOTE");
     fireEvent.click(screen.getByRole("button", { name: "筛选动态日期：2026-07-01 至 2026-07-02" }));
@@ -77,7 +79,7 @@ describe("客户动态筛选（组件环境）", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("事项读取失败");
     expect(screen.queryByText("本页没有可选事项，可继续查看。")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "重试动态事项" }));
-    fireEvent.click(await screen.findByRole("option", { name: /页外所选事项/ }));
+    fireEvent.click(await screen.findByRole("radio", { name: /页外所选事项/ }));
     expect(mocks.matters).toHaveBeenLastCalledWith({ clientId, cursor: "candidate-page-2" });
     expect(new URLSearchParams(window.location.search).get("historyMatterId")).toBe(matter.id);
     mocks.history.mockResolvedValueOnce({ ...empty, selectedMatter: matter });

@@ -47,7 +47,7 @@ describe("客户与服务分区状态（组件环境）", () => {
     mock.history.mockResolvedValue({ items: [{ ...activity, key: "CONTACT:older", id: "older", title: "合成较早动态" }], nextCursor: null });
     render(customer());
     expect(screen.getByText("合成沟通区域")).toBeVisible();
-    expect(screen.getByText("合成联系人区域")).not.toBeVisible();
+    expect(screen.getByText("合成联系人区域").closest('[role="tabpanel"]')).toHaveAttribute("aria-hidden", "true");
     selectTab("客户动态");
     fireEvent.click(screen.getByRole("button", { name: "客户动态下一页" }));
     await waitFor(() => expect(screen.getByText("合成较早动态")).toBeVisible());

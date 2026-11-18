@@ -5,10 +5,9 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AlertTriangle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Gavel, Plus } from "lucide-react";
-import { PageHeader, RiskLadder, Segmented } from "@/components/patterns/moan";
+import { PageHeader, RiskLadder } from "@/components/patterns/moan";
 import { useTopbarAction } from "@/components/layout/topbar-action";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Button, RadioGroup, Tag, Typography } from "@douyinfe/semi-ui";
 import {
   Dialog,
   DialogContent,
@@ -87,15 +86,9 @@ export function ScheduleView({
         actions={
           <>
             <CalendarSubscriptionDialog />
-            <Segmented
-              items={[
-                { key: "week", label: "周" },
-                { key: "calendar", label: "月历" },
-                { key: "list", label: "列表" }
-              ]}
-              value={view}
-              onChange={setView}
-            />
+            <RadioGroup aria-label="日程视图" type="button" buttonSize="small"
+              options={[{ value: "week", label: "周" }, { value: "calendar", label: "月历" }, { value: "list", label: "列表" }]}
+              value={view} onChange={(event) => setView(event.target.value as View)} />
           </>
         }
       />
@@ -195,10 +188,10 @@ function CalendarView({
       <div className="panel-head">
         <div className="cal-head">
           <span className="cal-month">{year} 年 {month + 1} 月</span>
-          <div className="cal-nav">
-            <button type="button" onClick={() => onOffsetChange(monthOffset - 1)} aria-label="上一月"><ChevronLeft className="h-3.5 w-3.5" /></button>
-            <button type="button" onClick={() => onOffsetChange(0)} style={{ width: "auto", padding: "0 10px", fontSize: 12 }}>今天</button>
-            <button type="button" onClick={() => onOffsetChange(monthOffset + 1)} aria-label="下一月"><ChevronRight className="h-3.5 w-3.5" /></button>
+          <div className="flex gap-1">
+            <Button theme="borderless" size="small" onClick={() => onOffsetChange(monthOffset - 1)} aria-label="上一月"><ChevronLeft className="h-3.5 w-3.5" /></Button>
+            <Button theme="borderless" size="small" onClick={() => onOffsetChange(0)}>今天</Button>
+            <Button theme="borderless" size="small" onClick={() => onOffsetChange(monthOffset + 1)} aria-label="下一月"><ChevronRight className="h-3.5 w-3.5" /></Button>
           </div>
         </div>
         <Legend />
@@ -212,18 +205,19 @@ function CalendarView({
             <div key={cell.key} className={cn("cell group relative", cell.out && "out", isToday && "today")}>
               <div className="flex items-center justify-between">
                 <span className="d">{cell.out ? `${cell.date.getMonth() + 1}-${cell.date.getDate()}` : cell.date.getDate()}</span>
-                <button
-                  type="button"
+                <Button
+                  theme="borderless"
+                  size="small"
                   onClick={() => onAddDay(cell.date)}
-                  className="flex h-[18px] w-[18px] items-center justify-center rounded text-[var(--t-faint)] opacity-0 transition-opacity hover:bg-[var(--bg-sunken)] hover:text-[var(--teal-deep)] focus:opacity-100 group-hover:opacity-100"
+                  className="opacity-0 focus:opacity-100 group-hover:opacity-100"
                   aria-label={`添加 ${cell.date.getMonth() + 1} 月 ${cell.date.getDate()} 日的任务`}
                 >
                   <Plus className="h-3 w-3" />
-                </button>
+                </Button>
               </div>
               {dayItems.slice(0, VISIBLE_ITEMS_PER_DAY).map((it) => <EventChip key={it.id} item={it} onSelect={onSelectItem} />)}
               {dayItems.length > VISIBLE_ITEMS_PER_DAY ? (
-                <button type="button" className="more border-0 bg-transparent p-0 font-[inherit]" onClick={() => onSelectItem(dayItems[VISIBLE_ITEMS_PER_DAY])}>+{dayItems.length - VISIBLE_ITEMS_PER_DAY} 隐藏</button>
+                <Button theme="borderless" size="small" onClick={() => onSelectItem(dayItems[VISIBLE_ITEMS_PER_DAY])}>+{dayItems.length - VISIBLE_ITEMS_PER_DAY} 隐藏</Button>
               ) : null}
               {isToday && dayItems.length === 0 ? <div className="more">今天 · 无日程</div> : null}
             </div>
@@ -262,10 +256,10 @@ function WeekView({
       <div className="panel-head">
         <div className="cal-head">
           <span className="cal-month">{monday.getMonth() + 1} 月 {monday.getDate()} 日 – {sunday.getMonth() + 1} 月 {sunday.getDate()} 日</span>
-          <div className="cal-nav">
-            <button type="button" onClick={() => onOffsetChange(weekOffset - 1)} aria-label="上一周"><ChevronLeft className="h-3.5 w-3.5" /></button>
-            <button type="button" onClick={() => onOffsetChange(0)} style={{ width: "auto", padding: "0 10px", fontSize: 12 }}>本周</button>
-            <button type="button" onClick={() => onOffsetChange(weekOffset + 1)} aria-label="下一周"><ChevronRight className="h-3.5 w-3.5" /></button>
+          <div className="flex gap-1">
+            <Button theme="borderless" size="small" onClick={() => onOffsetChange(weekOffset - 1)} aria-label="上一周"><ChevronLeft className="h-3.5 w-3.5" /></Button>
+            <Button theme="borderless" size="small" onClick={() => onOffsetChange(0)}>本周</Button>
+            <Button theme="borderless" size="small" onClick={() => onOffsetChange(weekOffset + 1)} aria-label="下一周"><ChevronRight className="h-3.5 w-3.5" /></Button>
           </div>
         </div>
         <Legend />
@@ -283,7 +277,7 @@ function WeekView({
           const dayItems = itemsByKey.get(key) ?? [];
           return (
             <div key={key} className={cn("cell group", key === todayKey && "today")} style={{ minHeight: 420 }}>
-              <button type="button" onClick={() => onAddDay(d)} className="more w-full border-0 bg-transparent p-0 text-left font-[inherit] opacity-0 group-hover:opacity-100">+ 添加任务</button>
+              <Button theme="borderless" size="small" onClick={() => onAddDay(d)} className="opacity-0 focus:opacity-100 group-hover:opacity-100">+ 添加任务</Button>
               {dayItems.length === 0 ? <div className="more">无日程</div> : dayItems.map((it) => <EventChip key={it.id} item={it} onSelect={onSelectItem} />)}
             </div>
           );
@@ -421,7 +415,7 @@ function ScheduleSideRail({
             <CalendarDays className="ic" strokeWidth={1.8} />
             即将到来
           </div>
-          <button type="button" onClick={onSwitchToList} className="t-xs t-mute hover:text-[var(--t-primary)]">列表视图 →</button>
+          <Button theme="borderless" size="small" onClick={onSwitchToList}>列表视图 →</Button>
         </div>
         {upcoming.length === 0 ? (
           <div className="empty mo-empty-compact"><div className="mo-empty-title">暂无即将到来的日程</div></div>
@@ -460,17 +454,17 @@ function ScheduleItemDialog({
                 >
                   <Icon className="h-4 w-4" />
                 </span>
-                <Badge
-                  variant="outline"
+                <Tag
+                  type="light"
                   className="text-[10px]"
                   style={{ borderColor: `${meta.color}55`, color: meta.color }}
                 >
                   {meta.label}
-                </Badge>
+                </Tag>
                 {item.completed && (
-                  <Badge variant="secondary" className="text-[10px]">
+                  <Tag type="light" className="text-[10px]">
                     已完成
-                  </Badge>
+                  </Tag>
                 )}
               </div>
               <DialogTitle className="text-base leading-6">{item.title}</DialogTitle>
@@ -511,12 +505,10 @@ function ScheduleItemDialog({
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
+              <Button theme="outline" onClick={() => onOpenChange(false)}>
                 关闭
               </Button>
-              <Button asChild>
-                <Link href={item.href??matterHref(item.matter)}>查看案件</Link>
-              </Button>
+              <Typography.Text type="primary" strong><Link href={item.href??matterHref(item.matter)}>查看案件</Link></Typography.Text>
             </DialogFooter>
           </>
         )}

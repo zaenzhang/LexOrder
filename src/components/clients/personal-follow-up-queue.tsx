@@ -1,9 +1,9 @@
 "use client";
 
+import { Button, Tag } from "@douyinfe/semi-ui";
+
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/patterns/moan";
 import { actionErrorMessage } from "@/lib/action-error";
 import { shDayKey, shTime } from "@/lib/ui/sh-time";
@@ -96,26 +96,26 @@ export function PersonalFollowUpQueue({ initialData, initialTarget = null, initi
     <PageHeader title="本人待跟进" sub={!verified ? "当前列表尚未核实" : data.available ? `共 ${data.total} 项` : "当前资格不能读取客户跟进"} />
     <h2 ref={heading} tabIndex={-1} className="sr-only">客户待跟进列表</h2>
     <div className="flex flex-wrap gap-2" aria-label="跟进筛选">{Object.entries(followUpFilters).map(([filter, label]) =>
-      <Button key={filter} variant={data.filter === filter ? "default" : "outline"} aria-pressed={data.filter === filter} disabled={pending || Boolean(editor)}
+      <Button htmlType="button" key={filter} theme={data.filter === filter ? "solid" : "outline"} aria-pressed={data.filter === filter} disabled={pending || Boolean(editor)}
         onClick={() => load({ filter: filter as keyof typeof followUpFilters, page: 1 }, null, "result", true)}>{label}</Button>)}</div>
-    {error && <div className="flex items-center gap-3"><p role="alert" className="text-sm text-destructive">{error}</p><Button variant="outline" disabled={pending || Boolean(editor)} onClick={() => load({ filter: data.filter, page: data.page })}>重新读取列表</Button></div>}
+    {error && <div className="flex items-center gap-3"><p role="alert" className="text-sm text-destructive">{error}</p><Button htmlType="button" type="tertiary" theme="outline" disabled={pending || Boolean(editor)} onClick={() => load({ filter: data.filter, page: data.page })}>重新读取列表</Button></div>}
     {pending && <p role="status" className="text-sm text-muted-foreground">正在读取跟进队列…</p>}
     {!verified ? <p className="text-sm text-muted-foreground">读取尚未成功，请重试后查看当前跟进。</p> : !data.available ? <p>当前资格不能读取客户跟进。</p> : data.items.length === 0 ? <p className="text-sm text-muted-foreground">当前筛选下没有待跟进。</p> : <ul className="divide-y rounded-md border">
       {data.items.map(item => <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
         <div className="min-w-0 flex-1"><p className="break-words font-medium">{item.title}</p><div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <Link href={`/clients/${encodeURIComponent(item.client.id)}?tab=followups&returnTo=${encodeURIComponent(returnTo)}`}>{item.client.name}</Link>
-          <time dateTime={item.dueAt}>{shDayKey(item.dueAt)} {shTime(item.dueAt)}</time>{item.overdue && <Badge variant="secondary">已逾期</Badge>}
+          <time dateTime={item.dueAt}>{shDayKey(item.dueAt)} {shTime(item.dueAt)}</time>{item.overdue && <Tag color="orange">已逾期</Tag>}
         </div></div>
-        <div className="flex gap-2"><Button variant="outline" disabled={pending || Boolean(editor)} aria-label={`${item.canClose ? "录入结果" : "查看跟进"}：${item.title}`}
+        <div className="flex gap-2"><Button htmlType="button" type="tertiary" theme="outline" disabled={pending || Boolean(editor)} aria-label={`${item.canClose ? "录入结果" : "查看跟进"}：${item.title}`}
           onClick={event => open({ followUpId: item.id, clientId: item.client.id }, "COMPLETED", "result", event.currentTarget)}>{item.canClose ? "录入结果" : "查看跟进"}</Button>
-          {item.canClose && <><Button variant="outline" disabled={pending || Boolean(editor)} aria-label={`改期：${item.title}`} onClick={event => open({ followUpId: item.id, clientId: item.client.id }, "COMPLETED", "reschedule", event.currentTarget)}>改期</Button>
-          <Button variant="ghost" disabled={pending || Boolean(editor)} aria-label={`取消跟进：${item.title}`} onClick={event => open({ followUpId: item.id, clientId: item.client.id }, "CANCELLED", "result", event.currentTarget)}>取消</Button></>}
+          {item.canClose && <><Button htmlType="button" type="tertiary" theme="outline" disabled={pending || Boolean(editor)} aria-label={`改期：${item.title}`} onClick={event => open({ followUpId: item.id, clientId: item.client.id }, "COMPLETED", "reschedule", event.currentTarget)}>改期</Button>
+          <Button htmlType="button" type="tertiary" theme="borderless" disabled={pending || Boolean(editor)} aria-label={`取消跟进：${item.title}`} onClick={event => open({ followUpId: item.id, clientId: item.client.id }, "CANCELLED", "result", event.currentTarget)}>取消</Button></>}
         </div>
       </li>)}
     </ul>}
     {verified && data.available && <div className="flex items-center justify-between gap-3"><span className="text-sm text-muted-foreground">第 {data.page} / {pages} 页 · 北京时间</span><div className="flex gap-2">
-      <Button variant="outline" disabled={pending || Boolean(editor) || data.page <= 1} onClick={() => load({ filter: data.filter, page: data.page - 1 }, null, "result", true)}>上一页</Button>
-      <Button variant="outline" disabled={pending || Boolean(editor) || data.page >= pages} onClick={() => load({ filter: data.filter, page: data.page + 1 }, null, "result", true)}>下一页</Button>
+      <Button htmlType="button" type="tertiary" theme="outline" disabled={pending || Boolean(editor) || data.page <= 1} onClick={() => load({ filter: data.filter, page: data.page - 1 }, null, "result", true)}>上一页</Button>
+      <Button htmlType="button" type="tertiary" theme="outline" disabled={pending || Boolean(editor) || data.page >= pages} onClick={() => load({ filter: data.filter, page: data.page + 1 }, null, "result", true)}>下一页</Button>
     </div></div>}
     {editor && (editor.mode === "reschedule" ? <ClientFollowUpRescheduleDialog key={identity(editor.target, editor.mode)} {...editor.target}
       trigger={trigger} fallback={heading} onClose={() => close()} onSaved={() => close(true)} /> : <ClientActivityDialog key={`${identity(editor.target, editor.mode)}:${editor.status}`} clientId={editor.target.clientId} mode={{ id: editor.target.followUpId, status: editor.status }} verifyPersonalTarget

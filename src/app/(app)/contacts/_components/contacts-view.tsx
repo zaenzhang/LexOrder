@@ -5,8 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Archive, Check, XCircle } from "lucide-react";
 import type { ExternalContactCategory, ExternalContactStatus } from "@prisma/client";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, Button, Input, RadioGroup, Tag } from "@douyinfe/semi-ui";
 import { userRoleLabel } from "@/lib/enums";
 import { ExternalContactDialog } from "./external-contact-dialog";
 import {
@@ -15,7 +14,7 @@ import {
   rejectExternalContact
 } from "@/server/external-contacts/actions";
 import { toast } from "sonner";
-import { PageHeader, Segmented } from "@/components/patterns/moan";
+import { PageHeader } from "@/components/patterns/moan";
 import { confirmDialog, promptDialog } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
 import type { RuntimeMode } from "@/lib/runtime/mode";
@@ -146,12 +145,7 @@ export function ContactsView({
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {colleagues.map((u) => (
             <div key={u.id} className="flex items-start gap-3 ll-surface p-3">
-              <Avatar className="h-10 w-10 border border-border bg-primary/10">
-                {u.avatar ? <AvatarImage src={u.avatar} alt={u.name} /> : null}
-                <AvatarFallback className="bg-primary/10 text-sm font-semibold text-primary">
-                  {u.name.charAt(0)}
-                </AvatarFallback>
-              </Avatar>
+              <Avatar size="default" src={u.avatar ?? undefined} alt={u.name}>{u.name.charAt(0)}</Avatar>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">{u.name}</div>
                 <div className="text-[11px] text-muted-foreground">
@@ -173,36 +167,42 @@ export function ContactsView({
           <h2 className="flex items-center gap-2 text-sm font-medium">
             外部联系人 ({externalContacts.length})
             {canReviewContacts && pendingCount > 0 && (
-              <span className="rounded-full border border-[var(--amber-line)] bg-[var(--amber-bg)] px-2 py-0.5 text-[10px] font-medium text-[var(--amber)]">
+              <Tag color="orange">
                 {personal ? "待确认" : "待审核"} {pendingCount}
-              </span>
+              </Tag>
             )}
           </h2>
           <Button
-            size="sm"
+            htmlType="button"
+            size="small"
+            theme="solid"
             onClick={() => {
               setEditing(null);
               setDialogOpen(true);
             }}
-            className="gap-1.5"
+            icon={<Plus className="h-3.5 w-3.5" />}
           >
-            <Plus className="h-3.5 w-3.5" />
             新增
           </Button>
         </header>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Segmented
-            items={[{ key: "ALL" as const, label: "全部" }, ...(Object.keys(EXT_CATEGORY_LABEL) as ExternalContactCategory[]).map((c) => ({ key: c, label: EXT_CATEGORY_LABEL[c] }))]}
+          <RadioGroup
+            type="button"
+            buttonSize="small"
+            aria-label="联系人类别"
+            options={[{ value: "ALL", label: "全部" }, ...(Object.keys(EXT_CATEGORY_LABEL) as ExternalContactCategory[]).map((c) => ({ value: c, label: EXT_CATEGORY_LABEL[c] }))]}
             value={filter}
-            onChange={setFilter}
+            onChange={(event) => setFilter(event.target.value as ExternalContactCategory | "ALL")}
           />
-          <input
-            type="text"
+          <Input
+            aria-label="搜索外部联系人"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={setSearch}
             placeholder="搜索姓名 / 单位 / 电话"
-            className="ml-auto h-8 w-48 rounded-md border border-border bg-background px-3 text-xs"
+            showClear
+            size="small"
+            style={{ marginLeft: "auto", width: 240 }}
           />
         </div>
 
@@ -224,13 +224,13 @@ export function ContactsView({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{c.name}</span>
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                      <Tag>
                         {EXT_CATEGORY_LABEL[c.category]}
-                      </span>
+                      </Tag>
                       {c.status === "PENDING_REVIEW" && (
-                        <span className="rounded-full border border-[var(--amber-line)] bg-[var(--amber-bg)] px-2 py-0.5 text-[10px] font-medium text-[var(--amber)]">
+                        <Tag color="orange">
                           {personal ? "待确认" : "待审核"}
-                        </span>
+                        </Tag>
                       )}
                       {c.title && (
                         <span className="text-[11px] text-muted-foreground">{c.title}</span>
@@ -261,23 +261,23 @@ export function ContactsView({
                       {canReviewContacts && c.status === "PENDING_REVIEW" && (
                         <div className="flex gap-1">
                           <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
+                            htmlType="button"
+                            theme="borderless"
+                            type="primary"
+                            size="small"
                             onClick={() => handleApprove(c)}
-                            className="h-7 gap-1 px-2 text-[11px] text-[var(--green)] hover:text-[var(--green)]"
+                            icon={<Check className="h-3 w-3" />}
                           >
-                            <Check className="h-3 w-3" />
                             {personal ? "本人确认" : "通过"}
                           </Button>
                           <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
+                            htmlType="button"
+                            theme="borderless"
+                            type="danger"
+                            size="small"
                             onClick={() => handleReject(c)}
-                            className="h-7 gap-1 px-2 text-[11px] text-destructive"
+                            icon={<XCircle className="h-3 w-3" />}
                           >
-                            <XCircle className="h-3 w-3" />
                             驳回
                           </Button>
                         </div>
@@ -285,26 +285,26 @@ export function ContactsView({
                       {canEdit && (
                         <>
                           <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
+                            htmlType="button"
+                            theme="borderless"
+                            type="tertiary"
+                            size="small"
+                            aria-label={`编辑联系人 ${c.name}`}
                             onClick={() => {
                               setEditing(c);
                               setDialogOpen(true);
                             }}
-                            className="h-7 px-2 text-[11px] text-muted-foreground hover:text-primary"
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </Button>
+                            icon={<Pencil className="h-3 w-3" />}
+                          />
                           <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
+                            htmlType="button"
+                            theme="borderless"
+                            type="danger"
+                            size="small"
+                            aria-label={`归档联系人 ${c.name}`}
                             onClick={() => handleArchive(c)}
-                            className="h-7 px-2 text-[11px] text-muted-foreground hover:text-destructive"
-                          >
-                            <Archive className="h-3 w-3" />
-                          </Button>
+                            icon={<Archive className="h-3 w-3" />}
+                          />
                         </>
                       )}
                     </div>

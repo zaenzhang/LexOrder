@@ -22,9 +22,7 @@ import type {
   PartyRole,
   LitigationStanding
 } from "@prisma/client";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
+import { Button, Tag, TextArea } from "@douyinfe/semi-ui";
 import { runCheckAndSave, setConflictConclusion } from "@/server/conflicts/actions";
 import { conflictConclusionLabel, litigationStandingLabel, matterCategoryLabel, matterStatusLabel } from "@/lib/enums";
 import type { buildIntakeConflictQueries } from "@/lib/approvals/intake-detail";
@@ -170,8 +168,8 @@ export function ConflictSection({
         <Button
           onClick={handleRunCheck} hidden={!canRunCheck}
           disabled={isPending}
-          size="sm"
-          variant={latestCheck ? "secondary" : "default"}
+          size="small"
+          theme={latestCheck ? "light" : "solid"}
         >
           {isPending ? <Loader2 className="animate-spin" /> : <Search />}
           {latestCheck ? "重新检索" : "运行冲突检索"}
@@ -194,8 +192,8 @@ export function ConflictSection({
               冲突命中{" "}
               <span className="font-mono text-foreground">{latestCheck.hits.length}</span>
             </span>
-            <Badge
-              variant="outline"
+            <Tag
+              type="ghost"
               className={cn(
                 "ml-1 text-[10px]",
                 latestCheck.conclusion === "SAME_SUBJECT" && "border-destructive/40 text-destructive",
@@ -204,7 +202,7 @@ export function ConflictSection({
               )}
             >
               {latestCheck.note?.startsWith("系统自动标记：")?"未命中（系统自动提示）":conflictConclusionLabel[latestCheck.conclusion]}
-            </Badge>
+            </Tag>
             {latestCheck.decidedBy && !latestCheck.note?.startsWith("系统自动标记：") && (
               <span className="ml-auto text-[11px] text-muted-foreground">
                 {latestCheck.decidedBy.name} ·{" "}
@@ -282,35 +280,35 @@ export function ConflictSection({
                 <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
                 <h3 className="text-[13px] font-medium">标记结论</h3>
               </div>
-              <Textarea
+              <TextArea
                 value={conclusionNote}
-                onChange={(e) => setConclusionNote(e.target.value)}
+                onChange={setConclusionNote}
                 placeholder="补充说明（如：经核对确认非同一主体；或已披露风险并取得书面同意）"
                 rows={2}
                 className="mb-2 text-[12px]"
               />
               <div className="flex flex-wrap gap-2">
                 <Button
-                  variant="outline"
-                  size="sm"
+                  theme="outline"
+                  size="small"
                   onClick={() => handleSetConclusion("SAME_SUBJECT")}
                   disabled={isPending}
-                  className="text-destructive border-destructive/40 hover:bg-destructive/10"
+                  type="danger"
                 >
                   有冲突（不承接）
                 </Button>
                 <Button
-                  variant="outline"
-                  size="sm"
+                  theme="outline"
+                  size="small"
                   onClick={() => handleSetConclusion("DIFFERENT")}
                   disabled={isPending}
-                  className="border-[#1A7F45]/40 text-[#1A7F45] hover:bg-[#1A7F45]/10"
+                  type="primary"
                 >
                   可承接
                 </Button>
                 <Button
-                  variant="outline"
-                  size="sm"
+                  theme="outline"
+                  size="small"
                   onClick={() => handleSetConclusion("NEED_INFO")}
                   disabled={isPending}
                 >

@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@douyinfe/semi-ui";
+
 import { useRef, useState } from "react";
 import { Pencil } from "lucide-react";
 import type { Client, Contact } from "@prisma/client";
@@ -18,15 +20,13 @@ export function ClientEditButton({
   const trigger = useRef<HTMLButtonElement>(null);
   return (
     <>
-      <button
-        ref={trigger}
-        type="button"
-        onClick={() => setOpen(true)}
-        className="btn btn-secondary btn-sm"
+      <Button
+        htmlType="button"
+        onClick={event => { trigger.current = event.currentTarget; setOpen(true); }}
+        theme="outline" type="tertiary" size="small" icon={<Pencil size={14} />}
       >
-        <Pencil />
         编辑资料
-      </button>
+      </Button>
       <ClientSheet open={open} onOpenChange={setOpen} editingClient={client} onReturnFocus={() => trigger.current?.focus({ preventScroll: true })} />
     </>
   );

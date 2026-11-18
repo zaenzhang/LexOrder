@@ -13,7 +13,8 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Briefcase, FileClock, Info, Loader2, Plus, Search, ShieldAlert, ShieldCheck, TriangleAlert, Users, X } from "lucide-react";
+import { Briefcase, FileClock, Info, Plus, Search, ShieldAlert, ShieldCheck, TriangleAlert, Users, X } from "lucide-react";
+import { Button, Input, RadioGroup } from "@douyinfe/semi-ui";
 import type { ConflictSeverity, MatterCategory, MatterStatus, PartyRole, LitigationStanding } from "@prisma/client";
 import { runCheckAndSave } from "@/server/conflicts/actions";
 import { matterHref } from "@/lib/matters/route";
@@ -131,9 +132,10 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
     setSearchedQueries([]);
     setCheckedAt(null);
   }
-  useTopbarAction({ label: "新建预检", onClick: () => reset() }, []);
+  useTopbarAction({ label: "新建预检", onClick: () => reset(), disabled: pending }, [pending]);
 
   function run() {
+    if (pending) return;
     const valid = queries.filter((q) => q.name.trim() || q.idNumber.trim());
     if (valid.length === 0) {
       toast.warning("请至少填写一个主体的名称或证件号");
@@ -188,15 +190,17 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
               <div style={{ flex: 1, minWidth: 0 }}>
                 {q.editing ? (
                   <div className="grid gap-2.5 md:grid-cols-[auto_1fr_1fr]">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {ROLE_OPTS.map((o) => (
-                        <button key={o.value} type="button" aria-pressed={q.role === o.value} onClick={() => update(q.key, { role: o.value })} className={cn("badge cursor-pointer", q.role === o.value ? o.badge : "b-white")} style={{ height: 26, padding: "0 10px" }}>
-                          {o.label}
-                        </button>
-                      ))}
-                    </div>
-                    <input autoFocus={!q.name} value={q.name} onChange={(e) => update(q.key, { name: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") run(); }} placeholder="姓名 / 名称，如：华东置业集团有限公司" aria-label="主体名称" className="input" style={{ height: 32 }} />
-                    <input value={q.idNumber} onChange={(e) => update(q.key, { idNumber: e.target.value.toUpperCase().replace(/\s+/g, "") })} onKeyDown={(e) => { if (e.key === "Enter") run(); }} placeholder="身份证 / 统一社会信用代码（选填，精确匹配）" aria-label="证件号码" className="input font-mono" style={{ height: 32 }} />
+                    <RadioGroup
+                      type="button"
+                      buttonSize="small"
+                      aria-label="检索主体角色"
+                      value={q.role}
+                      options={ROLE_OPTS.map(({ value, label }) => ({ value, label }))}
+                      disabled={pending}
+                      onChange={(event) => update(q.key, { role: event.target.value as QueryRole })}
+                    />
+                    <Input autoFocus={!q.name} value={q.name} onChange={(name) => update(q.key, { name })} onEnterPress={run} disabled={pending} placeholder="姓名 / 名称，如：华东置业集团有限公司" aria-label="主体名称" />
+                    <Input value={q.idNumber} onChange={(idNumber) => update(q.key, { idNumber: idNumber.toUpperCase().replace(/\s+/g, "") })} onEnterPress={run} disabled={pending} placeholder="身份证 / 统一社会信用代码（选填，精确匹配）" aria-label="证件号码" />
                   </div>
                 ) : (
                   <>
@@ -218,13 +222,11 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-1">
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => update(q.key, { editing: !q.editing })}>
+                <Button htmlType="button" theme="borderless" type="tertiary" size="small" disabled={pending} onClick={() => update(q.key, { editing: !q.editing })}>
                   {q.editing ? "完成" : "修改"}
-                </button>
+                </Button>
                 {queries.length > 1 ? (
-                  <button type="button" className="btn btn-ghost btn-sm btn-icon" aria-label="移除该主体" onClick={() => setQueries((qs) => qs.filter((x) => x.key !== q.key))}>
-                    <X />
-                  </button>
+                  <Button htmlType="button" theme="borderless" type="tertiary" size="small" disabled={pending} aria-label="移除该主体" onClick={() => setQueries((qs) => qs.filter((x) => x.key !== q.key))} icon={<X className="h-4 w-4" />} />
                 ) : null}
               </div>
             </div>
@@ -232,17 +234,15 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
         })}
 
         <div className="subject" style={{ borderTop: "1px dashed var(--bd-subtle)" }}>
-          <button type="button" className="btn btn-ghost btn-sm" style={{ border: "1px dashed var(--bd-default)", width: "100%", justifyContent: "center", height: 38 }} onClick={() => setQueries((qs) => [...qs, emptyRow("OPPOSING_PARTY")])}>
-            <Plus />
+          <Button htmlType="button" theme="borderless" block disabled={pending} icon={<Plus className="h-4 w-4" />} onClick={() => setQueries((qs) => [...qs, emptyRow("OPPOSING_PARTY")])}>
             添加检索主体（自然人 / 机构）
-          </button>
+          </Button>
         </div>
 
         <div className="run-bar" style={{ padding: "0 16px 16px" }}>
-          <button type="button" className="btn btn-primary" onClick={run} disabled={pending}>
-            {pending ? <Loader2 className="animate-spin" /> : <Search />}
+          <Button htmlType="button" theme="solid" onClick={run} disabled={pending} loading={pending} icon={<Search className="h-4 w-4" />}>
             {hasRun ? "重新预检" : "开始预检"}
-          </button>
+          </Button>
           <span className="run-note">
             <Info className="h-3.5 w-3.5" />
             检索范围：历史案件当事人 · 客户档案关联案件 · 尚未转为案件的在办收案
@@ -398,7 +398,7 @@ function TargetRow({ target }: { target: TargetGroup }) {
       </div>
       <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] t-faint">
         {href ? (
-          <Link href={href} className="btn btn-ghost btn-sm">查看案件</Link>
+          <Link href={href} className="text-[var(--semi-color-link)] hover:underline">查看案件</Link>
         ) : (
           <span className="inline-flex items-center gap-1"><Info className="h-3 w-3" />{m ? "你不是该案成员，如需了解请联系主办律师" : "收案内容不因预检开放，如需了解请联系登记人"}</span>
         )}

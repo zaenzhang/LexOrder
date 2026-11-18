@@ -1,21 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useTransition } from "react";
-import { Check, Plus, Building2, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger
-} from "@/components/ui/popover";
-import {
-  Command,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList
-} from "@/components/ui/command";
-import { cn } from "@/lib/utils";
+import { useId, useState, useEffect, useRef, useCallback, useTransition } from "react";
+import { Select, Spin } from "@douyinfe/semi-ui";
 import type { ClientType } from "@prisma/client";
 export type ClientOption = { id: string; name: string; type: ClientType };
 import { searchEnterpriseCandidates, type EnterpriseSearchItem } from "@/server/yuandian/enterprise";
@@ -31,7 +17,8 @@ export function ClientCombobox({
   onTypeNew,
   onPickYuandian,
   onClear,
-  triggerClassName
+  triggerClassName,
+  onDropdownVisibleChange
 }: {
   clientId: string;
   clientName: string;
@@ -42,10 +29,12 @@ export function ClientCombobox({
   onPickYuandian: (candidate: YuandianCandidate) => void;
   onClear: () => void;
   triggerClassName?: string;
+  onDropdownVisibleChange?: (open: boolean) => void;
 }) {
+  const labelId = useId();
+  const selectRef = useRef<Select>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const triggerRef = useRef<HTMLButtonElement>(null);
   const [yuandianResults, setYuandianResults] = useState<YuandianCandidate[]>([]);
   const [yuandianLoading, setYuandianLoading] = useState(false);
   const [yuandianConfigured, setYuandianConfigured] = useState(true);
@@ -84,6 +73,7 @@ export function ClientCombobox({
 
   useEffect(() => {
     if (!open) {
+      selectRef.current?.clearInput();
       setQuery("");
       setYuandianResults([]);
       setYuandianLoading(false);
@@ -109,137 +99,51 @@ export function ClientCombobox({
     };
   }, [query, clientType, open, yuandianConfigured, searchYuandian]);
 
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          ref={triggerRef}
-          type="button"
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className={cn(
-            "h-10 w-full justify-between font-normal",
-            triggerClassName,
-            !display && "text-muted-foreground"
-          )}
-        >
-          <span className="flex items-center gap-1.5 truncate text-xs">
-            {display || "搜索或直接输入名称"}
-            {!clientId && clientName && (
-              <span className="ml-1 rounded-sm bg-primary/10 px-1 text-[10px] text-primary/80">
-                新客户
-              </span>
-            )}
-          </span>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        portalled={false}
-        className="w-[--radix-popover-trigger-width] p-0"
-        align="start"
-      >
-        <Command shouldFilter={false}>
-          <CommandInput
-            placeholder="输入姓名 / 公司名"
-            value={query}
-            onValueChange={setQuery}
-          />
-          <CommandList>
-            {query.trim() && !hasExactMatch && (
-              <CommandGroup heading="作为新客户使用">
-                <CommandItem
-                  value={`__new__${query}`}
-                  onSelect={() => {
-                    onTypeNew(query.trim());
-                    setOpen(false);
-                  }}
-                  className="gap-2"
-                >
-                  <Plus className="h-3.5 w-3.5 text-primary" />
-                  <span>
-                    新建 <span className="text-primary">{query.trim()}</span> 为委托方
-                  </span>
-                </CommandItem>
-              </CommandGroup>
-            )}
+  const selection = clientId ? `client:${clientId}` : clientName ? "new-client" : undefined;
+  const selectedOutsideResults = selection && !filtered.some((client) => `client:${client.id}` === selection);
 
-            {filtered.length > 0 && (
-              <CommandGroup heading="已有客户">
-                {filtered.map((o) => (
-                  <CommandItem
-                    key={o.id}
-                    value={o.name}
-                    onSelect={() => {
-                      onPickExisting(o.id, o.name);
-                      setOpen(false);
-                    }}
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 h-3.5 w-3.5",
-                        clientId === o.id ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    {o.name}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            )}
-
-            {(yuandianLoading || yuandianResults.length > 0) && yuandianConfigured && (
-              <CommandGroup heading="企业信息库（元典）">
-                {yuandianLoading && yuandianResults.length === 0 && (
-                  <div className="flex items-center gap-2 px-2 py-3 text-xs text-muted-foreground">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    搜索中…
-                  </div>
-                )}
-                {yuandianResults.map((c) => (
-                  <CommandItem
-                    key={`yd-${c.id}`}
-                    value={`yd-${c.name}`}
-                    onSelect={() => {
-                      onPickYuandian(c);
-                      setOpen(false);
-                    }}
-                    className="gap-2"
-                  >
-                    <Building2 className="h-3.5 w-3.5 shrink-0 text-[var(--blue)]" />
-                    <span className="truncate">{c.name}</span>
-                    {c.creditCode && (
-                      <span className="ml-auto shrink-0 text-[10px] font-mono text-muted-foreground">
-                        {c.creditCode}
-                      </span>
-                    )}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            )}
-
-            {!query && filtered.length === 0 && (
-              <div className="py-4 text-center text-xs text-muted-foreground">
-                开始输入以搜索 / 新建
-              </div>
-            )}
-
-            {display && (
-              <CommandGroup>
-                <CommandItem
-                  value="__clear__"
-                  onSelect={() => {
-                    onClear();
-                    setOpen(false);
-                  }}
-                  className="text-xs text-muted-foreground"
-                >
-                  清除选择
-                </CommandItem>
-              </CommandGroup>
-            )}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  );
+  return <><span id={labelId} className="sr-only">委托方客户</span><Select
+    ref={selectRef}
+    aria-labelledby={labelId}
+    placeholder="搜索或直接输入名称"
+    searchPlaceholder="输入姓名 / 公司名"
+    className={triggerClassName}
+    style={{ width: "100%" }}
+    value={selection}
+    renderSelectedItem={() => display}
+    filter
+    remote
+    searchPosition="dropdown"
+    onSearch={setQuery}
+    innerTopSlot={yuandianLoading ? <div role="status" className="flex items-center gap-2 px-3 py-2 text-sm"><Spin size="small" />正在查询企业信息</div> : undefined}
+    emptyContent="开始输入以搜索 / 新建"
+    showClear={Boolean(display)}
+    onClear={onClear}
+    onDropdownVisibleChange={(visible) => { setOpen(visible); onDropdownVisibleChange?.(visible); }}
+    // 选中时固定当前查询/候选；收起后会清查询，不能在动画完成的 onChange 再读取。
+    onSelect={(value) => {
+      if (typeof value !== "string") return;
+      if (value === "create-client") onTypeNew(query.trim());
+      else if (value.startsWith("client:")) {
+        const client = options.find((item) => `client:${item.id}` === value);
+        if (client) onPickExisting(client.id, client.name);
+      } else if (value.startsWith("enterprise:")) {
+        const candidate = yuandianResults.find((item) => `enterprise:${item.id}` === value);
+        if (candidate) onPickYuandian(candidate);
+      }
+    }}
+  >
+    {query.trim() && !hasExactMatch && <Select.OptGroup label="作为新客户使用">
+      <Select.Option value="create-client" label={`新建 ${query.trim()} 为委托方`} />
+    </Select.OptGroup>}
+    {filtered.length > 0 && <Select.OptGroup label="已有客户">
+      {filtered.map((client) => <Select.Option key={client.id} value={`client:${client.id}`} label={client.name} />)}
+    </Select.OptGroup>}
+    {yuandianConfigured && yuandianResults.length > 0 && <Select.OptGroup label="企业信息库（元典）">
+      {yuandianResults.map((candidate) => <Select.Option key={candidate.id} value={`enterprise:${candidate.id}`} label={`${candidate.name}${candidate.creditCode ? ` · ${candidate.creditCode}` : ""}`} />)}
+    </Select.OptGroup>}
+    {selectedOutsideResults && <Select.OptGroup label="当前选择">
+      <Select.Option value={selection} label={display} />
+    </Select.OptGroup>}
+  </Select></>;
 }

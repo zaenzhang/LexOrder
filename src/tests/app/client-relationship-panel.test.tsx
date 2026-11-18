@@ -101,13 +101,23 @@ describe("客户沟通表单交互（组件环境）", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("只调整沟通方式也属于未保存修改", async () => {
+  it("沟通方式下拉在弹窗内逐层 Escape，变更后保留草稿", async () => {
     renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "记录沟通" }));
-    fireEvent.change(screen.getByLabelText("沟通方式"), { target: { value: "OTHER" } });
+    const editor = screen.getByRole("dialog", { name: "记录沟通" });
+    const channel = screen.getByRole("combobox", { name: "沟通方式" });
+    fireEvent.focus(channel);
+    fireEvent.keyDown(channel, { key: "Enter", keyCode: 13 });
+    expect(await within(editor).findByRole("option", { name: /其他/ })).toBeInTheDocument();
+    fireEvent.keyDown(channel, { key: "Escape", keyCode: 27 });
+    await waitFor(() => expect(within(editor).queryByRole("listbox")).not.toBeInTheDocument());
+    expect(editor).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "继续编辑" })).not.toBeInTheDocument();
+    fireEvent.keyDown(channel, { key: "Enter", keyCode: 13 });
+    fireEvent.click(await within(editor).findByRole("option", { name: /其他/ }));
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     fireEvent.click(await screen.findByRole("button", { name: "继续编辑" }));
-    await waitFor(() => expect(screen.getByLabelText("沟通方式")).toHaveValue("OTHER"));
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "沟通方式" })).toHaveTextContent("其他"));
   });
 
   it("无沟通读取权限时不渲染记录或操作入口", () => {
