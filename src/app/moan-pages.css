@@ -367,8 +367,6 @@
 .mo-approval .rv-summary .s .v.mono { font-family: var(--font-mono); font-weight: 600; }
 .mo-approval .rv-alert { display: flex; align-items: center; gap: 7px; margin-left: auto; font-size: 11.5px; color: var(--amber); font-weight: 550; }
 .mo-approval .rv-body { display: grid; grid-template-columns: 1fr 312px; flex: 1; min-height: 0; }
-.mo-approval .rv-main { overflow-y: auto; padding: 0 0 18px; border-right: 1px solid var(--bd-hair); background: var(--bg-canvas); }
-.mo-approval .rv-main .tabs { padding: 0 20px; background: var(--bg-card); }
 .mo-approval .rv-section { background: var(--bg-card); border-radius: var(--r-lg); margin: 14px 20px 0; border: 1px solid var(--bd-hair); box-shadow: var(--sh-card); overflow: hidden; }
 .mo-approval .rv-sec-head { padding: 11px 15px; border-bottom: 1px solid var(--bd-hair); font-size: 12.5px; font-weight: 650; display: flex; align-items: center; gap: 8px; }
 .mo-approval .arow { display: flex; align-items: baseline; gap: 12px; padding: 9px 15px; border-bottom: 1px solid var(--bd-hair); }
@@ -594,9 +592,6 @@
 
 /* 07 审阅窗口 · 实现补充：Radix 弹窗内的滚动与窄屏堆叠 */
 .mo-approval .rv-body { overflow: hidden; }
-.mo-approval .rv-main { min-height: 0; }
-.mo-approval .rv-main [role="tabpanel"] { overflow-y: auto; padding-bottom: 18px; }
-.mo-approval .rv-main .tabs { flex-shrink: 0; height: auto; }
 .mo-approval .rv-side { min-height: 0; }
 .mo-approval .op-area { resize: vertical; outline: none; }
 .mo-approval .op-area:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(0,123,127,0.12); }
@@ -604,8 +599,6 @@
 .mo-approval .arow .badge { flex-shrink: 0; }
 @media (max-width: 860px) {
   .mo-approval .rv-body { display: block; overflow-y: auto; }
-  .mo-approval .rv-main { border-right: 0; }
-  .mo-approval .rv-main [role="tabpanel"] { overflow: visible; }
   .mo-approval .rv-side { border-top: 1px solid var(--bd-hair); }
   .mo-approval .rv-side-foot { position: sticky; bottom: 0; background: var(--bg-card); }
   .mo-approval .rv-summary { gap: 10px 16px; }

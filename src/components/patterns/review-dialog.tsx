@@ -6,10 +6,11 @@
  * 只组织资料与操作，权限和提交逻辑由调用方持有。
  */
 import type { ReactNode } from "react";
+import { Tabs, Tag, Typography } from "@douyinfe/semi-ui";
 import { AlertTriangle, SquareCheck } from "lucide-react";
 import { DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn, formatDateTime } from "@/lib/utils";
+import styles from "./review-dialog.module.css";
 
 export type ReviewTab = { id: string; label: string; icon?: ReactNode; count?: number; countTone?: "red" | "muted"; content: ReactNode };
 
@@ -48,7 +49,7 @@ export function ReviewDialogContent({
   /** 右侧底部固定操作（驳回 / 通过） */
   footer?: ReactNode;
 }) {
-  const controlled = tab !== undefined ? { value: tab, onValueChange: onTabChange } : { defaultValue: tabs[0]?.id };
+  const controlled = tab !== undefined ? { activeKey: tab, onChange: onTabChange } : { defaultActiveKey: tabs[0]?.id };
   return (
     <DialogContent className="mo-approval flex h-[calc(100dvh-56px)] max-h-[980px] w-[calc(100%-32px)] max-w-[1120px] flex-col gap-0 overflow-hidden rounded-[16px] border-0 p-0">
       <div className="rv-head">
@@ -83,28 +84,40 @@ export function ReviewDialogContent({
       </div>
 
       <div className="rv-body">
-        <Tabs {...controlled} className="rv-main flex min-h-0 flex-col">
-          <TabsList aria-label="申请详情分区" className="tabs sticky top-0 z-[1] w-full justify-start rounded-none border-b-[var(--bd-hair)] bg-card">
+        <div className={styles.main} role="group" aria-label="申请详情分区">
+          <Tabs
+            {...controlled}
+            className={styles.tabs}
+            tabBarClassName={styles.tabBar}
+            contentStyle={{ flex: 1, minHeight: 0, overflow: "hidden" }}
+            keepDOM
+            lazyRender={false}
+            tabPaneMotion={false}
+          >
             {tabs.map((t) => (
-              <TabsTrigger key={t.id} value={t.id} className="tab gap-1.5">
-                {t.icon}
-                {t.label}
-                {t.count != null ? (
-                  t.countTone === "red" && t.count > 0 ? (
-                    <span className="badge b-red" style={{ fontSize: 9.5, padding: "0 6px", marginLeft: 2 }}>{t.count}</span>
-                  ) : (
-                    <span className="num-sm t-mute">{t.count}</span>
-                  )
-                ) : null}
-              </TabsTrigger>
+              <Tabs.TabPane
+                key={t.id}
+                itemKey={t.id}
+                icon={t.icon}
+                className={styles.pane}
+                tab={(
+                  <span className={styles.tabLabel}>
+                    {t.label}
+                    {t.count != null ? (
+                      t.countTone === "red" && t.count > 0 ? (
+                        <Tag color="red" size="small">{t.count}</Tag>
+                      ) : (
+                        <Typography.Text type="tertiary">{t.count}</Typography.Text>
+                      )
+                    ) : null}
+                  </span>
+                )}
+              >
+                {t.content}
+              </Tabs.TabPane>
             ))}
-          </TabsList>
-          {tabs.map((t) => (
-            <TabsContent key={t.id} value={t.id} forceMount className="mt-0 min-h-0 flex-1 data-[state=inactive]:hidden">
-              {t.content}
-            </TabsContent>
-          ))}
-        </Tabs>
+          </Tabs>
+        </div>
 
         <aside className="rv-side" aria-label={sidebarTitle}>
           <div className="rv-side-head">

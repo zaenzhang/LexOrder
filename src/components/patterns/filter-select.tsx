@@ -1,17 +1,9 @@
 "use client";
 
-/**
- * 墨案 03 页筛选按钮（.filter-btn）：未选时「标签 ⌄」，选中后 teal 底「标签 值 ×」。
- * 值为 undefined/空串表示未筛选；清除按钮与菜单内「全部」等价。
- */
-import { ChevronDown } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
+/** 页面筛选：业务值由调用方持有，清除与菜单内「全部」含义相同。 */
+import { useRef, useState } from "react";
+import { Button, ButtonGroup, Dropdown } from "@douyinfe/semi-ui";
+import { ChevronDown, X } from "lucide-react";
 
 export type FilterOption = { value: string; label: string };
 
@@ -33,41 +25,49 @@ export function FilterSelect({
   clearable?: boolean;
   icon?: React.ReactNode;
 }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLSpanElement>(null);
   const current = options.find((o) => o.value === value);
   const on = clearable && Boolean(current);
+
+  function choose(next: string | undefined) {
+    setOpen(false);
+    rootRef.current?.querySelector<HTMLButtonElement>("[data-filter-trigger]")?.focus();
+    onChange(next);
+  }
+
   return (
-    <span className={cn("mo-filter-btn p-0", on && "on")}>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button type="button" className="inline-flex h-full items-center gap-1.5 bg-transparent px-[11px] font-[inherit] text-inherit outline-none">
-            {icon}
-            {label}
-            {current ? <span className="fv">{current.label}</span> : null}
-            {!on ? <ChevronDown aria-hidden /> : null}
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="max-h-80 min-w-[10rem] overflow-y-auto">
-          {clearable ? (
-            <DropdownMenuItem onSelect={() => onChange(undefined)} className={cn(!current && "font-semibold text-[var(--teal-deep)]")}>
-              {allLabel}
-            </DropdownMenuItem>
-          ) : null}
-          {options.map((o) => (
-            <DropdownMenuItem
-              key={o.value}
-              onSelect={() => onChange(o.value)}
-              className={cn(o.value === value && "font-semibold text-[var(--teal-deep)]")}
-            >
-              {o.label}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {on ? (
-        <button type="button" aria-label={`清除${label}筛选`} onClick={() => onChange(undefined)} className="x -ml-1 pr-[10px]">
-          ×
-        </button>
-      ) : null}
+    <span ref={rootRef} className="inline-flex">
+      <ButtonGroup>
+        <Dropdown
+          trigger="click"
+          position="bottomLeft"
+          visible={open}
+          onVisibleChange={setOpen}
+          closeOnEsc
+          motion={false}
+          render={<Dropdown.Menu aria-label={`${label}筛选`} style={{ maxHeight: 320, minWidth: 160, overflowY: "auto" }}>
+            {clearable ? <Dropdown.Item active={!current} onClick={() => choose(undefined)}>{allLabel}</Dropdown.Item> : null}
+            {options.map((o) => <Dropdown.Item key={o.value} active={o.value === value} onClick={() => choose(o.value)}>{o.label}</Dropdown.Item>)}
+          </Dropdown.Menu>}
+        >
+          <Button data-filter-trigger htmlType="button" type={on ? "primary" : "tertiary"} aria-label={current ? `${label} ${current.label}` : label} aria-haspopup="menu" aria-expanded={open} onKeyDown={event => {
+            // 保留原筛选的 ArrowDown 打开入口，菜单内导航由 Semi 处理。
+            if (event.key === "ArrowDown" && !open) {
+              event.preventDefault();
+              event.currentTarget.click();
+            }
+          }}>
+            <span className="inline-flex items-center gap-1.5">
+              {icon}
+              {label}
+              {current ? <span>{current.label}</span> : null}
+              <ChevronDown size={14} aria-hidden />
+            </span>
+          </Button>
+        </Dropdown>
+        {on ? <Button htmlType="button" type="primary" aria-label={`清除${label}筛选`} icon={<X size={14} />} onClick={() => choose(undefined)} /> : null}
+      </ButtonGroup>
     </span>
   );
 }

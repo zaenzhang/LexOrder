@@ -42,7 +42,7 @@ async function approveIntake() {
   await screen.findByRole("dialog", { name: "合成收案 A" });
   fireEvent.click(screen.getByRole("checkbox", { name: /已核对申请资料/ }));
   fireEvent.click(screen.getByRole("checkbox", { name: /同意按申请登记/ }));
-  fireEvent.click(screen.getByRole("button", { name: "审批通过" }));
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "审批通过" })); });
 }
 function prepareConversion(result = converted) {
   mocks.params = new URLSearchParams({ type: intakeSelection.action, id: intakeSelection.id, returnTo: returnA }).toString();
@@ -172,7 +172,7 @@ describe("审批详情读取、轮次与返回案件", () => {
     expect(mocks.push).not.toHaveBeenCalled();
     mocks.params = new URLSearchParams({ type: second.action, id: second.id, returnTo: returnB }).toString();
     mocks.detail.mockResolvedValue(detail("后续申请 B", returnB));
-    view.rerender(<ApprovalInbox data={data} initialSelection={second} returnTo={returnB} />);
+    await act(async () => { view.rerender(<ApprovalInbox data={data} initialSelection={second} returnTo={returnB} />); });
     fireEvent.change(await screen.findByRole("textbox", { name: "审批意见或驳回原因" }), { target: { value: "B 的尚未保存意见" } });
     fireEvent.click(screen.getByText("合成程序 · 未归属环节材料", { selector: "a" }));
     await waitFor(() => expect(mocks.ask).toHaveBeenCalledWith(expect.objectContaining({ initialFocus: "cancel" })));
@@ -189,7 +189,7 @@ describe("审批详情读取、轮次与返回案件", () => {
     await approveIntake(); await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     mocks.params = new URLSearchParams({ type: second.action, id: second.id, returnTo: returnB }).toString();
     mocks.detail.mockResolvedValue(detail("后续申请 B", returnB));
-    view.rerender(<ApprovalInbox data={data} initialSelection={second} returnTo={returnB} />);
+    await act(async () => { view.rerender(<ApprovalInbox data={data} initialSelection={second} returnTo={returnB} />); });
     fireEvent.change(await screen.findByRole("textbox", { name: "审批意见或驳回原因" }), { target: { value: "B 当前处理意见" } });
     let confirm!: (accepted: boolean) => void, finish!: (value: { ok: true }) => void;
     mocks.ask.mockImplementationOnce(() => new Promise(resolve => { confirm = resolve; }));
@@ -210,7 +210,7 @@ describe("审批详情读取、轮次与返回案件", () => {
     await approveIntake(); await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     mocks.params = new URLSearchParams({ type: second.action, id: second.id, returnTo: returnB }).toString();
     mocks.detail.mockResolvedValue(detail("后续申请 B", returnB));
-    view.rerender(<ApprovalInbox data={data} initialSelection={second} returnTo={returnB} />);
+    await act(async () => { view.rerender(<ApprovalInbox data={data} initialSelection={second} returnTo={returnB} />); });
     fireEvent.change(await screen.findByRole("textbox", { name: "审批意见或驳回原因" }), { target: { value: "B 的意见" } });
     let confirm!: (accepted: boolean) => void;
     mocks.ask.mockImplementationOnce(() => new Promise(resolve => { confirm = resolve; }));
@@ -219,7 +219,7 @@ describe("审批详情读取、轮次与返回案件", () => {
     mocks.ask.mockResolvedValueOnce(true);
     mocks.params = new URLSearchParams({ type: first.action, id: first.id, returnTo: returnA }).toString();
     mocks.detail.mockResolvedValue(detail("后来选择的申请 C", returnA));
-    view.rerender(<ApprovalInbox data={data} initialSelection={first} returnTo={returnA} />);
+    await act(async () => { view.rerender(<ApprovalInbox data={data} initialSelection={first} returnTo={returnA} />); });
     await screen.findByRole("dialog", { name: "后来选择的申请 C" });
     fireEvent.change(screen.getByRole("textbox", { name: "审批意见或驳回原因" }), { target: { value: "C 的新草稿" } });
     await act(async () => confirm(true));

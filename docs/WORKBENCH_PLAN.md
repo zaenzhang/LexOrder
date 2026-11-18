@@ -1569,7 +1569,7 @@ root 在现有 main 唯一修改 src/server/evidence/source-links.ts 的 resolve
 | 组 | 分支 | 独占文件与范围 | 交付与重点验证 |
 | --- | --- | --- | --- |
 | A 接入与集成 | ui/semi-integration | package.json、package-lock.json、next.config.mjs、components.json、AGENTS.md、主文档；根 src/app/layout.tsx、globals.css、moan.css、moan-pages.css；src/components/providers.tsx、workspace-actor-provider.tsx、ui/、patterns/ 中的共享实现 | 固定 Semi 版本，接入 React 19 适配与默认主题并校验样式顺序。定义确有复用需求的业务弹窗、确认、反馈和表单组合。维护合并记录，最后删除失去引用的旧实现和依赖 |
-| B 登录、导航与设置 | ui/semi-shell | src/app/(auth)/、src/app/(app)/ 顶层页面和布局、settings/、notifications/、announcements/、policy/、tools/；src/components/layout/、dashboard/、users/ | 接续已做的登录页。迁移全局搜索、工作台导航和设置控件，验证登录保护、密码显示、两步验证码、搜索键盘打开及关闭返回，处理目录外的直接 Radix 导入 |
+| B 登录、导航与设置 | ui/semi-shell | src/app/(auth)/、src/app/(app)/ 顶层页面和布局、settings/、notifications/、announcements/、policy/、tools/；src/app/(admin)/admin/；src/components/layout/、dashboard/、users/ | 接续已做的登录页。迁移全局搜索、工作台导航、设置与系统管理控件，验证登录保护、密码显示、两步验证码、搜索键盘打开及关闭返回，处理目录外的直接 Radix 导入 |
 | C 案件、材料与研究 | ui/semi-matters | src/app/(app)/ 下的 matters/、preservation/、firm-resources/；src/components/ 下的 matters/、documents/、document-reviews/、research/ | 首条业务链以案件筛选和服务端分页进入详情，再走材料、研究或编辑弹窗的保存与返回。核对当前程序/材料、固定版本引用、空态、长表单滚动、保稿以及只读入口 |
 | D 收案、客户与任务 | ui/semi-intake | src/app/(app)/ 下的 intakes/、clients/、contacts/、conflicts/、inbox/、schedule/；src/components/intakes/、clients/ | 覆盖独立收案、联系人和冲突筛选、任务/日程、客户跟进。核对保存失败后的输入、原记录改期、所选对象与返回位置 |
 | E 财务、审批与交付归档 | ui/semi-operations | src/app/(app)/ 下的 finance/、approvals/、archive/、seals/、express/、reports/；src/components/deliveries/ | 核对审批与实际执行区分、财务确认、交付材料选择与移除、归档入口。危险操作沿现有确认语义，验证无权限、取消和失败反馈 |
@@ -1607,6 +1607,23 @@ B—E 只写本组路由、组件、就近样式及已归属的相关测试。�
 - **已修复**。材料来源打开时停用搜索外层交互并将初始焦点放在返回按钮。收案向导的 Semi 下拉保留在父抽屉中，Escape 先关闭下拉。研究中的类案选择也验证了 Escape 逐层关闭。现有 Semi SideSheet 的默认实现缺少所需焦点限制，相关共享抽屉待继续迁移。
 - **已修复**。案件分页沿用 URL 上已应用的筛选。审批、财务等立即应用的筛选使用 Semi 内置无动画配置。日历的新建任务判断请求结果并允许立即重试。审批定点测试仍记录 React `act` 提示，29 项断言均通过。
 - **审计仍失败**。修复后 npm audit 仍是既有的 [picomatch 公告](https://github.com/advisories/GHSA-fc5q-39xc-vjpf) 所产生的 22 项高危条目。
+
+#### A 组第二批：公共控件与确认回焦（2026-11-18）
+
+本批由云端 A 组在独立检出 `/workspace/scratch/820345e2310c/lexorder-a` 单写，基于 `ui/semi-integration@01226ce`，分支为 `ui/semi-a-shared`。用户要求完成后提交、push 并提 PR，目标为 `ui/semi-integration`。本批不直接发布 main。开工核对的远端 main 为 `ab20185`，远端尚无 B—E 首批分支，§7.17 所列四个本地提交及 `a21a357` 不冒称已获取或合入。
+
+本批代码、定点验证和只读复审已完成，结果及待验边界见 §8.57；文件认领如下：
+
+| 文件 | 现行合同与实施范围 | 定点验收 |
+| --- | --- | --- |
+| `patterns/confirm-dialog.tsx` | 确认/输入采用 Semi Button、TextArea；保留现有队列、必填、快捷提交、取消返回值及弹层壳。首次入队固定真实入口，末项关闭恢复入口焦点，不把排队中的按钮当返回目标 | 确认与输入队列、显式取消初始焦点、空白必填、Ctrl/Cmd+Enter；父表单内取消/Escape、原稿及回焦 |
+| `patterns/filter-select.tsx` | 现有页面筛选改用 Semi Dropdown/Button；原值、全部、清除和不可清空含义不变，关闭动画不延迟立即筛选 | 选择、清除、不可清空、受控值与键盘返回 |
+| `patterns/review-dialog.tsx` 与就近布局样式 | 复核页签采用 Semi Tabs/TabPane；维持业务 tab ID、受控切换、计数、只读内容及所有页签挂载，左右区域继续独立滚动 | 切换保稿、受控原 ID、键盘切换、长内容布局边界与原审批调用回归 |
+| A 所属共享测试、主文档及两个直接消费方回归测试 | 新增共享合同验证；仅适配 `intake-approval-dialog.test.tsx`、`approval-return-flow.test.tsx` 中受本次共享实现影响的交互与异步等待，不改两组业务生产文件；补足系统管理目录归属 | 定点组件测试、受影响 lint、类型与集成构建；浏览器仍由用户验收 |
+
+源码证实：Semi Modal 的 Escape 栈只协调 Semi，而既有 Radix 父表单在 document capture 处理 Escape，另持有焦点限制与点击边界。将全局确认单独替换为 Semi Modal 会破坏当前嵌套调用；本批不新增双套弹层适配、不临时切换 Radix modal 属性。FormDialogContent、ReviewDialogContent 的外壳及仍在旧抽屉内使用的 ChoiceField 随页面调用链原子迁移，不能写成已整体完成。Sonner 和旧 UI/CSS/依赖按实际消费者保留，待 B—E 成果汇合后统一清理。
+
+**补齐归属：** `src/app/(admin)/admin/**` 属 B 组的设置与系统管理范围，A 只负责其中使用的共享实现。该分配写入现行计划供接续，未把不可见的外部会话写为已收到或已确认。
 
 #### 验收与停点
 
@@ -2495,9 +2512,41 @@ Personal/Windows、M4及全部非业务维护、知识发布、结构化方案�
 
 本轮用户桌面验收与真人律师专业核验仍未执行；已有§8.55截图保留原时点/输入/构建未知等边界，不能改标为本轮通过。B3两包仍professionalReview=PENDING，临时fixture退役后不是用户可继续操作的样本。M3原六项及真实交付/回复、无程序/完整卷宗等汇合证据继续按原条件登记；本节不关闭整个M3或宣称项目全部完成。
 
+### 8.57 A 组 Semi 公共控件第二批（2026-11-18）
+
+从远端 `ui/semi-integration@01226ce` 接续，在独立检出 `lexorder-a` 的 `ui/semi-a-shared` 实施，按用户最新要求提交 PR 到 `ui/semi-integration`。主检出单写；复核页签在独立 worktree 实施后 cherry-pick，另外的调用及弹层审查只读。现行认领见 §7.17，没有改 B—E 的业务生产文件。
+
+| 实现 | 本批结果 |
+| --- | --- |
+| ConfirmHost | 内部确认/取消与输入改用 Semi Button/TextArea/Typography；保留唯一队列和原 Promise 返回。首次发起捕获真实入口，末项关闭回焦；每个排队请求按自身类型落焦，旧事件不能结算新请求。标签、必填错误与 Ctrl/Cmd+Enter 继续关联同一输入 |
+| 页面 FilterSelect | Semi Dropdown/Button/ButtonGroup 替换旧页面菜单，保留原值、全部/清除的 undefined、不可清空和父级受控回读。选择关闭并回焦，Enter/空格/ArrowDown 打开，Escape 关闭；菜单内部键盘由 Semi 处理 |
+| ReviewDialogContent | 页签与计数改用 Semi Tabs/TabPane/Tag/Typography；保留原 ID、受控选择、所有页签挂载、各区和侧栏草稿以及原只读动作。就近 CSS module 管理内容高度及滚动，删除已无消费者的七条 `.rv-main` 旧规则 |
+| 分工与技术记录 | 四主文档同步实际合同和证据；补齐系统管理 `src/app/(admin)/admin/**` 归 B，未将外部会话状态或本地旧提交写成已收到 |
+
+**实际发现与修正。** 新增父表单内取消/Escape 两例在旧 ConfirmHost 上均失败，焦点落到 body；本批修复后，原输入、父层开闭和准确返回均通过。筛选回归使用安装版 Semi，等待 `aria-expanded=true` 的真实展开通知后操作，避免把离屏预定位的菜单误当作已可交互。收案消费方页签测试从 Radix 专用 mousedown 改为标准 click，保留附件逐件授权及审批意见断言。
+
+审批 G11 消费方首轮三例在转案后重开表单时失败；独立检出对照证明原基线四例通过、仅迁移 Review Tabs 即复现三例失败，不能归为既有问题。保留全部原断言及 mock，仅将转案提交点击和后续四次 rerender 放入 awaited async act 后四例通过，且不再出现 act/suspense 警告；单独等待提交 click 不足，后续异步详情读取与页签实例更新也必须等待。该修正只涉及测试驱动操作，未借机改审批生产逻辑。
+
+**验证记录。** Node 24.22.3、npm 11.9.0、Semi 2.105.0；依照已有锁文件安装并生成 Prisma Client，未连接数据库。六个受影响文件分段完成 **34 个不同用例全部通过、0 跳过**，不把失败后的复验及独立诊断重复计入：
+
+| 定点文件 | 最终通过数 |
+| --- | ---: |
+| `confirm-dialog-focus.test.tsx` | 6 |
+| `filter-select.test.tsx` | 7 |
+| `review-dialog.test.tsx` | 4 |
+| `form-dialog.test.tsx` | 1 |
+| `intake-approval-dialog.test.tsx` | 5 |
+| `approval-return-flow.test.tsx` | 11 |
+
+八个改动 TSX 文件的定点 ESLint、`git diff --check` 通过；`npm run typecheck` 和生产 `npm run build`（含最终生产树的 TypeScript、页面收集）通过。构建产生的 `next-env.d.ts` 恢复为原有路径，没有生成文件进入提交。独立只读复审无剩余阻断。Vitest 仍报告既有配置未来原生加载器兼容性提示；本批没有新增依赖或改变审计配置，原审计条目沿 §7.17 既有记录，不冒称重新审计通过。
+
+**汇合与待验。** 收尾核对远端 main 仍为 `ab20185`、integration 仍为 `01226ce`；新增 `ui/semi-shell` 也只指向该基线，尚无可获取的 B—E 首批实现，原 WSL 提交和 `a21a357` 保留历史交接性质。ConfirmHost、FormDialogContent、ReviewDialogContent 的 Radix 外壳及旧抽屉中的 ChoiceField 仍随其消费者等待整条调用链迁移；当前 Sonner、旧 UI 和直接依赖仍有真实引用，不提前删除。本批完成公共控件子范围，不宣称 Server 界面已全部换齐。
+
+真实浏览器继续由用户统一验收：在现有表单中触发确认后取消/Escape，检查原稿和入口焦点；在页面筛选中选择、清除并用键盘打开/返回；打开审批详情，切换资料、冲突、附件与历史后确认意见保留，并检查长内容与侧栏滚动。本批没有浏览器、窄屏、数据库/HTTP 或律师专业验收；不将 DOM 与构建结果替代这些证据。
+
 ## 9. 继续工作时的约束
 
-- 用户已授权研究、文档、提交并上传 `zaenzhang/LexOrder`，不再重复询问；每阶段完成后先提交并确认推送main，再继续下一实施阶段。本轮不包含生产迁移、部署、真实客户数据或对外消息。
+- 用户已授权研究、文档、提交并上传 `zaenzhang/LexOrder`，不再重复询问；每阶段完成后先提交并确认上传，再继续下一实施阶段。本次 Semi 迁移按 §7.17 提 PR 到 `ui/semi-integration`，其他业务沿原 main 发布分工。本轮不包含生产迁移、部署、真实客户数据或对外消息。
 - 工作区单写者，其余代理只读。先读当前四份主文档及 AGENTS 顶部，保留业务守卫和并发改动。旧路径/旧测试属于对应历史批次，不当作当前环境状态。
 - 仅具体业务开发所需的既有运行方式参考[架构第 11 节](REFACTOR_DESKTOP_TEAM_RAG.md#11-当前源码的开发部署与恢复)；`tools/cloud-dev/run.mjs` 仅运行 Server，默认关闭 cron/自动备份。Personal 搁置、无自动恢复排期，不新增或运行其验证。会话内 loopback 地址不是公网交付地址。
 - 数据目录、私有 `.env`、密钥、附件、备份、依赖、构建和原始测试输出不提交。合成样本仅放独立验收库，不重置真实库或删除锁文件绕过启动检查。

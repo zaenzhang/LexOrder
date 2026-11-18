@@ -6,9 +6,9 @@
  *      `const note = await promptDialog({ title, label, required: false });`（取消返回 null）
  * <ConfirmHost /> 挂在 Providers 中，全站唯一实例；模块级队列保证同一时刻只显示一个。
  */
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { Button, TextArea, Typography } from "@douyinfe/semi-ui";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
 
 type BaseOptions = {
   title: string;
@@ -23,16 +23,20 @@ type BaseOptions = {
 export type ConfirmOptions = BaseOptions;
 export type PromptOptions = BaseOptions & { label?: string; placeholder?: string; defaultValue?: string; required?: boolean; maxLength?: number };
 
-type Request =
+type RequestInput =
   | { kind: "confirm"; opts: ConfirmOptions; resolve: (v: boolean) => void }
   | { kind: "prompt"; opts: PromptOptions; resolve: (v: string | null) => void };
+type Request = RequestInput & { returnFocus: HTMLElement | null };
 
 let current: Request | null = null;
 const queue: Request[] = [];
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 
-function push(req: Request) {
+function push(input: RequestInput) {
+  // 同一批排队请求返回最初入口，不记录即将卸载的确认按钮。
+  const returnFocus = current ? current.returnFocus : document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const req: Request = { ...input, returnFocus };
   if (current) queue.push(req);
   else current = req;
   emit();
@@ -59,9 +63,13 @@ export function ConfirmHost() {
   const req = useSyncExternalStore(subscribe, () => current, () => null);
   const [value, setValue] = useState("");
   const [touched, setTouched] = useState(false);
+  const fieldId = useId();
+  const contentRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const cancelRef = useRef<HTMLButtonElement>(null);
-  const confirmRef = useRef<HTMLButtonElement>(null);
+  const focusInitial = useCallback((request: Request) => {
+    if (request.kind === "prompt" && !request.opts.initialFocus) inputRef.current?.focus();
+    else contentRef.current?.querySelector<HTMLButtonElement>(`[data-confirm-action="${request.opts.initialFocus ?? "confirm"}"]`)?.focus();
+  }, []);
 
   useEffect(() => {
     if (req?.kind === "prompt") {
@@ -71,9 +79,9 @@ export function ConfirmHost() {
   }, [req]);
 
   useEffect(() => {
-    // Queued requests reuse the mounted dialog, so an explicit choice also applies here.
-    if (req?.opts.initialFocus) (req.opts.initialFocus === "cancel" ? cancelRef : confirmRef).current?.focus();
-  }, [req]);
+    // 排队请求复用窗口，按每项真实类型重新落焦。
+    if (req) focusInitial(req);
+  }, [req, focusInitial]);
 
   if (!req) return null;
   const { opts } = req;
@@ -81,7 +89,7 @@ export function ConfirmHost() {
   const invalid = Boolean(promptReq?.opts.required && !value.trim());
 
   function close(ok: boolean) {
-    if (!req) return;
+    if (!req || current !== req) return;
     if (req.kind === "confirm") req.resolve(ok);
     else {
       if (ok && invalid) {
@@ -96,9 +104,12 @@ export function ConfirmHost() {
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) close(false); }}>
-      <DialogContent className="max-w-md" onOpenAutoFocus={(e) => {
-        if (opts.initialFocus) { e.preventDefault(); (opts.initialFocus === "cancel" ? cancelRef : confirmRef).current?.focus(); }
-        else if (promptReq) { e.preventDefault(); inputRef.current?.focus(); }
+      <DialogContent ref={contentRef} className="max-w-md" onOpenAutoFocus={(e) => {
+        e.preventDefault();
+        focusInitial(req);
+      }} onCloseAutoFocus={(e) => {
+        e.preventDefault();
+        if (!current && req.returnFocus?.isConnected) req.returnFocus.focus();
       }}>
         <DialogHeader className={promptReq ? undefined : "border-b-0 pb-0"}>
           <DialogTitle>{opts.title}</DialogTitle>
@@ -107,28 +118,39 @@ export function ConfirmHost() {
         {promptReq ? (
           <div className="space-y-1.5">
             {promptReq.opts.label ? (
-              <label className="text-[12.5px] font-medium text-[var(--t-secondary)]">
+              <label htmlFor={fieldId} className="text-sm font-medium">
                 {promptReq.opts.label}
-                {promptReq.opts.required ? <span className="text-[var(--red)]"> *</span> : null}
+                {promptReq.opts.required ? <Typography.Text type="danger" aria-hidden> *</Typography.Text> : null}
               </label>
             ) : null}
-            <Textarea
+            <TextArea
+              id={fieldId}
               ref={inputRef}
               rows={3}
               value={value}
               maxLength={promptReq.opts.maxLength ?? 500}
               placeholder={promptReq.opts.placeholder}
-              onChange={(e) => setValue(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) close(true); }}
+              aria-label={promptReq.opts.label ? undefined : opts.title}
+              aria-required={promptReq.opts.required}
+              aria-invalid={touched && invalid}
+              aria-describedby={touched && invalid ? `${fieldId}-error` : undefined}
+              validateStatus={touched && invalid ? "error" : "default"}
+              onChange={setValue}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  close(true);
+                }
+              }}
             />
-            {touched && invalid ? <div className="text-[11.5px] text-[var(--red)]">请填写{promptReq.opts.label ?? "内容"}</div> : null}
+            {touched && invalid ? <div id={`${fieldId}-error`} role="alert"><Typography.Text type="danger">请填写{promptReq.opts.label ?? "内容"}</Typography.Text></div> : null}
           </div>
         ) : null}
         <DialogFooter className={promptReq ? undefined : "border-t-0 pt-1"}>
-          <button ref={cancelRef} type="button" className="btn btn-secondary" onClick={() => close(false)}>{opts.cancelText ?? "取消"}</button>
-          <button ref={confirmRef} type="button" className={opts.danger ? "btn btn-danger" : "btn btn-primary"} onClick={() => close(true)} autoFocus={!promptReq && opts.initialFocus !== "cancel"}>
+          <Button data-confirm-action="cancel" htmlType="button" type="tertiary" onClick={() => close(false)}>{opts.cancelText ?? "取消"}</Button>
+          <Button data-confirm-action="confirm" htmlType="button" type={opts.danger ? "danger" : "primary"} theme="solid" onClick={() => close(true)}>
             {opts.confirmText ?? "确认"}
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

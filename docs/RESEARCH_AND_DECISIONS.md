@@ -1248,6 +1248,14 @@ C8沿真实卡片/弹窗到Action确认编辑误调用create。只读方案/实�
 
 实读本地已安装Next16.4.6 Server Actions文档、项目Radix/shadcn组件及既有领域服务，未引入依赖或复刻新交互底座。四主文档与main接管账本统一更新，12个受影响测试文件117个不同用例的实际结果和分层边界见计划 §8.56。同步保留远端#17的截图及G05认可设计；模拟预览不作为真实Word/Tauri/云盘联调证据。
 
+### 3.47 Semi 公共控件与嵌套弹层的实际边界（2026-11-18）
+
+本批从 `ui/semi-integration@01226ce` 接续，实际阅读 [Semi Modal 官方说明](https://semi.design/en-US/feedback/modal)、[接入说明](https://semi.design/en-US/start/getting-started)，并核安装版 `@douyinfe/semi-ui@2.105.0` 的 Button、TextArea、Dropdown、Tabs/TabPane、Modal/SideSheet 及相应 semi-foundation 源码/类型；Next 读取安装版 16.4.6 的 Server/Client Components 和 CSS 指南。参考范围为当前共享调用，不以官网功能清单代替代码核对，也未运行第三方演示。
+
+用户任务是从原表单取消确认后继续编辑、用键盘切换页面筛选、在复核分区间保留输入。采用 Semi 原生按钮/输入、页面 Dropdown 和保持挂载的 Tabs；保留原业务输入输出及已启用的资格守卫。实读发现 Semi 的 Modal Escape 栈仅协调 Semi，旧 Radix 父表单先在 capture 处理 Escape，另持有焦点和点击边界；将 Host 单独换壳不能可靠保留嵌套行为。本批不建临时协调器，完整外壳与其实际消费者后续原子替换。ChoiceField 的现有旧抽屉消费者也按此边界处理。
+
+源码和实际组件测试确认全局 ConfirmHost 没有 DialogTrigger，原关闭路径不返回真实入口：新增的父表单 Escape/取消两例在修改前均失败、焦点落到 body。采用首次入队记录真实入口、队列末项返回；不推断不存在的入口。页面筛选使用原业务值和框架菜单，补回旧有 ArrowDown 打开。复核读取安装版 Tabs CSS，验证隐藏页、原 ID、保稿和原生键盘；未把 jsdom 结果当成真实桌面排版。实施与证据统一记于计划 §7.17/§8.57。
+
 ## 4. 可选法律服务 MCP 与来源
 
 核查日期 2026-11-16；以下为官方公开的接入信息，不是本项目已取得账号、权益或实测成功。机构目录可扩展，自定义远程 MCP 为未预置服务保留入口；不虚构“市面所有机构都提供官方 MCP”。
