@@ -110,6 +110,7 @@ export function EnterpriseNameInput({
         onClickOutSide={dismiss}
         getPopupContainer={() => root.current?.closest<HTMLElement>('[role="dialog"]') ?? document.body}
         position="bottomLeft"
+        guardFocus={false}
         motion={false}
         content={
           <ul id={listId} aria-label="匹配的企业" className="max-h-64 w-80 space-y-1 overflow-y-auto p-1">

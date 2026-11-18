@@ -115,7 +115,9 @@ describe("F01 真实期限表单（组件环境，服务动作边界受控）", 
     expect(await screen.findByText("保存失败，请重试")).toBeVisible();
     expect(screen.getByLabelText("准确时刻（北京时间）")).toHaveValue("17:00");
     expect(screen.getByPlaceholderText("如：法院通知书载明举证期限延长至…")).toHaveValue("按合成来件明确核对");
-    fireEvent.click(screen.getByRole("button", { name: "保存调整" }));
+    const retry = screen.getByRole("button", { name: "保存调整" });
+    await waitFor(() => expect(retry).toBeEnabled());
+    fireEvent.click(retry);
     await waitFor(() => expect(mock.adjust).toHaveBeenCalledTimes(2));
     expect(mock.adjust.mock.calls[1][0]).toEqual(mock.adjust.mock.calls[0][0]);
     expect(mock.adjust.mock.calls[1][0]).toMatchObject({ dueAt: original.dueAt, duePrecision: "DATETIME" });
