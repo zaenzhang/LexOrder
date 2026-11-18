@@ -769,17 +769,27 @@ A2复用ClientFollowUp TIMESTAMP(3) updatedAt显式单调毫秒CAS；沿liveRela
 
 按当前客户关系/本人精确资格读取改期审计，anchor只确定位置，各页仍核权；合并后保原followUpId历史，不用旧detail.clientId授权。专用Dialog与旧结果Dialog只共享窄只读历史，模式/目标/版本/请求身份隔离，分钟呈现不截秒毫秒。准确九生产/六测试见计划 §7.16.13，无schema/公共授权/提醒平台变更。
 
+2026-11-18 接管重建已完成并验证，证据见计划 §8.56。列表请求序号随接受新的初始身份和打开/关闭编辑器失效；初始查询同步使用同批 initialData，旧列表响应不能覆盖新改期草稿或回写旧筛选页码。
+
 ### 6.27 真实格式工作包复用现有领域链（2026-11-17）
 
 B3仅在两个新测试文件串联既有上传/处理、要点/研究、模板、复核和批准；不增加业务模型。上传/模板/新版本自带解析入队，研究分析稿当前没有该入队，须显式调用现有retryMaterialProcessing后取得真实SUBJECT位置。R1研究来源与模板字段快照各沿原关系，不制造模板到研究的新绑定；复核BASIS须具备当前本案原件读权。
 
-仅领取本轮确切任务的受控租约，显式受控的session/cache/storage与真实格式bytes、加解密、授权事务/审计/PG分开记证。收尾同时限定本轮ingest-reconcile与parse任务，不改共享配置、不运行通用worker；临时fixture生命期不能跨进程或清理后用于交付归档。详细合同见计划 §7.16.14，PG等待A2交还后由C分配。
+仅领取本轮确切任务的受控租约，显式受控的session/cache/storage与真实格式bytes、加解密、授权事务/审计/PG分开记证。收尾同时限定本轮ingest-reconcile与parse任务，不改共享配置、不运行通用worker；临时fixture生命期不能跨进程或清理后用于交付归档。详细合同见计划 §7.16.14，2026-11-18 已由 root 串行完成真实PG两场景，见 §8.56。
+
+首轮真实TEXT来源揭示JSONB键序误判：resolveReference原来只规范解析位置，再与未规范的已存JSON按字符串比较。现两边均用既有sourceLocationSchema规范，已存位置非法仍UNAVAILABLE；固定位置值、SHA、run/anchor和当前资格均未放宽，无迁移或历史数据重写。合同见计划 §7.16.16。
 
 ### 6.28 Server 案件工作稿的桌面入口（G05 设计，2026-11-18）
 
 Tauri 作为现有 Server 工作台的桌面宿主，沿用现有页面和登录/授权。材料直接编辑绑定当前工作稿及基线版本，延续 [checkout](../src/app/api/desktop/checkout/route.ts)、[受控取件](../src/app/api/desktop/file/route.ts)和[版本摄入](../src/server/documents/material-ingest.ts)的身份、归属和过时基线检查。保存后生成同一版本族内的新版本。模板在当前环节生成时，服务端须核对环节属于所选程序和案件，再写入实际材料归属。
 
 第三方云盘作为可选的工作稿同步来源。接入具体供应商前核实授权、文件身份、断网与冲突行为。正式版本、固定来源与审批以 LexOrder 记录为准。现有 Next.js、Prisma、PostgreSQL 及后台材料队列继续承接 Server。此处登记的是[获认可的交互设计](PRODUCT_REQUIREMENTS_ACCEPTANCE.md#949-案件内的文书模板与连续编辑g052026-11-18)。
+
+### 6.29 保全原记录编辑的现有事务与版本（2026-11-18）
+
+编辑 UI 固定打开时的原记录，按 id/expectedUpdatedAt 提交实际变更字段；create/update 分开，不将创建默认值用于编辑。服务复用 lockWritableMatters 的授权锁和排序事项锁，update 再锁原保全行并重读。精确毫秒CAS及单调新版本、auditTx、仅PENDING提醒作废同事务；关联变化后刷新新旧事项。最终独立记录要求有效负责人，CUSTOM沿现有matters.read读取资格，不新增内置岗位门槛或承接流程。
+
+四生产文件、不改schema/公共授权/其他保全CRUD；保留原被保全人、财产、续期和未展示字段。已完成的组件/PG与未进行的桌面验收分记于计划 §8.56。
 
 ## 7. 参考项目如何进入 LexOrder
 
