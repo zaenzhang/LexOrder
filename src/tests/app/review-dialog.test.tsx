@@ -32,7 +32,7 @@ function Review({ tab, onTabChange, mounted }: { tab?: string; onTabChange?: (id
     { id: "original-history", label: "历史记录", content: <p>本条历史记录仅供查阅</p> },
   ];
   return (
-    <WorkspaceDialog open>
+    <WorkspaceDialog open onOpenChange={() => {}}>
       <ReviewDialogContent
         title="复核申请"
         description="合成申请编号"

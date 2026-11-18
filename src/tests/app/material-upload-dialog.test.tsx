@@ -154,7 +154,7 @@ describe("G04 批量接件：逐件身份、目标与接续（组件环境）", 
   it("发送中换范围停止后续文件，迟到结果仍属于原行；返回原范围须显式继续且保持所选行", async () => {
     const pending = deferred<{ ok: true; id: string }>(); mock.upload.mockReturnValueOnce(pending.promise);
     const view = render(<Harness />); fireEvent.click(screen.getByRole("button", { name: "打开批次" })); add(["一.txt", "二.txt"]); upload();
-    choose(1); expect(screen.getAllByRole("button", { name: "关闭", exact: true }).find(button => !button.hasAttribute("aria-label"))!).toBeDisabled();
+    choose(1); expect(screen.getAllByRole("button", { name: "关闭" }).find(button => !button.hasAttribute("aria-label"))!).toBeDisabled();
     fireEvent.click(screen.getAllByRole("button", { name: "关闭" }).find(button => button.getAttribute("aria-label") === "关闭")!);
     expect(screen.getByRole("dialog")).toBeVisible(); expect(mock.confirm).not.toHaveBeenCalled();
     act(() => { window.history.replaceState(null, "", "/matters/matter-1?procedure=procedure-b&stage=stage-stage-b"); });
@@ -181,10 +181,10 @@ describe("G04 批量接件：逐件身份、目标与接续（组件环境）", 
     mock.confirm.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
     render(<Harness />); const trigger = screen.getByRole("button", { name: "打开批次" }); trigger.focus(); fireEvent.click(trigger);
     add(["未上传.txt"]); change("显示名", "保留的草稿"); fireEvent.click(editor().getByRole("button", { name: "采用合成指示 A" }));
-    fireEvent.click(screen.getAllByRole("button", { name: "关闭", exact: true }).find(button => !button.hasAttribute("aria-label"))!);
+    fireEvent.click(screen.getAllByRole("button", { name: "关闭" }).find(button => !button.hasAttribute("aria-label"))!);
     await waitFor(() => expect(mock.confirm).toHaveBeenCalledOnce());
     expect(editor().getByLabelText("显示名")).toHaveValue("保留的草稿"); expect(editor().getByText(/本件采用：cgoal.*A/)).toBeVisible();
-    fireEvent.click(screen.getAllByRole("button", { name: "关闭", exact: true }).find(button => !button.hasAttribute("aria-label"))!);
+    fireEvent.click(screen.getAllByRole("button", { name: "关闭" }).find(button => !button.hasAttribute("aria-label"))!);
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await waitFor(() => expect(trigger).toHaveFocus()); expect(mock.upload).not.toHaveBeenCalled(); expect(mock.close).not.toHaveBeenCalled();
   });

@@ -72,6 +72,14 @@ function DialogFocus({ onOpen, onClose }: { onOpen: FocusHandler; onClose: Focus
 
 type SurfaceProps = DialogContentProps & { edge?: "left" | "right" };
 
+function tabBoundary(dialog: HTMLElement, backwards: boolean) {
+  // Tabs and conditional form sections stay mounted but their hidden fields cannot receive focus.
+  const visible = Array.from(dialog.querySelectorAll<HTMLElement>("button, input, textarea, select, a[href], iframe, summary, [tabindex], [contenteditable=true]"))
+    .filter(control => control.tabIndex >= 0 && !control.matches(":disabled") &&
+      !control.closest('[hidden], [inert], [aria-hidden="true"]') && control.getClientRects().length > 0);
+  return { boundary: backwards ? visible[0] : visible.at(-1), next: backwards ? visible.at(-1) : visible[0] };
+}
+
 function DialogSurface({
   children, className, ref, edge, showClose = true, onOpenAutoFocus, onCloseAutoFocus,
   onEscapeKeyDown, onKeyDown, onKeyDownCapture, ...props
@@ -121,11 +129,21 @@ function DialogSurface({
           "aria-describedby": "aria-describedby" in props ? props["aria-describedby"] : descriptionId,
           id: props.id,
           onKeyDownCapture: event => {
-            if (event.key === "Escape" && containsEvent(event.target)) {
+            onKeyDownCapture?.(event);
+            if (!containsEvent(event.target)) return;
+            if (event.key === "Escape") {
               const trigger = (event.target as Element).closest('[role="combobox"][aria-expanded="true"], [aria-haspopup][aria-expanded="true"]');
               guardedEscape.current = trigger ? event.nativeEvent : null;
             }
-            onKeyDownCapture?.(event);
+            if (event.key === "Tab" && !event.defaultPrevented) {
+              const dialog = event.currentTarget;
+              const { boundary, next } = tabBoundary(dialog, event.shiftKey);
+              if (!next || event.target === dialog || event.target === boundary) {
+                event.preventDefault();
+                event.stopPropagation();
+                (next ?? dialog).focus({ preventScroll: true });
+              }
+            }
           },
           onKeyDown: event => {
             onKeyDown?.(event);
@@ -150,7 +168,11 @@ function DialogSurface({
           : "grid max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-lg gap-4 overflow-y-auto p-6",
         className
       )}>
-        <DialogFocus onOpen={event => onOpenAutoFocus?.(event)} onClose={event => onCloseAutoFocus?.(event)} />
+        <DialogFocus onOpen={event => {
+          onOpenAutoFocus?.(event);
+          const dialog = surface.current;
+          if (!event.defaultPrevented && dialog && !dialog.contains(document.activeElement)) dialog.focus({ preventScroll: true });
+        }} onClose={event => onCloseAutoFocus?.(event)} />
         {children}
         {showClose ? <Button
           icon={<X size={16} aria-hidden />}

@@ -18,7 +18,7 @@ const base = {
 } satisfies Detail;
 function Harness({ detail = base, onDecision = vi.fn() }: { detail?: Detail; onDecision?: (decision: "approve" | "reject" | "revision") => void }) {
   const [note, setNote] = useState("");
-  return <WorkspaceDialog open><IntakeApprovalDialog detail={detail} intakeDetail={intakeDetail} note={note} onNoteChange={setNote} pending={false} onDecision={onDecision} onResubmit={vi.fn()} /></WorkspaceDialog>;
+  return <WorkspaceDialog open onOpenChange={() => {}}><IntakeApprovalDialog detail={detail} intakeDetail={intakeDetail} note={note} onNoteChange={setNote} pending={false} onDecision={onDecision} onResubmit={vi.fn()} /></WorkspaceDialog>;
 }
 const tab = (name: RegExp) => fireEvent.click(screen.getByRole("tab", { name }));
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
