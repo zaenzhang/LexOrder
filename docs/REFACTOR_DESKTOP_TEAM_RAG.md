@@ -775,6 +775,12 @@ B3仅在两个新测试文件串联既有上传/处理、要点/研究、模板�
 
 仅领取本轮确切任务的受控租约，显式受控的session/cache/storage与真实格式bytes、加解密、授权事务/审计/PG分开记证。收尾同时限定本轮ingest-reconcile与parse任务，不改共享配置、不运行通用worker；临时fixture生命期不能跨进程或清理后用于交付归档。详细合同见计划 §7.16.14，PG等待A2交还后由C分配。
 
+### 6.28 Server 案件工作稿的桌面入口（G05 设计，2026-11-18）
+
+Tauri 作为现有 Server 工作台的桌面宿主，沿用现有页面和登录/授权。材料直接编辑绑定当前工作稿及基线版本，延续 [checkout](../src/app/api/desktop/checkout/route.ts)、[受控取件](../src/app/api/desktop/file/route.ts)和[版本摄入](../src/server/documents/material-ingest.ts)的身份、归属和过时基线检查。保存后生成同一版本族内的新版本。模板在当前环节生成时，服务端须核对环节属于所选程序和案件，再写入实际材料归属。
+
+第三方云盘作为可选的工作稿同步来源。接入具体供应商前核实授权、文件身份、断网与冲突行为。正式版本、固定来源与审批以 LexOrder 记录为准。现有 Next.js、Prisma、PostgreSQL 及后台材料队列继续承接 Server。此处登记的是[获认可的交互设计](PRODUCT_REQUIREMENTS_ACCEPTANCE.md#949-案件内的文书模板与连续编辑g052026-11-18)。
+
 ## 7. 参考项目如何进入 LexOrder
 
 沿用 [来源记录](RESEARCH_AND_DECISIONS.md)，按“观察行为 → 输入输出与规则 → LexOrder 设计 → 场景验收”吸收。实际复制代码另记固定提交、文件、依赖与来源；研究范围不按协议类型排除。
