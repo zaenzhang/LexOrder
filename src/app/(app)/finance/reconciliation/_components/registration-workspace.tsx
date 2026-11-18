@@ -1,11 +1,10 @@
 "use client";
-import { Select, Button, Input, RadioGroup, TextArea } from "@douyinfe/semi-ui";
+import { Select, Button, Input, RadioGroup, TextArea, Toast } from "@douyinfe/semi-ui";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { contractHref } from "./contract-location";
-import { toast } from "sonner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/patterns/workspace-dialog";
 
 import { formatDate } from "@/lib/utils";
 import { moneyKinds, moneyKindLabels, type MoneyKind } from "@/lib/finance/ledger-labels";
@@ -44,7 +43,7 @@ export function RegistrationWorkspace({data,canWrite,canConfirm,selectedMatterId
     setError("");setDialogOpen(true);setMode(next);setTarget(id);setMatterId(selectedMatterId??"");setTitle("");setAmount("");setMoneyKind(next==="expense"?"OTHER":"LAWYER_FEE");setDay(formatDate(new Date()));setDraft(false);setNote("");setCounterparty("");setParts([newPart()]);
   }
   async function run(work:()=>Promise<{ok:boolean;message?:string}>,success:string) {
-    setBusy(true);setError("");try{const result=await work();if(!result.ok)throw new Error(result.message);toast.success(success);setDialogOpen(false);
+    setBusy(true);setError("");try{const result=await work();if(!result.ok)throw new Error(result.message);Toast.success(success);setDialogOpen(false);
       // M-3e（D 批）：从案件入口进入时，保存成功后留在案件上下文并回原案页，不再停在全局对账页
       if(contractEntry)return;
       if(returnTo){router.push(returnTo);return;}
@@ -67,7 +66,7 @@ export function RegistrationWorkspace({data,canWrite,canConfirm,selectedMatterId
     {!contractEntry&&data.pending.length?<section className="rounded-xl border border-amber-200 bg-amber-50 p-4"><h2 className="font-semibold">待确认实收</h2><p className="text-sm text-muted-foreground">以下登记尚未计入实收、分成或应收核销。</p><ul className="divide-y">{data.pending.map(p=><li key={p.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"><span>{matters.get(p.matterId)?.internalCode} · {moneyKindLabels[p.moneyKind]} · {yuan(p.amount)} · {p.name}登记 · {formatDate(p.occurredAt)}{p.payerOrPayee?` · 付款人：${p.payerOrPayee}`:""}{p.note?<span className="block pt-1 text-muted-foreground">{p.note}</span>:null}</span>{canConfirm && canChange(p.matterId)?<span className="flex gap-2"><Button  disabled={busy} onClick={()=>void run(()=>confirmReceipt(p.id),"到账已确认，实收与计提已入账")} size="small" theme="solid" type="primary" htmlType="button">确认到账</Button><Button  disabled={busy} onClick={()=>open("reject",p.id)} size="small" theme="outline" type="tertiary" htmlType="button">退回</Button></span>:null}</li>)}</ul></section>:null}
     {!contractEntry&&canWrite && data.receivables.some(r=>r.dueState==="CONDITIONAL"&&!r.conditionSatisfiedAt&&r.status!=="CANCELLED")?<section className="rounded-xl border bg-card p-4"><h2 className="font-semibold">待成就条件</h2>{data.receivables.filter(r=>r.dueState==="CONDITIONAL"&&!r.conditionSatisfiedAt&&r.status!=="CANCELLED").map(r=><div className="flex justify-between gap-3 py-3 text-sm" key={r.id}><span>{r.title} · {r.dueCondition}</span>{canChange(r.matterId)?<Button  onClick={()=>open("condition",r.id)} size="small" theme="outline" type="tertiary" htmlType="button">条件已成就</Button>:null}</div>)}</section>:null}
     {!dialogOpen&&error&&<p role="alert" className="text-sm text-destructive">{error}</p>}
-    <Dialog open={dialogOpen} onOpenChange={open=>{if(!busy){setDialogOpen(open);if(!open)onContractClose?.();}}}><DialogContent ref={popupContainer} onEscapeKeyDown={event => { if (busy || openDropdown.current) event.preventDefault(); }} className="max-h-[88vh] overflow-y-auto"><DialogHeader><DialogTitle>{{billing:"登记合同",receipt:"登记实收",expense:"登记支出",sign:"确认签署与分期",reject:"退回实收",condition:"确认到期条件"}[mode??"billing"]}</DialogTitle><DialogDescription>{mode==="receipt"?"登记后须由有权财务确认到账，才计入实收。":fields?"签署时按收费总额生成分期应收；各期合计须等于总额。":"填写实际日期及依据，操作将记录审计。"}</DialogDescription></DialogHeader><form onSubmit={submit}><fieldset disabled={busy} className="space-y-4">
+    <WorkspaceDialog open={dialogOpen} onOpenChange={open=>{if(!busy){setDialogOpen(open);if(!open)onContractClose?.();}}}><DialogContent ref={popupContainer} onEscapeKeyDown={event => { if (busy || openDropdown.current) event.preventDefault(); }} className="max-h-[88vh] overflow-y-auto"><DialogHeader><DialogTitle>{{billing:"登记合同",receipt:"登记实收",expense:"登记支出",sign:"确认签署与分期",reject:"退回实收",condition:"确认到期条件"}[mode??"billing"]}</DialogTitle><DialogDescription>{mode==="receipt"?"登记后须由有权财务确认到账，才计入实收。":fields?"签署时按收费总额生成分期应收；各期合计须等于总额。":"填写实际日期及依据，操作将记录审计。"}</DialogDescription></DialogHeader><form onSubmit={submit}><fieldset disabled={busy} className="space-y-4">
       {mode==="billing"||mode==="receipt"||mode==="expense"?<><label id="register-matter-label" htmlFor="register-matter">案件{selectedMatterId?"（案件入口锁定）":""}</label><Select<string> getPopupContainer={() => popupContainer.current!} onDropdownVisibleChange={visible => { openDropdown.current = visible; }} aria-labelledby="register-matter-label" id="register-matter" value={matterId} disabled={busy || Boolean(selectedMatterId)} onChange={value => (e=>setMatterId(e))(String(value ?? ""))} aria-required={true} style={{ width: "100%" }} motion={false}><Select.Option value="">请选择案件</Select.Option>{/* 2026-09-20 P3 修复：新增收费安排（billing）服务端对归档案恒拒（allowTail:false），下拉不再提供「归档收尾」选项 */}{data.matters.filter(m=>m.status!=="ARCHIVED"||(m.tailWritable===true&&(mode==="receipt"||mode==="expense"))).map(m=><Select.Option key={m.id} value={m.id}>{m.internalCode} · {m.title}{m.status==="ARCHIVED"?"（归档收尾）":""}</Select.Option>)}</Select><label>款项性质</label><RadioGroup options={moneyKinds.map(value=>({value,label:moneyKindLabels[value]}))} value={moneyKind} onChange={event => (v=>setMoneyKind(v as MoneyKind))(String(event.target.value))} disabled={busy} type="button"/></>:null}
       {fields?<><label htmlFor="billing-title">合同名称</label><Input id="billing-title" value={title} onChange={e=>setTitle(e)} required disabled={mode==="sign"}/></>:null}
       {fields||mode==="receipt"||mode==="expense"?<><label htmlFor="register-amount">{fields?"合同金额":mode==="expense"?"本次支出":"本次实收"}（元）</label><Input id="register-amount" inputMode="decimal" value={amount} onChange={e=>setAmount(e)} required disabled={mode==="sign"}/></>:null}
@@ -78,6 +77,6 @@ export function RegistrationWorkspace({data,canWrite,canConfirm,selectedMatterId
       {mode==="receipt"||mode==="expense"||mode==="reject"||mode==="condition"?<><label htmlFor="register-note">{mode==="receipt"||mode==="expense"?"备注":mode==="reject"?"退回原因":"条件成就依据"}</label><TextArea id="register-note" value={note} onChange={e=>setNote(e)} required={mode!=="receipt"&&mode!=="expense"} maxLength={mode==="receipt"||mode==="expense"?500:1000}/></>:null}
       {error&&<p role="alert" className="text-sm text-destructive">{error}</p>}
       <Button  disabled={busy || ((mode === "billing" || mode === "receipt" || mode === "expense") && !matterId)} htmlType="submit" theme="solid" type="primary">{busy?"保存中…":mode==="billing"?"登记合同":mode==="sign"?"确认签署":"确认保存"}</Button>
-    </fieldset></form></DialogContent></Dialog>
+    </fieldset></form></DialogContent></WorkspaceDialog>
   </>;
 }

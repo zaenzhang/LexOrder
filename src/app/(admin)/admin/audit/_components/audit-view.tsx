@@ -1,18 +1,10 @@
 "use client";
 
+import { Button, Select, Tag } from "@douyinfe/semi-ui";
 import { useState, useCallback, useTransition } from "react";
 import { auditActionLabel, auditTargetLabel } from "@/lib/audit-labels";
 import { useRouter } from "next/navigation";
 import { RotateCcw } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
 import { AdminPageHeader } from "@/components/layout/admin-page-header";
 import { shMonthDayTime } from "@/lib/ui/sh-time";
 
@@ -29,28 +21,29 @@ type AuditItem = {
   user: { id: string; name: string } | null;
 };
 
-const actionColor: Record<string, string> = {
-  LOGIN: "#1E56C8",
-  MATTER_CREATE: "#1A7F45",
-  MATTER_CLOSE: "#96650B",
-  MATTER_ARCHIVE: "#6C3FC5",
-  MATTER_DELETE: "#B42318",
-  CLIENT_CREATE: "#1A7F45",
-  CLIENT_DELETE: "#B42318",
-  CONFLICT_CHECK_RUN: "#96650B",
-  FEE_ENTRY_CREATE: "#1A7F45",
-  USER_CREATE: "#1A7F45",
-  USER_DEACTIVATE: "#B42318",
-  USER_PASSWORD_RESET: "#96650B"
-};
+const actionColor = {
+  LOGIN: "blue",
+  MATTER_CREATE: "green",
+  MATTER_CLOSE: "amber",
+  MATTER_ARCHIVE: "violet",
+  MATTER_DELETE: "red",
+  CLIENT_CREATE: "green",
+  CLIENT_DELETE: "red",
+  CONFLICT_CHECK_RUN: "amber",
+  FEE_ENTRY_CREATE: "green",
+  USER_CREATE: "green",
+  USER_DEACTIVATE: "red",
+  USER_PASSWORD_RESET: "amber"
+} as const;
 
 function colorFor(action: string) {
-  if (actionColor[action]) return actionColor[action];
-  if (action.endsWith("_CREATE") || action.endsWith("_ADD")) return "#1A7F45";
-  if (action.endsWith("_DELETE") || action.endsWith("_DEACTIVATE")) return "#B42318";
-  if (action.endsWith("_UPDATE") || action.endsWith("_EDIT")) return "#96650B";
-  if (action.endsWith("_VIEW")) return "#98A3AD";
-  return "#1E56C8";
+  const color = actionColor[action as keyof typeof actionColor];
+  if (color) return color;
+  if (action.endsWith("_CREATE") || action.endsWith("_ADD")) return "green";
+  if (action.endsWith("_DELETE") || action.endsWith("_DEACTIVATE")) return "red";
+  if (action.endsWith("_UPDATE") || action.endsWith("_EDIT")) return "amber";
+  if (action.endsWith("_VIEW")) return "grey";
+  return "blue";
 }
 
 export function AuditView({
@@ -98,66 +91,54 @@ export function AuditView({
       <AdminPageHeader title="审计日志" sub={<>当前筛选下 <b>{items.length}</b> 条 · 敏感操作（明文查看、导出、权限变更）均在此留痕，不可删除</>} />
 
       <div className="flex flex-wrap items-center gap-3 card p-3">
-        <Select
+        <Select<string> insetLabel="动作" insetLabelId="audit-action-label" aria-labelledby="audit-action-label" className="w-44" motion={false}
           value={action}
-          onValueChange={(v) => {
-            setAction(v);
-            updateUrl({ action: v });
+          onChange={(v) => {
+            const nextAction = String(v);
+            setAction(nextAction);
+            updateUrl({ action: nextAction });
           }}
         >
-          <SelectTrigger className="h-9 w-44 bg-background">
-            <SelectValue placeholder="动作" />
-          </SelectTrigger>
-          <SelectContent className="max-h-80">
-            <SelectItem value="ALL">全部动作</SelectItem>
+            <Select.Option value="ALL">全部动作</Select.Option>
             {distinctActions.map((a) => (
-              <SelectItem key={a} value={a}>
+              <Select.Option key={a} value={a}>
                 {auditActionLabel(a)}
-              </SelectItem>
+              </Select.Option>
             ))}
-          </SelectContent>
-        </Select>
+          </Select>
 
-        <Select
+        <Select<string> insetLabel="用户" insetLabelId="audit-user-label" aria-labelledby="audit-user-label" className="w-44" filter motion={false}
           value={userId}
-          onValueChange={(v) => {
-            setUserId(v);
-            updateUrl({ userId: v });
+          onChange={(v) => {
+            const nextUser = String(v);
+            setUserId(nextUser);
+            updateUrl({ userId: nextUser });
           }}
         >
-          <SelectTrigger className="h-9 w-40 bg-background">
-            <SelectValue placeholder="用户" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">全部用户</SelectItem>
+            <Select.Option value="ALL">全部用户</Select.Option>
             {userOptions.map((u) => (
-              <SelectItem key={u.id} value={u.id}>
+              <Select.Option key={u.id} value={u.id}>
                 {u.name}
-              </SelectItem>
+              </Select.Option>
             ))}
-          </SelectContent>
-        </Select>
+          </Select>
 
-        <Select
+        <Select<string> insetLabel="期间" insetLabelId="audit-period-label" aria-labelledby="audit-period-label" className="w-36" motion={false}
           value={days}
-          onValueChange={(v) => {
-            setDays(v);
-            updateUrl({ days: v });
+          onChange={(v) => {
+            const nextDays = String(v);
+            setDays(nextDays);
+            updateUrl({ days: nextDays });
           }}
         >
-          <SelectTrigger className="h-9 w-32 bg-background">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7">近 7 天</SelectItem>
-            <SelectItem value="30">近 30 天</SelectItem>
-            <SelectItem value="90">近 90 天</SelectItem>
-            <SelectItem value="365">近 1 年</SelectItem>
-          </SelectContent>
-        </Select>
+            <Select.Option value="7">近 7 天</Select.Option>
+            <Select.Option value="30">近 30 天</Select.Option>
+            <Select.Option value="90">近 90 天</Select.Option>
+            <Select.Option value="365">近 1 年</Select.Option>
+          </Select>
 
         {(action !== "ALL" || userId !== "ALL" || days !== "30") && (
-          <Button variant="ghost" size="sm" onClick={reset} className="gap-1">
+          <Button theme="borderless" type="tertiary" size="small" onClick={reset} className="gap-1">
             <RotateCcw className="h-3.5 w-3.5" />
             重置
           </Button>
@@ -177,19 +158,11 @@ export function AuditView({
                 key={it.id}
                 className="flex items-start gap-3 rounded-md border border-border bg-card px-4 py-2.5"
               >
-                <span
-                  className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: color, boxShadow: `0 0 6px ${color}` }}
-                />
                 <div className="flex-1 overflow-hidden">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge
-                      variant="outline"
-                      className="font-mono text-[10px]"
-                      style={{ borderColor: `${color}50`, color }}
-                    >
+                    <Tag color={color}>
                       {auditActionLabel(it.action)}
-                    </Badge>
+                    </Tag>
                     {it.targetType && (
                       <span className="font-mono text-xs text-muted-foreground">
                         {auditTargetLabel(it.targetType)}

@@ -1,10 +1,9 @@
 "use client";
 
+import { Button, Toast } from "@douyinfe/semi-ui";
 import { useRef, useState, useTransition } from "react";
 import { Download, Upload, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet } from "lucide-react";
-import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
 import {
   parseMatterImportAction,
   commitMatterImportAction,
@@ -33,7 +32,7 @@ export function MatterImportView() {
         setPreview(p);
       } catch (e) {
         setPreview(null);
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "解析失败");
+        Toast.error(e instanceof Error ? actionErrorMessage(e) : "解析失败");
       }
     });
   };
@@ -42,7 +41,7 @@ export function MatterImportView() {
     if (!preview) return;
     const valid = preview.rows.filter((r) => r.valid).map((r) => ({ rowNo: r.rowNo, raw: r.raw }));
     if (valid.length === 0) {
-      toast.error("没有可导入的有效行");
+      Toast.error("没有可导入的有效行");
       return;
     }
     startImport(async () => {
@@ -51,9 +50,9 @@ export function MatterImportView() {
         setResult(res);
         setPreview(null);
         if (fileRef.current) fileRef.current.value = "";
-        toast.success(`导入完成：成功 ${res.succeeded.length}，失败 ${res.failed.length}`);
+        Toast.success(`导入完成：成功 ${res.succeeded.length}，失败 ${res.failed.length}`);
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "导入失败");
+        Toast.error(e instanceof Error ? actionErrorMessage(e) : "导入失败");
       }
     });
   };
@@ -80,7 +79,7 @@ export function MatterImportView() {
 
         <div className="flex flex-wrap items-center gap-3">
           <a href="/api/imports/matters/template" download>
-            <Button variant="outline" className="gap-1.5">
+            <Button theme="outline" className="gap-1.5">
               <Download className="h-3.5 w-3.5" />
               下载模板
             </Button>
@@ -93,7 +92,7 @@ export function MatterImportView() {
             className="hidden"
             onChange={(e) => onFile(e.target.files?.[0])}
           />
-          <Button onClick={() => fileRef.current?.click()} disabled={parsing} className="gap-1.5">
+          <Button theme="solid" onClick={() => fileRef.current?.click()} disabled={parsing} className="gap-1.5">
             {parsing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
             上传并预览
           </Button>
@@ -116,10 +115,10 @@ export function MatterImportView() {
               </span>
             </h3>
             <div className="flex gap-2">
-              <Button variant="ghost" size="sm" onClick={reset}>
+              <Button theme="borderless" type="tertiary" size="small" onClick={reset}>
                 取消
               </Button>
-              <Button size="sm" onClick={doImport} disabled={importing || preview.validCount === 0} className="gap-1.5">
+              <Button theme="solid" size="small" onClick={doImport} disabled={importing || preview.validCount === 0} className="gap-1.5">
                 {importing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 确认导入 {preview.validCount} 行
               </Button>
@@ -181,7 +180,7 @@ export function MatterImportView() {
               导入结果 · 成功 <span className="text-[var(--green)]">{result.succeeded.length}</span> · 失败{" "}
               <span className={result.failed.length > 0 ? "text-destructive" : ""}>{result.failed.length}</span>
             </h3>
-            <Button variant="ghost" size="sm" onClick={reset}>
+            <Button theme="borderless" type="tertiary" size="small" onClick={reset}>
               再导入一批
             </Button>
           </header>

@@ -5,7 +5,14 @@ const mock = vi.hoisted(() => ({ token: vi.fn(), regenerate: vi.fn(), copy: vi.f
 vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams("view=list") }));
 vi.mock("@/components/layout/topbar-action", () => ({ useTopbarAction: vi.fn() }));
 vi.mock("@/server/calendar/actions", () => ({ getCalendarToken: mock.token, regenerateCalendarToken: mock.regenerate }));
-vi.mock("sonner", () => ({ toast: { success: mock.success, error: mock.error } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { success: mock.success }),
+    Notification: Object.assign(semi.Notification, { success: mock.success, error: mock.error })
+  };
+});
 vi.mock("@/app/(app)/schedule/_components/add-task-dialog", () => ({ AddTaskDialog: () => null }));
 
 import { ActionError } from "@/lib/action-error";
@@ -81,7 +88,7 @@ describe("日历订阅 Semi 控件与既有确认边界", () => {
     const { dialog } = await openSubscription();
     fireEvent.click(within(dialog).getByRole("button", { name: "重置链接" }));
     fireEvent.click(within(await screen.findByRole("dialog", { name: "重置订阅链接？" })).getByRole("button", { name: "重置链接" }));
-    await waitFor(() => expect(mock.error).toHaveBeenCalledWith("重置失败", { description: "重置暂不可用" }));
+    await waitFor(() => expect(mock.error).toHaveBeenCalledWith(expect.objectContaining({ title: "重置失败", content: "重置暂不可用" })));
     expect(within(dialog).getByText(`${window.location.origin}/api/calendar/synthetic-calendar-token`)).toBeVisible();
     let finish!: (value: { token: string }) => void;
     mock.regenerate.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
@@ -101,14 +108,14 @@ describe("日历订阅 Semi 控件与既有确认边界", () => {
     const trigger = renderSubscription();
     fireEvent.click(trigger);
     expect(await screen.findByText("订阅链接不可用。")).toBeVisible();
-    expect(mock.error).toHaveBeenCalledWith("获取订阅链接失败");
+    expect(mock.error).toHaveBeenCalledWith(expect.objectContaining({ title: "获取订阅链接失败" }));
     fireEvent.click(screen.getByRole("button", { name: "关闭" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     fireEvent.click(trigger);
     await screen.findByText(`${window.location.origin}/api/calendar/synthetic-calendar-token`);
     mock.copy.mockRejectedValueOnce(new Error("synthetic clipboard failure"));
     fireEvent.click(screen.getByRole("button", { name: "复制链接" }));
-    await waitFor(() => expect(mock.error).toHaveBeenCalledWith("复制失败，请手动选中复制"));
+    await waitFor(() => expect(mock.error).toHaveBeenCalledWith(expect.objectContaining({ title: "复制失败，请手动选中复制" })));
   });
 });
 

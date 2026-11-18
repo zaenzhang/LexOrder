@@ -1,9 +1,8 @@
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 const { save, saveBuiltin, refresh } = vi.hoisted(() => ({ save: vi.fn(), saveBuiltin: vi.fn(), refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/server/roles/actions", () => ({ saveRoleDefinition: save, saveBuiltinRolePresentation: saveBuiltin }));
 import { RolesView } from "@/app/(admin)/admin/roles/_components/roles-view";
 const role = { id: "cmrolescustomverification1", name: "档案专员", normalizedName: "档案专员", description: "日常行政事务", active: true, version: 2, permissions: [{ roleId: "cmrolescustomverification1", permissionKey: "express.manage", scope: "OWN" }], _count: { users: 2 }, createdAt: new Date(), updatedAt: new Date() };
@@ -15,7 +14,8 @@ describe("角色管理界面", () => {
     fireEvent.click(screen.getByRole("button", { name: "新增角色" }));
     fireEvent.change(screen.getByLabelText("角色名称"), { target: { value: "档案管理员" } });
     fireEvent.click(screen.getByRole("checkbox", { name: "查看归档" }));
-    fireEvent.change(screen.getByRole("combobox", { name: "查看归档的数据范围" }), { target: { value: "TEAM" } });
+    const scope = screen.getByRole("radiogroup", { name: "查看归档的数据范围" });
+    fireEvent.click(within(scope).getByRole("radio", { name: "本人及已有团队查看授权" }));
     fireEvent.click(screen.getByRole("button", { name: "保存角色" }));
     await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({ name: "档案管理员", permissions: [{ permissionKey: "archive.read", scope: "TEAM" }] })));
     await waitFor(() => expect(refresh).toHaveBeenCalledOnce());

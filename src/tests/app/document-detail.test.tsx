@@ -9,7 +9,7 @@ const mock = vi.hoisted(() => ({
 }));
 vi.mock("@/server/matters/context-actions", () => ({ getMatterContextInputOptions: mock.contextOptions, getMatterContextInputChoice: mock.contextChoice, getMatterContextHistory: mock.contextHistory }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mock.refresh, push: mock.push, replace: mock.replace }), useSearchParams: () => new URLSearchParams(window.location.search) }));
-vi.mock("sonner", () => ({ toast: { success: mock.toast, error: mock.toast } }));
+vi.mock("@douyinfe/semi-ui", async (load) => ({ ...await load<typeof import("@douyinfe/semi-ui")>(), Toast: { success: mock.toast, error: mock.toast }, Notification: { success: mock.toast, error: mock.toast } }));
 vi.mock("@/server/documents/detail-actions", () => ({ getDocumentDetail: mock.detail }));
 vi.mock("@/server/documents/actions", () => ({ uploadNewVersion: mock.upload, submitDocumentForReview: mock.submit, fileDocument: mock.file, approveDocument: mock.approve, rejectDocument: mock.reject }));
 vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: mock.confirm }));
@@ -63,7 +63,7 @@ const approvalData: Awaited<ReturnType<typeof listApprovalWorkspace>> = {
 function renderDetail(extra: Partial<React.ComponentProps<typeof DocumentDetail>> = {}) {
   return render(<DocumentDetail matterId={matterId} documentId={oldId} onClose={close} onDocumentChange={change} onIssueChange={issue} onPrepareDelivery={prepare} {...extra} />);
 }
-function tab(name: string) { fireEvent.mouseDown(screen.getByRole("tab", { name }), { button: 0, ctrlKey: false }); }
+function tab(name: string) { fireEvent.click(screen.getByRole("tab", { name })); }
 beforeEach(() => {
   vi.resetAllMocks(); window.history.replaceState(null, "", "/");
   mock.detail.mockResolvedValue(detail()); mock.approval.mockResolvedValue(approval()); mock.confirm.mockResolvedValue(false);

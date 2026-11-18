@@ -16,7 +16,7 @@ vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: mocks.co
 const adopted: ContextInputSelection = { recordId: "ccontext000000000000000000001", expectedCurrentRecordId: "ccontext000000000000000000001", expectedConfirmedAt: null };
 vi.mock("@/components/matters/context-input-picker", () => ({ ContextInputPicker: ({ value, onChange, disabled }: { value: ContextInputSelection[]; onChange(value: ContextInputSelection[]): void; disabled?: boolean }) =>
   <button disabled={disabled} onClick={() => onChange([adopted])}>{value.length ? "已选合成目标" : "选择合成目标"}</button> }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), warning: vi.fn(), info: vi.fn(), error: vi.fn() } }));
+vi.mock("@douyinfe/semi-ui", async (load) => ({ ...await load<typeof import("@douyinfe/semi-ui")>(), Toast: { success: vi.fn(), warning: vi.fn(), info: vi.fn(), error: vi.fn() }, Notification: { success: vi.fn(), warning: vi.fn(), info: vi.fn(), error: vi.fn() } }));
 const matterId = "cmatter000000000000000000001";
 const templates: TemplateSummary[] = [
   { id: "execution", name: "执行验收模板", category: "EXECUTION", description: null, applicableCategories: [], variables: ["execution.basis", "proceeding.court", "client.phone"], isBuiltIn: true },
@@ -121,7 +121,9 @@ describe("二开界面适配（组件交互）", () => {
     const request = mocks.render.mock.calls[0][0];
     expect(request).toMatchObject({ overrides: { "client.phone": "仅本稿电话" }, expectedValues: { "client.phone": "原始值:client.phone" }, contextInputs: [adopted] });
     expect(screen.getByLabelText("委托人电话")).toHaveValue("仅本稿电话");
-    fireEvent.click(screen.getByRole("button", { name: "生成草稿并下载" }));
+    const retry = screen.getByRole("button", { name: "生成草稿并下载" });
+    await waitFor(() => expect(retry).toBeEnabled());
+    fireEvent.click(retry);
     await waitFor(() => expect(mocks.render).toHaveBeenCalledTimes(2));
     expect(mocks.render.mock.calls[1][0]).toEqual(request);
   });

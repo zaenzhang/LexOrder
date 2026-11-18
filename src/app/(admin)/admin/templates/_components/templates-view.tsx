@@ -1,27 +1,17 @@
 "use client";
 
+import { Button, Form, Input, Notification, Select, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
-import { toast } from "sonner";
 import { Plus, Trash2, Loader2, Pencil, Save } from "lucide-react";
 import type { ProcedureType, StageTemplate } from "@prisma/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
-import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogFooter
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import { upsertStageTemplate } from "@/server/settings/actions";
 import { procedureTypeLabel } from "@/lib/enums";
 import { AdminPageHeader } from "@/components/layout/admin-page-header";
@@ -66,18 +56,13 @@ export function TemplatesView({ templates }: { templates: StageTemplate[] }) {
     <div className="space-y-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <AdminPageHeader title="阶段模板" sub="新建程序时自动套用对应模板的环节；已建程序的环节不受模板修改影响。" />
-        <Select value={selected} onValueChange={(v) => setSelected(v as ProcedureType)}>
-          <SelectTrigger className="h-9 w-48 bg-background">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
+        <Select insetLabel="程序类型" insetLabelId="template-procedure-label" aria-labelledby="template-procedure-label" className="w-52" motion={false} value={selected} onChange={(v) => setSelected(v as ProcedureType)}>
             {ALL_PROCEDURE_TYPES.map((t) => (
-              <SelectItem key={t} value={t}>
+              <Select.Option key={t} value={t}>
                 {procedureTypeLabel[t]}
-              </SelectItem>
+              </Select.Option>
             ))}
-          </SelectContent>
-        </Select>
+          </Select>
       </header>
 
       <section className="card p-5">
@@ -90,7 +75,7 @@ export function TemplatesView({ templates }: { templates: StageTemplate[] }) {
               新建程序时将自动套用此模板的阶段
             </p>
           </div>
-          <Button size="sm" onClick={() => setEditing(true)} className="gap-1.5">
+          <Button theme="solid" size="small" onClick={() => setEditing(true)} className="gap-1.5">
             <Pencil className="h-3.5 w-3.5" />
             {current ? "编辑" : "新建模板"}
           </Button>
@@ -174,7 +159,7 @@ function EditTemplateDialog({
       .filter((s) => s.name.trim())
       .map((s, i) => ({ name: s.name.trim(), order: i + 1, defaultTasks: [] }));
     if (cleaned.length === 0) {
-      toast.warning("至少需要一个阶段");
+      Toast.warning("至少需要一个阶段");
       return;
     }
     startTransition(async () => {
@@ -184,16 +169,16 @@ function EditTemplateDialog({
           name,
           steps: cleaned
         });
-        toast.success("模板已保存");
+        Toast.success("模板已保存");
         onClose();
       } catch (err) {
-        toast.error("保存失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "保存失败", content: actionErrorMessage(err) });
       }
     });
   }
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
+    <WorkspaceDialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>编辑模板 — {procedureTypeLabel[procedureType]}</DialogTitle>
@@ -203,14 +188,14 @@ function EditTemplateDialog({
         </DialogHeader>
 
         <div className="space-y-1.5">
-          <Label className="text-xs">模板名称</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} />
+          <Form.Label name="procedure-template-name">模板名称</Form.Label>
+          <Input id="procedure-template-name" value={name} onChange={(value) => setName(value)} />
         </div>
 
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <Label className="text-xs">阶段流程</Label>
-            <Button variant="outline" size="sm" onClick={addStep} className="h-7 gap-1">
+            <h3 className="text-sm font-medium">阶段流程</h3>
+            <Button theme="outline" size="small" onClick={addStep} className="h-7 gap-1">
               <Plus className="h-3.5 w-3.5" />
               添加阶段
             </Button>
@@ -224,13 +209,14 @@ function EditTemplateDialog({
                   </span>
                   <Input
                     value={s.name}
-                    onChange={(e) => updateStep(idx, { name: e.target.value })}
+                    onChange={(value) => updateStep(idx, { name: value })}
+                    aria-label={`阶段 ${idx + 1} 名称`}
                     placeholder="阶段名称"
                     className="h-8 flex-1"
                   />
                   <Button
-                    variant="ghost"
-                    size="sm"
+                    theme="borderless" type="tertiary"
+                    size="small"
                     onClick={() => removeStep(idx)}
                     className="h-8 w-8 p-0 text-destructive"
                   >
@@ -243,15 +229,15 @@ function EditTemplateDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isPending}>
+          <Button theme="outline" onClick={onClose} disabled={isPending}>
             取消
           </Button>
-          <Button onClick={handleSave} disabled={isPending} className="gap-1.5">
+          <Button theme="solid" onClick={handleSave} disabled={isPending} className="gap-1.5">
             {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             保存模板
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }

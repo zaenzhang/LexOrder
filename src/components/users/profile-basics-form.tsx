@@ -5,9 +5,8 @@ import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { toast } from "sonner";
 import { z } from "zod";
-import { Button, Form, Input } from "@douyinfe/semi-ui";
+import { Button, Form, Input, Toast } from "@douyinfe/semi-ui";
 import { myProfileSchema, personalProfileSchema } from "@/server/users/profile-schema";
 import type { RuntimeMode } from "@/lib/runtime/mode";
 import { updateMyProfile } from "@/server/users/profile-actions";
@@ -42,16 +41,16 @@ export function ProfileBasicsForm({ profile, adminTargetId, isSelf = true, onSav
           : await updateMyProfile(values);
         resetField("currentPassword");
         if (!personal && result.emailChanged && isSelf) {
-          toast.success("邮箱已更新，请使用新邮箱重新登录");
+          Toast.success("邮箱已更新，请使用新邮箱重新登录");
           await signOut({ callbackUrl: "/login" });
           return;
         }
-        toast.success(!personal && result.emailChanged ? "资料已更新，该账号需使用新邮箱重新登录" : "个人资料已保存");
+        Toast.success(!personal && result.emailChanged ? "资料已更新，该账号需使用新邮箱重新登录" : "个人资料已保存");
         setShowPhone(false);
         onSaved?.();
         router.refresh();
       } catch (error) {
-        toast.error(error instanceof Error ? actionErrorMessage(error) : "资料保存失败");
+        Toast.error(error instanceof Error ? actionErrorMessage(error) : "资料保存失败");
       }
     });
   }

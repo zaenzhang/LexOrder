@@ -12,7 +12,14 @@ vi.mock("@/server/external-contacts/actions", () => ({
   approveExternalContact: mock.approve, rejectExternalContact: mock.reject, archiveExternalContact: mock.archive
 }));
 vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: mock.confirm, promptDialog: mock.prompt }));
-vi.mock("sonner", () => ({ toast: { success: mock.success, error: mock.error } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { success: mock.success }),
+    Notification: Object.assign(semi.Notification, { success: mock.success, error: mock.error })
+  };
+});
 
 import { ExternalContactDialog } from "@/app/(app)/contacts/_components/external-contact-dialog";
 import { ContactsView } from "@/app/(app)/contacts/_components/contacts-view";
@@ -47,7 +54,7 @@ describe("通讯录 Semi 控件（服务动作替身）", () => {
     fireEvent.change(screen.getByLabelText("姓名"), { target: { value: "修改后合成联系人" } });
     fireEvent.change(screen.getByLabelText("备注"), { target: { value: "修改后备注" } });
     fireEvent.click(screen.getByRole("button", { name: "更新" }));
-    await waitFor(() => expect(mock.error).toHaveBeenCalledWith("保存失败", expect.any(Object)));
+    await waitFor(() => expect(mock.error).toHaveBeenCalledWith(expect.objectContaining({ title: "保存失败", content: expect.any(String) })));
     expect(close).not.toHaveBeenCalled();
     expect(screen.getByLabelText("姓名")).toHaveValue("修改后合成联系人");
     expect(screen.getByLabelText("备注")).toHaveValue("修改后备注");

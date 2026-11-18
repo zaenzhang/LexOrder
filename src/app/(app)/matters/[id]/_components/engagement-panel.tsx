@@ -8,30 +8,18 @@
  * - 关联客户名下已有委托（挂链，带生效区间）；
  * - 终止委托（填写原因；终止不触碰财务与程序状态——状态轴分离）。
  */
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useId, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { Select, Button, Checkbox, Input, Notification, TextArea, Toast } from "@douyinfe/semi-ui";
 import { Handshake, Link2, Loader2, Plus, SquareSlash } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
+} from "@/components/patterns/workspace-dialog";
 import {
   createEngagement,
   linkEngagementMatter,
@@ -73,6 +61,7 @@ export function EngagementPanel({
   engagements: EngagementRow[];
   canManage: boolean;
 }) {
+  const selectLabelId = useId();
   const router = useRouter();
   const [dialog, setDialog] = useState<"create" | "link" | "terminate" | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -118,7 +107,7 @@ export function EngagementPanel({
 
   function submitCreate() {
     if (!client) return;
-    if (!title.trim()) { toast.warning("请填写委托名称"); return; }
+    if (!title.trim()) { Toast.warning("请填写委托名称"); return; }
     startTransition(async () => {
       try {
         await createEngagement({
@@ -129,17 +118,17 @@ export function EngagementPanel({
           startedAt: startedAt ? new Date(startedAt) : undefined,
           matterIds: linkThisMatter ? [matterId] : []
         });
-        toast.success("委托已创建");
+        Toast.success("委托已创建");
         closeDialog();
         router.refresh();
       } catch (err) {
-        toast.error("创建失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "创建失败", content: actionErrorMessage(err) });
       }
     });
   }
 
   function submitLink() {
-    if (!linkEngagementId) { toast.warning("请选择要关联的委托"); return; }
+    if (!linkEngagementId) { Toast.warning("请选择要关联的委托"); return; }
     startTransition(async () => {
       try {
         await linkEngagementMatter({
@@ -148,26 +137,26 @@ export function EngagementPanel({
           validFrom: validFrom ? new Date(validFrom) : undefined,
           validTo: validTo ? new Date(validTo) : undefined
         });
-        toast.success("已关联到本案");
+        Toast.success("已关联到本案");
         closeDialog();
         router.refresh();
       } catch (err) {
-        toast.error("关联失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "关联失败", content: actionErrorMessage(err) });
       }
     });
   }
 
   function submitTerminate() {
     if (!terminateTarget) return;
-    if (!terminateReason.trim()) { toast.warning("请填写终止原因"); return; }
+    if (!terminateReason.trim()) { Toast.warning("请填写终止原因"); return; }
     startTransition(async () => {
       try {
         await terminateEngagement({ engagementId: terminateTarget.engagement.id, reason: terminateReason.trim() });
-        toast.success("委托已终止");
+        Toast.success("委托已终止");
         closeDialog();
         router.refresh();
       } catch (err) {
-        toast.error("终止失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "终止失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -184,11 +173,11 @@ export function EngagementPanel({
         </span>
         {canManage && client && (
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" className="h-7 gap-1" onClick={() => setDialog("link")}>
+            <Button className="h-7 gap-1" onClick={() => setDialog("link")} type="tertiary" theme="borderless" size="small">
               <Link2 className="h-3 w-3" />
               关联已有
             </Button>
-            <Button variant="ghost" size="sm" className="h-7 gap-1" onClick={() => setDialog("create")}>
+            <Button className="h-7 gap-1" onClick={() => setDialog("create")} type="tertiary" theme="borderless" size="small">
               <Plus className="h-3 w-3" />
               新建委托
             </Button>
@@ -259,11 +248,11 @@ export function EngagementPanel({
                 </div>
                 {canManage && !terminated && (
                   <Button
-                    variant="ghost"
-                    size="sm"
                     className="h-7 shrink-0 gap-1 text-xs text-muted-foreground hover:text-destructive"
                     disabled={isPending}
                     onClick={() => { setTerminateTarget(row); setTerminateReason(""); setDialog("terminate"); }}
+                    type="tertiary" theme="borderless"
+                    size="small"
                   >
                     <SquareSlash className="h-3 w-3" />
                     终止
@@ -276,7 +265,7 @@ export function EngagementPanel({
       )}
 
       {/* 新建委托 */}
-      <Dialog open={dialog === "create"} onOpenChange={o => !o && closeDialog()}>
+      <WorkspaceDialog open={dialog === "create"} onOpenChange={o => !o && closeDialog()}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>新建委托</DialogTitle>
@@ -286,19 +275,19 @@ export function EngagementPanel({
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-xs">委托名称 <span className="text-destructive">*</span></Label>
+              <label className="text-xs">委托名称 <span className="text-destructive">*</span></label>
               <Input
                 value={title}
-                onChange={e => setTitle(e.target.value)}
+                onChange={inputValue => setTitle(inputValue)}
                 placeholder="如：2026 年度常年法律顾问"
                 maxLength={120}
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">委托范围</Label>
-              <Textarea
+              <label className="text-xs">委托范围</label>
+              <TextArea
                 value={scopeText}
-                onChange={e => setScopeText(e.target.value)}
+                onChange={inputValue => setScopeText(inputValue)}
                 placeholder="如：合同审查、劳动用工咨询、重大事项专项意见"
                 rows={3}
                 maxLength={2000}
@@ -306,31 +295,31 @@ export function EngagementPanel({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">收费备注</Label>
-                <Input value={feeNote} onChange={e => setFeeNote(e.target.value)} maxLength={500} />
+                <label className="text-xs">收费备注</label>
+                <Input value={feeNote} onChange={inputValue => setFeeNote(inputValue)} maxLength={500} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">委托起始日</Label>
-                <Input type="date" value={startedAt} onChange={e => setStartedAt(e.target.value)} />
+                <label className="text-xs">委托起始日</label>
+                <Input type="date" value={startedAt} onChange={inputValue => setStartedAt(inputValue)} />
               </div>
             </div>
-            <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-              <Checkbox checked={linkThisMatter} onCheckedChange={v => setLinkThisMatter(v === true)} />
+            <div className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+              <Checkbox checked={linkThisMatter} onChange={({ target: { checked } }) => setLinkThisMatter(checked === true)}>
               同时将本案关联到该委托
-            </label>
+            </Checkbox></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={closeDialog} disabled={isPending}>取消</Button>
-            <Button onClick={submitCreate} disabled={isPending}>
+            <Button onClick={closeDialog} disabled={isPending} type="tertiary" theme="outline">取消</Button>
+            <Button onClick={submitCreate} disabled={isPending} theme="solid">
               {isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
               创建
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </WorkspaceDialog>
 
       {/* 关联已有委托 */}
-      <Dialog open={dialog === "link"} onOpenChange={o => !o && closeDialog()}>
+      <WorkspaceDialog open={dialog === "link"} onOpenChange={o => !o && closeDialog()}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>关联已有委托</DialogTitle>
@@ -340,7 +329,7 @@ export function EngagementPanel({
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-xs">委托 <span className="text-destructive">*</span></Label>
+              <label className="text-xs">委托 <span className="text-destructive">*</span></label>
               {activeOptions === null ? (
                 <div className="flex h-9 items-center gap-2 text-xs text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" /> 正在读取客户委托…
@@ -348,42 +337,37 @@ export function EngagementPanel({
               ) : activeOptions.length === 0 ? (
                 <p className="text-xs text-muted-foreground">该客户暂无未终止的委托，可先新建。</p>
               ) : (
-                <Select value={linkEngagementId} onValueChange={setLinkEngagementId}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="选择委托" /></SelectTrigger>
-                  <SelectContent>
-                    {activeOptions.map(o => (
-                      <SelectItem key={o.id} value={o.id}>
+                <> <span className="sr-only" id={selectLabelId + "-1"}>{"选择委托"}</span><Select value={linkEngagementId} onChange={value => { if (typeof value === "string") setLinkEngagementId(value); }} aria-labelledby={selectLabelId + "-1"} placeholder="选择委托" className="w-full" motion={false}>{activeOptions.map(o => (
+                      <Select.Option key={o.id} value={o.id}>
                         {o.title}
                         {o.startedAt ? `（${fmtDate(o.startedAt)} 起）` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      </Select.Option>
+                    ))}</Select></>
               )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">关联生效日</Label>
-                <Input type="date" value={validFrom} onChange={e => setValidFrom(e.target.value)} />
+                <label className="text-xs">关联生效日</label>
+                <Input type="date" value={validFrom} onChange={inputValue => setValidFrom(inputValue)} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">关联截止日</Label>
-                <Input type="date" value={validTo} onChange={e => setValidTo(e.target.value)} />
+                <label className="text-xs">关联截止日</label>
+                <Input type="date" value={validTo} onChange={inputValue => setValidTo(inputValue)} />
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={closeDialog} disabled={isPending}>取消</Button>
-            <Button onClick={submitLink} disabled={isPending || !linkEngagementId}>
+            <Button onClick={closeDialog} disabled={isPending} type="tertiary" theme="outline">取消</Button>
+            <Button onClick={submitLink} disabled={isPending || !linkEngagementId} theme="solid">
               {isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
               关联
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </WorkspaceDialog>
 
       {/* 终止委托 */}
-      <Dialog open={dialog === "terminate"} onOpenChange={o => !o && closeDialog()}>
+      <WorkspaceDialog open={dialog === "terminate"} onOpenChange={o => !o && closeDialog()}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>终止委托「{terminateTarget?.engagement.title}」</DialogTitle>
@@ -392,24 +376,24 @@ export function EngagementPanel({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
-            <Label className="text-xs">终止原因 <span className="text-destructive">*</span></Label>
-            <Textarea
+            <label className="text-xs">终止原因 <span className="text-destructive">*</span></label>
+            <TextArea
               value={terminateReason}
-              onChange={e => setTerminateReason(e.target.value)}
+              onChange={inputValue => setTerminateReason(inputValue)}
               placeholder="如：委托事项全部办结，双方确认终止"
               rows={3}
               maxLength={300}
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={closeDialog} disabled={isPending}>取消</Button>
-            <Button variant="destructive" onClick={submitTerminate} disabled={isPending}>
+            <Button onClick={closeDialog} disabled={isPending} type="tertiary" theme="outline">取消</Button>
+            <Button onClick={submitTerminate} disabled={isPending} type="danger" theme="solid">
               {isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
               确认终止
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </WorkspaceDialog>
     </section>
   );
 }

@@ -1,27 +1,18 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
+import { useId, useState, useTransition } from "react";
+import { Select, Button, Input, Notification, Toast } from "@douyinfe/semi-ui";
 import type { CustomFieldDef } from "@prisma/client";
 import { Pencil, ListChecks } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { FieldGrid, FieldItem } from "@/components/patterns/moan";
 import { useRouter } from "next/navigation";
-import { Input } from "@/components/ui/input";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
+} from "@/components/patterns/workspace-dialog";
 import { saveMatterCustomValues } from "@/server/custom-fields/actions";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -110,6 +101,7 @@ function EditDialog({
   defs: FieldDef[];
   values: Record<string, string>;
 }) {
+  const selectLabelId = useId();
   const router = useRouter();
   const [draft, setDraft] = useState<Record<string, string>>({ ...values });
   const [pending, startTransition] = useTransition();
@@ -122,17 +114,17 @@ function EditDialog({
     startTransition(async () => {
       try {
         await saveMatterCustomValues(matterId, draft);
-        toast.success("已保存");
+        Toast.success("已保存");
         onClose();
         router.refresh();
       } catch (err) {
-        toast.error("保存失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "保存失败", content: actionErrorMessage(err) });
       }
     });
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <WorkspaceDialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>编辑自定义信息</DialogTitle>
@@ -146,23 +138,16 @@ function EditDialog({
                 {d.required && <span className="ml-0.5 text-destructive">*</span>}
               </label>
               {d.fieldType === "SELECT" ? (
-                <Select value={draft[d.key] ?? ""} onValueChange={(v) => set(d.key, v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="请选择" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {d.options.map((o) => (
-                      <SelectItem key={o} value={o}>
+                <> <span className="sr-only" id={selectLabelId + "-1"}>{"请选择"}</span><Select value={draft[d.key] ?? ""} onChange={v => { if (typeof v === "string") set(d.key, v); }} aria-labelledby={selectLabelId + "-1"} placeholder="请选择" className="w-full" motion={false}>{d.options.map((o) => (
+                      <Select.Option key={o} value={o}>
                         {o}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      </Select.Option>
+                    ))}</Select></>
               ) : (
                 <Input
                   type={d.fieldType === "NUMBER" ? "number" : d.fieldType === "DATE" ? "date" : "text"}
                   value={draft[d.key] ?? ""}
-                  onChange={(e) => set(d.key, e.target.value)}
+                  onChange={inputValue => set(d.key, inputValue)}
                 />
               )}
             </div>
@@ -170,14 +155,14 @@ function EditDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={pending}>
+          <Button onClick={onClose} disabled={pending} type="tertiary" theme="outline">
             取消
           </Button>
-          <Button onClick={submit} disabled={pending}>
+          <Button onClick={submit} disabled={pending} theme="solid">
             保存
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }

@@ -8,9 +8,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { ClipboardPaste, Mail } from "lucide-react";
-import { Button, Popover, Spin, Tag } from "@douyinfe/semi-ui";
+import { Button, Popover, Spin, Tag, Toast } from "@douyinfe/semi-ui";
 import { listSmsMessages, markSmsProcessed } from "@/server/sms/actions";
 import { SmsPasteDialog } from "@/app/(app)/inbox/_components/sms-paste-dialog";
 import { shMonthDayTime } from "@/lib/ui/sh-time";
@@ -98,7 +97,7 @@ export function SmsPopover() {
       setItems(previous => previous.filter(sms => sms.id !== id));
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? actionErrorMessage(error) : "标记失败，请稍后重试");
+      Toast.error(error instanceof Error ? actionErrorMessage(error) : "标记失败，请稍后重试");
     } finally {
       mutating.current = false;
       setBusyId(null);

@@ -1,19 +1,18 @@
 "use client";
 
-import { Button, Checkbox, TextArea } from "@douyinfe/semi-ui";
+import { Button, Checkbox, TextArea, Notification, Toast } from "@douyinfe/semi-ui";
 
 import { FormDialogContent as DialogContent } from "@/components/patterns/form-dialog";
 
 import { useState, useMemo, useTransition } from "react";
 import { CalendarClock, FileDown, Inbox, KeyRound, Loader2, Sparkles } from "lucide-react";
-import { toast } from "sonner";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogDescription
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import { parseSms, splitSmsBatch } from "@/lib/sms-parser";
 import { parseAndSaveSms } from "@/server/sms/actions";
 import { SMS_TYPE_CN, SMS_TYPE_ACCENT } from "./sms-types";
@@ -49,24 +48,24 @@ export function SmsPasteDialog({
 
   const submit = () => {
     if (!text.trim()) {
-      toast.error("请粘贴短信内容");
+      Notification.error({ title: "请粘贴短信内容", duration: 6 });
       return;
     }
     startTransition(async () => {
       try {
         const res = await parseAndSaveSms({ rawText: text, batch, useAi, extractAttachments });
         const aiHint = useAi && res.aiEnrichedCount > 0 ? `，AI 增强 ${res.aiEnrichedCount} 条` : "";
-        toast.success(`已解析 ${res.count} 条${aiHint}`);
+        Toast.success(`已解析 ${res.count} 条${aiHint}`);
         setText("");
         onOpenChange(false);
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "保存失败");
+        Notification.error({ title: e instanceof Error ? actionErrorMessage(e) : "保存失败", duration: 6 });
       }
     });
   };
 
   return (
-    <Dialog
+    <WorkspaceDialog
       open={open}
       onOpenChange={(o) => {
         if (!o) requestClose();
@@ -202,6 +201,6 @@ export function SmsPasteDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }

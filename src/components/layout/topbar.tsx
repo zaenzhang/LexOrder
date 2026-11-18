@@ -51,7 +51,7 @@ export function Topbar({ onMobileMenuToggle, userAvatar }: { onMobileMenuToggle?
             <Button htmlType="button" onClick={() => router.push("/conflicts")} theme="light" type="tertiary" title="收案前查一查本所有没有相关记录" aria-label="冲突预检" icon={<ScanSearch size={18} />}><span className="hidden lg:inline">冲突预检</span></Button>
           ) : null}
           {action ? (
-            <Button htmlType="button" onClick={action.onClick} disabled={action.disabled} theme="solid" aria-label={action.label} icon={<Plus size={18} />}><span className="hidden sm:inline">{action.label}</span></Button>
+            <Button id="workspace-top-action" htmlType="button" onClick={action.onClick} disabled={action.disabled} theme="solid" aria-label={action.label} icon={<Plus size={18} />}><span className="hidden sm:inline">{action.label}</span></Button>
           ) : null}
         </div>
       ) : null}

@@ -18,7 +18,14 @@ vi.mock("@/server/clients/dedup", () => ({ checkClientDuplicate: mock.duplicate 
 vi.mock("@/server/yuandian/enterprise", () => ({ searchEnterpriseCandidates: mock.enterpriseSearch, getEnterpriseDetail: mock.enterpriseDetail }));
 vi.mock("@/server/ai/parse-pleading", () => ({ parsePleading: vi.fn() }));
 vi.mock("@/server/ai/recommend-cause", () => ({ recommendCause: vi.fn() }));
-vi.mock("sonner", () => ({ toast: { warning: mock.warning, success: vi.fn(), error: vi.fn(), info: vi.fn(), loading: vi.fn() } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { warning: mock.warning, success: vi.fn(), info: vi.fn() }),
+    Notification: Object.assign(semi.Notification, { warning: mock.warning, success: vi.fn(), error: vi.fn(), info: vi.fn() })
+  };
+});
 // 案由回显另有独立切片；向导的 RHF、schema、PartyCard、ChoiceField 均使用真实实现。
 vi.mock("@/app/(app)/matters/_components/cause-combobox", () => ({ CauseCombobox: () => <span>案由选择</span> }));
 
@@ -85,8 +92,8 @@ function summary(label: string) {
 }
 
 async function select(label: string, option: string) {
-  fireEvent.keyDown(screen.getByRole("combobox", { name: label }), { key: "ArrowDown" });
-  fireEvent.keyDown(await screen.findByRole("option", { name: option }), { key: "Enter" });
+  fireEvent.click(screen.getByRole("combobox", { name: label }));
+  fireEvent.click(await screen.findByRole("option", { name: option }));
   await waitFor(() => expect(screen.getByRole("combobox", { name: label })).toHaveTextContent(option));
 }
 

@@ -1,5 +1,5 @@
 "use client";
-import { Button, Input } from "@douyinfe/semi-ui";
+import { Button, Input, Notification, Toast } from "@douyinfe/semi-ui";
 
 /**
  * 工作区「冲突预检」（2026-09-14 用户确认）：
@@ -13,7 +13,6 @@ import { Button, Input } from "@douyinfe/semi-ui";
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { Briefcase, FileClock, Info, Loader2, Plus, Search, ShieldAlert, ShieldCheck, TriangleAlert, Users, X } from "lucide-react";
 import type { ConflictSeverity, MatterCategory, MatterStatus, PartyRole, LitigationStanding } from "@prisma/client";
 import { runCheckAndSave } from "@/server/conflicts/actions";
@@ -140,7 +139,7 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
     if (pending) return;
     const valid = queries.filter((q) => q.name.trim() || q.idNumber.trim());
     if (valid.length === 0) {
-      toast.warning("请至少填写一个主体的名称或证件号");
+      Toast.warning("请至少填写一个主体的名称或证件号");
       return;
     }
     startTransition(async () => {
@@ -153,10 +152,10 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
         setCheckedAt(new Date());
         setSearchedQueries(valid.map((q) => ({ ...q, editing: false })));
         setQueries((qs) => qs.map((q) => ({ ...q, editing: false })));
-        toast.success(list.length ? `预检完成，共 ${list.length} 条相关记录` : "预检完成，系统中未发现相关记录");
+        Toast.success(list.length ? `预检完成，共 ${list.length} 条相关记录` : "预检完成，系统中未发现相关记录");
         router.refresh();
       } catch (err) {
-        toast.error("检索失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "检索失败", content: actionErrorMessage(err), duration: 6 });
       }
     });
   }

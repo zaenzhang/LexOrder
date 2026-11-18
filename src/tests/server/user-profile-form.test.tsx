@@ -5,7 +5,6 @@ vi.mock("@/server/users/profile-actions", () => ({ updateMyProfile: save }));
 vi.mock("@/server/users/actions", () => ({ updateUserProfile: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 vi.mock("next-auth/react", () => ({ signOut }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 import { ProfileBasicsForm } from "@/components/users/profile-basics-form";
 const profile = { name: "表单测试", email: "profile@example.invalid", phone: "13800000000", updatedAt: "2026-09-06T00:00:00.000Z" };
 beforeEach(() => { vi.resetAllMocks(); save.mockResolvedValue({ emailChanged: false }); });

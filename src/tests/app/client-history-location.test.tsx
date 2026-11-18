@@ -70,7 +70,7 @@ describe("具体指示的客户历史返回位置", () => {
     window.history.replaceState(null, "", clientHistoryHref(clientId, { filters: { matterId: newMatter.id, source: "CONTEXT" } }));
     rendered.rerender(<ClientHistoryPanel clientId={clientId} initial={first} />);
     await screen.findByText(row.title);
-    expect(screen.getByRole("button", { name: `筛选动态事项：${newMatter.title}` })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: `筛选动态事项：${newMatter.title}` })).toHaveTextContent(newMatter.title);
     expect(mocks.read).toHaveBeenLastCalledWith(expect.objectContaining({ clientId, matterId: newMatter.id, source: "CONTEXT" }));
     await act(async () => old.resolve({ ...second, items: [{ ...row, title: "旧筛选迟到正文" }], selectedMatter: oldMatter }));
     expect(screen.queryByText("旧筛选迟到正文")).not.toBeInTheDocument();
@@ -97,7 +97,7 @@ describe("具体指示的客户历史返回位置", () => {
     expect(screen.queryByText(row.title)).not.toBeInTheDocument();
     expect(screen.queryByText(selectedMatter.title)).not.toBeInTheDocument();
     await act(async () => current.resolve({ items: [], nextCursor: null, selectedMatter: null }));
-    expect(screen.getByRole("button", { name: "筛选动态事项：所选事项（名称不可读）" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "筛选动态事项：所选事项（名称不可读）" })).toHaveTextContent("所选事项（名称不可读）");
   });
 
   it("浏览器恢复URL而Server props仍为首屏时按URL重新读取，迟到页不能替换新目标", async () => {

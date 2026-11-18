@@ -1,0 +1,18 @@
+{
+  "name": "@lexorder/picomatch",
+  "version": "4.0.7-backport.1",
+  "description": "LexOrder's private backport of picomatch 4.0.7 for GHSA-fc5q-39xc-vjpf",
+  "private": true,
+  "license": "MIT",
+  "author": "Jon Schlinkert (https://github.com/jonschlinkert)",
+  "repository": "micromatch/picomatch",
+  "main": "index.js",
+  "engines": {
+    "node": ">=12"
+  },
+  "files": [
+    "index.js",
+    "posix.js",
+    "lib"
+  ]
+}

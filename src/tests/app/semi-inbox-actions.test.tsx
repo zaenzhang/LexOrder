@@ -12,7 +12,14 @@ vi.mock("@/server/sms/confirm-actions", () => ({ decideSmsSuggestions: mock.deci
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mock.refresh }), useSearchParams: () => new URLSearchParams() }));
 vi.mock("@/components/layout/topbar-action", () => ({ useTopbarAction: vi.fn() }));
 vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: vi.fn() }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: mock.error } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { success: vi.fn() }),
+    Notification: Object.assign(semi.Notification, { success: vi.fn(), error: mock.error })
+  };
+});
 
 const now = new Date("2026-11-18T08:00:00.000Z");
 const matter: NonNullable<SmsRow["matchedMatter"]> = { id: "cmtestmatter000000000001", internalCode: "SYN-01", title: "合成案件", procedures: [
@@ -52,7 +59,7 @@ describe("Semi 收件箱操作（真实控件，服务替身）", () => {
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     expect(mock.close).not.toHaveBeenCalled();
     await act(async () => { reject(new Error("合成保存失败")); });
-    expect(mock.error).toHaveBeenCalledWith("合成保存失败");
+    expect(mock.error).toHaveBeenCalledWith(expect.objectContaining({ title: "合成保存失败" }));
     expect(text).toHaveValue("合成法院短信一\n\n合成法院短信二");
     expect(screen.getByRole("checkbox", { name: /多条短信/ })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: /尝试提取电子送达附件/ })).toBeChecked();
@@ -72,7 +79,7 @@ describe("Semi 收件箱操作（真实控件，服务替身）", () => {
     fireEvent.change(screen.getByLabelText(/^开庭时间/), { target: { value: "2026-11-21T15:20" } });
     fireEvent.change(screen.getByLabelText("备注"), { target: { value: "合成待核对说明" } });
     fireEvent.click(screen.getByRole("button", { name: "生成开庭" }));
-    await waitFor(() => expect(mock.error).toHaveBeenCalledWith("合成庭期失败"));
+    await waitFor(() => expect(mock.error).toHaveBeenCalledWith(expect.objectContaining({ title: "合成庭期失败" })));
     expect(mock.close).not.toHaveBeenCalled();
     expect(screen.getByLabelText(/^标题/)).toHaveValue("合成询问");
     expect(screen.getByRole("combobox", { name: /关联程序/ })).toHaveTextContent("合成第二程序");
@@ -110,7 +117,7 @@ describe("Semi 收件箱操作（真实控件，服务替身）", () => {
     expect(screen.queryByRole("option", { name: /合成第一程序/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("option", { name: /合成第二程序/ }));
     fireEvent.click(screen.getByRole("button", { name: "回填案号" }));
-    await waitFor(() => expect(mock.error).toHaveBeenCalledWith("合成回填失败"));
+    await waitFor(() => expect(mock.error).toHaveBeenCalledWith(expect.objectContaining({ title: "合成回填失败" })));
     expect(mock.close).not.toHaveBeenCalled();
     expect(screen.getByRole("combobox", { name: /短信解析出的案号/ })).toHaveTextContent("（2026）合民终2号");
     await waitFor(() => expect(screen.getByRole("button", { name: "回填案号" })).toBeEnabled());
@@ -127,7 +134,9 @@ describe("Semi 收件箱操作（真实控件，服务替身）", () => {
     fireEvent.click(await screen.findByRole("option", { name: /SYN-01 合成案件/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent("合成关联失败");
     expect(screen.getByRole("combobox", { name: "指派案件" })).toHaveTextContent("合成案件");
-    fireEvent.click(screen.getByRole("button", { name: "重试关联" }));
+    const retry = screen.getByRole("button", { name: "重试关联" });
+    await waitFor(() => expect(retry).toBeEnabled());
+    fireEvent.click(retry);
     await waitFor(() => expect(mock.match).toHaveBeenCalledTimes(2));
     expect(mock.match.mock.calls.map(call => call[0])).toEqual([{ smsId: sms.id, matterId: matter.id }, { smsId: sms.id, matterId: matter.id }]);
   });

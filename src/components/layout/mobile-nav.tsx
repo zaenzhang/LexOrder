@@ -1,11 +1,11 @@
 "use client";
 
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  WorkspaceDialog,
+  DrawerContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/patterns/workspace-dialog";
 import { NavContent, type FirmBrand } from "./sidebar";
 
 export function MobileNav({
@@ -20,15 +20,15 @@ export function MobileNav({
   onOpenTools?: () => void;
 }) {
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="w-[248px] p-0">
-        <SheetHeader className="sr-only">
-          <SheetTitle>导航菜单</SheetTitle>
-        </SheetHeader>
+    <WorkspaceDialog open={open} onOpenChange={onOpenChange}>
+      <DrawerContent side="left" className="w-[248px] p-0">
+        <DialogHeader className="sr-only">
+          <DialogTitle>导航菜单</DialogTitle>
+        </DialogHeader>
         <div className="h-full" onClick={() => onOpenChange(false)}>
           <NavContent firm={firm} onOpenTools={onOpenTools} />
         </div>
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </WorkspaceDialog>
   );
 }

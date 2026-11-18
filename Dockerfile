@@ -8,7 +8,8 @@ WORKDIR /app
 # 失败会回退选择 openssl-1.1.x 的引擎二进制，而运行环境只有 libssl3 —— 引擎加载
 # 失败，容器内 migrate/seed 与应用查询全部不可用。见 AGENTS.md「数据库与运行环境」。
 RUN apk add --no-cache libc6-compat openssl
-COPY package*.json ./
+COPY package*.json .npmrc ./
+COPY vendor/picomatch ./vendor/picomatch
 COPY prisma ./prisma
 COPY prisma.config.ts ./prisma.config.ts
 RUN npm ci

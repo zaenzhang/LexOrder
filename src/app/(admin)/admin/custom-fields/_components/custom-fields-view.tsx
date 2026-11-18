@@ -1,27 +1,17 @@
 "use client";
 
+import { Button, Input, Notification, Form, Select, Switch, TextArea, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
-import { toast } from "sonner";
 import type { CustomFieldDef } from "@prisma/client";
 import { Plus, Pencil, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogFooter
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
+} from "@/components/patterns/workspace-dialog";
 import {
   createCustomFieldDef,
   updateCustomFieldDef,
@@ -49,9 +39,9 @@ export function CustomFieldsView({ matterFields }: { matterFields: CustomFieldDe
     startTransition(async () => {
       try {
         await deleteCustomFieldDef(id);
-        toast.success("已删除");
+        Toast.success("已删除");
       } catch (err) {
-        toast.error("删除失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "删除失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -61,14 +51,14 @@ export function CustomFieldsView({ matterFields }: { matterFields: CustomFieldDe
       try {
         await toggleCustomFieldDef(id, enabled);
       } catch (err) {
-        toast.error("操作失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "操作失败", content: actionErrorMessage(err) });
       }
     });
   }
 
   return (
     <div className="space-y-4">
-      <AdminPageHeader title="自定义字段" sub="为案件添加机构特有的字段，新建/编辑案件详情时填写。" actions={<Button onClick={() => setCreateOpen(true)} size="sm"><Plus />添加字段</Button>} />
+      <AdminPageHeader title="自定义字段" sub="为案件添加机构特有的字段，新建/编辑案件详情时填写。" actions={<Button theme="solid" onClick={() => setCreateOpen(true)} size="small"><Plus />添加字段</Button>} />
 
       <div className="overflow-hidden card">
         <table className="w-full text-[13px]">
@@ -103,23 +93,23 @@ export function CustomFieldsView({ matterFields }: { matterFields: CustomFieldDe
                   <td className="px-4 py-2.5">
                     <Switch
                       checked={f.enabled}
-                      onCheckedChange={(v) => handleToggle(f.id, v)}
+                      onChange={(v) => handleToggle(f.id, v)}
                       disabled={pending}
                     />
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center justify-end gap-1">
                       <Button
-                        variant="ghost"
-                        size="sm"
+                        theme="borderless" type="tertiary"
+                        size="small"
                         className="h-7 w-7 p-0"
                         onClick={() => setEditing(f)}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
                       <Button
-                        variant="ghost"
-                        size="sm"
+                        theme="borderless" type="tertiary"
+                        size="small"
                         className="h-7 w-7 p-0 text-destructive"
                         onClick={() => handleDelete(f.id, f.label)}
                         disabled={pending}
@@ -167,7 +157,7 @@ function FieldFormDialog({
 
   function submit() {
     if (!label.trim()) {
-      toast.warning("请填写字段名称");
+      Toast.warning("请填写字段名称");
       return;
     }
     const options =
@@ -178,7 +168,7 @@ function FieldFormDialog({
             .filter(Boolean)
         : [];
     if (fieldType === "SELECT" && options.length === 0) {
-      toast.warning("下拉类型请至少填写一个选项（每行一个）");
+      Toast.warning("下拉类型请至少填写一个选项（每行一个）");
       return;
     }
     startTransition(async () => {
@@ -188,16 +178,16 @@ function FieldFormDialog({
         } else {
           await createCustomFieldDef({ entityType: "MATTER", label, fieldType, required, options });
         }
-        toast.success(field ? "已更新" : "已添加");
+        Toast.success(field ? "已更新" : "已添加");
         onClose();
       } catch (err) {
-        toast.error("保存失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "保存失败", content: actionErrorMessage(err) });
       }
     });
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <WorkspaceDialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{field ? "编辑字段" : "添加字段"}</DialogTitle>
@@ -206,53 +196,52 @@ function FieldFormDialog({
 
         <div className="space-y-3">
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">字段名称</label>
-            <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="如：内部承办编号" />
+            <Form.Label name="custom-field-name" required>字段名称</Form.Label>
+            <Input id="custom-field-name" disabled={pending} value={label} onChange={setLabel} placeholder="如：内部承办编号" />
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">字段类型</label>
+            <Form.Label id="custom-field-type-label">字段类型</Form.Label>
             <Select
+              aria-labelledby="custom-field-type-label"
+              disabled={pending}
+              className="w-full"
               value={fieldType}
-              onValueChange={(v) => setFieldType(v as CustomFieldDef["fieldType"])}
+              onChange={(v) => setFieldType(v as CustomFieldDef["fieldType"])}
             >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="TEXT">文本</SelectItem>
-                <SelectItem value="NUMBER">数字</SelectItem>
-                <SelectItem value="DATE">日期</SelectItem>
-                <SelectItem value="SELECT">下拉</SelectItem>
-              </SelectContent>
-            </Select>
+                <Select.Option value="TEXT">文本</Select.Option>
+                <Select.Option value="NUMBER">数字</Select.Option>
+                <Select.Option value="DATE">日期</Select.Option>
+                <Select.Option value="SELECT">下拉</Select.Option>
+              </Select>
           </div>
           {fieldType === "SELECT" && (
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">选项值（每行一个）</label>
-              <textarea
+              <Form.Label name="custom-field-options" required>选项值（每行一个）</Form.Label>
+              <TextArea
+                id="custom-field-options"
+                disabled={pending}
                 value={optionsText}
-                onChange={(e) => setOptionsText(e.target.value)}
+                onChange={setOptionsText}
                 rows={4}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                 placeholder={"选项一\n选项二"}
               />
             </div>
           )}
           <label className="flex items-center gap-2 text-sm">
-            <Switch checked={required} onCheckedChange={setRequired} />
+            <Switch aria-label="必填字段" disabled={pending} checked={required} onChange={setRequired} />
             必填
           </label>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={pending}>
+          <Button theme="outline" onClick={onClose} disabled={pending}>
             取消
           </Button>
-          <Button onClick={submit} disabled={pending}>
+          <Button theme="solid" onClick={submit} loading={pending} disabled={pending}>
             {field ? "保存" : "添加"}
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }

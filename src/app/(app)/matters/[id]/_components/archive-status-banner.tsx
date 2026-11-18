@@ -1,7 +1,7 @@
 "use client";
 
+import { Tag } from "@douyinfe/semi-ui";
 import { Hourglass, XCircle, Archive } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 type ArchiveStatus = "PENDING_REVIEW" | "REJECTED" | "APPROVED";
@@ -43,17 +43,18 @@ export function ArchiveStatusBanner({ record, onReArchive }: Props) {
           <span className={cn("text-sm font-medium", isRejected ? "text-[var(--red)]" : "text-[var(--bronze)]")}>
             {isRejected ? "归档申请被驳回" : "归档申请审批中"}
           </span>
-          <Badge
-            variant="outline"
+          <Tag
             className={cn(
               "text-[10px]",
               isRejected
                 ? "border-[var(--red-line)] text-[var(--red)]"
                 : "border-[var(--bronze-line)] text-[var(--bronze)]"
             )}
+            color="grey"
+            type="ghost"
           >
             {record.archiveNo}
-          </Badge>
+          </Tag>
         </div>
         <div className="text-xs text-muted-foreground">
           {isRejected

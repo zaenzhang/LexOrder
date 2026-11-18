@@ -4,7 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mock = vi.hoisted(() => ({ run: vi.fn(), refresh: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mock.refresh }) }));
 vi.mock("@/server/conflicts/actions", () => ({ runCheckAndSave: mock.run }));
-vi.mock("sonner", () => ({ toast: { success: mock.success, error: mock.error, warning: mock.warning } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { success: mock.success, warning: mock.warning }),
+    Notification: Object.assign(semi.Notification, { success: mock.success, error: mock.error, warning: mock.warning })
+  };
+});
 
 import { ConflictsViewV4 } from "@/app/(app)/conflicts/_components/conflicts-view-v4";
 import { TopbarActionProvider, useTopbarActionValue } from "@/components/layout/topbar-action";
@@ -56,7 +63,7 @@ describe("冲突预检 Semi 控件（服务动作替身）", () => {
     await act(async () => fail(new Error("request failed")));
     expect(name).toHaveValue("合成失败重试主体");
     await waitFor(() => expect(name).toBeEnabled());
-    expect(mock.error).toHaveBeenCalledWith("检索失败", expect.any(Object));
+    expect(mock.error).toHaveBeenCalledWith(expect.objectContaining({ title: "检索失败", content: expect.any(String) }));
     fireEvent.click(screen.getByRole("button", { name: "开始预检" }));
     await screen.findByText("不等于确认无冲突");
     expect(mock.run).toHaveBeenCalledTimes(2);

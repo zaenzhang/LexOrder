@@ -1,20 +1,9 @@
 "use client";
 
+import { Banner, Button, Form, Input, Notification, Select } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpenCheck, ExternalLink, Loader2 } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { BookOpenCheck, ExternalLink } from "lucide-react";
 import { saveArchivePolicy, type getArchivePolicySettings } from "@/server/archive/policy";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -32,10 +21,10 @@ export function ArchivePolicyForm({ data }: { data: Data }) {
     startTransition(async () => {
       try {
         await saveArchivePolicy({ name, version, effectiveAt, sourceFileId });
-        toast.success("归档制度已保存", { description: "后续申请将固定当前制度版本与原文。" });
+        Notification.success({ title: "归档制度已保存", content: "后续申请将固定当前制度版本与原文。" });
         router.refresh();
       } catch (error) {
-        toast.error("保存失败", { description: error instanceof Error ? actionErrorMessage(error) : "请稍后重试" });
+        Notification.error({ title: "保存失败", content: error instanceof Error ? actionErrorMessage(error) : "请稍后重试" });
       }
     });
   }
@@ -53,35 +42,40 @@ export function ArchivePolicyForm({ data }: { data: Data }) {
       </header>
 
       {!data.policy.configured && (
-        <Alert>
-          <AlertTitle>尚未配置律所归档制度</AlertTitle>
-          <AlertDescription>
-            系统内置清单只能作为设置基础。在这里关联本所现行制度后，律师才能提交正式归档申请。
-          </AlertDescription>
-        </Alert>
+        <Banner
+          type="warning"
+          closeIcon={null}
+          title="尚未配置律所归档制度"
+          description="系统内置清单只能作为设置基础。请先为正式归档申请关联本所现行制度原文。"
+        />
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="archive-policy-name">制度名称</Label>
-          <Input id="archive-policy-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：律师业务档案立卷归档办法" maxLength={120} />
+          <Form.Label name="archive-policy-name">制度名称</Form.Label>
+          <Input id="archive-policy-name" value={name} onChange={(value) => setName(value)} placeholder="例如：律师业务档案立卷归档办法" maxLength={120} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="archive-policy-version">版本</Label>
-          <Input id="archive-policy-version" value={version} onChange={(event) => setVersion(event.target.value)} placeholder="例如：2026 年版 / 第 2 版" maxLength={60} />
+          <Form.Label name="archive-policy-version">版本</Form.Label>
+          <Input id="archive-policy-version" value={version} onChange={(value) => setVersion(value)} placeholder="例如：2026 年版 / 第 2 版" maxLength={60} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="archive-policy-date">生效日期</Label>
-          <Input id="archive-policy-date" type="date" value={effectiveAt} onChange={(event) => setEffectiveAt(event.target.value)} />
+          <Form.Label name="archive-policy-date">生效日期</Form.Label>
+          <Input id="archive-policy-date" type="date" value={effectiveAt} onChange={(value) => setEffectiveAt(value)} />
         </div>
         <div className="space-y-2">
-          <Label>制度原文</Label>
-          <Select value={sourceFileId} onValueChange={setSourceFileId}>
-            <SelectTrigger aria-label="选择归档制度原文"><SelectValue placeholder="选择律所资料库中的制度文件" /></SelectTrigger>
-            <SelectContent>
-              {data.files.map((file) => <SelectItem key={file.id} value={file.id}>{file.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <Form.Label id="archive-policy-source-label">制度原文</Form.Label>
+          <Select<string>
+            aria-labelledby="archive-policy-source-label"
+            className="w-full"
+            placeholder="选择律所资料库中的制度文件"
+            value={sourceFileId || undefined}
+            disabled={pending || !data.files.length}
+            filter
+            onChange={value => setSourceFileId(String(value))}
+          >
+              {data.files.map((file) => <Select.Option key={file.id} value={file.id}>{file.name}</Select.Option>)}
+            </Select>
           {!data.files.length && <p className="text-xs text-destructive">律所资料库暂无带校验值的“制度”文件，请先上传制度原文。</p>}
         </div>
       </div>
@@ -98,8 +92,7 @@ export function ArchivePolicyForm({ data }: { data: Data }) {
       </div>
 
       <div className="flex justify-end">
-        <Button disabled={pending || !data.files.length} onClick={submit}>
-          {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        <Button theme="solid" loading={pending} disabled={pending || !data.files.length} onClick={submit}>
           保存并启用此版本
         </Button>
       </div>

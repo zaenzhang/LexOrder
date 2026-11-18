@@ -2,15 +2,9 @@
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { Select, Button, Input, Notification, Tag, TextArea, Toast, Typography } from "@douyinfe/semi-ui";
 import { Loader2, Unlink } from "lucide-react";
-import { Badge, type BadgeProps } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { WorkspaceDialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import {
   addEvidenceSource, confirmEvidenceItem, createEvidenceItem, getEvidenceItem,
@@ -39,7 +33,7 @@ export type EvidenceItemRow = {
   sources?: EvidenceSourceView[]; restricted?: boolean; canEdit?: boolean;
   eventDate?: EvidenceEventDate | null;
 };
-const EVIDENCE_KIND_VARIANT: Record<EvidenceKind, BadgeProps["variant"]> = {
+const EVIDENCE_KIND_COLOR: Record<EvidenceKind, NonNullable<React.ComponentProps<typeof Tag>["color"]>> = {
   FACT: "teal",
   CLAIM: "blue",
   ANALYSIS: "violet",
@@ -50,10 +44,8 @@ const KIND_KEYS = Object.keys(evidenceKindLabel) as EvidenceKind[];
 const RELATIONS = Object.keys(sourceRelationLabel) as Relation[];
 
 function KindSelect({ value, onChange, id, disabled }: { value: EvidenceKind; onChange: (value: EvidenceKind) => void; id: string; disabled?: boolean }) {
-  return <Select value={value} onValueChange={value => onChange(value as EvidenceKind)} disabled={disabled}>
-    <SelectTrigger id={id}><SelectValue /></SelectTrigger>
-    <SelectContent>{KIND_KEYS.map(kind => <SelectItem key={kind} value={kind}>{evidenceKindLabel[kind]}</SelectItem>)}</SelectContent>
-  </Select>;
+  const selectLabelId = useId();
+  return <> <span className="sr-only" id={selectLabelId + "-kind"}>类型</span><Select id={id} value={value} onChange={value => { if (typeof value === "string") onChange(value as EvidenceKind); }} disabled={disabled} aria-labelledby={selectLabelId + "-kind"} className="w-full" motion={false}>{KIND_KEYS.map(kind => <Select.Option key={kind} value={kind}>{evidenceKindLabel[kind]}</Select.Option>)}</Select></>;
 }
 
 function EventDateFields({ value, onChange, id, disabled }: {
@@ -65,21 +57,18 @@ function EventDateFields({ value, onChange, id, disabled }: {
   return <fieldset className="space-y-2" disabled={disabled}>
     <legend className="mb-1 text-sm font-medium">发生时间</legend>
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-      <div className="space-y-1.5"><Label htmlFor={id + "-precision"}>日期精度</Label>
-        <Select value={value.precision} onValueChange={next => precision(next as EvidenceEventDate["precision"])} disabled={disabled}>
-          <SelectTrigger id={id + "-precision"}><SelectValue /></SelectTrigger>
-          <SelectContent>{Object.entries(evidenceDatePrecisionLabel).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent>
-        </Select>
+      <div className="space-y-1.5"><label id={id + "-precision" + "-label"} className="text-sm font-medium text-[var(--semi-color-text-1)]">日期精度</label>
+        <Select value={value.precision} onChange={next => { if (typeof next === "string") precision(next as EvidenceEventDate["precision"]); }} disabled={disabled} id={id + "-precision"} aria-labelledby={id + "-precision" + "-label"} className="w-full" motion={false}>{Object.entries(evidenceDatePrecisionLabel).map(([key, label]) => <Select.Option key={key} value={key}>{label}</Select.Option>)}</Select>
       </div>
-      {value.precision !== "UNKNOWN" ? <div className="space-y-1.5"><Label htmlFor={id + "-date-start"}>{value.precision === "EXACT" ? "发生日期" : "开始日期"}</Label>
-        <Input id={id + "-date-start"} type="date" min="0001-01-01" max="9999-12-31" value={value.start ?? ""} onChange={event => onChange({ ...value, start: event.target.value || null })} />
+      {value.precision !== "UNKNOWN" ? <div className="space-y-1.5"><label htmlFor={id + "-date-start"} className="text-sm font-medium text-[var(--semi-color-text-1)]">{value.precision === "EXACT" ? "发生日期" : "开始日期"}</label>
+        <Input id={id + "-date-start"} type="date" min="0001-01-01" max="9999-12-31" value={value.start ?? ""} onChange={inputValue => onChange({ ...value, start: inputValue || null })} />
       </div> : null}
-      {value.precision === "RANGE" ? <div className="space-y-1.5"><Label htmlFor={id + "-date-end"}>结束日期</Label>
-        <Input id={id + "-date-end"} type="date" min="0001-01-01" max="9999-12-31" value={value.end ?? ""} onChange={event => onChange({ ...value, end: event.target.value || null })} />
+      {value.precision === "RANGE" ? <div className="space-y-1.5"><label htmlFor={id + "-date-end"} className="text-sm font-medium text-[var(--semi-color-text-1)]">结束日期</label>
+        <Input id={id + "-date-end"} type="date" min="0001-01-01" max="9999-12-31" value={value.end ?? ""} onChange={inputValue => onChange({ ...value, end: inputValue || null })} />
       </div> : null}
     </div>
-    <div className="space-y-1.5"><Label htmlFor={id + "-date-text"}>原始时间表述（可选）</Label>
-      <Textarea id={id + "-date-text"} value={value.text ?? ""} onChange={event => onChange({ ...value, text: event.target.value || null })} maxLength={500} rows={2} placeholder="如：某年夏天、收到通知后的第二天" />
+    <div className="space-y-1.5"><label htmlFor={id + "-date-text"} className="text-sm font-medium text-[var(--semi-color-text-1)]">原始时间表述（可选）</label>
+      <TextArea id={id + "-date-text"} value={value.text ?? ""} onChange={inputValue => onChange({ ...value, text: inputValue || null })} maxLength={500} rows={2} placeholder="如：某年夏天、收到通知后的第二天" />
     </div>
   </fieldset>;
 }
@@ -101,21 +90,25 @@ function SourceButton({ itemId, revision, source }: { itemId: string; revision?:
     startTransition(async () => {
       try {
         const result = await resolveEvidenceSource({ evidenceItemId: itemId, sourceId: source.id, revision });
-        if (result.status === "UNAVAILABLE") { toast.error("该来源当前不可用，请刷新后核对权限和材料状态"); return; }
+        if (result.status === "UNAVAILABLE") { Toast.error("该来源当前不可用，请刷新后核对权限和材料状态"); return; }
         setPreview(result);
-      } catch (error) { toast.error("无法打开来源", { description: actionErrorMessage(error) }); }
+      } catch (error) { Notification.error({ title: "无法打开来源", content: actionErrorMessage(error) }); }
     });
   }
   return <>
-    <Button ref={triggerRef} type="button" onClick={open} disabled={pending} variant="link" size="sm"
-      className="h-auto min-w-0 max-w-full justify-start whitespace-normal px-0 py-0 text-left">
+    <button
+      ref={triggerRef}
+      type="button"
+      onClick={open}
+      disabled={pending}
+      className="font-medium text-[var(--semi-color-link)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--semi-color-primary)] disabled:opacity-50 h-auto min-w-0 max-w-full justify-start whitespace-normal px-0 py-0 text-left">
       {pending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : null}
       <span className="min-w-0 break-words">
         {source.relation ? sourceRelationLabel[source.relation] + " · " : "历史来源 · "}
         {source.documentName} · 第 {source.documentVersion} 版 · {source.locationLabel}
       </span>
-    </Button>
-    <Dialog open={preview !== null} onOpenChange={open => { if (!open) setPreview(null); }}>
+    </button>
+    <WorkspaceDialog open={preview !== null} onOpenChange={open => { if (!open) setPreview(null); }}>
       <DialogContent className="max-w-4xl" onCloseAutoFocus={event => {
         event.preventDefault();
         triggerRef.current?.focus({ preventScroll: true });
@@ -129,12 +122,12 @@ function SourceButton({ itemId, revision, source }: { itemId: string; revision?:
         {preview?.previewKind === "CONVERTED" && <p className="text-sm text-muted-foreground">转换预览打开整份文件，未按引用位置跳转。</p>}
         {preview?.previewUrl ? <iframe title={preview.previewKind === "TABLE" ? "单元格转换预览" : preview.previewKind === "CONVERTED" ? "整份转换预览" : "文件预览"} src={preview.previewUrl} className="h-[55vh] w-full rounded border" /> : null}
         <DialogFooter>
-          {preview?.previewUrl ? <Button asChild variant="outline"><a href={preview.previewUrl} target="_blank" rel="noopener noreferrer">{preview.previewKind === "TABLE" ? "查看单元格转换预览" : preview.previewKind === "CONVERTED" ? "另页查看转换预览" : "另页查看预览"}</a></Button> : null}
-          {preview ? <Button asChild variant="outline"><a href={preview.downloadUrl} target="_blank" rel="noopener noreferrer">下载此版本</a></Button> : null}
-          <Button variant="outline" onClick={() => setPreview(null)}>返回要点</Button>
+          {preview?.previewUrl ? <Typography.Text link={{ href: preview.previewUrl, target: "_blank", rel: "noopener noreferrer" }}>{preview.previewKind === "TABLE" ? "查看单元格转换预览" : preview.previewKind === "CONVERTED" ? "另页查看转换预览" : "另页查看预览"}</Typography.Text> : null}
+          {preview ? <Typography.Text link={{ href: preview.downloadUrl, target: "_blank", rel: "noopener noreferrer" }}>下载此版本</Typography.Text> : null}
+          <Button onClick={() => setPreview(null)} type="tertiary" theme="outline">返回要点</Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   </>;
 }
 
@@ -149,13 +142,13 @@ export function EvidencePoints({ items, showSource = false, onResearch }: {
   function openItem(id: string) {
     startTransition(async () => {
       try { setDetail(await getEvidenceItem(id)); }
-      catch (error) { toast.error("无法读取要点", { description: actionErrorMessage(error) }); }
+      catch (error) { Notification.error({ title: "无法读取要点", content: actionErrorMessage(error) }); }
     });
   }
   return <>
     <ul ref={listRef} tabIndex={-1} aria-label="证据要点列表" className="m-0 flex min-w-0 list-none flex-col gap-3 p-0">{items.map(item => <li key={item.id} className="flex min-w-0 flex-col gap-2 border-b border-border pb-3 last:border-b-0 last:pb-0">
       <div className="flex min-w-0 flex-wrap items-start gap-x-2 gap-y-1">
-        <Badge variant={EVIDENCE_KIND_VARIANT[item.kind]}>{evidenceKindLabel[item.kind]}</Badge>
+        <Tag color={EVIDENCE_KIND_COLOR[item.kind]}>{evidenceKindLabel[item.kind]}</Tag>
         <span className="min-w-0 flex-1 break-words text-left text-sm font-semibold">{item.title}</span>
         {item.revision ? <span className="text-xs text-muted-foreground">第 {item.revision} 版 · {item.confirmedAt ? "记录已核对" : "记录待核对"}</span> : item.sourcePage ? <span className="text-xs text-muted-foreground">第 {item.sourcePage} 页</span> : null}
       </div>
@@ -166,13 +159,22 @@ export function EvidencePoints({ items, showSource = false, onResearch }: {
         {showSource && !item.sources?.length ? <span>{item.sourceDocumentId ? item.sourceDocumentName ?? "来源不可用（引用保留）" : "未挂来源材料"}</span> : null}
         {item.createdByName ? <span className="min-w-0 break-words">记录人 {item.createdByName}</span> : null}
         <span className="font-mono">记录时间 {formatDate(new Date(item.createdAt))}</span>
-        {!item.restricted ? <Button type="button" variant="ghost" size="sm" className="sm:ml-auto" disabled={pending}
+        {!item.restricted ? <Button
+          className="sm:ml-auto"
+          disabled={pending}
           aria-label={`${item.canEdit ? "查看与编辑要点" : "查看要点"}：${item.title}`}
-          onClick={event => { detailTrigger.current = event.currentTarget; openItem(item.id); }}>
+          onClick={event => { detailTrigger.current = event.currentTarget; openItem(item.id); }}
+          htmlType="button"
+          type="tertiary" theme="borderless"
+          size="small">
           {item.canEdit ? "查看与编辑要点" : "查看要点"}
         </Button> : null}
-        {onResearch && item.kind === "ISSUE" && !item.restricted ? <Button type="button" variant="outline" size="sm" disabled={pending}
-          onClick={() => onResearch(item.id)}>以此争点开始研究</Button> : null}
+        {onResearch && item.kind === "ISSUE" && !item.restricted ? <Button
+          disabled={pending}
+          onClick={() => onResearch(item.id)}
+          htmlType="button"
+          type="tertiary" theme="outline"
+          size="small">以此争点开始研究</Button> : null}
       </div>
     </li>)}</ul>
     {detail && items.some(item => item.id === detail.item.id && !item.restricted) ? <EvidenceDetailDialog key={detail.item.id} initial={detail} onClose={() => setDetail(null)} onReturnFocus={() => (detailTrigger.current?.isConnected ? detailTrigger.current : listRef.current)?.focus({ preventScroll: true })} /> : null}
@@ -203,7 +205,7 @@ function EvidenceDetailDialog({ initial, onClose, onReturnFocus }: { initial: Ed
   function change(work: () => Promise<unknown>, success: string) {
     setError("");
     startTransition(async () => {
-      try { await work(); await reload(); toast.success(success); }
+      try { await work(); await reload(); Toast.success(success); }
       catch (failure) { setError(actionErrorMessage(failure)); }
     });
   }
@@ -234,31 +236,31 @@ function EvidenceDetailDialog({ initial, onClose, onReturnFocus }: { initial: Ed
     if (!date.success) { setError(date.error.issues[0].message); return; }
     change(() => updateEvidenceItem({ evidenceItemId: item.id, expectedRevision: item.revision, title, content, kind, eventDate: date.data }), "要点修改已保存，记录待核对");
   }
-  return <Dialog open onOpenChange={open => { if (!open) void close(); }}>
+  return <WorkspaceDialog open onOpenChange={open => { if (!open) void close(); }}>
     <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto" onCloseAutoFocus={event => { event.preventDefault(); onReturnFocus(); }}>
       <DialogHeader><DialogTitle>证据要点</DialogTitle><DialogDescription>
         第 {item.revision} 版 · {item.confirmedAt ? `记录已由 ${item.confirmedByName ?? "记录的核对人"} 核对 · ${formatDate(new Date(item.confirmedAt))}` : "记录待核对"}
       </DialogDescription></DialogHeader>
       {item.restricted ? <p role="status" className="text-sm text-muted-foreground">部分来源已不可读或身份发生变化，内容和修改暂不可用。请核对材料权限和原件状态。</p> : <>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
-          <div className="space-y-1.5"><Label htmlFor={id + "-title"}>标题</Label><Input id={id + "-title"} value={title} onChange={event => setTitle(event.target.value)} maxLength={200} disabled={!item.canEdit || pending || sourceBusy} /></div>
-          <div className="space-y-1.5"><Label htmlFor={id + "-kind"}>性质</Label><KindSelect id={id + "-kind"} value={kind} onChange={setKind} disabled={!item.canEdit || pending || sourceBusy} /></div>
+          <div className="space-y-1.5"><label htmlFor={id + "-title"} className="text-sm font-medium text-[var(--semi-color-text-1)]">标题</label><Input id={id + "-title"} value={title} onChange={inputValue => setTitle(inputValue)} maxLength={200} disabled={!item.canEdit || pending || sourceBusy} /></div>
+          <div className="space-y-1.5"><label htmlFor={id + "-kind"} className="text-sm font-medium text-[var(--semi-color-text-1)]">性质</label><KindSelect id={id + "-kind"} value={kind} onChange={setKind} disabled={!item.canEdit || pending || sourceBusy} /></div>
         </div>
-        <div className="space-y-1.5"><Label htmlFor={id + "-content"}>内容</Label><Textarea id={id + "-content"} value={content} onChange={event => setContent(event.target.value)} maxLength={5000} rows={5} disabled={!item.canEdit || pending || sourceBusy} /></div>
+        <div className="space-y-1.5"><label htmlFor={id + "-content"} className="text-sm font-medium text-[var(--semi-color-text-1)]">内容</label><TextArea id={id + "-content"} value={content} onChange={inputValue => setContent(inputValue)} maxLength={5000} rows={5} disabled={!item.canEdit || pending || sourceBusy} /></div>
         <EventDateFields id={id} value={eventDate} onChange={setEventDate} disabled={!item.canEdit || pending || sourceBusy} />
       </>}
       <section className="space-y-2" aria-label="来源材料">
         <h3 className="text-sm font-medium">来源</h3>
         {item.sources.length ? <ul className="space-y-2 text-sm">{item.sources.map(source => <li key={source.id} className="flex items-start justify-between gap-3">
           <SourceButton itemId={item.id} revision={item.revision} source={source} />
-          {item.canEdit && !source.legacy ? <Button size="sm" variant="ghost" className="shrink-0" disabled={pending || sourceBusy || dirty} onClick={() => void remove(source)}>移除关联</Button> : null}
+          {item.canEdit && !source.legacy ? <Button className="shrink-0" disabled={pending || sourceBusy || dirty} onClick={() => void remove(source)} type="tertiary" theme="borderless" size="small">移除关联</Button> : null}
         </li>)}</ul> : <p className="text-sm text-muted-foreground">未挂来源材料</p>}
         {item.canEdit ? <SourceAdder key={item.revision} item={item} documents={data.documents} disabled={pending || dirty} onAdded={reload} onBusyChange={setSourceBusy} /> : null}
       </section>
       {dirty ? <p className="text-sm text-muted-foreground">先保存要点修改，再调整来源或核对记录。{item.confirmedAt ? "保存后需重新核对。" : ""}</p> : null}
       {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
       <section className="space-y-2">
-        {history === null ? <Button variant="ghost" size="sm" disabled={pending} onClick={() => loadHistory()}>查看历史修订</Button> : <>
+        {history === null ? <Button disabled={pending} onClick={() => loadHistory()} type="tertiary" theme="borderless" size="small">查看历史修订</Button> : <>
           <h3 className="text-sm font-medium">历史修订</h3>
           {history.length ? <ol className="space-y-3">{history.map(entry => <li key={entry.revision} className="space-y-1 border-t pt-2 text-sm">
             <div className="text-xs text-muted-foreground">第 {entry.revision} 版 · {entry.confirmedAt ? `当时已由 ${entry.confirmedByName ?? "记录的核对人"} 核对记录` : "当时记录未核对"} · {formatDate(new Date(entry.createdAt))}</div>
@@ -267,20 +269,20 @@ function EvidenceDetailDialog({ initial, onClose, onReturnFocus }: { initial: Ed
             {!entry.restricted ? <EventDateDetails value={entry.eventDate} /> : null}
             {entry.sources.map(source => <div key={source.id}><SourceButton itemId={item.id} revision={entry.revision} source={source} /></div>)}
           </li>)}</ol> : <p className="text-sm text-muted-foreground">尚无历史修订</p>}
-          {nextBefore ? <Button variant="ghost" size="sm" disabled={pending} onClick={() => loadHistory(true)}>更早修订</Button> : null}
+          {nextBefore ? <Button disabled={pending} onClick={() => loadHistory(true)} type="tertiary" theme="borderless" size="small">更早修订</Button> : null}
         </>}
       </section>
       <DialogFooter>
-        <Button variant="outline" disabled={pending || sourceBusy} onClick={() => void close()}>返回要点列表</Button>
+        <Button disabled={pending || sourceBusy} onClick={() => void close()} type="tertiary" theme="outline">返回要点列表</Button>
         {item.canEdit ? <>
-          <Button variant="outline" disabled={pending || sourceBusy || dirty || Boolean(item.confirmedAt)} onClick={() => void confirm()}>核对本版记录</Button>
-          <Button disabled={pending || sourceBusy || !dirty || !title.trim() || !content.trim()} onClick={save}>
+          <Button disabled={pending || sourceBusy || dirty || Boolean(item.confirmedAt)} onClick={() => void confirm()} type="tertiary" theme="outline">核对本版记录</Button>
+          <Button disabled={pending || sourceBusy || !dirty || !title.trim() || !content.trim()} onClick={save} theme="solid">
             {pending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}保存要点修改
           </Button>
         </> : null}
       </DialogFooter>
     </DialogContent>
-  </Dialog>;
+  </WorkspaceDialog>;
 }
 
 function SourceAdder({ item, documents, disabled, onAdded, onBusyChange }: { item: EvidenceItemView; documents: EvidenceDocumentOption[]; disabled: boolean; onAdded: () => Promise<void>; onBusyChange: (busy: boolean) => void }) {
@@ -300,30 +302,25 @@ function SourceAdder({ item, documents, disabled, onAdded, onBusyChange }: { ite
       try {
         await addEvidenceSource({ evidenceItemId: item.id, expectedRevision: item.revision, documentId, relation,
           ...(location.position ? { parseRunId: location.position.runId, anchorId: location.position.anchorId } : { page: location.page ? Number(location.page) : null }) });
-        await onAdded(); toast.success("来源已添加，记录待核对");
+        await onAdded(); Toast.success("来源已添加，记录待核对");
       } catch (failure) { setError(actionErrorMessage(failure)); }
       finally { onBusyChange(false); }
     });
   }
-  if (!expanded) return <Button size="sm" variant="outline" disabled={disabled} onClick={() => setExpanded(true)}>添加来源</Button>;
+  if (!expanded) return <Button disabled={disabled} onClick={() => setExpanded(true)} type="tertiary" theme="outline" size="small">添加来源</Button>;
   return <div className="space-y-2 border-t pt-3">
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_100px]">
-      <div className="space-y-1"><Label htmlFor={id + "-document"}>材料版本</Label>
-        <Select value={documentId} onValueChange={selectDocument} disabled={disabled || pending}>
-          <SelectTrigger id={id + "-document"}><SelectValue placeholder="选择材料" /></SelectTrigger>
-          <SelectContent>{documents.map(option => <SelectItem key={option.id} value={option.id}>{option.name} · 第 {option.version} 版</SelectItem>)}</SelectContent>
-        </Select>
+      <div className="space-y-1"><label id={id + "-document" + "-label"} className="text-sm font-medium text-[var(--semi-color-text-1)]">材料版本</label>
+        <Select value={documentId} onChange={value => { if (typeof value === "string") selectDocument(value); }} disabled={disabled || pending} id={id + "-document"} aria-labelledby={id + "-document" + "-label"} placeholder="选择材料" className="w-full" motion={false}>{documents.map(option => <Select.Option key={option.id} value={option.id}>{option.name} · 第 {option.version} 版</Select.Option>)}</Select>
       </div>
-      <div className="space-y-1"><Label htmlFor={id + "-relation"}>关系</Label>
-        <Select value={relation} onValueChange={value => setRelation(value as Relation)} disabled={disabled || pending}>
-          <SelectTrigger id={id + "-relation"}><SelectValue /></SelectTrigger><SelectContent>{RELATIONS.map(value => <SelectItem key={value} value={value}>{sourceRelationLabel[value]}</SelectItem>)}</SelectContent>
-        </Select>
+      <div className="space-y-1"><label id={id + "-relation" + "-label"} className="text-sm font-medium text-[var(--semi-color-text-1)]">关系</label>
+        <Select value={relation} onChange={value => { if (typeof value === "string") setRelation(value as Relation); }} disabled={disabled || pending} id={id + "-relation"} aria-labelledby={id + "-relation" + "-label"} className="w-full" motion={false}>{RELATIONS.map(value => <Select.Option key={value} value={value}>{sourceRelationLabel[value]}</Select.Option>)}</Select>
       </div>
     </div>
     {document && !document.hasIdentity ? <p className="text-sm text-muted-foreground">该材料原件标识尚未就绪，请先核对材料。</p> : null}
     {document ? <MaterialSourceLocationPicker key={`${item.matterId}:${document.id}`} matterId={item.matterId} document={document} value={location} onChange={setLocation} disabled={disabled || pending} /> : null}
     {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
-    <div className="flex gap-2"><Button size="sm" variant="outline" disabled={disabled || pending} onClick={() => setExpanded(false)}>取消添加</Button><Button size="sm" disabled={disabled || pending || !document?.hasIdentity} onClick={submit}>添加来源</Button></div>
+    <div className="flex gap-2"><Button disabled={disabled || pending} onClick={() => setExpanded(false)} type="tertiary" theme="outline" size="small">取消添加</Button><Button disabled={disabled || pending || !document?.hasIdentity} onClick={submit} theme="solid" size="small">添加来源</Button></div>
   </div>;
 }
 
@@ -333,7 +330,7 @@ export function EvidenceItemDialog({ open, onOpenChange, matterId, documents, de
   documents: { id: string; name: string }[]; defaultDocumentId: string | null;
 }) {
   const [saving, setSaving] = useState(false);
-  return <Dialog open={open} onOpenChange={next => { if (!saving) onOpenChange(next); }}>{open ? <EvidenceCreateForm key={matterId} matterId={matterId} documents={documents} defaultDocumentId={defaultDocumentId} onClose={() => onOpenChange(false)} onBusyChange={setSaving} /> : null}</Dialog>;
+  return <WorkspaceDialog open={open} onOpenChange={next => { if (!saving) onOpenChange(next); }}>{open ? <EvidenceCreateForm key={matterId} matterId={matterId} documents={documents} defaultDocumentId={defaultDocumentId} onClose={() => onOpenChange(false)} onBusyChange={setSaving} /> : null}</WorkspaceDialog>;
 }
 
 function EvidenceCreateForm({ matterId, documents, defaultDocumentId, onClose, onBusyChange }: {
@@ -369,29 +366,27 @@ function EvidenceCreateForm({ matterId, documents, defaultDocumentId, onClose, o
         await createEvidenceItem({ requestKey, matterId, title: title.trim(), content: content.trim(), kind,
           sourceDocumentId: sourceDocumentId === "none" ? null : sourceDocumentId, sourcePage: page, sourceRelation: relation, eventDate: date.data });
         if (!active.current) return;
-        toast.success("证据要点已保存，记录待核对"); onClose(); router.refresh();
+        Toast.success("证据要点已保存，记录待核对"); onClose(); router.refresh();
       } catch (failure) { if (active.current) setError(actionErrorMessage(failure)); }
       finally { if (active.current) onBusyChange(false); }
     });
   }
-  return <DialogContent onEscapeKeyDown={event => { if (pending) event.preventDefault(); }} onInteractOutside={event => { if (pending) event.preventDefault(); }}>
+  return <DialogContent onEscapeKeyDown={event => { if (pending) event.preventDefault(); }}>
     <DialogHeader><DialogTitle>添加证据要点</DialogTitle><DialogDescription>保存后可继续编辑、关联来源并核对记录。</DialogDescription></DialogHeader>
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
-      <div className="space-y-1.5"><Label htmlFor={id + "-title"}>标题</Label><Input id={id + "-title"} value={title} onChange={event => setTitle(event.target.value)} maxLength={200} disabled={pending} /></div>
-      <div className="space-y-1.5"><Label htmlFor={id + "-kind"}>性质</Label><KindSelect id={id + "-kind"} value={kind} onChange={setKind} disabled={pending} /></div>
+      <div className="space-y-1.5"><label htmlFor={id + "-title"} className="text-sm font-medium text-[var(--semi-color-text-1)]">标题</label><Input id={id + "-title"} value={title} onChange={inputValue => setTitle(inputValue)} maxLength={200} disabled={pending} /></div>
+      <div className="space-y-1.5"><label htmlFor={id + "-kind"} className="text-sm font-medium text-[var(--semi-color-text-1)]">性质</label><KindSelect id={id + "-kind"} value={kind} onChange={setKind} disabled={pending} /></div>
     </div>
-    <div className="space-y-1.5"><Label htmlFor={id + "-content"}>内容</Label><Textarea id={id + "-content"} value={content} onChange={event => setContent(event.target.value)} maxLength={5000} rows={4} disabled={pending} /></div>
+    <div className="space-y-1.5"><label htmlFor={id + "-content"} className="text-sm font-medium text-[var(--semi-color-text-1)]">内容</label><TextArea id={id + "-content"} value={content} onChange={inputValue => setContent(inputValue)} maxLength={5000} rows={4} disabled={pending} /></div>
     <EventDateFields id={id} value={eventDate} onChange={setEventDate} disabled={pending} />
-    <div className="space-y-1.5"><Label htmlFor={id + "-source"}>来源材料</Label>
-      <Select value={sourceDocumentId} onValueChange={value => { setSourceDocumentId(value); setSourcePage(""); }} disabled={pending}>
-        <SelectTrigger id={id + "-source"}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">不挂来源</SelectItem>{documents.map(document => <SelectItem key={document.id} value={document.id}>{document.name}</SelectItem>)}</SelectContent>
-      </Select>
+    <div className="space-y-1.5"><label id={id + "-source" + "-label"} className="text-sm font-medium text-[var(--semi-color-text-1)]">来源材料</label>
+      <Select value={sourceDocumentId} onChange={value => { if (typeof value !== "string") return; setSourceDocumentId(value); setSourcePage(""); }} disabled={pending} id={id + "-source"} aria-labelledby={id + "-source" + "-label"} className="w-full" motion={false}><Select.Option value="none">不挂来源</Select.Option>{documents.map(document => <Select.Option key={document.id} value={document.id}>{document.name}</Select.Option>)}</Select>
     </div>
     {sourceDocumentId !== "none" ? <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <div className="space-y-1.5"><Label htmlFor={id + "-page"}>PDF 页码（可选）</Label><Input id={id + "-page"} type="number" min={1} max={10000} value={sourcePage} onChange={event => setSourcePage(event.target.value)} disabled={pending} /></div>
-      <div className="space-y-1.5"><Label htmlFor={id + "-relation"}>来源关系</Label><Select value={relation} onValueChange={value => setRelation(value as Relation)} disabled={pending}><SelectTrigger id={id + "-relation"}><SelectValue /></SelectTrigger><SelectContent>{RELATIONS.map(value => <SelectItem key={value} value={value}>{sourceRelationLabel[value]}</SelectItem>)}</SelectContent></Select></div>
+      <div className="space-y-1.5"><label htmlFor={id + "-page"} className="text-sm font-medium text-[var(--semi-color-text-1)]">PDF 页码（可选）</label><Input id={id + "-page"} type="number" min={1} max={10000} value={sourcePage} onChange={inputValue => setSourcePage(inputValue)} disabled={pending} /></div>
+      <div className="space-y-1.5"><label id={id + "-relation" + "-label"} className="text-sm font-medium text-[var(--semi-color-text-1)]">来源关系</label><Select value={relation} onChange={value => { if (typeof value === "string") setRelation(value as Relation); }} disabled={pending} id={id + "-relation"} aria-labelledby={id + "-relation" + "-label"} className="w-full" motion={false}>{RELATIONS.map(value => <Select.Option key={value} value={value}>{sourceRelationLabel[value]}</Select.Option>)}</Select></div>
     </div> : null}
     {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
-    <DialogFooter><Button variant="outline" onClick={onClose} disabled={pending}>取消</Button><Button onClick={submit} disabled={pending}>{pending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}保存要点</Button></DialogFooter>
+    <DialogFooter><Button onClick={onClose} disabled={pending} type="tertiary" theme="outline">取消</Button><Button onClick={submit} disabled={pending} theme="solid">{pending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}保存要点</Button></DialogFooter>
   </DialogContent>;
 }

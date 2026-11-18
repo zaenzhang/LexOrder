@@ -18,7 +18,9 @@ const targetLabels: Record<string, string> = {
   ArchiveBorrowRequest: "案卷借阅申请", CommissionSettlement: "分成结算", DeadlineRule: "期限规则",
   FeeEntryList: "收付记录列表", FinanceCorrection: "财务更正", Holiday: "放假安排",
   Payment: "实收", Receivable: "应收", ReminderDelivery: "提醒送达台账",
-  UserIdentityDocument: "人员证件资料"
+  UserIdentityDocument: "人员证件资料",
+  ProcedureMemo: "程序备忘", ReviewRecord: "复核记录",
+  SmsInboundFile: "短信附件", SmsSuggestion: "短信处理建议"
 };
 const words: Record<string, string> = {
   ACTIVITY: "沟通", FOLLOWUP: "跟进",
@@ -75,7 +77,10 @@ const words: Record<string, string> = {
   RESEARCH: "法律研究", REVISE: "修订", ISSUE: "问题", RESPOND: "回应",
   DELIVERY: "客户交付", PREPARE: "准备", EXPORTED: "已导出", SENT: "发送登记", RECEIVED: "收悉登记",
   REPLIED: "客户回复", CONTENT: "内容", SEND: "发送", WAIT: "外部等待", END: "结束",
-  DATE: "日期", DEPENDENCY: "前置依赖"
+  DATE: "日期", DEPENDENCY: "前置依赖",
+  ATTEMPT: "尝试", MEMO: "备忘", READ: "读取",
+  ANALYSIS: "分析", ADDED: "新增", PENDING: "待处理", SUGGESTIONS: "建议",
+  FILED: "已归档", ORGANIZED: "已整理", REOPENED: "已重新开启"
 };
 export function auditActionLabel(code: string): string {
   const parts = code.split("_");

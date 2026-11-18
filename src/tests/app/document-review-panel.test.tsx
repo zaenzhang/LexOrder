@@ -36,8 +36,8 @@ async function beginSourceDraft() {
   fireEvent.change(await screen.findByLabelText("问题"), { target: { value: "合成未保存问题" } });
   fireEvent.change(screen.getByLabelText("依据与理由"), { target: { value: "合成未保存依据文字" } });
   const select = screen.getByRole("combobox", { name: "关联依据材料（可选）" });
-  select.focus(); fireEvent.keyDown(select, { key: "Enter" });
-  fireEvent.click(await screen.findByRole("option", { name: "合成旧依据 · 第 2 版" }));
+  fireEvent.click(select);
+  fireEvent.click(await screen.findByRole("option", { name: text => text.includes("合成旧依据 · 第 2 版") }));
   return select;
 }
 
@@ -110,7 +110,7 @@ describe("具体文书复核面板", () => {
     mocks.sources.mockResolvedValueOnce({ items: [otherSource], nextCursor: "source-second", selected: { id: oldSource.id, document: oldSource } });
     fireEvent.change(screen.getByLabelText("按材料名称查找"), { target: { value: "其他" } });
     fireEvent.click(screen.getByRole("button", { name: "查找材料" }));
-    await waitFor(() => expect(select).toBeEnabled());
+    await waitFor(() => expect(select).toHaveAttribute("aria-disabled", "false"));
     expect(select).toHaveTextContent("合成旧依据 · 第 2 版");
     expect(mocks.sources).toHaveBeenLastCalledWith({ documentId: "document-one", query: "其他", selectedId: oldSource.id });
     mocks.sources.mockRejectedValueOnce(new Error("private database detail"));
@@ -171,9 +171,9 @@ describe("具体文书复核面板", () => {
     fireEvent.change(screen.getByLabelText("页码（可选，共 4 页）"), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: "继续查找依据" }));
     const select = screen.getByRole("combobox", { name: "关联依据材料（可选）" });
-    await waitFor(() => expect(select).toBeEnabled());
-    select.focus(); fireEvent.keyDown(select, { key: "Enter" });
-    fireEvent.click(await screen.findByRole("option", { name: "合成旧依据 · 第 2 版" }));
+    await waitFor(() => expect(select).toHaveAttribute("aria-disabled", "false"));
+    fireEvent.click(select);
+    fireEvent.click(await screen.findByRole("option", { name: text => text.includes("合成旧依据 · 第 2 版") }));
     fireEvent.change(await screen.findByLabelText("页码（可选，共 7 页）"), { target: { value: "6" } });
     fireEvent.click(screen.getByRole("button", { name: "保存问题" }));
     await screen.findByText("合成保存暂不可用");
@@ -189,9 +189,9 @@ describe("具体文书复核面板", () => {
     fireEvent.click(screen.getByRole("button", { name: "保存问题" }));
     await waitFor(() => expect(mocks.create).toHaveBeenCalledTimes(2));
     expect(mocks.create.mock.calls[1][0]).toEqual(original);
-    await waitFor(() => expect(select).toBeEnabled());
-    select.focus(); fireEvent.keyDown(select, { key: "Enter" });
-    fireEvent.click(await screen.findByRole("option", { name: "合成其他依据 · 第 1 版" }));
+    await waitFor(() => expect(select).toHaveAttribute("aria-disabled", "false"));
+    fireEvent.click(select);
+    fireEvent.click(await screen.findByRole("option", { name: text => text.includes("合成其他依据 · 第 1 版") }));
     expect(await screen.findByLabelText("页码（可选，共 8 页）")).toHaveValue(null);
     expect(screen.getByLabelText("页码（可选，共 4 页）")).toHaveValue(2);
     expect(screen.getByLabelText("问题")).toHaveValue("保留当前问题");
@@ -208,17 +208,17 @@ describe("具体文书复核面板", () => {
     render(<DocumentReviewPanel documentId="document-one" initialIssueId={issue.id} />);
     fireEvent.change(await screen.findByLabelText("处理说明"), { target: { value: "保留本次处理理由" } });
     const select = screen.getByRole("combobox", { name: "实际修订版本（可选）" });
-    select.focus(); fireEvent.keyDown(select, { key: "Enter" });
-    fireEvent.click(await screen.findByRole("option", { name: "合成第二版.pdf · 第 2 版" }));
+    fireEvent.click(select);
+    fireEvent.click(await screen.findByRole("option", { name: text => text.includes("合成第二版.pdf · 第 2 版") }));
     expect(screen.getByRole("button", { name: "保存回应" })).toBeDisabled();
     fireEvent.change(screen.getByLabelText("页码（可选，共 6 页）"), { target: { value: "5" } });
     expect(screen.getByLabelText("修订位置")).toHaveValue("");
     fireEvent.click(screen.getByRole("button", { name: "保存回应" }));
     await screen.findByText("合成回应暂不可用");
     expect(mocks.respond).toHaveBeenCalledWith(expect.objectContaining({ revisionDocumentId: revision.id, revisionLocation: null, revisionPosition: { page: 5 } }));
-    await waitFor(() => expect(select).toBeEnabled());
-    select.focus(); fireEvent.keyDown(select, { key: "Enter" });
-    fireEvent.click(await screen.findByRole("option", { name: "合成第三版.pdf · 第 3 版" }));
+    await waitFor(() => expect(select).toHaveAttribute("aria-disabled", "false"));
+    fireEvent.click(select);
+    fireEvent.click(await screen.findByRole("option", { name: text => text.includes("合成第三版.pdf · 第 3 版") }));
     expect(screen.getByLabelText("页码（可选，共 9 页）")).toHaveValue(null);
     expect(screen.getByLabelText("处理说明")).toHaveValue("保留本次处理理由");
     expect(screen.getByRole("button", { name: "保存回应" })).toBeDisabled();
@@ -233,13 +233,14 @@ describe("具体文书复核面板", () => {
     const onIssueChange = vi.fn();
     render(<DocumentReviewPanel documentId="document-one" initialIssueId={issue.id} onIssueChange={onIssueChange} />);
     fireEvent.change(await screen.findByLabelText("复核结论"), { target: { value: "本版未保存结论" } });
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "待复核" }), { button: 0, ctrlKey: false });
+    fireEvent.click(screen.getByRole("radio", { name: "待复核" }));
     fireEvent.click(screen.getByRole("button", { name: "保留未解决" }));
     await screen.findByText("合成核对暂不可用"); const original = mocks.check.mock.calls[0][0];
     const heading = screen.getByText("前版未决意见（1）");
     expect(heading).not.toHaveAttribute("tabindex", "-1");
     fireEvent.click(heading);
     const trigger = screen.getByRole("button", { name: /合成前版原稿.*合成前版问题/ });
+    await waitFor(() => expect(trigger).toBeEnabled());
     trigger.focus(); fireEvent.click(trigger);
     const dialog = await screen.findByRole("dialog", { name: "前版复核意见" });
     expect(await within(dialog).findByText("合成前版问题")).toBeInTheDocument();
@@ -249,7 +250,7 @@ describe("具体文书复核面板", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "返回本版复核" }));
     await waitFor(() => expect(trigger).toHaveFocus());
     expect(screen.getByLabelText("复核结论")).toHaveValue("本版未保存结论");
-    expect(screen.getByRole("tab", { name: "待复核" })).toHaveAttribute("data-state", "active");
+    expect(screen.getByRole("radio", { name: "待复核" })).toBeChecked();
     fireEvent.click(screen.getByRole("button", { name: "保留未解决" }));
     await waitFor(() => expect(mocks.check).toHaveBeenCalledTimes(2));
     expect(mocks.check.mock.calls[1][0]).toEqual(original);

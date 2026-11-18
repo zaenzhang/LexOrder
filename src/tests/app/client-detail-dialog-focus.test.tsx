@@ -2,7 +2,14 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
-vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { success: vi.fn(), warning: vi.fn() }),
+    Notification: Object.assign(semi.Notification, { error: vi.fn(), success: vi.fn(), warning: vi.fn() })
+  };
+});
 vi.mock("@/server/clients/actions", () => ({ addContact: vi.fn() }));
 vi.mock("@/server/clients/dedup", () => ({ mergeClientsByCode: vi.fn() }));
 

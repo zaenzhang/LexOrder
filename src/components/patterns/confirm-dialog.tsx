@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { Button, TextArea, Typography } from "@douyinfe/semi-ui";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 
 type BaseOptions = {
   title: string;
@@ -103,7 +103,7 @@ export function ConfirmHost() {
   }
 
   return (
-    <Dialog open onOpenChange={(o) => { if (!o) close(false); }}>
+    <WorkspaceDialog open onOpenChange={(o) => { if (!o) close(false); }}>
       <DialogContent ref={contentRef} className="max-w-md" onOpenAutoFocus={(e) => {
         e.preventDefault();
         focusInitial(req);
@@ -153,6 +153,6 @@ export function ConfirmHost() {
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }

@@ -2,11 +2,9 @@
 
 import { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Loader2, Sparkles, AlertTriangle, AlertCircle, Lightbulb, FileWarning, BookmarkPlus, ChevronLeft } from "lucide-react";
-import { toast } from "sonner";
-import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Button, Notification, Tag, Typography } from "@douyinfe/semi-ui";
+import { WorkspaceDialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/patterns/workspace-dialog";
 import { FormDialogBody, FormDialogContent } from "@/components/patterns/form-dialog";
-import { Button } from "@/components/ui/button";
-import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { reviewDocument } from "@/server/ai/review-document";
 import { saveReviewToMatter } from "@/server/ai/save-review";
 import { listReviewHistory, getReviewRecord, type ReviewHistoryEntry, type ReviewHistoryDetail } from "@/server/ai/review-history";
@@ -30,10 +28,10 @@ const typeMeta: Record<ReviewType, { label: string; Icon: typeof AlertTriangle }
   ISSUE: { label: "条款问题", Icon: AlertCircle },
   SUGGESTION: { label: "优化建议", Icon: Lightbulb },
 };
-const severityMeta: Record<ReviewSeverity, { label: string; variant: BadgeProps["variant"] }> = {
-  HIGH: { label: "高", variant: "destructive" },
-  MEDIUM: { label: "中", variant: "amber" },
-  LOW: { label: "低", variant: "secondary" },
+const severityMeta: Record<ReviewSeverity, { label: string; color: NonNullable<React.ComponentProps<typeof Tag>["color"]> }> = {
+  HIGH: { label: "高", color: "red" },
+  MEDIUM: { label: "中", color: "amber" },
+  LOW: { label: "低", color: "grey" },
 };
 const TYPE_ORDER: ReviewType[] = ["MISSING", "RISK", "ISSUE", "SUGGESTION"];
 type View = { kind: "list" } | { kind: "detail"; result: ReviewHistoryDetail };
@@ -130,7 +128,7 @@ function ReviewSession({ documentId, matterId, canStartReview, canSaveReport, on
         const report = await saveReviewToMatter({ recordId: source.recordId, matterId: source.matterId, documentId: source.documentId });
         if (!lifecycle.current.active || request !== lifecycle.current.viewRequest) return;
         setView({ kind: "detail", result: { ...source, reportDocumentId: report.documentId } });
-        toast.success("报告已保存到本案", { description: report.documentName });
+        Notification.success({ title: "报告已保存到本案", content: report.documentName });
         refreshHistory();
       } catch (err) {
         if (lifecycle.current.active && request === lifecycle.current.viewRequest) setError(actionErrorMessage(err));
@@ -151,11 +149,11 @@ function ReviewSession({ documentId, matterId, canStartReview, canSaveReport, on
   const result = view.kind === "detail" ? view.result : null;
   const grouped = result ? TYPE_ORDER.map(type => ({ type, items: result.items.filter(item => item.type === type) })).filter(group => group.items.length) : [];
 
-  return <Dialog open onOpenChange={nextOpen => { if (!nextOpen) close(); }}>
+  return <WorkspaceDialog open onOpenChange={nextOpen => { if (!nextOpen) close(); }}>
     <FormDialogContent className="max-w-2xl">
       <DialogHeader className="px-5 pt-4">
         <DialogTitle className="flex items-center gap-2">
-          {result && <Button type="button" variant="ghost" size="icon" disabled={saving} aria-label="返回审查历史" onClick={() => { lifecycle.current.viewRequest++; setError(null); setView({ kind: "list" }); }}><ChevronLeft className="h-4 w-4" /></Button>}
+          {result && <Button disabled={saving} aria-label="返回审查历史" onClick={() => { lifecycle.current.viewRequest++; setError(null); setView({ kind: "list" }); }} htmlType="button" type="tertiary" theme="borderless"><ChevronLeft className="h-4 w-4" /></Button>}
           AI 文书审查
         </DialogTitle>
         <DialogDescription className={result ? "break-words" : "sr-only"}>
@@ -165,7 +163,7 @@ function ReviewSession({ documentId, matterId, canStartReview, canSaveReport, on
       <FormDialogBody className="space-y-4 px-5 py-4">
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         {!result && <>
-          <Button type="button" onClick={runNewReview} disabled={!canStartReview || reviewing || opening}>
+          <Button onClick={runNewReview} disabled={!canStartReview || reviewing || opening} htmlType="button" theme="solid">
             {reviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             {reviewing ? "正在审查" : "发起新审查"}
           </Button>
@@ -175,16 +173,16 @@ function ReviewSession({ documentId, matterId, canStartReview, canSaveReport, on
             <h3 className="text-sm font-medium">审查历史</h3>
             {loadingHistory ? <p role="status" className="text-sm text-muted-foreground">正在读取历史…</p> : historyError ? <div className="space-y-2">
               <p role="alert" className="text-sm text-destructive">历史读取失败：{historyError}</p>
-              <Button type="button" size="sm" variant="outline" onClick={refreshHistory}>重试读取历史</Button>
+              <Button onClick={refreshHistory} htmlType="button" type="tertiary" theme="outline" size="small">重试读取历史</Button>
             </div> : !history.length ? <p className="text-sm text-muted-foreground">暂无审查记录</p> : <ul className="space-y-2">
               {history.map(entry => <li key={entry.id}>
-                <Button type="button" variant="outline" className="h-auto w-full justify-between gap-3 whitespace-normal py-3 text-left" disabled={reviewing || opening} onClick={() => openHistoryDetail(entry)}>
+                <Button className="h-auto w-full justify-between gap-3 whitespace-normal py-3 text-left" disabled={reviewing || opening} onClick={() => openHistoryDetail(entry)} htmlType="button" type="tertiary" theme="outline">
                   <span className="space-y-1">
                     <span className="block">{formatDateTime(entry.reviewedAt)}</span>
                     <span className="block text-xs text-muted-foreground">{entry.reviewedBy.name} · {entry.itemCount} 条 · {coverageLabel(entry.coverage)}</span>
                   </span>
                   <span className="flex flex-wrap justify-end gap-1">
-                    {(["HIGH", "MEDIUM", "LOW"] as const).filter(severity => entry.severityCounts[severity] > 0).map(severity => <Badge key={severity} variant={severityMeta[severity].variant}>{severityMeta[severity].label} {entry.severityCounts[severity]}</Badge>)}
+                    {(["HIGH", "MEDIUM", "LOW"] as const).filter(severity => entry.severityCounts[severity] > 0).map(severity => <Tag key={severity} color={severityMeta[severity].color}>{severityMeta[severity].label} {entry.severityCounts[severity]}</Tag>)}
                   </span>
                 </Button>
               </li>)}
@@ -206,13 +204,13 @@ function ReviewSession({ documentId, matterId, canStartReview, canSaveReport, on
         </>}
       </FormDialogBody>
       <DialogFooter className="px-5 pb-4">
-        {result?.reportDocumentId ? <Button asChild variant="outline"><a href={`/api/documents/${encodeURIComponent(result.reportDocumentId)}/download`}>下载报告</a></Button> : result?.reportReady && canSaveReport ? <Button type="button" variant="outline" onClick={handleSave} disabled={saving}>
+        {result?.reportDocumentId ? <Typography.Text link={{ href: `/api/documents/${encodeURIComponent(result.reportDocumentId)}/download` }}>下载报告</Typography.Text> : result?.reportReady && canSaveReport ? <Button onClick={handleSave} disabled={saving} htmlType="button" type="tertiary" theme="outline">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <BookmarkPlus className="h-4 w-4" />}{saving ? "正在保存" : "保存报告到本案"}
         </Button> : null}
-        <Button type="button" variant="ghost" disabled={saving} onClick={close}>关闭</Button>
+        <Button disabled={saving} onClick={close} htmlType="button" type="tertiary" theme="borderless">关闭</Button>
       </DialogFooter>
     </FormDialogContent>
-  </Dialog>;
+  </WorkspaceDialog>;
 }
 
 function coverageLabel(coverage: ReviewCoverage | null) {
@@ -225,7 +223,7 @@ function CoverageSummary({ coverage }: { coverage: ReviewCoverage | null }) {
   if (!coverage) return <p className="text-sm text-muted-foreground">该历史未记录实际覆盖范围，不能将原文本长度视为已完成审查的字数。</p>;
   const counts = summarizeReviewCoverage(coverage);
   return <section className="space-y-2" aria-label="审查覆盖范围">
-    <div className="flex flex-wrap items-center gap-2"><Badge variant={counts.status === "COMPLETE" ? "secondary" : "amber"}>{coverageLabel(coverage)}</Badge><span className="text-xs text-muted-foreground">提取文本 {counts.totalChars} 字符 / {counts.totalSegments} 段</span></div>
+    <div className="flex flex-wrap items-center gap-2"><Tag color={counts.status === "COMPLETE" ? "grey" : "amber"}>{coverageLabel(coverage)}</Tag><span className="text-xs text-muted-foreground">提取文本 {counts.totalChars} 字符 / {counts.totalSegments} 段</span></div>
     <dl className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
       {[["已请求", counts.sentChars, counts.sentSegments], ["有效回复", counts.completedChars, counts.completedSegments], ["失败", counts.failedChars, counts.failedSegments], ["未请求", counts.notSentChars, counts.notSentSegments]].map(([label, chars, segments]) => <div key={label}><dt className="text-muted-foreground">{label}</dt><dd>{chars} 字符 / {segments} 段</dd></div>)}
     </dl>
@@ -236,7 +234,7 @@ function CoverageSummary({ coverage }: { coverage: ReviewCoverage | null }) {
 function ReviewItemRow({ item }: { item: ReviewItem }) {
   const severity = severityMeta[item.severity];
   return <li className="space-y-1 rounded-md border p-3">
-    <div className="flex flex-wrap items-center gap-2"><span className="text-sm font-medium break-words">{item.title}</span><Badge variant={severity.variant}>{severity.label}</Badge></div>
+    <div className="flex flex-wrap items-center gap-2"><span className="text-sm font-medium break-words">{item.title}</span><Tag color={severity.color}>{severity.label}</Tag></div>
     <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">{item.detail}</p>
   </li>;
 }

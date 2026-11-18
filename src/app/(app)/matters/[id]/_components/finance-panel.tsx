@@ -1,8 +1,8 @@
 "use client";
 
+import { Button } from "@douyinfe/semi-ui";
 import { useState } from "react";
 import { Wallet, Receipt } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { InvoiceRequestSheet } from "./invoice-request-sheet";
 import type { FinancePayload, UserOption } from "./matter-detail-tabs";
@@ -59,9 +59,10 @@ export function FinancePanel({
           </span>
           {canRequestInvoice && (
             <Button
-              size="sm"
               onClick={() => setInvoiceOpen(true)}
               className="h-6 gap-0.5 px-2 text-[11px]"
+              theme="solid"
+              size="small"
             >
               <Receipt className="h-2.5 w-2.5" />
               申请开票

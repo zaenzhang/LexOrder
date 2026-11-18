@@ -1,13 +1,12 @@
 "use client";
 
-import { Select, Button, Checkbox, Input, RadioGroup, TextArea } from "@douyinfe/semi-ui";
+import { Select, Button, Checkbox, Input, RadioGroup, TextArea, Toast } from "@douyinfe/semi-ui";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Loader2, Paperclip, X } from "lucide-react";
-import { toast } from "sonner";
 import { FormDialogContent, FormDialogBody } from "@/components/patterns/form-dialog";
-import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 
 import { createInvoiceRequest, getMatterInvoiceContext, prepareInvoiceRequestUpload, searchMattersForInvoice } from "@/server/finance/actions";
 import { uploadDocument } from "@/server/documents/actions";
@@ -167,7 +166,7 @@ export function InvoiceRequestForm({ matterId: fixedMatterId, onOpenChange, canC
       if (!evidenceDocIds) { setSubmitError("部分附件尚未保存，请在失败项重试后提交。已保存的附件无需重新上传。"); return; }
       const created = await createInvoiceRequest({ ...data, evidenceDocIds });
       if (version !== contextVersion.current) return;
-      toast.success(created.status === "APPROVED" ? "已定位申请：已批准，待开票" : created.status === "ISSUED" ? "已定位申请：已开票" : created.status === "REJECTED" ? "已定位申请：已驳回" : "开票申请已提交");
+      Toast.success(created.status === "APPROVED" ? "已定位申请：已批准，待开票" : created.status === "ISSUED" ? "已定位申请：已开票" : created.status === "REJECTED" ? "已定位申请：已驳回" : "开票申请已提交");
       onOpenChange(false);
       if (onSubmitted) onSubmitted(created.id);
       else {
@@ -184,7 +183,7 @@ export function InvoiceRequestForm({ matterId: fixedMatterId, onOpenChange, canC
     }
   }
   const field = (name: string) => `${prefix}-${name}`;
-  return <Dialog open onOpenChange={open => { if (!busy) onOpenChange(open); }}>
+  return <WorkspaceDialog open onOpenChange={open => { if (!busy) onOpenChange(open); }}>
     <FormDialogContent ref={popupContainer} className="max-w-2xl" onEscapeKeyDown={event => { if (busy || openDropdown.current) event.preventDefault(); }}>
       <DialogHeader className="border-b px-5 py-3"><DialogTitle>申请开票</DialogTitle><DialogDescription className="sr-only">填写购方资料并选择本次开票依据。</DialogDescription></DialogHeader>
       <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
@@ -225,5 +224,5 @@ export function InvoiceRequestForm({ matterId: fixedMatterId, onOpenChange, canC
         </DialogFooter>
       </form>
     </FormDialogContent>
-  </Dialog>;
+  </WorkspaceDialog>;
 }

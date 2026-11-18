@@ -1,21 +1,20 @@
 "use client";
 
-import { Button, Checkbox, Input, RadioGroup, Select, TextArea } from "@douyinfe/semi-ui";
+import { Button, Checkbox, Input, RadioGroup, Select, TextArea, Notification, Toast } from "@douyinfe/semi-ui";
 
 import { FormDialogContent as DialogContent, FormDialogBody } from "@/components/patterns/form-dialog";
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { Loader2, Clock } from "lucide-react";
 
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 
 import { createTask } from "@/server/tasks/actions";
 import { civilKey, shParts, WEEKDAY_CN } from "@/lib/ui/sh-time";
@@ -61,15 +60,15 @@ export function AddTaskDialog({
   function submit() {
     if (isPending) return;
     if (!matterId) {
-      toast.warning("请选择关联案件");
+      Toast.warning("请选择关联案件");
       return;
     }
     if (!title.trim()) {
-      toast.warning("请填写事项标题");
+      Toast.warning("请填写事项标题");
       return;
     }
     if (!date) {
-      toast.warning("缺少日期");
+      Toast.warning("缺少日期");
       return;
     }
 
@@ -92,19 +91,17 @@ export function AddTaskDialog({
           assigneeId: "",
           stageId: ""
         });
-        toast.success("任务已创建");
+        Toast.success("任务已创建");
         onOpenChange(false);
         router.refresh();
       } catch (err) {
-        toast.error("创建失败", {
-          description: actionErrorMessage(err)
-        });
+        Notification.error({ title: "创建失败", content: actionErrorMessage(err), duration: 6 });
       }
     });
   }
 
   return (
-    <Dialog open={open} onOpenChange={value => { if (!isPending) onOpenChange(value); }}>
+    <WorkspaceDialog open={open} onOpenChange={value => { if (!isPending) onOpenChange(value); }}>
       <DialogContent ref={editorContent} className="max-w-md" onEscapeKeyDown={event => { if (openSelect) event.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -202,6 +199,6 @@ export function AddTaskDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }

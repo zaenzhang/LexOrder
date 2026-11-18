@@ -1,7 +1,7 @@
 "use client";
 
 import { startTransition, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { Toast } from "@douyinfe/semi-ui";
 import { actionErrorMessage } from "@/lib/action-error";
 import { getMaterialProcessingStatuses, retryMaterialProcessing } from "@/server/documents/processing-actions";
 import type { MaterialProcessingStatusItem } from "@/server/documents/material-processing";
@@ -56,9 +56,9 @@ export function MaterialProcessingStatus({ matterId, documentIds, canManage = fa
     setRetrying(row.documentId);
     try {
       await retryMaterialProcessing({ documentId: row.documentId, expectedGeneration: row.generation });
-      toast.success("已安排重新处理");
+      Toast.success("已安排重新处理");
       setRevision(value => value + 1);
-    } catch (err) { toast.error(actionErrorMessage(err)); }
+    } catch (err) { Toast.error(actionErrorMessage(err)); }
     finally { setRetrying(null); }
   }
 

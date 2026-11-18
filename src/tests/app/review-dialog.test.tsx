@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { useEffect, useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { Dialog } from "@/components/ui/dialog";
+import { WorkspaceDialog } from "@/components/patterns/workspace-dialog";
 import { ReviewDialogContent, type ReviewTab } from "@/components/patterns/review-dialog";
 
 let tabsStyle: HTMLStyleElement;
@@ -32,7 +32,7 @@ function Review({ tab, onTabChange, mounted }: { tab?: string; onTabChange?: (id
     { id: "original-history", label: "历史记录", content: <p>本条历史记录仅供查阅</p> },
   ];
   return (
-    <Dialog open>
+    <WorkspaceDialog open onOpenChange={() => {}}>
       <ReviewDialogContent
         title="复核申请"
         description="合成申请编号"
@@ -43,7 +43,7 @@ function Review({ tab, onTabChange, mounted }: { tab?: string; onTabChange?: (id
         sidebarTitle="审批处理"
         footer={<button type="button" disabled>当前无审批权限</button>}
       />
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 

@@ -1,12 +1,9 @@
 "use client";
 
-/**
- * 单选字段：选项 ≤ threshold（默认 5）平铺为 chip，一眼可选；超过则收为下拉，避免一屏被按钮占满。
- * chip 样式沿用所在作用域的 `.chip-set / .chip`（墨案 05 收案抽屉）。
- */
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+import { RadioGroup, Select } from "@douyinfe/semi-ui";
+import { useId } from "react";
 
+/** 常用少量选项直接可见，长选项列表使用下拉。 */
 export type ChoiceOption<V extends string> = { value: V; label: string };
 
 export function ChoiceField<V extends string>({
@@ -30,38 +27,32 @@ export function ChoiceField<V extends string>({
   className?: string;
   ariaLabel?: string;
 }) {
+  const accessibleLabelId = useId();
   if (options.length <= threshold) {
-    return (
-      <div className={cn("chip-set", className)} role="radiogroup" aria-label={ariaLabel}>
-        {options.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            role="radio"
-            aria-checked={value === o.value}
-            disabled={disabled}
-            onClick={() => onChange(o.value)}
-            className={cn("chip", value === o.value && "active")}
-          >
-            {value === o.value ? <span className="cd" /> : null}
-            {o.label}
-          </button>
-        ))}
-      </div>
-    );
+    return <RadioGroup
+      type="button"
+      options={options}
+      value={value ?? ""}
+      onChange={event => onChange(event.target.value as V)}
+      disabled={disabled}
+      aria-invalid={invalid}
+      aria-label={ariaLabel}
+      className={className}
+    />;
   }
-  return (
-    <Select value={value ?? ""} onValueChange={(v) => onChange(v as V)} disabled={disabled}>
-      <SelectTrigger className={cn("h-9", invalid && "!border-[var(--red)]", className)} aria-label={ariaLabel}>
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent className="max-h-[320px]">
-        {options.map((o) => (
-          <SelectItem key={o.value} value={o.value}>
-            {o.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
+  return <>
+    {ariaLabel ? <span hidden id={accessibleLabelId}>{ariaLabel}</span> : null}
+    <Select
+      optionList={options.map(option => ({ ...option, showTick: false }))}
+      value={value ?? undefined}
+      onChange={next => onChange(next as V)}
+      placeholder={placeholder}
+      disabled={disabled}
+      validateStatus={invalid ? "error" : "default"}
+      aria-labelledby={ariaLabel ? accessibleLabelId : undefined}
+      className={className}
+      motion={false}
+      style={{ width: "100%" }}
+      />
+  </>;
 }

@@ -1,12 +1,11 @@
 "use client";
 
-import { Button, Input, Select } from "@douyinfe/semi-ui";
+import { Button, Input, Select, Toast } from "@douyinfe/semi-ui";
 import { formatDeadlineDue } from "@/lib/deadline-due";
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { actionErrorMessage } from "@/lib/action-error";
 import { formatDateTime } from "@/lib/utils";
 import { matterHref } from "@/lib/matters/route";
@@ -45,7 +44,7 @@ export function SmsSuggestions({ sms, busy }: { sms: SmsRow; busy: boolean }) {
         const other = result.results.filter(row => ["UPDATED", "UNCHANGED"].includes(row.outcome) && !row.replayed).length;
         const replayed = result.results.filter(row => row.replayed).length;
         const summary = [created ? `新建 ${created} 项` : "", linked ? `关联已有 ${linked} 项` : "", rejected ? `未采用 ${rejected} 项` : "", other ? `确认档案/归属 ${other} 项` : "", replayed ? `已保存记录 ${replayed} 项（未重复应用）` : ""].filter(Boolean).join("，");
-        toast.success(summary || "决定已保存");
+        Toast.success(summary || "决定已保存");
         const remaining = result.remaining;
         setMessage([...result.warnings, remaining?.processingNote ?? "", remaining?.remainingFiles ? `仍有 ${remaining.remainingFiles} 个文件待处理，可继续入卷或补传。` : "", remaining?.needsManualFetch ? "仍有取件未完成，请使用来件上的重新取件或人工补传。" : ""].filter(Boolean).join("；") || null);
         router.refresh();

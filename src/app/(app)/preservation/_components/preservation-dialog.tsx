@@ -2,16 +2,10 @@
 
 import { FormDialogContent as DialogContent, FormDialogBody } from "@/components/patterns/form-dialog";
 
-import { useRef, useState, useTransition } from "react";
-import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { useId, useRef, useState, useTransition } from "react";
+import { Button, Input, Notification, Select, TextArea, Toast } from "@douyinfe/semi-ui";
 import type { PreservationType, PropertyType } from "@prisma/client";
-import { Dialog, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { WorkspaceDialog, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/patterns/workspace-dialog";
 import {
   createPreservationCase,
   updatePreservationCase,
@@ -44,7 +38,9 @@ function startCivil(startDate: string): Date {
   return startDate ? validatedCivil(startDate) : shTodayCivil();
 }
 
-// ── Case Dialog (create + edit) ──
+const propertyOptions = Object.entries(PROPERTY_TYPE_CN).map(([value, label]) => ({ value: value as PropertyType, label }));
+
+// ── Case WorkspaceDialog (create + edit) ──
 
 export function PreservationCaseDialog({
   open,
@@ -63,6 +59,9 @@ export function PreservationCaseDialog({
 }) {
   const [isPending, startTransition] = useTransition();
   const submitting = useRef(false);
+  const dialog = useRef<HTMLDivElement>(null);
+  const selectOpen = useRef(false);
+  const fieldId = useId();
   const isEdit = !!editCase;
 
   const [matterId, setMatterId] = useState(editCase?.matterId ?? initialMatterId ?? "");
@@ -114,12 +113,12 @@ export function PreservationCaseDialog({
       try {
         if (editCase) {
           await updatePreservationCase({ id: editCase.id, expectedUpdatedAt: editCase.updatedAt, ...changes });
-          toast.success("已更新");
+          Toast.success("已更新");
           onOpenChange(false);
           return;
         }
         if (target && !expiryDate) {
-          toast.error("请填写法院文书载明的到期日");
+          Notification.error({ title: "请填写法院文书载明的到期日", duration: 6 });
           return;
         }
         const sd = startCivil(startDate);
@@ -153,11 +152,11 @@ export function PreservationCaseDialog({
           firstDuration: target ? dur : undefined,
           firstExpiryDate: target ? ed : undefined,
         });
-        toast.success("保全已创建");
+        Toast.success("保全已创建");
         reset();
         onOpenChange(false);
       } catch (err) {
-        toast.error("操作失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "操作失败", content: actionErrorMessage(err), duration: 6 });
       } finally {
         submitting.current = false;
       }
@@ -165,8 +164,8 @@ export function PreservationCaseDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-lg">
+    <WorkspaceDialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent ref={dialog} className="max-w-lg" onEscapeKeyDown={event => { if (selectOpen.current) event.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle>{isEdit ? "编辑保全" : "新建保全"}</DialogTitle>
           <DialogDescription className="sr-only">{isEdit ? "修改当前保全记录" : "填写保全信息"}</DialogDescription>
@@ -174,59 +173,56 @@ export function PreservationCaseDialog({
         <FormDialogBody>
         <fieldset disabled={isPending} className="min-w-0 space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <Field label="关联案件">
-              <Select value={matterId} onValueChange={setMatterId} disabled={isPending}>
-                <SelectTrigger aria-label="关联案件" className="h-9 text-xs"><SelectValue placeholder="选择案件（诉前可空）" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">不关联</SelectItem>
-                  {editCase?.matter && !matters.some(m => m.id === editCase.matterId) && <SelectItem value={editCase.matter.id}>{editCase.matter.internalCode} {editCase.matter.title}</SelectItem>}
-                  {matters.map((m) => <SelectItem key={m.id} value={m.id}>{m.internalCode} {m.title}</SelectItem>)}
-                </SelectContent>
+            <Field label="关联案件" id={`${fieldId}-matter`}>
+              <Select<string> id={`${fieldId}-matter`} aria-labelledby={`${fieldId}-matter-label`}
+                value={matterId || undefined} onChange={value => { if (typeof value === "string") setMatterId(value); }} disabled={isPending}
+                placeholder="选择案件（诉前可空）" className="w-full" filter motion={false}
+                getPopupContainer={() => dialog.current!} onDropdownVisibleChange={visible => { selectOpen.current = visible; }}>
+                <Select.Option value="__none__">不关联</Select.Option>
+                {editCase?.matter && !matters.some(m => m.id === editCase.matterId) && <Select.Option value={editCase.matter.id}>{editCase.matter.internalCode} {editCase.matter.title}</Select.Option>}
+                {matters.map(m => <Select.Option key={m.id} value={m.id}>{m.internalCode} {m.title}</Select.Option>)}
               </Select>
             </Field>
-            <Field label="保全类型 *">
-              <Select value={type} onValueChange={(v) => setType(v as PreservationType)} disabled={isPending}>
-                <SelectTrigger aria-label="保全类型" className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(PRES_TYPE_CN).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            <Field label="保全类型" id={`${fieldId}-type`}>
+              <Select<PreservationType> id={`${fieldId}-type`} aria-labelledby={`${fieldId}-type-label`}
+                value={type} onChange={value => { if (typeof value === "string") setType(value); }} disabled={isPending}
+                optionList={Object.entries(PRES_TYPE_CN).map(([value, label]) => ({ value: value as PreservationType, label }))}
+                className="w-full" motion={false} getPopupContainer={() => dialog.current!}
+                onDropdownVisibleChange={visible => { selectOpen.current = visible; }} />
             </Field>
-            <Field label="保全法院"><Input aria-label="保全法院" value={court} onChange={(e) => setCourt(e.target.value)} className="h-9 text-xs" /></Field>
-            <Field label="裁定书编号"><Input aria-label="裁定书编号" value={rulingNumber} onChange={(e) => setRulingNumber(e.target.value)} className="h-9 text-xs font-mono" /></Field>
-            <Field label="跟进负责人">
-              <Select value={ownerId} onValueChange={setOwnerId} disabled={isPending}>
-                <SelectTrigger aria-label="跟进负责人" className="h-9 text-xs"><SelectValue placeholder="选择" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">不指定</SelectItem>
-                  {editCase?.ownerId && !users.some(u => u.id === editCase.ownerId) && <SelectItem value={editCase.ownerId}>{editCase.owner?.name ?? "当前负责人不可用，请重新选择"}</SelectItem>}
-                  {users.map((u) => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
-                </SelectContent>
+            <Field label="保全法院" id={`${fieldId}-court`}><Input id={`${fieldId}-court`} value={court} onChange={setCourt} /></Field>
+            <Field label="裁定书编号" id={`${fieldId}-ruling`}><Input id={`${fieldId}-ruling`} value={rulingNumber} onChange={setRulingNumber} /></Field>
+            <Field label="跟进负责人" id={`${fieldId}-owner`}>
+              <Select<string> id={`${fieldId}-owner`} aria-labelledby={`${fieldId}-owner-label`}
+                value={ownerId || undefined} onChange={value => { if (typeof value === "string") setOwnerId(value); }} disabled={isPending}
+                placeholder="选择负责人" className="w-full" filter motion={false}
+                getPopupContainer={() => dialog.current!} onDropdownVisibleChange={visible => { selectOpen.current = visible; }}>
+                <Select.Option value="__none__">不指定</Select.Option>
+                {editCase?.ownerId && !users.some(u => u.id === editCase.ownerId) && <Select.Option value={editCase.ownerId}>{editCase.owner?.name ?? "当前负责人不可用，请重新选择"}</Select.Option>}
+                {users.map(u => <Select.Option key={u.id} value={u.id}>{u.name}</Select.Option>)}
               </Select>
             </Field>
           </div>
           {!selectedMatterId && <p className="text-xs text-muted-foreground">不关联案件时须指定有效负责人，仅该负责人可查看此保全记录。</p>}
-          <Field label="备注"><Textarea aria-label="备注" value={note} onChange={(e) => setNote(e.target.value)} rows={2} className="text-xs" /></Field>
+          <Field label="备注" id={`${fieldId}-note`}><TextArea id={`${fieldId}-note`} value={note} onChange={setNote} rows={2} /></Field>
 
           {/* First target + property (create only) */}
           {!isEdit && (
             <div className="rounded-lg border border-dashed border-border p-3 space-y-3">
               <p className="text-xs font-medium text-muted-foreground">首个被保全人及财产（可后续添加更多）</p>
-              <Field label="被保全人"><Input value={target} onChange={(e) => setTarget(e.target.value)} placeholder="被保全人名称" className="h-9 text-xs" /></Field>
+              <Field label="被保全人" id={`${fieldId}-target`}><Input id={`${fieldId}-target`} value={target} onChange={setTarget} /></Field>
               {target && (
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="财产类型 *">
-                    <Select value={propertyType} onValueChange={(v) => setPropertyType(v as PropertyType)}>
-                      <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(PROPERTY_TYPE_CN).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                  <Field label="财产类型" id={`${fieldId}-property`}>
+                    <Select<PropertyType> id={`${fieldId}-property`} aria-labelledby={`${fieldId}-property-label`}
+                      value={propertyType} onChange={value => { if (typeof value === "string") setPropertyType(value); }} disabled={isPending}
+                      optionList={propertyOptions} className="w-full" motion={false} getPopupContainer={() => dialog.current!}
+                      onDropdownVisibleChange={visible => { selectOpen.current = visible; }} />
                   </Field>
-                  <Field label="保全金额"><Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="h-9 text-xs font-mono" /></Field>
-                  <Field label="财产详情"><Input value={propertyDetail} onChange={(e) => setPropertyDetail(e.target.value)} placeholder="如：账号/地址/车牌" className="h-9 text-xs" /></Field>
-                  <Field label="生效日期"><Input type="date" aria-label="生效日期" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-9 text-xs" /></Field>
-                  <Field label="到期日（法院文书载明）*"><Input type="date" aria-label="到期日（法院文书载明）" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} className="h-9 text-xs" /></Field>
+                  <Field label="保全金额" id={`${fieldId}-amount`}><Input id={`${fieldId}-amount`} type="number" value={amount} onChange={setAmount} placeholder="0.00" /></Field>
+                  <Field label="财产详情" id={`${fieldId}-detail`}><Input id={`${fieldId}-detail`} value={propertyDetail} onChange={setPropertyDetail} placeholder="账号、地址或车牌" /></Field>
+                  <Field label="生效日期" id={`${fieldId}-start`}><Input id={`${fieldId}-start`} type="date" value={startDate} onChange={setStartDate} /></Field>
+                  <Field label="到期日（法院文书载明）" id={`${fieldId}-expiry`}><Input id={`${fieldId}-expiry`} type="date" value={expiryDate} onChange={setExpiryDate} aria-required={true} /></Field>
                   <div className="col-span-2"><ExpiryHint startDate={startDate} expiryDate={expiryDate} propertyType={propertyType} /></div>
                 </div>
               )}
@@ -235,14 +231,13 @@ export function PreservationCaseDialog({
         </fieldset>
         </FormDialogBody>
         <DialogFooter>
-          <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isPending}>取消</Button>
-          <Button onClick={handleSubmit} disabled={isPending || (isEdit && !dirty) || (!selectedMatterId && !selectedOwnerId)} className="gap-1.5">
-            {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          <Button theme="light" type="tertiary" onClick={() => handleOpenChange(false)} disabled={isPending}>取消</Button>
+          <Button theme="solid" aria-busy={isPending} onClick={handleSubmit} disabled={isPending || (isEdit && !dirty) || (!selectedMatterId && !selectedOwnerId)}>
             {isEdit ? "保存" : "创建"}
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 
@@ -286,34 +281,36 @@ function ExpiryHint({ startDate, expiryDate, propertyType }: { startDate: string
 
 export function AddTargetDialog({ open, onOpenChange, caseId }: { open: boolean; onOpenChange: (o: boolean) => void; caseId: string }) {
   const [isPending, startTransition] = useTransition();
+  const fieldId = useId();
   const [name, setName] = useState("");
 
   function handleSubmit() {
+    if (isPending || !name.trim()) return;
     startTransition(async () => {
       try {
         await addTarget({ caseId, name });
-        toast.success("被保全人已添加");
+        Toast.success("被保全人已添加");
         setName("");
         onOpenChange(false);
       } catch (err) {
-        toast.error("添加失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "添加失败", content: actionErrorMessage(err), duration: 6 });
       }
     });
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <WorkspaceDialog open={open} onOpenChange={next => { if (!isPending) onOpenChange(next); }}>
       <DialogContent className="max-w-sm">
         <DialogHeader><DialogTitle>添加被保全人</DialogTitle></DialogHeader>
         <FormDialogBody>
-        <Field label="被保全人名称 *"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="名称" className="h-9 text-xs" /></Field>
+        <Field label="被保全人名称" id={fieldId}><Input id={fieldId} value={name} onChange={setName} aria-required={true} /></Field>
         </FormDialogBody>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
-          <Button onClick={handleSubmit} disabled={isPending || !name.trim()} className="gap-1.5">{isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}添加</Button>
+          <Button theme="light" type="tertiary" onClick={() => onOpenChange(false)} disabled={isPending}>取消</Button>
+          <Button theme="solid" aria-busy={isPending} onClick={handleSubmit} disabled={isPending || !name.trim()}>添加</Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 
@@ -321,6 +318,9 @@ export function AddTargetDialog({ open, onOpenChange, caseId }: { open: boolean;
 
 export function AddPropertyDialog({ open, onOpenChange, targetId }: { open: boolean; onOpenChange: (o: boolean) => void; targetId: string }) {
   const [isPending, startTransition] = useTransition();
+  const dialog = useRef<HTMLDivElement>(null);
+  const selectOpen = useRef(false);
+  const fieldId = useId();
   const [propertyType, setPropertyType] = useState<PropertyType>("BANK_DEPOSIT");
   const [propertyDetail, setPropertyDetail] = useState("");
   const [amount, setAmount] = useState("");
@@ -329,13 +329,14 @@ export function AddPropertyDialog({ open, onOpenChange, targetId }: { open: bool
   const [expiryDate, setExpiryDate] = useState("");
 
   async function handleSubmit() {
+    if (isPending) return;
     if (!expiryDate) {
-      toast.error("请填写法院文书载明的到期日");
+      Notification.error({ title: "请填写法院文书载明的到期日", duration: 6 });
       return;
     }
     let sd: Date, ed: Date, f: ReturnType<typeof expiryFacts>;
     try { sd = startCivil(startDate); ed = validatedCivil(expiryDate); f = expiryFacts(startDate, expiryDate, propertyType); }
-    catch { toast.error("请填写有效的生效日期与到期日"); return; }
+    catch { Notification.error({ title: "请填写有效的生效日期与到期日", duration: 6 }); return; }
     if (f.overLimit) {
       const okToSave = await confirmDialog({
         title: "到期日晚于法定上限",
@@ -358,41 +359,41 @@ export function AddPropertyDialog({ open, onOpenChange, targetId }: { open: bool
           duration: dur,
           expiryDate: ed,
         });
-        toast.success("财产已添加");
+        Toast.success("财产已添加");
         onOpenChange(false);
       } catch (err) {
-        toast.error("添加失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "添加失败", content: actionErrorMessage(err), duration: 6 });
       }
     });
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+    <WorkspaceDialog open={open} onOpenChange={next => { if (!isPending) onOpenChange(next); }}>
+      <DialogContent ref={dialog} className="max-w-md" onEscapeKeyDown={event => { if (selectOpen.current) event.preventDefault(); }}>
         <DialogHeader><DialogTitle>添加保全财产</DialogTitle><DialogDescription>登记财产及法院文书载明的期限。</DialogDescription></DialogHeader>
         <FormDialogBody>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <Field label="财产类型 *">
-              <Select value={propertyType} onValueChange={(v) => setPropertyType(v as PropertyType)}>
-                <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>{Object.entries(PROPERTY_TYPE_CN).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
-              </Select>
+            <Field label="财产类型" id={`${fieldId}-property`}>
+              <Select<PropertyType> id={`${fieldId}-property`} aria-labelledby={`${fieldId}-property-label`}
+                value={propertyType} onChange={value => { if (typeof value === "string") setPropertyType(value); }} disabled={isPending}
+                optionList={propertyOptions} className="w-full" motion={false} getPopupContainer={() => dialog.current!}
+                onDropdownVisibleChange={visible => { selectOpen.current = visible; }} />
             </Field>
-            <Field label="保全金额"><Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="h-9 text-xs font-mono" /></Field>
-            <Field label="财产详情"><Input value={propertyDetail} onChange={(e) => setPropertyDetail(e.target.value)} placeholder="如：账号/地址" className="h-9 text-xs" /></Field>
-            <Field label="生效日期"><Input type="date" aria-label="生效日期" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-9 text-xs" /></Field>
-            <Field label="到期日（法院文书载明）*"><Input type="date" aria-label="到期日（法院文书载明）" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} className="h-9 text-xs" /></Field>
+            <Field label="保全金额" id={`${fieldId}-amount`}><Input id={`${fieldId}-amount`} type="number" value={amount} onChange={setAmount} placeholder="0.00" /></Field>
+            <Field label="财产详情" id={`${fieldId}-detail`}><Input id={`${fieldId}-detail`} value={propertyDetail} onChange={setPropertyDetail} placeholder="账号、地址或车牌" /></Field>
+            <Field label="生效日期" id={`${fieldId}-start`}><Input id={`${fieldId}-start`} type="date" value={startDate} onChange={setStartDate} /></Field>
+            <Field label="到期日（法院文书载明）" id={`${fieldId}-expiry`}><Input id={`${fieldId}-expiry`} type="date" value={expiryDate} onChange={setExpiryDate} aria-required={true} /></Field>
           </div>
           <ExpiryHint startDate={startDate} expiryDate={expiryDate} propertyType={propertyType} />
         </div>
         </FormDialogBody>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
-          <Button onClick={handleSubmit} disabled={isPending} className="gap-1.5">{isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}添加</Button>
+          <Button theme="light" type="tertiary" onClick={() => onOpenChange(false)} disabled={isPending}>取消</Button>
+          <Button theme="solid" aria-busy={isPending} onClick={handleSubmit} disabled={isPending}>添加</Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 
@@ -403,46 +404,56 @@ export function RenewPropertyDialog({ open, onOpenChange, property }: { open: bo
   const [days, setDays] = useState("365");
   const [note, setNote] = useState("");
 
+  const fieldId = useId();
+  const duration = Number(days);
+  const newExpiry = new Date(property.expiryDate.getTime() + duration * 86_400_000);
+  const validDuration = Number.isInteger(duration) && duration > 0 && Number.isFinite(newExpiry.getTime());
+
   function handleSubmit() {
-    const d = parseInt(days) || 365;
-    const newExpiry = new Date(property.expiryDate.getTime() + d * 86400000);
+    if (!validDuration || isPending) return;
     startTransition(async () => {
       try {
-        await renewProperty({ propertyId: property.id, newExpiryDate: newExpiry, renewalDuration: d, note });
-        toast.success("续保成功");
+        await renewProperty({ propertyId: property.id, newExpiryDate: newExpiry, renewalDuration: duration, note });
+        Toast.success("续保成功");
         onOpenChange(false);
       } catch (err) {
-        toast.error("续保失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "续保失败", content: actionErrorMessage(err), duration: 6 });
       }
     });
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <WorkspaceDialog open={open} onOpenChange={next => { if (!isPending) onOpenChange(next); }}>
       <DialogContent className="max-w-sm">
         <DialogHeader><DialogTitle>续保</DialogTitle></DialogHeader>
         <FormDialogBody>
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground">当前到期日：{formatDate(property.expiryDate)}</p>
-          <Field label="续保天数"><Input type="number" value={days} onChange={(e) => setDays(e.target.value)} className="h-9 text-xs font-mono" /></Field>
-          <Field label="备注"><Input value={note} onChange={(e) => setNote(e.target.value)} className="h-9 text-xs" /></Field>
+          <Field label="续保天数" id={`${fieldId}-days`}>
+            <Input id={`${fieldId}-days`} type="number" value={days} onChange={setDays} disabled={isPending}
+              aria-required={true} aria-describedby={`${fieldId}-next-expiry`} validateStatus={validDuration ? "default" : "error"} />
+            <p id={`${fieldId}-next-expiry`} className="text-xs text-muted-foreground">
+              {validDuration ? `续保后到期日：${formatDate(newExpiry)}` : "请输入大于 0 的整数天数。"}
+            </p>
+          </Field>
+          <Field label="备注" id={`${fieldId}-note`}><Input id={`${fieldId}-note`} value={note} onChange={setNote} disabled={isPending} /></Field>
         </div>
         </FormDialogBody>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
-          <Button onClick={handleSubmit} disabled={isPending} className="gap-1.5">{isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}确认续保</Button>
+          <Button theme="light" type="tertiary" onClick={() => onOpenChange(false)} disabled={isPending}>取消</Button>
+          <Button theme="solid" aria-busy={isPending} disabled={isPending || !validDuration} onClick={handleSubmit}>确认续保</Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 
 // ── Shared ──
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, id, children }: { label: string; id: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <Label className="text-[11px]">{label}</Label>
+      <label id={`${id}-label`} htmlFor={id} className="block text-sm font-medium">{label}</label>
       {children}
     </div>
   );

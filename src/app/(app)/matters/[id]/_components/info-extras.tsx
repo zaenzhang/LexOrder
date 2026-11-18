@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useId, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -13,26 +13,16 @@ import {
   Loader2,
   ScanLine
 } from "lucide-react";
-import { toast } from "sonner";
+import { Select, Button, Input, Notification, Toast } from "@douyinfe/semi-ui";
 import { cn, formatDate } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
+} from "@/components/patterns/workspace-dialog";
 import { createExpress } from "@/server/express/actions";
 import { parseExpressLabel } from "@/server/ai/parse-express";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -178,7 +168,7 @@ export function ExpressMiniCard({
         </span>
         <div className="flex items-center gap-2">
           {matterId && (
-            <Button size="sm" onClick={() => setAddOpen(true)} className="h-6 gap-0.5 px-2 text-[11px]">
+            <Button onClick={() => setAddOpen(true)} className="h-6 gap-0.5 px-2 text-[11px]" theme="solid" size="small">
               <Plus className="h-2.5 w-2.5" />
               添加
             </Button>
@@ -247,6 +237,7 @@ function AddExpressDialog({
   onOpenChange: (o: boolean) => void;
   matterId: string;
 }) {
+  const selectLabelId = useId();
   const router = useRouter();
   const [trackingNo, setTrackingNo] = useState("");
   const [companyCode, setCompanyCode] = useState("");
@@ -276,26 +267,24 @@ function AddExpressDialog({
         const r = await parseExpressLabel(fd);
         if (r.trackingNo) {
           setTrackingNo(r.trackingNo);
-          toast.success(`已识别单号：${r.trackingNo}`);
+          Toast.success(`已识别单号：${r.trackingNo}`);
         } else {
-          toast.warning("未识别到单号，请手动输入");
+          Toast.warning("未识别到单号，请手动输入");
         }
         if (r.companyCode) setCompanyCode(r.companyCode);
       } catch (err) {
-        toast.error("识别失败", {
-          description: actionErrorMessage(err)
-        });
+        Notification.error({ title: "识别失败", content: actionErrorMessage(err) });
       }
     });
   }
 
   function handleSubmit() {
     if (!trackingNo.trim()) {
-      toast.error("请填写或识别快递单号");
+      Toast.error("请填写或识别快递单号");
       return;
     }
     if (!purpose.trim()) {
-      toast.error("请填写用途");
+      Toast.error("请填写用途");
       return;
     }
     startSubmit(async () => {
@@ -309,20 +298,18 @@ function AddExpressDialog({
           recipient: recipient.trim(),
           recipientPhone: recipientPhone.trim()
         });
-        toast.success("快递记录已创建");
+        Toast.success("快递记录已创建");
         reset();
         onOpenChange(false);
         router.refresh();
       } catch (err) {
-        toast.error("创建失败", {
-          description: actionErrorMessage(err)
-        });
+        Notification.error({ title: "创建失败", content: actionErrorMessage(err) });
       }
     });
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <WorkspaceDialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>添加快递记录</DialogTitle>
@@ -333,11 +320,11 @@ function AddExpressDialog({
 
         <div className="space-y-3 py-2">
           <div className="space-y-1.5">
-            <Label className="text-xs">单号</Label>
+            <label className="text-xs">单号</label>
             <div className="flex gap-1">
               <Input
                 value={trackingNo}
-                onChange={(e) => setTrackingNo(e.target.value)}
+                onChange={inputValue => setTrackingNo(inputValue)}
                 placeholder="可手动输入或上传图片识别"
                 className="font-mono"
               />
@@ -352,13 +339,13 @@ function AddExpressDialog({
                 }}
               />
               <Button
-                type="button"
-                variant="outline"
-                size="sm"
                 onClick={() => fileRef.current?.click()}
                 disabled={ocrPending}
                 className="h-9 shrink-0 gap-1"
                 title="上传快递单照片，AI 自动识别单号 + 快递公司"
+                htmlType="button"
+                type="tertiary" theme="outline"
+                size="small"
               >
                 {ocrPending ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -372,52 +359,46 @@ function AddExpressDialog({
 
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1.5">
-              <Label className="text-xs">快递公司</Label>
+              <label className="text-xs">快递公司</label>
               <Input
                 value={companyCode}
-                onChange={(e) => setCompanyCode(e.target.value)}
+                onChange={inputValue => setCompanyCode(inputValue)}
                 placeholder="留空则自动识别"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">方向</Label>
+              <label id={selectLabelId + "-1"} className="text-xs">方向</label>
               <Select
                 value={direction}
-                onValueChange={(v) => setDirection(v as "OUTBOUND" | "INBOUND")}
-              >
-                <SelectTrigger className="h-10 bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="OUTBOUND">寄出（我方→外）</SelectItem>
-                  <SelectItem value="INBOUND">收件（外→我方）</SelectItem>
-                </SelectContent>
-              </Select>
+                onChange={v => { if (typeof v === "string") setDirection(v as "OUTBOUND" | "INBOUND"); }}
+                aria-labelledby={selectLabelId + "-1"}
+                className="w-full"
+                motion={false}><Select.Option value="OUTBOUND">寄出（我方→外）</Select.Option><Select.Option value="INBOUND">收件（外→我方）</Select.Option></Select>
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs">用途 *</Label>
+            <label className="text-xs">用途 *</label>
             <Input
               value={purpose}
-              onChange={(e) => setPurpose(e.target.value)}
+              onChange={inputValue => setPurpose(inputValue)}
               placeholder="如：起诉状寄朝阳法院"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1.5">
-              <Label className="text-xs">收件人 / 单位</Label>
+              <label className="text-xs">收件人 / 单位</label>
               <Input
                 value={recipient}
-                onChange={(e) => setRecipient(e.target.value)}
+                onChange={inputValue => setRecipient(inputValue)}
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">收件电话</Label>
+              <label className="text-xs">收件电话</label>
               <Input
                 value={recipientPhone}
-                onChange={(e) => setRecipientPhone(e.target.value)}
+                onChange={inputValue => setRecipientPhone(inputValue)}
                 className="font-mono"
               />
             </div>
@@ -425,15 +406,15 @@ function AddExpressDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+          <Button onClick={() => onOpenChange(false)} disabled={submitting} type="tertiary" theme="outline">
             取消
           </Button>
-          <Button onClick={handleSubmit} disabled={submitting}>
+          <Button onClick={handleSubmit} disabled={submitting} theme="solid">
             {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
             保存并跟踪
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }

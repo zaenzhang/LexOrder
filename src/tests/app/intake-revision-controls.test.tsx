@@ -3,7 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mock = vi.hoisted(() => ({ withdraw: vi.fn(), void: vi.fn(), refresh: vi.fn(), error: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mock.refresh }) }));
-vi.mock("sonner", () => ({ toast: { error: mock.error, success: vi.fn() } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { success: vi.fn() }),
+    Notification: Object.assign(semi.Notification, { error: mock.error, success: vi.fn() })
+  };
+});
 vi.mock("@/app/(app)/intakes/_components/intake-wizard", () => ({ IntakeWizard: () => null }));
 vi.mock("@/server/intakes/revision-actions", () => ({ getIntakeEditForm: vi.fn(), withdrawIntake: mock.withdraw }));
 vi.mock("@/server/intakes/actions", () => ({ resubmitIntake: vi.fn(), voidIntake: mock.void }));

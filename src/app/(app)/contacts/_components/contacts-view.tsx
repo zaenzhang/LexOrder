@@ -1,5 +1,5 @@
 "use client";
-import { Avatar, Button, Input, RadioGroup } from "@douyinfe/semi-ui";
+import { Avatar, Button, Input, RadioGroup, Notification, Toast } from "@douyinfe/semi-ui";
 import { customOrLegacy, hasCustomPermission, scopeFor, type RoleGrant } from "@/lib/roles/catalog";
 
 import { useState } from "react";
@@ -14,7 +14,6 @@ import {
   archiveExternalContact,
   rejectExternalContact
 } from "@/server/external-contacts/actions";
-import { toast } from "sonner";
 import { PageHeader } from "@/components/patterns/moan";
 import { confirmDialog, promptDialog } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -104,10 +103,10 @@ export function ContactsView({
     if (!(await confirmDialog({ title: `归档联系人「${c.name}」？`, description: "归档后不再在通讯录中展示，历史引用保留。", confirmText: "归档" }))) return;
     try {
       await archiveExternalContact(c.id);
-      toast.success("已归档");
+      Toast.success("已归档");
       router.refresh();
     } catch (err) {
-      toast.error("归档失败", { description: actionErrorMessage(err) });
+      Notification.error({ title: "归档失败", content: actionErrorMessage(err), duration: 6 });
     }
   }
 
@@ -115,10 +114,10 @@ export function ContactsView({
     if (!(await confirmDialog({ title: personal ? `确认联系人「${c.name}」？` : `通过联系人「${c.name}」？`, description: personal ? undefined : "通过后将对全所展示。", confirmText: personal ? "本人确认" : "通过" }))) return;
     try {
       await approveExternalContact({ id: c.id });
-      toast.success(personal ? "本人已确认" : "已通过");
+      Toast.success(personal ? "本人已确认" : "已通过");
       router.refresh();
     } catch (err) {
-      toast.error("审核失败", { description: actionErrorMessage(err) });
+      Notification.error({ title: "审核失败", content: actionErrorMessage(err), duration: 6 });
     }
   }
 
@@ -127,10 +126,10 @@ export function ContactsView({
     if (note === null) return;
     try {
       await rejectExternalContact({ id: c.id, note });
-      toast.success("已驳回");
+      Toast.success("已驳回");
       router.refresh();
     } catch (err) {
-      toast.error("审核失败", { description: actionErrorMessage(err) });
+      Notification.error({ title: "审核失败", content: actionErrorMessage(err), duration: 6 });
     }
   }
 

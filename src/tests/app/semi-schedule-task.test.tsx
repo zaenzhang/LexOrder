@@ -5,7 +5,14 @@ import { ActionError } from "@/lib/action-error";
 const mocks = vi.hoisted(() => ({ create: vi.fn(), refresh: vi.fn(), error: vi.fn(), success: vi.fn(), warning: vi.fn() }));
 vi.mock("@/server/tasks/actions", () => ({ createTask: mocks.create }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
-vi.mock("sonner", () => ({ toast: { error: mocks.error, success: mocks.success, warning: mocks.warning } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { success: mocks.success, warning: mocks.warning }),
+    Notification: Object.assign(semi.Notification, { error: mocks.error, success: mocks.success, warning: mocks.warning })
+  };
+});
 
 import { AddTaskDialog } from "@/app/(app)/schedule/_components/add-task-dialog";
 
@@ -38,7 +45,7 @@ describe("Semi 日程新建任务", () => {
     expect(submit).toHaveAttribute("type", "submit");
     expect(submit.form).toBe(form);
     fireEvent.submit(form!);
-    await waitFor(() => expect(mocks.error).toHaveBeenCalledWith("创建失败", { description: "事项已变化，请重试" }));
+    await waitFor(() => expect(mocks.error).toHaveBeenCalledWith(expect.objectContaining({ title: "创建失败", content: "事项已变化，请重试" })));
     expect(change).not.toHaveBeenCalled();
     expect(mocks.success).not.toHaveBeenCalled();
     expect(screen.getByLabelText(/事项标题/)).toHaveValue("提交合成证据");

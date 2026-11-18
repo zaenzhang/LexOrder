@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Modal, TextArea } from "@douyinfe/semi-ui";
-import { toast } from "sonner";
+import { Button, Modal, TextArea, Notification, Toast } from "@douyinfe/semi-ui";
 import { IntakeWizard, type ClientOption } from "../../_components/intake-wizard";
 import { getIntakeEditForm, withdrawIntake } from "@/server/intakes/revision-actions";
 import { resubmitIntake, voidIntake } from "@/server/intakes/actions";
@@ -31,7 +30,7 @@ export function RevisionControls({ id, status }: { id: string; status: string })
       setPeople(users);
       setOpen(true);
     } catch (error) {
-      toast.error(error instanceof Error ? actionErrorMessage(error) : "无法打开补正");
+      Notification.error({ title: error instanceof Error ? actionErrorMessage(error) : "无法打开补正", duration: 6 });
     } finally {
       setBusy(false);
     }
@@ -41,10 +40,10 @@ export function RevisionControls({ id, status }: { id: string; status: string })
     setBusy(true);
     try {
       await resubmitIntake(id);
-      toast.success("本轮申请已固定并送审");
+      Toast.success("本轮申请已固定并送审");
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? actionErrorMessage(error) : "送审失败");
+      Notification.error({ title: error instanceof Error ? actionErrorMessage(error) : "送审失败", duration: 6 });
     } finally {
       setBusy(false);
     }
@@ -57,7 +56,7 @@ export function RevisionControls({ id, status }: { id: string; status: string })
       setWithdraw(false);
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? actionErrorMessage(error) : "撤回失败");
+      Notification.error({ title: error instanceof Error ? actionErrorMessage(error) : "撤回失败", duration: 6 });
     } finally {
       setBusy(false);
     }
@@ -68,10 +67,10 @@ export function RevisionControls({ id, status }: { id: string; status: string })
     try {
       await voidIntake({ id, reason });
       setVoiding(false);
-      toast.success("草稿已作废");
+      Toast.success("草稿已作废");
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? actionErrorMessage(error) : "作废失败");
+      Notification.error({ title: error instanceof Error ? actionErrorMessage(error) : "作废失败", duration: 6 });
     } finally {
       setBusy(false);
     }

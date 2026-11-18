@@ -7,7 +7,14 @@ const mock = vi.hoisted(() => ({
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mock.refresh }), useSearchParams: () => new URLSearchParams() }));
 vi.mock("@/components/layout/topbar-action", () => ({ useTopbarAction: vi.fn() }));
-vi.mock("sonner", () => ({ toast: { success: mock.success, error: mock.error } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { success: mock.success }),
+    Notification: Object.assign(semi.Notification, { success: mock.success, error: mock.error })
+  };
+});
 vi.mock("@/server/sms/actions", () => ({
   parseAndSaveSms: mock.parse, generateHearingFromSms: mock.hearing, generateDeadlineFromSms: mock.deadline,
   backfillCaseNumberFromSms: mock.backfill, matchSmsToMatter: mock.match,
@@ -75,7 +82,7 @@ describe("收件箱 Semi 控件接线（真实组件，服务动作受控）", (
     fireEvent.click(screen.getByRole("checkbox", { name: /多条短信/ }));
     fireEvent.click(screen.getByRole("checkbox", { name: /尝试提取电子送达附件/ }));
     fireEvent.click(screen.getByRole("button", { name: "解析并保存" }));
-    await waitFor(() => expect(mock.error).toHaveBeenCalledWith("保存失败，请重试"));
+    await waitFor(() => expect(mock.error).toHaveBeenCalledWith(expect.objectContaining({ title: "保存失败，请重试" })));
     expect(close).not.toHaveBeenCalled();
     expect(screen.getByRole("textbox", { name: "法院短信原文" })).toHaveValue("合成短信第一条\n\n合成短信第二条");
     expect(screen.getByRole("checkbox", { name: /多条短信/ })).toBeChecked();
@@ -122,7 +129,7 @@ describe("收件箱 Semi 控件接线（真实组件，服务动作受控）", (
     fireEvent.change(screen.getByLabelText("标题 *"), { target: { value: "合成证据交换" } });
     fireEvent.change(screen.getByLabelText("开庭时间 *"), { target: { value: "2027-02-05T09:30" } });
     fireEvent.click(screen.getByRole("button", { name: "生成开庭" }));
-    await waitFor(() => expect(mock.error).toHaveBeenCalledWith("程序已变化，请核对"));
+    await waitFor(() => expect(mock.error).toHaveBeenCalledWith(expect.objectContaining({ title: "程序已变化，请核对" })));
     expect(close).not.toHaveBeenCalled();
     expect(screen.getByLabelText("开庭时间 *")).toHaveValue("2027-02-05T09:30");
     fireEvent.click(screen.getByRole("button", { name: "生成开庭" }));

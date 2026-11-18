@@ -1,11 +1,8 @@
 "use client";
 
+import { Button, Form, Input, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import { Package, CheckCircle2, Loader2, Trash2, ExternalLink } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { saveExpressSettingsAction } from "@/server/express/actions";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -31,11 +28,11 @@ export function ExpressSettingsForm({ initial }: { initial: Initial }) {
           kuaidi100Customer: k100Customer,
           kuaidi100Key: k100Key
         });
-        toast.success("配置已保存");
+        Toast.success("配置已保存");
         setKdAppKey("");
         setK100Key("");
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "失败");
+        Toast.error(e instanceof Error ? actionErrorMessage(e) : "失败");
       }
     });
   };
@@ -45,9 +42,9 @@ export function ExpressSettingsForm({ initial }: { initial: Initial }) {
     startTransition(async () => {
       try {
         await saveExpressSettingsAction({ kdniaoClearKey: true });
-        toast.success("已清除");
+        Toast.success("已清除");
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "失败");
+        Toast.error(e instanceof Error ? actionErrorMessage(e) : "失败");
       }
     });
   };
@@ -57,9 +54,9 @@ export function ExpressSettingsForm({ initial }: { initial: Initial }) {
     startTransition(async () => {
       try {
         await saveExpressSettingsAction({ kuaidi100ClearKey: true });
-        toast.success("已清除");
+        Toast.success("已清除");
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "失败");
+        Toast.error(e instanceof Error ? actionErrorMessage(e) : "失败");
       }
     });
   };
@@ -99,27 +96,27 @@ export function ExpressSettingsForm({ initial }: { initial: Initial }) {
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <Label className="text-[11px]">EBusinessID（用户 ID）</Label>
+              <Form.Label name="express-kd-customer" className="text-[11px]">EBusinessID（用户 ID）</Form.Label>
               <Input
-                value={kdEbId}
-                onChange={(e) => setKdEbId(e.target.value)}
+                id="express-kd-customer" value={kdEbId}
+                onChange={(value) => setKdEbId(value)}
                 placeholder="数字 ID"
                 className="mt-1 font-mono"
               />
             </div>
             <div>
-              <Label className="text-[11px]">
+              <Form.Label name="express-kd-key" className="text-[11px]">
                 AppKey
                 {initial.kdniao.configured && (
                   <span className="ml-2 font-mono text-[10px] text-muted-foreground">
                     当前 {initial.kdniao.appKeyMasked}（留空保留）
                   </span>
                 )}
-              </Label>
+              </Form.Label>
               <Input
-                type="password"
+                id="express-kd-key" type="password"
                 value={kdAppKey}
-                onChange={(e) => setKdAppKey(e.target.value)}
+                onChange={(value) => setKdAppKey(value)}
                 placeholder={initial.kdniao.configured ? "如需更换请粘贴新 AppKey" : "AppKey"}
                 className="mt-1 font-mono"
                 autoComplete="off"
@@ -162,26 +159,26 @@ export function ExpressSettingsForm({ initial }: { initial: Initial }) {
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <Label className="text-[11px]">Customer（授权码）</Label>
+              <Form.Label name="express-k100-customer" className="text-[11px]">Customer（授权码）</Form.Label>
               <Input
-                value={k100Customer}
-                onChange={(e) => setK100Customer(e.target.value)}
+                id="express-k100-customer" value={k100Customer}
+                onChange={(value) => setK100Customer(value)}
                 className="mt-1 font-mono"
               />
             </div>
             <div>
-              <Label className="text-[11px]">
+              <Form.Label name="express-k100-key" className="text-[11px]">
                 Key
                 {initial.kuaidi100.configured && (
                   <span className="ml-2 font-mono text-[10px] text-muted-foreground">
                     当前 {initial.kuaidi100.keyMasked}（留空保留）
                   </span>
                 )}
-              </Label>
+              </Form.Label>
               <Input
-                type="password"
+                id="express-k100-key" type="password"
                 value={k100Key}
-                onChange={(e) => setK100Key(e.target.value)}
+                onChange={(value) => setK100Key(value)}
                 placeholder={initial.kuaidi100.configured ? "如需更换请粘贴新 key" : "key"}
                 className="mt-1 font-mono"
                 autoComplete="off"
@@ -203,7 +200,7 @@ export function ExpressSettingsForm({ initial }: { initial: Initial }) {
         </div>
 
         <div className="mt-4 flex justify-end">
-          <Button onClick={save} disabled={pending} className="gap-1.5">
+          <Button theme="solid" onClick={save} disabled={pending} className="gap-1.5">
             {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             保存配置
           </Button>

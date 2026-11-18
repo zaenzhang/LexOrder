@@ -1,11 +1,10 @@
 "use client";
 
-import { Banner, Select, Button, Checkbox, Input, Tag, TextArea } from "@douyinfe/semi-ui";
+import { Banner, Select, Button, Checkbox, Input, Tag, TextArea, Toast } from "@douyinfe/semi-ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, FileText, Plus } from "lucide-react";
-import { toast } from "sonner";
 
-import { Dialog, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 
 import { FormDialogBody, FormDialogContent } from "@/components/patterns/form-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
@@ -184,7 +183,7 @@ export function DeliveryPanel({ matterId, initialDeliveryId, initialEventId, ini
       const input = { ...draft, matterId, requestKey: key };
       try { result = await prepareDelivery(input); }
       catch (err) { result = await findDeliveryByRequest(input); if (!result) throw err; }
-      setDirty(false); openDetail(result.id); setRefresh(value => value + 1); toast.success("交付清单已固定保存");
+      setDirty(false); openDetail(result.id); setRefresh(value => value + 1); Toast.success("交付清单已固定保存");
     } catch (err) { setError(actionErrorMessage(err) || "保存失败，输入已保留"); }
     finally { setBusy(false); }
   }
@@ -195,7 +194,7 @@ export function DeliveryPanel({ matterId, initialDeliveryId, initialEventId, ini
     try {
       const result = await createClientBrief({ matterId, requestKey: key, ...brief });
       setDirty(false); setMode(null); setRefresh(value => value + 1);
-      toast.success("简报已保存为草稿，请核对并按原流程送审");
+      Toast.success("简报已保存为草稿，请核对并按原流程送审");
       callbacks.current.onDocumentOpen?.(result.id);
     } catch (err) { setError(actionErrorMessage(err) || "保存失败，输入已保留"); }
     finally { setBusy(false); }
@@ -211,7 +210,7 @@ export function DeliveryPanel({ matterId, initialDeliveryId, initialEventId, ini
       try { result = await registerDeliveryEvent(input); }
       catch (err) { result = await findDeliveryEventByRequest(input); if (!result) throw err; }
       setDirty(false); setMode("detail"); setRefresh(value => value + 1);
-      callbacks.current.onLocationChange?.(result.deliveryId, result.id); toast.success("实际发生情况已登记");
+      callbacks.current.onLocationChange?.(result.deliveryId, result.id); Toast.success("实际发生情况已登记");
     } catch (err) { setError(actionErrorMessage(err) || "登记失败，输入已保留"); }
     finally { setBusy(false); }
   }
@@ -224,7 +223,7 @@ export function DeliveryPanel({ matterId, initialDeliveryId, initialEventId, ini
       if (!response.ok) { const result = await response.json(); throw new Error(result.error || "导出未完成"); }
       const blob = await response.blob(), url = URL.createObjectURL(blob), link = document.createElement("a");
       link.href = url; link.download = `${detail.purpose}_交付材料.zip`; link.click(); URL.revokeObjectURL(url);
-      setRefresh(value => value + 1); toast.success("已导出，实际发送后请另行登记");
+      setRefresh(value => value + 1); Toast.success("已导出，实际发送后请另行登记");
     } catch (err) { setError(actionErrorMessage(err) || "导出失败，固定清单仍保留"); }
     finally { setBusy(false); }
   }
@@ -254,9 +253,9 @@ export function DeliveryPanel({ matterId, initialDeliveryId, initialEventId, ini
       <Button size="small" theme="outline" type="tertiary" disabled={loading || !nextCursor} onClick={() => { setPreviousCursors(value => [...value, cursor]); setCursor(nextCursor!); }} htmlType="button">下一页</Button>
     </div>}
 
-    <Dialog open={mode !== null} onOpenChange={open => { if (!open) void close(); }}>
+    <WorkspaceDialog open={mode !== null} onOpenChange={open => { if (!open) void close(); }}>
       <FormDialogContent ref={popupContainer} className="max-w-3xl" aria-describedby={undefined} onCloseAutoFocus={event => { event.preventDefault(); trigger.current?.focus(); }}
-        onEscapeKeyDown={event => { if (busy || openDropdown.current) event.preventDefault(); }} onInteractOutside={event => { if (busy) event.preventDefault(); }}>
+        onEscapeKeyDown={event => { if (busy || openDropdown.current) event.preventDefault(); }}>
         <DialogHeader className="px-6 pt-5"><DialogTitle>{title}</DialogTitle></DialogHeader>
         <FormDialogBody className="flex flex-col gap-5 px-6 py-5">
           {error && <Banner type="danger" closeIcon={null} description={error} />}
@@ -345,6 +344,6 @@ export function DeliveryPanel({ matterId, initialDeliveryId, initialEventId, ini
           </>}
         </DialogFooter>
       </FormDialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   </section>;
 }

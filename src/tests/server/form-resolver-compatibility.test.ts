@@ -32,6 +32,9 @@ describe("业务表单校验器兼容性", () => {
     );
     expect(result.errors).toEqual({});
     expect(procedureCreateSchema.parse(result.values).acceptedAt).toEqual(new Date("2026-11-15"));
-    expect(procedureUpdateSchema.parse({ id, caseNumber: "更新案号" })).not.toHaveProperty("acceptedAt");
+    const update = { id, caseNumber: "更新案号" };
+    const expectedUpdatedAt = new Date("2026-11-14T12:00:00Z");
+    expect(procedureUpdateSchema.parse({ ...update, expectedUpdatedAt })).not.toHaveProperty("acceptedAt");
+    expect(procedureUpdateSchema.safeParse(update).success).toBe(false);
   });
 });

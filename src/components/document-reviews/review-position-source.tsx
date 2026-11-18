@@ -1,8 +1,8 @@
 "use client";
 
+import { Button, Typography } from "@douyinfe/semi-ui";
 import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
 import { getSavedDocumentReviewPosition, previewDocumentReviewPosition } from "@/server/document-reviews/actions";
 import type { EvidenceSourceResult } from "@/server/evidence/contracts";
@@ -33,10 +33,10 @@ export function ReviewPositionSourceButton({ target, children, disabled = false 
   }, [request, identity, attempt]);
   const current = read?.request === request && open ? read : null;
   const source = current?.value?.status === "AVAILABLE" ? current.value : null;
-  return <Dialog open={open} onOpenChange={value => setRequest(value ? { target, identity } : null)}>
-    <DialogTrigger asChild><Button ref={trigger} type="button" size="sm" variant="outline" disabled={disabled}>{children}</Button></DialogTrigger>
+  return <WorkspaceDialog open={open} onOpenChange={value => setRequest(value ? { target, identity } : null)}>
+    <button onClick={() => setRequest({ target, identity })} ref={trigger} type="button" disabled={disabled} className="rounded-md border border-[var(--semi-color-border)] px-3 py-1.5 text-sm hover:bg-[var(--semi-color-fill-0)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--semi-color-primary)] disabled:opacity-50">{children}</button>
     <DialogContent className="max-w-4xl" onCloseAutoFocus={event => {
-      if (trigger.current?.isConnected && !trigger.current.closest('[hidden], [inert], [data-state="inactive"]')) {
+      if (trigger.current?.isConnected && !trigger.current.closest('[hidden], [inert], [aria-hidden="true"]')) {
         event.preventDefault(); trigger.current.focus();
       }
     }}>
@@ -53,11 +53,11 @@ export function ReviewPositionSourceButton({ target, children, disabled = false 
         {source.previewUrl && <iframe title={source.previewKind === "TABLE" ? "单元格转换预览" : source.previewKind === "CONVERTED" ? "整份转换预览" : "文件预览"} src={source.previewUrl} className="h-[55vh] w-full rounded border" />}
       </>}
       <DialogFooter>
-        {(current?.error || current?.value?.status === "UNAVAILABLE") && <Button type="button" variant="outline" onClick={() => setAttempt(value => value + 1)}>重新读取位置</Button>}
-        {source?.previewUrl && <Button variant="outline" asChild><a href={source.previewUrl} target="_blank" rel="noopener noreferrer">{source.previewKind === "TABLE" ? "查看单元格转换预览" : source.previewKind === "CONVERTED" ? "另页查看转换预览" : "另页查看预览"}</a></Button>}
-        {source && <Button variant="outline" asChild><a href={source.downloadUrl} target="_blank" rel="noopener noreferrer">下载此版本</a></Button>}
-        <Button type="button" variant="outline" onClick={() => setRequest(null)}>返回复核内容</Button>
+        {(current?.error || current?.value?.status === "UNAVAILABLE") && <Button onClick={() => setAttempt(value => value + 1)} htmlType="button" type="tertiary" theme="outline">重新读取位置</Button>}
+        {source?.previewUrl && <Typography.Text link={{ href: source.previewUrl, target: "_blank", rel: "noopener noreferrer" }}>{source.previewKind === "TABLE" ? "查看单元格转换预览" : source.previewKind === "CONVERTED" ? "另页查看转换预览" : "另页查看预览"}</Typography.Text>}
+        {source && <Typography.Text link={{ href: source.downloadUrl, target: "_blank", rel: "noopener noreferrer" }}>下载此版本</Typography.Text>}
+        <Button onClick={() => setRequest(null)} htmlType="button" type="tertiary" theme="outline">返回复核内容</Button>
       </DialogFooter>
     </DialogContent>
-  </Dialog>;
+  </WorkspaceDialog>;
 }

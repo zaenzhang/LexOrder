@@ -1,5 +1,6 @@
 "use client";
 
+import { Button, Form, Input, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -10,10 +11,6 @@ import {
   Trash2,
   ExternalLink
 } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   saveYuandianSettingsAction,
   clearYuandianKeyAction,
@@ -52,12 +49,12 @@ export function YuandianSettingsForm({
     startTransition(async () => {
       try {
         await saveYuandianSettingsAction({ apiKey, baseUrl, caseDetailHost });
-        toast.success("元典配置已保存");
+        Toast.success("元典配置已保存");
         setApiKey("");
         setTestResult(null);
         router.refresh();
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "保存失败");
+        Toast.error(e instanceof Error ? actionErrorMessage(e) : "保存失败");
       }
     });
   };
@@ -67,11 +64,11 @@ export function YuandianSettingsForm({
     startTransition(async () => {
       try {
         await clearYuandianKeyAction({ confirm: true });
-        toast.success("元典 API key 已清除");
+        Toast.success("元典 API key 已清除");
         setTestResult(null);
         router.refresh();
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "失败");
+        Toast.error(e instanceof Error ? actionErrorMessage(e) : "失败");
       }
     });
   };
@@ -104,19 +101,19 @@ export function YuandianSettingsForm({
 
       <div className="space-y-3">
         <div>
-          <Label htmlFor="yuandian-api-key" className="text-[11px]">
+          <Form.Label name="yuandian-api-key" className="text-[11px]">
             接口密钥（API Key）
             {initial.apiKeyMasked && (
               <span className="ml-2 font-mono text-[10px] text-muted-foreground">
                 当前：{initial.apiKeyMasked}（留空保留原值）
               </span>
             )}
-          </Label>
+          </Form.Label>
           <Input
             id="yuandian-api-key"
             type="password"
             value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
+            onChange={(value) => setApiKey(value)}
             placeholder={initial.configured ? "如需更换粘贴新 key" : "粘贴元典 API key"}
             className="mt-1 font-mono"
             autoComplete="off"
@@ -124,22 +121,22 @@ export function YuandianSettingsForm({
         </div>
 
         <div>
-          <Label htmlFor="yuandian-base-url" className="text-[11px]">接口地址（Base URL）</Label>
+          <Form.Label name="yuandian-base-url" className="text-[11px]">接口地址（Base URL）</Form.Label>
           <Input
             id="yuandian-base-url"
             value={baseUrl}
-            onChange={(e) => setBaseUrl(e.target.value)}
+            onChange={(value) => setBaseUrl(value)}
             placeholder={defaults.baseUrl}
             className="mt-1 font-mono text-[12px]"
           />
         </div>
 
         <div>
-          <Label htmlFor="yuandian-case-detail-host" className="text-[11px]">案例详情前端域名</Label>
+          <Form.Label name="yuandian-case-detail-host" className="text-[11px]">案例详情前端域名</Form.Label>
           <Input
             id="yuandian-case-detail-host"
             value={caseDetailHost}
-            onChange={(e) => setCaseDetailHost(e.target.value)}
+            onChange={(value) => setCaseDetailHost(value)}
             placeholder={defaults.caseDetailHost}
             className="mt-1 font-mono text-[12px]"
           />
@@ -150,12 +147,12 @@ export function YuandianSettingsForm({
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <Button onClick={save} disabled={pending} className="gap-1.5">
+        <Button theme="solid" onClick={save} disabled={pending} className="gap-1.5">
           {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           保存配置
         </Button>
         <Button
-          variant="outline"
+          theme="outline"
           onClick={runTest}
           disabled={testing || pending || changed || !initial.configured}
           className="gap-1.5"
@@ -165,7 +162,7 @@ export function YuandianSettingsForm({
         </Button>
         {initial.apiKeyMasked && (
           <Button
-            variant="ghost"
+            theme="borderless" type="tertiary"
             onClick={clearKey}
             disabled={pending}
             className="ml-auto gap-1 text-destructive"

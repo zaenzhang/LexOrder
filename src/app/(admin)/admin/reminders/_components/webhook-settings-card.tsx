@@ -4,13 +4,9 @@
  * v0.50: 提醒推送（企业微信 / 钉钉群机器人）配置卡片。
  * 每日 09:00 到期扫描产生新提醒时，向机器人推一条汇总消息。
  */
+import { Button, Checkbox, Form, Input, Notification, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import { Loader2, Send, Webhook } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   saveWebhookSettingsAction,
   sendTestWebhookAction
@@ -33,9 +29,9 @@ export function WebhookSettingsCard({
     startSaving(async () => {
       try {
         await saveWebhookSettingsAction({ enabled, url: url.trim() });
-        toast.success("推送配置已保存");
+        Toast.success("推送配置已保存");
       } catch (err) {
-        toast.error("保存失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "保存失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -44,9 +40,9 @@ export function WebhookSettingsCard({
     startTesting(async () => {
       try {
         await sendTestWebhookAction();
-        toast.success("测试消息已发送，请到群里确认");
+        Toast.success("测试消息已发送，请到群里确认");
       } catch (err) {
-        toast.error("测试失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "测试失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -68,26 +64,26 @@ export function WebhookSettingsCard({
 
       <div className="mt-3 max-w-[760px] space-y-3">
         <div className="space-y-1.5">
-          <Label className="text-xs">机器人 Webhook 地址</Label>
+          <Form.Label name="reminder-webhook">机器人 Webhook 地址</Form.Label>
           <Input
+            id="reminder-webhook"
+            autoComplete="off"
             value={url}
-            onChange={(e) => setUrl(e.target.value)}
+            onChange={(value) => setUrl(value)}
             placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=... 或 https://oapi.dingtalk.com/robot/send?access_token=..."
             className="font-mono text-[12px]"
           />
         </div>
-        <label className="flex items-center gap-2 text-[12.5px]">
-          <Checkbox checked={enabled} onCheckedChange={(v) => setEnabled(v === true)} />
-          启用每日提醒推送
-        </label>
+        <Checkbox checked={enabled} onChange={event => setEnabled(event.target.checked === true)}>启用每日提醒推送
+        </Checkbox>
         <div className="flex items-center gap-2">
-          <Button size="sm" onClick={save} disabled={saving}>
+          <Button theme="solid" size="small" onClick={save} disabled={saving}>
             {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             保存
           </Button>
           <Button
-            size="sm"
-            variant="secondary"
+            size="small"
+            theme="light" type="tertiary"
             onClick={test}
             disabled={testing}
           >

@@ -1,20 +1,19 @@
 "use client";
 
-import { Button, Input, Select, TextArea } from "@douyinfe/semi-ui";
+import { Button, Input, Select, TextArea, Notification, Toast } from "@douyinfe/semi-ui";
 
 import { DeadlineDueFields } from "@/components/matters/deadline-due-fields";
 import { deadlineDueDraft, deadlineDueFromDraft } from "@/lib/deadline-due";
 
 import { useId, useRef, useState, useTransition } from "react";
 import { Loader2, Gavel, Clock, FileDigit } from "lucide-react";
-import { toast } from "sonner";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import {
   backfillCaseNumberFromSms,
   generateHearingFromSms,
@@ -69,12 +68,12 @@ export function GenerateHearingDialog({
 
   const submit = () => {
     if (!procedureId) {
-      toast.error("请选择程序");
+      Notification.error({ title: "请选择程序", duration: 6 });
       return;
     }
     const d = dateStr ? parseLocalInput(dateStr) : null;
     if (!d) {
-      toast.error("请填写有效的开庭时间");
+      Notification.error({ title: "请填写有效的开庭时间", duration: 6 });
       return;
     }
     startTransition(async () => {
@@ -88,16 +87,16 @@ export function GenerateHearingDialog({
           judge: judge.trim(),
           notes: notes.trim()
         });
-        toast.success("已生成开庭并标记此短信处理完成");
+        Toast.success("已生成开庭并标记此短信处理完成");
         onOpenChange(false);
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "失败");
+        Notification.error({ title: e instanceof Error ? actionErrorMessage(e) : "失败", duration: 6 });
       }
     });
   };
 
   return (
-    <Dialog open={open} onOpenChange={next => { if (!pending) onOpenChange(next); }}>
+    <WorkspaceDialog open={open} onOpenChange={next => { if (!pending) onOpenChange(next); }}>
       <DialogContent ref={dialogRef} onEscapeKeyDown={event => { if (pickerOpen) event.preventDefault(); }} className="max-h-[88vh] w-[92vw] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -177,7 +176,7 @@ export function GenerateHearingDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 
@@ -276,7 +275,7 @@ export function GenerateDeadlineDialog({
 
   const submit = () => {
     if (!procedureId) {
-      toast.error("请选择程序");
+      Notification.error({ title: "请选择程序", duration: 6 });
       return;
     }
     startTransition(async () => {
@@ -290,16 +289,16 @@ export function GenerateDeadlineDialog({
           basis: basis.trim(),
           remindDays
         });
-        toast.success("已生成期限并标记此短信处理完成");
+        Toast.success("已生成期限并标记此短信处理完成");
         onOpenChange(false);
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "失败");
+        Notification.error({ title: e instanceof Error ? actionErrorMessage(e) : "失败", duration: 6 });
       }
     });
   };
 
   return (
-    <Dialog open={open} onOpenChange={next => { if (!pending) onOpenChange(next); }}>
+    <WorkspaceDialog open={open} onOpenChange={next => { if (!pending) onOpenChange(next); }}>
       <DialogContent ref={dialogRef} onEscapeKeyDown={event => { if (openSelect) event.preventDefault(); }} className="max-h-[88vh] w-[92vw] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -389,7 +388,7 @@ export function GenerateDeadlineDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 
@@ -424,22 +423,22 @@ export function BackfillCaseNumberDialog({
 
   const submit = () => {
     if (!caseNumber || !procedureId) {
-      toast.error("请选择案号和目标程序");
+      Notification.error({ title: "请选择案号和目标程序", duration: 6 });
       return;
     }
     startTransition(async () => {
       try {
         await backfillCaseNumberFromSms({ smsId: sms.id, procedureId, caseNumber });
-        toast.success(`案号已回填：${caseNumber}`);
+        Toast.success(`案号已回填：${caseNumber}`);
         onOpenChange(false);
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "回填失败");
+        Notification.error({ title: e instanceof Error ? actionErrorMessage(e) : "回填失败", duration: 6 });
       }
     });
   };
 
   return (
-    <Dialog open={open} onOpenChange={next => { if (!pending) onOpenChange(next); }}>
+    <WorkspaceDialog open={open} onOpenChange={next => { if (!pending) onOpenChange(next); }}>
       <DialogContent ref={dialogRef} onEscapeKeyDown={event => { if (openSelect) event.preventDefault(); }} className="w-[92vw] max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -497,7 +496,7 @@ export function BackfillCaseNumberDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 

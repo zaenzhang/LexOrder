@@ -3,20 +3,19 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles, Loader2, Check, X } from "lucide-react";
-import { toast } from "sonner";
+import { Button, Notification, Toast } from "@douyinfe/semi-ui";
 import {
   batchReviewMatterDocuments,
   type BatchReviewSummary
 } from "@/server/ai/batch-review-matter";
-import { Button } from "@/components/ui/button";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogFooter
-} from "@/components/ui/dialog";
+} from "@/components/patterns/workspace-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -43,19 +42,17 @@ export function BatchReviewButton({ matterId }: { matterId: string }) {
         setOpen(true);
         const totalErrors = r.errors.length;
         if (r.reviewed.length === 0 && totalErrors === 0) {
-          toast.info("没有需要审查的新文档");
+          Toast.info("没有需要审查的新文档");
         } else if (totalErrors > 0) {
-          toast.warning(
+          Toast.warning(
             `已审查 ${r.reviewed.length}，失败 ${totalErrors}`
           );
         } else {
-          toast.success(`已审查 ${r.reviewed.length} 份文档`);
+          Toast.success(`已审查 ${r.reviewed.length} 份文档`);
         }
         router.refresh();
       } catch (err) {
-        toast.error("批量审查失败", {
-          description: actionErrorMessage(err)
-        });
+        Notification.error({ title: "批量审查失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -63,19 +60,19 @@ export function BatchReviewButton({ matterId }: { matterId: string }) {
   return (
     <>
       <Button
-        type="button"
-        size="sm"
-        variant="outline"
         onClick={run}
         disabled={pending}
         className="gap-1"
         title="对本案未审查过的文档批量发起 AI 审查（单次最多 5 个）"
+        htmlType="button"
+        type="tertiary" theme="outline"
+        size="small"
       >
         {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
         AI 复检全部
       </Button>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <WorkspaceDialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
@@ -153,12 +150,12 @@ export function BatchReviewButton({ matterId }: { matterId: string }) {
           )}
 
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
+            <Button onClick={() => setOpen(false)} type="tertiary" theme="outline" size="small">
               关闭
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </WorkspaceDialog>
     </>
   );
 }

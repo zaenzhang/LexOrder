@@ -1,10 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 const { ledger, session, register, sign, amendment, workspace, push, replace, refresh } = vi.hoisted(() => ({ ledger: vi.fn(), session: vi.fn(), register: vi.fn(), sign: vi.fn(), amendment: vi.fn(), workspace: vi.fn(), push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }));
 vi.mock("@/lib/auth/session", () => ({ requireSession: session }));
 vi.mock("@/server/finance/ledger-actions", () => ({ getFinanceLedger: ledger, registerBilling: register, signBilling: sign, draftAmendment: amendment, bindContractScope: vi.fn(), activateAmendment: vi.fn(), cancelAmendment: vi.fn(), registerExpense: vi.fn(), registerReceipt: vi.fn(), confirmReceipt: vi.fn(), rejectReceipt: vi.fn(), confirmDueCondition: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, replace, refresh }) }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { success: vi.fn() }),
+    Notification: Object.assign(semi.Notification, { success: vi.fn() })
+  };
+});
 vi.mock("@/app/(app)/finance/reconciliation/_components/ledger-workspace", () => ({ LedgerWorkspace: (props: unknown) => { workspace(props); return <div>合成财务工作区</div>; } }));
 import ReconciliationPage from "@/app/(app)/finance/reconciliation/page";
 import { ContractWorkspace } from "@/app/(app)/finance/reconciliation/_components/contract-workspace";
@@ -94,7 +101,8 @@ describe("合同明确入口与返回", () => {
     const rows = data(); rows.billings[1] = { ...rows.billings[1], status: "DRAFT", signedAt: null };
     render(<ContractWorkspace data={rows} canWrite canCorrect={false} selectedMatterId={MATTER} billingId={SECOND} returnTo={RETURN} />);
     fireEvent.click(screen.getByRole("button", { name: "确认签署" }));
-    fireEvent.click(screen.getByRole("button", { name: "确认签署" }));
+    const dialog = await screen.findByRole("dialog", { name: "确认签署与分期" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "确认签署" }));
     await waitFor(() => expect(sign).toHaveBeenCalledOnce());
     expect(sign.mock.calls[0][0]).toMatchObject({ id: SECOND, revision: 2 });
     expect(new URL(replace.mock.calls[0][0], "http://lexorder.invalid").searchParams.get("billingId")).toBe(SECOND);

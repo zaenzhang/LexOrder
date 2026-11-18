@@ -1,10 +1,13 @@
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-const { save, refresh } = vi.hoisted(() => ({ save: vi.fn().mockResolvedValue(undefined), refresh: vi.fn() }));
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+const { save, savePurpose, refresh } = vi.hoisted(() => ({
+  save: vi.fn().mockResolvedValue(undefined),
+  savePurpose: vi.fn().mockResolvedValue(undefined),
+  refresh: vi.fn()
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-vi.mock("@/server/approval-permissions/actions", () => ({ saveApprovalSettings: save, savePermissionGroup: vi.fn(), saveSealPurpose: vi.fn() }));
+vi.mock("@/server/approval-permissions/actions", () => ({ saveApprovalSettings: save, savePermissionGroup: vi.fn(), saveSealPurpose: savePurpose }));
 import { PermissionAdministration } from "@/app/(admin)/admin/approval-permissions/permissions-view";
 afterEach(cleanup);
 describe("事项审批设置页面", () => {
@@ -17,5 +20,18 @@ describe("事项审批设置页面", () => {
     fireEvent.click(screen.getByRole("button", { name: "保存本人审批设置" }));
     await waitFor(() => expect(save).toHaveBeenCalledWith({ allowSelfApproval: true }));
     await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+  });
+
+  it("用章事项保存键提交表单，保留勾选的章类型", async () => {
+    render(<PermissionAdministration data={{ groups: [], purposes: [], users: [], settings: { enabled: true, allowSelfApproval: false } }} />);
+    fireEvent.click(screen.getByRole("button", { name: "新增事项" }));
+    const editor = within(screen.getByRole("dialog", { name: "用章事项" }));
+    fireEvent.change(editor.getByLabelText("事项名称"), { target: { value: "合成委托合同" } });
+    fireEvent.click(editor.getByRole("checkbox", { name: "合同专用章" }));
+    fireEvent.click(editor.getByRole("button", { name: "保存事项" }));
+    await waitFor(() => expect(savePurpose).toHaveBeenCalledWith({
+      name: "合成委托合同", description: "", active: true, allowedSealTypes: ["CONTRACT_SEAL"]
+    }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "用章事项" })).not.toBeInTheDocument());
   });
 });

@@ -20,7 +20,7 @@ vi.mock("@/server/tasks/actions", () => ({ createTask: actions.createTask, updat
 vi.mock("@/server/reminders/work-actions", () => actions);
 vi.mock("@/components/matters/intake-handover-panel", () => ({ IntakeHandoverPanel: (props: { data: unknown; intakeId?: string }) => { actions.intakeHandover(props); return null; } }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: actions.refresh }) }));
-vi.mock("sonner", () => ({ toast: { success: actions.success, error: actions.error } }));
+vi.mock("@douyinfe/semi-ui", async (load) => ({ ...await load<typeof import("@douyinfe/semi-ui")>(), Toast: { success: actions.success, error: actions.error }, Notification: { success: actions.success, error: actions.error } }));
 vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: actions.confirm }));
 
 const matterId = "cm3matter00000000000000001";
@@ -54,7 +54,7 @@ function activeWaiting() {
 }
 
 function tab(name: string | RegExp) {
-  fireEvent.mouseDown(screen.getByRole("tab", { name }), { button: 0, ctrlKey: false });
+  fireEvent.click(screen.getByRole("tab", { name }));
 }
 
 beforeEach(() => {
@@ -266,8 +266,8 @@ it("收案未传schedule时保紧急事项原责任ID、固定交接接线及登
 });
 async function filterTasks(label: string) {
   const trigger = screen.getByRole("combobox", { name: "任务推进筛选" });
-  trigger.focus(); fireEvent.keyDown(trigger, { key: "Enter" });
-  fireEvent.click(await screen.findByRole("option", { name: label }));
+  fireEvent.click(trigger);
+  fireEvent.click(await screen.findByRole("option", { name: name => name.includes(label) }));
 }
 
 describe("G02 首页与完整任务责任总览", () => {

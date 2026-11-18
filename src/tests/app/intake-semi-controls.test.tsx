@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -7,7 +7,14 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(), error: vi.fn(), success: vi.fn()
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
-vi.mock("sonner", () => ({ toast: { error: mocks.error, success: mocks.success, warning: vi.fn() } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { success: mocks.success, warning: vi.fn() }),
+    Notification: Object.assign(semi.Notification, { error: mocks.error, success: mocks.success, warning: vi.fn() })
+  };
+});
 vi.mock("@/server/external-contacts/actions", () => ({ createExternalContact: mocks.createContact, updateExternalContact: mocks.updateContact }));
 vi.mock("@/server/yuandian/enterprise", () => ({ searchEnterpriseCandidates: mocks.searchEnterprise }));
 vi.mock("@/server/conflicts/actions", () => ({ runCheckAndSave: mocks.conflicts }));
@@ -17,7 +24,7 @@ import { ExternalContactDialog } from "@/app/(app)/contacts/_components/external
 import { ClientCombobox } from "@/app/(app)/intakes/_components/client-combobox";
 import { JurisdictionSelect } from "@/app/(app)/intakes/_components/jurisdiction-select";
 import { ConflictsViewV4 } from "@/app/(app)/conflicts/_components/conflicts-view-v4";
-import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { WorkspaceDialog, DrawerContent, DialogTitle, DialogDescription } from "@/components/patterns/workspace-dialog";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -32,29 +39,26 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 function RegionSheet() {
   const [open, setOpen] = useState(true);
-  const [value, setValue] = useState("");
-  return <Sheet open={open} onOpenChange={setOpen}><SheetContent>
-    <SheetTitle>程序修改</SheetTitle><SheetDescription>合成程序管辖地</SheetDescription>
-    <JurisdictionSelect value={value} onChange={setValue} />
-  </SheetContent></Sheet>;
+  const [value, setValue] = useState("浙江省/杭州市");
+  const popupOpen = useRef(false);
+  return <WorkspaceDialog open={open} onOpenChange={setOpen}><DrawerContent onEscapeKeyDown={event => { if (popupOpen.current) event.preventDefault(); }}>
+    <DialogTitle>程序修改</DialogTitle><DialogDescription>合成程序管辖地</DialogDescription>
+    <JurisdictionSelect value={value} onChange={setValue} onDropdownVisibleChange={visible => { popupOpen.current = visible; }} />
+  </DrawerContent></WorkspaceDialog>;
 }
 
 describe("Semi 收案控件与原业务身份", () => {
   it("三级管辖地在原父抽屉内逐层关闭，退出下拉保留正在编辑的程序", async () => {
     render(<RegionSheet />);
-    const trigger = screen.getByRole("button", { name: "选择管辖地" });
-    fireEvent.click(trigger);
-    const province = await screen.findByRole("combobox", { name: "省 / 直辖市" });
+    const province = screen.getByRole("combobox", { name: "省 / 直辖市" });
     fireEvent.click(province);
     await screen.findByRole("listbox");
     fireEvent.keyDown(document.activeElement ?? province, { key: "Escape", keyCode: 27, which: 27 });
     await waitFor(() => expect(province).toHaveAttribute("aria-expanded", "false"));
     expect(screen.getByRole("dialog", { name: "程序修改" })).toBeVisible();
-    expect(province).toBeVisible();
+    expect(screen.getByRole("combobox", { name: "市" })).toHaveTextContent("杭州市");
     fireEvent.keyDown(province, { key: "Escape", keyCode: 27, which: 27 });
-    await waitFor(() => expect(screen.queryByRole("combobox", { name: "省 / 直辖市" })).not.toBeInTheDocument());
-    expect(screen.getByRole("dialog", { name: "程序修改" })).toBeVisible();
-    await waitFor(() => expect(trigger).toHaveFocus());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "程序修改" })).not.toBeInTheDocument());
   });
 
   it("客户下拉选择同名已有客户仍使用具体ID，明确新名称走新建回调", async () => {

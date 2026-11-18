@@ -6,7 +6,14 @@ import type { getFinanceLedger } from "@/server/finance/ledger-actions";
 const mocks = vi.hoisted(() => ({ adjust: vi.fn(), refresh: vi.fn(), error: vi.fn() }));
 vi.mock("@/server/finance/ledger-actions", () => ({ adjustInvoice: mocks.adjust }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: mocks.error } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { success: vi.fn() }),
+    Notification: Object.assign(semi.Notification, { success: vi.fn(), error: mocks.error })
+  };
+});
 
 type Data = Awaited<ReturnType<typeof getFinanceLedger>>;
 const data: Data = {
@@ -43,7 +50,7 @@ describe("发票外部处理登记", () => {
     expect(screen.getByRole("button", { name: "确认登记外部处理结果" })).toBeDisabled();
     await chooseProof();
     fireEvent.click(screen.getByRole("button", { name: "确认登记外部处理结果" }));
-    await waitFor(() => expect(mocks.error).toHaveBeenCalledWith("登记暂未保存"));
+    await waitFor(() => expect(mocks.error).toHaveBeenCalledWith(expect.objectContaining({ title: "登记暂未保存" })));
     expect(screen.getByLabelText("外部凭证编号")).toHaveValue("SYNTHETIC-RED-01");
     expect(mocks.adjust.mock.calls[0][0]).toMatchObject({ invoiceId: "original", documentId: "proof", amount: "120.00", kind: "RED" });
     fireEvent.click(screen.getByRole("button", { name: "确认登记外部处理结果" }));

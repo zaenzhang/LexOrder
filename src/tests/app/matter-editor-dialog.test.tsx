@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Notification, Toast } from "@douyinfe/semi-ui";
 import { ActionError } from "@/lib/action-error";
 
 const mock = vi.hoisted(() => ({ basic: vi.fn(), team: vi.fn(), procedure: vi.fn(), confirm: vi.fn() }));
@@ -31,7 +32,7 @@ beforeEach(() => {
   mock.basic.mockResolvedValue({ ok: true }); mock.team.mockResolvedValue({ ok: true }); mock.procedure.mockResolvedValue(undefined); mock.confirm.mockResolvedValue(false);
   HTMLElement.prototype.scrollIntoView = vi.fn();
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); Toast.destroyAll(); Notification.destroyAll(); vi.unstubAllGlobals(); });
 
 describe("三个对象独立保存（组件环境）", () => {
   it("案件入口只显示案件表单，只提交案件 action", async () => {
@@ -50,7 +51,7 @@ describe("三个对象独立保存（组件环境）", () => {
     const input = props(); render(<TeamEditorDialog {...input} initialSection="procedure" />);
     fireEvent.change(screen.getByDisplayValue("合成案号"), { target: { value: "编辑中的合成案号" } });
     fireEvent.click(screen.getByRole("button", { name: "保存程序与当事人" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("程序已被其他人修改");
+    expect(await within(screen.getByRole("dialog", { name: "编辑程序与当事人" })).findByRole("alert")).toHaveTextContent("程序已被其他人修改");
     expect(screen.getByDisplayValue("编辑中的合成案号")).toBeVisible();
     expect(mock.basic).not.toHaveBeenCalled(); expect(mock.team).not.toHaveBeenCalled();
     expect(input.onOpenChange).not.toHaveBeenCalled();
@@ -139,7 +140,7 @@ describe("编辑对象和草稿保持", () => {
 
   it("请求的编辑任务无权或不存在时显示失效状态，不自动换成别的对象", () => {
     render(<TeamEditorDialog {...props()} currentProcedure={null} initialSection="procedure" />);
-    expect(screen.getByRole("alert")).toHaveTextContent("当前对象不存在或已无权修改");
+    expect(within(screen.getByRole("dialog", { name: "编辑程序与当事人" })).getByRole("alert")).toHaveTextContent("当前对象不存在或已无权修改");
     expect(screen.queryByLabelText("案件名称")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /保存/ })).not.toBeInTheDocument();
   });

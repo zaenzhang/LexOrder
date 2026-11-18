@@ -10,11 +10,8 @@ import {
   BookmarkPlus,
   Check
 } from "lucide-react";
-import { toast } from "sonner";
+import { Button, Input, Notification, Toast } from "@douyinfe/semi-ui";
 import type { MatterCategory } from "@prisma/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   searchSimilarCases,
   searchSimilarCasesByVector,
@@ -113,13 +110,9 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
         caseHit: c
       });
       setSavedIds((prev) => new Set(prev).add(c.id));
-      toast.success("已保存到案件资料", {
-        description: res.documentName
-      });
+      Notification.success({ title: "已保存到案件资料", content: res.documentName });
     } catch (err) {
-      toast.error("保存失败", {
-        description: actionErrorMessage(err)
-      });
+      Notification.error({ title: "保存失败", content: actionErrorMessage(err) });
     } finally {
       setSavingId(null);
     }
@@ -133,13 +126,9 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
         caseHit: c
       });
       setSavedIds((prev) => new Set(prev).add(c.scid));
-      toast.success("已保存到案件资料", {
-        description: res.documentName
-      });
+      Notification.success({ title: "已保存到案件资料", content: res.documentName });
     } catch (err) {
-      toast.error("保存失败", {
-        description: actionErrorMessage(err)
-      });
+      Notification.error({ title: "保存失败", content: actionErrorMessage(err) });
     } finally {
       setSavingId(null);
     }
@@ -169,7 +158,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
           setVectorResult(null);
           setCncasesResult(null);
           setRegResult(null);
-          if (r.items.length === 0) toast.info("未命中类案");
+          if (r.items.length === 0) Toast.info("未命中类案");
         } else if (mode === "cncases") {
           if (!cncasesQuery.trim()) {
             setError("请输入裁判文书关键词");
@@ -180,7 +169,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
           setKeywordResult(null);
           setVectorResult(null);
           setRegResult(null);
-          if (r.items.length === 0) toast.info(r.message ?? "未命中本地裁判文书");
+          if (r.items.length === 0) Toast.info(r.message ?? "未命中本地裁判文书");
         } else if (mode === "regulation") {
           if (!regKeyword.trim() && !regFgmc.trim()) {
             setError("请输入法规关键词或法规名称");
@@ -198,7 +187,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
           setKeywordResult(null);
           setVectorResult(null);
           setCncasesResult(null);
-          if (r.items.length === 0) toast.info("未命中法规");
+          if (r.items.length === 0) Toast.info("未命中法规");
         } else {
           if (!vectorQuery.trim()) {
             setError("语义检索的案情描述不能为空");
@@ -219,12 +208,12 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
           setKeywordResult(null);
           setCncasesResult(null);
           setRegResult(null);
-          if (r.items.length === 0) toast.info("未命中类案");
+          if (r.items.length === 0) Toast.info("未命中类案");
         }
       } catch (err) {
         const msg = err instanceof Error ? actionErrorMessage(err) : "检索失败";
         setError(msg);
-        toast.error("检索失败", { description: msg });
+        Notification.error({ title: "检索失败", content: msg });
       }
     });
   }
@@ -301,11 +290,11 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
       <div className="space-y-3 card p-4">
         {mode === "cncases" && (
           <div>
-            <Label htmlFor="case-local-query" className="text-[11px]">裁判文书关键词（自建服务）</Label>
+            <label htmlFor="case-local-query" className="text-[11px]">裁判文书关键词（自建服务）</label>
             <Input
               id="case-local-query"
               value={cncasesQuery}
-              onChange={(e) => setCncasesQuery(e.target.value)}
+              onChange={inputValue => setCncasesQuery(inputValue)}
               placeholder="如：民间借贷 违约金 二七区人民法院"
               className="mt-1"
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -315,21 +304,21 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
         {mode === "regulation" && (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <Label htmlFor="case-regulation-keyword" className="text-[11px]">法规内容关键词</Label>
+              <label htmlFor="case-regulation-keyword" className="text-[11px]">法规内容关键词</label>
               <Input
                 id="case-regulation-keyword"
                 value={regKeyword}
-                onChange={(e) => setRegKeyword(e.target.value)}
+                onChange={inputValue => setRegKeyword(inputValue)}
                 placeholder="如：违约金 不得超过 造成损失"
                 className="mt-1"
               />
             </div>
             <div>
-              <Label htmlFor="case-regulation-title" className="text-[11px]">法规名称（可选）</Label>
+              <label htmlFor="case-regulation-title" className="text-[11px]">法规名称（可选）</label>
               <Input
                 id="case-regulation-title"
                 value={regFgmc}
-                onChange={(e) => setRegFgmc(e.target.value)}
+                onChange={inputValue => setRegFgmc(inputValue)}
                 placeholder="如：最高人民法院关于审理民间借贷案件适用法律若干问题的规定"
                 className="mt-1"
               />
@@ -339,7 +328,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
         {mode === "regulation" && (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <Label htmlFor="case-regulation-level" className="text-[11px]">效力级别（可选）</Label>
+              <label htmlFor="case-regulation-level" className="text-[11px]">效力级别（可选）</label>
               <select
                 id="case-regulation-level"
                 value={regXljb}
@@ -357,7 +346,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
               </select>
             </div>
             <div>
-              <Label htmlFor="case-regulation-status" className="text-[11px]">时效性（可选）</Label>
+              <label htmlFor="case-regulation-status" className="text-[11px]">时效性（可选）</label>
               <select
                 id="case-regulation-status"
                 value={regSxx}
@@ -376,7 +365,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
         )}
         {mode === "vector" && (
           <div>
-            <Label className="text-[11px]">案情描述（自然语言）</Label>
+            <label className="text-[11px]">案情描述（自然语言）</label>
             <textarea
               value={vectorQuery}
               onChange={(e) => setVectorQuery(e.target.value)}
@@ -389,22 +378,22 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
         {(mode === "keyword" || mode === "vector") && (<>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div>
-            <Label className="text-[11px]">
+            <label className="text-[11px]">
               {mode === "vector" ? "案由过滤（可选）" : "案由（多个用 / 逗号分隔）"}
-            </Label>
+            </label>
             <Input
               value={causeInput}
-              onChange={(e) => setCauseInput(e.target.value)}
+              onChange={inputValue => setCauseInput(inputValue)}
               placeholder="如：民间借贷纠纷"
               className="mt-1"
             />
           </div>
           {mode === "keyword" && (
             <div>
-              <Label className="text-[11px]">全文关键词（以空格分隔，需同时包含）</Label>
+              <label className="text-[11px]">全文关键词（以空格分隔，需同时包含）</label>
               <Input
                 value={qw}
-                onChange={(e) => setQw(e.target.value)}
+                onChange={inputValue => setQw(inputValue)}
                 placeholder="如：违约金 逾期"
                 className="mt-1"
               />
@@ -413,9 +402,9 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
         </div>
 
         <div>
-          <Label className="text-[11px]">
+          <label className="text-[11px]">
             {mode === "vector" ? "省份过滤（取第一个，语义接口单值）" : "省级法院（多选）"}
-          </Label>
+          </label>
           <div className="mt-1.5 flex flex-wrap gap-1">
             {PROVINCES.map((p) => (
               <button
@@ -437,7 +426,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <div>
-            <Label className="text-[11px]">文书种类</Label>
+            <label className="text-[11px]">文书种类</label>
             <div className="mt-1.5 flex flex-wrap gap-1">
               {WSZL_OPTIONS.map((w) => (
                 <button
@@ -457,19 +446,19 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
             </div>
           </div>
           <div>
-            <Label className="text-[11px]">裁判日期</Label>
+            <label className="text-[11px]">裁判日期</label>
             <div className="mt-1 flex items-center gap-1.5">
               <Input
                 type="date"
                 value={jaStart}
-                onChange={(e) => setJaStart(e.target.value)}
+                onChange={inputValue => setJaStart(inputValue)}
                 className="h-9 text-[12px]"
               />
               <span className="text-muted-foreground">~</span>
               <Input
                 type="date"
                 value={jaEnd}
-                onChange={(e) => setJaEnd(e.target.value)}
+                onChange={inputValue => setJaEnd(inputValue)}
                 className="h-9 text-[12px]"
               />
             </div>
@@ -479,19 +468,19 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
 
         </>)}
           <div>
-            <Label className="text-[11px]">返回条数（1-50）</Label>
+            <label className="text-[11px]">返回条数（1-50）</label>
             <Input
               type="number"
               min={1}
               max={50}
               value={topK}
-              onChange={(e) => setTopK(Math.min(50, Math.max(1, Math.trunc(Number(e.target.value)) || 10)))}
+              onChange={inputValue => setTopK(Math.min(50, Math.max(1, Math.trunc(Number(inputValue)) || 10)))}
               className="mt-1"
             />
           </div>
 
         <div className="flex items-center justify-end pt-1">
-          <Button onClick={handleSearch} disabled={pending} className="gap-1.5">
+          <Button onClick={handleSearch} disabled={pending} className="gap-1.5" theme="solid">
             {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
             {mode === "regulation" ? "检索法规" : mode === "cncases" ? "检索文书" : "检索类案"}
           </Button>

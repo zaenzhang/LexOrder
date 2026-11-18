@@ -4,7 +4,6 @@ import type { PublicMcpConfig } from "@/lib/legal-mcp/contracts";
 
 const mock = vi.hoisted(() => ({ save: vi.fn(), discover: vi.fn(), test: vi.fn(), query: vi.fn() }));
 vi.mock("@/server/legal/mcp-actions", () => ({ saveLegalMcpSettingsAction: mock.save, discoverLegalMcpTools: mock.discover, testLegalMcpConnection: mock.test, queryLegalMcpTool: mock.query }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
 
 import { LegalMcpSettingsForm } from "@/app/(admin)/admin/ai/_components/legal-mcp-settings-form";
 

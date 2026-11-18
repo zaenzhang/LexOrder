@@ -6,10 +6,10 @@
  * 推算示例用 lib/deadline-rules 的 computeDeadlineDate 与 lib/deadline-reminders 的
  * 真实提醒档位计算，不做节假日表（系统不内置，由人工核对顺延）。
  */
+import { Button, Checkbox, Form, Input, Select, Switch, Toast } from "@douyinfe/semi-ui";
 import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Info, Pencil, Plus, Scale, Search, Trash2 } from "lucide-react";
-import { toast } from "sonner";
 import type { ProcedureType } from "@prisma/client";
 import {
   createDeadlineRule, updateDeadlineRule, toggleDeadlineRule, deleteDeadlineRule
@@ -18,12 +18,7 @@ import { computeDeadlineDate } from "@/lib/deadline-rules";
 import { deadlineReminderOffsets } from "@/lib/deadline-reminders";
 import { procedureTypeLabel } from "@/lib/enums";
 import { FilterSelect } from "@/components/patterns/filter-select";
-import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { WorkspaceDialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/patterns/workspace-dialog";
 import { cn } from "@/lib/utils";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { shMonthDay, shTodayCivil } from "@/lib/ui/sh-time";
@@ -119,7 +114,7 @@ export function DeadlineRulesCard({ rules, rail, headerActions }: { rules: Admin
         if (editing?.id) await updateDeadlineRule({ id: editing.id, ...payload });
         else await createDeadlineRule(payload);
         setEditing(null);
-        toast.success("规则已保存");
+        Toast.success("规则已保存");
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? actionErrorMessage(e) : "保存失败");
@@ -133,7 +128,7 @@ export function DeadlineRulesCard({ rules, rail, headerActions }: { rules: Admin
         await toggleDeadlineRule({ id: rule.id, enabled });
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? actionErrorMessage(err) : "操作失败");
+        Toast.error(err instanceof Error ? actionErrorMessage(err) : "操作失败");
       }
     });
   }
@@ -145,7 +140,7 @@ export function DeadlineRulesCard({ rules, rail, headerActions }: { rules: Admin
         await deleteDeadlineRule({ id: rule.id });
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? actionErrorMessage(err) : "删除失败");
+        Toast.error(err instanceof Error ? actionErrorMessage(err) : "删除失败");
       }
     });
   }
@@ -177,9 +172,7 @@ export function DeadlineRulesCard({ rules, rail, headerActions }: { rules: Admin
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {headerActions}
-          <button type="button" className="btn btn-primary btn-sm" onClick={openCreate}>
-            <Plus /> 新建规则
-          </button>
+          <Button htmlType="button" theme="solid" size="small" onClick={openCreate} icon={<Plus size={16} aria-hidden />}>新建规则</Button>
         </div>
       </div>
 
@@ -209,10 +202,7 @@ export function DeadlineRulesCard({ rules, rail, headerActions }: { rules: Admin
               <span className="t-xs t-mute" style={{ fontWeight: 400 }}>启用 {rules.filter((r) => r.enabled).length}</span>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <label className="mo-toolbar-input" style={{ width: 220, height: 30 }}>
-                <Search aria-hidden />
-                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="按规则名称、起算事件搜索" aria-label="搜索规则" />
-              </label>
+              <Input className="w-56" value={search} onChange={setSearch} placeholder="按规则名称、起算事件搜索" aria-label="搜索规则" prefix={<Search size={14} aria-hidden />} />
               <FilterSelect label="类别" value={category} options={Object.entries(CATEGORY_CN).map(([value, label]) => ({ value, label }))} onChange={setCategory} />
             </div>
           </div>
@@ -255,10 +245,10 @@ export function DeadlineRulesCard({ rules, rail, headerActions }: { rules: Admin
                     <td><OffsetChips remindDays={rule.remindDays} /></td>
                     <td onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-0.5">
-                        <Switch checked={rule.enabled} disabled={pending} onCheckedChange={(v) => toggle(rule, v)} aria-label={rule.enabled ? `停用 ${rule.name}` : `启用 ${rule.name}`} />
-                        <button type="button" className="btn btn-ghost btn-sm btn-icon" onClick={() => openEdit(rule)} aria-label={`编辑 ${rule.name}`}><Pencil /></button>
+                        <Switch size="small" checked={rule.enabled} disabled={pending} onChange={value => toggle(rule, value)} aria-label={`启用期限规则：${rule.name}`} />
+                        <Button htmlType="button" type="tertiary" theme="borderless" size="small" onClick={() => openEdit(rule)} aria-label={`编辑 ${rule.name}`} icon={<Pencil size={14} aria-hidden />} />
                         {!rule.isBuiltIn ? (
-                          <button type="button" className="btn btn-ghost btn-sm btn-icon" style={{ color: "var(--red)" }} onClick={() => remove(rule)} aria-label={`删除 ${rule.name}`}><Trash2 /></button>
+                          <Button htmlType="button" type="danger" theme="borderless" size="small" onClick={() => remove(rule)} aria-label={`删除 ${rule.name}`} icon={<Trash2 size={14} aria-hidden />} />
                         ) : null}
                       </div>
                     </td>
@@ -316,7 +306,7 @@ export function DeadlineRulesCard({ rules, rail, headerActions }: { rules: Admin
         </div>
       </div>
 
-      <Dialog open={!!editing} onOpenChange={(o) => { if (!o) setEditing(null); }}>
+      <WorkspaceDialog open={!!editing} onOpenChange={(o) => { if (!o) setEditing(null); }}>
         <DialogContent className="mo-rules max-w-xl">
           <DialogHeader>
             <DialogTitle>{editing?.id ? "编辑期限规则" : "新建期限规则"}</DialogTitle>
@@ -324,68 +314,60 @@ export function DeadlineRulesCard({ rules, rail, headerActions }: { rules: Admin
           </DialogHeader>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 space-y-1.5">
-              <Label>规则名称 *</Label>
-              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="如：民事上诉期" />
+              <Form.Label name="deadline-rule-name" required>规则名称</Form.Label>
+              <Input id="deadline-rule-name" disabled={pending} value={form.name} onChange={(value) => setForm((f) => ({ ...f, name: value }))} placeholder="如：民事上诉期" />
             </div>
             <div className="space-y-1.5">
-              <Label>起算事件 *</Label>
-              <Input value={form.triggerLabel} onChange={(e) => setForm((f) => ({ ...f, triggerLabel: e.target.value }))} placeholder="判决书送达之日" />
+              <Form.Label name="deadline-rule-event" required>起算事件</Form.Label>
+              <Input id="deadline-rule-event" disabled={pending} value={form.triggerLabel} onChange={(value) => setForm((f) => ({ ...f, triggerLabel: value }))} placeholder="判决书送达之日" />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
-                <Label>期限值 *</Label>
-                <Input type="number" min={1} value={form.periodValue} onChange={(e) => setForm((f) => ({ ...f, periodValue: e.target.value }))} />
+                <Form.Label name="deadline-rule-period-value" required>期限值</Form.Label>
+                <Input id="deadline-rule-period-value" disabled={pending} type="number" min={1} value={form.periodValue} onChange={(value) => setForm((f) => ({ ...f, periodValue: value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>单位</Label>
-                <Select value={form.periodUnit} onValueChange={(v) => setForm((f) => ({ ...f, periodUnit: v as FormState["periodUnit"] }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="DAYS">日</SelectItem>
-                    <SelectItem value="MONTHS">个月</SelectItem>
-                    <SelectItem value="YEARS">年</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Form.Label id="deadline-rule-period-unit-label">单位</Form.Label>
+                <Select aria-labelledby="deadline-rule-period-unit-label" className="w-full" disabled={pending} value={form.periodUnit} onChange={(v) => setForm((f) => ({ ...f, periodUnit: v as FormState["periodUnit"] }))}>
+                    <Select.Option value="DAYS">日</Select.Option>
+                    <Select.Option value="MONTHS">个月</Select.Option>
+                    <Select.Option value="YEARS">年</Select.Option>
+                  </Select>
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>类别</Label>
-              <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v as RuleCategory }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(CATEGORY_CN).map(([v, label]) => <SelectItem key={v} value={v}>{label}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Form.Label id="deadline-rule-category-label">类别</Form.Label>
+              <Select aria-labelledby="deadline-rule-category-label" className="w-full" disabled={pending} value={form.category} onChange={(v) => setForm((f) => ({ ...f, category: v as RuleCategory }))}>
+                  {Object.entries(CATEGORY_CN).map(([v, label]) => <Select.Option key={v} value={v}>{label}</Select.Option>)}
+                </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>建议提前提醒（天）</Label>
-              <Input type="number" min={0} max={60} value={form.remindDays} onChange={(e) => setForm((f) => ({ ...f, remindDays: e.target.value }))} />
+              <Form.Label name="deadline-rule-remind">建议提前提醒（天）</Form.Label>
+              <Input id="deadline-rule-remind" disabled={pending} type="number" min={0} max={60} value={form.remindDays} onChange={(value) => setForm((f) => ({ ...f, remindDays: value }))} />
             </div>
             <div className="col-span-2 space-y-1.5">
-              <Label>法条依据 *</Label>
-              <Input value={form.legalBasis} onChange={(e) => setForm((f) => ({ ...f, legalBasis: e.target.value }))} placeholder="《中华人民共和国民事诉讼法(2023修正)》第一百七十一条" />
+              <Form.Label name="deadline-rule-basis" required>法条依据</Form.Label>
+              <Input id="deadline-rule-basis" disabled={pending} value={form.legalBasis} onChange={(value) => setForm((f) => ({ ...f, legalBasis: value }))} placeholder="《中华人民共和国民事诉讼法(2023修正)》第一百七十一条" />
             </div>
             <div className="col-span-2 space-y-1.5">
-              <Label>法条链接</Label>
-              <Input value={form.legalBasisUrl} onChange={(e) => setForm((f) => ({ ...f, legalBasisUrl: e.target.value }))} placeholder="https://…" />
+              <Form.Label name="deadline-rule-url">法条链接</Form.Label>
+              <Input id="deadline-rule-url" disabled={pending} value={form.legalBasisUrl} onChange={(value) => setForm((f) => ({ ...f, legalBasisUrl: value }))} placeholder="https://…" />
             </div>
             <div className="col-span-2 space-y-1.5">
-              <Label>说明</Label>
-              <Input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
+              <Form.Label name="deadline-rule-description">说明</Form.Label>
+              <Input id="deadline-rule-description" disabled={pending} value={form.description} onChange={(value) => setForm((f) => ({ ...f, description: value }))} />
             </div>
-            <label className="col-span-2 flex items-center gap-2 text-[13px]">
-              <Checkbox checked={form.enabled} onCheckedChange={(v) => setForm((f) => ({ ...f, enabled: v === true }))} />
-              启用该规则
-            </label>
+            <Checkbox className="col-span-2" checked={form.enabled} onChange={event => setForm((f) => ({ ...f, enabled: event.target.checked === true }))}>启用该规则
+            </Checkbox>
             <div className="col-span-2 flex items-center gap-2 t-xs t-mute">预警档位<OffsetChips remindDays={Number(form.remindDays) || 0} /></div>
           </div>
-          {error ? <div className="text-[12.5px] text-[var(--red)]">{error}</div> : null}
+          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
-            <button type="button" className="btn btn-secondary" onClick={() => setEditing(null)}>取消</button>
-            <button type="button" className="btn btn-primary" disabled={pending} onClick={submit}>{editing?.id ? "保存" : "创建"}</button>
+            <Button htmlType="button" theme="outline" disabled={pending} onClick={() => setEditing(null)}>取消</Button>
+            <Button htmlType="button" theme="solid" loading={pending} disabled={pending} onClick={submit}>{editing?.id ? "保存" : "创建"}</Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </WorkspaceDialog>
     </>
   );
 }

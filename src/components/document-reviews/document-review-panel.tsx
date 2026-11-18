@@ -1,13 +1,7 @@
 "use client";
 
+import { Banner, Button, Input, RadioGroup, Select, TextArea } from "@douyinfe/semi-ui";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
 import { checkReviewIssue, createReviewIssue, getDocumentReview, respondReviewIssue } from "@/server/document-reviews/actions";
@@ -27,9 +21,7 @@ const EMPTY_DRAFT = { title: "", location: "", basis: "", basisDocumentId: "none
 function DocumentChoice({ id, label, value, choices, onChange, disabled }: {
   id: string; label: string; value: string; choices: ReviewDocumentOption[]; onChange: (value: string) => void; disabled: boolean;
 }) {
-  return <div className="flex flex-col gap-1.5"><Label htmlFor={id}>{label}</Label><Select value={value} onValueChange={onChange} disabled={disabled}>
-    <SelectTrigger id={id}><SelectValue /></SelectTrigger><SelectContent><SelectGroup><SelectItem value="none">不关联材料</SelectItem>{choices.map(document => <SelectItem key={document.id} value={document.id}>{document.name} · 第 {document.version} 版</SelectItem>)}</SelectGroup></SelectContent>
-  </Select></div>;
+  return <div className="flex flex-col gap-1.5"><label id={id + "-label"} className="text-sm font-medium text-[var(--semi-color-text-1)]">{label}</label><Select value={value} onChange={value => { if (typeof value === "string") onChange(value); }} disabled={disabled} id={id} aria-labelledby={id + "-label"} className="w-full" motion={false}><Select.Option value="none">不关联材料</Select.Option>{choices.map(document => <Select.Option key={document.id} value={document.id}>{document.name} · 第 {document.version} 版</Select.Option>)}</Select></div>;
 }
 
 /** One panel is shared by the matter and the original approval entry. */
@@ -95,15 +87,22 @@ export function DocumentReviewPanel({ documentId, initialIssueId, onIssueChange,
   }
 
   return <section className="flex min-w-0 flex-col gap-4" aria-label="文书复核问题">
-    <div className="flex items-center justify-between gap-3"><h3 className="font-medium">复核问题</h3>{view?.canCreate && <Button size="sm" disabled={pending} onClick={() => void select(null, true)}>提出问题</Button>}</div>
+    <div className="flex items-center justify-between gap-3"><h3 className="font-medium">复核问题</h3>{view?.canCreate && <Button disabled={pending} onClick={() => void select(null, true)} theme="solid" size="small">提出问题</Button>}</div>
     {view && <PreviousReviewIssues key={documentId} documentId={documentId} items={view.previousIssues} disabled={pending} />}
-    {error && <Alert variant="destructive"><AlertDescription className="flex flex-col gap-2"><span>{error}</span><Button variant="outline" size="sm" disabled={pending || loading} onClick={() => void reload()}>刷新记录</Button></AlertDescription></Alert>}
+    {error && <Banner type="danger" closeIcon={null} fullMode={false} description={<> <div className="flex flex-col gap-2"><span>{error}</span><Button disabled={pending || loading} onClick={() => void reload()} type="tertiary" theme="outline" size="small">刷新记录</Button></div></>} />}
     {loading && !view && <p role="status">正在读取复核记录…</p>}
     {view && <div className="grid min-h-0 grid-cols-[220px_minmax(0,1fr)] gap-5">
       <div className="flex min-w-0 flex-col gap-3">
-        <Tabs value={filter} onValueChange={value => { if (!pending) setFilter(value); }}><TabsList className="grid h-auto grid-cols-2"><TabsTrigger value="ALL">全部</TabsTrigger><TabsTrigger value="OPEN">未处理</TabsTrigger><TabsTrigger value="WAITING_CHECK">待复核</TabsTrigger><TabsTrigger value="RESOLVED">已处理</TabsTrigger></TabsList></Tabs>
+        <RadioGroup
+          type="button"
+          aria-label="复核问题状态"
+          value={filter}
+          disabled={pending}
+          onChange={event => setFilter(event.target.value)}
+          options={[{ value: "ALL", label: "全部" }, { value: "OPEN", label: "未处理" }, { value: "WAITING_CHECK", label: "待复核" }, { value: "RESOLVED", label: "已处理" }]}
+        />
         <div className="flex max-h-[55vh] flex-col gap-2 overflow-y-auto">
-          {view.issues.filter(issue => filter === "ALL" || issue.state === filter).map(issue => <Button key={issue.id} variant={selectedId === issue.id ? "secondary" : "ghost"} className="h-auto justify-start whitespace-normal text-left" disabled={pending} onClick={() => void select(issue.id)}>
+          {view.issues.filter(issue => filter === "ALL" || issue.state === filter).map(issue => <Button key={issue.id} className="h-auto justify-start whitespace-normal text-left" disabled={pending} onClick={() => void select(issue.id)} type={selectedId === issue.id ? "primary" : "tertiary"} theme={selectedId === issue.id ? "light" : "borderless"}>
             <span className="flex min-w-0 flex-col gap-1"><span className="break-words">{issue.title}</span><span className="text-xs text-muted-foreground">{reviewIssueStateLabel[issue.state]}</span></span>
           </Button>)}
           {view.issues.filter(issue => filter === "ALL" || issue.state === filter).length === 0 && <p className="text-sm text-muted-foreground">暂无此类问题</p>}
@@ -111,35 +110,35 @@ export function DocumentReviewPanel({ documentId, initialIssueId, onIssueChange,
       </div>
       <div className="flex min-w-0 flex-col gap-4">
         {creating ? <form className="flex flex-col gap-3" onSubmit={event => { event.preventDefault(); save("CREATE"); }}>
-          <div className="flex flex-col gap-1.5"><Label htmlFor="review-question">问题</Label><Textarea id="review-question" value={draft.title} maxLength={2000} required disabled={pending} onChange={event => edit("title", event.target.value)} /></div>
-          <div className="flex flex-col gap-1.5"><Label htmlFor="review-location">文书位置</Label><Input id="review-location" placeholder="例如：第 2 页第 3 段" value={draft.location} maxLength={500} disabled={pending} onChange={event => edit("location", event.target.value)} /></div>
+          <div className="flex flex-col gap-1.5"><label htmlFor="review-question" className="text-sm font-medium text-[var(--semi-color-text-1)]">问题</label><TextArea id="review-question" value={draft.title} maxLength={2000} required disabled={pending} onChange={inputValue => edit("title", inputValue)} /></div>
+          <div className="flex flex-col gap-1.5"><label htmlFor="review-location" className="text-sm font-medium text-[var(--semi-color-text-1)]">文书位置</label><Input id="review-location" placeholder="例如：第 2 页第 3 段" value={draft.location} maxLength={500} disabled={pending} onChange={inputValue => edit("location", inputValue)} /></div>
           <div className="space-y-2"><p className="text-sm font-medium">固定问题位置（可选）</p>
             <ReviewPositionEditor documentId={documentId} matterId={view.matterId} slot="SUBJECT" document={view.document}
               value={draft.position} onChange={value => edit("position", value)} disabled={pending} /></div>
-          <div className="flex flex-col gap-1.5"><Label htmlFor="review-basis">依据与理由</Label><Textarea id="review-basis" value={draft.basis} maxLength={6000} required disabled={pending} onChange={event => edit("basis", event.target.value)} /></div>
+          <div className="flex flex-col gap-1.5"><label htmlFor="review-basis" className="text-sm font-medium text-[var(--semi-color-text-1)]">依据与理由</label><TextArea id="review-basis" value={draft.basis} maxLength={6000} required disabled={pending} onChange={inputValue => edit("basis", inputValue)} /></div>
           {view.canBrowseSources && <ReviewSourcePicker key={documentId} documentId={documentId} initialOptions={view.sourceOptions}
             initialNextCursor={view.sourceNextCursor} value={draft.basisDocumentId} disabled={pending} onChange={value => edit("basisDocumentId", value)} onSelectedDocument={setBasisDocument} />}
           {basisDocument?.id === draft.basisDocumentId && <div className="space-y-2"><p className="text-sm font-medium">固定依据位置（可选）</p>
             <ReviewPositionEditor documentId={documentId} matterId={view.matterId} slot="BASIS" document={basisDocument}
               value={draft.basisPosition} onChange={value => edit("basisPosition", value)} disabled={pending} /></div>}
-          <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={pending} onClick={() => void select(null)}>取消</Button><Button type="submit" disabled={pending || !draft.title.trim() || !draft.basis.trim()}>保存问题</Button></div>
+          <div className="flex justify-end gap-2"><Button disabled={pending} onClick={() => void select(null)} htmlType="button" type="tertiary" theme="outline">取消</Button><Button disabled={pending || !draft.title.trim() || !draft.basis.trim()} htmlType="submit" theme="solid">保存问题</Button></div>
         </form> : selected ? <>
           <ReviewIssueContent issue={selected} />
           {selected.state !== "RESOLVED" && (view.canRespond || (view.canCheck && selected.state === "WAITING_CHECK")) && <div className="flex flex-col gap-3">
-            {view.canRespond && <><div className="flex flex-col gap-1.5"><Label htmlFor="review-disposition">回应</Label><Select value={draft.disposition} disabled={pending} onValueChange={value => edit("disposition", value as typeof draft.disposition)}><SelectTrigger id="review-disposition"><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{Object.entries(reviewDispositionLabel).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectGroup></SelectContent></Select></div>
+            {view.canRespond && <><div className="flex flex-col gap-1.5"><label id={"review-disposition" + "-label"} className="text-sm font-medium text-[var(--semi-color-text-1)]">回应</label><Select value={draft.disposition} disabled={pending} onChange={value => { if (typeof value === "string") edit("disposition", value as typeof draft.disposition); }} id="review-disposition" aria-labelledby={"review-disposition" + "-label"} className="w-full" motion={false}>{Object.entries(reviewDispositionLabel).map(([value, label]) => <Select.Option key={value} value={value}>{label}</Select.Option>)}</Select></div>
               <DocumentChoice id="review-revision" label="实际修订版本（可选）" value={draft.revisionDocumentId} choices={view.revisionOptions} disabled={pending} onChange={value => edit("revisionDocumentId", value)} />
-              {draft.revisionDocumentId !== "none" && <div className="flex flex-col gap-1.5"><Label htmlFor="review-revision-location">修订位置</Label><Input id="review-revision-location" value={draft.revisionLocation} maxLength={500} disabled={pending} onChange={event => edit("revisionLocation", event.target.value)} /></div>}
+              {draft.revisionDocumentId !== "none" && <div className="flex flex-col gap-1.5"><label htmlFor="review-revision-location" className="text-sm font-medium text-[var(--semi-color-text-1)]">修订位置</label><Input id="review-revision-location" value={draft.revisionLocation} maxLength={500} disabled={pending} onChange={inputValue => edit("revisionLocation", inputValue)} /></div>}
               {revisionDocument && <div className="space-y-2"><p className="text-sm font-medium">固定修订位置（可选）</p>
                 <ReviewPositionEditor documentId={documentId} matterId={view.matterId} slot="REVISION" document={revisionDocument}
                   value={draft.revisionPosition} onChange={value => edit("revisionPosition", value)} disabled={pending} /></div>}
             </>}
-            <div className="flex flex-col gap-1.5"><Label htmlFor="review-response-note">{view.canRespond ? "处理说明" : "复核结论"}</Label><Textarea id="review-response-note" value={draft.note} maxLength={6000} disabled={pending} onChange={event => edit("note", event.target.value)} /></div>
+            <div className="flex flex-col gap-1.5"><label htmlFor="review-response-note" className="text-sm font-medium text-[var(--semi-color-text-1)]">{view.canRespond ? "处理说明" : "复核结论"}</label><TextArea id="review-response-note" value={draft.note} maxLength={6000} disabled={pending} onChange={inputValue => edit("note", inputValue)} /></div>
             <div className="flex flex-wrap justify-end gap-2">
-              {view.canRespond && <Button disabled={pending || !draft.note.trim() || (draft.revisionDocumentId !== "none" && !draft.revisionLocation.trim() && !hasReviewPosition(draft.revisionPosition))} onClick={() => save("RESPONSE")}>保存回应</Button>}
-              {view.canCheck && selected.state === "WAITING_CHECK" && <><Button variant="outline" disabled={pending || !draft.note.trim()} onClick={() => save("CHECK", false)}>保留未解决</Button><Button disabled={pending || !draft.note.trim() || !selected.canResolve} onClick={() => save("CHECK", true)}>确认已处理</Button></>}
+              {view.canRespond && <Button disabled={pending || !draft.note.trim() || (draft.revisionDocumentId !== "none" && !draft.revisionLocation.trim() && !hasReviewPosition(draft.revisionPosition))} onClick={() => save("RESPONSE")} theme="solid">保存回应</Button>}
+              {view.canCheck && selected.state === "WAITING_CHECK" && <><Button disabled={pending || !draft.note.trim()} onClick={() => save("CHECK", false)} type="tertiary" theme="outline">保留未解决</Button><Button disabled={pending || !draft.note.trim() || !selected.canResolve} onClick={() => save("CHECK", true)} theme="solid">确认已处理</Button></>}
             </div>
           </div>}
-        </> : selectedId ? <Alert><AlertDescription>此问题不存在或当前不可读取，请返回问题列表。</AlertDescription></Alert> : <p className="text-sm text-muted-foreground">选择问题查看处理记录</p>}
+        </> : selectedId ? <Banner type="warning" closeIcon={null} fullMode={false} description="此问题不存在或当前不可读取，请返回问题列表。" /> : <p className="text-sm text-muted-foreground">选择问题查看处理记录</p>}
       </div>
     </div>}
   </section>;

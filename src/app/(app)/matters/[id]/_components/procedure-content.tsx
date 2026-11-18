@@ -3,7 +3,7 @@
 import { DeadlineDueFields } from "@/components/matters/deadline-due-fields";
 import { deadlineDueDraft, deadlineDueFromDraft, formatDeadlineDue, deadlineOverdue, deadlineRelative, type DeadlineDuePrecision } from "@/lib/deadline-due";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useId, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Calendar,
@@ -27,27 +27,15 @@ import type {
   MatterProcedure,
   ProcedureMemo
 } from "@prisma/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
-import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
-import { toast } from "sonner";
+} from "@/components/patterns/workspace-dialog";
+import { Select, Button, Input, Notification, Tag, TextArea, Toast } from "@douyinfe/semi-ui";
 import { deadlineCategoryLabel } from "@/lib/enums";
 import { confirmDeadline, adjustDeadline } from "@/server/deadlines/confirm";
 import { cn, daysUntil, formatDate } from "@/lib/utils";
@@ -189,7 +177,7 @@ function ImportantItemsCard({
       try {
         await toggleDeadlineCompleted(id);
       } catch {
-        toast.error("操作失败");
+        Toast.error("操作失败");
       }
     });
   }
@@ -199,9 +187,9 @@ function ImportantItemsCard({
     startTransition(async () => {
       try {
         await deleteDeadline(id);
-        toast.success("已删除");
+        Toast.success("已删除");
       } catch {
-        toast.error("删除失败");
+        Toast.error("删除失败");
       }
     });
   }
@@ -211,9 +199,9 @@ function ImportantItemsCard({
     startTransition(async () => {
       try {
         await confirmDeadline({ id: deadline.id, expectedUpdatedAt: deadline.updatedAt });
-        toast.success("期限已确认");
+        Toast.success("期限已确认");
       } catch (err) {
-        toast.error("确认失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "确认失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -228,9 +216,9 @@ function ImportantItemsCard({
     startTransition(async () => {
       try {
         await deleteHearing(id);
-        toast.success("已删除");
+        Toast.success("已删除");
       } catch {
-        toast.error("删除失败");
+        Toast.error("删除失败");
       }
     });
   }
@@ -240,9 +228,9 @@ function ImportantItemsCard({
     startTransition(async () => {
       try {
         await deleteExpress({ id });
-        toast.success("已删除");
+        Toast.success("已删除");
       } catch {
-        toast.error("删除失败");
+        Toast.error("删除失败");
       }
     });
   }
@@ -252,7 +240,7 @@ function ImportantItemsCard({
       try {
         await deleteProcedureMemo(id);
       } catch {
-        toast.error("删除失败");
+        Toast.error("删除失败");
       }
     });
   }
@@ -422,7 +410,7 @@ export function AdjustDeadlineDialog({ deadline, onClose }: { deadline: { id: st
     startTransition(async () => {
       try {
         await adjustDeadline({ id: deadline.id, expectedUpdatedAt: deadline.updatedAt, ...deadlineDueFromDraft(dueDraft, deadline), reason: reason.trim() });
-        toast.success("期限已调整");
+        Toast.success("期限已调整");
         onClose();
       } catch (err) {
         setError(err instanceof Error ? actionErrorMessage(err) : "调整失败");
@@ -431,7 +419,7 @@ export function AdjustDeadlineDialog({ deadline, onClose }: { deadline: { id: st
   }
 
   return (
-    <Dialog open onOpenChange={(o) => { if (!o && !pending) onClose(); }}>
+    <WorkspaceDialog open onOpenChange={(o) => { if (!o && !pending) onClose(); }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>调整到期日</DialogTitle>
@@ -440,17 +428,17 @@ export function AdjustDeadlineDialog({ deadline, onClose }: { deadline: { id: st
         <div className="space-y-3">
           <DeadlineDueFields value={dueDraft} onChange={setDueDraft} original={deadline} disabled={pending} />
           <div className="space-y-1.5">
-            <Label>调整原因 *</Label>
-            <Textarea rows={3} disabled={pending} value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} placeholder="如：法院通知书载明举证期限延长至…" />
+            <label className="text-sm font-medium text-[var(--semi-color-text-1)]">调整原因 *</label>
+            <TextArea rows={3} disabled={pending} value={reason} maxLength={300} onChange={inputValue => setReason(inputValue)} placeholder="如：法院通知书载明举证期限延长至…" />
           </div>
           {error ? <div className="text-[12px] text-[var(--red)]">{error}</div> : null}
         </div>
         <DialogFooter>
-          <Button variant="secondary" onClick={onClose} disabled={pending}>取消</Button>
-          <Button onClick={submit} disabled={pending}>保存调整</Button>
+          <Button onClick={onClose} disabled={pending} type="primary" theme="light">取消</Button>
+          <Button onClick={submit} disabled={pending} theme="solid">保存调整</Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 
@@ -574,12 +562,13 @@ function AllImportantRow({
 // 程序标签小徽章（仅多程序时显示，标明该条属于哪个程序）
 function ProcTag({ label }: { label: string }) {
   return (
-    <Badge
-      variant="outline"
+    <Tag
       className="shrink-0 border-border bg-muted/40 px-1 text-[9px] font-normal text-muted-foreground"
+      color="grey"
+      type="ghost"
     >
       {label}
-    </Badge>
+    </Tag>
   );
 }
 
@@ -637,18 +626,18 @@ function DeadlineRow({
           >
             {d.title}
           </span>
-          <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[9px]">
+          <Tag className="h-5 shrink-0 px-1.5 text-[9px]" color="grey" type="ghost">
             {deadlineCategoryLabel[d.category]}
-          </Badge>
+          </Tag>
           {d.confirmStatus === "PENDING" && (
-            <Badge className="h-5 shrink-0 bg-[var(--amber-bg)] px-1.5 text-[9px] text-[var(--amber)] hover:bg-[var(--amber-bg)]">
+            <Tag className="h-5 shrink-0 bg-[var(--amber-bg)] px-1.5 text-[9px] text-[var(--amber)] hover:bg-[var(--amber-bg)]" color="teal">
               待确认
-            </Badge>
+            </Tag>
           )}
           {d.confirmStatus === "ADJUSTED" && (
-            <Badge variant="outline" className="h-5 shrink-0 border-[var(--blue-line)] px-1.5 text-[9px] text-[var(--blue)]">
+            <Tag className="h-5 shrink-0 border-[var(--blue-line)] px-1.5 text-[9px] text-[var(--blue)]" color="grey" type="ghost">
               已调整
-            </Badge>
+            </Tag>
           )}
           {multiProc && <ProcTag label={d.procLabel} />}
         </div>
@@ -747,9 +736,9 @@ function HearingRow({
         </div>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1 text-right">
-        <Badge variant="outline" className="h-5 px-1.5 text-[9px]">
+        <Tag className="h-5 px-1.5 text-[9px]" color="grey" type="ghost">
           {upcoming ? "未召开" : "已召开"}
-        </Badge>
+        </Tag>
         <span className="font-mono text-[10px] tabular text-muted-foreground">
           {shMonthDayTime(h.startsAt)}
         </span>
@@ -796,9 +785,9 @@ function ExpressRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="truncate text-[12.5px] font-medium">{item.purpose}</span>
-          <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[9px]">
+          <Tag className="h-5 shrink-0 px-1.5 text-[9px]" color="grey" type="ghost">
             {isOutbound ? "寄出" : "收件"}
-          </Badge>
+          </Tag>
         </div>
         <div className="mt-0.5 truncate font-mono text-[11px] tabular text-muted-foreground">
           {item.companyCode ?? "待识别"} · {item.trackingNo}
@@ -918,6 +907,7 @@ export function ImportantItemDialog({
   hearingCounts: Record<string, number>;
   proceduresDetail: Record<string, { handlingAgency?: string | null; panel?: string | null; jurisdiction?: string | null }>;
 }) {
+  const selectLabelId = useId();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [summonsPending, startSummons] = useTransition();
@@ -1004,7 +994,7 @@ export function ImportantItemDialog({
           setHearingStartsAt(`${result.hearingDate}T${result.hearingTime}`);
         } else if (result.hearingDate) {
           setHearingStartsAt("");
-          toast.warning(`已识别开庭日期 ${result.hearingDate}，具体时刻未识别，请手动填写`);
+          Toast.warning(`已识别开庭日期 ${result.hearingDate}，具体时刻未识别，请手动填写`);
         }
         if (result.courtRoom) setHearingRoom(result.courtRoom);
         if (result.judge) setHearingJudge(result.judge);
@@ -1014,11 +1004,9 @@ export function ImportantItemDialog({
           if (result.parties?.length) parts.push(`当事人：${result.parties.join("、")}`);
           setHearingNotes(parts.join("\n"));
         }
-        toast.success(result.pageLimit ? "已识别传票首页，请核对信息；其他页未处理" : "传票识别完成，请核对信息");
+        Toast.success(result.pageLimit ? "已识别传票首页，请核对信息；其他页未处理" : "传票识别完成，请核对信息");
       } catch (err) {
-        toast.error("传票识别失败", {
-          description: err instanceof Error ? actionErrorMessage(err) : "请手动填写"
-        });
+        Notification.error({ title: "传票识别失败", content: err instanceof Error ? actionErrorMessage(err) : "请手动填写" });
       } finally {
         if (summonsRef.current) summonsRef.current.value = "";
       }
@@ -1033,15 +1021,13 @@ export function ImportantItemDialog({
         const result = await parseExpressLabel(fd);
         if (result.trackingNo) {
           setTrackingNo(result.trackingNo);
-          toast.success(`已识别单号：${result.trackingNo}`);
+          Toast.success(`已识别单号：${result.trackingNo}`);
         } else {
-          toast.warning("未识别到单号，请手动输入");
+          Toast.warning("未识别到单号，请手动输入");
         }
         if (result.companyCode) setCompanyCode(result.companyCode);
       } catch (err) {
-        toast.error("识别失败", {
-          description: actionErrorMessage(err)
-        });
+        Notification.error({ title: "识别失败", content: actionErrorMessage(err) });
       } finally {
         if (expressRef.current) expressRef.current.value = "";
       }
@@ -1050,16 +1036,16 @@ export function ImportantItemDialog({
 
   function submitHearing() {
     if (!hearingProcedureId) {
-      toast.error("请先选择所处程序");
+      Toast.error("请先选择所处程序");
       return;
     }
     if (!hearingTitle.trim()) {
-      toast.error("请填写开庭主题");
+      Toast.error("请填写开庭主题");
       return;
     }
     const startsAt = new Date(`${hearingStartsAt}:00+08:00`);
     if (Number.isNaN(startsAt.getTime())) {
-      toast.error("请填写有效开庭时间");
+      Toast.error("请填写有效开庭时间");
       return;
     }
     startTransition(async () => {
@@ -1075,24 +1061,22 @@ export function ImportantItemDialog({
           contact: hearingContact.trim(),
           notes: hearingNotes.trim()
         });
-        toast.success("开庭安排已添加");
+        Toast.success("开庭安排已添加");
         onOpenChange(false);
         router.refresh();
       } catch (err) {
-        toast.error("添加失败", {
-          description: actionErrorMessage(err)
-        });
+        Notification.error({ title: "添加失败", content: actionErrorMessage(err) });
       }
     });
   }
 
   function submitDeadline() {
     if (!deadlineProcedureId) {
-      toast.error("请先选择所处程序");
+      Toast.error("请先选择所处程序");
       return;
     }
     if (!deadlineTitle.trim()) {
-      toast.error("请填写期限名称");
+      Toast.error("请填写期限名称");
       return;
     }
     startTransition(async () => {
@@ -1105,24 +1089,22 @@ export function ImportantItemDialog({
           basis: deadlineBasis.trim(),
           remindDays: deadlineRemindDays
         });
-        toast.success("期限已添加");
+        Toast.success("期限已添加");
         onOpenChange(false);
         router.refresh();
       } catch (err) {
-        toast.error("添加失败", {
-          description: actionErrorMessage(err)
-        });
+        Notification.error({ title: "添加失败", content: actionErrorMessage(err) });
       }
     });
   }
 
   function submitExpress() {
     if (!trackingNo.trim()) {
-      toast.error("请填写或识别快递单号");
+      Toast.error("请填写或识别快递单号");
       return;
     }
     if (!purpose.trim()) {
-      toast.error("请填写快递用途");
+      Toast.error("请填写快递用途");
       return;
     }
     startTransition(async () => {
@@ -1136,24 +1118,22 @@ export function ImportantItemDialog({
           recipient: recipient.trim(),
           recipientPhone: recipientPhone.trim()
         });
-        toast.success("快递记录已添加");
+        Toast.success("快递记录已添加");
         onOpenChange(false);
         router.refresh();
       } catch (err) {
-        toast.error("添加失败", {
-          description: actionErrorMessage(err)
-        });
+        Notification.error({ title: "添加失败", content: actionErrorMessage(err) });
       }
     });
   }
 
   function submitMemo() {
     if (!memoProcedureId) {
-      toast.error("请先选择所处程序");
+      Toast.error("请先选择所处程序");
       return;
     }
     if (!memoContent.trim()) {
-      toast.error("请填写备忘内容");
+      Toast.error("请填写备忘内容");
       return;
     }
     startTransition(async () => {
@@ -1162,13 +1142,11 @@ export function ImportantItemDialog({
           procedureId: memoProcedureId,
           content: memoContent.trim()
         });
-        toast.success("其他备忘已添加");
+        Toast.success("其他备忘已添加");
         onOpenChange(false);
         router.refresh();
       } catch (err) {
-        toast.error("添加失败", {
-          description: actionErrorMessage(err)
-        });
+        Notification.error({ title: "添加失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -1186,7 +1164,7 @@ export function ImportantItemDialog({
   const submitLabel = `添加${importantTypeMeta[type].label}`;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <WorkspaceDialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[88vh] max-w-2xl flex-col gap-0 p-0">
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle>{types.includes("express") && types.length === 1 ? "添加记录 · 快递" : "添加事项"}</DialogTitle>
@@ -1241,12 +1219,12 @@ export function ImportantItemDialog({
                     }}
                   />
                   <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
                     className="gap-1.5"
                     disabled={summonsPending || procedureMissing}
                     onClick={() => summonsRef.current?.click()}
+                    htmlType="button"
+                    type="tertiary" theme="outline"
+                    size="small"
                   >
                     {summonsPending ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1262,7 +1240,7 @@ export function ImportantItemDialog({
                 <ImportantField label="主题" required>
                   <Input
                     value={hearingTitle}
-                    onChange={(e) => setHearingTitle(e.target.value)}
+                    onChange={inputValue => setHearingTitle(inputValue)}
                     placeholder="如：第一次开庭"
                     disabled={procedureMissing}
                   />
@@ -1290,14 +1268,14 @@ export function ImportantItemDialog({
                     <Input
                       type="datetime-local"
                       value={hearingStartsAt}
-                      onChange={(e) => setHearingStartsAt(e.target.value)}
+                      onChange={inputValue => setHearingStartsAt(inputValue)}
                       disabled={procedureMissing}
                     />
                   </ImportantField>
                   <ImportantField label="法庭">
                     <Input
                       value={hearingRoom}
-                      onChange={(e) => setHearingRoom(e.target.value)}
+                      onChange={inputValue => setHearingRoom(inputValue)}
                       placeholder="如：第三法庭"
                       disabled={procedureMissing}
                     />
@@ -1305,14 +1283,14 @@ export function ImportantItemDialog({
                   <ImportantField label="主审 / 仲裁员">
                     <Input
                       value={hearingJudge}
-                      onChange={(e) => setHearingJudge(e.target.value)}
+                      onChange={inputValue => setHearingJudge(inputValue)}
                       disabled={procedureMissing}
                     />
                   </ImportantField>
                   <ImportantField label="联系方式">
                     <Input
                       value={hearingContact}
-                      onChange={(e) => setHearingContact(e.target.value)}
+                      onChange={inputValue => setHearingContact(inputValue)}
                       placeholder="法官/书记员电话"
                       disabled={procedureMissing}
                     />
@@ -1321,16 +1299,16 @@ export function ImportantItemDialog({
                 <ImportantField label="开庭地址">
                   <Input
                     value={hearingAddress}
-                    onChange={(e) => setHearingAddress(e.target.value)}
+                    onChange={inputValue => setHearingAddress(inputValue)}
                     placeholder="如：XX路XX号XX法院"
                     disabled={procedureMissing}
                   />
                 </ImportantField>
                 <ImportantField label="备注">
-                  <Textarea
+                  <TextArea
                     rows={4}
                     value={hearingNotes}
-                    onChange={(e) => setHearingNotes(e.target.value)}
+                    onChange={inputValue => setHearingNotes(inputValue)}
                     disabled={procedureMissing}
                   />
                 </ImportantField>
@@ -1350,38 +1328,31 @@ export function ImportantItemDialog({
                 <ImportantField label="期限名称" required>
                   <Input
                     value={deadlineTitle}
-                    onChange={(e) => setDeadlineTitle(e.target.value)}
+                    onChange={inputValue => setDeadlineTitle(inputValue)}
                     placeholder="如：举证截止 / 上诉到期日"
                     disabled={procedureMissing}
                   />
                 </ImportantField>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <ImportantField label="期限类型">
-                    <Select
+                    <> <span className="sr-only" id={selectLabelId + "-1"}>期限类型</span><Select
                       value={deadlineCategory}
-                      onValueChange={(value) =>
-                        setDeadlineCategory(value as DeadlineCreateInput["category"])
-                      }
+                      onChange={value => { if (typeof value === "string") setDeadlineCategory(value as DeadlineCreateInput["category"]); }}
                       disabled={procedureMissing}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(deadlineCategoryLabel).map(([key, label]) => (
-                          <SelectItem key={key} value={key}>
+                      aria-labelledby={selectLabelId + "-1"}
+                      className="w-full"
+                      motion={false}>{Object.entries(deadlineCategoryLabel).map(([key, label]) => (
+                          <Select.Option key={key} value={key}>
                             {label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                          </Select.Option>
+                        ))}</Select></>
                   </ImportantField>
                   <DeadlineDueFields value={deadlineDue} onChange={setDeadlineDue} disabled={procedureMissing || isPending} />
                 </div>
                 <ImportantField label="计算依据">
                   <Input
                     value={deadlineBasis}
-                    onChange={(e) => setDeadlineBasis(e.target.value)}
+                    onChange={inputValue => setDeadlineBasis(inputValue)}
                     placeholder="如：判决书送达日 2026-05-01 + 15 日"
                     disabled={procedureMissing}
                   />
@@ -1393,7 +1364,7 @@ export function ImportantItemDialog({
                     max={60}
                     className="font-mono tabular"
                     value={deadlineRemindDays}
-                    onChange={(e) => setDeadlineRemindDays(Number(e.target.value))}
+                    onChange={inputValue => setDeadlineRemindDays(Number(inputValue))}
                     disabled={procedureMissing}
                   />
                 </ImportantField>
@@ -1406,7 +1377,7 @@ export function ImportantItemDialog({
                   <div className="flex gap-1">
                     <Input
                       value={trackingNo}
-                      onChange={(e) => setTrackingNo(e.target.value)}
+                      onChange={inputValue => setTrackingNo(inputValue)}
                       placeholder="可手动输入或上传图片识别"
                       className="font-mono"
                     />
@@ -1421,12 +1392,12 @@ export function ImportantItemDialog({
                       }}
                     />
                     <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
                       onClick={() => expressRef.current?.click()}
                       disabled={expressOcrPending}
                       className="h-9 shrink-0 gap-1"
+                      htmlType="button"
+                      type="tertiary" theme="outline"
+                      size="small"
                     >
                       {expressOcrPending ? (
                         <Loader2 className="h-3 w-3 animate-spin" />
@@ -1441,40 +1412,34 @@ export function ImportantItemDialog({
                   <ImportantField label="快递公司">
                     <Input
                       value={companyCode}
-                      onChange={(e) => setCompanyCode(e.target.value)}
+                      onChange={inputValue => setCompanyCode(inputValue)}
                       placeholder="留空则自动识别"
                     />
                   </ImportantField>
                   <ImportantField label="方向">
-                    <Select
+                    <> <span className="sr-only" id={selectLabelId + "-2"}>收寄方向</span><Select
                       value={direction}
-                      onValueChange={(value) => setDirection(value as "OUTBOUND" | "INBOUND")}
-                    >
-                      <SelectTrigger className="bg-background">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="OUTBOUND">寄出（我方→外）</SelectItem>
-                        <SelectItem value="INBOUND">收件（外→我方）</SelectItem>
-                      </SelectContent>
-                    </Select>
+                      onChange={value => { if (typeof value === "string") setDirection(value as "OUTBOUND" | "INBOUND"); }}
+                      aria-labelledby={selectLabelId + "-2"}
+                      className="w-full"
+                      motion={false}><Select.Option value="OUTBOUND">寄出（我方→外）</Select.Option><Select.Option value="INBOUND">收件（外→我方）</Select.Option></Select></>
                   </ImportantField>
                 </div>
                 <ImportantField label="用途" required>
                   <Input
                     value={purpose}
-                    onChange={(e) => setPurpose(e.target.value)}
+                    onChange={inputValue => setPurpose(inputValue)}
                     placeholder="如：起诉状寄朝阳法院"
                   />
                 </ImportantField>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <ImportantField label="收件人 / 单位">
-                    <Input value={recipient} onChange={(e) => setRecipient(e.target.value)} />
+                    <Input value={recipient} onChange={inputValue => setRecipient(inputValue)} />
                   </ImportantField>
                   <ImportantField label="收件电话">
                     <Input
                       value={recipientPhone}
-                      onChange={(e) => setRecipientPhone(e.target.value)}
+                      onChange={inputValue => setRecipientPhone(inputValue)}
                       className="font-mono"
                     />
                   </ImportantField>
@@ -1493,10 +1458,10 @@ export function ImportantItemDialog({
                   />
                 </ImportantField>
                 <ImportantField label="备忘内容" required>
-                  <Textarea
+                  <TextArea
                     rows={6}
                     value={memoContent}
-                    onChange={(e) => setMemoContent(e.target.value)}
+                    onChange={inputValue => setMemoContent(inputValue)}
                     placeholder="输入备忘内容..."
                     disabled={procedureMissing}
                   />
@@ -1507,17 +1472,18 @@ export function ImportantItemDialog({
 
           <DialogFooter className="border-t border-border px-6 py-4">
             <Button
-              type="button"
-              variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={isPending}
+              htmlType="button"
+              type="tertiary" theme="outline"
             >
               取消
             </Button>
             <Button
-              type="submit"
               disabled={isPending || summonsPending || expressOcrPending || procedureMissing}
               className="gap-1.5"
+              htmlType="submit"
+              theme="solid"
             >
               {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               {submitLabel}
@@ -1525,7 +1491,7 @@ export function ImportantItemDialog({
           </DialogFooter>
         </form>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }
 
@@ -1540,19 +1506,13 @@ function ProcedureSelect({
   disabled?: boolean;
   onChange: (value: string) => void;
 }) {
+  const selectLabelId = useId();
   return (
-    <Select value={value || undefined} onValueChange={onChange} disabled={disabled}>
-      <SelectTrigger>
-        <SelectValue placeholder="选择所处程序" />
-      </SelectTrigger>
-      <SelectContent>
-        {procedures.map((p) => (
-          <SelectItem key={p.id} value={p.id}>
+    <> <span className="sr-only" id={selectLabelId + "-3"}>{"选择所处程序"}</span><Select value={value || undefined} onChange={value => { if (typeof value === "string") onChange(value); }} disabled={disabled} aria-labelledby={selectLabelId + "-3"} placeholder="选择所处程序" className="w-full" motion={false}>{procedures.map((p) => (
+          <Select.Option key={p.id} value={p.id}>
             {p.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+          </Select.Option>
+        ))}</Select></>
   );
 }
 
@@ -1567,10 +1527,10 @@ function ImportantField({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="flex items-center gap-1 text-xs">
+      <label className="flex items-center gap-1 text-xs">
         {label}
         {required && <span className="text-destructive">*</span>}
-      </Label>
+      </label>
       {children}
     </div>
   );

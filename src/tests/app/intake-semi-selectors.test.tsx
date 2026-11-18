@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mock = vi.hoisted(() => ({ search: vi.fn(), existing: vi.fn(), create: vi.fn(), enterprise: vi.fn(), clear: vi.fn() }));
@@ -109,7 +109,6 @@ describe("收案 Semi 客户及管辖地选择", () => {
       return <><JurisdictionSelect value={value} onChange={setValue} /><output aria-label="当前管辖地">{value}</output></>;
     }
     render(<Wrapper />);
-    fireEvent.click(screen.getByRole("button", { name: "选择管辖地" }));
     fireEvent.click(await screen.findByRole("combobox", { name: "省 / 直辖市" }));
     fireEvent.click(await screen.findByRole("option", { name: /浙江省/ }));
     await waitFor(() => expect(screen.getByLabelText("当前管辖地")).toHaveTextContent(/^浙江省$/));
@@ -119,5 +118,15 @@ describe("收案 Semi 客户及管辖地选择", () => {
     fireEvent.click(screen.getByRole("combobox", { name: "区 / 县（可选）" }));
     fireEvent.click(await screen.findByRole("option", { name: /上城区/ }));
     await waitFor(() => expect(screen.getByLabelText("当前管辖地")).toHaveTextContent(/^浙江省\/杭州市\/上城区$/));
+    const province = screen.getByRole("combobox", { name: "省 / 直辖市" });
+    fireEvent.click(province);
+    const filter = await within(province).findByRole("textbox");
+    fireEvent.change(filter, { target: { value: "清空" } });
+    await screen.findByRole("option", { name: /清空\s*管辖地/ });
+    fireEvent.keyDown(filter, { key: "ArrowDown", keyCode: 40, which: 40 });
+    fireEvent.keyDown(filter, { key: "Enter", keyCode: 13, which: 13 });
+    await waitFor(() => expect(screen.getByLabelText("当前管辖地")).toBeEmptyDOMElement());
+    expect(screen.getByRole("combobox", { name: "市" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("combobox", { name: "区 / 县（可选）" })).toHaveAttribute("aria-disabled", "true");
   });
 });

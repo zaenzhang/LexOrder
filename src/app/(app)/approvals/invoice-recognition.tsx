@@ -1,7 +1,6 @@
 "use client";
-import { Button } from "@douyinfe/semi-ui";
+import { Button, Notification, Toast } from "@douyinfe/semi-ui";
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 
 import { recognizeInvoiceFromImage, type RecognizedInvoice } from "@/server/ai/actions";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -20,11 +19,11 @@ export function InvoiceRecognition({ file, onNumber, requestedAmount }: { file: 
       const fd = new FormData(); fd.set("file", file);
       const response = await recognizeInvoiceFromImage(fd);
       if (generation.current !== current) return;
-      if (!response.ok) { toast.error(response.message); return; }
+      if (!response.ok) { Notification.error({ title: response.message, duration: 6 }); return; }
       setResult(response.data);
       if (response.data.invoiceNumber) onNumber(response.data.invoiceNumber);
-      toast.success("发票信息已识别，请核对后提交");
-    } catch (e) { if (generation.current === current) toast.error(e instanceof Error ? actionErrorMessage(e) : "识别失败，请手动填写"); }
+      Toast.success("发票信息已识别，请核对后提交");
+    } catch (e) { if (generation.current === current) Notification.error({ title: e instanceof Error ? actionErrorMessage(e) : "识别失败，请手动填写", duration: 6 }); }
     finally { if (generation.current === current) setPending(false); }
   }
   const amount = result?.totalWithTax ?? result?.totalAmount;

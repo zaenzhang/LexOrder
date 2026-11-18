@@ -2,13 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import type { WorkspaceActor } from "@/lib/runtime/actor";
 
-const { sessionProvider, useSession, navCounts } = vi.hoisted(() => ({
+const { sessionProvider, useSession, navCounts, router } = vi.hoisted(() => ({
   sessionProvider: vi.fn(({ children }: { children: React.ReactNode }) => children),
   useSession: vi.fn(),
-  navCounts: vi.fn()
+  navCounts: vi.fn(),
+  router: { push: vi.fn() }
 }));
 vi.mock("next-auth/react", () => ({ SessionProvider: sessionProvider, useSession, signOut: vi.fn() }));
-vi.mock("next/navigation", () => ({ usePathname: () => "/admin" }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/admin", useRouter: () => router }));
 vi.mock("@/server/layout/nav-counts", () => ({ getNavCounts: navCounts }));
 
 import { WorkspaceActorProvider, useWorkspaceActor } from "@/components/workspace-actor-provider";
@@ -27,10 +28,11 @@ function ActorProbe() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubGlobal("ResizeObserver", class { observe = vi.fn(); unobserve = vi.fn(); disconnect = vi.fn(); });
   navCounts.mockResolvedValue(null);
   useSession.mockReturnValue({ data: { user: { ...actor, runtimeMode: undefined } } });
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("共用 UI 的操作者来源", () => {
   it("Personal 直接注入本机操作者，不挂载 NextAuth 或读取认证会话", () => {
@@ -55,12 +57,15 @@ describe("共用 UI 的操作者来源", () => {
   });
 
   it("Personal 沿用原业务导航，包括财务、审批与报表", async () => {
-    const { container } = render(<WorkspaceActorProvider personalActor={actor}>
+    render(<WorkspaceActorProvider personalActor={actor}>
       <NavContent firm={{ name: "测试工作区", subtitle: "", logoDataUrl: null }} />
     </WorkspaceActorProvider>);
     await waitFor(() => expect(navCounts).toHaveBeenCalled());
-    for (const href of ["/", "/matters", "/approvals", "/schedule", "/clients", "/finance", "/reports"]) {
-      expect(container.querySelector(`nav a[href="${href}"]`)).not.toBeNull();
+    for (const [name, href] of [
+      ["工作台", "/"], ["案件", "/matters"], ["审批", "/approvals"], ["日程", "/schedule"],
+      ["客户", "/clients"], ["财务", "/finance"], ["报表", "/reports"]
+    ]) {
+      expect(screen.getByRole("link", { name })).toHaveAttribute("href", href);
     }
     expect(screen.getByText("个人工作区")).toBeInTheDocument();
     expect(useSession).not.toHaveBeenCalled();

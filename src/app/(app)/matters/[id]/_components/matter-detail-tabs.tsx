@@ -4,13 +4,13 @@ import Link from "next/link";
 import { hasCustomPermission, type RoleGrant } from "@/lib/roles/catalog";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { toast } from "sonner";
+import { Notification, Toast } from "@douyinfe/semi-ui";
 import type { ClientType, Prisma } from "@prisma/client";
 import { Archive, ChevronLeft, Clock3, FileSignature, Gavel, Pencil, Plus, Upload, X } from "lucide-react";
 import { CaseSearchPanel } from "./case-search-panel";
 import { DocumentReviewDialog } from "./document-review-dialog";
 import { DocActionsContext } from "./doc-actions-context";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { WorkspaceDialog, DrawerContent, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { matterStatusTone } from "@/lib/ui/moan-tones";
 import { useTopbarAction } from "@/components/layout/topbar-action";
 import { ProgressDialog } from "./progress-dialog";
@@ -368,12 +368,12 @@ export function MatterDetailTabs({
     startTransition(async () => {
       try {
         const result = await deleteProcedure(id);
-        if (!result.ok) { toast.error("程序不存在或已变化"); return; }
-        toast.success("程序已删除");
+        if (!result.ok) { Toast.error("程序不存在或已变化"); return; }
+        Toast.success("程序已删除");
         if (new URLSearchParams(window.location.search).get("procedure") === id) setSelectedProcId(null);
         router.refresh();
       } catch (err) {
-        toast.error("删除失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "删除失败", content: actionErrorMessage(err) });
       }
     });
   }
@@ -726,16 +726,16 @@ export function MatterDetailTabs({
         }
       />
 
-      <Sheet open={caseSearchOpen} onOpenChange={setCaseSearchOpen}>
-        <SheetContent side="right" className="w-full overflow-y-auto p-0 sm:max-w-[760px]">
-          <SheetHeader className="px-5 pt-5">
-            <SheetTitle>类案检索 · {matter.title}</SheetTitle>
-          </SheetHeader>
+      <WorkspaceDialog open={caseSearchOpen} onOpenChange={setCaseSearchOpen}>
+        <DrawerContent side="right" className="w-screen overflow-y-auto p-0 sm:max-w-[760px]">
+          <DialogHeader className="px-5 pt-5">
+            <DialogTitle>类案检索 · {matter.title}</DialogTitle>
+          </DialogHeader>
           <div className="p-5">
             {caseSearchOpen ? <CaseSearchPanel providers={{ yuandian: capabilities.yuandian ?? false, localJudgments: capabilities.localJudgments ?? false }} matterId={matter.id} matterCategory={matter.category} defaultCauseName={matter.cause?.name ?? matter.causeFreeText ?? null} /> : null}
           </div>
-        </SheetContent>
-      </Sheet>
+        </DrawerContent>
+      </WorkspaceDialog>
       {currentProcedure && ledgerAdd ? (
         <ImportantItemDialog
           open={Boolean(ledgerAdd)}

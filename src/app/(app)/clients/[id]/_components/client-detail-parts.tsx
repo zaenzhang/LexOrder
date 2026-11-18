@@ -1,15 +1,14 @@
 "use client";
 
-import { Button, Checkbox, Input, Radio } from "@douyinfe/semi-ui";
+import { Button, Checkbox, Input, Radio, Notification, Toast } from "@douyinfe/semi-ui";
 
 /** 墨案 10 客户详情的交互零件：疑似重复横幅 + 合并向导、添加联系人 */
 import { useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { GitMerge, Loader2, Plus, ScanSearch } from "lucide-react";
 import { mergeClientsByCode } from "@/server/clients/dedup";
 import { addContact } from "@/server/clients/actions";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -39,17 +38,17 @@ export function MergeBanner({
 
   function submit() {
     if (!code.trim() || !basis.trim()) {
-      toast.warning("请填写被合并客户编号与合并依据");
+      Toast.warning("请填写被合并客户编号与合并依据");
       return;
     }
     start(async () => {
       try {
         await mergeClientsByCode({ keepId, mergeCode: code.trim(), basis: basis.trim() });
-        toast.success("合并完成：被合并档案已停用并保留映射");
+        Toast.success("合并完成：被合并档案已停用并保留映射");
         setOpen(false);
         router.refresh();
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "合并失败");
+        Notification.error({ title: e instanceof Error ? actionErrorMessage(e) : "合并失败", duration: 6 });
       }
     });
   }
@@ -79,7 +78,7 @@ export function MergeBanner({
           合并重复档案
         </Button>
       ) : null}
-      <Dialog open={open} onOpenChange={value => { if (!pending) setOpen(value); }}>
+      <WorkspaceDialog open={open} onOpenChange={value => { if (!pending) setOpen(value); }}>
         <DialogContent id={dialogId} className="sm:max-w-[520px]" onCloseAutoFocus={event => { event.preventDefault(); trigger.current?.focus({ preventScroll: true }); }}>
           <DialogHeader>
             <DialogTitle>合并客户档案</DialogTitle>
@@ -115,7 +114,7 @@ export function MergeBanner({
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </WorkspaceDialog>
     </>
   );
 }
@@ -129,23 +128,23 @@ export function AddContactButton({ clientId }: { clientId: string }) {
   const [form, setForm] = useState({ name: "", title: "", phone: "", email: "", isPrimary: false });
   function submit() {
     if (!form.name.trim()) {
-      toast.warning("请填写联系人姓名");
+      Toast.warning("请填写联系人姓名");
       return;
     }
     start(async () => {
       try {
         await addContact(clientId, { ...form, wechat: "", notes: "" });
-        toast.success("联系人已添加");
+        Toast.success("联系人已添加");
         setOpen(false);
         setForm({ name: "", title: "", phone: "", email: "", isPrimary: false });
         router.refresh();
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "添加失败");
+        Notification.error({ title: e instanceof Error ? actionErrorMessage(e) : "添加失败", duration: 6 });
       }
     });
   }
   return (
-    <Dialog open={open} onOpenChange={value => { if (!pending) setOpen(value); }}>
+    <WorkspaceDialog open={open} onOpenChange={value => { if (!pending) setOpen(value); }}>
         <Button htmlType="button" theme="borderless" size="small" aria-haspopup="dialog" aria-expanded={open} aria-controls={`${formId}-dialog`}
           onClick={event => { trigger.current = event.currentTarget; setOpen(true); }}>
           <Plus />
@@ -167,6 +166,6 @@ export function AddContactButton({ clientId }: { clientId: string }) {
             <Button theme="solid" size="small" htmlType="button"  onClick={submit} disabled={pending}>{pending ? <Loader2 className="animate-spin" /> : null}添加</Button>
           </DialogFooter>
         </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }

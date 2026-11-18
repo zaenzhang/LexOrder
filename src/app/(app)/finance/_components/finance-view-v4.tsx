@@ -4,7 +4,7 @@
  * 财务（墨案 08 效果图）：KPI 四卡 → 分段（收付流水 / 开票管理 / 律师分成 / 应收账龄）→
  * 趋势 + 开票进度 → 收付流水表。已确认口径沿用 P0-6 规则（关联已签署合同或已登记发票号）。
  */
-import { Tabs, Select, Button, Input } from "@douyinfe/semi-ui";
+import { Tabs, Select, Button, Input, Notification, Toast } from "@douyinfe/semi-ui";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -20,7 +20,6 @@ import { MetricCard, PageHeader } from "@/components/patterns/moan";
 
 import { confirmFeeEntry, rejectFeeEntry } from "@/server/finance/actions";
 import { promptDialog } from "@/components/patterns/confirm-dialog";
-import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useTopbarAction } from "@/components/layout/topbar-action";
 import { invoiceRequestStatusLabel } from "@/lib/enums";
@@ -120,10 +119,10 @@ export function FinanceViewV4({ entries, monthly, aging, stats, invoiceRequests,
     setBusyId(id);
     try {
       await confirmFeeEntry(id);
-      toast.success("已确认到账");
+      Toast.success("已确认到账");
       router.refresh();
     } catch (e) {
-      toast.error(e instanceof Error ? actionErrorMessage(e) : "确认失败");
+      Notification.error({ title: e instanceof Error ? actionErrorMessage(e) : "确认失败", duration: 6 });
     } finally {
       setBusyId(null);
     }
@@ -135,10 +134,10 @@ export function FinanceViewV4({ entries, monthly, aging, stats, invoiceRequests,
     setBusyId(id);
     try {
       await rejectFeeEntry(id, reason);
-      toast.success("已退回");
+      Toast.success("已退回");
       router.refresh();
     } catch (e) {
-      toast.error(e instanceof Error ? actionErrorMessage(e) : "退回失败");
+      Notification.error({ title: e instanceof Error ? actionErrorMessage(e) : "退回失败", duration: 6 });
     } finally {
       setBusyId(null);
     }

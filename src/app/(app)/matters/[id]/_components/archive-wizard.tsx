@@ -1,32 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useId, useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
-import { BookOpenCheck, ExternalLink, Loader2, AlertTriangle, FileCheck2, Sparkles, Upload, FileCheck } from "lucide-react";
+import { Banner, Button, Checkbox, Input, Notification, Select, TextArea, Toast } from "@douyinfe/semi-ui";
+import { BookOpenCheck, ExternalLink, Loader2, FileCheck2, Sparkles, Upload, FileCheck } from "lucide-react";
 import {
-  Dialog,
+  WorkspaceDialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
+} from "@/components/patterns/workspace-dialog";
 import { archiveMatter, getArchivePrepData } from "@/server/archive/actions";
 import { uploadDocument } from "@/server/documents/actions";
 import { shDayKey } from "@/lib/ui/sh-time";
@@ -79,6 +64,7 @@ interface Props {
 }
 
 export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
+  const selectLabelId = useId();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [checklist, setChecklist] = useState<ArchiveChecklist | null>(null);
@@ -197,7 +183,7 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
       if (version !== prepVersion.current) return;
       setAvailableDocuments((current) => [...current, { id: uploaded.id, name: String(fd.get("name")), category: inferCategory(item.id), mimeType: file.type || null, size: file.size, folderName: archiveFolder?.name ?? null }]);
       setAssignments((current) => ({ ...current, [item.id]: [...new Set([...(current[item.id] ?? []), uploaded.id])] }));
-      toast.success(`已上传：${item.label}`, { description: file.name });
+      Notification.success({ title: `已上传：${item.label}`, content: file.name });
       try { await refreshPrep(false, version); }
       catch (error) { if (version === prepVersion.current) setUploadErrors((current) => ({ ...current, [item.id]: { message: `材料已保存，列表刷新失败：${actionErrorMessage(error)}`, refreshOnly: true } })); }
     } catch (err) {
@@ -265,7 +251,7 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
           forceWithMissing
         });
         if (version !== prepVersion.current) return;
-        toast.success(`归档申请已提交（${result.archiveNo}）`);
+        Toast.success(`归档申请已提交（${result.archiveNo}）`);
         onOpenChange(false);
         router.refresh();
       } catch (err) {
@@ -275,7 +261,7 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={(value) => { if (!isPending && !uploadingItemId) onOpenChange(value); }}>
+    <WorkspaceDialog open={open} onOpenChange={(value) => { if (!isPending && !uploadingItemId) onOpenChange(value); }}>
       <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -292,58 +278,52 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : loadError ? (
-          <Alert variant="destructive"><AlertTitle>加载归档数据失败</AlertTitle><AlertDescription>{loadError}</AlertDescription><Button type="button" variant="outline" onClick={() => void retryPrep()}>重试加载</Button></Alert>
+          <Banner type="danger" closeIcon={null} fullMode={false} title={<>加载归档数据失败</>} description={<> <div className="flex flex-wrap items-center justify-between gap-2"><span>{loadError}</span><Button onClick={() => void retryPrep()} htmlType="button" type="tertiary" theme="outline">重试加载</Button></div></>} />
         ) : (
-          <ScrollArea className="max-h-[68vh] pr-4">
+          <div className="max-h-[68dvh] overflow-y-auto overscroll-contain pr-4">
             <div className="space-y-5">
               {/* 结案信息 */}
               <section className="space-y-3">
                 <h3 className="text-sm font-medium">结案信息</h3>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label htmlFor="archive-closed-reason" className="text-xs">结案方式 *</Label>
+                    <label id={"archive-closed-reason" + "-label"} className="text-xs">结案方式 *</label>
                     <Select
                       value={closedReason}
-                      onValueChange={(v) => setClosedReason(v as ArchiveClosedReason)}
-                    >
-                      <SelectTrigger id="archive-closed-reason" className="h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                        {(Object.keys(CLOSED_REASON_CN) as ArchiveClosedReason[]).map((k) => (
-                          <SelectItem key={k} value={k}>
+                      onChange={v => { if (typeof v === "string") setClosedReason(v as ArchiveClosedReason); }}
+                      id="archive-closed-reason"
+                      aria-labelledby={"archive-closed-reason" + "-label"}
+                      className="w-full"
+                      motion={false}>{(Object.keys(CLOSED_REASON_CN) as ArchiveClosedReason[]).map((k) => (
+                          <Select.Option key={k} value={k}>
                             {CLOSED_REASON_CN[k]}
-                          </SelectItem>
-                        ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
+                          </Select.Option>
+                        ))}</Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="archive-completed-at" className="text-xs">结案日期 *</Label>
+                    <label htmlFor="archive-completed-at" className="text-xs">结案日期 *</label>
                     <Input
                       id="archive-completed-at"
                       type="date"
                       value={completedAt}
-                      onChange={(e) => setCompletedAt(e.target.value)}
+                      onChange={inputValue => setCompletedAt(inputValue)}
                       className="h-9"
                     />
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="archive-judgment-summary" className="text-xs">裁判结果摘要</Label>
-                  <Textarea
+                  <label htmlFor="archive-judgment-summary" className="text-xs">裁判结果摘要</label>
+                  <TextArea
                     id="archive-judgment-summary"
                     value={judgmentSummary}
-                    onChange={(e) => setJudgmentSummary(e.target.value)}
+                    onChange={inputValue => setJudgmentSummary(inputValue)}
                     placeholder="如：一审判决支持原告诉请，对方未上诉，判决于 2026-04-15 生效"
                     rows={2}
                   />
                 </div>
                 <div className="space-y-1.5">
                   <div className="flex items-baseline justify-between">
-                    <Label htmlFor="archive-summary" className="text-xs">结案小结 *</Label>
+                    <label htmlFor="archive-summary" className="text-xs">结案小结 *</label>
                     {summaryFromClose && (
                       <span className="inline-flex items-center gap-1 text-[10px] text-primary">
                         <Sparkles className="h-3 w-3" />
@@ -351,11 +331,11 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
                       </span>
                     )}
                   </div>
-                  <Textarea
+                  <TextArea
                     id="archive-summary"
                     value={summary}
-                    onChange={(e) => {
-                      setSummary(e.target.value);
+                    onChange={inputValue => {
+                      setSummary(inputValue);
                       setSummaryFromClose(false);
                     }}
                     placeholder="案件办理过程概述、关键节点、得失复盘等"
@@ -373,7 +353,7 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
                     <a href={`/api/firm-files/${policy.sourceFileId}/download?inline=1`} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-primary underline">查看制度原文：{policy.sourceFileName}<ExternalLink className="h-3 w-3" /></a>
                   </div>
                 ) : (
-                  <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>尚未配置律所归档制度</AlertTitle><AlertDescription>系统内置清单不能代替本所制度。请管理员先到“管理后台—归档制度”关联现行制度原文。</AlertDescription></Alert>
+                  <Banner type="danger" closeIcon={null} fullMode={false} title={<>尚未配置律所归档制度</>} description={<> 系统内置清单不能代替本所制度。请管理员先到“管理后台—归档制度”关联现行制度原文。</>} />
                 )}
               </section>
 
@@ -430,12 +410,12 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
                           </div>
                           {!item.autoGenerated && (
                             <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
                               onClick={() => triggerUpload(item)}
                               disabled={Boolean(uploadingItemId) || isPending || (supplement && !archiveFolder)}
                               className="h-8 shrink-0 px-2 text-xs"
+                              htmlType="button"
+                              type="tertiary" theme="borderless"
+                              size="small"
                             >
                               {isUploading ? (
                                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -448,17 +428,17 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
                             </Button>
                           )}
                           </div>
-                          {uploadErrors[item.id] && <Alert variant="destructive"><AlertDescription>{uploadErrors[item.id].message}</AlertDescription>{uploadErrors[item.id].refreshOnly && <Button type="button" variant="outline" size="sm" onClick={() => void refreshItem(item.id)}>刷新材料</Button>}</Alert>}
+                          {uploadErrors[item.id] && <Banner type="danger" closeIcon={null} fullMode={false} description={<> <div className="flex flex-wrap items-center justify-between gap-2"><span>{uploadErrors[item.id].message}</span>{uploadErrors[item.id].refreshOnly && <Button onClick={() => void refreshItem(item.id)} htmlType="button" type="tertiary" theme="outline" size="small">刷新材料</Button>}</div></>} />}
                           {!item.autoGenerated && <>
                             <div className="text-xs text-muted-foreground"><span>选择本案已有材料</span>
                               <div className="mt-1 max-h-32 space-y-1 overflow-y-auto rounded-md border bg-card p-2" role="group" aria-label={`${item.label}关联材料`}>
-                                {availableDocuments.length ? availableDocuments.map((document) => <label key={document.id} className="flex cursor-pointer items-start gap-2 rounded px-1.5 py-1.5 text-sm text-foreground hover:bg-muted/60"><Checkbox checked={documentIds.includes(document.id)} onCheckedChange={(value) => setAssignments((current) => ({ ...current, [item.id]: value === true ? [...new Set([...(current[item.id] ?? []), document.id])] : (current[item.id] ?? []).filter((id) => id !== document.id) }))} /><span className="min-w-0 flex-1 break-words"><span className="text-xs text-muted-foreground">{document.folderName ?? "散件"} / </span>{document.name}</span></label>) : <p className="py-3 text-center text-xs text-muted-foreground">本案暂无可选材料，请使用“补传材料”。</p>}
+                                {availableDocuments.length ? availableDocuments.map((document) => <div key={document.id} className="flex cursor-pointer items-start gap-2 rounded px-1.5 py-1.5 text-sm text-foreground hover:bg-muted/60"><Checkbox checked={documentIds.includes(document.id)} onChange={({ target: { checked } }) => setAssignments((current) => ({ ...current, [item.id]: checked === true ? [...new Set([...(current[item.id] ?? []), document.id])] : (current[item.id] ?? []).filter((id) => id !== document.id) }))}><span className="min-w-0 flex-1 break-words"><span className="text-xs text-muted-foreground">{document.folderName ?? "散件"} / </span>{document.name}</span></Checkbox></div>) : <p className="py-3 text-center text-xs text-muted-foreground">本案暂无可选材料，请使用“补传材料”。</p>}
                               </div>
                               <span className="mt-1 block">同一文件确有必要时可关联多个清单项。</span>
                             </div>
                             {hasDocs ? <div className="flex flex-wrap gap-2">{docs.map((document) => <a key={document.id} href={`/api/documents/${document.id}/download?inline=1`} target="_blank" rel="noreferrer" className="max-w-full truncate rounded-md bg-muted px-2 py-1 text-xs text-primary underline" title={document.name}>{document.name}</a>)}</div> : <div className="grid gap-2 sm:grid-cols-[180px_1fr]">
-                              <Select value={itemStatuses[item.id] ?? "MISSING"} onValueChange={(value) => setItemStatuses((current) => ({ ...current, [item.id]: value as "MISSING" | "NOT_APPLICABLE" }))}><SelectTrigger aria-label={`${item.label}缺项状态`}><SelectValue /></SelectTrigger><SelectContent><SelectGroup><SelectItem value="MISSING">缺失</SelectItem><SelectItem value="NOT_APPLICABLE">不适用</SelectItem></SelectGroup></SelectContent></Select>
-                              <Input aria-label={`${item.label}缺项或不适用说明`} value={itemNotes[item.id] ?? ""} onChange={(event) => setItemNotes((current) => ({ ...current, [item.id]: event.target.value }))} placeholder={item.required ? "必交项缺失或不适用时必须说明理由" : "可填写缺失或不适用说明"} maxLength={1000} />
+                              <> <span className="sr-only" id={selectLabelId + "-2" + "-" + item.id}>{`${item.label}缺项状态`}</span><Select value={itemStatuses[item.id] ?? "MISSING"} onChange={value => { if (typeof value === "string") setItemStatuses((current) => ({ ...current, [item.id]: value as "MISSING" | "NOT_APPLICABLE" })); }} aria-labelledby={selectLabelId + "-2" + "-" + item.id} className="w-full" motion={false}><Select.Option value="MISSING">缺失</Select.Option><Select.Option value="NOT_APPLICABLE">不适用</Select.Option></Select></>
+                              <Input aria-label={`${item.label}缺项或不适用说明`} value={itemNotes[item.id] ?? ""} onChange={inputValue => setItemNotes((current) => ({ ...current, [item.id]: inputValue }))} placeholder={item.required ? "必交项缺失或不适用时必须说明理由" : "可填写缺失或不适用说明"} maxLength={1000} />
                             </div>}
                           </>}
                         </div>
@@ -470,52 +450,47 @@ export function ArchiveWizardDialog({ matterId, open, onOpenChange }: Props) {
 
               <section className="space-y-3">
                 <div><h3 className="text-sm font-medium">人工核验事项</h3><p className="mt-1 text-xs text-muted-foreground">以下确认由申请人作出，审批人仍须独立复核。</p></div>
-                <div className="space-y-2">{ARCHIVE_MANUAL_CHECKS.map((item) => <div key={item.id} className="rounded-lg border p-3"><label className="flex items-start gap-3"><Checkbox checked={!!manualChecks[item.id]} onCheckedChange={(value) => setManualChecks((current) => ({ ...current, [item.id]: value === true }))} /><span className="text-sm">{item.label}</span></label><Input className="mt-2" value={manualNotes[item.id] ?? ""} onChange={(event) => setManualNotes((current) => ({ ...current, [item.id]: event.target.value }))} aria-label={`${item.label}说明`} placeholder="必要时填写核验说明、原件去向或页码状态" maxLength={1000} /></div>)}</div>
+                <div className="space-y-2">{ARCHIVE_MANUAL_CHECKS.map((item) => <div key={item.id} className="rounded-lg border p-3"><div className="flex items-start gap-3"><Checkbox checked={!!manualChecks[item.id]} onChange={({ target: { checked } }) => setManualChecks((current) => ({ ...current, [item.id]: checked === true }))}><span className="text-sm">{item.label}</span></Checkbox></div><Input className="mt-2" value={manualNotes[item.id] ?? ""} onChange={inputValue => setManualNotes((current) => ({ ...current, [item.id]: inputValue }))} aria-label={`${item.label}说明`} placeholder="必要时填写核验说明、原件去向或页码状态" maxLength={1000} /></div>)}</div>
               </section>
 
               {missingRequired.length > 0 && (
-                <Alert variant="destructive" className="border-destructive/50 bg-destructive/10 text-destructive">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle className="text-sm font-medium text-destructive">
-                    仍有 {missingRequired.length} 项必交材料没有关联文件
-                  </AlertTitle>
-                  <AlertDescription className="mt-1 text-xs text-destructive/85">
-                    <div className="mb-1">缺项：{missingRequired.map((x) => x.label).join("、")}</div>
-                    <div>
-                      请优先选择或补传实际文件。确实无法补齐或不适用时，逐项说明理由并申请例外审批。
+                <Banner
+                  type="danger"
+                  closeIcon={null}
+                  fullMode={false}
+                  title={<>仍有 {missingRequired.length} 项必交材料没有关联文件</>}
+                  description={
+                    <div className="space-y-2">
+                      <p>缺项：{missingRequired.map(item => item.label).join("、")}</p>
+                      <p>请优先选择或补传实际文件。确实无法补齐或不适用时，逐项说明理由并申请例外审批。</p>
+                      <Checkbox checked={forceWithMissing} onChange={event => setForceWithMissing(Boolean(event.target.checked))}>
+                        申请缺项或不适用例外审批
+                      </Checkbox>
                     </div>
-                  </AlertDescription>
-                  <label className="mt-3 flex cursor-pointer items-center gap-2">
-                    <Checkbox
-                      checked={forceWithMissing}
-                      onCheckedChange={(v) => setForceWithMissing(!!v)}
-                    />
-                    <span className="text-xs text-destructive">
-                      申请缺项或不适用例外审批
-                    </span>
-                  </label>
-                </Alert>
+                  }
+                />
               )}
 
-              {supplement && !archiveFolder && <Alert variant="destructive"><AlertDescription>本案没有可用的结案或归档卷宗，请先核对卷宗设置后补传材料。</AlertDescription></Alert>}
+              {supplement && !archiveFolder && <Banner type="danger" closeIcon={null} fullMode={false} description={<> 本案没有可用的结案或归档卷宗，请先核对卷宗设置后补传材料。</>} />}
             </div>
-          </ScrollArea>
+          </div>
         )}
 
-        {submitError && <Alert variant="destructive"><AlertTitle>尚未提交</AlertTitle><AlertDescription>{submitError}</AlertDescription></Alert>}
+        {submitError && <Banner type="danger" closeIcon={null} fullMode={false} title={<>尚未提交</>} description={<> {submitError}</>} />}
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending || Boolean(uploadingItemId)}>
+          <Button onClick={() => onOpenChange(false)} disabled={isPending || Boolean(uploadingItemId)} type="tertiary" theme="outline">
             取消
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={isPending || loading || Boolean(loadError) || Boolean(uploadingItemId) || !policy?.configured}
+            theme="solid"
           >
             {isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
             提交归档审批
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </WorkspaceDialog>
   );
 }

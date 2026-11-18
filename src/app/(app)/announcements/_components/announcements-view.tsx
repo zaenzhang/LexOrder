@@ -3,11 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pin, Pencil, Archive } from "lucide-react";
-import { Button, Tag } from "@douyinfe/semi-ui";
+import { Button, Tag, Notification, Toast } from "@douyinfe/semi-ui";
 import { formatDate } from "@/lib/utils";
 import { AnnouncementDialog } from "./announcement-dialog";
 import { archiveAnnouncement } from "@/server/announcements/actions";
-import { toast } from "sonner";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { useTopbarAction } from "@/components/layout/topbar-action";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -41,10 +40,10 @@ export function AnnouncementsView({
     if (!(await confirmDialog({ title: `归档公告「${a.title}」？`, description: "归档后不再显示，但保留历史。", confirmText: "归档" }))) return;
     try {
       await archiveAnnouncement(a.id);
-      toast.success("已归档");
+      Toast.success("已归档");
       router.refresh();
     } catch (err) {
-      toast.error("归档失败", { description: actionErrorMessage(err) });
+      Notification.error({ title: "归档失败", content: actionErrorMessage(err), duration: 6 });
     }
   }
 

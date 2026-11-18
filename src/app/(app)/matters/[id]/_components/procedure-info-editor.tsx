@@ -1,15 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useId, useEffect, useMemo, useState, useTransition } from "react";
 import type { LitigationStanding, MatterCategory, PartyRole, PartyType, ProcedureType } from "@prisma/client";
-import { toast } from "sonner";
+import { Select, Button, Checkbox, Input, Toast } from "@douyinfe/semi-ui";
 import { Loader2, Plus, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DialogFooter } from "@/components/patterns/workspace-dialog";
 import { FormDialogBody } from "@/components/patterns/form-dialog";
 import { EnterpriseNameInput } from "@/components/matters/enterprise-name-input";
 import { JurisdictionSelect } from "@/app/(app)/intakes/_components/jurisdiction-select";
@@ -160,6 +155,7 @@ function toProcedureForm(procedure: ProcedureMeta | null | undefined) {
 export function ProcedureInfoEditor({ currentProcedure, parties, category, initialSection, onStateChange, onSaved, onCancel }: EditorFormActions & {
   currentProcedure: ProcedureMeta; parties: PartyLite[]; category: MatterCategory; initialSection: MatterEditorSection;
 }) {
+  const selectLabelId = useId();
   const procedureStandingOptions = procedureToStandingOptions(currentProcedure.type, "ours");
   const partyStandingOptions = standingOrder(currentProcedure.type, currentProcedure.procedureParties);
   const [procedureForm, setProcedureForm] = useState(() => toProcedureForm(currentProcedure));
@@ -357,7 +353,7 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
             idType: partyType === "NATURAL_PERSON" ? idType as PersonIdType : null
           }))
         });
-        toast.success("程序与当事人已保存");
+        Toast.success("程序与当事人已保存");
         onSaved();
       } catch (err) { setError(actionErrorMessage(err) || "保存失败，请稍后重试"); }
     });
@@ -377,7 +373,7 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {isLitigationMatter ? (<>
                 <div className="space-y-1.5">
-                  <Label className={formLabelClass}>管辖地（省/市/区县）</Label>
+                  <label className={formLabelClass}>管辖地（省/市/区县）</label>
                   <JurisdictionSelect
                     value={procedureForm.jurisdiction}
                     onChange={handleJurisdictionChange}
@@ -385,12 +381,12 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className={formLabelClass}>{isArbitrationProc ? "仲裁机构" : isCriminalProc ? "办案机关" : "管辖机构"}</Label>
+                  <label className={formLabelClass}>{isArbitrationProc ? "仲裁机构" : isCriminalProc ? "办案机关" : "管辖机构"}</label>
                   <Input
                     list={`matter-info-agency-${currentProcedure.id}`}
                     aria-label="管辖机构"
                     value={procedureForm.handlingAgency}
-                    onChange={(e) => handleHandlingAgencyChange(e.target.value)}
+                    onChange={inputValue => handleHandlingAgencyChange(inputValue)}
                     placeholder="如：最高人民法院 / 广州市天河区人民法院"
                     className={formControlClass}
                   />
@@ -401,87 +397,82 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
                   </datalist>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className={formLabelClass}>案号</Label>
+                  <label className={formLabelClass}>案号</label>
                   <Input
                     aria-label="案号"
                     value={procedureForm.caseNumber}
-                    onChange={(e) => setProcedureField("caseNumber", e.target.value)}
+                    onChange={inputValue => setProcedureField("caseNumber", inputValue)}
                     className={cn(formControlClass, "font-mono")}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className={formLabelClass}>我方程序地位</Label>
+                  <label id={selectLabelId + "-1"} className={formLabelClass}>我方程序地位</label>
                   <Select
                     value={procedureForm.ourStanding || "unset"}
-                    onValueChange={(v) => setProcedureField("ourStanding", v === "unset" ? "" : v as LitigationStanding)}
-                  >
-                    <SelectTrigger className={formControlClass}>
-                      <SelectValue placeholder="选择地位" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unset">未设置</SelectItem>
-                      {procedureStandingOptions.map((s) => (
-                        <SelectItem key={s} value={s}>
+                    onChange={v => { if (typeof v === "string") setProcedureField("ourStanding", v === "unset" ? "" : v as LitigationStanding); }}
+                    aria-labelledby={selectLabelId + "-1"}
+                    placeholder="选择地位"
+                    className="w-full"
+                    disabled={isPending} motion={false}><Select.Option value="unset">未设置</Select.Option>{procedureStandingOptions.map((s) => (
+                        <Select.Option key={s} value={s}>
                           {litigationStandingLabel[s]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                        </Select.Option>
+                      ))}</Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className={formLabelClass}>{judgeLabel}</Label>
+                  <label className={formLabelClass}>{judgeLabel}</label>
                   <Input
                     aria-label="主审人员"
                     value={procedureForm.presidingJudge}
-                    onChange={(e) => setProcedureField("presidingJudge", e.target.value)}
+                    onChange={inputValue => setProcedureField("presidingJudge", inputValue)}
                     className={formControlClass}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className={formLabelClass}>{judgeLabel}联系方式</Label>
+                  <label className={formLabelClass}>{judgeLabel}联系方式</label>
                   <Input
                     aria-label="主审人员联系方式"
                     value={procedureForm.presidingJudgeContact}
-                    onChange={(e) => setProcedureField("presidingJudgeContact", e.target.value)}
+                    onChange={inputValue => setProcedureField("presidingJudgeContact", inputValue)}
                     className={cn(formControlClass, "font-mono")}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className={formLabelClass}>{assistantLabel}</Label>
+                  <label className={formLabelClass}>{assistantLabel}</label>
                   <Input
                     aria-label="辅助人员"
                     value={procedureForm.judgeAssistant}
-                    onChange={(e) => setProcedureField("judgeAssistant", e.target.value)}
+                    onChange={inputValue => setProcedureField("judgeAssistant", inputValue)}
                     className={formControlClass}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className={formLabelClass}>{assistantLabel}联系方式</Label>
+                  <label className={formLabelClass}>{assistantLabel}联系方式</label>
                   <Input
                     aria-label="辅助人员联系方式"
                     value={procedureForm.judgeAssistantContact}
-                    onChange={(e) => setProcedureField("judgeAssistantContact", e.target.value)}
+                    onChange={inputValue => setProcedureField("judgeAssistantContact", inputValue)}
                     className={cn(formControlClass, "font-mono")}
                   />
                 </div>
                 </>) : null}
                 <div className="space-y-1.5">
-                  <Label className={formLabelClass}>{isLitigationMatter ? (isArbitrationProc ? "受理时间" : "立案时间") : "开始时间"}</Label>
+                  <label className={formLabelClass}>{isLitigationMatter ? (isArbitrationProc ? "受理时间" : "立案时间") : "开始时间"}</label>
                   <Input
                     type="date"
                     aria-label="受理或开始日期"
                     value={procedureForm.acceptedAt}
-                    onChange={(e) => setProcedureField("acceptedAt", e.target.value)}
+                    onChange={inputValue => setProcedureField("acceptedAt", inputValue)}
                     className={formControlClass}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className={formLabelClass}>{isLitigationMatter ? "裁决 / 结案时间" : "完成时间"}</Label>
+                  <label className={formLabelClass}>{isLitigationMatter ? "裁决 / 结案时间" : "完成时间"}</label>
                   <Input
                     type="date"
                     aria-label="结案或完成日期"
                     value={procedureForm.concludedAt}
-                    onChange={(e) => setProcedureField("concludedAt", e.target.value)}
+                    onChange={inputValue => setProcedureField("concludedAt", inputValue)}
                     className={formControlClass}
                   />
                 </div>
@@ -492,11 +483,11 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
               <div className="flex items-center justify-between gap-3">
                 <SectionTitle>当前程序当事人</SectionTitle>
                 <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
                   onClick={() => setShowNewPartyForm((visible) => !visible)}
                   className="h-7 gap-1.5 px-2 text-xs"
+                  htmlType="button"
+                  type="tertiary" theme="outline"
+                  size="small"
                 >
                   {showNewPartyForm ? (
                     <X className="h-3.5 w-3.5" />
@@ -535,18 +526,10 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
                         </div>
                         <div className="flex flex-wrap gap-x-3 gap-y-2">
                           {partyStandingOptions.map((standing) => (
-                            <label
-                              key={`${party.id}-${standing}`}
-                              className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground"
-                            >
-                              <Checkbox
-                                checked={hasProcedureStanding(party.id, standing)}
-                                onCheckedChange={(checked) =>
-                                  toggleProcedureParty(party.id, standing, checked === true)
-                                }
-                              />
+                            <div key={`${party.id}-${standing}`} className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                              <Checkbox checked={hasProcedureStanding(party.id, standing)} onChange={({ target: { checked } }) => toggleProcedureParty(party.id, standing, checked === true)}>
                               <span>{litigationStandingLabel[standing]}</span>
-                            </label>
+                            </Checkbox></div>
                           ))}
                         </div>
                         {party.id.startsWith("client:") ? <p className="text-xs text-muted-foreground">客户资料请在客户详情修改；此处仅设置程序地位。</p> : <div className="rounded-md border border-border bg-muted/30 p-2">
@@ -555,7 +538,7 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
                           </div>
                           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                             <div className="space-y-1.5">
-                              <Label className={formLabelClass}>{isOrg ? "单位 / 组织名称" : "姓名"}</Label>
+                              <label className={formLabelClass}>{isOrg ? "单位 / 组织名称" : "姓名"}</label>
                               {isOrg ? (
                                 <EnterpriseNameInput
                                   value={draft.name}
@@ -571,87 +554,70 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
                               ) : (
                                 <Input
                                   value={draft.name}
-                                  onChange={(e) => setPartyEditValue(party.id, "name", e.target.value)}
+                                  onChange={inputValue => setPartyEditValue(party.id, "name", inputValue)}
                                   className={formControlClass}
                                 />
                               )}
                             </div>
                             <div className="space-y-1.5">
-                              <Label className={formLabelClass}>当事人角色</Label>
+                              <label id={selectLabelId + "-2" + "-" + party.id} className={formLabelClass}>当事人角色</label>
                               <Select
                                 value={draft.role}
-                                onValueChange={(v) => setPartyEditValue(party.id, "role", v as PartyRole)}
-                              >
-                                <SelectTrigger className={formControlClass}>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {PARTY_ROLE_OPTIONS.map((role) => (
-                                    <SelectItem key={role} value={role}>
+                                onChange={v => { if (typeof v === "string") setPartyEditValue(party.id, "role", v as PartyRole); }}
+                                aria-labelledby={selectLabelId + "-2" + "-" + party.id}
+                                className="w-full"
+                                disabled={isPending} motion={false}>{PARTY_ROLE_OPTIONS.map((role) => (
+                                    <Select.Option key={role} value={role}>
                                       {PARTY_ROLE_LABEL[role]}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                                    </Select.Option>
+                                  ))}</Select>
                             </div>
                             <div className="space-y-1.5">
-                              <Label className={formLabelClass}>主体类型</Label>
+                              <label id={selectLabelId + "-3" + "-" + party.id} className={formLabelClass}>主体类型</label>
                               <Select
                                 value={draft.partyType}
-                                onValueChange={(v) => setPartyEditValue(party.id, "partyType", v as PartyType)}
-                              >
-                                <SelectTrigger className={formControlClass}>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {PARTY_TYPE_OPTIONS.map((partyType) => (
-                                    <SelectItem key={partyType} value={partyType}>
+                                onChange={v => { if (typeof v === "string") setPartyEditValue(party.id, "partyType", v as PartyType); }}
+                                aria-labelledby={selectLabelId + "-3" + "-" + party.id}
+                                className="w-full"
+                                disabled={isPending} motion={false}>{PARTY_TYPE_OPTIONS.map((partyType) => (
+                                    <Select.Option key={partyType} value={partyType}>
                                       {partyTypeLabel[partyType]}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                                    </Select.Option>
+                                  ))}</Select>
                             </div>
                             {!isOrg && (
                               <div className="space-y-1.5">
-                                <Label className={formLabelClass}>证件类型</Label>
+                                <label id={selectLabelId + "-4" + "-" + party.id} className={formLabelClass}>证件类型</label>
                                 <Select
                                   value={draft.idType}
-                                  onValueChange={(v) => {
+                                  onChange={v => { if (typeof v !== "string") return;
                                     setPartyEditValue(party.id, "idType", v);
                                     setPartyEditValue(party.id, "idNumber", sanitizePersonIdInput(v, draft.idNumber));
                                   }}
-                                >
-                                  <SelectTrigger className={formControlClass}>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {PERSON_ID_TYPES.map((t) => (
-                                      <SelectItem key={t} value={t}>
+                                  aria-labelledby={selectLabelId + "-4" + "-" + party.id}
+                                  className="w-full"
+                                  disabled={isPending} motion={false}>{PERSON_ID_TYPES.map((t) => (
+                                      <Select.Option key={t} value={t}>
                                         {clientIdTypeLabel[t]}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                      </Select.Option>
+                                    ))}</Select>
                               </div>
                             )}
                             <div className="space-y-1.5">
-                              <Label className={formLabelClass}>
+                              <label className={formLabelClass}>
                                 {isOrg ? "统一社会信用代码" : "证件号码"}
                                 {!isOrg && draft.idType === "ID_CARD" ? (
                                   <span className="ml-1 font-normal text-muted-foreground">（{draft.idNumber.length}/18）</span>
                                 ) : null}
-                              </Label>
+                              </label>
                               <Input
                                 className={cn(formControlClass, "font-mono")}
                                 inputMode={!isOrg && draft.idType === "ID_CARD" ? "numeric" : undefined}
                                 placeholder={isOrg ? "18 位信用代码" : draft.idType === "ID_CARD" ? "18 位，仅数字或 X" : "证件号码"}
                                 value={isOrg ? draft.enterpriseSocialCode : draft.idNumber}
-                                onChange={(e) =>
-                                  isOrg
-                                    ? setPartyEditValue(party.id, "enterpriseSocialCode", e.target.value.toUpperCase().replace(/\s+/g, "").slice(0, 18))
-                                    : setPartyEditValue(party.id, "idNumber", sanitizePersonIdInput(draft.idType, e.target.value))
-                                }
+                                onChange={inputValue => isOrg
+                                    ? setPartyEditValue(party.id, "enterpriseSocialCode", inputValue.toUpperCase().replace(/\s+/g, "").slice(0, 18))
+                                    : setPartyEditValue(party.id, "idNumber", sanitizePersonIdInput(draft.idType, inputValue))}
                               />
                               {(() => {
                                 const err = isOrg ? personIdError("USCC", draft.enterpriseSocialCode) : personIdError(draft.idType, draft.idNumber);
@@ -660,35 +626,35 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
                             </div>
                             {isOrg && (
                               <div className="space-y-1.5">
-                                <Label className={formLabelClass}>{draft.partyType === "COMPANY" ? "法定代表人" : "法定代表人 / 负责人"}</Label>
+                                <label className={formLabelClass}>{draft.partyType === "COMPANY" ? "法定代表人" : "法定代表人 / 负责人"}</label>
                                 <Input
                                   value={draft.legalRep}
-                                  onChange={(e) => setPartyEditValue(party.id, "legalRep", e.target.value)}
+                                  onChange={inputValue => setPartyEditValue(party.id, "legalRep", inputValue)}
                                   className={formControlClass}
                                 />
                               </div>
                             )}
                             <div className="space-y-1.5">
-                              <Label className={formLabelClass}>{isOrg ? "经办联系人" : "联系人"}</Label>
+                              <label className={formLabelClass}>{isOrg ? "经办联系人" : "联系人"}</label>
                               <Input
                                 value={draft.contactName}
-                                onChange={(e) => setPartyEditValue(party.id, "contactName", e.target.value)}
+                                onChange={inputValue => setPartyEditValue(party.id, "contactName", inputValue)}
                                 className={formControlClass}
                               />
                             </div>
                             <div className="space-y-1.5">
-                              <Label className={formLabelClass}>联系方式</Label>
+                              <label className={formLabelClass}>联系方式</label>
                               <Input
                                 className={cn(formControlClass, "font-mono")}
                                 value={draft.phone}
-                                onChange={(e) => setPartyEditValue(party.id, "phone", e.target.value)}
+                                onChange={inputValue => setPartyEditValue(party.id, "phone", inputValue)}
                               />
                             </div>
                             <div className="space-y-1.5 sm:col-span-2">
-                              <Label className={formLabelClass}>地址</Label>
+                              <label className={formLabelClass}>地址</label>
                               <Input
                                 value={draft.address}
-                                onChange={(e) => setPartyEditValue(party.id, "address", e.target.value)}
+                                onChange={inputValue => setPartyEditValue(party.id, "address", inputValue)}
                                 className={formControlClass}
                               />
                             </div>
@@ -731,18 +697,10 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
                       </div>
                       <div className="flex flex-wrap gap-x-3 gap-y-2">
                         {partyStandingOptions.map((standing) => (
-                          <label
-                            key={`${party.tempId}-${standing}`}
-                            className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground"
-                          >
-                            <Checkbox
-                              checked={party.standings.includes(standing)}
-                              onCheckedChange={(checked) =>
-                                toggleNewDraftStanding(party.tempId, standing, checked === true)
-                              }
-                            />
+                          <div key={`${party.tempId}-${standing}`} className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                            <Checkbox checked={party.standings.includes(standing)} onChange={({ target: { checked } }) => toggleNewDraftStanding(party.tempId, standing, checked === true)}>
                             <span>{litigationStandingLabel[standing]}</span>
-                          </label>
+                          </Checkbox></div>
                         ))}
                       </div>
                     </div>
@@ -755,59 +713,42 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <Input
                       value={newPartyForm.name}
-                      onChange={(e) => setNewPartyFormValue("name", e.target.value)}
+                      onChange={inputValue => setNewPartyFormValue("name", inputValue)}
                       placeholder="新增当事人名称"
                       className={cn(formControlClass, "h-8 text-xs")}
                     />
 
-                    <Select
+                    <> <span className="sr-only" id={selectLabelId + "-5"}>角色</span><Select
                       value={newPartyForm.role}
-                      onValueChange={(v) => setNewPartyFormValue("role", v as PartyRole)}
-                    >
-                      <SelectTrigger className={cn(formControlClass, "h-8 text-xs")}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PARTY_ROLE_OPTIONS.map((role) => (
-                          <SelectItem key={role} value={role}>
+                      onChange={v => { if (typeof v === "string") setNewPartyFormValue("role", v as PartyRole); }}
+                      aria-labelledby={selectLabelId + "-5"}
+                      className="w-full"
+                      disabled={isPending} motion={false}>{PARTY_ROLE_OPTIONS.map((role) => (
+                          <Select.Option key={role} value={role}>
                             {PARTY_ROLE_LABEL[role]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select
+                          </Select.Option>
+                        ))}</Select></>
+                    <> <span className="sr-only" id={selectLabelId + "-6"}>主体类型</span><Select
                       value={newPartyForm.partyType}
-                      onValueChange={(v) => setNewPartyFormValue("partyType", v as PartyType)}
-                    >
-                      <SelectTrigger className={cn(formControlClass, "h-8 text-xs")}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PARTY_TYPE_OPTIONS.map((partyType) => (
-                          <SelectItem key={partyType} value={partyType}>
+                      onChange={v => { if (typeof v === "string") setNewPartyFormValue("partyType", v as PartyType); }}
+                      aria-labelledby={selectLabelId + "-6"}
+                      className="w-full"
+                      disabled={isPending} motion={false}>{PARTY_TYPE_OPTIONS.map((partyType) => (
+                          <Select.Option key={partyType} value={partyType}>
                             {partyTypeLabel[partyType]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                          </Select.Option>
+                        ))}</Select></>
                     {newPartyForm.partyType === "NATURAL_PERSON" ? (
-                      <Select
+                      <> <span className="sr-only" id={selectLabelId + "-7"}>{"证件类型"}</span><Select
                         value={newPartyForm.idType}
-                        onValueChange={(v) =>
-                          setNewPartyForm((cur) => ({ ...cur, idType: v, idNumber: sanitizePersonIdInput(v, cur.idNumber) }))
-                        }
-                      >
-                        <SelectTrigger className={cn(formControlClass, "h-8 text-xs")} aria-label="证件类型">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PERSON_ID_TYPES.map((t) => (
-                            <SelectItem key={t} value={t}>
+                        onChange={v => { if (typeof v === "string") setNewPartyForm((cur) => ({ ...cur, idType: v, idNumber: sanitizePersonIdInput(v, cur.idNumber) })); }}
+                        aria-labelledby={selectLabelId + "-7"}
+                        className="w-full"
+                        disabled={isPending} motion={false}>{PERSON_ID_TYPES.map((t) => (
+                            <Select.Option key={t} value={t}>
                               {clientIdTypeLabel[t]}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                            </Select.Option>
+                          ))}</Select></>
                     ) : (
                       <div className="hidden sm:block" />
                     )}
@@ -817,11 +758,9 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
                           ? newPartyForm.idNumber
                           : newPartyForm.enterpriseSocialCode
                       }
-                      onChange={(e) =>
-                        newPartyForm.partyType === "NATURAL_PERSON"
-                          ? setNewPartyFormValue("idNumber", sanitizePersonIdInput(newPartyForm.idType, e.target.value))
-                          : setNewPartyFormValue("enterpriseSocialCode", e.target.value.toUpperCase().replace(/\s+/g, "").slice(0, 18))
-                      }
+                      onChange={inputValue => newPartyForm.partyType === "NATURAL_PERSON"
+                          ? setNewPartyFormValue("idNumber", sanitizePersonIdInput(newPartyForm.idType, inputValue))
+                          : setNewPartyFormValue("enterpriseSocialCode", inputValue.toUpperCase().replace(/\s+/g, "").slice(0, 18))}
                       placeholder={
                         newPartyForm.partyType === "NATURAL_PERSON"
                           ? newPartyForm.idType === "ID_CARD" ? "18 位，仅数字或 X" : "证件号码"
@@ -830,28 +769,20 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
                       className={cn(formControlClass, "h-8 text-xs")}
                     />
                     <Button
-                      type="button"
-                      variant="outline"
                       onClick={addNewProcedureParty}
                       className="h-8 px-2 text-xs"
+                      htmlType="button"
+                      type="tertiary" theme="outline"
                     >
                       确认添加
                     </Button>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-x-3 gap-y-2">
                     {partyStandingOptions.map((standing) => (
-                      <label
-                        key={`new-form-${standing}`}
-                        className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground"
-                      >
-                        <Checkbox
-                          checked={newPartyForm.standings.includes(standing)}
-                          onCheckedChange={(checked) =>
-                            toggleNewPartyFormStanding(standing, checked === true)
-                          }
-                        />
+                      <div key={`new-form-${standing}`} className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <Checkbox checked={newPartyForm.standings.includes(standing)} onChange={({ target: { checked } }) => toggleNewPartyFormStanding(standing, checked === true)}>
                         <span>{litigationStandingLabel[standing]}</span>
-                      </label>
+                      </Checkbox></div>
                     ))}
                   </div>
                 </div>
@@ -863,8 +794,8 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
     </FormDialogBody>
     <DialogFooter className="px-6 py-4">
       {error && <p role="alert" className="basis-full text-sm text-destructive">{error}</p>}
-      <Button type="button" variant="outline" onClick={onCancel} disabled={isPending}>取消</Button>
-      <Button type="submit" disabled={isPending || !dirty}>{isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}保存程序与当事人</Button>
+      <Button onClick={onCancel} disabled={isPending} htmlType="button" type="tertiary" theme="outline">取消</Button>
+      <Button disabled={isPending || !dirty} htmlType="submit" theme="solid">{isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}保存程序与当事人</Button>
     </DialogFooter>
   </form>;
 }

@@ -5,30 +5,21 @@
  * 内置模板只读；自定义模板支持上传（docx，自动提取 {{变量}}）与启停。
  * 上传后即出现在案件详情「模板」选择器（按案件类别过滤）。
  */
+import { Button, Checkbox, Form, Input, Notification, Select, Switch, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
-import { FileText, Loader2, Plus, Upload } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { FileText, Plus, Upload } from "lucide-react";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetFooter
-} from "@/components/ui/sheet";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
+  WorkspaceDialog,
+  DrawerContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from "@/components/patterns/workspace-dialog";
 import { uploadDocumentTemplate, toggleTemplate } from "@/server/document-templates/actions";
 import { VARIABLE_LABEL_CN } from "@/app/(app)/matters/[id]/_components/folder-types";
+import { FileInput } from "@/components/patterns/file-input";
 import { AdminPageHeader } from "@/components/layout/admin-page-header";
 import { formatDate } from "@/lib/utils";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -67,7 +58,7 @@ export function DocumentTemplatesView({ templates }: { templates: AdminTemplateR
     <div className="space-y-4">
       <AdminPageHeader
         title="文书模板"
-        actions={<Button size="sm" onClick={() => setUploadOpen(true)}><Plus />上传模板</Button>}
+        actions={<Button theme="solid" size="small" onClick={() => setUploadOpen(true)}><Plus />上传模板</Button>}
         sub={<>
             模板在案件详情「生成文书」时按案件类别选用；正文使用 <code className="font-mono text-[11px]">{"{{变量}}"}</code> 占位（如 <code className="font-mono text-[11px]">{"{{client.name}}"}</code>），生成时自动填充。
         </>}
@@ -134,23 +125,22 @@ function ToggleEnabled({ template }: { template: AdminTemplateRow }) {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   return (
-    <label className="flex shrink-0 cursor-pointer items-center gap-1 text-[11px] text-muted-foreground">
-      <input
-        type="checkbox"
-        checked={template.enabled}
-        disabled={pending}
-        onChange={e => startTransition(async () => {
-          try {
-            await toggleTemplate({ id: template.id, enabled: e.target.checked });
-            toast.success(e.target.checked ? "模板已启用" : "模板已停用");
-            router.refresh();
-          } catch (err) {
-            toast.error("操作失败", { description: actionErrorMessage(err) });
-          }
-        })}
-      />
-      {template.enabled ? "启用" : "停用"}
-    </label>
+    <Switch
+      aria-label={`启用模板：${template.name}`}
+      size="small"
+      checked={template.enabled}
+      disabled={pending}
+      loading={pending}
+      onChange={enabled => startTransition(async () => {
+        try {
+          await toggleTemplate({ id: template.id, enabled });
+          Toast.success(enabled ? "模板已启用" : "模板已停用");
+          router.refresh();
+        } catch (err) {
+          Notification.error({ title: "操作失败", content: actionErrorMessage(err) });
+        }
+      })}
+    />
   );
 }
 
@@ -170,8 +160,8 @@ function UploadSheet({ open, onOpenChange, onDone }: { open: boolean; onOpenChan
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) { toast.warning("请填写模板名称"); return; }
-    if (!file) { toast.warning("请选择 docx 模板文件"); return; }
+    if (!name.trim()) { Toast.warning("请填写模板名称"); return; }
+    if (!file) { Toast.warning("请选择 docx 模板文件"); return; }
     const formData = new FormData();
     formData.set("name", name.trim());
     formData.set("category", category);
@@ -181,65 +171,57 @@ function UploadSheet({ open, onOpenChange, onDone }: { open: boolean; onOpenChan
     startTransition(async () => {
       try {
         const res = await uploadDocumentTemplate(formData);
-        toast.success(`模板已上传（识别到 ${res.variableCount} 个变量）`);
+        Toast.success(`模板已上传（识别到 ${res.variableCount} 个变量）`);
         onOpenChange(false);
         reset();
         onDone();
       } catch (err) {
-        toast.error("上传失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "上传失败", content: actionErrorMessage(err) });
       }
     });
   }
 
   return (
-    <Sheet open={open} onOpenChange={v => { onOpenChange(v); if (!v) reset(); }}>
-      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
-        <SheetHeader className="border-b border-border bg-background px-6 py-4">
-          <SheetTitle>上传文书模板</SheetTitle>
-          <SheetDescription className="text-xs">
+    <WorkspaceDialog open={open} onOpenChange={v => { onOpenChange(v); if (!v) reset(); }}>
+      <DrawerContent side="right" className="flex w-screen flex-col gap-0 p-0 sm:max-w-xl">
+        <DialogHeader className="border-b border-border bg-background px-6 py-4">
+          <DialogTitle>上传文书模板</DialogTitle>
+          <DialogDescription className="text-xs">
             仅支持 .docx；正文用双大括号占位，上传后自动提取变量清单（页眉页脚一并扫描）
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </DialogHeader>
         <form onSubmit={submit} className="flex flex-1 flex-col">
           <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
             <div className="space-y-1.5">
-              <Label className="text-xs">模板名称 <span className="text-destructive">*</span></Label>
-              <Input value={name} onChange={e => setName(e.target.value)} maxLength={80} placeholder="如：民事授权委托书（所内版）" />
+              <Form.Label name="new-template-name" required>模板名称</Form.Label>
+              <Input id="new-template-name" disabled={pending} value={name} onChange={value => setName(value)} maxLength={80} placeholder="如：民事授权委托书（所内版）" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">模板大类 <span className="text-destructive">*</span></Label>
-              <Select value={category} onValueChange={v => setCategory(v as Category)}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
+              <Form.Label id="new-template-category-label" required>模板大类</Form.Label>
+              <Select aria-labelledby="new-template-category-label" aria-required className="w-full" disabled={pending} value={category} onChange={v => setCategory(v as Category)}>
                   {(Object.keys(CATEGORY_CN) as Category[]).map(c => (
-                    <SelectItem key={c} value={c}>{CATEGORY_CN[c]}</SelectItem>
+                    <Select.Option key={c} value={c}>{CATEGORY_CN[c]}</Select.Option>
                   ))}
-                </SelectContent>
-              </Select>
+                </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">适用案件类别（不选 = 全部）</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {(Object.keys(MATTER_CAT_CN) as MatterCat[]).map(c => (
-                  <button
-                    key={c} type="button"
-                    onClick={() => setApplicable(cur => cur.includes(c) ? cur.filter(x => x !== c) : [...cur, c])}
-                    className={applicable.includes(c)
-                      ? "rounded-full bg-[#E4F1F0] px-2.5 py-1 text-[11px] text-[#005054] shadow-[inset_0_0_0_1px_#B7D8D6]"
-                      : "rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted"}
-                  >
-                    {MATTER_CAT_CN[c]}
-                  </button>
-                ))}
-              </div>
+              <Form.Label id="new-template-applicable-label">适用案件类别（未选时适用全部）</Form.Label>
+              <Checkbox.Group
+                aria-labelledby="new-template-applicable-label"
+                className="flex flex-wrap gap-3"
+                disabled={pending}
+                value={applicable}
+                onChange={setApplicable}
+                options={(Object.keys(MATTER_CAT_CN) as MatterCat[]).map(value => ({ value, label: MATTER_CAT_CN[value] }))}
+              />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">说明</Label>
-              <Input value={description} onChange={e => setDescription(e.target.value)} maxLength={300} placeholder="用途、注意事项（可选）" />
+              <Form.Label name="new-template-description">说明</Form.Label>
+              <Input id="new-template-description" disabled={pending} value={description} onChange={value => setDescription(value)} maxLength={300} placeholder="用途、注意事项（可选）" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">模板文件（.docx，≤10MB）<span className="text-destructive">*</span></Label>
-              <Input type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={e => setFile(e.target.files?.[0] ?? null)} />
+              <Form.Label name="new-template-file" required>模板文件（.docx，≤10MB）</Form.Label>
+              <FileInput id="new-template-file" required disabled={pending} accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={e => setFile(e.target.files?.[0] ?? null)} />
             </div>
             <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
               <div className="text-[11px] font-semibold text-muted-foreground">常用变量（生成时自动填充）</div>
@@ -252,15 +234,14 @@ function UploadSheet({ open, onOpenChange, onDone }: { open: boolean; onOpenChan
               </div>
             </div>
           </div>
-          <SheetFooter className="border-t border-border bg-background px-6 py-4">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>取消</Button>
-            <Button type="submit" disabled={pending} className="gap-1.5">
-              {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+          <DialogFooter className="border-t border-border bg-background px-6 py-4">
+            <Button htmlType="button" theme="outline" onClick={() => onOpenChange(false)} disabled={pending}>取消</Button>
+            <Button theme="solid" htmlType="submit" loading={pending} disabled={pending} icon={<Upload size={16} aria-hidden />}>
               上传
             </Button>
-          </SheetFooter>
+          </DialogFooter>
         </form>
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </WorkspaceDialog>
   );
 }

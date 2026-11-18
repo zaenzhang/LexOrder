@@ -4,7 +4,14 @@ import type { getApprovalDetail, listApprovalWorkspace } from "@/server/approval
 
 const mocks = vi.hoisted(() => ({ detail: vi.fn(), approve: vi.fn(), stamp: vi.fn(), convert: vi.fn(), ask: vi.fn(), push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), params: "" }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push, replace: mocks.replace, refresh: mocks.refresh }), useSearchParams: () => new URLSearchParams(mocks.params) }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { success: vi.fn() }),
+    Notification: Object.assign(semi.Notification, { success: vi.fn(), error: vi.fn() })
+  };
+});
 vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: mocks.ask }));
 vi.mock("@/server/approval-permissions/inbox", () => ({ getApprovalDetail: mocks.detail }));
 vi.mock("@/app/(app)/approvals/approval-create-menu", () => ({ ApprovalCreateMenu: () => null }));
@@ -195,9 +202,10 @@ describe("审批详情读取、轮次与返回案件", () => {
     mocks.params = new URLSearchParams({ type: first.action, id: first.id, returnTo: returnB }).toString();
     rerender(<ApprovalInbox data={data} initialSelection={first} returnTo={returnB} />);
     await waitFor(() => expect(mocks.detail).toHaveBeenCalledTimes(2));
-    expect(await screen.findByRole("link", { name: "案件列表" })).toHaveAttribute("href", "/matters");
-    expect(screen.queryByRole("link", { name: "返回案件" })).not.toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "审批意见或驳回原因" })).toHaveValue("保留当前意见");
+    const dialog = within(screen.getByRole("dialog", { name: "申请 A" }));
+    expect(await dialog.findByRole("link", { name: "案件列表" })).toHaveAttribute("href", "/matters");
+    expect(dialog.queryByRole("link", { name: "返回案件" })).not.toBeInTheDocument();
+    expect(dialog.getByRole("textbox", { name: "审批意见或驳回原因" })).toHaveValue("保留当前意见");
   });
 
   it("处理未决时阻止关闭和 URL 换对象；完成后保留返回案件入口", async () => {

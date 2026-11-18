@@ -1,15 +1,9 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef, useTransition } from "react";
-import { ChevronRight, ChevronsUpDown, Loader2, X } from "lucide-react";
+import { Input, Popover } from "@douyinfe/semi-ui";
+import { useState, useEffect, useMemo, useRef, useId, useTransition } from "react";
+import { ChevronRight, ChevronsUpDown, Loader2 } from "lucide-react";
 import type { MatterCategory, ProcedureType } from "@prisma/client";
-import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger
-} from "@/components/ui/popover";
-import { Input } from "@/components/ui/input";
 import { getCauseById, searchCauses, type CauseSearchResult } from "@/server/causes/actions";
 import { causeScopeForSelection } from "@/lib/cause-scope";
 import { cn } from "@/lib/utils";
@@ -46,6 +40,9 @@ export function CauseCombobox({
   placeholder = "点击选择",
   triggerClassName
 }: Props) {
+  const popupId = useId();
+  const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [allNodes, setAllNodes] = useState<Node[]>([]);
   const [isPending, startTransition] = useTransition();
@@ -138,8 +135,12 @@ export function CauseCombobox({
       .slice(0, 60);
   }, [allNodes, searchInput]);
 
-  function hasChildren(n: Node) {
-    return allNodes.some((x) => x.parentId === n.id);
+  const parents = useMemo(() => new Set(allNodes.map(node => node.parentId)), [allNodes]);
+  const hasChildren = (node: Node) => parents.has(node.id);
+
+  function closeToTrigger() {
+    setOpen(false);
+    trigger.current?.focus({ preventScroll: true });
   }
 
   // 选用一个案由：任意层级都可直接选中。
@@ -154,56 +155,43 @@ export function CauseCombobox({
         setPickedL3(node.id);
       }
     } else {
-      setOpen(false);
+      closeToTrigger();
     }
   }
 
   // 搜索结果直接选中并关闭
   function pickNode(node: Node) {
     onChange(node.id, node.name);
-    setOpen(false);
+    closeToTrigger();
   }
 
   return (
-    <Popover open={open} onOpenChange={handleOpen}>
-      <PopoverTrigger asChild disabled={disabled}>
-        <Button
-          type="button"
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className={cn("h-10 w-full justify-between rounded-sm font-normal", triggerClassName)}
-        >
-          <span className={cn("truncate", !(value && displayName) && "text-muted-foreground")}>{displayText}</span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        side="bottom"
-        avoidCollisions={false}
-        portalled={false}
-        className="w-auto max-w-[92vw] p-0"
-      >
+    <div ref={root} onKeyDown={event => {
+      if (open && event.key === "Escape") {
+        event.stopPropagation();
+        closeToTrigger();
+      }
+    }}>
+      <Popover
+        trigger="custom"
+        visible={open}
+        onClickOutSide={() => setOpen(false)}
+        getPopupContainer={() => root.current?.closest<HTMLElement>('[role="dialog"]') ?? document.body}
+        position="bottomLeft"
+        motion={false}
+        rePosKey={String(pickedL2) + String(pickedL3)}
+        content={<div id={popupId} role="dialog" aria-label="选择案由" className="w-auto max-w-[92vw]">
         {/* 搜索栏 */}
         <div className="border-b border-border p-2">
-          <div className="relative w-[240px]">
-            <Input
-              placeholder="搜索案由，或下方逐级浏览"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="h-8 pr-7 text-xs"
-            />
-            {searchInput && (
-              <button
-                type="button"
-                onClick={() => setSearchInput("")}
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </div>
+          <Input
+            autoFocus
+            aria-label="搜索案由"
+            placeholder="搜索案由，或下方逐级浏览"
+            value={searchInput}
+            onChange={setSearchInput}
+            showClear
+            className="w-64"
+          />
         </div>
 
         {isPending ? (
@@ -265,8 +253,26 @@ export function CauseCombobox({
             )}
           </div>
         )}
-      </PopoverContent>
-    </Popover>
+        </div>}
+      >
+        <button
+          ref={trigger}
+          type="button"
+          disabled={disabled}
+          aria-expanded={open}
+          role="combobox"
+          aria-label="案由"
+          aria-controls={popupId}
+          aria-haspopup="dialog"
+          className={cn("flex h-8 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] px-3 text-left text-sm hover:bg-[var(--semi-color-fill-1)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--semi-color-primary)] disabled:opacity-50", triggerClassName)}
+          onClick={() => handleOpen(!open)}
+          onKeyDown={event => { if (event.key === "ArrowDown" && !open) { event.preventDefault(); handleOpen(true); } }}
+        >
+          <span className={cn("truncate", !(value && displayName) && "text-muted-foreground")}>{displayText}</span>
+          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden />
+        </button>
+      </Popover>
+    </div>
   );
 }
 

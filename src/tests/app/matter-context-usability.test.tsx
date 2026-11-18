@@ -4,7 +4,7 @@ import type { ContextRecordView, MatterContextView } from "@/lib/matters/context
 
 const mocks = vi.hoisted(() => ({ options: vi.fn(), history: vi.fn(), source: vi.fn(), exact: vi.fn(), save: vi.fn(), confirm: vi.fn(), ask: vi.fn(), refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }), useSearchParams: () => new URLSearchParams(window.location.search) }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("@douyinfe/semi-ui", async (load) => ({ ...await load<typeof import("@douyinfe/semi-ui")>(), Toast: { success: vi.fn(), error: vi.fn() }, Notification: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: mocks.ask }));
 vi.mock("@/server/matters/context-actions", () => ({
   getMatterContextSourceOptions: mocks.options, getMatterContextHistory: mocks.history,
@@ -71,13 +71,9 @@ describe("目标与指示的明确动作与焦点", () => {
     const editor = await screen.findByRole("dialog", { name: "更正客户目标记录（当前第 2 版）" });
     await waitFor(() => expect(revise).toBeEnabled());
     fireEvent.change(within(editor).getByLabelText("更正或决定理由"), { target: { value: "待核对的合成更正理由" } });
-    // Radix defers an outside-pointer interaction until the full click completes.
-    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
-    const overlay = document.querySelector('[data-state="open"].ll-material');
-    expect(overlay).not.toBeNull();
-    fireEvent.pointerDown(overlay!, { pointerType: "mouse", button: 0 });
-    fireEvent.pointerUp(overlay!, { pointerType: "mouse", button: 0 });
-    fireEvent.click(overlay!);
+    const backdrop = editor.closest(".semi-modal-wrap");
+    expect(backdrop).not.toBeNull();
+    fireEvent.click(backdrop!);
     await waitFor(() => expect(mocks.ask).toHaveBeenCalledTimes(1));
     fireEvent.keyDown(editor, { key: "Escape" });
     expect(mocks.ask).toHaveBeenCalledTimes(1);

@@ -1,19 +1,14 @@
 "use client";
 
+import { ChoiceField } from "@/components/patterns/choice-field";
 import { useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { Select, Button, Input, TextArea, Toast } from "@douyinfe/semi-ui";
 import { Loader2 } from "lucide-react";
 import { createNote, updateNote, type NoteCreateInput } from "@/server/notes/actions";
-import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorkspaceDialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { FormDialogBody, FormDialogContent } from "@/components/patterns/form-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { RadioChips } from "@/components/ui/radio-chips";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { JUDGMENT_NOTE_TAG, stageNoteTag, type WorkflowNote } from "./procedure-workflow-panel";
 import { shDayKey, shTime } from "@/lib/ui/sh-time";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -40,6 +35,7 @@ export function ProgressDialog({ open, onOpenChange, matterId, initialMode = "re
   note?: WorkflowNote;
   canWrite?: boolean;
 }) {
+  const selectLabelId = useId();
   const router = useRouter();
   const fieldId = useId();
   const [pending, startTransition] = useTransition();
@@ -95,7 +91,7 @@ export function ProgressDialog({ open, onOpenChange, matterId, initialMode = "re
       try {
         if (original) await updateNote({ ...input, id: original.id, expectedUpdatedAt: original.updatedAt });
         else await createNote(input);
-        toast.success(original ? "记录已更新" : mode === "judgment" ? "研判已保存" : "记录已保存");
+        Toast.success(original ? "记录已更新" : mode === "judgment" ? "研判已保存" : "记录已保存");
         onOpenChange(false);
         router.refresh();
       } catch (cause) {
@@ -104,7 +100,7 @@ export function ProgressDialog({ open, onOpenChange, matterId, initialMode = "re
     });
   }
 
-  return <Dialog open={open} onOpenChange={next => { if (!next) void close(); }}>
+  return <WorkspaceDialog open={open} onOpenChange={next => { if (!next) void close(); }}>
     <FormDialogContent className="sm:max-w-[560px]" onCloseAutoFocus={event => {
       event.preventDefault();
       const target = returnTarget?.isConnected && !returnTarget.closest("[hidden]") ? returnTarget : document.querySelector<HTMLElement>('[aria-label="记录"]');
@@ -117,31 +113,33 @@ export function ProgressDialog({ open, onOpenChange, matterId, initialMode = "re
       <FormDialogBody>
         {!canWrite ? <p role="alert" className="mb-3 text-sm text-destructive">当前已无此案件的记录写入资格，输入仍保留。</p> : null}
         <fieldset disabled={pending || !canWrite} className="space-y-3.5">
-          {!original ? <RadioChips items={[{ value: "record", label: "沟通" }, { value: "judgment", label: "研判" }]} value={mode} onChange={setMode} /> : null}
+          {!original ? <ChoiceField ariaLabel="记录方式" options={[{ value: "record", label: "沟通" }, { value: "judgment", label: "研判" }]} value={mode} onChange={setMode} /> : null}
           {mode === "record" ? <>
-            <div className="space-y-1.5"><Label>类型</Label><RadioChips items={CHANNELS.map(item => ({ ...item }))} value={channel} onChange={setChannel} size="sm" /></div>
-            <div className="space-y-1.5"><Label htmlFor={`${fieldId}-with`}>对象</Label><Input id={`${fieldId}-with`} value={withWhom} onChange={event => setWithWhom(event.target.value)} placeholder="如：长宁法院 · 书记员" maxLength={80} /></div>
+            <div className="space-y-1.5"><label className="text-sm font-medium text-[var(--semi-color-text-1)]">类型</label><ChoiceField options={CHANNELS.map(item => ({ ...item }))} value={channel} onChange={setChannel} ariaLabel="沟通类型" threshold={6} /></div>
+            <div className="space-y-1.5"><label htmlFor={`${fieldId}-with`} className="text-sm font-medium text-[var(--semi-color-text-1)]">对象</label><Input id={`${fieldId}-with`} value={withWhom} onChange={inputValue => setWithWhom(inputValue)} placeholder="如：长宁法院 · 书记员" maxLength={80} /></div>
           </> : null}
-          <div className="space-y-1.5"><Label htmlFor={`${fieldId}-time`}>发生时间</Label><Input id={`${fieldId}-time`} type="datetime-local" value={occurredAt} onChange={event => setOccurredAt(event.target.value)} /></div>
+          <div className="space-y-1.5"><label htmlFor={`${fieldId}-time`} className="text-sm font-medium text-[var(--semi-color-text-1)]">发生时间</label><Input id={`${fieldId}-time`} type="datetime-local" value={occurredAt} onChange={inputValue => setOccurredAt(inputValue)} /></div>
           {availableStages.length > 0 ? <div className="space-y-1.5">
-            <Label>环节标签（可选）</Label>
-            <Select value={stage || "__none__"} onValueChange={value => setStage(value === "__none__" ? "" : value)} disabled={pending || !canWrite}>
-              <SelectTrigger aria-label="环节标签"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="__none__">不标注环节</SelectItem>{availableStages.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent>
-            </Select>
+            <label id={selectLabelId + "-1"} className="text-sm font-medium text-[var(--semi-color-text-1)]">环节标签（可选）</label>
+            <Select value={stage || "__none__"} onChange={value => { if (typeof value === "string") setStage(value === "__none__" ? "" : value); }} disabled={pending || !canWrite} aria-labelledby={selectLabelId + "-1"} className="w-full" motion={false}><Select.Option value="__none__">不标注环节</Select.Option>{availableStages.map(name => <Select.Option key={name} value={name}>{name}</Select.Option>)}</Select>
           </div> : null}
           <div className="space-y-1.5">
-            <Label htmlFor={`${fieldId}-content`}>{mode === "judgment" ? "研判内容" : "记录内容"}</Label>
-            <Textarea id={`${fieldId}-content`} rows={mode === "judgment" ? 7 : 4} value={content} onChange={event => setContent(event.target.value)} maxLength={5000}
+            <label htmlFor={`${fieldId}-content`} className="text-sm font-medium text-[var(--semi-color-text-1)]">{mode === "judgment" ? "研判内容" : "记录内容"}</label>
+            <TextArea
+              id={`${fieldId}-content`}
+              rows={mode === "judgment" ? 7 : 4}
+              value={content}
+              onChange={inputValue => setContent(inputValue)}
+              maxLength={5000}
               placeholder={mode === "judgment" ? "如：争议焦点与举证思路" : "如：签收法院送达材料 2 份"} />
           </div>
         </fieldset>
         {error ? <p role="alert" className="mt-3 text-sm text-destructive">保存失败：{error}</p> : null}
       </FormDialogBody>
       <DialogFooter>
-        <Button type="button" variant="outline" onClick={() => void close()} disabled={pending}>取消</Button>
-        <Button type="button" onClick={submit} disabled={pending || !canWrite}>{pending ? <Loader2 className="animate-spin" /> : null}保存</Button>
+        <Button onClick={() => void close()} disabled={pending} htmlType="button" type="tertiary" theme="outline">取消</Button>
+        <Button onClick={submit} disabled={pending || !canWrite} htmlType="button" theme="solid">{pending ? <Loader2 className="animate-spin" /> : null}保存</Button>
       </DialogFooter>
     </FormDialogContent>
-  </Dialog>;
+  </WorkspaceDialog>;
 }

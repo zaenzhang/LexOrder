@@ -1,9 +1,9 @@
 "use client";
 
+import { Button, Notification } from "@douyinfe/semi-ui";
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, RefreshCw } from "lucide-react";
-import { toast } from "sonner";
+import { RefreshCw } from "lucide-react";
 import { triggerDueReminderScan } from "@/server/reminders/actions";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -17,19 +17,16 @@ export function ReminderScanButton() {
         const r = await triggerDueReminderScan();
         const total = r.deadlineNotified + r.hearingNotified;
         router.refresh();
-        toast.success(`扫描完成：新推送 ${total} 条`, {
-          description: `期限 ${r.deadlineNotified}·开庭 ${r.hearingNotified}（去重跳过 ${r.suppressed}）`
-        });
+        Notification.success({ title: `扫描完成：新推送 ${total} 条`, content: `期限 ${r.deadlineNotified}·开庭 ${r.hearingNotified}（去重跳过 ${r.suppressed}）` });
       } catch (err) {
-        toast.error("扫描失败", { description: actionErrorMessage(err) });
+        Notification.error({ title: "扫描失败", content: actionErrorMessage(err) });
       }
     });
   }
 
   return (
-    <button type="button" onClick={handleScan} disabled={isPending} className="btn btn-secondary btn-sm shrink-0">
-      {isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+    <Button htmlType="button" size="small" theme="outline" onClick={handleScan} loading={isPending} disabled={isPending} icon={<RefreshCw size={14} aria-hidden />}>
       立即扫描
-    </button>
+    </Button>
   );
 }

@@ -18,7 +18,14 @@ vi.mock("@/server/clients/history-actions", () => ({ getClientHistoryPage: mock.
 vi.mock("@/server/clients/dedup", () => ({ mergeClientsByCode: vi.fn() }));
 vi.mock("@/server/yuandian/enterprise", () => ({ searchEnterpriseCandidates: vi.fn(), getEnterpriseDetail: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mock.refresh, replace: vi.fn() }), useSearchParams: () => new URLSearchParams(window.location.search), notFound: () => { throw new Error("not found"); } }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), warning: vi.fn(), error: mock.error } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { success: vi.fn(), warning: vi.fn() }),
+    Notification: Object.assign(semi.Notification, { success: vi.fn(), warning: vi.fn(), error: mock.error })
+  };
+});
 
 import ClientsPage from "@/app/(app)/clients/page";
 import ClientDetailPage from "@/app/(app)/clients/[id]/page";
@@ -218,7 +225,7 @@ describe("Server 客户编辑入口（组件环境）", () => {
     expect(editor).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "放弃更改" })).not.toBeInTheDocument();
     await act(async () => { rejectSave(new Error("合成保存失败")); });
-    await waitFor(() => expect(mock.error).toHaveBeenCalledWith("保存失败", expect.any(Object)));
+    await waitFor(() => expect(mock.error).toHaveBeenCalledWith(expect.objectContaining({ title: "保存失败", content: expect.any(String) })));
     expect(within(editor).getByLabelText(/^客户名称\s*\*$/)).toBeEnabled();
     fireEvent.keyDown(editor, { key: "Escape" });
     fireEvent.click(await screen.findByRole("button", { name: "继续编辑" }));
@@ -251,7 +258,7 @@ describe("Server 客户编辑入口（组件环境）", () => {
     mock.edit.mockRejectedValue(new Error("客户不存在或无权维护"));
     renderPage(<ClientsView initialData={initialData} initialFilters={filters} canCreate editableClientIds={[id]} />);
     fireEvent.click(screen.getAllByRole("button", { name: `编辑 ${client.name}` })[0]);
-    await waitFor(() => expect(mock.error).toHaveBeenCalledWith("无法打开客户编辑", expect.objectContaining({ description: expect.any(String) })));
+    await waitFor(() => expect(mock.error).toHaveBeenCalledWith(expect.objectContaining({ title: "无法打开客户编辑", content: expect.any(String) })));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(mock.update).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getAllByRole("button", { name: `编辑 ${client.name}` })[0]).toBeEnabled());

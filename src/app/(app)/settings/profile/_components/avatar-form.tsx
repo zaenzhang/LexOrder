@@ -3,8 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ImageUp, Trash2 } from "lucide-react";
-import { toast } from "sonner";
-import { Avatar, Button, Tag } from "@douyinfe/semi-ui";
+import { Avatar, Button, Tag, Toast } from "@douyinfe/semi-ui";
 import { saveMyAvatar } from "@/server/users/actions";
 import { actionErrorMessage } from "@/lib/action-error";
 
@@ -20,11 +19,11 @@ export function AvatarForm({ name, role, initialAvatar }: { name: string; role?:
   const onPick = (file: File | undefined) => {
     if (!file) return;
     if (!/^image\//.test(file.type)) {
-      toast.error("请选择图片文件（PNG / JPG / WebP / SVG）");
+      Toast.error("请选择图片文件（PNG / JPG / WebP / SVG）");
       return;
     }
     if (file.size > AVATAR_MAX_BYTES) {
-      toast.error("头像过大，请控制在约 180KB 以内");
+      Toast.error("头像过大，请控制在约 180KB 以内");
       return;
     }
     const reader = new FileReader();
@@ -32,7 +31,7 @@ export function AvatarForm({ name, role, initialAvatar }: { name: string; role?:
       const dataUrl = reader.result as string;
       save(dataUrl);
     };
-    reader.onerror = () => toast.error("读取图片失败");
+    reader.onerror = () => Toast.error("读取图片失败");
     reader.readAsDataURL(file);
   };
 
@@ -41,10 +40,10 @@ export function AvatarForm({ name, role, initialAvatar }: { name: string; role?:
       try {
         await saveMyAvatar({ avatar: value });
         setAvatar(value);
-        toast.success(value ? "头像已更新" : "头像已清除");
+        Toast.success(value ? "头像已更新" : "头像已清除");
         router.refresh();
       } catch (e) {
-        toast.error(e instanceof Error ? actionErrorMessage(e) : "保存失败");
+        Toast.error(e instanceof Error ? actionErrorMessage(e) : "保存失败");
       }
     });
   };

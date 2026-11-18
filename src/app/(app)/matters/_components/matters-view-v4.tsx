@@ -82,7 +82,6 @@ export function MattersViewV4({
   const [wizardOpen, setWizardOpen] = useState(canCreateIntake && Boolean(autoOpenIntake));
   const [searchInput, setSearchInput] = useState(initialFilters.search);
   const [dateFilterOpen, setDateFilterOpen] = useState(false);
-  const [dateDraft, setDateDraft] = useState({ from: initialFilters.from ?? "", to: initialFilters.to ?? "" });
   useTopbarAction(canCreateIntake ? { label: "新建收案", onClick: () => setWizardOpen(true) } : null, [canCreateIntake]);
 
   const f = initialFilters;
@@ -224,32 +223,34 @@ export function MattersViewV4({
           <Popover
             trigger="click"
             position="bottomLeft"
+            motion={false}
             visible={dateFilterOpen}
-            onVisibleChange={(open) => {
-              if (open) setDateDraft({ from: f.from ?? "", to: f.to ?? "" });
-              setDateFilterOpen(open);
-            }}
+            onVisibleChange={setDateFilterOpen}
             content={({ initialFocusRef }) => (
-              <div className="w-64 space-y-2.5 p-3">
+              <form className="w-64 space-y-2.5 p-3" onSubmit={event => {
+                event.preventDefault();
+                const dates = new FormData(event.currentTarget);
+                go({ from: String(dates.get("from") ?? ""), to: String(dates.get("to") ?? ""), page: 1 });
+                setDateFilterOpen(false);
+              }}>
                 <label className="block text-xs">
                   起
-                  <Input ref={initialFocusRef as RefObject<HTMLInputElement> | undefined} type="date" value={dateDraft.from} onChange={(from) => setDateDraft({ ...dateDraft, from })} className="mt-1" />
+                  <input ref={initialFocusRef as RefObject<HTMLInputElement> | undefined} type="date" name="from" defaultValue={f.from ?? ""}
+                    className="mt-1 block min-h-8 w-full rounded border border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] px-2 text-sm" />
                 </label>
                 <label className="block text-xs">
                   止
-                  <Input type="date" value={dateDraft.to} onChange={(to) => setDateDraft({ ...dateDraft, to })} className="mt-1" />
+                  <input type="date" name="to" defaultValue={f.to ?? ""}
+                    className="mt-1 block min-h-8 w-full rounded border border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] px-2 text-sm" />
                 </label>
                 <div className="flex items-center justify-between gap-2">
-                  <Button theme="borderless" type="tertiary" size="small" disabled={!f.from && !f.to && !dateDraft.from && !dateDraft.to} onClick={() => {
-                    setDateDraft({ from: "", to: "" });
-                    go({ from: "", to: "", page: 1 });
-                  }}>清除日期</Button>
-                  <Button theme="solid" size="small" onClick={() => {
-                    go({ ...dateDraft, page: 1 });
+                  <Button htmlType="button" theme="borderless" type="tertiary" size="small" onClick={() => {
+                    if (f.from || f.to) go({ from: "", to: "", page: 1 });
                     setDateFilterOpen(false);
-                  }}>应用</Button>
+                  }}>清除日期</Button>
+                  <Button htmlType="submit" theme="solid" size="small">应用</Button>
                 </div>
-              </div>
+              </form>
             )}
           >
             <Button theme="light" type={f.from || f.to ? "primary" : "tertiary"} size="small" icon={<CalendarDays size={14} aria-hidden />}>
@@ -311,7 +312,9 @@ export function MattersViewV4({
         </div>
       </Tabs>
 
-      {canCreateIntake && <IntakeWizard open={wizardOpen} onOpenChange={closeWizard} clientOptions={clientOptions} colleagues={colleagues} initialClientId={autoOpenIntake ? initialClientId : undefined} />}
+      {canCreateIntake && <IntakeWizard open={wizardOpen} onOpenChange={closeWizard} onReturnFocus={() => {
+        if (document.activeElement === document.body) document.getElementById("workspace-top-action")?.focus({ preventScroll: true });
+      }} clientOptions={clientOptions} colleagues={colleagues} initialClientId={autoOpenIntake ? initialClientId : undefined} />}
     </div>
   );
 }

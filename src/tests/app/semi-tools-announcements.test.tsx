@@ -5,7 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const actions = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn(), refresh: vi.fn(), error: vi.fn(), success: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: actions.refresh }) }));
 vi.mock("@/server/announcements/actions", () => ({ createAnnouncement: actions.create, updateAnnouncement: actions.update }));
-vi.mock("sonner", () => ({ toast: { error: actions.error, success: actions.success } }));
+vi.mock("@douyinfe/semi-ui", async importOriginal => {
+  const semi = await importOriginal<typeof import("@douyinfe/semi-ui")>();
+  return {
+    ...semi,
+    Toast: Object.assign(semi.Toast, { success: actions.success }),
+    Notification: Object.assign(semi.Notification, { error: actions.error, success: actions.success })
+  };
+});
 
 import { AnnouncementDialog } from "@/app/(app)/announcements/_components/announcement-dialog";
 import { CourtFeeCalc, useCourtFeeCalculator } from "@/app/(app)/tools/calc/_components/court-fee-calc";
@@ -34,7 +41,7 @@ describe("公告 Semi 控件保留原保存合同", () => {
     fireEvent.change(screen.getByLabelText("过期日期（可选）"), { target: { value: "2026-11-21" } });
     fireEvent.click(screen.getByRole("checkbox", { name: "置顶到公告栏" }));
     fireEvent.click(screen.getByRole("button", { name: "更新" }));
-    await waitFor(() => expect(actions.error).toHaveBeenCalledWith("保存失败", expect.any(Object)));
+    await waitFor(() => expect(actions.error).toHaveBeenCalledWith(expect.objectContaining({ title: "保存失败", content: expect.any(String) })));
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(screen.getByLabelText("标题 *")).toHaveValue("修订标题");
     expect(screen.getByLabelText("内容 *")).toHaveValue("修订正文\n第二行");
@@ -74,7 +81,7 @@ describe("公告 Semi 控件保留原保存合同", () => {
     render(<AnnouncementDialog open onOpenChange={onOpenChange} editing={null} />);
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
     expect(actions.create).not.toHaveBeenCalled();
-    expect(actions.error).toHaveBeenCalledWith("标题和内容必填");
+    expect(actions.error).toHaveBeenCalledWith(expect.objectContaining({ title: "标题和内容必填" }));
     fireEvent.change(screen.getByLabelText("标题 *"), { target: { value: "新公告" } });
     fireEvent.change(screen.getByLabelText("内容 *"), { target: { value: "新公告内容" } });
     fireEvent.click(screen.getByRole("button", { name: "发布" }));

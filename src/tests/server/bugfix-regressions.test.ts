@@ -4,7 +4,7 @@ vi.mock("@/server/finance/ledger-storage", () => ({ financeLedgerReady: vi.fn().
 import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
 import { Prisma } from "@prisma/client";
 const { db, notify, webhook, session, writeFile, auditMock } = vi.hoisted(() => {
-  const tables = ["client", "matter", "matterStage", "task", "workResponsibility", "timelineEvent", "billing", "feeEntry", "commissionPlan", "deadline", "hearing", "notification", "preservationProperty", "auditLog", "document", "invoiceRequest", "systemSetting", "jobQueue", "payment", "receivable", "team", "user", "reminderDelivery"] as const;
+  const tables = ["client", "matter", "matterStage", "task", "taskWaiting", "workResponsibility", "timelineEvent", "billing", "feeEntry", "commissionPlan", "deadline", "hearing", "notification", "preservationProperty", "auditLog", "document", "invoiceRequest", "systemSetting", "jobQueue", "payment", "receivable", "team", "user", "reminderDelivery"] as const;
   const methods = ["findMany", "findFirst", "findUnique", "findUniqueOrThrow", "count", "create", "update", "updateMany", "upsert", "createMany", "delete", "deleteMany"] as const;
   const models = Object.fromEntries(tables.map(table => [table,
     Object.fromEntries(methods.map(method => [method, vi.fn()]))
@@ -66,6 +66,7 @@ beforeEach(() => {
   db.client.findFirst.mockResolvedValue({ id: "shared-client" });
   db.billing.findMany.mockResolvedValue([]); db.feeEntry.findMany.mockResolvedValue([]); db.matter.count.mockResolvedValue(0);
   db.deadline.findMany.mockResolvedValue([]); db.hearing.findMany.mockResolvedValue([]);
+  db.taskWaiting.findMany.mockResolvedValue([]);
   db.preservationProperty.findMany.mockResolvedValue([]); db.notification.findFirst.mockResolvedValue(null);
   // 第六轮体检 P2-5：此前缺 user.findMany mock——「待确认实收通知」分支全程走
   // catch（usersWhoCanConfirmReceipt 里 rows.map 抛 TypeError），断言在通知
