@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const mock = vi.hoisted(() => ({ add: vi.fn(), error: vi.fn() }));
-vi.mock("@/server/preservations/actions-v2", () => ({ addProperty: mock.add, createPreservationCase: vi.fn(), addTarget: vi.fn(), renewProperty: vi.fn() }));
+vi.mock("@/server/preservations/actions-v2", () => ({ addProperty: mock.add, createPreservationCase: vi.fn(), updatePreservationCase: vi.fn(), addTarget: vi.fn(), renewProperty: vi.fn() }));
 vi.mock("sonner", () => ({ toast: { error: mock.error, success: vi.fn() } }));
 import { AddPropertyDialog } from "@/app/(app)/preservation/_components/preservation-dialog";
 

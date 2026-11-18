@@ -141,7 +141,7 @@ function CaseCard({ caseData: cs, expanded, onToggle, matters, users }: { caseDa
   const [addTargetOpen, setAddTargetOpen] = useState(false);
   const [addPropOpen, setAddPropOpen] = useState<string | null>(null);
   const [renewPropOpen, setRenewPropOpen] = useState<string | null>(null);
-  const [editOpen, setEditOpen] = useState(false);
+  const [editingCase, setEditingCase] = useState<PreservationCaseRow | null>(null);
 
   const allProps = cs.targets.flatMap((t) => t.properties);
   const worstExpiry = allProps.length ? Math.min(...allProps.map((p) => Math.ceil((p.expiryDate.getTime() - Date.now()) / 86400000))) : null;
@@ -165,7 +165,7 @@ function CaseCard({ caseData: cs, expanded, onToggle, matters, users }: { caseDa
           </div>
         </button>
         <div className="flex shrink-0 items-center gap-1">
-          <button type="button" onClick={() => setEditOpen(true)} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+          <button type="button" aria-label="编辑保全" onClick={() => setEditingCase(cs)} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
           <button type="button" onClick={async () => { if (await confirmDialog({ title: "删除此保全案件？", description: "将同时删除其下的被保全人、财产与续保记录。", confirmText: "删除", danger: true })) { startTransition(async () => { try { await deletePreservationCase({ id: cs.id }); toast.success("已删除"); } catch { toast.error("删除失败"); } }); } }} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
         </div>
       </div>
@@ -214,7 +214,7 @@ function CaseCard({ caseData: cs, expanded, onToggle, matters, users }: { caseDa
         </div>
       )}
 
-      <PreservationCaseDialog open={editOpen} onOpenChange={setEditOpen} editCase={cs} matters={matters} users={users} />
+      {editingCase && <PreservationCaseDialog open onOpenChange={open => { if (!open) setEditingCase(null); }} editCase={editingCase} matters={matters} users={users} />}
       <AddTargetDialog open={addTargetOpen} onOpenChange={setAddTargetOpen} caseId={cs.id} />
       {addPropOpen && <AddPropertyDialog open={!!addPropOpen} onOpenChange={(o) => { if (!o) setAddPropOpen(null); }} targetId={addPropOpen} />}
       {renewPropOpen && (() => { const prop = allProps.find((p) => p.id === renewPropOpen); return prop ? <RenewPropertyDialog open={!!renewPropOpen} onOpenChange={(o) => { if (!o) setRenewPropOpen(null); }} property={prop} /> : null; })()}

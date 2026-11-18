@@ -1,5 +1,6 @@
 "use server";
-import { roleMutation, checkRoleMutation } from "@/lib/roles/service";
+import { roleMutation, checkRoleMutation, resolveRoleUser } from "@/lib/roles/service";
+import { scopeFor } from "@/lib/roles/catalog";
 import { isManager } from "@/lib/permissions";
 
 import { revalidatePath } from "next/cache";
@@ -7,7 +8,7 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/session";
-import { audit } from "@/server/audit";
+import { audit, auditTx } from "@/server/audit";
 import { assertMatterWritable } from "@/lib/archive/guard";
 import { serializeDecimals } from "@/lib/decimal";
 import { assertCanAssociateMatter, matterAssociationFilter } from "@/lib/permissions";
@@ -25,6 +26,7 @@ import {
 import { revalidateMatter } from "@/server/matters/route";
 import { voidPendingPreservation } from "@/server/reminders/delivery";
 import { ActionError } from "@/lib/action-error";
+import { lockWritableMatters } from "@/server/matters/write-access";
 
 // ━━━━ Read ━━━━
 
@@ -106,18 +108,26 @@ async function assertCanAccessPreservationCase(userId: string, id: string) {
 
 // ━━━━ Case CRUD ━━━━
 
+async function assertStandaloneOwner(tx: Prisma.TransactionClient, matterId: string | null, ownerId: string | null) {
+  if (matterId) return;
+  if (!ownerId) throw new ActionError("未关联案件的保全必须指定跟进负责人");
+  await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${ownerId} FOR SHARE`;
+  const owner = await tx.user.findUnique({ where: { id: ownerId }, select: { active: true, role: true } });
+  if (!owner?.active) throw new ActionError("跟进负责人已停用或不存在，请重新选择");
+  const role = await resolveRoleUser(ownerId, owner.role, tx);
+  if (!role.enabled || (owner.role === "CUSTOM" && !scopeFor(role, "matters.read"))) {
+    throw new ActionError("跟进负责人当前无权读取保全，请重新选择");
+  }
+}
+
 export async function createPreservationCase(input: z.infer<typeof caseCreateSchema>) {
   const session = await requireSession("matters.write");
   const data = caseCreateSchema.parse(input);
 
-  if (data.matterId) {
-    const m = await prisma.matter.findUnique({ where: { id: data.matterId } });
-    if (!m) throw new ActionError("关联案件不存在");
-    await assertCanAssociateMatter(session.user.id, data.matterId);
-    await assertMatterWritable(data.matterId);
-  }
-
-  const created = await roleMutation(session.user, "matters.write", async roleDb => roleDb.preservationCase.create({
+  const created = await prisma.$transaction(async tx => {
+    await lockWritableMatters(tx, session.user, "matters.write", data.matterId ? [data.matterId] : []);
+    await assertStandaloneOwner(tx, data.matterId ?? null, data.ownerId ?? null);
+    const record = await tx.preservationCase.create({
     data: {
       matterId: data.matterId ?? null,
       type: data.type,
@@ -148,15 +158,16 @@ export async function createPreservationCase(input: z.infer<typeof caseCreateSch
       } : undefined
     },
     select: { id: true, matterId: true }
-  }));
-
-  await audit({
-    userId: session.user.id,
-    action: "PRESERVATION_CASE_CREATE",
-    targetType: "PreservationCase",
-    targetId: created.id,
-    detail: { type: data.type }
-  });
+    });
+    await auditTx(tx, {
+      userId: session.user.id,
+      action: "PRESERVATION_CASE_CREATE",
+      targetType: "PreservationCase",
+      targetId: record.id,
+      detail: { type: data.type }
+    });
+    return record;
+  }, { maxWait: 10000, timeout: 20000 });
 
   revalidatePath("/preservation");
   if (created.matterId) await revalidateMatter(created.matterId);
@@ -166,45 +177,61 @@ export async function createPreservationCase(input: z.infer<typeof caseCreateSch
 export async function updatePreservationCase(input: z.infer<typeof caseUpdateSchema>) {
   const session = await requireSession("matters.write");
   const data = caseUpdateSchema.parse(input);
-  const { id, matterId, court, rulingNumber, note, ownerId, guaranteeType, ...rest } = data;
-
-  const existing = await assertCanAccessPreservationCase(session.user.id, id);
-  if (existing.matterId) await assertMatterWritable(existing.matterId);
-  if (matterId) {
-    await assertCanAssociateMatter(session.user.id, matterId);
-    await assertMatterWritable(matterId);
-  }
-
-  const patch: Prisma.PreservationCaseUpdateInput = { ...rest };
-  if (matterId !== undefined) patch.matter = matterId ? { connect: { id: matterId } } : { disconnect: true };
-  if (ownerId !== undefined) patch.owner = ownerId ? { connect: { id: ownerId } } : { disconnect: true };
-  if (court !== undefined) patch.court = court?.trim() || null;
-  if (rulingNumber !== undefined) patch.rulingNumber = rulingNumber?.trim() || null;
-  if (note !== undefined) patch.note = note?.trim() || null;
-  if (guaranteeType !== undefined) patch.guaranteeType = guaranteeType ?? null;
-
-  await roleMutation(session.user, "matters.write", async roleDb => {
-    await roleDb.preservationCase.update({ where: { id }, data: patch });
-    // F-1 阶段一：档位（remindDays）、保全负责人或关联案件变化会改变提醒集合——
-    // 作废该保全下全部 PENDING 档位登记，下次扫描按当前事实重新登记
-    if (data.remindDays !== undefined || ownerId !== undefined || matterId !== undefined) {
-      const props = await roleDb.preservationProperty.findMany({
-        where: { target: { caseId: id } },
-        select: { id: true }
-      });
-      await voidPendingPreservation(props.map((p) => p.id), "SUPERSEDED", "CASE_MUTATED", roleDb);
+  const reference = await prisma.preservationCase.findUnique({ where: { id: data.id }, select: { matterId: true } });
+  if (!reference) throw new ActionError("保全案件不存在");
+  const result = await prisma.$transaction(async tx => {
+    const matterIds = [reference.matterId, data.matterId].filter((id): id is string => !!id);
+    await lockWritableMatters(tx, session.user, "matters.write", matterIds);
+    await tx.$queryRaw`SELECT id FROM "PreservationCase" WHERE id = ${data.id} FOR UPDATE`;
+    const existing = await tx.preservationCase.findUnique({ where: { id: data.id } });
+    if (!existing) throw new ActionError("保全案件不存在");
+    if (existing.matterId !== reference.matterId || existing.updatedAt.getTime() !== data.expectedUpdatedAt.getTime()) {
+      throw new ActionError("保全记录已变化，请关闭后重新打开并核对");
     }
-  });
+    if (!existing.matterId && existing.ownerId !== session.user.id) throw new ActionError("无权操作此保全记录");
+    const matterId = data.matterId === undefined ? existing.matterId : data.matterId;
+    const ownerId = data.ownerId === undefined ? existing.ownerId : data.ownerId;
+    await assertStandaloneOwner(tx, matterId, ownerId);
 
-  await audit({
-    userId: session.user.id,
-    action: "PRESERVATION_CASE_UPDATE",
-    targetType: "PreservationCase",
-    targetId: id
-  });
+    const patch: Prisma.PreservationCaseUncheckedUpdateManyInput = {};
+    if (matterId !== existing.matterId) patch.matterId = matterId;
+    if (ownerId !== existing.ownerId) patch.ownerId = ownerId;
+    if (data.type !== undefined && data.type !== existing.type) patch.type = data.type;
+    for (const field of ["court", "rulingNumber", "note"] as const) {
+      if (data[field] !== undefined) {
+        const value = data[field]?.trim() || null;
+        if (value !== existing[field]) patch[field] = value;
+      }
+    }
+    if (data.guaranteeType !== undefined && data.guaranteeType !== existing.guaranteeType) patch.guaranteeType = data.guaranteeType;
+    if (data.appliedAt !== undefined && data.appliedAt?.getTime() !== existing.appliedAt?.getTime()) patch.appliedAt = data.appliedAt;
+    if (data.remindDays !== undefined) {
+      const before = [...new Set(existing.remindDays)].sort((a, b) => a - b);
+      const after = [...new Set(data.remindDays)].sort((a, b) => a - b);
+      if (before.length !== after.length || before.some((day, index) => day !== after[index])) patch.remindDays = after;
+    }
+    const changedFields = Object.keys(patch);
+    if (!changedFields.length) return { changed: false, matterIds };
+    patch.updatedAt = new Date(Math.max(Date.now(), existing.updatedAt.getTime() + 1));
+    const updated = await tx.preservationCase.updateMany({
+      where: { id: data.id, updatedAt: existing.updatedAt }, data: patch,
+    });
+    if (updated.count !== 1) throw new ActionError("保全记录已变化，请关闭后重新打开并核对");
+    if (changedFields.some(field => ["matterId", "ownerId", "remindDays"].includes(field))) {
+      const properties = await tx.preservationProperty.findMany({ where: { target: { caseId: data.id } }, select: { id: true } });
+      await voidPendingPreservation(properties.map(property => property.id), "SUPERSEDED", "CASE_MUTATED", tx);
+    }
+    await auditTx(tx, {
+      userId: session.user.id, action: "PRESERVATION_CASE_UPDATE", targetType: "PreservationCase", targetId: data.id,
+      detail: { changedFields, previousMatterId: existing.matterId, matterId, previousOwnerId: existing.ownerId, ownerId },
+    });
+    return { changed: true, matterIds: [existing.matterId, matterId].filter((id): id is string => !!id) };
+  }, { maxWait: 10000, timeout: 20000 });
 
-  revalidatePath("/preservation");
-  if (existing.matterId) await revalidateMatter(existing.matterId);
+  if (result.changed) {
+    revalidatePath("/preservation");
+    for (const matterId of new Set(result.matterIds)) await revalidateMatter(matterId);
+  }
   return { ok: true };
 }
 

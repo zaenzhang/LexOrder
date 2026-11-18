@@ -2,7 +2,7 @@
 
 import { FormDialogContent as DialogContent, FormDialogBody } from "@/components/patterns/form-dialog";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import type { PreservationType, PropertyType } from "@prisma/client";
@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   createPreservationCase,
+  updatePreservationCase,
   addTarget,
   addProperty,
   renewProperty,
@@ -61,6 +62,7 @@ export function PreservationCaseDialog({
   initialMatterId?: string;
 }) {
   const [isPending, startTransition] = useTransition();
+  const submitting = useRef(false);
   const isEdit = !!editCase;
 
   const [matterId, setMatterId] = useState(editCase?.matterId ?? initialMatterId ?? "");
@@ -77,6 +79,25 @@ export function PreservationCaseDialog({
   const [startDate, setStartDate] = useState("");
   // F-2：到期日（法院文书载明）为第一事实、必填；期限天数按到期日折算派生
   const [expiryDate, setExpiryDate] = useState("");
+  const selectedMatterId = matterId === "__none__" ? null : (matterId || null);
+  const selectedOwnerId = ownerId === "__none__" ? null : (ownerId || null);
+  const changes = {
+    ...(editCase && selectedMatterId !== editCase.matterId ? { matterId: selectedMatterId } : {}),
+    ...(editCase && selectedOwnerId !== editCase.ownerId ? { ownerId: selectedOwnerId } : {}),
+    ...(editCase && type !== editCase.type ? { type } : {}),
+    ...(editCase && court.trim() !== (editCase.court ?? "") ? { court } : {}),
+    ...(editCase && rulingNumber.trim() !== (editCase.rulingNumber ?? "") ? { rulingNumber } : {}),
+    ...(editCase && note.trim() !== (editCase.note ?? "") ? { note } : {}),
+  };
+  const dirty = Object.keys(changes).length > 0;
+
+  async function handleOpenChange(nextOpen: boolean) {
+    if (submitting.current || isPending) return;
+    if (!nextOpen && isEdit && dirty && !await confirmDialog({
+      title: "放弃本次修改？", description: "本次修改尚未保存。", confirmText: "放弃修改", danger: true,
+    })) return;
+    if (!submitting.current) onOpenChange(nextOpen);
+  }
 
   function reset() {
     if (!isEdit) {
@@ -87,8 +108,16 @@ export function PreservationCaseDialog({
   }
 
   function handleSubmit() {
+    if (submitting.current || isPending || (isEdit && !dirty)) return;
+    submitting.current = true;
     startTransition(async () => {
       try {
+        if (editCase) {
+          await updatePreservationCase({ id: editCase.id, expectedUpdatedAt: editCase.updatedAt, ...changes });
+          toast.success("已更新");
+          onOpenChange(false);
+          return;
+        }
         if (target && !expiryDate) {
           toast.error("请填写法院文书载明的到期日");
           return;
@@ -110,10 +139,10 @@ export function PreservationCaseDialog({
         const dur = target ? (f.days ?? defaultDurationDays(sd, propertyType)) : undefined;
 
         await createPreservationCase({
-          matterId: matterId === "__none__" ? null : (matterId || null),
+          matterId: selectedMatterId,
           type,
           court, rulingNumber,
-          ownerId: ownerId === "__none__" ? null : (ownerId || null),
+          ownerId: selectedOwnerId,
           note,
           remindDays: [30, 15, 7, 3, 1],
           firstTarget: target,
@@ -124,54 +153,60 @@ export function PreservationCaseDialog({
           firstDuration: target ? dur : undefined,
           firstExpiryDate: target ? ed : undefined,
         });
-        toast.success(isEdit ? "已更新" : "保全已创建");
+        toast.success("保全已创建");
         reset();
         onOpenChange(false);
       } catch (err) {
         toast.error("操作失败", { description: actionErrorMessage(err) });
+      } finally {
+        submitting.current = false;
       }
     });
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{isEdit ? "编辑保全" : "新建保全"}</DialogTitle>
+          <DialogDescription className="sr-only">{isEdit ? "修改当前保全记录" : "填写保全信息"}</DialogDescription>
         </DialogHeader>
         <FormDialogBody>
-        <div className="space-y-3">
+        <fieldset disabled={isPending} className="min-w-0 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <Field label="关联案件">
-              <Select value={matterId} onValueChange={setMatterId}>
-                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="选择案件（诉前可空）" /></SelectTrigger>
+              <Select value={matterId} onValueChange={setMatterId} disabled={isPending}>
+                <SelectTrigger aria-label="关联案件" className="h-9 text-xs"><SelectValue placeholder="选择案件（诉前可空）" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">不关联</SelectItem>
+                  {editCase?.matter && !matters.some(m => m.id === editCase.matterId) && <SelectItem value={editCase.matter.id}>{editCase.matter.internalCode} {editCase.matter.title}</SelectItem>}
                   {matters.map((m) => <SelectItem key={m.id} value={m.id}>{m.internalCode} {m.title}</SelectItem>)}
                 </SelectContent>
               </Select>
             </Field>
             <Field label="保全类型 *">
-              <Select value={type} onValueChange={(v) => setType(v as PreservationType)}>
-                <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+              <Select value={type} onValueChange={(v) => setType(v as PreservationType)} disabled={isPending}>
+                <SelectTrigger aria-label="保全类型" className="h-9 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {Object.entries(PRES_TYPE_CN).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="保全法院"><Input value={court} onChange={(e) => setCourt(e.target.value)} className="h-9 text-xs" /></Field>
-            <Field label="裁定书编号"><Input value={rulingNumber} onChange={(e) => setRulingNumber(e.target.value)} className="h-9 text-xs font-mono" /></Field>
+            <Field label="保全法院"><Input aria-label="保全法院" value={court} onChange={(e) => setCourt(e.target.value)} className="h-9 text-xs" /></Field>
+            <Field label="裁定书编号"><Input aria-label="裁定书编号" value={rulingNumber} onChange={(e) => setRulingNumber(e.target.value)} className="h-9 text-xs font-mono" /></Field>
             <Field label="跟进负责人">
-              <Select value={ownerId} onValueChange={setOwnerId}>
-                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="选择" /></SelectTrigger>
+              <Select value={ownerId} onValueChange={setOwnerId} disabled={isPending}>
+                <SelectTrigger aria-label="跟进负责人" className="h-9 text-xs"><SelectValue placeholder="选择" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">不指定</SelectItem>
+                  {editCase?.ownerId && !users.some(u => u.id === editCase.ownerId) && <SelectItem value={editCase.ownerId}>{editCase.owner?.name ?? "当前负责人不可用，请重新选择"}</SelectItem>}
                   {users.map((u) => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </Field>
           </div>
-          <Field label="备注"><Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className="text-xs" /></Field>
+          {!selectedMatterId && <p className="text-xs text-muted-foreground">不关联案件时须指定有效负责人，仅该负责人可查看此保全记录。</p>}
+          <Field label="备注"><Textarea aria-label="备注" value={note} onChange={(e) => setNote(e.target.value)} rows={2} className="text-xs" /></Field>
 
           {/* First target + property (create only) */}
           {!isEdit && (
@@ -197,11 +232,11 @@ export function PreservationCaseDialog({
               )}
             </div>
           )}
-        </div>
+        </fieldset>
         </FormDialogBody>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>取消</Button>
-          <Button onClick={handleSubmit} disabled={isPending} className="gap-1.5">
+          <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isPending}>取消</Button>
+          <Button onClick={handleSubmit} disabled={isPending || (isEdit && !dirty) || (!selectedMatterId && !selectedOwnerId)} className="gap-1.5">
             {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             {isEdit ? "保存" : "创建"}
           </Button>

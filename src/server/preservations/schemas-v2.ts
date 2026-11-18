@@ -28,6 +28,7 @@ export const caseCreateSchema = z.object({
 
 export const caseUpdateSchema = z.object({
   id: z.string().cuid(),
+  expectedUpdatedAt: z.coerce.date(),
   matterId: z.string().cuid().optional().nullable(),
   type: z.enum(presTypes).optional(),
   court: z.string().max(80).optional().or(z.literal("")),
