@@ -262,7 +262,7 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
       </div>
     </section>
 
-      <WorkspaceDialog open={editor !== null} onOpenChange={open => { if (!open) void closeEditor(); }}>
+      <WorkspaceDialog open={editor !== null} dismissOnBackdrop onOpenChange={open => { if (!open) void closeEditor(); }}>
         <DrawerContent ref={editorContent} className="w-screen overflow-y-auto sm:max-w-xl" onCloseAutoFocus={event => { event.preventDefault(); restoreFocus(editorTrigger.current, addTrigger.current, sectionTitle.current); }}>
           <DialogHeader><DialogTitle>{editor?.record ? `更正${contextKindLabels[editor.record.kind]}记录（当前第 ${editor.record.version} 版）` : "记录目标或指示"}</DialogTitle><DialogDescription>{editor?.record ? `保存为第 ${editor.record.version + 1} 版，保留第 ${editor.record.version} 版；新版需重新核对确认。` : "保存后待主办或协办核对确认。"}</DialogDescription></DialogHeader>
           {requestedRecordId !== null ? <p role="status" className="mt-3 text-sm text-muted-foreground">关闭当前编辑后显示选中的记录，当前输入已保留。</p> : null}

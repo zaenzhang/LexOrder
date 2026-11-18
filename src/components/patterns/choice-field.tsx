@@ -43,7 +43,7 @@ export function ChoiceField<V extends string>({
   return <>
     {ariaLabel ? <span hidden id={accessibleLabelId}>{ariaLabel}</span> : null}
     <Select
-      optionList={options}
+      optionList={options.map(option => ({ ...option, showTick: false }))}
       value={value ?? undefined}
       onChange={next => onChange(next as V)}
       placeholder={placeholder}
@@ -52,7 +52,6 @@ export function ChoiceField<V extends string>({
       aria-labelledby={ariaLabel ? accessibleLabelId : undefined}
       className={className}
       motion={false}
-      showTick={false}
       style={{ width: "100%" }}
       />
   </>;

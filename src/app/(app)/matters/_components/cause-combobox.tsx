@@ -261,6 +261,7 @@ export function CauseCombobox({
           disabled={disabled}
           aria-expanded={open}
           role="combobox"
+          aria-label="案由"
           aria-controls={popupId}
           aria-haspopup="dialog"
           className={cn("flex h-8 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] px-3 text-left text-sm hover:bg-[var(--semi-color-fill-1)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--semi-color-primary)] disabled:opacity-50", triggerClassName)}

@@ -92,8 +92,8 @@ function summary(label: string) {
 }
 
 async function select(label: string, option: string) {
-  fireEvent.keyDown(screen.getByRole("combobox", { name: label }), { key: "ArrowDown" });
-  fireEvent.keyDown(await screen.findByRole("option", { name: option }), { key: "Enter" });
+  fireEvent.click(screen.getByRole("combobox", { name: label }));
+  fireEvent.click(await screen.findByRole("option", { name: option }));
   await waitFor(() => expect(screen.getByRole("combobox", { name: label })).toHaveTextContent(option));
 }
 
