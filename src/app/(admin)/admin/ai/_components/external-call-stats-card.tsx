@@ -1,6 +1,7 @@
 /**
  * 外部调用台账卡片（服务端组件）：近 30 天调用量 / 失败率 / 平均耗时 + 最近失败。
  */
+import { Table } from "@/components/patterns/semi-surfaces";
 import { AlertTriangle } from "lucide-react";
 import type { ExternalCallStats } from "@/server/settings/external-call-stats";
 import { formatDateTime } from "@/lib/utils";
@@ -40,26 +41,25 @@ export function ExternalCallStatsCard({ stats }: { stats: ExternalCallStats }) {
             </div>
           </div>
 
-          <table className="mt-3 w-full text-[12.5px]">
-            <thead>
-              <tr className="border-b text-left text-[11px] text-muted-foreground">
-                <th className="py-1 font-normal">服务</th>
-                <th className="py-1 text-right font-normal">调用</th>
-                <th className="py-1 text-right font-normal">失败</th>
-                <th className="py-1 text-right font-normal">平均耗时</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.services.map(s => (
-                <tr key={s.service} className="border-b border-border/50 last:border-0">
-                  <td className="py-1.5">{SERVICE_CN[s.service] ?? s.service}</td>
-                  <td className="py-1.5 text-right font-mono tabular">{s.calls}</td>
-                  <td className={`py-1.5 text-right font-mono tabular ${s.failures > 0 ? "text-destructive" : "text-muted-foreground"}`}>{s.failures}</td>
-                  <td className="py-1.5 text-right font-mono tabular text-muted-foreground">{(s.avgDurationMs / 1000).toFixed(1)}s</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Table
+            className="mt-3"
+            size="small"
+            pagination={false}
+            rowKey="service"
+            columns={[
+              { title: "服务", dataIndex: "label" },
+              { title: "调用", dataIndex: "calls", align: "right" },
+              { title: "失败", dataIndex: "failures", align: "right" },
+              { title: "平均耗时", dataIndex: "duration", align: "right" },
+            ]}
+            dataSource={stats.services.map(service => ({
+              service: service.service,
+              label: SERVICE_CN[service.service] ?? service.service,
+              calls: service.calls,
+              failures: <span className={service.failures > 0 ? "text-destructive" : undefined}>{service.failures}</span>,
+              duration: (service.avgDurationMs / 1000).toFixed(1) + "s",
+            }))}
+          />
 
           {stats.recentFailures.length > 0 && (
             <div className="mt-3 space-y-1">

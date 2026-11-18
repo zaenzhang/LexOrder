@@ -23,8 +23,8 @@ const typeLabels: Record<string, string> = {
 };
 
 const priorityClass: Record<string, string> = {
-  URGENT: "text-[var(--red)]",
-  HIGH: "text-[var(--amber)]",
+  URGENT: "text-[var(--semi-color-danger)]",
+  HIGH: "text-[var(--semi-color-warning)]",
   NORMAL: "text-foreground",
   LOW: "text-muted-foreground"
 };

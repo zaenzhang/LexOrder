@@ -81,7 +81,7 @@ type Props = {
 
 const severityStyle: Record<ConflictSeverity, { color: string; bg: string; label: string }> = {
   BLOCKING: { color: "#B42318", bg: "rgba(220,38,38,0.10)", label: "阻塞" },
-  HIGH: { color: "var(--amber)", bg: "var(--amber-bg)", label: "高" },
+  HIGH: { color: "var(--semi-color-warning)", bg: "var(--semi-color-warning-light-default)", label: "高" },
   MEDIUM: { color: "#96650B", bg: "rgba(217,119,6,0.10)", label: "中" },
   LOW: { color: "#1A7F45", bg: "rgba(101,163,13,0.10)", label: "低" }
 };
@@ -235,7 +235,7 @@ export function ConflictSection({
                   <Link
                     key={c.clientId}
                     href={`/clients/${c.clientId}`}
-                    className="inline-flex items-center gap-1 rounded border border-[var(--amber-line)] bg-[var(--amber-bg)] px-2 py-0.5 text-[11px] text-[var(--amber)] hover:bg-[var(--amber-bg)]"
+                    className="inline-flex items-center gap-1 rounded border border-[var(--semi-color-warning-light-active)] bg-[var(--semi-color-warning-light-default)] px-2 py-0.5 text-[11px] text-[var(--semi-color-warning)] hover:bg-[var(--semi-color-warning-light-default)]"
                   >
                     {c.name} <span className="font-mono opacity-60">{c.idNumber}</span>
                     <ExternalLink className="h-2.5 w-2.5" />
@@ -329,8 +329,8 @@ function InfoBar({
 }) {
   const colors =
     tone === "warn"
-      ? { border: "border-[var(--amber-line)]", bg: "bg-[var(--amber-bg)]", text: "text-[var(--amber)]" }
-      : { border: "border-[var(--blue-line)]", bg: "bg-[var(--blue-bg)]", text: "text-[var(--blue)]" };
+      ? { border: "border-[var(--semi-color-warning-light-active)]", bg: "bg-[var(--semi-color-warning-light-default)]", text: "text-[var(--semi-color-warning)]" }
+      : { border: "border-[var(--semi-color-info-light-active)]", bg: "bg-[var(--semi-color-info-light-default)]", text: "text-[var(--semi-color-info)]" };
   return (
     <div className={cn("rounded-md border p-2.5 text-[12px]", colors.border, colors.bg)}>
       <div className={cn("flex items-center gap-1.5 font-medium", colors.text)}>

@@ -14,8 +14,8 @@ const initial: PublicMcpConfig = {
 };
 const saved: PublicMcpConfig = { ...initial, revision: "22222222-2222-4222-8222-222222222222", state: "UNVERIFIED", checks: {} };
 function openEditor() {
-  const editor = screen.getByText(initial.name).closest("details")!;
-  fireEvent.click(editor.querySelector("summary")!);
+  const editor = screen.getByRole("button", { name: new RegExp(initial.name) }).parentElement!;
+  fireEvent.click(within(editor).getByRole("button", { name: new RegExp(initial.name) }));
   return editor;
 }
 beforeEach(() => { vi.clearAllMocks(); });
@@ -32,7 +32,7 @@ describe("MCP 配置连续操作（组件环境）", () => {
     fireEvent.click(within(editor).getByRole("button", { name: "保存配置" }));
     await waitFor(() => expect(within(editor).getByRole("button", { name: "保存配置" })).toBeEnabled());
     expect(mock.save).toHaveBeenCalledOnce();
-    expect(editor).toHaveAttribute("open");
+    expect(within(editor).getByRole("button", { name: new RegExp(initial.name) })).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByDisplayValue("合成未保存服务")).toBeVisible();
     expect(within(editor).queryByText(/通过 ·/)).not.toBeInTheDocument();
     expect(within(editor).getAllByText("未验证")).toHaveLength(3);
@@ -49,7 +49,7 @@ describe("MCP 配置连续操作（组件环境）", () => {
     fireEvent.click(within(editor).getByRole("checkbox", { name: /我已核实白名单/ }));
     fireEvent.click(within(editor).getByRole("button", { name: "保存配置" }));
     await waitFor(() => expect(within(editor).getByText("该工具声明的输入格式")).toBeVisible());
-    expect(editor).toHaveAttribute("open");
+    expect(within(editor).getByRole("button", { name: new RegExp(initial.name) })).toHaveAttribute("aria-expanded", "true");
     expect(within(editor).getAllByText("未验证")).toHaveLength(3);
     fireEvent.change(within(editor).getByLabelText("远程 Streamable HTTP 地址"), { target: { value: "https://different.example.test/mcp" } });
     fireEvent.click(within(editor).getByRole("button", { name: "保存配置" }));
@@ -68,7 +68,7 @@ describe("MCP 配置连续操作（组件环境）", () => {
     fireEvent.change(screen.getByLabelText("服务名称"), { target: { value: "合成新服务" } });
     fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
     await waitFor(() => expect(screen.getByText("合成新服务")).toBeVisible());
-    expect(screen.getByText("合成新服务").closest("details")).toHaveAttribute("open");
+    expect(screen.getByRole("button", { name: /合成新服务/ })).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("button", { name: "检查连接" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "添加自定义服务" })).toBeEnabled();
   });

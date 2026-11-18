@@ -1,4 +1,6 @@
 "use client";
+
+import { Button as SemiButton } from "@douyinfe/semi-ui";
 import { formatDeadlineDue } from "@/lib/deadline-due";
 
 import { useEffect, useId, useRef, useState } from "react";
@@ -55,10 +57,10 @@ function BriefSection({ matterId }: { matterId: string }) {
       <div className="dos-group-h flex-wrap">
         <ClipboardList className="ic" strokeWidth={1.8} aria-hidden="true" />
         <h2 className="t" id={titleId}>事项摘要</h2>
-        <button type="button" className="a btn btn-secondary btn-sm" onClick={reload} disabled={state.status === "loading"}>
+        <SemiButton htmlType="button" theme="outline" type="tertiary" className="a" onClick={reload} disabled={state.status === "loading"}>
           <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
           {state.status === "error" ? "重试摘要" : "刷新摘要"}
-        </button>
+        </SemiButton>
       </div>
       <div className="dos-group-b">
         {state.status === "loading" ? <p className="t-sm t-mute" role="status">正在读取事项摘要…</p> : null}
@@ -89,7 +91,7 @@ function BriefContent({ brief }: { brief: MatterBrief }) {
         </div>
       </dl>
 
-      <div className="border-t border-[var(--bd-hair)] pt-3">
+      <div className="border-t border-[var(--semi-color-border)] pt-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-medium">近期目标与指示</h3>
           <a href="#matter-context" className="t-xs underline underline-offset-2">查看目标与指示</a>
@@ -113,7 +115,7 @@ function BriefContent({ brief }: { brief: MatterBrief }) {
         {readableRecords.length > 5 || brief.context.hasMore ? <p className="mt-2 t-xs t-mute">此处最多显示最近 5 条可读记录。</p> : null}
       </div>
 
-      <div className="border-t border-[var(--bd-hair)] pt-3">
+      <div className="border-t border-[var(--semi-color-border)] pt-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-medium">下一步工作</h3>
           {brief.nextActions.length > 0 || brief.deadlines.length > 0 ? <Link href="/schedule" className="t-xs underline underline-offset-2">查看日程</Link> : null}
@@ -177,7 +179,7 @@ function BriefContent({ brief }: { brief: MatterBrief }) {
       </div>
 
       {brief.recentClientActivities.length > 0 ? (
-        <div className="border-t border-[var(--bd-hair)] pt-3">
+        <div className="border-t border-[var(--semi-color-border)] pt-3">
           <h3 className="mb-2 font-medium">近期客户沟通</h3>
           <ul className="space-y-1.5">
             {brief.recentClientActivities.map(activity => (

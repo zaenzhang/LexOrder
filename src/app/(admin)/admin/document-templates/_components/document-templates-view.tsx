@@ -5,6 +5,7 @@
  * 内置模板只读；自定义模板支持上传（docx，自动提取 {{变量}}）与启停。
  * 上传后即出现在案件详情「模板」选择器（按案件类别过滤）。
  */
+import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
 import { Button, Checkbox, Form, Input, Notification, Select, Switch, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -83,7 +84,7 @@ export function DocumentTemplatesView({ templates }: { templates: AdminTemplateR
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="truncate text-[12.75px] font-semibold">{t.name}</span>
-                    <span className="badge b-white">{CATEGORY_CN[t.category]}</span>
+                    <SemiTag size="small" color="grey">{CATEGORY_CN[t.category]}</SemiTag>
                     {t.isBuiltIn ? (
                       <span className="rounded-full bg-primary/10 px-1.5 py-px text-[10px] text-primary">内置</span>
                     ) : (

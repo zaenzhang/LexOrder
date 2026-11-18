@@ -4,6 +4,7 @@
  * 文档文本层维护卡（P0-2 存量回填入口）。每次处理一批（50 条），
  * 剩余数提示继续点击；结果就地展示。
  */
+import { Button } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import { FileText, Loader2 } from "lucide-react";
 import { backfillDocumentTextLayers } from "@/server/documents/admin-text-backfill";
@@ -53,14 +54,14 @@ export function TextBackfillCard({ initialStats }: { initialStats: Stats }) {
             总数 {stats.total} · 已有文本 {stats.ready} · 待处理 {stats.pending} · 跳过 {stats.skip} · 失败 {stats.failed}
           </div>
         </div>
-        <button
+        <Button theme="outline" type="tertiary" size="default" contentClassName="inline-flex items-center gap-1.5"
           onClick={run}
           disabled={pending || stats.pending === 0}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-3 py-1.5 text-[13px] hover:bg-accent disabled:opacity-50"
+          className="shrink-0"
         >
           {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {stats.pending > 0 ? "回填一批" : "无待处理"}
-        </button>
+        </Button>
       </div>
       {lastRun && (
         <div className="mt-2 text-[12px] text-muted-foreground">

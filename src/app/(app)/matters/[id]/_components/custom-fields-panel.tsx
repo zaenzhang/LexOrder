@@ -1,5 +1,7 @@
 "use client";
 
+import { Button as SemiButton } from "@douyinfe/semi-ui";
+
 import { useId, useState, useTransition } from "react";
 import { Select, Button, Input, Notification, Toast } from "@douyinfe/semi-ui";
 import type { CustomFieldDef } from "@prisma/client";
@@ -41,10 +43,10 @@ export function CustomFieldsPanel({
   if (editOnly) {
     return (
       <>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditOpen(true)}>
+        <SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={() => setEditOpen(true)}>
           <Pencil />
           编辑自定义信息
-        </button>
+        </SemiButton>
         <EditDialog key={editOpen ? "open" : "closed"} open={editOpen} onClose={() => setEditOpen(false)} matterId={matterId} defs={defs} values={values} />
       </>
     );
@@ -58,10 +60,10 @@ export function CustomFieldsPanel({
           自定义信息
         </div>
         {canEdit && (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditOpen(true)}>
+          <SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={() => setEditOpen(true)}>
             <Pencil />
             编辑
-          </button>
+          </SemiButton>
         )}
       </div>
       <div className="panel-body">

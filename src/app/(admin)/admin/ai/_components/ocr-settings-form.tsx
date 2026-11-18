@@ -4,6 +4,7 @@
  * （支持任意云厂商 / 自建网关，声明 supportsPdf 后可整体识别扫描 PDF）。未配置时来件分析
  * 对扫描件降级为「需人工（无 OCR）」，保存、取件与人工确认照常（不显示为分析成功）。
  */
+import { Disclosure } from "@/components/patterns/disclosure";
 import { Button, Checkbox, Form, Input, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -53,7 +54,7 @@ export function OcrSettingsForm({ initial }: { initial: { endpoint: string; apiK
       <Checkbox className="mt-3" checked={supportsPdf} onChange={e => setSupportsPdf((e.target.checked === true))}>该网关支持直接识别扫描 PDF（整体送 PDF 字节）
       </Checkbox>
       {initial.apiKey && <Checkbox className="mt-3" checked={clearKey} onChange={e => { setClearKey((e.target.checked === true)); setApiKey(""); }}>清除已保存的密钥（保存后生效）</Checkbox>}
-      <details className="mt-3 text-xs text-muted-foreground"><summary className="cursor-pointer">网关协议</summary><p className="mt-2">系统发送 {"{ contentBase64, mimeType }"}，期望返回 {"{ text }"}。需由部署方选择兼容的 HTTPS 网关；密钥加密保存，不回显原文。</p></details>
+      <Disclosure className="mt-3 text-xs text-muted-foreground" heading="网关协议"><p className="mt-2">系统发送 {"{ contentBase64, mimeType }"}，期望返回 {"{ text }"}。需由部署方选择兼容的 HTTPS 网关；密钥加密保存，不回显原文。</p></Disclosure>
       <div className="mt-3">
         <Button theme="solid" size="small" disabled={pending} onClick={save}>{pending ? "保存中…" : "保存 OCR 设置"}</Button>
       </div>

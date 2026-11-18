@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * 墨案顶栏（docs/mockup/v4 .topbar）：⌘K 搜索框 / 通知 / 按页主操作 / 用户胶囊。
+ * 工作区顶栏：⌘K 搜索框 / 通知 / 按页主操作 / 用户胶囊。
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Avatar, Button } from "@douyinfe/semi-ui";
+import { Avatar, Button, Layout } from "@douyinfe/semi-ui";
 import { useWorkspaceActor } from "@/components/workspace-actor-provider";
 import { Search, ChevronDown, Plus, Menu, ScanSearch } from "lucide-react";
 import { WorkspaceAccountMenu } from "./workspace-account-menu";
@@ -28,25 +28,27 @@ export function Topbar({ onMobileMenuToggle, userAvatar }: { onMobileMenuToggle?
   const action = pageAction === "none" ? null : pageAction ?? (canCreateIntake ? { label: "新建收案", onClick: () => router.push("/matters?tab=intake&new=1") } : null);
 
   return (
-    <header className="topbar ll-material">
+    <Layout.Header className="sticky top-0 z-20 flex h-[56px] min-w-0 items-center gap-1 border-b border-[var(--semi-color-border)] bg-[var(--semi-color-bg-0)] px-2 sm:gap-2.5 sm:px-5">
       {onMobileMenuToggle ? (
-        <Button htmlType="button" onClick={onMobileMenuToggle} theme="borderless" type="tertiary" className="md:hidden" aria-label="打开菜单" icon={<Menu size={18} />} />
+        <span className="md:hidden">
+          <Button htmlType="button" onClick={onMobileMenuToggle} theme="borderless" type="tertiary" aria-label="打开菜单" icon={<Menu size={18} />} />
+        </span>
       ) : null}
 
       <Button htmlType="button" onClick={() => setSearchOpen(true)} theme="light" type="tertiary"
         className="min-w-0" aria-label="全局搜索（⌘K）" icon={<Search size={16} />}>
-        <span className="truncate">搜索案件、客户、材料正文…</span>
+        <span className="hidden truncate sm:inline">搜索案件、客户、材料正文…</span>
         <kbd className="ml-3 hidden sm:inline">⌘K</kbd>
       </Button>
 
-      <div className="hidden flex-1 sm:block" />
+      <div className="min-w-0 flex-1" />
 
       <NotificationPopover />
       {canReadMatters ? <SmsPopover /> : null}
 
       {/* 收案动线：先预检再建案——预检为次级按钮，与主操作同高、同圆角，靠拢成一组 */}
       {canCreateIntake || action ? (
-        <div className="tb-actions">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
           {canCreateIntake ? (
             <Button htmlType="button" onClick={() => router.push("/conflicts")} theme="light" type="tertiary" title="收案前查一查本所有没有相关记录" aria-label="冲突预检" icon={<ScanSearch size={18} />}><span className="hidden lg:inline">冲突预检</span></Button>
           ) : null}
@@ -57,14 +59,14 @@ export function Topbar({ onMobileMenuToggle, userAvatar }: { onMobileMenuToggle?
       ) : null}
 
       <WorkspaceAccountMenu position="bottomRight">
-        <Button htmlType="button" theme="borderless" type="tertiary" className="ml-1 hidden sm:inline-flex" aria-label="账户菜单" icon={
+        <Button htmlType="button" theme="borderless" type="tertiary" className="shrink-0" aria-label="账户菜单" icon={
           <Avatar size="extra-extra-small" src={userAvatar || undefined} alt={displayName}>{displayName.charAt(0) || "?"}</Avatar>
         }>
-          {displayName || "…"}<ChevronDown size={12} className="ml-2" />
+          <span className="hidden lg:inline">{displayName || "…"}</span><ChevronDown size={12} className="ml-2 hidden lg:block" />
         </Button>
       </WorkspaceAccountMenu>
 
       <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
-    </header>
+    </Layout.Header>
   );
 }

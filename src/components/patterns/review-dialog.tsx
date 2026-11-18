@@ -6,7 +6,7 @@
  * 只组织资料与操作，权限和提交逻辑由调用方持有。
  */
 import type { ReactNode } from "react";
-import { Tabs, Tag, Typography } from "@douyinfe/semi-ui";
+import { Button, Tabs, Tag, Typography } from "@douyinfe/semi-ui";
 import { AlertTriangle, SquareCheck } from "lucide-react";
 import { DialogContent, DialogDescription, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { cn, formatDateTime } from "@/lib/utils";
@@ -68,9 +68,9 @@ export function ReviewDialogContent({
             {summary}
             {alert ? (
               onAlertClick ? (
-                <button type="button" className="rv-alert border-0 bg-transparent p-0 font-[inherit] hover:underline" onClick={onAlertClick}>
+                <Button theme="borderless" type="tertiary" size="small" htmlType="button" className="rv-alert border-0 bg-transparent p-0 font-[inherit] hover:underline" onClick={onAlertClick}>
                   {alert}
-                </button>
+                </Button>
               ) : (
                 <div className="rv-alert">{alert}</div>
               )
@@ -117,7 +117,7 @@ export function ReviewDialogContent({
 
         <aside className="rv-side" aria-label={sidebarTitle}>
           <div className="rv-side-head">
-            <SquareCheck className="h-[15px] w-[15px] text-[var(--teal)]" strokeWidth={1.8} />
+            <SquareCheck className="h-[15px] w-[15px] text-[var(--semi-color-primary)]" strokeWidth={1.8} />
             {sidebarTitle}
             {sidebarDescription ? <span className="t-xs t-mute ml-auto font-normal">{sidebarDescription}</span> : null}
           </div>
@@ -151,7 +151,7 @@ export function ReviewSection({ title, icon, extra, children, className }: { tit
   return (
     <section className={cn("rv-section", className)}>
       <div className="rv-sec-head">
-        {icon ? <span className="flex text-[var(--teal)] [&_svg]:h-[14px] [&_svg]:w-[14px]">{icon}</span> : null}
+        {icon ? <span className="flex text-[var(--semi-color-primary)] [&_svg]:h-[14px] [&_svg]:w-[14px]">{icon}</span> : null}
         {title}
         {extra ? <span className="ml-auto flex items-center gap-2 text-[11px] font-[550]">{extra}</span> : null}
       </div>
@@ -185,11 +185,11 @@ export function ReviewFields({ fields, title = "申请资料", icon }: { fields:
 
 export function ReviewStatusLine({ tone = "amber", title, desc }: { tone?: "amber" | "teal" | "green" | "red" | "slate"; title: ReactNode; desc?: ReactNode }) {
   const palette: Record<string, { bg: string; line: string; t: string; d: string; dot: string }> = {
-    amber: { bg: "var(--amber-bg)", line: "var(--amber-line)", t: "#7A5205", d: "#8A6B3E", dot: "dot-amber dot-pulse-amber" },
-    teal: { bg: "var(--teal-soft)", line: "var(--teal-line)", t: "var(--teal-deep)", d: "var(--teal-deep)", dot: "dot-teal" },
-    green: { bg: "var(--green-bg)", line: "var(--green-line)", t: "var(--green)", d: "var(--green)", dot: "dot-green" },
-    red: { bg: "var(--red-bg)", line: "var(--red-line)", t: "var(--red)", d: "var(--red)", dot: "dot-red" },
-    slate: { bg: "var(--bg-sunken)", line: "var(--bd-hair)", t: "var(--t-secondary)", d: "var(--t-muted)", dot: "dot-slate" }
+    amber: { bg: "var(--semi-color-warning-light-default)", line: "var(--semi-color-warning-light-active)", t: "#7A5205", d: "#8A6B3E", dot: "dot-amber dot-pulse-amber" },
+    teal: { bg: "var(--semi-color-primary-light-default)", line: "var(--semi-color-primary-light-active)", t: "var(--semi-color-primary-active)", d: "var(--semi-color-primary-active)", dot: "dot-teal" },
+    green: { bg: "var(--semi-color-success-light-default)", line: "var(--semi-color-success-light-active)", t: "var(--semi-color-success)", d: "var(--semi-color-success)", dot: "dot-green" },
+    red: { bg: "var(--semi-color-danger-light-default)", line: "var(--semi-color-danger-light-active)", t: "var(--semi-color-danger)", d: "var(--semi-color-danger)", dot: "dot-red" },
+    slate: { bg: "var(--semi-color-fill-1)", line: "var(--semi-color-border)", t: "var(--semi-color-text-1)", d: "var(--semi-color-text-2)", dot: "dot-slate" }
   };
   const p = palette[tone];
   return (
@@ -219,7 +219,7 @@ export function ReviewFileRow({ id, name, readable, meta }: { id: string; name: 
   return (
     <div className="doc-row">
       <span className="doc-ic" aria-hidden>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="2">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--semi-color-danger)" strokeWidth="2">
           <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
           <path d="M14 3v6h6" />
         </svg>
@@ -252,7 +252,7 @@ export function ReviewHistory({ items, emptyText, emptyDesc }: { items: { id: st
                 </span>
                 <span className="num-sm t-mute">{dateText(h.at)}</span>
               </div>
-              {h.note || h.decision ? <div className="rec-note mt-1.5 whitespace-pre-wrap" style={{ background: "var(--bg-sunken)", borderRadius: 8, padding: "8px 11px", fontSize: 12, color: "var(--t-secondary)" }}>{h.note || "未记录审批意见"}</div> : null}
+              {h.note || h.decision ? <div className="rec-note mt-1.5 whitespace-pre-wrap" style={{ background: "var(--semi-color-fill-1)", borderRadius: 8, padding: "8px 11px", fontSize: 12, color: "var(--semi-color-text-1)" }}>{h.note || "未记录审批意见"}</div> : null}
               {h.legacy ? <div className="t-xs t-faint mt-1">来自原业务记录</div> : null}
             </div>
           ))}

@@ -1,5 +1,6 @@
 "use client";
 
+import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
 import { Button, Checkbox, Input, Radio, Notification, Toast } from "@douyinfe/semi-ui";
 
 /** 墨案 10 客户详情的交互零件：疑似重复横幅 + 合并向导、添加联系人 */
@@ -91,8 +92,8 @@ export function MergeBanner({
                 {suspects.map((x) => (
                   <Radio key={x.id} className="flex items-center gap-2" name="merge-suspect" checked={code === (x.internalCode ?? "")} onChange={() => setCode(x.internalCode ?? "")} disabled={pending || !x.internalCode}>
                     <span className="min-w-0 flex-1 truncate font-[550]">{x.name}</span>
-                    <span className="badge b-amber">{x.reason}</span>
-                    <span className="font-mono text-[11px] text-[var(--t-muted)]">{x.internalCode ?? "无编号"}</span>
+                    <SemiTag size="small" color="amber">{x.reason}</SemiTag>
+                    <span className="font-mono text-[11px] text-[var(--semi-color-text-2)]">{x.internalCode ?? "无编号"}</span>
                   </Radio>
                 ))}
               </div>

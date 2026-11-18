@@ -178,7 +178,7 @@ export function YuandianSettingsForm({
           className={
             "mt-3 flex items-start gap-2 rounded-md border p-3 text-[12px] " +
             (testResult.ok
-              ? "border-[var(--green-line)] bg-[var(--green-bg)] text-[var(--green)]"
+              ? "border-[var(--semi-color-success-light-active)] bg-[var(--semi-color-success-light-default)] text-[var(--semi-color-success)]"
               : "border-destructive/30 bg-destructive/10 text-destructive")
           }
         >

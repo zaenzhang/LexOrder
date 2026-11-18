@@ -1,5 +1,8 @@
 "use client";
 
+import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
+import { Table } from "@douyinfe/semi-ui";
+
 import type { IntakeStatus, ConflictSeverity } from "@prisma/client";
 import { matterCategoryLabel, matterCategoryShort, intakeStatusLabel } from "@/lib/enums";
 import { formatDate } from "@/lib/utils";
@@ -50,29 +53,14 @@ export function IntakesTable({
 
   return (
     <div className="mo-scroll-x">
-      <table className="mo-table" style={{ minWidth: 900 }}>
-        <thead>
-          <tr>
-            <th style={{ width: "30%", paddingLeft: 20 }}>收案 / 当事人</th>
-            <th style={{ width: "12%" }}>类别</th>
-            <th style={{ width: "13%" }}>委托方</th>
-            <th style={{ width: "11%" }}>收案时间</th>
-            <th style={{ width: "12%" }} className="num">标的额</th>
-            <th style={{ width: "22%" }}>冲突核查</th>
-            <th style={{ width: "10%" }}>状态</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((it) => {
-            const statusLabel = kind === "revision" ? "待补正" : intakeStatusLabel[it.status] ?? it.status;
-            const hitSeverities = it.conflictChecks.flatMap((c) => c.hits.map((h) => h.severity));
-            const hasBlocking = hitSeverities.includes("BLOCKING");
-            const pendingConclusion = it.conflictChecks.some((c) => c.conclusion === "PENDING");
-            const spine = hasBlocking ? "red" : "amber";
-            return (
-              <tr key={it.id} data-spine={spine} className="is-link" onClick={() => { window.location.href = `/intakes/${it.id}`; }}>
-                <td style={{ paddingLeft: 20 }}>
-                  <a href={`/intakes/${it.id}`} className="block min-w-0 no-underline" onClick={(e) => e.stopPropagation()}>
+      <Table<(typeof items)[number]>
+        size="small"
+        pagination={false}
+        rowKey="id"
+        dataSource={items}
+        scroll={{ x: 900 }}
+        columns={[
+          { title: "收案 / 当事人", width: "30%", key: "column1", render: (_, it) => <a href={`/intakes/${it.id}`} className="block min-w-0 no-underline" onClick={(e) => e.stopPropagation()}>
                     <span className="block truncate text-[13px] font-semibold leading-5 text-foreground">{it.title}</span>
                     {it.parties.length > 0 ? (
                       <span className="mt-0.5 block truncate text-[11px] leading-4 text-muted-foreground">
@@ -84,51 +72,32 @@ export function IntakesTable({
                         已转案件 {it.matter.internalCode}
                       </span>
                     ) : null}
-                  </a>
-                </td>
-                <td>
-                  <span className="badge b-white">{matterCategoryShort[it.category as keyof typeof matterCategoryShort]}</span>
-                </td>
-                <td className="max-w-[9rem] truncate">
-                  {it.client?.name ?? it.parties[0]?.name ?? "—"}
-                </td>
-                <td className="font-mono text-[12px] text-[var(--t-secondary)]">
-                  {formatDate(new Date(it.receivedAt))}
-                </td>
-                <td className="num font-mono">
-                  {it.claimAmount != null ? it.claimAmount.toLocaleString("zh-CN", { maximumFractionDigits: 0 }) : "—"}
-                </td>
-                <td>
-                  {it.conflictChecks.length === 0 ? (
+                  </a> },
+          { title: "类别", width: "12%", key: "column2", render: (_, it) => <SemiTag size="small" color="grey">{matterCategoryShort[it.category as keyof typeof matterCategoryShort]}</SemiTag> },
+          { title: "委托方", width: "13%", key: "column3", render: (_, it) => <span className="truncate">{it.client?.name ?? it.parties[0]?.name ?? "—"}</span> },
+          { title: "收案时间", width: "11%", key: "column4", render: (_, it) => <span className="font-mono text-[var(--semi-color-text-1)]">{formatDate(new Date(it.receivedAt))}</span> },
+          { title: "标的额", width: "12%", align: "right", key: "column5", render: (_, it) => <span className="font-mono">{it.claimAmount != null ? it.claimAmount.toLocaleString("zh-CN", { maximumFractionDigits: 0 }) : "—"}</span> },
+          { title: "冲突核查", width: "22%", key: "column6", render: (_, it) => { const hitSeverities = it.conflictChecks.flatMap((c) => c.hits.map((h) => h.severity)); const hasBlocking = hitSeverities.includes("BLOCKING"); const pendingConclusion = it.conflictChecks.some((c) => c.conclusion === "PENDING"); return (it.conflictChecks.length === 0 ? (
                     <span className="text-[12px] text-muted-foreground/55">未发起</span>
                   ) : (
                     <span className="flex flex-wrap items-center gap-1.5">
                       {hasBlocking ? (
-                        <span className="badge b-outline-red">冲突 BLOCKING</span>
+                        <SemiTag size="small" color="red" type="ghost">冲突 BLOCKING</SemiTag>
                       ) : hitSeverities.length > 0 ? (
-                        <span className="badge b-amber">命中 {hitSeverities.length}</span>
+                        <SemiTag size="small" color="amber">命中 {hitSeverities.length}</SemiTag>
                       ) : (
-                        <span className="badge b-white">未命中</span>
+                        <SemiTag size="small" color="grey">未命中</SemiTag>
                       )}
                       {pendingConclusion ? (
-                        <span className="badge b-amber"><span className="bdot" />结论待出</span>
+                        <SemiTag size="small" color="amber">结论待出</SemiTag>
                       ) : (
-                        <span className="badge b-green"><span className="bdot" />已出结论</span>
+                        <SemiTag size="small" color="green">已出结论</SemiTag>
                       )}
                     </span>
-                  )}
-                </td>
-                <td>
-                  <span className={`badge ${hasBlocking ? "b-red" : "b-amber"}`}>
-                    <span className="bdot" />
-                    {statusLabel}
-                  </span>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  )); } },
+          { title: "状态", width: "10%", key: "column7", render: (_, it) => { const statusLabel = kind === "revision" ? "待补正" : intakeStatusLabel[it.status] ?? it.status; const hitSeverities = it.conflictChecks.flatMap((c) => c.hits.map((h) => h.severity)); const hasBlocking = hitSeverities.includes("BLOCKING"); return (<SemiTag size="small" color={hasBlocking ? "red" : "amber"}>{statusLabel}</SemiTag>); } },
+        ]}
+      />
     </div>
   );
 }

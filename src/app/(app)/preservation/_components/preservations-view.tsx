@@ -129,7 +129,7 @@ function KpiCard({ label, value, tone }: { label: string; value: string | number
   return (
     <div className="ll-surface p-3">
       <div className="text-[11px] text-muted-foreground">{label}</div>
-      <div className={cn("mt-1 text-lg font-semibold tabular", tone === "danger" && "text-destructive", tone === "warn" && "text-[var(--amber)]")}>{value}</div>
+      <div className={cn("mt-1 text-lg font-semibold tabular", tone === "danger" && "text-destructive", tone === "warn" && "text-[var(--semi-color-warning)]")}>{value}</div>
     </div>
   );
 }
@@ -149,20 +149,20 @@ function CaseCard({ caseData: cs, expanded, onToggle, matters, users }: { caseDa
   return (
     <div className="ll-surface">
       <div className="flex items-center gap-3 px-4 py-3">
-        <button type="button" onClick={onToggle} aria-expanded={expanded} aria-controls={detailsId} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+        <Button theme="borderless" type="tertiary" size="small" contentClassName="flex w-full min-w-0 flex-wrap items-center gap-2 text-left" htmlType="button" onClick={onToggle} aria-expanded={expanded} aria-controls={detailsId} className="flex min-w-0 flex-1 items-center gap-3 text-left">
           {expanded ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
           <Shield className="h-4 w-4 shrink-0 text-primary" strokeWidth={1.8} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium truncate">{cs.matter ? cs.matter.title : "未关联案件"}</span>
               <Tag color="blue">{PRES_TYPE_CN[cs.type]}</Tag>
-              {expiryInfo && <span className={cn("shrink-0 text-[10px] font-medium", expiryInfo.tone === "danger" ? "text-destructive" : expiryInfo.tone === "warn" ? "text-[var(--amber)]" : "text-muted-foreground")}>{expiryInfo.label}</span>}
+              {expiryInfo && <span className={cn("shrink-0 text-[10px] font-medium", expiryInfo.tone === "danger" ? "text-destructive" : expiryInfo.tone === "warn" ? "text-[var(--semi-color-warning)]" : "text-muted-foreground")}>{expiryInfo.label}</span>}
             </div>
             <div className="mt-0.5 text-[11px] text-muted-foreground">
               {cs.court && <span>{cs.court}</span>}{cs.rulingNumber && <span> · {cs.rulingNumber}</span>}{" · "}{cs.targets.length} 个被保全人 · {allProps.length} 项财产
             </div>
           </div>
-        </button>
+        </Button>
         <div className="flex shrink-0 items-center gap-1">
           <Button theme="borderless" type="tertiary" icon={<Pencil size={16} />} aria-label="编辑保全" onClick={() => setEditingCase(cs)} />
           <Button theme="borderless" type="danger" icon={<Trash2 size={16} />} aria-label="删除保全" onClick={async () => {
@@ -199,7 +199,7 @@ function CaseCard({ caseData: cs, expanded, onToggle, matters, users }: { caseDa
                         <span className="text-xs font-medium">{PROPERTY_TYPE_CN[prop.propertyType]}</span>
                         {prop.amount && <span className="text-[11px] text-muted-foreground">{formatCurrency(Number(prop.amount))}</span>}
                         {prop.propertyDetail && <span className="truncate text-[10px] text-muted-foreground">({prop.propertyDetail})</span>}
-                        <span className={cn("ml-auto shrink-0 text-[10px] font-medium", exp.tone === "danger" ? "text-destructive" : exp.tone === "warn" ? "text-[var(--amber)]" : "text-muted-foreground")}>{exp.label}</span>
+                        <span className={cn("ml-auto shrink-0 text-[10px] font-medium", exp.tone === "danger" ? "text-destructive" : exp.tone === "warn" ? "text-[var(--semi-color-warning)]" : "text-muted-foreground")}>{exp.label}</span>
                         <Tag color={statusTagColors[prop.status]}>{PRES_STATUS_CN[prop.status]}</Tag>
                         {(prop.status === "ACTIVE" || prop.status === "RENEWED") && (
                           <>

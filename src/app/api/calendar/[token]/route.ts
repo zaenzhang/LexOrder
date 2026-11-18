@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { queryScheduleItems } from "@/server/schedule/query";
 import { buildIcs, type IcsEvent } from "@/lib/ics";
 import { shParts } from "@/lib/ui/sh-time";
+import { PRODUCT_SHORT_NAME } from "@/lib/product";
 
 export const dynamic = "force-dynamic";
 
@@ -83,7 +84,7 @@ export async function GET(
   });
 
   const ics = buildIcs({
-    calendarName: `律序日程 · ${user.name}`,
+    calendarName: `${PRODUCT_SHORT_NAME}日程 · ${user.name}`,
     events
   });
 

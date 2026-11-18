@@ -1,4 +1,6 @@
 "use client";
+import type { TagColor } from "@douyinfe/semi-ui/lib/es/tag";
+import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
 import { Button, Input, Notification, Toast } from "@douyinfe/semi-ui";
 
 /**
@@ -61,10 +63,10 @@ type HitResult = {
   } | null;
 };
 
-const ROLE_OPTS: { value: QueryRole; label: string; badge: string; logo: string }[] = [
-  { value: "CLIENT_PARTY", label: "拟委托方", badge: "b-teal", logo: "var(--navy)" },
-  { value: "OPPOSING_PARTY", label: "对方", badge: "b-slate", logo: "var(--slate)" },
-  { value: "THIRD_PARTY", label: "第三人", badge: "b-slate", logo: "#33989B" }
+const ROLE_OPTS: { value: QueryRole; label: string; color: TagColor; logo: string }[] = [
+  { value: "CLIENT_PARTY", label: "拟委托方", color: "teal", logo: "var(--navy)" },
+  { value: "OPPOSING_PARTY", label: "对方", color: "grey", logo: "var(--semi-color-text-1)" },
+  { value: "THIRD_PARTY", label: "第三人", color: "grey", logo: "#33989B" }
 ];
 const roleMeta = (role: QueryRole) => ROLE_OPTS.find((o) => o.value === role) ?? ROLE_OPTS[1];
 
@@ -74,11 +76,11 @@ const HIT_ROLE: Record<string, string> = {
 };
 
 /** 风险提示用业务语言表达，只是系统按角色组合给出的关注程度，不是结论 */
-const SEVERITY_META: Record<ConflictSeverity, { label: string; badge: string; rank: number }> = {
-  BLOCKING: { label: "重点关注", badge: "b-red", rank: 3 },
-  HIGH: { label: "高风险提示", badge: "b-red", rank: 2 },
-  MEDIUM: { label: "需核实", badge: "b-amber", rank: 1 },
-  LOW: { label: "一般提示", badge: "b-slate", rank: 0 }
+const SEVERITY_META: Record<ConflictSeverity, { label: string; color: TagColor; rank: number }> = {
+  BLOCKING: { label: "重点关注", color: "red", rank: 3 },
+  HIGH: { label: "高风险提示", color: "red", rank: 2 },
+  MEDIUM: { label: "需核实", color: "amber", rank: 1 },
+  LOW: { label: "一般提示", color: "grey", rank: 0 }
 };
 
 const matchKind = (h: HitResult) => (h.matchedField === "idNumber" ? "证件一致" : h.matchedRatio !== null && h.matchedRatio < 1 ? "名称相似" : "名称相同");
@@ -168,7 +170,7 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
         title="冲突预检"
         sub={
           <>
-            收案前先查一查本所系统里有没有相关记录，仅供自己了解情况：<b style={{ fontFamily: "inherit", color: "var(--t-primary)" }}>不需要审批，也不出检索结论。</b>
+            收案前先查一查本所系统里有没有相关记录，仅供自己了解情况：<b style={{ fontFamily: "inherit", color: "var(--semi-color-text-0)" }}>不需要审批，也不出检索结论。</b>
             正式的利益冲突检索在登记收案时自动进行，并随收案审批核查。
           </>
         }
@@ -179,7 +181,7 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
         <div className="panel-head">
           <div className="panel-title">
             <Search className="ic" />
-            检索主体 <span className="badge b-white" style={{ marginLeft: 2 }}>{queries.length}</span>
+            检索主体 <SemiTag size="small" color="grey" style={{ marginLeft: 2 }}>{queries.length}</SemiTag>
           </div>
         </div>
 
@@ -205,7 +207,7 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
                   <>
                     <div className="sub-name">
                       {q.name || <span className="t-faint">未填写名称</span>}
-                      <span className={cn("badge", meta.badge)}>{meta.label}</span>
+                      <SemiTag size="small" color={meta.color}>{meta.label}</SemiTag>
                     </div>
                     <div className="sub-fields">
                       <div className="sub-field">
@@ -234,7 +236,7 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
           );
         })}
 
-        <div className="subject" style={{ borderTop: "1px dashed var(--bd-subtle)" }}>
+        <div className="subject" style={{ borderTop: "1px dashed var(--semi-color-border)" }}>
           <Button theme="borderless" htmlType="button" disabled={pending} block onClick={() => setQueries((qs) => [...qs, emptyRow("OPPOSING_PARTY")])}>
             <Plus />
             添加检索主体（自然人 / 机构）
@@ -267,20 +269,20 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
             <>
               <div className="risk-strip" style={{ marginTop: 0 }}>
                 <div className="card risk-cell">
-                  <div className="risk-ic" style={{ background: "var(--teal-soft)", color: "var(--teal-deep)" }}><Users /></div>
+                  <div className="risk-ic" style={{ background: "var(--semi-color-primary-light-default)", color: "var(--semi-color-primary-active)" }}><Users /></div>
                   <div><div className="rn">{hitSubjects.length}<span className="t-xs t-mute" style={{ fontFamily: "inherit", fontWeight: 500 }}> / {subjects.length}</span></div><div className="rl">有相关记录的主体</div></div>
                 </div>
                 <div className="card risk-cell">
-                  <div className="risk-ic" style={{ background: "var(--slate-bg)", color: "var(--slate)" }}><Briefcase /></div>
-                  <div><div className="rn" style={{ color: matterCount ? undefined : "var(--t-faint)" }}>{matterCount}</div><div className="rl">涉及历史案件</div></div>
+                  <div className="risk-ic" style={{ background: "var(--semi-color-fill-0)", color: "var(--semi-color-text-1)" }}><Briefcase /></div>
+                  <div><div className="rn" style={{ color: matterCount ? undefined : "var(--semi-color-text-3)" }}>{matterCount}</div><div className="rl">涉及历史案件</div></div>
                 </div>
                 <div className="card risk-cell">
-                  <div className="risk-ic" style={{ background: "var(--amber-bg)", color: "var(--amber)" }}><FileClock /></div>
-                  <div><div className="rn" style={{ color: intakeCount ? "var(--amber)" : "var(--t-faint)" }}>{intakeCount}</div><div className="rl">涉及在办收案</div></div>
+                  <div className="risk-ic" style={{ background: "var(--semi-color-warning-light-default)", color: "var(--semi-color-warning)" }}><FileClock /></div>
+                  <div><div className="rn" style={{ color: intakeCount ? "var(--semi-color-warning)" : "var(--semi-color-text-3)" }}>{intakeCount}</div><div className="rl">涉及在办收案</div></div>
                 </div>
-                <div className="card risk-cell" style={attention ? { borderColor: "var(--red-line)" } : undefined}>
-                  <div className="risk-ic" style={{ background: "var(--red-bg)", color: "var(--red)" }}><TriangleAlert /></div>
-                  <div><div className="rn" style={{ color: attention ? "var(--red)" : "var(--t-faint)" }}>{attention}</div><div className="rl">重点关注 / 高风险</div></div>
+                <div className="card risk-cell" style={attention ? { borderColor: "var(--semi-color-danger-light-active)" } : undefined}>
+                  <div className="risk-ic" style={{ background: "var(--semi-color-danger-light-default)", color: "var(--semi-color-danger)" }}><TriangleAlert /></div>
+                  <div><div className="rn" style={{ color: attention ? "var(--semi-color-danger)" : "var(--semi-color-text-3)" }}>{attention}</div><div className="rl">重点关注 / 高风险</div></div>
                 </div>
               </div>
 
@@ -306,7 +308,7 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
                         </div>
                         <div className="t-xs t-mute" style={{ marginTop: 1 }}>历史案件、客户档案与在办收案中均未发现</div>
                       </div>
-                      <span className="badge b-white">未发现</span>
+                      <SemiTag size="small" color="grey">未发现</SemiTag>
                     </div>
                   ))
                 )}
@@ -323,7 +325,7 @@ export function ConflictsViewV4({ prefillName = "" }: { prefillName?: string }) 
           <div className="card">
             <div className="panel-head">
               <div className="panel-title" style={{ fontSize: 13 }}>本次预检</div>
-              {checkedAt ? <span className="badge b-teal" style={{ fontSize: 10 }}>{shMonthDayTime(checkedAt)}</span> : <span className="badge b-white" style={{ fontSize: 10 }}>未开始</span>}
+              {checkedAt ? <SemiTag size="small" color="teal">{shMonthDayTime(checkedAt)}</SemiTag> : <SemiTag size="small" color="grey">未开始</SemiTag>}
             </div>
             <div className="panel-body space-y-1.5 text-[12px]" style={{ paddingTop: 10 }}>
               <div className="flex justify-between"><span className="t-mute">检索主体</span><span>{hasRun ? searchedQueries.length : queries.filter((q) => q.name.trim() || q.idNumber.trim()).length} 个</span></div>
@@ -355,7 +357,7 @@ function SubjectCard({ subject }: { subject: SubjectResult }) {
         <div className="min-w-0 flex-1">
           <div className="hit-title flex flex-wrap items-center gap-2">
             <span className="truncate">{q.name || q.idNumber}</span>
-            <span className={cn("badge", meta.badge)}>{meta.label}</span>
+            <SemiTag size="small" color={meta.color}>{meta.label}</SemiTag>
           </div>
           <div className="hit-meta">相关记录 {targets.length} 处 · {[...new Set(targets.flatMap((t) => t.hits.map(matchKind)))].join(" / ")}</div>
         </div>
@@ -379,9 +381,9 @@ function TargetRow({ target }: { target: TargetGroup }) {
   return (
     <div className="hit-match" style={{ borderBottom: "none", display: "block" }}>
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className={cn("badge shrink-0", m ? "b-white" : "b-amber")}>{m ? "历史案件" : "在办收案"}</span>
+        <SemiTag size="small" color={m ? "grey" : "amber"} className="shrink-0">{m ? "历史案件" : "在办收案"}</SemiTag>
         <span className="min-w-0 truncate text-[13px] font-semibold">{m ? `${m.internalCode} · ${m.title}` : it?.title ?? top.matchedName}</span>
-        <span className={cn("badge ml-auto shrink-0", sev.badge)}><span className="bdot" />{sev.label}</span>
+        <SemiTag size="small" className="ml-auto shrink-0" color={sev.color}>{sev.label}</SemiTag>
       </div>
       <div className="mt-1.5 grid grid-cols-1 gap-x-4 gap-y-1 text-[12px] sm:grid-cols-2">
         <div><span className="t-mute">命中方式　</span>{[...new Set(hits.map(matchKind))].join("、")}{idHit ? <span className="ml-1 font-mono text-[11px] t-mute">{idHit.matchedValue}</span> : null}</div>

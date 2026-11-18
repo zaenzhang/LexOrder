@@ -1,5 +1,6 @@
 "use client";
 
+import { FocusButton } from "@/components/patterns/focus-button";
 import { Button, Typography } from "@douyinfe/semi-ui";
 import { useEffect, useRef, useState } from "react";
 import { WorkspaceDialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
@@ -34,7 +35,7 @@ export function ReviewPositionSourceButton({ target, children, disabled = false 
   const current = read?.request === request && open ? read : null;
   const source = current?.value?.status === "AVAILABLE" ? current.value : null;
   return <WorkspaceDialog open={open} onOpenChange={value => setRequest(value ? { target, identity } : null)}>
-    <button onClick={() => setRequest({ target, identity })} ref={trigger} type="button" disabled={disabled} className="rounded-md border border-[var(--semi-color-border)] px-3 py-1.5 text-sm hover:bg-[var(--semi-color-fill-0)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--semi-color-primary)] disabled:opacity-50">{children}</button>
+    <FocusButton theme="outline" type="tertiary" size="small" onClick={() => setRequest({ target, identity })} ref={trigger} htmlType="button" disabled={disabled}>{children}</FocusButton>
     <DialogContent className="max-w-4xl" onCloseAutoFocus={event => {
       if (trigger.current?.isConnected && !trigger.current.closest('[hidden], [inert], [aria-hidden="true"]')) {
         event.preventDefault(); trigger.current.focus();

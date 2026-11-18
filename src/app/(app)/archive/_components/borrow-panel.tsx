@@ -79,7 +79,7 @@ export function BorrowPanel({ mine, pending, canApply }: { mine: BorrowRow[]; pe
                 <span className="offset-chip">{STATUS_CN[r.status] ?? r.status}</span>
                 <span style={{ flex: 1, minWidth: 180 }} className="truncate">{r.archiveRecord.matter.internalCode} {r.archiveRecord.matter.title}</span>
                 <span>{formatDate(r.createdAt)}</span>
-                {r.status === "REJECTED" && r.rejectReason ? <span style={{ color: "var(--red)" }} title={r.rejectReason}>驳回：{r.rejectReason.slice(0, 20)}…</span> : null}
+                {r.status === "REJECTED" && r.rejectReason ? <span style={{ color: "var(--semi-color-danger)" }} title={r.rejectReason}>驳回：{r.rejectReason.slice(0, 20)}…</span> : null}
               </div>
             ))}
           </div>

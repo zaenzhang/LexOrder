@@ -1,3 +1,4 @@
+import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
 import {hasCustomPermission} from "@/lib/roles/catalog";
 import {getWorkBoard} from "@/server/reminders/work-actions";
 import {WorkResponsibilityPanel} from "@/components/matters/work-responsibility-panel";
@@ -41,7 +42,7 @@ export default async function IntakeDetailPage({ params }: PageProps) {
         className="!mb-0"
         back={{ href: "/matters?tab=intake", label: "返回收案列表" }}
         title={intake.title}
-        sub={<>团队查看 · 收案信息 · <span className="badge b-white">{intakeStatusLabel[intake.status]}</span></>}
+        sub={<>团队查看 · 收案信息 · <SemiTag size="small" color="grey">{intakeStatusLabel[intake.status]}</SemiTag></>}
       />
       {intake.materialContinuation ? <IntakeMaterialContinuationView value={intake.materialContinuation} /> : null}
       <Panel title="收案信息">
@@ -161,7 +162,7 @@ export default async function IntakeDetailPage({ params }: PageProps) {
   }
 
   const showApprovalLink = intake.status === "PENDING_CONFIRMATION" || intake.status === "NEEDS_REVISION";
-  const statusTone = intake.status === "CONVERTED" ? "b-teal" : intake.status === "DECLINED" ? "b-red" : "b-amber";
+  const statusColor = intake.status === "CONVERTED" ? "teal" : intake.status === "DECLINED" ? "red" : "amber";
 
   return (
     <div className="space-y-4">
@@ -171,10 +172,10 @@ export default async function IntakeDetailPage({ params }: PageProps) {
         title={intake.title}
         sub={
           <span className="flex flex-wrap items-center gap-1.5">
-            <span className="badge b-white">{matterCategoryLabel[intake.category]}</span>
-            <span className={`badge ${statusTone}`}><span className="bdot" />{intakeStatusLabel[intake.status]}</span>
+            <SemiTag size="small" color="grey">{matterCategoryLabel[intake.category]}</SemiTag>
+            <SemiTag size="small" color={statusColor}>{intakeStatusLabel[intake.status]}</SemiTag>
             {intake.matter ? (
-              <Link href={matterHref(intake.matter)} className="badge b-teal">已转为案件 {intake.matter.internalCode} →</Link>
+              <Link href={matterHref(intake.matter)} className="text-sm font-medium text-primary">已转为案件 {intake.matter.internalCode} →</Link>
             ) : null}
           </span>
         }
@@ -191,9 +192,9 @@ export default async function IntakeDetailPage({ params }: PageProps) {
       <WorkResponsibilityPanel data={await getWorkBoard({intakeId:id})} intakeId={id}/>
       <RevisionHistory rounds={rounds}/>
       {intake.declinedReason ? (
-        <div className="flex items-start gap-2 rounded-[10px] border border-[var(--red-line)] bg-[var(--red-bg)] px-3.5 py-3 text-[12.5px]">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--red)]" />
-          <div><b className="text-[var(--red)]">{intake.status==="DECLINED"?"不接案原因":"补正说明"}</b><div className="mt-0.5 text-[var(--t-secondary)]">{intake.declinedReason}</div></div>
+        <div className="flex items-start gap-2 rounded-[10px] border border-[var(--semi-color-danger-light-active)] bg-[var(--semi-color-danger-light-default)] px-3.5 py-3 text-[12.5px]">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--semi-color-danger)]" />
+          <div><b className="text-[var(--semi-color-danger)]">{intake.status==="DECLINED"?"不接案原因":"补正说明"}</b><div className="mt-0.5 text-[var(--semi-color-text-1)]">{intake.declinedReason}</div></div>
         </div>
       ) : null}
 
@@ -205,7 +206,7 @@ export default async function IntakeDetailPage({ params }: PageProps) {
               <FieldItem label="发起人">{createdBy?.name ?? "—"}</FieldItem>
               <FieldItem label="主办律师">{intake.ownerUser?.name ?? "—"}</FieldItem>
               <FieldItem label="客户">
-                {intake.client ? <Link href={`/clients/${intake.client.id}`} className="text-[var(--teal-deep)] hover:underline">{intake.client.name}</Link> : "—"}
+                {intake.client ? <Link href={`/clients/${intake.client.id}`} className="text-[var(--semi-color-primary-active)] hover:underline">{intake.client.name}</Link> : "—"}
               </FieldItem>
               <FieldItem label="收案日期" mono>{formatDate(new Date(intake.receivedAt))}</FieldItem>
               <FieldItem label="办理机构">{intake.firstAgency ?? "—"}</FieldItem>
@@ -254,14 +255,14 @@ function PartyGroup({ title, tone, children }: { title: string; tone: "teal" | "
 
 function PartyCard({ name, sub, href }: { name: string; sub?: string; href?: string }) {
   const inner = (
-    <div className="rounded-[9px] border border-[var(--bd-hair)] bg-[var(--bg-card)] px-3 py-2 transition-colors hover:bg-[var(--bg-hover)]">
+    <div className="rounded-[9px] border border-[var(--semi-color-border)] bg-[var(--semi-color-bg-0)] px-3 py-2 transition-colors hover:bg-[var(--semi-color-fill-0)]">
       <div className="truncate text-[13px] font-medium">{name}</div>
-      {sub ? <div className="mt-0.5 font-mono text-[11px] text-[var(--t-muted)]">{sub}</div> : null}
+      {sub ? <div className="mt-0.5 font-mono text-[11px] text-[var(--semi-color-text-2)]">{sub}</div> : null}
     </div>
   );
   return href ? <Link href={href} className="block">{inner}</Link> : inner;
 }
 
 function Empty() {
-  return <div className="rounded-[9px] border border-dashed border-[var(--bd-subtle)] py-2 text-center text-[11px] text-[var(--t-faint)]">—</div>;
+  return <div className="rounded-[9px] border border-dashed border-[var(--semi-color-border)] py-2 text-center text-[11px] text-[var(--semi-color-text-3)]">—</div>;
 }

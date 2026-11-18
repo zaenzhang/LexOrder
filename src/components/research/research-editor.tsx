@@ -1,5 +1,6 @@
 "use client";
 
+import { Disclosure } from "@/components/patterns/disclosure";
 import { useId } from "react";
 import { Tabs, Select, Button, Input, TextArea } from "@douyinfe/semi-ui";
 import { shDayKey } from "@/lib/ui/sh-time";
@@ -28,10 +29,10 @@ export function ResearchEditor({ matterId, value, onChange, options, disabled, r
 
     <Tabs.TabPane itemKey="question" tab="问题与范围" className="space-y-4">
       <div className="space-y-1.5"><label htmlFor="research-question" className="text-sm font-medium text-[var(--semi-color-text-1)]">研究问题</label><Input id="research-question" value={value.question} onChange={inputValue => update({ question: inputValue })} maxLength={300} readOnly={readOnly} disabled={disabled} /></div>
-      {readOnly ? saved?.issue ? <details className="text-sm space-y-2"><summary className="cursor-pointer">关联争点：{saved.issue.title} · 修订 {saved.issue.revision}{saved.issue.changed ? "（争点已有新修订）" : saved.issue.confirmationChanged ? "（核对状态已有变化）" : ""}</summary>
+      {readOnly ? saved?.issue ? <Disclosure className="text-sm space-y-2" heading={<>关联争点：{saved.issue.title} · 修订 {saved.issue.revision}{saved.issue.changed ? "（争点已有新修订）" : saved.issue.confirmationChanged ? "（核对状态已有变化）" : ""}</>}>
         <p className="whitespace-pre-wrap break-words">{saved.issue.content}</p><p className="text-xs text-muted-foreground">采用时：{saved.issue.confirmedAt ? `已核对（${shDayKey(saved.issue.confirmedAt)}）` : "尚未核对"} · 输入固定于 {shDayKey(saved.issue.capturedAt)}</p>
         {saved.issue.sources.map(source => <div key={source.id} className="flex items-center justify-between gap-3 rounded-md border p-2"><span>{source.documentName} · V{source.documentVersion} · {source.locationLabel}</span><Button disabled={disabled} onClick={() => onOpenSource(source.id)} htmlType="button" type="tertiary" theme="outline" size="small">查看争点来源</Button></div>)}
-      </details> : null : <div className="space-y-1.5"><div className="flex items-center justify-between gap-3"><label id={selectLabelId + "-issue"} className="text-sm font-medium text-[var(--semi-color-text-1)]">关联争点</label><Button disabled={disabled} onClick={onRefreshIssues} htmlType="button" type="tertiary" theme="borderless" size="small">更新争点选项</Button></div>
+      </Disclosure> : null : <div className="space-y-1.5"><div className="flex items-center justify-between gap-3"><label id={selectLabelId + "-issue"} className="text-sm font-medium text-[var(--semi-color-text-1)]">关联争点</label><Button disabled={disabled} onClick={onRefreshIssues} htmlType="button" type="tertiary" theme="borderless" size="small">更新争点选项</Button></div>
         <Select
           disabled={disabled || !options}
           value={researchIssueSelectionKey(value.issueSelection)}
@@ -61,12 +62,12 @@ export function ResearchEditor({ matterId, value, onChange, options, disabled, r
           <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-sm font-medium break-words">{source.documentName} · V{source.version}</p><p className="text-xs text-muted-foreground">{sourceRelationLabels[source.relation]} · {source.locationLabel}{source.changed ? " · 已有新版本，当前研究仍采用此版" : ""}</p></div>
             <Button onClick={() => onOpenSource(source.id)} disabled={disabled} type="tertiary" theme="outline" size="small">查看原文</Button></div>
           {source.lawMetadata.kind !== "MATERIAL" ? <p className="text-sm">{lawKindLabels[source.lawMetadata.kind]} · {source.lawMetadata.jurisdiction || "法域待核实"} · {source.lawMetadata.title || "法源名称未记录"} · {source.lawMetadata.verification === "CHECKED" ? "身份及时点已核实" : "待核实"}</p> : null}
-          <details><summary className="text-xs cursor-pointer text-muted-foreground">来源详情</summary><dl className="mt-2 text-sm grid grid-cols-[8rem_1fr] gap-2">
+          <Disclosure heading="来源详情"><dl className="mt-2 text-sm grid grid-cols-[8rem_1fr] gap-2">
             <dt>机关 / 编号</dt><dd>{source.lawMetadata.authority || "未记录"} / {source.lawMetadata.number || "未记录"}</dd>
             <dt>效力期间</dt><dd>{source.lawMetadata.effectiveFrom || "起日未知"} 至 {source.lawMetadata.effectiveTo || "结束日未知"}</dd>
             <dt>取得时间 / 途径</dt><dd>{source.lawMetadata.acquiredOn || "未记录"} / {source.lawMetadata.acquiredVia || "未记录"}</dd>
             <dt>使用范围</dt><dd className="whitespace-pre-wrap break-words">{source.lawMetadata.usageScope || "待核实"}</dd>
-          </dl></details>
+          </dl></Disclosure>
         </div>) : <p className="text-sm text-muted-foreground">尚未选入原文。链接与摘要见下方查询记录。</p> : <ResearchSourceEditor matterId={matterId} value={value.sources} documents={options?.documents ?? []} disabled={disabled || !options} onChange={sources => update({ sources })} onPreview={onPreviewSource} />}
       </section>
       <section className="space-y-3"><div className="flex items-center justify-between"><h3 className="font-medium text-sm">查询与阅读记录</h3>{!readOnly ? <Button disabled={disabled || value.queryLog.length >= 40} onClick={() => update({ queryLog: [...value.queryLog, { query: "", location: "", access: "NONE", outcome: "NOT_OBTAINED", notes: "" }] })} type="tertiary" theme="outline" size="small">添加记录</Button> : null}</div>

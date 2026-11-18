@@ -1,3 +1,4 @@
+import { Table, Tag } from "@/components/patterns/semi-surfaces";
 import Link from "next/link";
 import { Download } from "lucide-react";
 import {
@@ -70,65 +71,56 @@ export default async function ArchivePage({ searchParams }: { searchParams: Prom
       ) : (
         <div className="card" style={{ overflow: "hidden" }}>
           <div className="mo-scroll-x">
-            <table className="mo-table" style={{ minWidth: 1080, tableLayout: "fixed" }}>
-              <thead>
-                <tr>
-                  <th style={{ width: 150, paddingLeft: 20 }}>归档号 / 所内案号</th>
-                  <th>案件</th>
-                  <th style={{ width: 84 }}>类别</th>
-                  <th style={{ width: 120 }}>委托方</th>
-                  <th style={{ width: 76 }}>结案方式</th>
-                  <th style={{ width: 108 }}>结案日期</th>
-                  <th style={{ width: 108 }}>归档日期</th>
-                  <th style={{ width: 70 }}>归档人</th>
-                  <th style={{ width: 92 }}>材料</th>
-                  <th style={{ width: 96 }}>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((rec) => (
-                  <tr key={rec.id} data-spine="bronze">
-                    <td style={{ paddingLeft: 20 }}>
-                      <div className="font-mono text-[12px] font-semibold">{rec.archiveNo}</div>
-                      <div className="font-mono text-[11px] text-[var(--t-muted)]">{rec.matter.firmCaseNo ?? "—"}</div>
-                    </td>
-                    <td className="min-w-0">
-                      <Link href={matterHref(rec.matter)} className="block truncate font-semibold hover:text-[var(--teal-deep)]" title={rec.matter.title}>
+            <Table
+              size="small"
+              pagination={false}
+              rowKey="id"
+              scroll={{ x: 1180 }}
+              columns={[
+                { title: "归档号 / 所内案号", dataIndex: "archive", width: 156 },
+                { title: "案件", dataIndex: "matter" },
+                { title: "类别", dataIndex: "category", width: 90 },
+                { title: "委托方", dataIndex: "client", width: 130 },
+                { title: "结案方式", dataIndex: "closure", width: 90 },
+                { title: "结案日期", dataIndex: "completedAt", width: 110 },
+                { title: "归档日期", dataIndex: "archivedAt", width: 110 },
+                { title: "归档人", dataIndex: "archivedBy", width: 85 },
+                { title: "材料", dataIndex: "materials", width: 90 },
+                { title: "操作", dataIndex: "actions", width: 125 },
+              ]}
+              dataSource={items.map(rec => ({
+                id: rec.id,
+                archive: <> <div className="font-mono text-[12px] font-semibold">{rec.archiveNo}</div>
+                      <div className="font-mono text-[11px] text-[var(--semi-color-text-2)]">{rec.matter.firmCaseNo ?? "—"}</div></>,
+                matter: <Link href={matterHref(rec.matter)} className="block truncate font-semibold hover:text-[var(--semi-color-primary-active)]" title={rec.matter.title}>
                         {rec.matter.title}
-                      </Link>
-                    </td>
-                    <td className="t-sm">{matterCategoryLabel[rec.matter.category as keyof typeof matterCategoryLabel] ?? "类别待核实"}</td>
-                    <td className="t-sm truncate" title={rec.matter.primaryClient?.name ?? undefined}>{rec.matter.primaryClient?.name ?? "—"}</td>
-                    <td className="t-sm">{rec.closedReason ? CLOSED_REASON_CN[rec.closedReason] : "—"}</td>
-                    <td className="whitespace-nowrap font-mono text-[12px] text-[var(--t-secondary)]">{rec.completedAt ? formatDate(rec.completedAt) : "—"}</td>
-                    <td className="whitespace-nowrap font-mono text-[12px] text-[var(--t-secondary)]">{formatDate(rec.archivedAt)}</td>
-                    <td className="t-sm">{rec.archivedBy}</td>
-                    <td>
-                      {!rec.materialSnapshotVerified ? (
-                        <span className="badge b-amber" title="历史归档记录没有固定获批材料清单">未固定</span>
+                      </Link>,
+                category: matterCategoryLabel[rec.matter.category as keyof typeof matterCategoryLabel] ?? "类别待核实",
+                client: <span className="block truncate" title={rec.matter.primaryClient?.name ?? undefined}>{rec.matter.primaryClient?.name ?? "—"}</span>,
+                closure: rec.closedReason ? CLOSED_REASON_CN[rec.closedReason] : "—",
+                completedAt: rec.completedAt ? formatDate(rec.completedAt) : "—",
+                archivedAt: formatDate(rec.archivedAt),
+                archivedBy: rec.archivedBy,
+                materials: !rec.materialSnapshotVerified ? (
+                        <Tag color="amber"><span title="历史归档记录没有固定获批材料清单">未固定</span></Tag>
                       ) : rec.missingItems.length > 0 ? (
-                        <span className="badge b-amber">缺 {rec.missingItems.length} 项</span>
+                        <Tag color="amber">缺 {rec.missingItems.length} 项</Tag>
                       ) : (
-                        <span className="badge b-green">齐全</span>
-                      )}
-                    </td>
-                    <td>
-                      <div className="flex items-center gap-2 whitespace-nowrap text-[12px]">
+                        <Tag color="green">齐全</Tag>
+                      ),
+                actions: <div className="flex items-center gap-2 whitespace-nowrap text-[12px]">
                         {canAuditAll || rec.archivedById === session.user.id ? (
-                          <Link className="text-[var(--teal-deep)] hover:underline" href={`/approvals?type=ARCHIVE_APPROVE&id=${rec.id}`}>审阅记录</Link>
+                          <Link className="text-[var(--semi-color-primary-active)] hover:underline" href={`/approvals?type=ARCHIVE_APPROVE&id=${rec.id}`}>审阅记录</Link>
                         ) : null}
                         {rec.materialSnapshotVerified ? (
-                          <a href={`/api/archive/${rec.matter.id}/export?archiveId=${rec.id}`} className="inline-flex items-center gap-1 text-[var(--teal-deep)] hover:underline" title="导出归档 ZIP">
+                          <a href={`/api/archive/${rec.matter.id}/export?archiveId=${rec.id}`} className="inline-flex items-center gap-1 text-[var(--semi-color-primary-active)] hover:underline" title="导出归档 ZIP">
                             <Download className="h-3 w-3" />
                             ZIP
                           </a>
                         ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </div>,
+              }))}
+            />
           </div>
         </div>
       ))}

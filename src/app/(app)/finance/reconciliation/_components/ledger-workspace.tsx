@@ -1,5 +1,5 @@
 "use client";
-import { Tabs, Select, Button, Input, RadioGroup, Notification, Toast } from "@douyinfe/semi-ui";
+import { Table, Empty, Tabs, Select, Button, Input, RadioGroup, Notification, Toast } from "@douyinfe/semi-ui";
 import {InvoiceAdjustments} from "./invoice-adjustments";
 import { ContractWorkspace } from "./contract-workspace";
 import { CorrectionWorkspace } from "./correction-workspace";
@@ -24,13 +24,13 @@ const TABLE_LIMIT = 8;
 const LIST_LIMIT = 6;
 
 /** 表尾「展开全部 / 收起」——行数超限时折叠展示 */
-function ShowMoreFooter({ colSpan, total, expanded, onToggle }: { colSpan: number; total: number; expanded: boolean; onToggle: () => void }) {
-  if (total <= 0) return null;
-  return <tr><td colSpan={colSpan} className="p-2 text-center">
+function ShowMoreFooter({ total, expanded, onToggle }: { total: number; expanded: boolean; onToggle: () => void }) {
+  if (total <= TABLE_LIMIT) return null;
+  return <div className="pt-2 text-center">
     <Button htmlType="button"  onClick={onToggle} size="small" theme="borderless" type="tertiary">
       {expanded ? "收起" : `展开全部 ${total} 条`}
     </Button>
-  </td></tr>;
+  </div>;
 }
 
 export function LedgerWorkspace({ data, canWrite, canConfirm, canCorrect, canSettle, selectedMatterId, tab = "overview", billingId, createContract = false, returnTo }: { data: Data; canWrite: boolean; canConfirm:boolean; canCorrect:boolean; canSettle:boolean; selectedMatterId?: string; tab?: LedgerTab; billingId?: string; createContract?: boolean; returnTo?: string }) {
@@ -105,20 +105,42 @@ export function LedgerWorkspace({ data, canWrite, canConfirm, canCorrect, canSet
       <section className="rounded-xl border bg-card p-4">
         <h2 className="mb-1 font-semibold">应收计划与余额</h2>
         <p className="mb-3 text-xs text-muted-foreground">未结清 {openReceivables.length} 项 · 共 {data.receivables.length} 条{data.receivables.length > TABLE_LIMIT && !showAllReceivables ? ` · 当前显示前 ${TABLE_LIMIT} 条` : ""}</p>
-        <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b text-muted-foreground"><th className="p-2">案件 / 应收</th><th>款项性质</th><th>原额 / 调整</th><th>待收</th><th>到期情况</th></tr></thead><tbody>
-          {receivableRows.map(r => <tr key={r.id} className="border-b"><td className="p-2"><div>{r.title}</div><div className="text-xs text-muted-foreground">{matterName(r.matterId)}</div></td><td>{moneyKindLabels[r.moneyKind]}</td><td>{yuan(r.amount)} / {yuan(r.adjustmentAmount)}</td><td>{yuan(r.outstanding)}</td><td>{r.status === "CANCELLED" ? "已作废" : r.status === "SETTLED" ? "已结清" : dueLabels[r.dueBucket]}{r.dueDate ? <div className="text-xs">到期日 {formatDate(r.dueDate)}</div> : null}{r.dueCondition ? <div className="text-xs">{r.dueCondition}</div> : null}</td></tr>)}
-          {!data.receivables.length ? <tr><td colSpan={5} className="p-5 text-muted-foreground">暂无应收计划</td></tr> : null}
-          <ShowMoreFooter colSpan={5} total={data.receivables.length} expanded={showAllReceivables} onToggle={() => setShowAllReceivables(!showAllReceivables)} />
-        </tbody></table></div>
+        <div className="overflow-x-auto"><Table<(typeof receivableRows)[number]>
+          size="small"
+          pagination={false}
+          rowKey="id"
+          dataSource={receivableRows}
+          scroll={{ x: 640 }}
+          empty={<Empty description={"暂无应收计划"} />}
+          columns={[
+            { title: "案件 / 应收", key: "column1", render: (_, r) => <><div>{r.title}</div><div className="text-xs text-muted-foreground">{matterName(r.matterId)}</div></> },
+            { title: "款项性质", key: "column2", render: (_, r) => moneyKindLabels[r.moneyKind] },
+            { title: "原额 / 调整", align: "right", key: "column3", render: (_, r) => <>{yuan(r.amount)} / {yuan(r.adjustmentAmount)}</> },
+            { title: "待收", align: "right", key: "column4", render: (_, r) => yuan(r.outstanding) },
+            { title: "到期情况", key: "column5", render: (_, r) => <>{r.status === "CANCELLED" ? "已作废" : r.status === "SETTLED" ? "已结清" : dueLabels[r.dueBucket]}{r.dueDate ? <div className="text-xs">到期日 {formatDate(r.dueDate)}</div> : null}{r.dueCondition ? <div className="text-xs">{r.dueCondition}</div> : null}</> },
+          ]}
+        />
+        <ShowMoreFooter total={data.receivables.length} expanded={showAllReceivables} onToggle={() => setShowAllReceivables(!showAllReceivables)} /></div>
       </section>
       <section className="rounded-xl border bg-card p-4">
         <h2 className="mb-1 font-semibold">实收与分配</h2>
         <p className="mb-3 text-xs text-muted-foreground">未核销 {unallocatedPayments.length} 笔 · 共 {data.payments.length} 条{data.payments.length > TABLE_LIMIT && !showAllPayments ? ` · 当前显示前 ${TABLE_LIMIT} 条` : ""}</p>
-        <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b text-muted-foreground"><th className="p-2">案件 / 日期</th><th>款项性质</th><th>原始收款 / 退款</th><th>未核销</th><th>操作</th></tr></thead><tbody>
-          {paymentRows.map(p => <tr key={p.id} className="border-b"><td className="p-2">{matterName(p.matterId)}<div className="text-xs text-muted-foreground">{formatDate(p.occurredAt)}</div></td><td>{moneyKindLabels[p.moneyKind]}</td><td>{yuan(p.amount)} / {yuan(p.refundedAmount)}</td><td>{yuan(p.unallocated)}</td><td>{canWrite && writable(p.matterId) ? <Button  onClick={() => startAllocation(p)} size="small" theme="outline" type="tertiary" htmlType="button">分配收款</Button> : "仅查看"}</td></tr>)}
-          {!data.payments.length ? <tr><td colSpan={5} className="p-5 text-muted-foreground">暂无实收记录；待确认款不列入此表</td></tr> : null}
-          <ShowMoreFooter colSpan={5} total={data.payments.length} expanded={showAllPayments} onToggle={() => setShowAllPayments(!showAllPayments)} />
-        </tbody></table></div>
+        <div className="overflow-x-auto"><Table<(typeof paymentRows)[number]>
+          size="small"
+          pagination={false}
+          rowKey="id"
+          dataSource={paymentRows}
+          scroll={{ x: 640 }}
+          empty={<Empty description={"暂无实收记录；待确认款不列入此表"} />}
+          columns={[
+            { title: "案件 / 日期", key: "column1", render: (_, p) => <>{matterName(p.matterId)}<div className="text-xs text-muted-foreground">{formatDate(p.occurredAt)}</div></> },
+            { title: "款项性质", key: "column2", render: (_, p) => moneyKindLabels[p.moneyKind] },
+            { title: "原始收款 / 退款", align: "right", key: "column3", render: (_, p) => <>{yuan(p.amount)} / {yuan(p.refundedAmount)}</> },
+            { title: "未核销", align: "right", key: "column4", render: (_, p) => yuan(p.unallocated) },
+            { title: "操作", key: "column5", render: (_, p) => canWrite && writable(p.matterId) ? <Button  onClick={() => startAllocation(p)} size="small" theme="outline" type="tertiary" htmlType="button">分配收款</Button> : "仅查看" },
+          ]}
+        />
+        <ShowMoreFooter total={data.payments.length} expanded={showAllPayments} onToggle={() => setShowAllPayments(!showAllPayments)} /></div>
       </section>
     </> : null}
 

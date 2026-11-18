@@ -1,10 +1,11 @@
 "use client";
 
+import { FocusButton } from "@/components/patterns/focus-button";
 import { useId, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus, X, Search, Loader2 } from "lucide-react";
-import { Input, Notification, Popover, RadioGroup, Toast } from "@douyinfe/semi-ui";
+import { Button, Input, Notification, Popover, RadioGroup, Toast } from "@douyinfe/semi-ui";
 import {
   searchMattersForLink,
   addMatterLink,
@@ -131,9 +132,9 @@ export function RelatedMattersField({
             <p className="py-6 text-center text-xs text-muted-foreground">无可关联的案件</p>
           ) : (
             results.map((m) => (
-              <button
+              <Button theme="outline" type="tertiary" size="small" contentClassName="flex w-full min-w-0 flex-col items-start gap-1 text-left"
                 key={m.id}
-                type="button"
+                htmlType="button"
                 onClick={() => add(m.id)}
                 disabled={pending}
                 className="flex w-full flex-col rounded-sm border border-border bg-background px-2 py-1.5 text-left text-xs transition-colors hover:border-input hover:bg-muted hover:text-foreground disabled:opacity-50"
@@ -144,23 +145,22 @@ export function RelatedMattersField({
                   </span>
                 ) : null}
                 <span className="truncate">{m.title}</span>
-              </button>
+              </Button>
             ))
           )}
         </div>
         </div>}
       >
-        <button
+        <FocusButton theme="borderless" type="tertiary" size="small"
           ref={trigger}
-          type="button"
+          htmlType="button"
           aria-label="关联案件"
           aria-expanded={open}
           aria-controls={open ? resultsId : undefined}
-          className="inline-flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--semi-color-primary)]"
           onClick={() => onOpenChange(!open)}
         >
           <Plus className="h-3.5 w-3.5" aria-hidden />
-        </button>
+        </FocusButton>
       </Popover>
     </span>
   ) : null;
@@ -187,15 +187,15 @@ export function RelatedMattersField({
             </span>
           )}
           {canManage && m.status !== "ARCHIVED" && (
-            <button
-              type="button"
+            <Button theme="borderless" type="danger" size="small"
+              htmlType="button"
               onClick={() => remove(m.id)}
               disabled={pending}
               className="rounded-sm p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
               title="解除关联"
             >
               <X className="h-3 w-3" />
-            </button>
+            </Button>
           )}
           {index === related.length - 1 && addButton}
         </span>

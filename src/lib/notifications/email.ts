@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { PRODUCT_NAME, PRODUCT_SHORT_NAME } from "@/lib/product";
 
 /**
  * 个人级邮件提醒渠道（v5 P1-5 收尾：SMTP 部署环境已就位后启用）。
@@ -36,9 +37,9 @@ export async function sendReminderEmail(input: {
   await transport.sendMail({
     from: process.env.MAIL_FROM,
     to: input.to,
-    subject: `律序期限提醒（${input.userName}，共 ${input.lines.length} 项）`,
-    text: `${input.userName}，你好：\n\n以下事项临近或已到期：\n\n${body}\n\n—— 律序 · LexOrder 律师工作台（自动发送）\n`,
-    html: `<p>${input.userName}，你好：</p><p>以下事项临近或已到期：</p><ul>${input.lines.map(l => `<li>${l.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</li>`).join("")}</ul><p style="color:#888">—— 律序 · LexOrder 律师工作台（自动发送）</p>`
+    subject: `${PRODUCT_SHORT_NAME}期限提醒（${input.userName}，共 ${input.lines.length} 项）`,
+    text: `${input.userName}，你好：\n\n以下事项临近或已到期：\n\n${body}\n\n—— ${PRODUCT_NAME} 律师工作台（自动发送）\n`,
+    html: `<p>${input.userName}，你好：</p><p>以下事项临近或已到期：</p><ul>${input.lines.map(l => `<li>${l.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</li>`).join("")}</ul><p style="color:#888">—— ${PRODUCT_NAME} 律师工作台（自动发送）</p>`
   });
   return { ok: true };
 }

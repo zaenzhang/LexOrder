@@ -65,7 +65,7 @@ export function ApprovalsPanel({
 
   return (
     <section className="card">
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--bd-hair)] px-4 py-3">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--semi-color-border)] px-4 py-3">
         <div className="flex items-center gap-3">
           <span className="panel-title">
             <Stamp className="h-3.5 w-3.5 text-primary" />
@@ -76,9 +76,9 @@ export function ApprovalsPanel({
           </span>
           <div className="flex items-center gap-0.5 rounded-md border border-border bg-background p-0.5">
             {FILTERS.map((f) => (
-              <button
+              <Button theme="borderless" type="primary" size="small"
                 key={f.value}
-                type="button"
+                htmlType="button"
                 onClick={() => setFilter(f.value)}
                 className={cn(
                   "rounded px-2 py-0.5 text-[11px] transition-colors",
@@ -93,7 +93,7 @@ export function ApprovalsPanel({
                     {sealContracts.filter((s) => s.status === "PENDING").length}
                   </span>
                 )}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -165,10 +165,10 @@ const SEAL_STATUS_LABEL: Record<string, string> = {
 function SealStatusBadge({ status }: { status: string }) {
   const tone =
     status === "APPROVED" || status === "STAMPED"
-      ? "text-[var(--green)] bg-[var(--green-bg)] border-[var(--green-line)]"
+      ? "text-[var(--semi-color-success)] bg-[var(--semi-color-success-light-default)] border-[var(--semi-color-success-light-active)]"
       : status === "REJECTED" || status === "CANCELLED"
-        ? "text-[var(--red)] bg-[var(--red-bg)] border-[var(--red-line)]"
-        : "text-[var(--amber)] bg-[var(--amber-bg)] border-[var(--amber-line)]";
+        ? "text-[var(--semi-color-danger)] bg-[var(--semi-color-danger-light-default)] border-[var(--semi-color-danger-light-active)]"
+        : "text-[var(--semi-color-warning)] bg-[var(--semi-color-warning-light-default)] border-[var(--semi-color-warning-light-active)]";
   return (
     <Tag className={cn("h-5 border px-1.5 text-[10px]", tone)} color="grey" type="ghost">
       {SEAL_STATUS_LABEL[status] ?? status}

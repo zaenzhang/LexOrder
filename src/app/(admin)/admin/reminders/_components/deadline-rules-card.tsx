@@ -6,7 +6,8 @@
  * 推算示例用 lib/deadline-rules 的 computeDeadlineDate 与 lib/deadline-reminders 的
  * 真实提醒档位计算，不做节假日表（系统不内置，由人工核对顺延）。
  */
-import { Button, Checkbox, Form, Input, Select, Switch, Toast } from "@douyinfe/semi-ui";
+import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
+import { Table, Empty, Button, Checkbox, Form, Input, Select, Switch, Toast } from "@douyinfe/semi-ui";
 import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Info, Pencil, Plus, Scale, Search, Trash2 } from "lucide-react";
@@ -66,7 +67,7 @@ function OffsetChips({ remindDays }: { remindDays: number }) {
   return (
     <span className="inline-flex flex-wrap gap-1" style={{ maxWidth: 170 }}>
       {deadlineReminderOffsets(remindDays).map((o) => (
-        <span key={o} className="offset-chip" style={o > 0 ? { background: "var(--red-bg)", color: "var(--red)" } : undefined}>
+        <span key={o} className="offset-chip" style={o > 0 ? { background: "var(--semi-color-danger-light-default)", color: "var(--semi-color-danger)" } : undefined}>
           {offsetLabel(o)}
         </span>
       ))}
@@ -178,17 +179,17 @@ export function DeadlineRulesCard({ rules, rail, headerActions }: { rules: Admin
 
       <div className="flow-strip">
         <div className="card flow-card">
-          <div className="flow-ic" style={{ background: "var(--teal-soft)", color: "var(--teal-deep)" }}><Scale /></div>
+          <div className="flow-ic" style={{ background: "var(--semi-color-primary-light-default)", color: "var(--semi-color-primary-active)" }}><Scale /></div>
           <div><div className="flow-t">① 起算事件发生</div><div className="flow-d">如：判决书送达之日、立案受理之日，由程序环节与材料识别记录</div></div>
         </div>
         <div className="flow-arrow">→</div>
         <div className="card flow-card">
-          <div className="flow-ic" style={{ background: "var(--blue-bg)", color: "var(--blue)" }}><Info /></div>
+          <div className="flow-ic" style={{ background: "var(--semi-color-info-light-default)", color: "var(--semi-color-info)" }}><Info /></div>
           <div><div className="flow-t">② 规则推算期限</div><div className="flow-d">按日 / 月 / 年计算（期间开始日不计入），届满日遇法定休假日由人工核对顺延</div></div>
         </div>
         <div className="flow-arrow">→</div>
         <div className="card flow-card">
-          <div className="flow-ic" style={{ background: "var(--amber-bg)", color: "var(--amber)" }}><Search /></div>
+          <div className="flow-ic" style={{ background: "var(--semi-color-warning-light-default)", color: "var(--semi-color-warning)" }}><Search /></div>
           <div><div className="flow-t">③ 阶梯预警推送</div><div className="flow-d">T-3 / T-1 / T-0 / T+1 固定四档，另加规则建议提前档；逾期升级团队负责人</div></div>
         </div>
       </div>
@@ -198,7 +199,7 @@ export function DeadlineRulesCard({ rules, rail, headerActions }: { rules: Admin
           <div className="panel-head flex-wrap gap-2">
             <div className="panel-title">
               <Scale className="ic" strokeWidth={1.8} />
-              规则列表 <span className="badge b-white" style={{ marginLeft: 2 }}>{rules.length}</span>
+              规则列表 <SemiTag size="small" color="grey" style={{ marginLeft: 2 }}>{rules.length}</SemiTag>
               <span className="t-xs t-mute" style={{ fontWeight: 400 }}>启用 {rules.filter((r) => r.enabled).length}</span>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -207,55 +208,35 @@ export function DeadlineRulesCard({ rules, rail, headerActions }: { rules: Admin
             </div>
           </div>
           <div className="mo-scroll-x">
-            <table className="table rtable" style={{ minWidth: 760, tableLayout: "fixed" }}>
-              <thead>
-                <tr>
-                  <th style={{ width: "27%" }}>规则名称</th>
-                  <th style={{ width: "14%" }}>适用程序</th>
-                  <th style={{ width: "17%" }}>起算事件</th>
-                  <th style={{ width: "10%" }}>期限</th>
-                  <th style={{ width: "20%" }}>预警阶梯</th>
-                  <th style={{ width: 96 }}>状态</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length === 0 ? (
-                  <tr><td colSpan={6}><div className="empty mo-empty-compact"><div className="mo-empty-title">{rules.length ? "没有匹配的规则" : "暂无规则"}</div></div></td></tr>
-                ) : filtered.map((rule) => (
-                  <tr
-                    key={rule.id}
-                    className={cn("group cursor-pointer", !rule.enabled && "opacity-60")}
-                    style={rule.id === selectedId ? { background: "var(--teal-soft)" } : undefined}
-                    onClick={() => setSelectedId(rule.id)}
-                    aria-selected={rule.id === selectedId}
-                  >
-                    <td>
-                      <div className="rule-name">{rule.name}</div>
+            <Table<(typeof filtered)[number]>
+              size="small"
+              pagination={false}
+              rowKey="id"
+              dataSource={filtered}
+              onRow={rule => rule ? ({ style: rule.id === selectedId ? { background: "var(--semi-color-primary-light-default)" } : undefined, onClick: () => setSelectedId(rule.id), "aria-selected": rule.id === selectedId, className: cn("group cursor-pointer", !rule.enabled && "opacity-60") }) : {}}
+              scroll={{ x: 760 }}
+              tableLayout="fixed"
+              empty={<Empty description={rules.length ? "没有匹配的规则" : "暂无规则"} />}
+              columns={[
+                { title: "规则名称", width: "27%", key: "column1", render: (_, rule) => <><div className="rule-name">{rule.name}</div>
                       <div className="rule-meta truncate" title={`${rule.code} · ${rule.legalBasis}`}>
                         {rule.isBuiltIn ? "内置" : "自定义"} · {CATEGORY_CN[rule.category] ?? rule.category}
-                        {rule.verifiedAt ? <span style={{ color: "var(--green)", fontWeight: 600 }}> · 法条已核验</span> : <span> · 法条未核验</span>}
-                      </div>
-                    </td>
-                    <td><span className="badge b-white max-w-full truncate" title={procedureScope(rule)}>{procedureScope(rule)}</span></td>
-                    <td className="t-sm">{rule.triggerLabel}</td>
-                    <td>
-                      <div className="num-md whitespace-nowrap">{rule.periodValue} {UNIT_CN[rule.periodUnit]}</div>
-                      <span className="offset-chip" style={{ marginTop: 3, display: "inline-block" }}>{rule.periodUnit === "DAYS" ? "自然日" : "对应日"}</span>
-                    </td>
-                    <td><OffsetChips remindDays={rule.remindDays} /></td>
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-0.5">
+                        {rule.verifiedAt ? <span style={{ color: "var(--semi-color-success)", fontWeight: 600 }}> · 法条已核验</span> : <span> · 法条未核验</span>}
+                      </div></> },
+                { title: "适用程序", width: "14%", key: "column2", render: (_, rule) => <SemiTag size="small" color="grey" className="max-w-full truncate"><span title={procedureScope(rule)}>{procedureScope(rule)}</span></SemiTag> },
+                { title: "起算事件", width: "17%", dataIndex: "triggerLabel" },
+                { title: "期限", width: "10%", key: "column4", render: (_, rule) => <><div className="num-md whitespace-nowrap">{rule.periodValue} {UNIT_CN[rule.periodUnit]}</div>
+                      <span className="offset-chip" style={{ marginTop: 3, display: "inline-block" }}>{rule.periodUnit === "DAYS" ? "自然日" : "对应日"}</span></> },
+                { title: "预警阶梯", width: "20%", key: "column5", render: (_, rule) => <OffsetChips remindDays={rule.remindDays} /> },
+                { title: "状态", width: 96, key: "column6", render: (_, rule) => <div className="flex items-center gap-0.5">
                         <Switch size="small" checked={rule.enabled} disabled={pending} onChange={value => toggle(rule, value)} aria-label={`启用期限规则：${rule.name}`} />
                         <Button htmlType="button" type="tertiary" theme="borderless" size="small" onClick={() => openEdit(rule)} aria-label={`编辑 ${rule.name}`} icon={<Pencil size={14} aria-hidden />} />
                         {!rule.isBuiltIn ? (
                           <Button htmlType="button" type="danger" theme="borderless" size="small" onClick={() => remove(rule)} aria-label={`删除 ${rule.name}`} icon={<Trash2 size={14} aria-hidden />} />
                         ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </div> },
+              ]}
+            />
           </div>
           <div className="panel-foot">
             <span className="t-xs t-mute">规则变更记录审计；停用规则不影响已生成期限。内置规则只能编辑与启停（法条依据为核心价值），自定义规则可删除。</span>
@@ -272,22 +253,22 @@ export function DeadlineRulesCard({ rules, rail, headerActions }: { rules: Admin
                 <div className="panel-body" style={{ padding: "6px 0 10px" }}>
                   <div className="ex-day">
                     <span className="ex-date">{mmdd(example.trigger)}</span><span className="ex-role">{selected.triggerLabel}（假设今天发生）</span>
-                    <span className="badge b-white ex-tag">起算</span>
+                    <SemiTag size="small" color="grey" className="ex-tag">起算</SemiTag>
                   </div>
                   <div className="ex-day">
                     <span className="ex-date">+{selected.periodValue}{selected.periodUnit === "DAYS" ? "" : UNIT_CN[selected.periodUnit]}</span>
                     <span className="ex-role">{selected.periodUnit === "DAYS" ? "自然日计算 · 期间不含起算当日" : "取届满月对应日，无对应日取月末"}</span>
-                    <span className="badge b-white ex-tag">计算</span>
+                    <SemiTag size="small" color="grey" className="ex-tag">计算</SemiTag>
                   </div>
                   <div className="ex-day">
                     <span className="ex-date">{mmdd(example.due)}</span><span className="ex-role">届满日（遇法定休假日需人工核对顺延）</span>
-                    <span className="badge b-blue ex-tag">届满</span>
+                    <SemiTag size="small" color="blue" className="ex-tag">届满</SemiTag>
                   </div>
                   {example.tiers.map((t) => (
                     <div key={t.offset} className="ex-day" style={{ background: "#FBFDFC" }}>
-                      <span className="ex-date" style={{ color: t.offset > 0 ? "var(--red)" : t.offset === 0 ? "var(--teal-deep)" : "var(--amber)" }}>{mmdd(t.date)}</span>
+                      <span className="ex-date" style={{ color: t.offset > 0 ? "var(--semi-color-danger)" : t.offset === 0 ? "var(--semi-color-primary-active)" : "var(--semi-color-warning)" }}>{mmdd(t.date)}</span>
                       <span className="ex-role">{t.offset > 0 ? `${offsetLabel(t.offset)} 逾期升级（通知主办 + 团队负责人）` : t.offset === 0 ? "T-0 到期当日提醒" : `${offsetLabel(t.offset)} 预警`}</span>
-                      {t.offset > 0 ? <span className="badge b-outline-red ex-tag">升级</span> : <span className="offset-chip ex-tag">通知</span>}
+                      {t.offset > 0 ? <SemiTag size="small" color="red" type="ghost" className="ex-tag">升级</SemiTag> : <span className="offset-chip ex-tag">通知</span>}
                     </div>
                   ))}
                 </div>

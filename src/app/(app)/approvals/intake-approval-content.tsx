@@ -1,5 +1,6 @@
 "use client";
 
+import { Disclosure } from "@/components/patterns/disclosure";
 import { Button, Tag } from "@douyinfe/semi-ui";
 import {RevisionHistory} from "@/app/(app)/intakes/[id]/_components/revision-history";
 import { useState } from "react";
@@ -33,7 +34,7 @@ function splitEmpty(fields: IntakeReviewField[]) {
 
 function EmptyToggle({ count, open, onToggle }: { count: number; open: boolean; onToggle: () => void }) {
   if (!count) return null;
-  return <Button htmlType="button" onClick={onToggle} aria-expanded={open} className="ml-auto text-[11px] font-normal text-[var(--t-faint)] hover:text-[var(--teal-deep)]" theme="borderless" type="tertiary">{open ? "收起未填写项" : `未填写 ${count} 项`}</Button>;
+  return <Button htmlType="button" onClick={onToggle} aria-expanded={open} className="ml-auto text-[11px] font-normal text-[var(--semi-color-text-3)] hover:text-[var(--semi-color-primary-active)]" theme="borderless" type="tertiary">{open ? "收起未填写项" : `未填写 ${count} 项`}</Button>;
 }
 
 function ReviewSection({ section }: { section: Detail["sections"][number] }) {
@@ -41,7 +42,7 @@ function ReviewSection({ section }: { section: Detail["sections"][number] }) {
   const { empty, visible } = splitEmpty(section.fields);
   const Icon = section.title.includes("收费") ? Wallet : section.title.includes("程序") ? Scale : section.title.includes("委托方") ? Building2 : section.title.includes("顾问") ? BriefcaseBusiness : FileText;
   return <section className="rv-section">
-    <div className="rv-sec-head"><Icon className="h-[14px] w-[14px] text-[var(--teal)]" />{section.title}<EmptyToggle count={empty.length} open={showEmpty} onToggle={() => setShowEmpty(!showEmpty)} /></div>
+    <div className="rv-sec-head"><Icon className="h-[14px] w-[14px] text-[var(--semi-color-primary)]" />{section.title}<EmptyToggle count={empty.length} open={showEmpty} onToggle={() => setShowEmpty(!showEmpty)} /></div>
     {section.note && <div className="rv-note">{section.note}</div>}
     <ReviewRows items={showEmpty ? [...visible, ...empty] : visible} />
   </section>;
@@ -53,7 +54,7 @@ function PartiesSection({ sections }: { sections: Detail["sections"] }) {
   const [showEmpty, setShowEmpty] = useState(false);
   const emptyCount = sections.reduce((n, sec) => n + emptyPartyFieldCount(sec.fields), 0);
   return <section className="rv-section">
-    <div className="rv-sec-head"><Users className="h-[14px] w-[14px] text-[var(--teal)]" />当事人<span className="t-xs t-mute font-normal">{sections.length} 位</span><EmptyToggle count={emptyCount} open={showEmpty} onToggle={() => setShowEmpty(!showEmpty)} /></div>
+    <div className="rv-sec-head"><Users className="h-[14px] w-[14px] text-[var(--semi-color-primary)]" />当事人<span className="t-xs t-mute font-normal">{sections.length} 位</span><EmptyToggle count={emptyCount} open={showEmpty} onToggle={() => setShowEmpty(!showEmpty)} /></div>
     {sections.map(sec => {
       const get = (label: string) => sec.fields.find(f => f.label === label)?.value;
       const rest = sec.fields.filter(f => !partyHeadFields.has(f.label));
@@ -63,8 +64,8 @@ function PartiesSection({ sections }: { sections: Detail["sections"] }) {
       return <div key={sec.title} className="rv-party">
         <div className="rv-party-head">
           <strong>{get("姓名 / 名称") ?? sec.title}</strong>
-          {get("本案角色") && <span className="badge b-white" style={{ fontSize: 10 }}>{get("本案角色")}</span>}
-          {standing && standing !== "未填写" && <span className="badge b-teal" style={{ fontSize: 10 }}>{standing}</span>}
+          {get("本案角色") && <Tag size="small" color="grey">{get("本案角色")}</Tag>}
+          {standing && standing !== "未填写" && <Tag size="small" color="teal">{standing}</Tag>}
           {get("主体类型") && <span className="t-xs t-mute">{get("主体类型")}</span>}
         </div>
         <ReviewRows items={showEmpty ? [...visible, ...empty] : visible} />
@@ -89,37 +90,36 @@ export function IntakeApprovalContent({ detail, view = "all", onOpenConflicts }:
       return blocks;
     })()}
     {view === "overview" && <section className="rv-section">
-      <div className="rv-sec-head"><AlertTriangle className="h-[14px] w-[14px] text-[var(--red)]" />冲突核查摘要{onOpenConflicts && <Button htmlType="button" onClick={onOpenConflicts} className="ml-auto text-[11px] font-[550] text-[var(--teal-deep)]" theme="borderless" type="tertiary">查看完整检索记录 →</Button>}</div>
+      <div className="rv-sec-head"><AlertTriangle className="h-[14px] w-[14px] text-[var(--semi-color-danger)]" />冲突核查摘要{onOpenConflicts && <Button htmlType="button" onClick={onOpenConflicts} className="ml-auto text-[11px] font-[550] text-[var(--semi-color-primary-active)]" theme="borderless" type="tertiary">查看完整检索记录 →</Button>}</div>
       <div className="conf-sum">
-        <div className="cs-ic" style={!latest || latest.hits.length ? undefined : { background: "var(--green-bg)", color: "var(--green)" }}><AlertTriangle /></div>
+        <div className="cs-ic" style={!latest || latest.hits.length ? undefined : { background: "var(--semi-color-success-light-default)", color: "var(--semi-color-success)" }}><AlertTriangle /></div>
         <div style={{ flex: 1 }}>
           <div className="cs-t">{!latest ? "尚未进行冲突检索" : latest.hits.length ? conflictMatchKinds.map(k => ({ k, n: latest.hits.filter(h => conflictMatchKind(h) === k.key).length })).filter(x => x.n).map(x => `${x.k.label} × ${x.n}`).join(" · ") : "系统检索未命中"}</div>
           <div className="cs-d">{!latest ? "当前没有可供核查的检索记录，请退回补正或要求重新检索。" : `最近一次检索 ${dateText(latest.checkedAt)} · 当前结论「${latest.conclusion}」${latest.coversCurrentParties ? "" : " · 检索资料不完整，请重新检索"}。未命中不等于人工确认无冲突。`}</div>
         </div>
-        {onOpenConflicts && <ChevronRight className="h-4 w-4 text-[var(--t-faint)]" />}
+        {onOpenConflicts && <ChevronRight className="h-4 w-4 text-[var(--semi-color-text-3)]" />}
       </div>
     </section>}
     {view !== "overview" && <section className="rv-section">
-      <div className="rv-sec-head"><AlertTriangle className="h-[14px] w-[14px] text-[var(--red)]" />利益冲突核查详情<span className="t-xs t-mute ml-auto font-normal">系统提示不能代替审批判断</span></div>
+      <div className="rv-sec-head"><AlertTriangle className="h-[14px] w-[14px] text-[var(--semi-color-danger)]" />利益冲突核查详情<span className="t-xs t-mute ml-auto font-normal">系统提示不能代替审批判断</span></div>
       <div className="panel-body space-y-4">
-      {!detail.checks.length && <p className="rounded-lg border border-[var(--amber-line)] bg-[var(--amber-bg)] p-3 text-sm">尚未运行利益冲突检索，当前没有可供核查的检索记录。</p>}
-      {detail.checks.map((check, index) => <details key={check.id} open={index === 0} className={styles.check}>
-        <summary className="cursor-pointer text-sm font-medium">{index === 0 ? "最近一次检索" : "历史检索"} · {dateText(check.checkedAt)} · 检索结果 {check.hits.length} 条</summary>
+      {!detail.checks.length && <p className="rounded-lg border border-[var(--semi-color-warning-light-active)] bg-[var(--semi-color-warning-light-default)] p-3 text-sm">尚未运行利益冲突检索，当前没有可供核查的检索记录。</p>}
+      {detail.checks.map((check, index) => <Disclosure key={check.id} defaultOpen={index === 0} className={styles.check} heading={<>{index === 0 ? "最近一次检索" : "历史检索"} · {dateText(check.checkedAt)} · 检索结果 {check.hits.length} 条</>}>
         <div className="mt-4 space-y-4">
           <ConflictResults hits={check.hits} />
-          {!check.coversCurrentParties && <p className="rounded-md bg-[var(--amber-bg)] p-3 text-sm text-[var(--amber)]">检索资料不完整或当事人已变更，请重新检索后提交审批。</p>}
+          {!check.coversCurrentParties && <p className="rounded-md bg-[var(--semi-color-warning-light-default)] p-3 text-sm text-[var(--semi-color-warning)]">检索资料不完整或当事人已变更，请重新检索后提交审批。</p>}
           <div className={styles.checkConclusion}><div><span>当前保存结论</span><strong>{check.conclusion}</strong></div><div><span>结论来源</span><strong>{check.source}</strong></div>{check.decidedBy && <p>结论记录人：{check.decidedBy} · {dateText(check.decidedAt)}</p>}<p>说明：{check.note || "未记录"}</p></div>
           <div className="space-y-2"><h4 className="text-sm font-medium">本案核查对象</h4>
             <div className={styles.queries}>{detail.currentParties.map((q, i) => <div key={i}><Tag color="grey" type="ghost">{roleText(q.role)}</Tag><strong>{q.name || "未填写名称"}</strong><p>证件条件：<IntakeReviewValue label={`本案当事人 ${i + 1} 的证件条件`} value={q.idNumber || "未填写"} /></p></div>)}</div>
           </div>
-          <details className={styles.emptyFields}><summary>查看本次检索条件</summary>
+          <Disclosure className={styles.emptyFields} heading="查看本次检索条件">
             {!check.queries.length && <p className="mt-2 text-sm text-muted-foreground">检索条件不完整，请重新检索。</p>}
             <div className={styles.queries}>{check.queries.map((q, i) => <div key={i}>{roleText(q.role) && <Tag color="grey" type="ghost">{roleText(q.role)}</Tag>}<strong>{q.name || "未填写名称"}</strong><p>证件条件：<IntakeReviewValue label={`检索对象 ${i + 1} 的证件条件`} value={q.idNumber || "未填写"} /></p></div>)}</div>
-          </details>
+          </Disclosure>
           {!!check.sameNameClients.length && <div className="text-sm"><h4 className="font-medium">历史客户库同名提示（不等同利益冲突）</h4>{check.sameNameClients.map((c, i) => <p key={i}>{c.name || "姓名未记录"}</p>)}</div>}
           {!!check.idMatchedClients.length && <div className="text-sm"><h4 className="font-medium">历史客户库证件匹配提示（需核对主体身份）</h4>{check.idMatchedClients.map((c, i) => <p key={i}>{c.name} · <IntakeReviewValue label="客户库匹配证件" value={c.idNumber || "未记录"} /></p>)}</div>}
         </div>
-      </details>)}
+      </Disclosure>)}
       </div>
     </section>}
   </div>;

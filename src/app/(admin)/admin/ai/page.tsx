@@ -1,3 +1,4 @@
+import { Disclosure } from "@/components/patterns/disclosure";
 import { getAiSettingsPublic } from "@/server/settings/ai-actions";
 import { getOcrSettingsPublic } from "@/server/settings/ocr-actions";
 import { OcrSettingsForm } from "./_components/ocr-settings-form";
@@ -39,7 +40,7 @@ export default async function AiSettingsPage({ searchParams }: { searchParams: P
         mcp: mcp.status === "fulfilled" ? <LegalMcpSettingsForm initial={mcp.value} /> : <SettingsFailure name="法律 MCP" />,
         calls: callStats.status === "fulfilled" ? <ExternalCallStatsCard stats={callStats.value} /> : <SettingsFailure name="外部调用统计" />
       }} />
-      <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">RAGFlow</summary><p className="mt-2">本页暂不支持配置 RAGFlow。内置材料处理与检索可正常使用。</p></details>
+      <Disclosure className="text-xs text-muted-foreground" heading="RAGFlow"><p className="mt-2">本页暂不支持配置 RAGFlow。内置材料处理与检索可正常使用。</p></Disclosure>
     </div>
   );
 }

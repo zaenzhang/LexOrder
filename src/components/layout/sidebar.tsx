@@ -1,16 +1,11 @@
 "use client";
 
-/**
- * 墨案侧栏（docs/mockup/v4 02–10 页 .sidebar）：
- * 品牌（律所名 + LexOrder）/ 工作区·业务·知识·资料 四段导航（带计数）/ 底部用户卡。
- * 计数经 getNavCounts 按当前账号权限异步获取，失败不显示；路由切换后刷新。
- */
 import { useEffect, useRef, useState } from "react";
-import { Avatar, Button, Dropdown, Nav, Tag } from "@douyinfe/semi-ui";
-import Link from "next/link";
+import { Avatar, Button, Dropdown, Layout, Nav, Tag } from "@douyinfe/semi-ui";
 import { usePathname, useRouter } from "next/navigation";
 import { useWorkspaceActor } from "@/components/workspace-actor-provider";
-import { ChevronsUpDown, LayoutGrid } from "lucide-react";
+import { PRODUCT_SHORT_NAME } from "@/lib/product";
+import { IconApps, IconChevronUpDown } from "@douyinfe/semi-icons";
 import { customOrLegacy, hasCustomPermission, roleDisplayName, type PermissionKey } from "@/lib/roles/catalog";
 import { getNavCounts, type NavCounts } from "@/server/layout/nav-counts";
 import { WorkspaceAccountMenu } from "./workspace-account-menu";
@@ -36,9 +31,9 @@ const PERMISSION_BY_HREF: Record<string, PermissionKey> = {
 /** 桌面侧边栏（md 以上显示） */
 export function Sidebar({ firm, onOpenTools }: { firm: FirmBrand; onOpenTools?: () => void }) {
   return (
-    <aside className="sidebar fixed left-0 top-0 z-30 hidden w-[228px] md:flex">
+    <Layout.Sider className="workspace-sider hidden md:block" aria-label="工作区导航">
       <NavContent firm={firm} onOpenTools={onOpenTools} />
-    </aside>
+    </Layout.Sider>
   );
 }
 
@@ -59,7 +54,7 @@ export function BrandMark({ logoDataUrl, name, size = 30 }: { logoDataUrl?: stri
 }
 
 /** 导航内容 — 桌面侧边栏和移动 Sheet 共用 */
-export function NavContent({ firm, onOpenTools }: { firm: FirmBrand; onOpenTools?: () => void }) {
+export function NavContent({ firm, onOpenTools, onNavigate }: { firm: FirmBrand; onOpenTools?: () => void; onNavigate?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
   const moreTrigger = useRef<HTMLDivElement>(null);
@@ -98,70 +93,71 @@ export function NavContent({ firm, onOpenTools }: { firm: FirmBrand; onOpenTools
   const systemLabel = !personal && user?.systemRole === "SUPER_ADMIN" ? "超级管理员" : "";
 
   const navList = primaryNav.filter(visible);
+  function followLink(event: React.MouseEvent<HTMLAnchorElement>, href: string) {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    onNavigate?.();
+    router.push(href);
+  }
 
   return (
-    <div className="flex h-full w-full flex-col">
-      <Link href="/" className="brand no-underline hover:bg-[var(--bg-hover)]" aria-label="返回工作台">
-        <BrandMark logoDataUrl={firm.logoDataUrl} name={firm.name} />
-        <div className="min-w-0">
-          <div className="brand-name truncate text-[var(--t-primary)]">{firm.name}</div>
-          <div className="brand-sub truncate">{firm.subtitle || "律序律师工作台"}</div>
-        </div>
-      </Link>
-
-      <Nav aria-label="业务导航" style={{ width: "100%", flex: 1, minHeight: 0, overflowY: "auto" }}
-        selectedKeys={navList.filter(item => isActive(pathname, item.href)).map(item => item.href)}>
-        {navList.map(item => {
-          const count = countOf(item);
-          return <Nav.Item key={item.href} itemKey={item.href} link={item.href} tabIndex={-1}
-            linkOptions={{
-              tabIndex: 0,
-              onKeyPress: event => event.stopPropagation(),
-              "aria-current": isActive(pathname, item.href) ? "page" : undefined,
-              onClick: event => {
-                if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
-                  event.preventDefault(); router.push(item.href);
-                }
-              }
-            }} icon={<item.icon size={18} />} text={
-              <span className="flex w-full items-center justify-between gap-2"><span>{item.label}</span>
-                {count ? <Tag size="small" color={count.alert ? "red" : "grey"}>{count.n > 99 ? "99+" : count.n}</Tag> : null}
-              </span>
-            } />;
-        })}
-      </Nav>
-      <div className="p-3" ref={moreTrigger}>
-        <Dropdown trigger="click" position="rightBottom" visible={moreOpen} onVisibleChange={setMoreOpen} onEscKeyDown={() => setMoreOpen(false)} motion={false} render={
-          <Dropdown.Menu>
-            {APP_ITEMS.map(item => <Dropdown.Item key={item.label} active={item.kind === "link" && Boolean(item.href && isActive(pathname, item.href))} icon={<item.icon size={16} />} onClick={() => {
-              setMoreOpen(false);
-              if (item.kind === "tools") {
-                moreTrigger.current?.querySelector("button")?.focus();
-                onOpenTools?.();
-              } else if (item.kind === "external") {
-                window.open(item.href, "_blank", "noopener,noreferrer");
-              } else if (item.href) router.push(item.href);
-            }}>{item.label}</Dropdown.Item>)}
-          </Dropdown.Menu>
-        }>
-          <Button htmlType="button" block theme={APP_ITEMS.some(item => item.kind === "link" && item.href && isActive(pathname, item.href)) ? "light" : "borderless"}
-            type="tertiary" icon={<LayoutGrid size={18} />}>更多应用</Button>
-        </Dropdown>
-      </div>
-
-      <div className="p-3 pt-0">
-        <WorkspaceAccountMenu position="topLeft">
-          <Button htmlType="button" block theme="borderless" type="tertiary" aria-label="侧栏账户菜单" style={{ height: "auto", padding: 8 }}
-            icon={<Avatar size="extra-extra-small">{displayName.charAt(0) || "?"}</Avatar>}>
-            <span className="flex min-w-0 flex-col items-start px-2">
-              <span className="max-w-[120px] truncate">{displayName || "…"}</span>
-              <span className="max-w-[120px] truncate text-xs text-[var(--semi-color-text-2)]">{[roleLabel, systemLabel].filter(Boolean).join(" · ")}</span>
+    <Nav className="workspace-nav" aria-label="业务导航"
+      selectedKeys={navList.filter(item => isActive(pathname, item.href)).map(item => item.href)}>
+      <Nav.Header link="/" linkOptions={{ "aria-label": "返回工作台", onClick: event => followLink(event, "/") }}
+        logo={<BrandMark logoDataUrl={firm.logoDataUrl} name={firm.name} />}
+        text={<span className="block min-w-0">
+          <span className="block truncate" title={firm.name}>{firm.name}</span>
+          <span className="block truncate text-xs font-normal text-[var(--semi-color-text-2)]">{firm.subtitle || PRODUCT_SHORT_NAME}</span>
+        </span>}
+      />
+      {navList.map(item => {
+        const count = countOf(item);
+        return <Nav.Item key={item.href} itemKey={item.href} link={item.href} tabIndex={-1}
+          linkOptions={{
+            tabIndex: 0,
+            onKeyPress: event => event.stopPropagation(),
+            "aria-current": isActive(pathname, item.href) ? "page" : undefined,
+            onClick: event => followLink(event, item.href),
+          }} icon={<item.icon size="large" aria-hidden />} text={
+            <span className="flex w-full items-center justify-between gap-2"><span>{item.label}</span>
+              {count ? <Tag size="small" color={count.alert ? "red" : "grey"}>{count.n > 99 ? "99+" : count.n}</Tag> : null}
             </span>
-            <ChevronsUpDown size={14} />
-          </Button>
-        </WorkspaceAccountMenu>
-      </div>
-    </div>
+          } />;
+      })}
+      <Nav.Footer>
+        <div className="grid w-full min-w-0 gap-2">
+          <div ref={moreTrigger}>
+            <Dropdown trigger="click" position={onNavigate ? "topLeft" : "rightBottom"} visible={moreOpen} onVisibleChange={setMoreOpen} onEscKeyDown={() => setMoreOpen(false)} motion={false} render={
+              <Dropdown.Menu>
+                {APP_ITEMS.map(item => <Dropdown.Item key={item.label} active={item.kind === "link" && Boolean(item.href && isActive(pathname, item.href))} icon={<item.icon aria-hidden />} onClick={() => {
+                  setMoreOpen(false);
+                  onNavigate?.();
+                  if (item.kind === "tools") {
+                    moreTrigger.current?.querySelector("button")?.focus();
+                    onOpenTools?.();
+                  } else if (item.kind === "external") {
+                    window.open(item.href, "_blank", "noopener,noreferrer");
+                  } else if (item.href) router.push(item.href);
+                }}>{item.label}</Dropdown.Item>)}
+              </Dropdown.Menu>
+            }>
+              <Button htmlType="button" block theme={APP_ITEMS.some(item => item.kind === "link" && item.href && isActive(pathname, item.href)) ? "light" : "borderless"}
+                type="tertiary" style={{ justifyContent: "flex-start" }} icon={<IconApps aria-hidden />}>更多应用</Button>
+            </Dropdown>
+          </div>
+          <WorkspaceAccountMenu position="topLeft">
+            <Button htmlType="button" block theme="borderless" type="tertiary" aria-label="侧栏账户菜单" style={{ height: "auto", padding: 8, justifyContent: "flex-start" }}
+              icon={<Avatar size="extra-extra-small">{displayName.charAt(0) || "?"}</Avatar>}>
+              <span className="flex min-w-0 flex-col items-start px-2">
+                <span className="max-w-[120px] truncate">{displayName || "…"}</span>
+                <span className="max-w-[120px] truncate text-xs text-[var(--semi-color-text-2)]">{[roleLabel, systemLabel].filter(Boolean).join(" · ")}</span>
+              </span>
+              <IconChevronUpDown size="small" aria-hidden />
+            </Button>
+          </WorkspaceAccountMenu>
+        </div>
+      </Nav.Footer>
+    </Nav>
   );
 }
 

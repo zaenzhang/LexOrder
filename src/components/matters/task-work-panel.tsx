@@ -1,9 +1,10 @@
 "use client";
 
+import { FocusButton } from "@/components/patterns/focus-button";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
-import { Select, Button, Checkbox, Input, Tag, TextArea, Toast } from "@douyinfe/semi-ui";
+import { Table, Select, Button, Checkbox, Input, Tag, TextArea, Toast } from "@douyinfe/semi-ui";
 import { WorkspaceDialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { FormDialogBody, FormDialogContent } from "@/components/patterns/form-dialog";
@@ -114,33 +115,29 @@ export function TaskWorkPanel({ matterId, canWrite = true, createRequest = 0, cr
           <Checkbox checked={includeClosed} onChange={({ target: { checked } }) => setIncludeClosed(checked === true)}>
           显示已办结和已取消
         </Checkbox></div>
-        {canWrite && data?.canWrite && <button ref={createButton} onClick={() => { creatingLocation.current = window.location.href; setCreatingStage(defaultStage); setCreating(true); }} type="button" className="font-medium text-[var(--semi-color-link)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--semi-color-primary)] disabled:opacity-50"><Plus />新建任务</button>}
+        {canWrite && data?.canWrite && <FocusButton theme="borderless" type="tertiary" size="small" style={{ height: "auto", paddingInline: 0 }} contentClassName="whitespace-normal break-words text-left" ref={createButton} onClick={() => { creatingLocation.current = window.location.href; setCreatingStage(defaultStage); setCreating(true); }} htmlType="button" className="min-w-0 max-w-full"><Plus />新建任务</FocusButton>}
       </div>
     </div>
     {error ? <div role="alert" className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm">
       <span>{error}</span><Button onClick={() => setReload(value => value + 1)} type="tertiary" theme="outline" size="small">重试</Button>
     </div> : !data ? <p role="status" className="py-4 text-sm text-muted-foreground">正在读取任务…</p> : scopedTasks.length === 0 ? <p className="py-4 text-sm text-muted-foreground">{dueWaitingOnly ? "当前范围没有到期的等待检查。" : scopedUntracked.length ? "没有责任记录完整的任务。" : includeClosed ? "当前范围还没有任务。" : "当前范围没有办理中的任务。"}</p> : <div className="overflow-x-auto rounded-lg border">
-      <table className="w-full text-left text-sm">
-        <thead className="border-b bg-muted/40 text-muted-foreground"><tr>
-          <th className="px-3 py-2 font-medium">任务</th>
-          <th className="px-3 py-2 font-medium">内部责任人</th>
-          <th className="px-3 py-2 font-medium">任务截止</th>
-          <th className="px-3 py-2 font-medium">外部等待</th>
-        </tr></thead>
-        <tbody className="divide-y">{scopedTasks.map(task => <tr key={task.id}>
-          <td className="max-w-md px-3 py-3 align-top">
-            <div className="flex items-start gap-2">
-              <button ref={node => { if (node) taskButtons.current.set(task.id, node); else taskButtons.current.delete(task.id); }} onClick={() => { openedTaskId.current = task.id; selectTask(task.id); }} type="button" className="font-medium text-[var(--semi-color-link)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--semi-color-primary)] disabled:opacity-50 h-auto min-w-0 whitespace-normal py-0 text-left">{task.title}</button>
+      <Table<(typeof scopedTasks)[number]>
+        size="small"
+        pagination={false}
+        rowKey="id"
+        dataSource={scopedTasks}
+        columns={[
+          { title: "任务", key: "column1", render: (_, task) => <><div className="flex items-start gap-2">
+              <FocusButton theme="borderless" type="tertiary" size="small" style={{ height: "auto", paddingInline: 0 }} contentClassName="whitespace-normal break-words text-left" ref={node => { if (node) taskButtons.current.set(task.id, node); else taskButtons.current.delete(task.id); }} onClick={() => { openedTaskId.current = task.id; selectTask(task.id); }} htmlType="button" className="min-w-0 max-w-full">{task.title}</FocusButton>
               <Tag color={task.responsibility.state === "DONE" ? "green" : "grey"}>{taskStateLabels[task.responsibility.state]}</Tag>
               {task.priority === 2 && <Tag color="red">紧急</Tag>}
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">{task.stageId ? [task.procedureTitle, task.stageName].filter(Boolean).join(" · ") : "事项级"}</p>
-          </td>
-          <td className="px-3 py-3 align-top"><span>{task.responsibility.name}</span>{!task.responsibility.active && <p className="mt-1 text-xs text-destructive">待交接</p>}</td>
-          <td className="whitespace-nowrap px-3 py-3 align-top">{task.dueAt ? formatDateTime(task.dueAt) : "未安排"}</td>
-          <td className="max-w-xs px-3 py-3 align-top">{task.activeWaiting ? <><p className="break-words">{task.activeWaiting.waitingFor}</p><p className="mt-1 text-xs text-muted-foreground">检查：{formatDateTime(task.activeWaiting.nextCheckAt)}</p>{waitingIsDue(task) && <Tag className="mt-1" color="grey" type="ghost">待检查</Tag>}</> : <span className="text-muted-foreground">—</span>}</td>
-        </tr>)}</tbody>
-      </table>
+            <p className="mt-1 text-xs text-muted-foreground">{task.stageId ? [task.procedureTitle, task.stageName].filter(Boolean).join(" · ") : "事项级"}</p></> },
+          { title: "内部责任人", key: "column2", render: (_, task) => <><span>{task.responsibility.name}</span>{!task.responsibility.active && <p className="mt-1 text-xs text-destructive">待交接</p>}</> },
+          { title: "任务截止", key: "column3", render: (_, task) => <span className="whitespace-nowrap">{task.dueAt ? formatDateTime(task.dueAt) : "未安排"}</span> },
+          { title: "外部等待", key: "column4", render: (_, task) => task.activeWaiting ? <><p className="break-words">{task.activeWaiting.waitingFor}</p><p className="mt-1 text-xs text-muted-foreground">检查：{formatDateTime(task.activeWaiting.nextCheckAt)}</p>{waitingIsDue(task) && <Tag className="mt-1" color="grey" type="ghost">待检查</Tag>}</> : <span className="text-muted-foreground">—</span> },
+        ]}
+      />
     </div>}
     {data && scopedUntracked.length > 0 && <div role="alert" className="rounded-lg border p-3 text-sm">
       <p>以下既有任务缺少责任记录，暂不能在任务工作区办理；请联系管理员核实责任、截止日期和提醒。原任务字段仅供核对：</p>

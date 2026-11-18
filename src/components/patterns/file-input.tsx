@@ -1,6 +1,8 @@
 "use client"
 
 import * as React from "react"
+import { Button, Typography } from "@douyinfe/semi-ui"
+import { IconUpload } from "@douyinfe/semi-icons"
 
 import { cn } from "@/lib/utils"
 
@@ -30,8 +32,7 @@ export const FileInput = React.forwardRef<HTMLInputElement, Omit<React.Component
 
     return (
       <span className={cn(
-        "relative flex min-h-8 w-full min-w-0 items-center gap-3 rounded-[var(--semi-border-radius-small)] border border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] px-3 py-1.5 text-sm focus-within:border-[var(--semi-color-primary)]",
-        disabled && "cursor-not-allowed opacity-50",
+        "relative flex min-w-0 items-center gap-2 rounded-[var(--semi-border-radius-small)] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--semi-color-focus-border)]",
         className
       )}>
         <input
@@ -40,7 +41,7 @@ export const FileInput = React.forwardRef<HTMLInputElement, Omit<React.Component
           disabled={disabled}
           title={props.title ?? summary}
           aria-describedby={[props["aria-describedby"], descriptionId].filter(Boolean).join(" ")}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+          className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
           ref={node => {
             inputRef.current = node
             if (typeof forwardedRef === "function") forwardedRef(node)
@@ -51,8 +52,8 @@ export const FileInput = React.forwardRef<HTMLInputElement, Omit<React.Component
             setNames(Array.from(event.currentTarget.files ?? [], file => file.name))
           }}
         />
-        <span aria-hidden="true" className="shrink-0 font-medium text-[var(--semi-color-text-0)]">选择文件</span>
-        <span id={descriptionId} aria-hidden="true" className="truncate text-[var(--semi-color-text-2)]">{summary}</span>
+        <Button icon={<IconUpload aria-hidden />} theme="outline" type="tertiary" disabled={disabled} tabIndex={-1} aria-hidden className="shrink-0">选择文件</Button>
+        <Typography.Text id={descriptionId} type="secondary" size="small" className="truncate">{summary}</Typography.Text>
       </span>
     )
   }

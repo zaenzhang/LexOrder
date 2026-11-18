@@ -5,7 +5,7 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AlertTriangle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock3, Gavel, Plus } from "lucide-react";
-import { PageHeader, RiskLadder, Segmented } from "@/components/patterns/moan";
+import { PageHeader, RiskLadder, WorkspaceTabs } from "@/components/patterns/moan";
 import { useTopbarAction } from "@/components/layout/topbar-action";
 import { Button, Modal, Tag, Typography } from "@douyinfe/semi-ui";
 import { cn } from "@/lib/utils";
@@ -79,7 +79,7 @@ export function ScheduleView({
         actions={
           <>
             <CalendarSubscriptionDialog />
-            <Segmented
+            <WorkspaceTabs
               items={[
                 { key: "week", label: "周" },
                 { key: "calendar", label: "月历" },
@@ -120,10 +120,10 @@ function Legend() {
   );
   return (
     <div className="hidden flex-wrap gap-3 md:flex">
-      {dot("var(--blue)", "开庭")}
-      {dot("var(--red)", "法定期限")}
-      {dot("var(--amber)", "所内提醒")}
-      {dot("var(--teal)", "任务")}
+      {dot("var(--semi-color-info)", "开庭")}
+      {dot("var(--semi-color-danger)", "法定期限")}
+      {dot("var(--semi-color-warning)", "所内提醒")}
+      {dot("var(--semi-color-primary)", "任务")}
     </div>
   );
 }
@@ -131,8 +131,8 @@ function Legend() {
 function EventChip({ item, onSelect }: { item: ScheduleItem; onSelect: (item: ScheduleItem) => void }) {
   const hasTime = item.deadlineId ? item.duePrecision === "DATETIME" : shTime(item.occurredAt) !== "00:00";
   return (
-    <button
-      type="button"
+    <Button theme="borderless" type="tertiary" size="small" contentClassName="flex w-full min-w-0 flex-wrap items-center gap-2 text-left"
+      htmlType="button"
       onClick={(e) => {
         e.stopPropagation();
         onSelect(item);
@@ -142,7 +142,7 @@ function EventChip({ item, onSelect }: { item: ScheduleItem; onSelect: (item: Sc
     >
       <span className="t">{item.deadlineId ? scheduleTime(item) : hasTime ? scheduleTime(item) : "—"}</span>
       <span className="min-w-0 truncate">{item.type === "hearing" && !/^(开庭|庭审|询问)/.test(item.title) ? `开庭·${item.title}` : item.title}</span>
-    </button>
+    </Button>
   );
 }
 
@@ -265,7 +265,7 @@ function WeekView({
       </div>
       <div className="dow">
         {days.map((d, i) => (
-          <div key={i} style={civilKey(d) === todayKey ? { color: "var(--teal-deep)" } : undefined}>
+          <div key={i} style={civilKey(d) === todayKey ? { color: "var(--semi-color-primary-active)" } : undefined}>
             {WEEKDAYS[i]} <span className="font-mono">{d.getDate()}</span>
           </div>
         ))}
@@ -306,8 +306,8 @@ function ListView({ items, today, onSelectItem }: { items: (ScheduleItem & { dat
         const days = Math.round((d.getTime() - today.getTime()) / 86_400_000);
         return (
           <div key={key}>
-            <div className="flex items-center gap-2 border-b border-[var(--bd-hair)] bg-[#FAFBFA] px-3.5 py-2">
-              <span className={cn("text-[12.5px] font-[650]", days === 0 && "text-[var(--teal-deep)]")}>{d.getMonth() + 1}月{d.getDate()}日</span>
+            <div className="flex items-center gap-2 border-b border-[var(--semi-color-border)] bg-[#FAFBFA] px-3.5 py-2">
+              <span className={cn("text-[12.5px] font-[650]", days === 0 && "text-[var(--semi-color-primary-active)]")}>{d.getMonth() + 1}月{d.getDate()}日</span>
               <span className="t-xs t-mute">{WEEKDAYS[(d.getDay() + 6) % 7]}</span>
               <span className={cn("t-xs ml-auto", days < 0 ? "t-red" : "t-mute")}>{days === 0 ? "今天" : days === 1 ? "明天" : days > 0 ? `${days} 天后` : `${-days} 天前`}</span>
             </div>
@@ -322,7 +322,7 @@ function ListView({ items, today, onSelectItem }: { items: (ScheduleItem & { dat
 function SideItem({ item, onSelectItem, lead }: { item: ScheduleItem; onSelectItem: (item: ScheduleItem) => void; lead: string }) {
   const overdue = item.type === "deadline" && !item.completed && (item.deadlineId ? deadlineOverdue(item.occurredAt, item.duePrecision ?? null) : new Date(item.occurredAt).getTime() < Date.now());
   return (
-    <button type="button" onClick={() => onSelectItem(item)} className="today-item w-full border-0 bg-transparent text-left font-[inherit]">
+    <Button theme="borderless" type="tertiary" size="small" contentClassName="flex w-full min-w-0 flex-wrap items-center gap-2 text-left" style={{ height: "auto" }} htmlType="button" onClick={() => onSelectItem(item)} className="today-item w-full border-0 bg-transparent text-left font-[inherit]">
       <span className={cn("w-12 shrink-0 font-mono text-[12px]", overdue ? "t-red" : "t-mute")}>{lead}</span>
       <span className="min-w-0 flex-1">
         <span className={cn("tt block truncate", item.completed && "line-through opacity-60")}>
@@ -333,7 +333,7 @@ function SideItem({ item, onSelectItem, lead }: { item: ScheduleItem; onSelectIt
           {[lead === scheduleTime(item) ? null : scheduleTime(item), displaySubject(item), item.procedureLabel ? formatProcedureLabel(item.procedureLabel) : null].filter(Boolean).join(" · ")}
         </span>
       </span>
-    </button>
+    </Button>
   );
 }
 
@@ -378,7 +378,7 @@ function ScheduleSideRail({
           <div style={{ padding: "8px 14px 12px" }}>
             <div className="empty" style={{ padding: "16px 10px" }}>
               <div className="empty-ic"><CheckCircle2 /></div>
-              <div style={{ fontSize: 12.5, color: "var(--t-muted)" }}>今天没有安排</div>
+              <div style={{ fontSize: 12.5, color: "var(--semi-color-text-2)" }}>今天没有安排</div>
               {tomorrowFirst ? <div className="t-xs t-faint" style={{ marginTop: 3 }}>明天 {scheduleTime(tomorrowFirst)} {tomorrowFirst.title}</div> : null}
             </div>
           </div>
@@ -396,14 +396,14 @@ function ScheduleSideRail({
           <span className="t-xs t-mute">未来 30 天</span>
         </div>
         {buckets.map((b) => (
-          <button key={b.label} type="button" disabled={!b.list.length} onClick={() => b.list[0] && onSelectItem(b.list[0])} className="warn-row w-full border-0 bg-transparent text-left font-[inherit] disabled:cursor-default">
-            <span className="warn-count" style={{ color: b.list.length ? (b.tone === "red" ? "var(--red)" : b.tone === "amber" ? "var(--amber)" : "var(--t-secondary)") : "var(--t-faint)" }}>{b.list.length}</span>
+          <Button theme="borderless" type="tertiary" size="small" contentClassName="flex w-full min-w-0 flex-wrap items-center gap-2 text-left" style={{ height: "auto" }} key={b.label} htmlType="button" disabled={!b.list.length} onClick={() => b.list[0] && onSelectItem(b.list[0])} className="warn-row w-full border-0 bg-transparent text-left font-[inherit] disabled:cursor-default">
+            <span className="warn-count" style={{ color: b.list.length ? (b.tone === "red" ? "var(--semi-color-danger)" : b.tone === "amber" ? "var(--semi-color-warning)" : "var(--semi-color-text-1)") : "var(--semi-color-text-3)" }}>{b.list.length}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="warn-label">{b.label}</div>
               <div className="t-xs t-mute truncate">{b.list.length ? b.list.slice(0, 2).map((it) => `${it.title} · ${displaySubject(it)}`).join("；") : "—"}</div>
             </div>
             <RiskLadder level={b.level} tone={b.tone} />
-          </button>
+          </Button>
         ))}
         <div className="panel-foot t-xs t-mute">提醒档位：T-3 / T-1 / T-0 / T+1，另加各规则建议提前档（管理后台 · 期限规则库）</div>
       </div>

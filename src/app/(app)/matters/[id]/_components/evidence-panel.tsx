@@ -1,5 +1,6 @@
 "use client";
 
+import { FocusButton } from "@/components/patterns/focus-button";
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Select, Button, Input, Notification, Tag, TextArea, Toast, Typography } from "@douyinfe/semi-ui";
@@ -96,18 +97,18 @@ function SourceButton({ itemId, revision, source }: { itemId: string; revision?:
     });
   }
   return <>
-    <button
+    <FocusButton theme="borderless" type="tertiary" size="small" style={{ height: "auto", paddingInline: 0 }} contentClassName="whitespace-normal break-words text-left"
       ref={triggerRef}
-      type="button"
+      htmlType="button"
       onClick={open}
       disabled={pending}
-      className="font-medium text-[var(--semi-color-link)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--semi-color-primary)] disabled:opacity-50 h-auto min-w-0 max-w-full justify-start whitespace-normal px-0 py-0 text-left">
+      className="min-w-0 max-w-full">
       {pending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : null}
       <span className="min-w-0 break-words">
         {source.relation ? sourceRelationLabel[source.relation] + " · " : "历史来源 · "}
         {source.documentName} · 第 {source.documentVersion} 版 · {source.locationLabel}
       </span>
-    </button>
+    </FocusButton>
     <WorkspaceDialog open={preview !== null} onOpenChange={open => { if (!open) setPreview(null); }}>
       <DialogContent className="max-w-4xl" onCloseAutoFocus={event => {
         event.preventDefault();

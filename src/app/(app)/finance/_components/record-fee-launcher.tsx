@@ -49,15 +49,15 @@ export function RecordFeeLauncher({ open, onOpenChange }: { open: boolean; onOpe
       <Modal visible={open} onCancel={() => onOpenChange(false)} title="登记收付" footer={null} width={520} motion={false}>
           <p className="mb-4 text-sm text-muted-foreground">选择案件后登记应收、实收、支出或退款；分成按案件方案自动派生。</p>
           <Input autoFocus value={q} onChange={setQ} placeholder="按案件名称或编号搜索" aria-label="搜索案件" prefix={<Search size={16} />} suffix={loading ? <Loader2 className="animate-spin" size={16} /> : null} className="mb-3" />
-          <div className="max-h-[320px] overflow-y-auto rounded-[10px] border border-[var(--bd-hair)]">
+          <div className="max-h-[320px] overflow-y-auto rounded-[10px] border border-[var(--semi-color-border)]">
             {options.length === 0 ? (
               <div className="empty mo-empty-compact"><div className="mo-empty-title">{loading ? "搜索中…" : "没有可登记收付的案件"}</div></div>
             ) : (
               options.map((m) => (
-                <Button key={m.id} htmlType="button" onClick={() => pick(m.id)} className="flex w-full items-center gap-3 border-b border-[var(--bd-hair)] px-3.5 py-2.5 text-left last:border-b-0 hover:bg-[var(--bg-hover)]" theme="borderless" type="tertiary">
+                <Button key={m.id} htmlType="button" onClick={() => pick(m.id)} className="flex w-full items-center gap-3 border-b border-[var(--semi-color-border)] px-3.5 py-2.5 text-left last:border-b-0 hover:bg-[var(--semi-color-fill-0)]" theme="borderless" type="tertiary">
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[13px] font-[550]">{m.title}</span>
-                    <span className="block font-mono text-[11px] text-[var(--t-muted)]">{m.internalCode}</span>
+                    <span className="block font-mono text-[11px] text-[var(--semi-color-text-2)]">{m.internalCode}</span>
                   </span>
                 </Button>
               ))

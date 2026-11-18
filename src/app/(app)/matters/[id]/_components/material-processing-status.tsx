@@ -1,5 +1,8 @@
 "use client";
 
+import { Disclosure } from "@/components/patterns/disclosure";
+import { Button as SemiButton } from "@douyinfe/semi-ui";
+
 import { startTransition, useEffect, useRef, useState } from "react";
 import { Toast } from "@douyinfe/semi-ui";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -67,7 +70,7 @@ export function MaterialProcessingStatus({ matterId, documentIds, canManage = fa
   return <section aria-label="材料处理状态" className="space-y-2 text-sm">
     <div className="flex items-center justify-between gap-2">
       <h3 className="font-medium">材料处理</h3>
-      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setRevision(value => value + 1)}>刷新状态</button>
+      <SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={() => setRevision(value => value + 1)}>刷新状态</SemiButton>
     </div>
     {loading || loadedSelection !== selectedKey ? <p role="status" className="text-muted-foreground">正在读取材料状态…</p> : null}
     {error && loadedSelection === selectedKey ? <p role="alert" className="text-destructive">{error}</p> : null}
@@ -85,16 +88,16 @@ export function MaterialProcessingStatus({ matterId, documentIds, canManage = fa
             <div className="flex shrink-0 items-center gap-2">
               {row.previewUrl ? <a href={row.previewUrl} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm">{row.previewKind === "CONVERTED" ? "转换预览" : "查看预览"}</a> : null}
               <a href={row.downloadUrl} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm">下载此版本</a>
-              {canManage && row.canRetry ? <button type="button" className="btn btn-ghost btn-sm" disabled={retrying !== null} onClick={() => startTransition(() => { void retry(row); })}>
+              {canManage && row.canRetry ? <SemiButton htmlType="button" theme="borderless" type="tertiary" disabled={retrying !== null} onClick={() => startTransition(() => { void retry(row); })}>
                 {retrying === row.documentId ? "正在提交…" : row.state === "NOT_PROCESSED" ? "建立来源" : "重新处理"}
-              </button> : null}
+              </SemiButton> : null}
             </div>
           </div>
           {row.coverage ? <p className="mt-1 text-muted-foreground">已处理 {row.coverage.ready}{row.coverage.totalUnits === null ? " / 范围未知" : ` / ${row.coverage.totalUnits}`} {unit}</p> : null}
           {row.detail ? <p className="mt-1 text-muted-foreground">{row.detail}</p> : null}
-          {pending?.some(([, values]) => values.length) ? <details className="mt-1"><summary className="cursor-pointer">查看未处理范围</summary>
+          {pending?.some(([, values]) => values.length) ? <Disclosure className="mt-1" heading="查看未处理范围">
             {pending.filter(([, values]) => values.length).map(([label, values]) => <p key={label} className="break-words text-muted-foreground">{label}：第 {ranges(values)} {unit}</p>)}
-          </details> : null}
+          </Disclosure> : null}
         </li>;
       })}
     </ul>

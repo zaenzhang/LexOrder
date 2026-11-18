@@ -6,7 +6,7 @@ import { deadlineDueDraft, type DeadlineDueDraft } from "@/lib/deadline-due";
 import { useId, useTransition, useRef, useState, useEffect, useMemo, useCallback } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Select, Button, Input, Notification, TextArea, Toast } from "@douyinfe/semi-ui";
+import { Select, Button, Input, InputNumber, Notification, TextArea, Toast } from "@douyinfe/semi-ui";
 import { ExternalLink, Loader2, Scale, ScanText } from "lucide-react";
 import type { MatterCategory, ProcedureType } from "@prisma/client";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
@@ -192,9 +192,9 @@ export function AddProcedureSheet({
               <label className="text-xs">程序类型 *</label>
               <div className="flex flex-wrap gap-1.5">
                 {procedureOptions.map((p) => (
-                  <button
+                  <Button theme="outline" type="primary" size="small"
                     key={p}
-                    type="button"
+                    htmlType="button"
                     onClick={() => handleProcedureTypeChange(p as ProcedureType)}
                     className={cn(
                       "rounded-md border px-2.5 py-1 text-xs transition-colors",
@@ -204,7 +204,7 @@ export function AddProcedureSheet({
                     )}
                   >
                     {procedureTypeLabel[p]}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
@@ -349,7 +349,6 @@ export function AddDeadlineDialog({
   const [dueDraft, setDueDraft] = useState<DeadlineDueDraft>(() => deadlineDueDraft());
 
   const {
-    register,
     control,
     handleSubmit,
     setValue,
@@ -531,7 +530,7 @@ export function AddDeadlineDialog({
                           </a>
                         )}
                         {selectedRule.verifiedAt && (
-                          <span className="ml-1.5 rounded bg-[var(--green-bg)] px-1.5 py-0.5 text-[10px] text-[var(--green)]">
+                          <span className="ml-1.5 rounded bg-[var(--semi-color-success-light-default)] px-1.5 py-0.5 text-[10px] text-[var(--semi-color-success)]">
                             已核验 {shDayKey(selectedRule.verifiedAt)}
                           </span>
                         )}
@@ -592,7 +591,11 @@ export function AddDeadlineDialog({
             </Field>
 
             <Field label="提前提醒（天）" error={errors.remindDays?.message as string | undefined}>
-              <input type="number" min={0} max={60} className="h-8 w-full rounded-md border border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] px-3 text-sm outline-none focus:border-[var(--semi-color-focus-border)] font-mono tabular" {...register("remindDays", { valueAsNumber: true })} />
+              <Controller control={control} name="remindDays" render={({ field }) => (
+                <InputNumber min={0} max={60} aria-label="提前提醒（天）" className="w-full" name={field.name}
+                  forwardedRef={field.ref} value={typeof field.value === "number" && Number.isNaN(field.value) ? "" : typeof field.value === "number" || typeof field.value === "string" ? field.value : ""}
+                  onBlur={field.onBlur} onChange={value => field.onChange(value === "" ? Number.NaN : Number(value))} />
+              )} />
             </Field>
           </div>
 

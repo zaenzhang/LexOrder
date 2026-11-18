@@ -11,7 +11,7 @@ import { UploadDialog } from "./upload-dialog";
 import { PreviewDialog } from "./preview-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { useTopbarAction } from "@/components/layout/topbar-action";
-import { Segmented } from "@/components/patterns/moan";
+import { WorkspaceTabs } from "@/components/patterns/moan";
 import { actionErrorMessage } from "@/lib/action-error";
 
 type FileEntry = {
@@ -167,7 +167,7 @@ export function FirmFilesView({
       <div className="space-y-3">
         {!hideCategoryNav && (
         <div className="flex flex-wrap items-center gap-1.5">
-          <Segmented
+          <WorkspaceTabs
             items={[{ key: "ALL", label: "全部", count: files.length }, ...activeCategories.map((c) => ({ key: c as string, label: CATEGORY_META[c].label, count: counts[c] }))]}
             value={currentCategory ?? "ALL"}
             onChange={(k) => navigate({ category: k === "ALL" ? undefined : (k as typeof activeCategories[number]) })}

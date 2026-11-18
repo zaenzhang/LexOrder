@@ -79,7 +79,7 @@ export function MatterSignalStrip({
         {nearest && nDays !== null ? (
           <>
             <div className="signal-main">
-              <span className="signal-num" style={{ color: risk.tone === "red" ? "var(--red)" : risk.tone === "amber" ? "var(--amber)" : "var(--t-primary)" }}>
+              <span className="signal-num" style={{ color: risk.tone === "red" ? "var(--semi-color-danger)" : risk.tone === "amber" ? "var(--semi-color-warning)" : "var(--semi-color-text-0)" }}>
                 {nDays < 0 ? Math.abs(nDays) : nDays}
               </span>
               <span className="signal-unit">
@@ -110,7 +110,7 @@ export function MatterSignalStrip({
           {service.end ? (
             <>
               <div className="signal-main">
-                <span className="signal-num" style={{ color: dayDiff(service.end) <= 30 && dayDiff(service.end) >= 0 ? "var(--amber)" : "var(--t-primary)" }}>
+                <span className="signal-num" style={{ color: dayDiff(service.end) <= 30 && dayDiff(service.end) >= 0 ? "var(--semi-color-warning)" : "var(--semi-color-text-0)" }}>
                   {Math.abs(dayDiff(service.end))}
                 </span>
                 <span className="signal-unit">{dayDiff(service.end) < 0 ? "天 · 已到期" : "天后到期"}</span>
@@ -138,7 +138,7 @@ export function MatterSignalStrip({
         {hearing && hDays !== null ? (
           <>
             <div className="signal-main">
-              <span className="signal-num" style={{ color: "var(--blue)" }}>
+              <span className="signal-num" style={{ color: "var(--semi-color-info)" }}>
                 {shParts(hearing.startsAt).m}-{shParts(hearing.startsAt).d}
               </span>
               <span className="signal-unit">
@@ -202,7 +202,7 @@ export function MatterSignalStrip({
           本环节任务
         </div>
         <div className="signal-main">
-          <span className="signal-num" style={{ color: openTasks.length > 0 ? "var(--amber)" : "var(--t-faint)" }}>{openTasks.length}</span>
+          <span className="signal-num" style={{ color: openTasks.length > 0 ? "var(--semi-color-warning)" : "var(--semi-color-text-3)" }}>{openTasks.length}</span>
           <span className="signal-unit">项待办{overdueTasks.length > 0 ? ` · 逾期 ${overdueTasks.length}` : ""}</span>
         </div>
         <div className="signal-sub truncate">{nextTask ? nextTask.title : tasks.length > 0 ? "本程序任务均已完成" : "暂无任务"}</div>

@@ -41,8 +41,8 @@ describe("二开界面适配（组件交互）", () => {
   it("opens the configured local provider without a Yuandian account and submits the matter association", async () => {
     mocks.local.mockResolvedValue({ available: true, total: 1, items: [{ title: "合成检索判决书" }] });
     render(<CaseSearchPanel matterId={matterId} matterCategory="CIVIL_COMMERCIAL" defaultCauseName={null} providers={{ yuandian: false, localJudgments: true }} />);
-    for (const name of ["关键词", "语义", "法规检索"]) expect(screen.getByRole("button", { name })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "本地文书" })).toBeEnabled();
+    for (const name of ["关键词", "语义", "法规检索"]) expect(screen.getByRole("tab", { name })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("tab", { name: "本地文书" })).toBeEnabled();
     fireEvent.change(screen.getByLabelText("裁判文书关键词（自建服务）"), { target: { value: "合成关键词" } });
     fireEvent.click(screen.getByRole("button", { name: "检索文书" }));
     await waitFor(() => expect(mocks.local).toHaveBeenCalledWith("合成关键词", { max: 10, matterId }));
@@ -52,7 +52,7 @@ describe("二开界面适配（组件交互）", () => {
   it("submits regulation filters and exposes the original-source link", async () => {
     mocks.regulations.mockResolvedValue({ total: 1, items: [{ fgmc: "合成法规", content: "合成摘要", detailUrl: "https://source.example.invalid/law/1" }] });
     render(<CaseSearchPanel matterId={matterId} matterCategory="CIVIL_COMMERCIAL" defaultCauseName={null} providers={{ yuandian: true, localJudgments: false }} />);
-    fireEvent.click(screen.getByRole("button", { name: "法规检索" }));
+    fireEvent.click(screen.getByRole("tab", { name: "法规检索" }));
     fireEvent.change(screen.getByLabelText("法规内容关键词"), { target: { value: "合成法条条件" } });
     fireEvent.change(screen.getByLabelText("法规名称（可选）"), { target: { value: "合成法规" } });
     fireEvent.click(screen.getByRole("button", { name: "检索法规" }));

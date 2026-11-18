@@ -26,7 +26,7 @@ describe("G07 归档总览的记录口径与返回", () => {
     expect(mocks.list).toHaveBeenCalledWith({ query: "合成案号", cursor: "current-page" });
     expect(screen.getByText("205")).toBeInTheDocument();
     expect(screen.getByText(/归档记录.*含补充归档.*本页 2 条/)).toBeInTheDocument();
-    const rows = within(screen.getByRole("table")).getAllByRole("row"); expect(rows).toHaveLength(3);
+    const rows = within(screen.getByRole("grid")).getAllByRole("row"); expect(rows).toHaveLength(3);
     expect(screen.getAllByRole("link", { name: "ZIP" }).map(link => link.getAttribute("href"))).toEqual([
       "/api/archive/matter-one/export?archiveId=archive-one", "/api/archive/matter-one/export?archiveId=archive-supplement",
     ]);

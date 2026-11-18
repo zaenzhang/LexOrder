@@ -4,6 +4,7 @@
  * 自确认清单管理卡（4.3）：按操作开关低影响动作的申请人自确认。
  * 归档、开票、盖章回填、法定代表人章由服务端硬排除，任何配置不可自确认。
  */
+import { Checkbox } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, ShieldCheck } from "lucide-react";
@@ -53,23 +54,13 @@ export function SelfConfirmCard({ initialActions }: { initialActions: string[] }
       </p>
       <div className="mt-3 space-y-2">
         {ACTION_META.map(meta => (
-          <label
-            key={meta.action}
-            className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-2"
-            style={meta.action === "INTAKE_APPROVE" ? { opacity: 0.6 } : undefined}
-          >
-            <span className="min-w-0">
-              <span className="block text-[13px] font-medium">{meta.label}</span>
-              <span className="block text-[11.5px] text-muted-foreground">{meta.hint}</span>
-            </span>
-            <input
-              type="checkbox"
-              className="h-4 w-4 shrink-0"
-              checked={false}
-              disabled={pending || meta.action === "INTAKE_APPROVE"}
-              onChange={() => toggle(meta.action)}
-            />
-          </label>
+          <Checkbox key={meta.action}
+            className="rounded-md border border-[var(--semi-color-border)] px-3 py-2"
+            checked={false} disabled={pending || meta.action === "INTAKE_APPROVE"}
+            onChange={() => toggle(meta.action)}>
+            <span className="block font-medium">{meta.label}</span>
+            <span className="block text-xs text-muted-foreground">{meta.hint}</span>
+          </Checkbox>
         ))}
       </div>
       {pending && (

@@ -1,3 +1,5 @@
+import { Card as SemiCard, Tag as SemiTag } from "@/components/patterns/semi-surfaces";
+import { statusTagColor } from "@/lib/ui/moan-tones";
 import Link from "next/link";
 import { BookOpen, CalendarClock, ChevronLeft, Eye, Landmark, Users } from "lucide-react";
 import type { getMatterById } from "@/server/matters/actions";
@@ -45,7 +47,8 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
   return (
     <div className="mo-matter mo-dossier">
       {/* ① 案卷头 */}
-      <section className="card dos-head" aria-label="案卷头">
+      <section className="dos-head" aria-label="案卷头">
+        <SemiCard bodyStyle={{ padding: 0 }}>
         <div className="dos-head-top">
           <div className="min-w-0 flex-1">
             <div className="dos-eyebrow">
@@ -65,20 +68,21 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
               <span className="v">{kind === "litigation" ? opposing.map((p) => p.name).join("、") || "—" : matter.owner.name}</span>
             </div>
             <div className="ctx-badges">
-              <span className={cn("badge", `b-${matterStatusTone(matter.status)}`)}>
-                <span className="bdot" />
+              <SemiTag size="small" color={statusTagColor(matterStatusTone(matter.status))}>
+
                 {matterStatusLabel[matter.status]}
-              </span>
-              <span className="badge b-slate" title="你不在本案团队内，只能查看概况">
+              </SemiTag>
+              <SemiTag size="small" color="grey"><span title="你不在本案团队内，只能查看概况">
                 <Eye className="h-3 w-3" />
                 团队只读
-              </span>
-              {claim ? <span className="badge b-white">{kind === "litigation" ? "标的" : "金额"} <span className="mono">{claim}</span></span> : null}
-              {matter.intakeDate ? <span className="badge b-white">收案 <span className="mono">{date(matter.intakeDate)}</span></span> : null}
-              <span className="badge b-white">主办 {matter.owner.name}</span>
+              </span></SemiTag>
+              {claim ? <SemiTag size="small" color="grey">{kind === "litigation" ? "标的" : "金额"} <span className="mono">{claim}</span></SemiTag> : null}
+              {matter.intakeDate ? <SemiTag size="small" color="grey">收案 <span className="mono">{date(matter.intakeDate)}</span></SemiTag> : null}
+              <SemiTag size="small" color="grey">主办 {matter.owner.name}</SemiTag>
             </div>
           </div>
         </div>
+        </SemiCard>
       </section>
 
       {/* ② 程序栏：只读，不能切换或新增 */}
@@ -95,10 +99,10 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
                 <div className="dos-proc-main">
                   <span className="top">
                     <span className="nm">{proc.customLabel ?? procedureTypeLabel[proc.type]}</span>
-                    <span className={cn("badge", proc.status === "CONCLUDED" ? "b-slate" : proc.status === "IN_PROGRESS" ? "b-teal" : "b-white")} style={{ fontSize: 10 }}>
+                    <SemiTag size="small" color={proc.status === "CONCLUDED" ? "grey" : proc.status === "IN_PROGRESS" ? "teal" : "grey"}>
                       {procedureStateLabel(proc)}
-                    </span>
-                    {proc.engagement === "INFORMATIONAL" && <span className="badge b-slate">信息记录</span>}
+                    </SemiTag>
+                    {proc.engagement === "INFORMATIONAL" && <SemiTag size="small" color="grey">信息记录</SemiTag>}
                   </span>
                   <span className="no">{proc.caseNumber || "案号未登记"}</span>
                   <span className="ag">{proc.handlingAgency || "受理机构未登记"}</span>
@@ -140,7 +144,7 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
                     ) : (
                       upcoming.map((u) => (
                         <div key={u.id} className="flex items-center gap-3 text-[12.5px]">
-                          <span className="w-[120px] shrink-0 font-mono text-[12px] text-[var(--t-secondary)]">{formatDateTime(u.at)}</span>
+                          <span className="w-[120px] shrink-0 font-mono text-[12px] text-[var(--semi-color-text-1)]">{formatDateTime(u.at)}</span>
                           <span className={u.done ? "t-mute line-through" : ""}>{u.text}</span>
                         </div>
                       ))
@@ -156,7 +160,7 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
               <div className="panel-title">
                 <BookOpen className="ic" strokeWidth={1.8} />
                 记录
-                {notesResult.notes ? <span className="badge b-white" style={{ marginLeft: 2 }}>{notesResult.notes.length}</span> : null}
+                {notesResult.notes ? <SemiTag size="small" color="grey" style={{ marginLeft: 2 }}>{notesResult.notes.length}</SemiTag> : null}
               </div>
             </div>
             {notesResult.notes === null ? (
@@ -169,7 +173,7 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
             ) : (
               <div className="panel-body space-y-3">
                 {notesResult.notes.map((note) => (
-                  <div key={note.id} className="border-b border-[var(--bd-hair)] pb-3 last:border-0 last:pb-0">
+                  <div key={note.id} className="border-b border-[var(--semi-color-border)] pb-3 last:border-0 last:pb-0">
                     <div className="t-xs t-mute">
                       {note.author.name} · {formatDateTime(note.occurredAt)}
                     </div>
@@ -207,7 +211,7 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
         <aside className="dos-rail">
           <section className="card">
             <div className="rail-sec-head">
-              <Users className="h-[15px] w-[15px] text-[var(--t-muted)]" strokeWidth={1.8} />
+              <Users className="h-[15px] w-[15px] text-[var(--semi-color-text-2)]" strokeWidth={1.8} />
               承办团队
             </div>
             {members.length === 0 ? (
@@ -220,9 +224,9 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
                     <div className="n truncate">{m.name}</div>
                     <div className="r truncate">{m.roleName ?? "—"}</div>
                   </div>
-                  <span className={cn("badge role-tag", m.role === "LEAD" ? "b-teal" : "b-slate")} style={{ fontSize: 10 }}>
+                  <SemiTag size="small" color={m.role === "LEAD" ? "teal" : "grey"} className="role-tag">
                     {roleText(m.role)}
-                  </span>
+                  </SemiTag>
                 </div>
               ))
             )}
@@ -234,7 +238,7 @@ export async function TeamMatterOverview({ matter }: { matter: Matter }) {
           <section className="card">
             <div className="rail-sec-head">
               当事人
-              <span className="badge b-white" style={{ marginLeft: 2 }}>{matter.parties.length}</span>
+              <SemiTag size="small" color="grey" style={{ marginLeft: 2 }}>{matter.parties.length}</SemiTag>
             </div>
             {matter.parties.length === 0 ? (
               <div className="panel-body t-xs t-mute">暂无当事人</div>

@@ -46,7 +46,7 @@ export function CauseRecommendationDialog({
       <DialogContent className="max-w-lg gap-0 p-0">
         <DialogHeader className="border-b border-border px-5 py-3">
           <DialogTitle className="flex items-center gap-2 text-base">
-            <Sparkles className="h-4 w-4 text-[var(--violet)]" />
+            <Sparkles className="h-4 w-4 text-[var(--semi-color-secondary)]" />
             AI 案由推荐
           </DialogTitle>
           <DialogDescription className="text-xs">
@@ -62,7 +62,7 @@ export function CauseRecommendationDialog({
             </div>
           ) : errorMessage ? (
             <div className="flex flex-col items-center gap-3 py-8 text-sm">
-              <p className="text-center text-[var(--red)]">{errorMessage}</p>
+              <p className="text-center text-[var(--semi-color-danger)]">{errorMessage}</p>
               {onRetry && (
                 <Button htmlType="button" size="small" theme="outline" onClick={onRetry}>
                   重试

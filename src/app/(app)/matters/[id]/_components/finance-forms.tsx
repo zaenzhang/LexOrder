@@ -7,8 +7,9 @@ import { useRouter } from "next/navigation";
 import { useId, useEffect, useState, useTransition } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Select, Button, Input, Notification, TextArea, Toast } from "@douyinfe/semi-ui";
-import { Loader2, Paperclip, FileText, Sparkles } from "lucide-react";
+import { Select, Button, Input, InputNumber, Notification, TextArea, Toast } from "@douyinfe/semi-ui";
+import { FileInput } from "@/components/patterns/file-input";
+import { Loader2, Sparkles } from "lucide-react";
 import {
   WorkspaceDialog,
   DialogContent,
@@ -50,7 +51,6 @@ export function AddBillingSheet({
   const [isPending, startTransition] = useTransition();
   const [contractFile, setContractFile] = useState<File | null>(null);
   const {
-    register,
     control,
     handleSubmit,
     setValue,
@@ -112,7 +112,11 @@ export function AddBillingSheet({
             </Field>
 
             <Field label="合同金额（元）" required error={errors.contractAmount?.message as string | undefined}>
-              <input type="number" step="0.01" className="h-8 w-full rounded-md border border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] px-3 text-sm outline-none focus:border-[var(--semi-color-focus-border)] font-mono tabular" {...register("contractAmount", { valueAsNumber: true })} />
+              <Controller control={control} name="contractAmount" render={({ field }) => (
+                <InputNumber step={0.01} precision={2} hideButtons aria-label="合同金额（元）" className="w-full" name={field.name}
+                  forwardedRef={field.ref} value={typeof field.value === "number" && Number.isNaN(field.value) ? "" : typeof field.value === "number" || typeof field.value === "string" ? field.value : ""}
+                  onBlur={field.onBlur} onChange={value => field.onChange(value === "" ? Number.NaN : Number(value))} />
+              )} />
             </Field>
 
             <Field label="状态">
@@ -138,26 +142,12 @@ export function AddBillingSheet({
             </Field>
 
             <Field label="合同附件（可选）">
-              <label className="flex cursor-pointer items-center gap-2 rounded border border-dashed border-border px-3 py-3 text-[12px] text-muted-foreground hover:bg-muted/30">
-                <Paperclip className="h-3.5 w-3.5" />
-                {contractFile ? (
-                  <span className="flex items-center gap-1 text-foreground">
-                    <FileText className="h-3 w-3" />
-                    {contractFile.name}
-                    <span className="ml-1 text-[10px] text-muted-foreground">
-                      ({(contractFile.size / 1024).toFixed(0)} KB)
-                    </span>
-                  </span>
-                ) : (
-                  "选择 PDF / docx 文件，提交时自动加密入库"
-                )}
-                <input
-                  type="file"
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                  className="hidden"
-                  onChange={(e) => setContractFile(e.target.files?.[0] ?? null)}
-                />
-              </label>
+              <FileInput
+                aria-label="合同附件"
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                disabled={isPending}
+                onChange={event => setContractFile(event.currentTarget.files?.[0] ?? null)}
+              />
             </Field>
           </div>
 
@@ -224,7 +214,6 @@ export function AddFeeEntrySheet({
   }, [open, matterId]);
 
   const {
-    register,
     control,
     handleSubmit,
     setValue,
@@ -283,7 +272,11 @@ export function AddFeeEntrySheet({
             </Field>
 
             <Field label="金额（元）" required error={errors.amount?.message}>
-              <input type="number" step="0.01" className="h-8 w-full rounded-md border border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] px-3 text-sm outline-none focus:border-[var(--semi-color-focus-border)] font-mono tabular" {...register("amount", { valueAsNumber: true })} />
+              <Controller control={control} name="amount" render={({ field }) => (
+                <InputNumber step={0.01} precision={2} hideButtons aria-label="金额（元）" className="w-full" name={field.name}
+                  forwardedRef={field.ref} value={typeof field.value === "number" && Number.isNaN(field.value) ? "" : typeof field.value === "number" || typeof field.value === "string" ? field.value : ""}
+                  onBlur={field.onBlur} onChange={value => field.onChange(value === "" ? Number.NaN : Number(value))} />
+              )} />
             </Field>
 
             <Field label="发生日期" required error={errors.occurredAt?.message}>
@@ -450,26 +443,16 @@ function InvoiceOcrBlock({
         上传增值税发票（JPG / PNG / PDF），识别后自动填发票号 / 金额 / 销售方 / 开票日
       </p>
       <div className="flex items-center gap-2">
-        <label className="flex flex-1 cursor-pointer items-center gap-2 rounded border border-border bg-background px-2.5 py-1.5 text-[11px] text-muted-foreground hover:bg-muted/30">
-          <Paperclip className="h-3 w-3" />
-          {file ? (
-            <span className="flex items-center gap-1 text-foreground">
-              <FileText className="h-3 w-3" />
-              {file.name}
-            </span>
-          ) : (
-            "选择发票（JPG / PNG / PDF）"
-          )}
-          <input
-            type="file"
-            accept="image/*,application/pdf"
-            className="hidden"
-            onChange={(e) => {
-              setFile(e.target.files?.[0] ?? null);
-              setPreview(null);
-            }}
-          />
-        </label>
+        <FileInput
+          className="flex-1"
+          aria-label="选择发票（JPG / PNG / PDF）"
+          accept="image/*,application/pdf"
+          disabled={busy}
+          onChange={event => {
+            setFile(event.currentTarget.files?.[0] ?? null);
+            setPreview(null);
+          }}
+        />
         <Button
           onClick={recognize}
           disabled={!file || busy}

@@ -36,12 +36,16 @@ const hearing: ScheduleItem = {
 };
 
 beforeEach(() => {
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
   vi.clearAllMocks();
   mock.hero.mockResolvedValue(hero);
   mock.schedule.mockResolvedValue([]);
   mock.queue.mockResolvedValue({ followUps: { available: true, items: [], total: 0, page: 1, pageSize: 5, filter: "all" as const, observedAt: "2026-11-17T10:00:00.000Z" }, approvals: [], tasks: [], approvalTotal: 0 });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 // 仅检查异步取数完成后的页面组合；不替代 Next Server Component 或浏览器验收。
 describe("首页期限焦点组合", () => {

@@ -1,5 +1,6 @@
 "use client";
 
+import { Disclosure } from "@/components/patterns/disclosure";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -98,17 +99,17 @@ function ClientHistoryResults({ clientId, initial, initialCursor = null, initial
         const back = item.source === "CONTEXT" ? clientHistoryHref(clientId, { cursor: controls.cursor, rowId: item.key, filters, returnTo }) : null;
         const href = back ? `${item.href}${item.href.includes("?") ? "&" : "?"}${new URLSearchParams({ contextReturnTo: back })}` : item.href;
         return <article key={item.key} ref={item.key === locatedRowId ? selectedRow : undefined} tabIndex={item.key === locatedRowId ? -1 : undefined}
-          className="border-l-2 border-[var(--bd-hair)] pl-3">
-        <div className="flex flex-wrap items-center gap-1 text-xs text-[var(--t-muted)]"><span>{historySourceLabels[item.source]}</span>
+          className="border-l-2 border-[var(--semi-color-border)] pl-3">
+        <div className="flex flex-wrap items-center gap-1 text-xs text-[var(--semi-color-text-2)]"><span>{historySourceLabels[item.source]}</span>
           <time dateTime={item.at}>{shDayKey(item.at)} {shTime(item.at)}</time></div>
         <h3 className="mt-1 break-words text-sm font-medium">{item.title}</h3>
-        <p className="mt-1 break-words text-xs text-[var(--t-muted)]">{item.meta}</p>
-        {item.content ? <details className="mt-2 text-sm"><summary className="cursor-pointer text-[var(--teal-deep)]">查看记录内容</summary>
+        <p className="mt-1 break-words text-xs text-[var(--semi-color-text-2)]">{item.meta}</p>
+        {item.content ? <Disclosure className="mt-2 text-sm" heading="查看记录内容">
           <p className="mt-2 whitespace-pre-wrap break-words leading-relaxed">{item.content}</p>
-          <p className="mt-1 text-xs text-[var(--t-muted)]">记录于 {shDayKey(item.recordedAt)} {shTime(item.recordedAt)}</p>
-        </details> : null}
+          <p className="mt-1 text-xs text-[var(--semi-color-text-2)]">记录于 {shDayKey(item.recordedAt)} {shTime(item.recordedAt)}</p>
+        </Disclosure> : null}
         <Link href={href} onNavigate={back ? () => window.history.replaceState(null, "", back) : undefined}
-          className="mt-1 inline-block text-xs text-[var(--teal-deep)]">{item.linkLabel} →</Link>
+          className="mt-1 inline-block text-xs text-[var(--semi-color-primary-active)]">{item.linkLabel} →</Link>
       </article>;
       })}
       <ClientPagination controls={controls} label="客户动态" />

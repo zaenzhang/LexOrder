@@ -390,7 +390,7 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                                 <>
                                   <span className="mono">{due.date}</span>
                                   <span>· {item.meta} · {item.context}</span>
-                                  <span style={{ color: due.urgent ? "var(--red)" : undefined }}>· {due.left}</span>
+                                  <span style={{ color: due.urgent ? "var(--semi-color-danger)" : undefined }}>· {due.left}</span>
                                 </>
                               ) : (
                                 <span>{item.meta}</span>

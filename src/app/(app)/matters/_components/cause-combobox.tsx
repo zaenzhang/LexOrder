@@ -1,6 +1,7 @@
 "use client";
 
-import { Input, Popover } from "@douyinfe/semi-ui";
+import { FocusButton } from "@/components/patterns/focus-button";
+import { Button, Input, Popover } from "@douyinfe/semi-ui";
 import { useState, useEffect, useMemo, useRef, useId, useTransition } from "react";
 import { ChevronRight, ChevronsUpDown, Loader2 } from "lucide-react";
 import type { MatterCategory, ProcedureType } from "@prisma/client";
@@ -206,9 +207,9 @@ export function CauseCombobox({
               <p className="py-6 text-center text-xs text-muted-foreground">未找到匹配</p>
             ) : (
               searchMatched.map((n) => (
-                <button
+                <Button theme="borderless" type="tertiary" size="small" contentClassName="flex w-full min-w-0 items-center justify-between gap-2"
                   key={n.id}
-                  type="button"
+                  htmlType="button"
                   onClick={() => pickNode(n)}
                   title={n.name}
                   className="flex min-h-8 w-full items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-muted hover:text-foreground"
@@ -217,7 +218,7 @@ export function CauseCombobox({
                   <span className="shrink-0 text-[10.5px] text-muted-foreground">
                     {n.l2Name ?? ""}
                   </span>
-                </button>
+                </Button>
               ))
             )}
           </div>
@@ -255,9 +256,9 @@ export function CauseCombobox({
         )}
         </div>}
       >
-        <button
+        <FocusButton theme="borderless" type="tertiary" size="small"
           ref={trigger}
-          type="button"
+          htmlType="button"
           disabled={disabled}
           aria-expanded={open}
           role="combobox"
@@ -270,7 +271,7 @@ export function CauseCombobox({
         >
           <span className={cn("truncate", !(value && displayName) && "text-muted-foreground")}>{displayText}</span>
           <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden />
-        </button>
+        </FocusButton>
       </Popover>
     </div>
   );
@@ -304,9 +305,9 @@ function Column({
             const branching = hasChildren(n);
             const isActive = activeId === n.id;
             return (
-              <button
+              <Button theme="borderless" type="primary" size="small" contentClassName="flex w-full min-w-0 items-center justify-between gap-2"
                 key={n.id}
-                type="button"
+                htmlType="button"
                 onClick={() => onPick(n)}
                 title={n.name}
                 className={cn(
@@ -322,7 +323,7 @@ function Column({
                     !branching && "invisible"
                   )}
                 />
-              </button>
+              </Button>
             );
           })
         )}

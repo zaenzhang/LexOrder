@@ -1,5 +1,6 @@
 "use client";
 
+import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
 import { Button } from "@douyinfe/semi-ui";
 
 import { useMemo, useRef, useState } from "react";
@@ -45,14 +46,14 @@ export function ClientRelationshipPanel({ clientId, view }: { clientId: string; 
       {!view ? <div className="panel-body t-sm t-mute">沟通记录仅向客户经办人员及获授权的管理人员开放。</div> : (
         <div className="panel-body grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
           <div className="min-w-0">
-            <h3 className="mb-2 flex items-center gap-2 text-sm font-medium"><CalendarClock className="h-4 w-4" />待跟进 {followUps ? <span className="badge b-white">{followUps.total}</span> : null}</h3>
+            <h3 className="mb-2 flex items-center gap-2 text-sm font-medium"><CalendarClock className="h-4 w-4" />待跟进 {followUps ? <SemiTag size="small" color="grey">{followUps.total}</SemiTag> : null}</h3>
             {followUps?.items.length === 0 ? <p className="t-sm t-mute py-2">本页暂无待跟进。</p> : <ul className="space-y-2">
-              {followUps?.items.map(item => <li key={item.id} className="flex flex-wrap items-start gap-2 rounded-lg border border-[var(--bd-hair)] p-3">
+              {followUps?.items.map(item => <li key={item.id} className="flex flex-wrap items-start gap-2 rounded-lg border border-[var(--semi-color-border)] p-3">
                 <div className="min-w-0 flex-1 basis-48">
                   <p className="break-words text-sm font-medium">{item.title}</p>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--t-muted)]">
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--semi-color-text-2)]">
                     <time dateTime={item.dueAt}>{when(item.dueAt)}</time><span>· {item.assigneeName}</span>
-                    {item.overdue ? <span className="badge b-amber">已逾期</span> : null}
+                    {item.overdue ? <SemiTag size="small" color="amber">已逾期</SemiTag> : null}
                   </div>
                 </div>
                 {item.canClose ? <div className="flex flex-wrap gap-1">
@@ -63,12 +64,12 @@ export function ClientRelationshipPanel({ clientId, view }: { clientId: string; 
             </ul>}
             <ClientPagination controls={followUpPager} label="待跟进" />
           </div>
-          <div className="min-w-0 border-t border-[var(--bd-hair)] pt-4 lg:border-t-0 lg:pt-0">
+          <div className="min-w-0 border-t border-[var(--semi-color-border)] pt-4 lg:border-t-0 lg:pt-0">
             <h3 className="mb-3 text-sm font-medium">沟通历史 {activities ? <span className="t-xs t-mute">{activities.total} 条</span> : null}</h3>
             {activities?.items.length === 0 ? <p className="t-sm t-mute">本页暂无沟通记录。</p> : <ol className="space-y-4">
-              {activities?.items.map(item => <li key={item.id} className="border-l-2 border-[var(--bd-hair)] pl-3">
-                <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-[var(--t-muted)]"><span className="badge b-white">{clientChannelLabels[item.channel]}</span><span>{item.authorName}</span><time dateTime={item.occurredAt}>{when(item.occurredAt)}</time></div>
-                {item.closedTitle ? <p className="mb-1 text-xs font-medium text-[var(--teal-deep)]">{item.closedStatus === "CANCELLED" ? "已取消" : "已完成"}：{item.closedTitle}</p> : null}
+              {activities?.items.map(item => <li key={item.id} className="border-l-2 border-[var(--semi-color-border)] pl-3">
+                <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-[var(--semi-color-text-2)]"><SemiTag size="small" color="grey">{clientChannelLabels[item.channel]}</SemiTag><span>{item.authorName}</span><time dateTime={item.occurredAt}>{when(item.occurredAt)}</time></div>
+                {item.closedTitle ? <p className="mb-1 text-xs font-medium text-[var(--semi-color-primary-active)]">{item.closedStatus === "CANCELLED" ? "已取消" : "已完成"}：{item.closedTitle}</p> : null}
                 <CommunicationContent activityId={item.id} content={item.content} />
               </li>)}
             </ol>}

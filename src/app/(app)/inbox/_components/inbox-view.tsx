@@ -459,7 +459,7 @@ function SmsCard({
                     {link.platform ?? `送达链接 ${i + 1}`}
                   </a>
                   {link.requiresLogin && (
-                    <span className="rounded bg-[var(--amber-bg)] px-1.5 py-0.5 text-[10px] text-[var(--amber)]">
+                    <span className="rounded bg-[var(--semi-color-warning-light-default)] px-1.5 py-0.5 text-[10px] text-[var(--semi-color-warning)]">
                       需登录/校验
                     </span>
                   )}
@@ -645,10 +645,10 @@ function normalizeParsedJson(sms: SmsRow): ParsedJson {
 
 function AttachmentResultRow({ result }: { result: ParsedJson["attachmentResults"][number] }) {
   const meta = {
-    DOWNLOADED: { label: "已保存", color: "text-[var(--green)]", bg: "bg-[var(--green-bg)]" },
-    ALREADY_DOWNLOADED: { label: "已存在", color: "text-[var(--green)]", bg: "bg-[var(--green-bg)]" },
-    LOGIN_REQUIRED: { label: "待人工", color: "text-[var(--amber)]", bg: "bg-[var(--amber-bg)]" },
-    SKIPPED_NO_MATTER: { label: "未关联", color: "text-[var(--amber)]", bg: "bg-[var(--amber-bg)]" },
+    DOWNLOADED: { label: "已保存", color: "text-[var(--semi-color-success)]", bg: "bg-[var(--semi-color-success-light-default)]" },
+    ALREADY_DOWNLOADED: { label: "已存在", color: "text-[var(--semi-color-success)]", bg: "bg-[var(--semi-color-success-light-default)]" },
+    LOGIN_REQUIRED: { label: "待人工", color: "text-[var(--semi-color-warning)]", bg: "bg-[var(--semi-color-warning-light-default)]" },
+    SKIPPED_NO_MATTER: { label: "未关联", color: "text-[var(--semi-color-warning)]", bg: "bg-[var(--semi-color-warning-light-default)]" },
     NO_FILE_FOUND: { label: "未发现", color: "text-muted-foreground", bg: "bg-muted/50" },
     UNSUPPORTED_TYPE: { label: "不支持", color: "text-muted-foreground", bg: "bg-muted/50" },
     FAILED: { label: "失败", color: "text-destructive", bg: "bg-destructive/10" },

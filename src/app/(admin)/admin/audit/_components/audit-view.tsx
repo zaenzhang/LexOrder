@@ -1,5 +1,6 @@
 "use client";
 
+import { Disclosure } from "@/components/patterns/disclosure";
 import { Button, Select, Tag } from "@douyinfe/semi-ui";
 import { useState, useCallback, useTransition } from "react";
 import { auditActionLabel, auditTargetLabel } from "@/lib/audit-labels";
@@ -174,12 +175,11 @@ export function AuditView({
                       </span>
                     )}
                   </div>
-                  <details className="mt-1 text-xs text-muted-foreground">
-                    <summary className="cursor-pointer">技术详情</summary>
+                  <Disclosure className="mt-1 text-xs text-muted-foreground" heading="技术详情">
                     <pre className="mt-1 max-h-48 overflow-auto font-mono text-[10px]">
                       {JSON.stringify({ action: it.action, targetType: it.targetType, detail: it.detail }, null, 2)}
                     </pre>
-                  </details>
+                  </Disclosure>
                 </div>
                 <div className="text-right text-xs">
                   <div>{it.user?.name ?? "—"}</div>

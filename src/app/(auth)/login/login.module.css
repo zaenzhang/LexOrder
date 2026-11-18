@@ -53,7 +53,7 @@
   place-items: start center;
   min-width: 0;
   padding-inline: clamp(20px, 3.5vw, 48px);
-  padding-block: clamp(24px, calc(50dvh - 200px), 220px) 24px;
+  padding-block: clamp(24px, calc(50dvh - 225px), 220px) 24px;
   background: var(--semi-color-fill-0);
 }
 
@@ -62,6 +62,12 @@
   max-width: 440px;
   border-radius: 14px;
   box-shadow: var(--semi-shadow-elevated);
+}
+
+.cardHeading {
+  display: grid;
+  justify-items: center;
+  margin: 0 0 28px;
 }
 
 .loading {

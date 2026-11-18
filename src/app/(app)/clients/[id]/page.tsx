@@ -1,3 +1,6 @@
+import { clientCooperationTone, statusTagColor } from "@/lib/ui/moan-tones";
+import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
+import { Disclosure } from "@/components/patterns/disclosure";
 import { clientIdTypeLabel } from "@/lib/clients/person-id";
 import { clientHistoryHref, clientListReturnHref } from "@/lib/clients/navigation";
 import { clientHistoryLocationSchema } from "@/lib/clients/history";
@@ -23,7 +26,6 @@ import { FieldGrid, FieldItem, InitialAvatar } from "@/components/patterns/moan"
 import { ClientEditButton } from "./_components/client-edit-button";
 import { AddContactButton, MergeBanner } from "./_components/client-detail-parts";
 
-const COOP_BADGE: Record<string, string> = { POTENTIAL: "b-slate", NEGOTIATING: "b-amber", SIGNED: "b-teal", TERMINATED: "b-bronze" };
 
 const yuan = (n: number) => `¥${Math.round(n).toLocaleString("zh-CN")}`;
 const ymd = (d: Date | string | null | undefined) => (d ? new Date(d).toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" }) : "—");
@@ -79,8 +81,8 @@ export default async function ClientDetailPage({ params, searchParams }: {
           <div style={{ minWidth: 0 }} className="flex-1">
             <h1 className="ch-name truncate" title={client.name}>{client.name}</h1>
             <div className="ch-badges">
-              <span className="badge b-white">{clientTypeLabel[client.type]}</span>
-              <span className={`badge ${COOP_BADGE[client.cooperationStatus] ?? "b-white"}`}><span className="bdot" />{cooperationStatusLabel[client.cooperationStatus]}</span>
+              <SemiTag size="small" color="grey">{clientTypeLabel[client.type]}</SemiTag>
+              <SemiTag size="small" color={statusTagColor(clientCooperationTone[client.cooperationStatus])}>{cooperationStatusLabel[client.cooperationStatus]}</SemiTag>
             </div>
           </div>
         </div>
@@ -103,8 +105,8 @@ export default async function ClientDetailPage({ params, searchParams }: {
                 <div className="panel-head"><h2 id="client-finance-title" className="panel-title"><CreditCard className="ic" strokeWidth={1.8} />财务往来</h2></div>
                 <div className="panel-body">
                   <div className="flex justify-between py-1"><span className="t-sm t-mute">合同总额</span><span className="num-md">{yuan(finance.contractTotal)}</span></div>
-                  <div className="flex justify-between py-1"><span className="t-sm t-mute">累计实收</span><span className="num-md" style={{ color: "var(--green)" }}>{yuan(finance.received)}</span></div>
-                  <div className="flex justify-between py-1"><span className="t-sm t-mute">待回款</span><span className="num-md" style={{ color: finance.pending ? "var(--amber)" : undefined }}>{yuan(finance.pending)}</span></div>
+                  <div className="flex justify-between py-1"><span className="t-sm t-mute">累计实收</span><span className="num-md" style={{ color: "var(--semi-color-success)" }}>{yuan(finance.received)}</span></div>
+                  <div className="flex justify-between py-1"><span className="t-sm t-mute">待回款</span><span className="num-md" style={{ color: finance.pending ? "var(--semi-color-warning)" : undefined }}>{yuan(finance.pending)}</span></div>
                   <div className="progress mt-2.5"><div className="progress-fill" style={{ width: `${paidRate}%` }} /></div>
                   <div className="mt-1.5 flex justify-between"><span className="t-xs t-mute">回款进度</span><span className="num-sm t-mute">{paidRate}%</span></div>
                 </div>
@@ -138,18 +140,17 @@ export default async function ClientDetailPage({ params, searchParams }: {
                     <FieldItem label="联系电话" mono>{client.phone || "—"}</FieldItem>
                     <FieldItem label="邮箱">{client.email || "—"}</FieldItem>
                     <FieldItem label={isIndividual ? "住所地" : "注册地"} wide>{client.address || "—"}</FieldItem>
-                    {client.tags.length > 0 ? <FieldItem label="标签" wide><span className="flex flex-wrap gap-1.5">{client.tags.map(tag => <span key={tag} className="badge b-white">{tag}</span>)}</span></FieldItem> : null}
+                    {client.tags.length > 0 ? <FieldItem label="标签" wide><span className="flex flex-wrap gap-1.5">{client.tags.map(tag => <SemiTag size="small" color="grey" key={tag}>{tag}</SemiTag>)}</span></FieldItem> : null}
                     {client.notes ? <FieldItem label="备注" wide><span className="whitespace-pre-wrap">{client.notes}</span></FieldItem> : null}
                   </FieldGrid>
-                  {insights.source ? <details className="mt-4 border-t border-[var(--bd-hair)] pt-3 text-xs text-[var(--t-muted)]">
-                    <summary className="cursor-pointer">来源渠道统计</summary>
+                  {insights.source ? <Disclosure className="mt-4 border-t border-[var(--semi-color-border)] pt-3 text-xs text-[var(--semi-color-text-2)]" heading="来源渠道统计">
                     <p className="mt-2">可见客户中，同渠道 {insights.source.sameSourceClients} 家，占 {Math.round((insights.source.sameSourceClients / Math.max(1, insights.source.totalClients)) * 100)}%。</p>
-                  </details> : null}
+                  </Disclosure> : null}
                 </div>
               </section>
               <section className="card min-w-0 overflow-hidden" aria-labelledby="client-contacts">
                 <div className="panel-head flex-wrap gap-2">
-                  <h2 id="client-contacts" className="panel-title"><Users className="ic" strokeWidth={1.8} />联系人 <span className="badge b-white">{client.contacts.length}</span></h2>
+                  <h2 id="client-contacts" className="panel-title"><Users className="ic" strokeWidth={1.8} />联系人 <SemiTag size="small" color="grey">{client.contacts.length}</SemiTag></h2>
                   {canWrite ? <AddContactButton clientId={client.id} /> : null}
                 </div>
                 {client.contacts.length === 0 ? <div className="empty mo-empty-compact"><div className="mo-empty-title">暂无联系人</div></div> : client.contacts.map(c => (
@@ -158,8 +159,8 @@ export default async function ClientDetailPage({ params, searchParams }: {
                     <div className="min-w-0 flex-1">
                       <div className="ct-name flex flex-wrap items-center gap-1.5">
                         {c.name}
-                        {c.isPrimary ? <span className="badge b-teal text-[10px]">主要联系人</span> : null}
-                        {c.title ? <span className="badge b-white text-[10px]">{c.title}</span> : null}
+                        {c.isPrimary ? <SemiTag size="small" color="teal">主要联系人</SemiTag> : null}
+                        {c.title ? <SemiTag size="small" color="grey">{c.title}</SemiTag> : null}
                       </div>
                       <div className="ct-meta flex flex-wrap items-center gap-x-1.5 break-all">
                         {c.phone ? <span className="mono">{c.phone}</span> : null}

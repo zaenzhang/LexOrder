@@ -23,7 +23,7 @@ export default async function ProfilePage() {
         <h2 className="mb-5 text-base font-semibold">个人信息</h2>
         <div className="grid gap-6 md:grid-cols-[184px_1fr] md:gap-8">
           <AvatarForm name={dbUser.name || (personal ? "本机操作者" : "")} role={personal ? "个人工作区" : roleDisplayName(user)} initialAvatar={dbUser?.avatar ?? null} />
-          <div className="md:border-l md:border-[var(--bd-hair)] md:pl-8">
+          <div className="md:border-l md:border-[var(--semi-color-border)] md:pl-8">
             <ProfileBasicsForm key={dbUser.updatedAt.toISOString()} layout="stacked" runtimeMode={user.runtimeMode} profile={{ name: dbUser.name, email: personal && dbUser.email.endsWith("@personal.invalid") ? "" : dbUser.email, phone: dbUser.phone, updatedAt: dbUser.updatedAt.toISOString() }} extraFields={personal ? undefined : <IdentityForm />} />
           </div>
         </div>

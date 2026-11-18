@@ -167,7 +167,7 @@ export function ContactsView({
           <h2 className="flex items-center gap-2 text-sm font-medium">
             外部联系人 ({externalContacts.length})
             {canReviewContacts && pendingCount > 0 && (
-              <span className="rounded-full border border-[var(--amber-line)] bg-[var(--amber-bg)] px-2 py-0.5 text-[10px] font-medium text-[var(--amber)]">
+              <span className="rounded-full border border-[var(--semi-color-warning-light-active)] bg-[var(--semi-color-warning-light-default)] px-2 py-0.5 text-[10px] font-medium text-[var(--semi-color-warning)]">
                 {personal ? "待确认" : "待审核"} {pendingCount}
               </span>
             )}
@@ -221,7 +221,7 @@ export function ContactsView({
                         {EXT_CATEGORY_LABEL[c.category]}
                       </span>
                       {c.status === "PENDING_REVIEW" && (
-                        <span className="rounded-full border border-[var(--amber-line)] bg-[var(--amber-bg)] px-2 py-0.5 text-[10px] font-medium text-[var(--amber)]">
+                        <span className="rounded-full border border-[var(--semi-color-warning-light-active)] bg-[var(--semi-color-warning-light-default)] px-2 py-0.5 text-[10px] font-medium text-[var(--semi-color-warning)]">
                           {personal ? "待确认" : "待审核"}
                         </span>
                       )}

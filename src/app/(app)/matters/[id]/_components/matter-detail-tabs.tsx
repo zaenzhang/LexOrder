@@ -1,4 +1,8 @@
 "use client";
+
+import { Card as SemiCard, Tag as SemiTag } from "@/components/patterns/semi-surfaces";
+import { statusTagColor } from "@/lib/ui/moan-tones";
+import { Button as SemiButton } from "@douyinfe/semi-ui";
 import { deadlineOverdue, deadlineRelative, formatDeadlineDue } from "@/lib/deadline-due";
 import Link from "next/link";
 import { hasCustomPermission, type RoleGrant } from "@/lib/roles/catalog";
@@ -442,11 +446,11 @@ export function MatterDetailTabs({
   ];
 
   const archiveBadge = matter.status === "ARCHIVED"
-    ? { tone: "bronze", text: "已归档" }
+    ? { color: "amber", text: "已归档" } as const
     : latestArchive?.status === "PENDING_REVIEW"
-      ? { tone: "bronze", text: "预归档中" }
+      ? { color: "amber", text: "预归档中" } as const
       : latestArchive?.status === "REJECTED"
-        ? { tone: "outline-red", text: "归档被驳回" }
+        ? { color: "red", text: "归档被驳回" } as const
         : null;
 
   const categoryKind = matterCategoryKind(matter.category);
@@ -476,7 +480,8 @@ export function MatterDetailTabs({
     <DocActionsContext.Provider value={docActions}>
     <div className="mo-matter mo-dossier">
       {/* ① 案卷头 */}
-      <section className="card dos-head" aria-label="案卷头">
+      <section className="dos-head" aria-label="案卷头">
+        <SemiCard bodyStyle={{ padding: 0 }}>
         <div className="dos-head-top">
           <div className="min-w-0 flex-1">
             <div className="dos-eyebrow">
@@ -508,31 +513,31 @@ export function MatterDetailTabs({
             </div>
             <div className="ctx-badges">
               {isArchived && archiveBadge ? null : (
-                <span className={cn("badge", `b-${matterStatusTone(matter.status)}`)}>
-                  <span className="bdot" />
+                <SemiTag size="small" color={statusTagColor(matterStatusTone(matter.status))}>
+
                   {matterStatusLabel[matter.status]}
-                </span>
+                </SemiTag>
               )}
-              {overdueCount > 0 ? <span className="badge b-red"><span className="bdot" />{overdueCount} 项逾期</span> : null}
-              {nearestExpiry !== null ? <span className="badge b-bronze">保全 {nearestExpiry < 0 ? "已过期" : `${nearestExpiry} 天后到期`}</span> : null}
-              {money(matter.claimAmount) ? <span className="badge b-white">{categoryKind === "litigation" ? "标的" : "金额"} <span className="mono">{money(matter.claimAmount)}</span></span> : null}
-              {allowed("finance.read") && money(finance.stats.contractAmount) ? <span className="badge b-white">合同额 <span className="mono">{money(finance.stats.contractAmount)}</span></span> : null}
-              {matter.intakeDate ? <span className="badge b-white">收案 <span className="mono">{formatShortDate(matter.intakeDate)}</span></span> : null}
+              {overdueCount > 0 ? <SemiTag size="small" color="red">{overdueCount} 项逾期</SemiTag> : null}
+              {nearestExpiry !== null ? <SemiTag size="small" color="amber">保全 {nearestExpiry < 0 ? "已过期" : `${nearestExpiry} 天后到期`}</SemiTag> : null}
+              {money(matter.claimAmount) ? <SemiTag size="small" color="grey">{categoryKind === "litigation" ? "标的" : "金额"} <span className="mono">{money(matter.claimAmount)}</span></SemiTag> : null}
+              {allowed("finance.read") && money(finance.stats.contractAmount) ? <SemiTag size="small" color="grey">合同额 <span className="mono">{money(finance.stats.contractAmount)}</span></SemiTag> : null}
+              {matter.intakeDate ? <SemiTag size="small" color="grey">收案 <span className="mono">{formatShortDate(matter.intakeDate)}</span></SemiTag> : null}
               {archiveBadge ? (
-                <span className={cn("badge", `b-${archiveBadge.tone}`)}>
+                <SemiTag size="small" color={archiveBadge.color}>
                   <Archive className="h-3 w-3" />
                   {archiveBadge.text}
-                </span>
+                </SemiTag>
               ) : null}
-              {restricted ? <span className="badge b-slate" title="受限事项不进入团队汇总视图">受限事项</span> : null}
+              {restricted ? <SemiTag size="small" color="grey"><span title="受限事项不进入团队汇总视图">受限事项</span></SemiTag> : null}
             </div>
           </div>
           <div className="ctx-actions">
             {canWriteMaterials ? (
-              <button type="button" className="btn btn-secondary btn-sm" disabled={invalidProcedure} onClick={() => workflowApi.current?.openUpload()}>
+              <SemiButton htmlType="button" theme="outline" type="tertiary" disabled={invalidProcedure} onClick={() => workflowApi.current?.openUpload()}>
                 <Upload />
                 上传材料
-              </button>
+              </SemiButton>
             ) : null}
             <LifecycleActions
               matterId={matter.id}
@@ -545,6 +550,7 @@ export function MatterDetailTabs({
             />
           </div>
         </div>
+        </SemiCard>
       </section>
 
       {/* 吸顶摘要：标题滚出视野后常驻案件身份与下一节点 */}
@@ -557,15 +563,15 @@ export function MatterDetailTabs({
         </div>
         <div className="dos-procs-list" role="tablist" aria-label="案件范围">
           <div className={cn("dos-proc", selectedProcId === null && searchParams.get("stage") !== "unassigned" && "on")}>
-            <button type="button" role="tab" aria-selected={selectedProcId === null && searchParams.get("stage") !== "unassigned"} className="dos-proc-main" onClick={() => setSelectedProcId(null)}>
-              <span className="top"><span className="nm">全案</span><span className="badge b-white">{matterStatusLabel[matter.status]}</span></span>
+            <SemiButton theme="borderless" type="tertiary" size="small" contentClassName="flex w-full min-w-0 flex-col items-stretch text-left" htmlType="button" role="tab" aria-selected={selectedProcId === null && searchParams.get("stage") !== "unassigned"} className="dos-proc-main" onClick={() => setSelectedProcId(null)}>
+              <span className="top"><span className="nm">全案</span><SemiTag size="small" color="grey">{matterStatusLabel[matter.status]}</SemiTag></span>
               <span className="ag">全部程序与事项级内容</span>
-            </button>
+            </SemiButton>
           </div>
           <div className={cn("dos-proc", selectedProcId === null && searchParams.get("stage") === "unassigned" && "on")}>
-            <button type="button" role="tab" aria-selected={selectedProcId === null && searchParams.get("stage") === "unassigned"} className="dos-proc-main" onClick={() => updateDossierLocation({ procedure: null, stage: "unassigned", task: null, view: "work" })}>
+            <SemiButton theme="borderless" type="tertiary" size="small" contentClassName="flex w-full min-w-0 flex-col items-stretch text-left" htmlType="button" role="tab" aria-selected={selectedProcId === null && searchParams.get("stage") === "unassigned"} className="dos-proc-main" onClick={() => updateDossierLocation({ procedure: null, stage: "unassigned", task: null, view: "work" })}>
               <span className="nm">未归属</span><span className="ag">事项材料与事项级任务</span>
-            </button>
+            </SemiButton>
           </div>
           {engagedProcedures.map((procedure) => {
             const active = currentProcedure?.id === procedure.id;
@@ -573,12 +579,12 @@ export function MatterDetailTabs({
             const labels = contactRoleLabels(procedure.type);
             return (
               <div key={procedure.id} className={cn("dos-proc", active && "on")}>
-                <button type="button" role="tab" aria-selected={active} className="dos-proc-main" onClick={() => setSelectedProcId(procedure.id)}>
+                <SemiButton theme="borderless" type="tertiary" size="small" contentClassName="flex w-full min-w-0 flex-col items-stretch text-left" htmlType="button" role="tab" aria-selected={active} className="dos-proc-main" onClick={() => setSelectedProcId(procedure.id)}>
                   <span className="top">
                     <span className="nm">{label}{procedure.engagement === "INFORMATIONAL" ? " · 仅信息" : ""}</span>
-                    <span className={cn("badge", procedure.status === "CONCLUDED" ? "b-slate" : procedure.status === "IN_PROGRESS" ? "b-teal" : "b-white")} style={{ fontSize: 10 }}>
+                    <SemiTag size="small" color={procedure.status === "CONCLUDED" ? "grey" : procedure.status === "IN_PROGRESS" ? "teal" : "grey"}>
                       {procedureStateLabel(procedure)}
-                    </span>
+                    </SemiTag>
                   </span>
                   {categoryKind === "litigation" ? (
                     <>
@@ -593,10 +599,10 @@ export function MatterDetailTabs({
                       <span className="ag">{procedure.acceptedAt ? `开始 ${formatShortDate(procedure.acceptedAt)}` : "\u00a0"}</span>
                     </>
                   )}
-                </button>
+                </SemiButton>
                 {canLeadThisMatter && canWriteSchedule ? (
-                  <button
-                    type="button"
+                  <SemiButton theme="borderless" type="tertiary" size="small" contentClassName="flex min-w-0 items-center gap-2"
+                    htmlType="button"
                     className="dos-proc-del"
                     title="删除此程序"
                     aria-label={`删除程序 ${label}`}
@@ -605,18 +611,18 @@ export function MatterDetailTabs({
                     }}
                   >
                     <X className="h-3 w-3" />
-                  </button>
+                  </SemiButton>
                 ) : null}
                 {canWriteSchedule && active ? <ProcedureStatusActions procedure={procedure} label={label} /> : null}
               </div>
             );
           })}
           {canWriteSchedule ? (
-            <button type="button" className="dos-proc add" onClick={() => setAddProcOpen(true)}>
+            <SemiButton theme="borderless" type="tertiary" size="small" contentClassName="flex min-w-0 items-center gap-2" htmlType="button" className="dos-proc add" onClick={() => setAddProcOpen(true)}>
               <Plus className="h-4 w-4" />
               <span>新增程序</span>
               <span className="t-xs t-mute">类型、案号分别登记</span>
-            </button>
+            </SemiButton>
           ) : null}
           {engagedProcedures.length === 0 && !canWriteSchedule ? <span className="t-xs t-mute">暂无程序</span> : null}
         </div>
@@ -631,7 +637,7 @@ export function MatterDetailTabs({
         </div>
       ) : null}
 
-      {invalidProcedure ? <p role="alert" className="mt-3 text-sm text-destructive">指定程序不可用。<button type="button" className="ml-2 underline" onClick={() => updateDossierLocation({ procedure: null, stage: null })}>重新选择程序</button></p> : null}
+      {invalidProcedure ? <p role="alert" className="mt-3 text-sm text-destructive">指定程序不可用。<SemiButton theme="borderless" type="primary" size="small" htmlType="button" className="ml-2" onClick={() => updateDossierLocation({ procedure: null, stage: null })}>重新选择程序</SemiButton></p> : null}
 
       {/* ③ 页签 */}
       <ProcedureWorkflowPanel
@@ -689,7 +695,7 @@ export function MatterDetailTabs({
         deliveryNode={<DeliveryPanel matterId={matter.id} initialDeliveryId={searchParams.get("delivery")} initialEventId={searchParams.get("deliveryEvent")}
           initialDocumentId={searchParams.get("deliveryDocument")} prepareSignal={deliveryPrepareSignal} onLocationChange={deliveryLocation} onDocumentOpen={openDocument} onDraftStateChange={deliveryDraft} />}
         materialsActions={<>
-          {evidenceError ? <p role="alert" className="text-sm text-destructive">证据要点读取失败：{evidenceError} <button type="button" className="underline" onClick={() => router.refresh()}>重新加载</button></p> : null}
+          {evidenceError ? <p role="alert" className="text-sm text-destructive">证据要点读取失败：{evidenceError} <SemiButton theme="borderless" type="primary" size="small" htmlType="button" onClick={() => router.refresh()}>重新加载</SemiButton></p> : null}
           <div className="flex flex-wrap items-center justify-between gap-2">
             {allowed("documents.read") ? <MaterialToolsSheet
               key={`${matter.id}:${currentProcedure?.id ?? "unassigned"}`}
@@ -902,13 +908,13 @@ function BillingsCard({ matterId, billings, canManage, contractTotal }: { matter
         <div className="panel-title">
           <FileSignature className="ic" strokeWidth={1.8} />
           合同与补充协议
-          <span className="badge b-white" style={{ marginLeft: 2 }}>{billings.length}</span>
+          <SemiTag size="small" color="grey" style={{ marginLeft: 2 }}>{billings.length}</SemiTag>
         </div>
         {canManage ? (
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setAddOpen(true)}>
+          <SemiButton htmlType="button" theme="outline" type="tertiary" onClick={() => setAddOpen(true)}>
             <Plus />
             合同 / 补充协议
-          </button>
+          </SemiButton>
         ) : null}
       </div>
       {billings.length === 0 ? (
@@ -918,9 +924,9 @@ function BillingsCard({ matterId, billings, canManage, contractTotal }: { matter
           {billings.map((b) => (
             <div key={b.id} className="dos-bill row">
               <span className="t">{b.title}</span>
-              <span className={cn("badge", b.status === "ACTIVE" ? "b-teal" : b.status === "CLOSED" ? "b-slate" : "b-white")}>
+              <SemiTag size="small" color={b.status === "ACTIVE" ? "teal" : b.status === "CLOSED" ? "grey" : "grey"}>
                 {b.status === "ACTIVE" ? "执行中" : b.status === "CLOSED" ? "已结束" : "草稿"}
-              </span>
+              </SemiTag>
               <span className="v mono">¥{Number(b.contractAmount).toLocaleString("zh-CN")}</span>
               <span className="m">{[b.signedAt ? `${formatShortDate(b.signedAt)} 签署` : null, b.schedule].filter(Boolean).join(" · ")}</span>
             </div>
@@ -1037,7 +1043,7 @@ function MatterStickyBar({
   const hearing = nextUpcomingHearing(procedures);
   const days = deadline ? daysFromToday(deadline.dueAt) : null;
   const deadlineTone =
-    days === null ? "" : days < 0 || days <= 3 ? "text-[var(--red)]" : days <= 7 ? "text-[var(--amber)]" : "text-[var(--t-muted)]";
+    days === null ? "" : days < 0 || days <= 3 ? "text-[var(--semi-color-danger)]" : days <= 7 ? "text-[var(--semi-color-warning)]" : "text-[var(--semi-color-text-2)]";
   const deadlineText =
     deadline ? deadlineRelative(deadline.dueAt, deadline.duePrecision) : "";
 
@@ -1045,7 +1051,7 @@ function MatterStickyBar({
     <div ref={wrapRef} className="h-0 w-full" aria-hidden={!pinned}>
       {pinned && rect && (
         <div className="fixed top-[58px] z-10" style={{ left: rect.left, width: rect.width }}>
-          <div className="flex items-center gap-2.5 rounded-[10px] border border-[var(--bd-hair)] bg-[var(--bg-glass)] px-3 py-1.5 shadow-[var(--sh-hover)] backdrop-blur-xl">
+          <div className="flex items-center gap-2.5 rounded-[10px] border border-[var(--semi-color-border)] bg-[var(--bg-glass)] px-3 py-1.5 shadow-[var(--sh-hover)] backdrop-blur-xl">
             <span className="min-w-0 truncate text-[13px] font-semibold" title={title}>
               {title}
             </span>
@@ -1055,7 +1061,7 @@ function MatterStickyBar({
               </span>
             )}
             <span className="ml-auto flex shrink-0 items-center gap-2 text-[11px]" aria-label="全案节点">
-              <span className="badge b-white">全案</span>
+              <SemiTag size="small" color="grey">全案</SemiTag>
               {deadline ? (
                 <span className={cn("inline-flex items-center gap-1", deadlineTone)}>
                   <Clock3 className="h-3 w-3" />

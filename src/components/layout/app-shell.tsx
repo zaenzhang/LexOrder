@@ -1,5 +1,6 @@
 "use client";
 
+import { Layout } from "@douyinfe/semi-ui";
 import { useState } from "react";
 import { Sidebar, type FirmBrand } from "./sidebar";
 import { Topbar } from "./topbar";
@@ -26,17 +27,18 @@ export function AppShell({
 
   return (
     <TopbarActionProvider>
-      <div className="min-h-screen bg-[var(--bg-canvas)]">
-        <Sidebar firm={firm} onOpenTools={() => setToolsOpen(true)} />
+      <Layout className="min-h-screen bg-[var(--semi-color-bg-0)]">
+        <Topbar onMobileMenuToggle={() => setMobileNavOpen(true)} userAvatar={userAvatar ?? null} />
+        <Layout hasSider>
+          <Sidebar firm={firm} onOpenTools={() => setToolsOpen(true)} />
+          <Layout.Content className="min-w-0" style={{ overflow: "visible" }}>
+            {banner}
+            <main className="mx-auto w-full max-w-[1440px] px-4 pb-12 pt-6 sm:px-6">{children}</main>
+          </Layout.Content>
+        </Layout>
         <MobileNav open={mobileNavOpen} onOpenChange={setMobileNavOpen} firm={firm} onOpenTools={() => setToolsOpen(true)} />
-        <div className="md:pl-[228px]">
-          <Topbar onMobileMenuToggle={() => setMobileNavOpen(true)} userAvatar={userAvatar ?? null} />
-          {banner}
-          {/* 墨案 .content：20px 24px 48px，最宽 1440 */}
-          <main className="mx-auto w-full max-w-[1440px] px-4 pb-12 pt-5 sm:px-6">{children}</main>
-        </div>
         <ToolsDialog open={toolsOpen} onOpenChange={setToolsOpen} />
-      </div>
+      </Layout>
     </TopbarActionProvider>
   );
 }

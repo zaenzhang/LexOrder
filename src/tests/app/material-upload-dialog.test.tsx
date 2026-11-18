@@ -88,8 +88,8 @@ describe("G04 批量接件：逐件身份、目标与接续（组件环境）", 
     fireEvent.click(editor().getByRole("button", { name: "上传此项" }));
     await screen.findByText("3 份 · 已保存 1 份");
     choose(1); change("显示名", "乙的独立显示名"); fireEvent.click(editor().getByRole("button", { name: "采用合成指示 B" }));
-    fireEvent.click(screen.getByText("共同默认值", { selector: "summary" }));
-    const defaults = within(screen.getByText("共同默认值", { selector: "summary" }).parentElement!);
+    fireEvent.click(screen.getByRole("button", { name: "共同默认值" }));
+    const defaults = within(screen.getByRole("button", { name: "共同默认值" }).parentElement!);
     await select("材料来源", "当事人提供", defaults);
     fireEvent.click(defaults.getByRole("button", { name: "应用到可编辑项" }));
     expect(editor().getByLabelText("显示名")).toHaveValue("乙的独立显示名");

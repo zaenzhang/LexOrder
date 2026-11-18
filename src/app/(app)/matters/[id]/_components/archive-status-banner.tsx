@@ -1,6 +1,6 @@
 "use client";
 
-import { Tag } from "@douyinfe/semi-ui";
+import { Button, Tag } from "@douyinfe/semi-ui";
 import { Hourglass, XCircle, Archive } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -31,24 +31,24 @@ export function ArchiveStatusBanner({ record, onReArchive }: Props) {
       className={cn(
         "flex items-start gap-3 rounded-[10px] border px-4 py-3",
         isRejected
-          ? "border-[var(--red-line)] bg-[var(--red-bg)]"
-          : "border-[var(--bronze-line)] bg-[var(--bronze-bg)]"
+          ? "border-[var(--semi-color-danger-light-active)] bg-[var(--semi-color-danger-light-default)]"
+          : "border-[var(--semi-color-warning-light-active)] bg-[var(--semi-color-warning-light-default)]"
       )}
     >
-      <div className={cn("mt-0.5", isRejected ? "text-[var(--red)]" : "text-[var(--bronze)]")}>
+      <div className={cn("mt-0.5", isRejected ? "text-[var(--semi-color-danger)]" : "text-[var(--semi-color-warning)]")}>
         {isRejected ? <XCircle className="h-4 w-4" /> : <Hourglass className="h-4 w-4" />}
       </div>
       <div className="flex-1 space-y-1">
         <div className="flex items-center gap-2">
-          <span className={cn("text-sm font-medium", isRejected ? "text-[var(--red)]" : "text-[var(--bronze)]")}>
+          <span className={cn("text-sm font-medium", isRejected ? "text-[var(--semi-color-danger)]" : "text-[var(--semi-color-warning)]")}>
             {isRejected ? "归档申请被驳回" : "归档申请审批中"}
           </span>
           <Tag
             className={cn(
               "text-[10px]",
               isRejected
-                ? "border-[var(--red-line)] text-[var(--red)]"
-                : "border-[var(--bronze-line)] text-[var(--bronze)]"
+                ? "border-[var(--semi-color-danger-light-active)] text-[var(--semi-color-danger)]"
+                : "border-[var(--semi-color-warning-light-active)] text-[var(--semi-color-warning)]"
             )}
             color="grey"
             type="ghost"
@@ -70,14 +70,14 @@ export function ArchiveStatusBanner({ record, onReArchive }: Props) {
         )}
       </div>
       {isRejected && onReArchive && (
-        <button
-          type="button"
+        <Button theme="outline" type="tertiary" size="small"
+          htmlType="button"
           onClick={onReArchive}
           className="mt-0.5 inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs hover:bg-muted/80"
         >
           <Archive className="h-3 w-3" />
           重新归档
-        </button>
+        </Button>
       )}
     </div>
   );

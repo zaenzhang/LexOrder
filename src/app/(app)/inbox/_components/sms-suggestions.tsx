@@ -1,5 +1,6 @@
 "use client";
 
+import { Disclosure } from "@/components/patterns/disclosure";
 import { Button, Input, Select, Toast } from "@douyinfe/semi-ui";
 import { formatDeadlineDue } from "@/lib/deadline-due";
 
@@ -95,8 +96,7 @@ export function SmsSuggestions({ sms, busy }: { sms: SmsRow; busy: boolean }) {
         {row.kind === "HEARING" || row.kind === "DEADLINE" ? <EventChoiceEditor key={`${row.id}:${row.updatedAt.toISOString()}`} sms={sms} row={row} disabled={locked} onChange={setChoice} /> : null}
       </div>;
     })}
-    {decided.length ? <details className="text-sm">
-      <summary className="cursor-pointer text-muted-foreground">已处理建议 · {decided.length} 项</summary>
+    {decided.length ? <Disclosure className="text-sm" heading={<>已处理建议 · {decided.length} 项</>}>
       <ul className="mt-2 space-y-2">
         {decided.map(row => {
           const receipt = savedSmsDecision(row.payload);
@@ -104,7 +104,7 @@ export function SmsSuggestions({ sms, busy }: { sms: SmsRow; busy: boolean }) {
           return <li key={row.id}>{row.suggestedValue} · {label}{row.targetId && receipt && sms.matchedMatter ? <Link className="ml-2 underline" href={matterHref(sms.matchedMatter, "?view=work&workPane=tasks")}>查看案件事项</Link> : null}</li>;
         })}
       </ul>
-    </details> : null}
+    </Disclosure> : null}
   </section>;
 }
 

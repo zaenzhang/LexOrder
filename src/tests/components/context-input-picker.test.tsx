@@ -72,6 +72,7 @@ describe("真实采用选择与固定版本", () => {
     render(<ContextInputsSummary matterId={matterId} summary={{ unavailable: false, inputs: [{ ...summary.inputs[0], historical: true, changed: true }] }} />);
     expect(screen.getByText("采用历史版")).toBeInTheDocument();
     expect(screen.getByText("采用后发生变化，待核对")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /第 .*版/ }));
     expect(screen.getByRole("link", { name: "查看这版记录" })).toHaveAttribute("href", `/matters/${matterId}?view=archive&contextRecord=${id}`);
   });
 });

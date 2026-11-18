@@ -805,6 +805,12 @@ ReviewDialogContent 的 Tabs/TabPane 使用业务原 ID，受控值由调用方�
 
 短弹窗和侧边面板分别使用 120ms 与 160ms 的入场过渡。关闭立即还原焦点，不等待离场动画。CSS 尊重 `prefers-reduced-motion`。高频筛选和复核页签即时更新。短状态反馈使用 Semi Toast，需阅读说明、重试或保留错误详情的反馈使用 Semi Notification。原生文件控件保留选取、校验及 `FormData` 语义，界面使用同一主题。[迁移证据](WORKBENCH_PLAN.md#717-semi-迁移协作计划2026-11-18)
 
+### 6.32 Semi 标准布局与列表（2026-11-18）
+
+业务与管理工作区通过 Semi Layout 和 Nav 提供顶栏、侧栏与内容区，长表格由 Table 自身横向滚动。服务端页面跨组件边界仅传可序列化的表格值与渲染节点。客户端表格从原有行对象渲染列，沿用原记录 ID、权限和服务端分页。
+
+共享折叠由 Semi Button 和 Collapsible 组合。按钮通过 aria-controls 指向内容，展开态通过 aria-expanded 公布，折叠期间内容保留但移出交互范围。文件输入通过 Semi 按钮呈现，底层浏览器文件控件提供 FileList、FormData、表单重置与原生校验。共享编辑与确认弹层沿 §6.31 的 Semi Modal 及嵌套焦点约定。
+
 ## 7. 参考项目如何进入 LexOrder
 
 沿用 [来源记录](RESEARCH_AND_DECISIONS.md)，按“观察行为 → 输入输出与规则 → LexOrder 设计 → 场景验收”吸收。实际复制代码另记固定提交、文件、依赖与来源；研究范围不按协议类型排除。

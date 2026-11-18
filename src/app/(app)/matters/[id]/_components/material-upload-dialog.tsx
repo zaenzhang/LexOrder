@@ -1,5 +1,6 @@
 "use client";
 
+import { Disclosure } from "@/components/patterns/disclosure";
 import { FileInput } from "@/components/patterns/file-input";
 import { Select, Button, Input, Tag } from "@douyinfe/semi-ui";
 import { useEffect, useId, useRef, useState } from "react";
@@ -304,7 +305,7 @@ export function MaterialUploadDialog({ current, procedures, canWrite, scopeValid
         disabled={busy || !scopeMatches}
         onChange={event => { addFiles(Array.from(event.target.files ?? [])); event.target.value = ""; }} /></div>
       <input ref={replacementInput} type="file" hidden aria-label="替换当前文件" onChange={event => { replaceFile(event.target.files?.[0]); event.target.value = ""; }} />
-      {defaults && context ? <details className="rounded-md border p-3"><summary className="cursor-pointer text-sm">共同默认值</summary>
+      {defaults && context ? <Disclosure heading="共同默认值">
         <div className="space-y-3 pt-3"><UploadFields value={defaults} onChange={setDefaults} procedures={procedures} opened={context} disabled={busy || !scopeMatches} prefix={`${id}-defaults`} />
           <Button
             disabled={busy || !scopeMatches || !rows.some(editable)}
@@ -313,7 +314,7 @@ export function MaterialUploadDialog({ current, procedures, canWrite, scopeValid
             setNotice("共同默认值已应用到可编辑项；逐件名称及采用的目标和指示保持。");
           }}
             type="tertiary" theme="outline"
-            size="small">应用到可编辑项</Button></div></details> : null}
+            size="small">应用到可编辑项</Button></div></Disclosure> : null}
       {rows.length ? <div className="grid items-start gap-4 md:grid-cols-[minmax(13rem,1fr)_minmax(0,2fr)]">
         <ol aria-label="本批材料" className="max-h-[58vh] space-y-1 overflow-y-auto rounded-md border p-2">
           {rows.map((row, index) => <li key={row.id}><Button

@@ -330,7 +330,7 @@ export function ClientSheet({ open, onOpenChange, onReturnFocus, editingClient }
                       onChange={value => setValue("idNumber", sanitizePersonIdInput(personIdType, value), { shouldDirty: true, shouldValidate: !!errors.idNumber })}
                     />
                     {watchedIdNumber && personIdError(personIdType, watchedIdNumber) ? (
-                      <p className="text-[11px] text-[var(--amber,#b7791f)]">{personIdError(personIdType, watchedIdNumber)}</p>
+                      <p className="text-[11px] text-[var(--semi-color-warning,#b7791f)]">{personIdError(personIdType, watchedIdNumber)}</p>
                     ) : null}
                   </div>
                 ) : (

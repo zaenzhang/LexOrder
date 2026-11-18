@@ -1,5 +1,6 @@
 "use client";
 
+import { Disclosure } from "@/components/patterns/disclosure";
 import { Select, Input } from "@douyinfe/semi-ui";
 import { useId } from "react";
 import type { DeadlineDue, DeadlineDueDraft } from "@/lib/deadline-due";
@@ -27,7 +28,7 @@ export function DeadlineDueFields({ value, onChange, disabled, original }: {
       {value.precision === "DATETIME" && <div className="min-w-0 flex-1 space-y-1.5"><label htmlFor={`${id}-time`} className="text-sm font-medium text-[var(--semi-color-text-1)]">准确时刻（北京时间）</label>
         <Input id={`${id}-time`} type="time" required disabled={disabled} value={value.time} onChange={inputValue => onChange({ ...value, time: inputValue })} /></div>}
     </div>
-    {original?.duePrecision === null && <details className="text-xs text-muted-foreground"><summary>查看原记录值</summary>
-      <p>{new Date(original.dueAt).toISOString()}（原存储值，非已核对的准确时刻）</p></details>}
+    {original?.duePrecision === null && <Disclosure className="text-xs text-muted-foreground" heading="查看原记录值">
+      <p>{new Date(original.dueAt).toISOString()}（原存储值，非已核对的准确时刻）</p></Disclosure>}
   </div>;
 }

@@ -1,4 +1,6 @@
 "use client";
+
+import { Button as SemiButton } from "@douyinfe/semi-ui";
 import { FieldGrid, FieldItem } from "@/components/patterns/moan";
 
 import { useState } from "react";
@@ -123,10 +125,10 @@ export function InfoPanel({
           </div>
           {canEdit ? (
             <div className="acts">
-              <button type="button" onClick={onEdit} className="btn btn-secondary btn-sm">
+              <SemiButton htmlType="button" onClick={onEdit} theme="outline" type="tertiary">
                 <Pencil strokeWidth={1.8} />
                 编辑信息
-              </button>
+              </SemiButton>
             </div>
           ) : null}
         </div>
@@ -190,13 +192,13 @@ function ClampedText({ text }: { text: string }) {
         {text}
       </span>
       {isLong && (
-        <button
-          type="button"
+        <SemiButton theme="borderless" type="primary" size="small"
+          htmlType="button"
           onClick={() => setOpen((v) => !v)}
           className="mt-0.5 text-[11px] text-primary hover:underline"
         >
           {open ? "收起" : "展开全文"}
-        </button>
+        </SemiButton>
       )}
     </span>
   );

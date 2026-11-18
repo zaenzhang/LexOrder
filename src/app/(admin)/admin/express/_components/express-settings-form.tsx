@@ -79,7 +79,7 @@ export function ExpressSettingsForm({ initial }: { initial: Initial }) {
           <div className="mb-2 flex items-center gap-2">
             <h3 className="text-[13px] font-medium">快递鸟（主，推荐）</h3>
             {initial.kdniao.configured && (
-              <span className="inline-flex items-center gap-1 rounded bg-[var(--green-bg)] px-1.5 py-0.5 text-[10px] text-[var(--green)]">
+              <span className="inline-flex items-center gap-1 rounded bg-[var(--semi-color-success-light-default)] px-1.5 py-0.5 text-[10px] text-[var(--semi-color-success)]">
                 <CheckCircle2 className="h-3 w-3" />
                 已配置
               </span>
@@ -125,14 +125,13 @@ export function ExpressSettingsForm({ initial }: { initial: Initial }) {
           </div>
           {initial.kdniao.configured && (
             <div className="mt-2 flex justify-end">
-              <button
-                type="button"
+              <Button theme="borderless" type="danger" size="small" contentClassName="inline-flex items-center gap-1"
+                htmlType="button"
                 onClick={clearKdniao}
-                className="inline-flex items-center gap-1 text-[10px] text-destructive hover:underline"
               >
                 <Trash2 className="h-3 w-3" />
                 清除密钥
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -142,7 +141,7 @@ export function ExpressSettingsForm({ initial }: { initial: Initial }) {
           <div className="mb-2 flex items-center gap-2">
             <h3 className="text-[13px] font-medium">快递100（备用）</h3>
             {initial.kuaidi100.configured && (
-              <span className="inline-flex items-center gap-1 rounded bg-[var(--green-bg)] px-1.5 py-0.5 text-[10px] text-[var(--green)]">
+              <span className="inline-flex items-center gap-1 rounded bg-[var(--semi-color-success-light-default)] px-1.5 py-0.5 text-[10px] text-[var(--semi-color-success)]">
                 <CheckCircle2 className="h-3 w-3" />
                 已配置
               </span>
@@ -187,14 +186,13 @@ export function ExpressSettingsForm({ initial }: { initial: Initial }) {
           </div>
           {initial.kuaidi100.configured && (
             <div className="mt-2 flex justify-end">
-              <button
-                type="button"
+              <Button theme="borderless" type="danger" size="small" contentClassName="inline-flex items-center gap-1"
+                htmlType="button"
                 onClick={clearKd100}
-                className="inline-flex items-center gap-1 text-[10px] text-destructive hover:underline"
               >
                 <Trash2 className="h-3 w-3" />
                 清除密钥
-              </button>
+              </Button>
             </div>
           )}
         </div>

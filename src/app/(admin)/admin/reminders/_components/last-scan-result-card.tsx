@@ -55,27 +55,27 @@ export function LastScanResultCard({ result, stats, deadJobs }: { result: Remind
               期限 {result.deadlineNotified}/{result.deadlineScanned} · 开庭 {result.hearingNotified}/{result.hearingScanned} · 保全 {result.preservationNotified}/{result.preservationScanned}
               {result.escalationSent ? ` · 逾期升级 ${result.escalationSent}` : ""}
             </div>
-            <div className="t-xs" style={{ marginBottom: 10, color: result.ok || result.queued ? "var(--t-secondary)" : result.skipped ? "var(--t-muted)" : "var(--red)" }}>
+            <div className="t-xs" style={{ marginBottom: 10, color: result.ok || result.queued ? "var(--semi-color-text-1)" : result.skipped ? "var(--semi-color-text-2)" : "var(--semi-color-danger)" }}>
               群机器人：{push}
             </div>
           </>
         )}
         <div className="t-xs t-faint" style={{ marginBottom: 6 }}>群机器人投递队列 · 近 30 天</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <Row tone="green" label={`发送成功 · ${stats.delivered} 条`} right={<span className="t-xs" style={{ color: "var(--green)" }}>群机器人</span>} />
-          <Row tone="red" label={`重试失败 · ${stats.failed} 条`} right={<span className="t-xs" style={{ color: "var(--red)" }}>{stats.failed ? "需人工处置" : "无"}</span>} />
+          <Row tone="green" label={`发送成功 · ${stats.delivered} 条`} right={<span className="t-xs" style={{ color: "var(--semi-color-success)" }}>群机器人</span>} />
+          <Row tone="red" label={`重试失败 · ${stats.failed} 条`} right={<span className="t-xs" style={{ color: "var(--semi-color-danger)" }}>{stats.failed ? "需人工处置" : "无"}</span>} />
           <Row tone="slate" label={`投递中 / 待重试 · ${stats.inFlight} 条`} right={<span className="t-xs t-mute">接口成功 ≠ 已阅读</span>} />
         </div>
         {deadJobs.length > 0 ? (
           <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
             {deadJobs.map((j) => (
-              <div key={j.id} className="t-xs" style={{ padding: "6px 8px", borderRadius: 7, background: "var(--bg-sunken)" }}>
+              <div key={j.id} className="t-xs" style={{ padding: "6px 8px", borderRadius: 7, background: "var(--semi-color-fill-1)" }}>
                 <div className="flex flex-wrap items-center gap-1.5 t-mute">
                   <span className="font-mono">{formatScanTime(j.updatedAt)}</span>
                   <span className="offset-chip">{j.type === "webhook-digest" ? "群机器人摘要" : j.type === "email-digest" ? "邮件摘要" : j.type}</span>
                   <span>尝试 {j.attempts} 次</span>
                 </div>
-                <div className="truncate" style={{ color: "var(--red)", marginTop: 2 }} title={j.lastError ?? ""}>{j.lastError ?? "未知错误"}</div>
+                <div className="truncate" style={{ color: "var(--semi-color-danger)", marginTop: 2 }} title={j.lastError ?? ""}>{j.lastError ?? "未知错误"}</div>
               </div>
             ))}
           </div>

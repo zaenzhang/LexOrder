@@ -145,7 +145,7 @@ describe("F01 真实期限表单（组件环境，服务动作边界受控）", 
     data.handovers = [{ id: "handover", matterId, title: "合成交接", fromName: "合成甲", toName: "合成乙", fromUserId: "actor", toUserId: "recipient", initiatedById: "actor", status: "ACCEPTED", reason: "固定历史", emergency: false, revision: 0, createdAt: original.updatedAt,
       snapshot: { work: [{ ...work(), title: "合成日期快照", dueAt: new Date("2027-02-05T00:00:00+08:00"), duePrecision: "DATE" }, old], procedures: [], pendingReceipts: [], invoices: [], seals: [] } }];
     render(<WorkResponsibilityPanel data={data} matterId={matterId} />);
-    const snapshot = screen.getByText(/固定交接清单：2 项待办/).closest("details")!;
+    const snapshot = screen.getByRole("button", { name: /固定交接清单：2 项待办/ }).parentElement!;
     fireEvent.click(within(snapshot).getByText(/固定交接清单/));
     expect(within(snapshot).getByText(/合成日期快照/)).toHaveTextContent("2027-02-05 · 原责任人");
     expect(within(snapshot).getByText(/合成旧快照/)).toHaveTextContent("2027-02-05 · 时间精度未记录");

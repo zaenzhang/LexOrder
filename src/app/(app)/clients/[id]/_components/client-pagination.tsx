@@ -51,7 +51,7 @@ type Controls = ReturnType<typeof useClientPagination<{ nextCursor: string | nul
 export function ClientPagination({ controls, label }: { controls: Controls; label: string }) {
   return <div className="mt-3 space-y-2">
     {controls.pending ? <p className="t-xs t-mute" role="status">正在加载{label}…</p> : null}
-    {controls.error ? <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-[var(--red)]">
+    {controls.error ? <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-[var(--semi-color-danger)]">
       <span>{controls.error}</span><Button htmlType="button" theme="outline" type="tertiary" size="small" onClick={controls.retry}>重试{label}</Button>
     </div> : null}
     <div className="flex flex-wrap items-center gap-2">

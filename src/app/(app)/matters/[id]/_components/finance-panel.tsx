@@ -1,5 +1,6 @@
 "use client";
 
+import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
 import { Button } from "@douyinfe/semi-ui";
 import { useState } from "react";
 import { Wallet, Receipt } from "lucide-react";
@@ -51,7 +52,7 @@ export function FinancePanel({
 
   return (
     <section className="card">
-      <header className={compact ? "border-b border-border px-3 py-2" : "border-b border-[var(--bd-hair)] px-4 py-3"}>
+      <header className={compact ? "border-b border-border px-3 py-2" : "border-b border-[var(--semi-color-border)] px-4 py-3"}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="panel-title">
             <Wallet className="h-3.5 w-3.5 text-primary" />
@@ -108,11 +109,11 @@ export function FinancePanel({
                   : "flex items-center gap-3 px-4 py-2 text-[12.5px]"
               }
             >
-              <span className={cn("shrink-0 font-mono tabular text-[14px] font-medium", e.confirmState === "PENDING" ? "text-[var(--amber)]" : "text-[var(--green)]")}>
+              <span className={cn("shrink-0 font-mono tabular text-[14px] font-medium", e.confirmState === "PENDING" ? "text-[var(--semi-color-warning)]" : "text-[var(--semi-color-success)]")}>
                 {formatCurrency(Number(e.amount))}
               </span>
               {e.confirmState === "PENDING" ? (
-                <span className="badge b-amber shrink-0" title="已登记，等待财务管理人员确认到账后才计入已收">待确认</span>
+                <SemiTag size="small" color="amber" className="shrink-0"><span title="已登记，等待财务管理人员确认到账后才计入已收">待确认</span></SemiTag>
               ) : null}
               <span className="min-w-0 flex-1 truncate text-muted-foreground">
                 {e.payerOrPayee && <span>{e.payerOrPayee}</span>}
@@ -162,11 +163,11 @@ function StatCard({
 }) {
   const cls =
     tone === "emerald"
-      ? "text-[var(--green)]"
+      ? "text-[var(--semi-color-success)]"
       : tone === "amber"
-        ? "text-[var(--amber)]"
+        ? "text-[var(--semi-color-warning)]"
         : tone === "red"
-          ? "text-[var(--red)]"
+          ? "text-[var(--semi-color-danger)]"
           : "text-foreground";
   return (
     <div className={`bg-card px-3 text-center ${compact ? "py-2" : "py-2.5"} ${className ?? ""}`}>

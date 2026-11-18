@@ -24,3 +24,15 @@ if (typeof HTMLCanvasElement !== "undefined") {
     }
   });
 }
+
+// jsdom omits geometry APIs used by Semi typography, tables, tabs and collapsibles.
+if (!globalThis.ResizeObserver) {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+if (typeof Range !== "undefined") {
+  Range.prototype.getBoundingClientRect ??= () => new DOMRect();
+}

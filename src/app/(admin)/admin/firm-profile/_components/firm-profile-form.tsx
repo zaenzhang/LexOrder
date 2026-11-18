@@ -116,26 +116,24 @@ export function FirmProfileForm({ initial }: { initial: Initial }) {
               onChange={(e) => onPickLogo(e.target.files?.[0])}
             />
             <div className="flex gap-1">
-              <button
-                type="button"
+              <Button theme="borderless" type="primary" size="small" contentClassName="inline-flex items-center gap-1"
+                htmlType="button"
                 onClick={() => fileRef.current?.click()}
-                className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
               >
                 <ImageUp className="h-3 w-3" />
                 上传
-              </button>
+              </Button>
               {logoDataUrl && (
-                <button
-                  type="button"
+                <Button theme="borderless" type="danger" size="small" contentClassName="inline-flex items-center gap-1"
+                  htmlType="button"
                   onClick={() => {
                     setLogoDataUrl(null);
                     if (fileRef.current) fileRef.current.value = "";
                   }}
-                  className="inline-flex items-center gap-1 text-[11px] text-destructive hover:underline"
                 >
                   <Trash2 className="h-3 w-3" />
                   清除
-                </button>
+                </Button>
               )}
             </div>
           </div>

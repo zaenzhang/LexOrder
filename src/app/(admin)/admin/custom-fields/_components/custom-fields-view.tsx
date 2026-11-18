@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Input, Notification, Form, Select, Switch, TextArea, Toast } from "@douyinfe/semi-ui";
+import { Table, Empty, Button, Input, Notification, Form, Select, Switch, TextArea, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import type { CustomFieldDef } from "@prisma/client";
 import { Plus, Pencil, Trash2 } from "lucide-react";
@@ -61,44 +61,25 @@ export function CustomFieldsView({ matterFields }: { matterFields: CustomFieldDe
       <AdminPageHeader title="自定义字段" sub="为案件添加机构特有的字段，新建/编辑案件详情时填写。" actions={<Button theme="solid" onClick={() => setCreateOpen(true)} size="small"><Plus />添加字段</Button>} />
 
       <div className="overflow-hidden card">
-        <table className="w-full text-[13px]">
-          <thead>
-            <tr className="border-b border-border text-left text-[12px] text-muted-foreground">
-              <th className="px-4 py-2 font-medium">字段名称</th>
-              <th className="px-4 py-2 font-medium">类型</th>
-              <th className="px-4 py-2 font-medium">必填</th>
-              <th className="px-4 py-2 font-medium">选项值</th>
-              <th className="px-4 py-2 font-medium">启用</th>
-              <th className="px-4 py-2 text-right font-medium">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {matterFields.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
-                  还没有自定义字段，点击右上角「添加字段」
-                </td>
-              </tr>
-            ) : (
-              matterFields.map((f) => (
-                <tr key={f.id} className="border-b border-border/60 last:border-0">
-                  <td className="px-4 py-2.5 font-medium text-foreground">{f.label}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{TYPE_LABEL[f.fieldType]}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{f.required ? "是" : "—"}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground">
-                    {f.fieldType === "SELECT" && f.options.length > 0
+        <Table<(typeof matterFields)[number]>
+          size="small"
+          pagination={false}
+          rowKey="id"
+          dataSource={matterFields}
+          empty={<Empty description={"还没有自定义字段，点击右上角「添加字段」"} />}
+          columns={[
+            { title: "字段名称", dataIndex: "label" },
+            { title: "类型", key: "column2", render: (_, f) => <span className="text-muted-foreground">{TYPE_LABEL[f.fieldType]}</span> },
+            { title: "必填", key: "column3", render: (_, f) => <span className="text-muted-foreground">{f.required ? "是" : "—"}</span> },
+            { title: "选项值", key: "column4", render: (_, f) => <span className="text-muted-foreground">{f.fieldType === "SELECT" && f.options.length > 0
                       ? f.options.join(" / ")
-                      : "—"}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <Switch
+                      : "—"}</span> },
+            { title: "启用", key: "column5", render: (_, f) => <Switch
                       checked={f.enabled}
                       onChange={(v) => handleToggle(f.id, v)}
                       disabled={pending}
-                    />
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex items-center justify-end gap-1">
+                    /> },
+            { title: "操作", align: "right", key: "column6", render: (_, f) => <div className="flex items-center justify-end gap-1">
                       <Button
                         theme="borderless" type="tertiary"
                         size="small"
@@ -116,13 +97,9 @@ export function CustomFieldsView({ matterFields }: { matterFields: CustomFieldDe
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+                    </div> },
+          ]}
+        />
       </div>
 
       <FieldFormDialog

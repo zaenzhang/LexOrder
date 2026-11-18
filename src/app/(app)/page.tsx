@@ -1,9 +1,10 @@
 import { formatDeadlineDue } from "@/lib/deadline-due";
 /**
- * 工作台（墨案 02 效果图）：今日行动与风险（问候 + 今日焦点）→ 行动入口四卡 →
+ * 工作台：今日行动与风险（问候 + 今日焦点）→ 行动入口四卡 →
  * 近期日程与期限 + 待我处理 → 趋势与分布（实收应收 / 案件类型 / 客户来源）。
  */
 import Link from "next/link";
+import { Card, Empty, Tag } from "@/components/patterns/semi-surfaces";
 import { ChevronRight, Gavel, SquareCheck, Timer, TriangleAlert, Calendar as CalendarIcon, Landmark, Clock3, ChartColumn } from "lucide-react";
 import { getSession } from "@/lib/auth/session";
 import { canEnterAdminWorkspace } from "@/lib/auth/system-role";
@@ -62,164 +63,110 @@ export default async function DashboardPage() {
     return acc;
   }, {});
 
+  const metrics = [
+    { href: "/approvals", label: urgentApprovals ? `待我审批 · ${urgentApprovals} 件等待超 2 天` : "待我审批", value: queue.approvalTotal, icon: SquareCheck, color: "var(--semi-color-danger)" },
+    { href: "/schedule", label: hero.overdueDeadlineCount ? `7 日内到期期限 · 另有逾期 ${hero.overdueDeadlineCount}` : "7 日内到期期限", value: hero.nearTermCount, icon: Timer, color: "var(--semi-color-warning)" },
+    { href: "/schedule", label: "本周开庭", value: hero.weekHearingCount, icon: Landmark, color: "var(--semi-color-primary)" },
+    canFinance && overdue
+      ? { href: "/finance?tab=aging", label: overdue.clientCount && overdue.amount ? `逾期未回款 · ${overdue.clientCount} 家客户` : "逾期未回款", value: overdue.amount ? money(overdue.amount) : "¥0", icon: ChartColumn, color: "var(--semi-color-warning)" }
+      : { href: "/schedule", label: "逾期期限 · 需立即处理", value: hero.overdueDeadlineCount, icon: TriangleAlert, color: "var(--semi-color-danger)" }
+  ];
+
   return (
-    <div className="mo-dash">
-      {/* 邮件配置提示只向可进入提醒维护的身份展示。 */}
-      {session?.user && canEnterAdminWorkspace(session.user) && !isEmailConfigured() ? (
-        <EmailReminderNotice />
-      ) : null}
-      {/* ① 今日行动与风险 */}
-      <section className="hero">
-        <div className="hero-greet">
-          <div className="greet-date">
-            <span className="pill-date">{ymd} · {weekday}</span>
-            {lunar ? <span>{lunar}</span> : null}
-          </div>
-          <h1 className="greet-title">
-            {greeting}
-            {name ? <span className="name">，{name}</span> : null}
-          </h1>
-          <p className="greet-sub">
+    <div className="grid min-w-0 gap-4">
+      {session?.user && canEnterAdminWorkspace(session.user) && !isEmailConfigured() ? <EmailReminderNotice /> : null}
+      <section className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <Card>
+          <p className="mb-2 text-xs text-[var(--semi-color-text-2)]">{ymd} · {weekday}{lunar ? ` · ${lunar}` : ""}</p>
+          <h1 className="mb-3 text-2xl font-semibold">{greeting}{name ? `，${name}` : ""}</h1>
+          <p className="text-sm text-[var(--semi-color-text-1)]">
             今日到期期限 <b>{hero.todayDeadlineCount}</b> 项；本周开庭 <b>{hero.weekHearingCount}</b> 场
             {queue.followUps.available && queue.followUps.total > 0 ? <>；本人待跟进 <b>{queue.followUps.total}</b> 项</> : null}
-            {hero.overdueDeadlineCount > 0 ? (
-              <>
-                ，<b className="warn">{hero.overdueDeadlineCount} 项期限已逾期</b>
-              </>
-            ) : null}
-            ，待你审批的申请有 <b style={{ whiteSpace: "nowrap" }}>{queue.approvalTotal} 件</b>。
+            {hero.overdueDeadlineCount > 0 ? <>；<b className="text-[var(--semi-color-danger)]">{hero.overdueDeadlineCount} 项期限已逾期</b></> : null}
+            ；待你审批 <b>{queue.approvalTotal}</b> 件。
           </p>
-        </div>
-
-        <Link href={focusHref} className="hero-focus no-underline">
-          <div className="focus-label">
-            <span className={`dot ${focus && focus.daysLeft <= 3 ? "dot-red dot-pulse-red" : "dot-amber"}`} />
-            今日焦点 · {focus && focus.overdue ? "逾期期限" : "最近期限"}
-          </div>
-          {focus ? (
-            <>
-              <div className="focus-countdown">
-                <span className="focus-days" style={focus.daysLeft > 3 ? { color: "var(--amber)" } : undefined}>{focus.overdue && focus.daysLeft === 0 ? "已逾期" : Math.abs(focus.daysLeft)}</span>
-                <span className="focus-unit">{focus.overdue && focus.daysLeft === 0 ? "" : focus.overdue ? "天 · 已逾期" : focus.daysLeft === 0 ? "天 · 今天到期" : "天"}</span>
+        </Card>
+        <Link href={focusHref} className="min-w-0 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--semi-color-primary)]">
+          <Card title="今日焦点" shadows="hover" className="h-full" headerExtraContent={<span className="text-[var(--semi-color-primary)]">前往{focus ? "案件" : "日程"}</span>}>
+            {focus ? (
+              <div className="grid gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Tag color={focus.overdue ? "red" : "amber"}>{focus.overdue ? "逾期期限" : "最近期限"}</Tag>
+                  <strong>{focus.overdue && focus.daysLeft === 0 ? "已逾期" : Math.abs(focus.daysLeft)}</strong>
+                  {!(focus.overdue && focus.daysLeft === 0) ? <span>{focus.overdue ? "天 · 已逾期" : focus.daysLeft === 0 ? "天 · 今天到期" : "天"}</span> : null}
+                </div>
+                <div className="text-sm"><span className="font-medium">{focus.title}</span> · {formatDeadlineDue(focus.dueAt, focus.duePrecision)}</div>
+                <p className="truncate text-xs text-[var(--semi-color-text-2)]">{[focus.matter, focus.internalCode, focus.procedure].filter(Boolean).join(" · ")}</p>
               </div>
-              <div className="focus-tag">
-                {focus.overdue ? "已过" : "距"} <b style={{ color: "var(--t-primary)" }}>{focus.title}</b> · {formatDeadlineDue(focus.dueAt, focus.duePrecision)}
-              </div>
-              <div className="focus-matter truncate">{focus.matter}</div>
-              <div className="focus-code">{[focus.internalCode, focus.procedure].filter(Boolean).join(" · ")}</div>
-            </>
-          ) : (
-            <>
-              <div className="focus-countdown">
-                <span className="focus-days" style={{ color: "var(--green)", fontSize: 32 }}>✓</span>
-              </div>
-              <div className="focus-tag">暂无未完成期限</div>
-            </>
-          )}
-          <div className="focus-link">前往{focus ? "案件" : "日程"} →</div>
+            ) : <Empty description="暂无未完成期限" />}
+          </Card>
         </Link>
       </section>
 
-      {/* ② 行动入口 */}
-      <div className="action-grid">
-        <Link href="/approvals" className="card card-hover action-tile no-underline">
-          <div className="action-ic ai-red"><SquareCheck strokeWidth={1.8} /></div>
-          <div><div className="action-num" style={{ color: queue.approvalTotal ? "var(--red)" : "var(--t-faint)" }}>{queue.approvalTotal}</div><div className="action-label">待我审批{urgentApprovals ? ` · ${urgentApprovals} 件等待超 2 天` : ""}</div></div>
-          <ChevronRight className="action-arrow" width={14} height={14} />
-        </Link>
-        <Link href="/schedule" className="card card-hover action-tile no-underline">
-          <div className="action-ic ai-amber"><Timer strokeWidth={1.8} /></div>
-          <div><div className="action-num" style={{ color: hero.nearTermCount ? "var(--amber)" : "var(--t-faint)" }}>{hero.nearTermCount}</div><div className="action-label">7 日内到期期限{hero.overdueDeadlineCount ? ` · 另有逾期 ${hero.overdueDeadlineCount}` : ""}</div></div>
-          <ChevronRight className="action-arrow" width={14} height={14} />
-        </Link>
-        <Link href="/schedule" className="card card-hover action-tile no-underline">
-          <div className="action-ic ai-blue"><Landmark strokeWidth={1.8} /></div>
-          <div><div className="action-num" style={{ color: hero.weekHearingCount ? "var(--blue)" : "var(--t-faint)" }}>{hero.weekHearingCount}</div><div className="action-label">本周开庭</div></div>
-          <ChevronRight className="action-arrow" width={14} height={14} />
-        </Link>
-        {canFinance && overdue ? (
-          <Link href="/finance?tab=aging" className="card card-hover action-tile no-underline">
-            <div className="action-ic ai-bronze"><ChartColumn strokeWidth={1.8} /></div>
-            <div><div className="action-num" style={{ color: overdue.amount ? "var(--bronze)" : "var(--t-faint)" }}>{overdue.amount ? money(overdue.amount) : "¥0"}</div><div className="action-label">逾期未回款{overdue.clientCount && overdue.amount ? ` · ${overdue.clientCount} 家客户` : ""}</div></div>
-            <ChevronRight className="action-arrow" width={14} height={14} />
-          </Link>
-        ) : (
-          <Link href="/schedule" className="card card-hover action-tile no-underline">
-            <div className="action-ic ai-red"><TriangleAlert strokeWidth={1.8} /></div>
-            <div><div className="action-num" style={{ color: hero.overdueDeadlineCount ? "var(--red)" : "var(--t-faint)" }}>{hero.overdueDeadlineCount}</div><div className="action-label">逾期期限 · 需立即处理</div></div>
-            <ChevronRight className="action-arrow" width={14} height={14} />
-          </Link>
-        )}
-      </div>
-
-      {/* ③ 短周期事项 */}
-      <div className="main-grid">
-        <div className="card">
-          <div className="panel-head">
-            <div className="panel-title">
-              <CalendarIcon className="ic" strokeWidth={1.8} />
-              近期日程与期限
-            </div>
-            <Link href="/schedule" className="t-sm t-mute">完整日历 →</Link>
-          </div>
-          <div style={{ paddingBottom: 12 }}>
-            {Object.keys(groups).length === 0 ? (
-              <div className="empty mo-empty-compact">
-                <div className="empty-ic"><CalendarIcon /></div>
-                <div className="mo-empty-title">未来 30 天暂无开庭与期限</div>
+      <section aria-label="行动入口" className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {metrics.map(({ href, label, value, icon: Icon, color }) => (
+          <Link key={label} href={href} className="min-w-0 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--semi-color-primary)]">
+            <Card shadows="hover" className="h-full">
+              <div className="flex items-center gap-3">
+                <Icon size={20} color={color} aria-hidden />
+                <div className="min-w-0 flex-1">
+                  <div className="text-xl font-semibold tabular-nums" style={{ color: value && value !== "¥0" ? color : "var(--semi-color-text-2)" }}>{value}</div>
+                  <div className="text-xs leading-relaxed text-[var(--semi-color-text-2)]">{label}</div>
+                </div>
+                <ChevronRight size={14} aria-hidden />
               </div>
-            ) : (
-              Object.entries(groups).map(([key, items]) => {
+            </Card>
+          </Link>
+        ))}
+      </section>
+
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,4fr)]">
+        <Card
+          title={<h2 className="flex items-center gap-2"><CalendarIcon size={16} aria-hidden />近期日程与期限</h2>}
+          headerExtraContent={<Link href="/schedule" className="text-[var(--semi-color-primary)]">完整日历</Link>}
+        >
+          {Object.keys(groups).length === 0 ? <Empty description="未来 30 天暂无开庭与期限" /> : (
+            <div className="grid gap-4">
+              {Object.entries(groups).map(([key, items]) => {
                 const [day, week] = key.split("|");
                 return (
-                  <div key={key}>
-                    <div className="sched-day-head">
-                      <span className="sched-day">{day}</span>
-                      <span className="sched-week">{week}</span>
-                      <span className="sched-rule" />
-                    </div>
+                  <section key={key}>
+                    <h3 className="mb-2 text-xs font-medium text-[var(--semi-color-text-2)]">{day} · {week}</h3>
                     {items.map((it) => {
                       const isDeadline = it.type === "deadline";
                       const d = it.daysUntil;
-                      const tone = d <= 3 ? "urgent" : d <= 7 ? "soon" : "normal";
-                      const icStyle = isDeadline
-                        ? d <= 3
-                          ? { background: "var(--red-bg)", color: "var(--red)" }
-                          : { background: "var(--amber-bg)", color: "var(--amber)" }
-                        : { background: "var(--blue-bg)", color: "var(--blue)" };
-                      const body = (
+                      const label = it.overdue && d === 0 ? "已逾期" : d < 0 ? `逾期 ${-d} 天` : d === 0 ? "今天" : d === 1 ? "明天" : `${d} 天`;
+                      const Icon = isDeadline ? Clock3 : Gavel;
+                      const row = (
                         <>
-                          <span className="sched-time">{it.time ?? (it.type === "deadline" && it.duePrecision == null ? "精度未记录" : "全天")}</span>
-                          <span className="sched-ic" style={icStyle}>{isDeadline ? <Clock3 strokeWidth={2} /> : <Gavel strokeWidth={2} />}</span>
-                          <span style={{ flex: 1, minWidth: 0 }}>
-                            <span className="sched-title block truncate">{isDeadline || /^(开庭|庭审|询问)/.test(it.title) ? it.title : `开庭 · ${it.title}`}</span>
-                            <span className="sched-meta block truncate">{[it.matter, it.procedure].filter(Boolean).join(" · ")}</span>
+                          <span className="shrink-0 text-xs text-[var(--semi-color-text-2)]">{it.time ?? (isDeadline && it.duePrecision == null ? "精度未记录" : "全天")}</span>
+                          <Icon size={16} className="shrink-0 text-[var(--semi-color-primary)]" aria-hidden />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-medium">{isDeadline || /^(开庭|庭审|询问)/.test(it.title) ? it.title : `开庭 · ${it.title}`}</span>
+                            <span className="block truncate text-xs text-[var(--semi-color-text-2)]">{[it.matter, it.procedure].filter(Boolean).join(" · ")}</span>
                           </span>
-                          <span className={`cd cd-${tone}`}>{it.overdue && d === 0 ? "已逾期" : d < 0 ? `逾期 ${-d} 天` : d === 0 ? "今天" : d === 1 ? "明天" : `${d} 天`}</span>
+                          <Tag color={d <= 3 ? "red" : d <= 7 ? "amber" : "grey"}>{label}</Tag>
                         </>
                       );
-                      return it.matterId ? (
-                        <Link key={it.id} href={matterHref({ id: it.matterId, internalCode: it.matterCode })} className="sched-item no-underline">{body}</Link>
-                      ) : (
-                        <div key={it.id} className="sched-item">{body}</div>
-                      );
+                      const rowClass = "flex items-center gap-2 rounded px-2 py-2";
+                      return it.matterId
+                        ? <Link key={it.id} href={matterHref({ id: it.matterId, internalCode: it.matterCode })} className={`${rowClass} hover:bg-[var(--semi-color-fill-0)]`}>{row}</Link>
+                        : <div key={it.id} className={rowClass}>{row}</div>;
                     })}
-                  </div>
+                  </section>
                 );
-              })
-            )}
-          </div>
-        </div>
-
+              })}
+            </div>
+          )}
+        </Card>
         <WorkQueueCard queue={queue} alerts={alerts} />
       </div>
 
-      {/* ④ 趋势和分布 */}
-      <div className="chart-grid">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         {canFinance ? <RevenueChart data={revenueTrend} /> : (
-          <div className="card"><div className="empty"><div className="mo-empty-title">无财务查看权限</div><div className="mo-empty-desc">实收与应收趋势仅对具备财务查看权限的账号展示。</div></div></div>
+          <Card title="近 6 个月实收与应收"><Empty description="实收与应收趋势仅对具备财务查看权限的账号展示。" /></Card>
         )}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div className="grid min-w-0 gap-4">
           <CategoryChart data={categoryDistribution} />
           <ClientSourceCard rows={sources} />
         </div>

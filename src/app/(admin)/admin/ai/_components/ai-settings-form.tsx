@@ -1,5 +1,6 @@
 "use client";
 
+import { Disclosure } from "@/components/patterns/disclosure";
 import { Button, Checkbox, Form, Input, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -152,14 +153,13 @@ export function AiSettingsForm({
           <legend className="text-[11px]">快速预设</legend>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {PROVIDER_PRESETS.map((p) => (
-              <button
+              <Button theme="outline" type="tertiary" size="small"
                 key={p.name}
-                type="button"
+                htmlType="button"
                 onClick={() => applyPreset(p)}
-                className="rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
               >
                 {p.name}
-              </button>
+              </Button>
             ))}
           </div>
         </fieldset>
@@ -254,7 +254,7 @@ export function AiSettingsForm({
             className={
               "mt-3 flex items-start gap-2 rounded-md border p-3 text-[12px] " +
               (testResult.ok
-                ? "border-[var(--green-line)] bg-[var(--green-bg)] text-[var(--green)]"
+                ? "border-[var(--semi-color-success-light-active)] bg-[var(--semi-color-success-light-default)] text-[var(--semi-color-success)]"
                 : "border-destructive/30 bg-destructive/10 text-destructive")
             }
           >
@@ -268,8 +268,7 @@ export function AiSettingsForm({
         )}
       </section>
 
-      <details className="ll-surface rounded-lg border border-border p-5">
-        <summary className="cursor-pointer text-sm font-medium">获取接口密钥</summary>
+      <Disclosure heading="获取接口密钥">
         <ul className="mt-3 space-y-2 text-[12px]">
           {PROVIDER_PRESETS.map((p) => (
             <li key={p.name} className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -288,7 +287,7 @@ export function AiSettingsForm({
           ))}
         </ul>
         <p className="mt-3 text-[11px] text-muted-foreground">密钥加密保存，不显示原文。</p>
-      </details>
+      </Disclosure>
     </div>
   );
 }

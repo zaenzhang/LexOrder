@@ -1,5 +1,8 @@
 "use client";
 
+import { WorkspaceTabs } from "@/components/patterns/moan";
+import { Button as SemiButton } from "@douyinfe/semi-ui";
+
 import { DeadlineDueFields } from "@/components/matters/deadline-due-fields";
 import { deadlineDueDraft, deadlineDueFromDraft, formatDeadlineDue, deadlineOverdue, deadlineRelative, type DeadlineDuePrecision } from "@/lib/deadline-due";
 
@@ -272,27 +275,13 @@ function ImportantItemsCard({
           <span className="mo-count">{total}</span>
         </span>
         <div className="flex flex-wrap items-center gap-2">
-          {/* 分类分段 */}
-          <div className="segmented" role="tablist">
-            {filters.map((f) => (
-              <button
-                key={f.value}
-                type="button"
-                role="tab"
-                aria-selected={filter === f.value}
-                onClick={() => setFilter(f.value)}
-                className={cn("seg", filter === f.value && "active")}
-              >
-                {f.label}
-                <span className="count">{f.count}</span>
-              </button>
-            ))}
-          </div>
+          <WorkspaceTabs items={filters.map(item => ({ key: item.value, label: item.label, count: item.count }))}
+            value={filter} onChange={setFilter} />
           {canManage && (
-            <button type="button" onClick={openAddDialog} className="btn btn-secondary btn-sm">
+            <SemiButton htmlType="button" onClick={openAddDialog} theme="outline" type="tertiary">
               <Plus />
               添加
-            </button>
+            </SemiButton>
           )}
         </div>
       </header>
@@ -431,7 +420,7 @@ export function AdjustDeadlineDialog({ deadline, onClose }: { deadline: { id: st
             <label className="text-sm font-medium text-[var(--semi-color-text-1)]">调整原因 *</label>
             <TextArea rows={3} disabled={pending} value={reason} maxLength={300} onChange={inputValue => setReason(inputValue)} placeholder="如：法院通知书载明举证期限延长至…" />
           </div>
-          {error ? <div className="text-[12px] text-[var(--red)]">{error}</div> : null}
+          {error ? <div className="text-[12px] text-[var(--semi-color-danger)]">{error}</div> : null}
         </div>
         <DialogFooter>
           <Button onClick={onClose} disabled={pending} type="primary" theme="light">取消</Button>
@@ -601,8 +590,8 @@ function DeadlineRow({
         d.completed && "opacity-50"
       )}
     >
-      <button
-        type="button"
+      <SemiButton theme="outline" type="primary" size="small"
+        htmlType="button"
         onClick={onToggle}
         disabled={pending || !canManage}
         className={cn(
@@ -614,7 +603,7 @@ function DeadlineRow({
         aria-label={d.completed ? "标记未完成" : "标记完成"}
       >
         {d.completed && <Check className="h-2.5 w-2.5" />}
-      </button>
+      </SemiButton>
 
       <div className="flex-1 overflow-hidden">
         <div className="flex items-center gap-1.5">
@@ -630,12 +619,12 @@ function DeadlineRow({
             {deadlineCategoryLabel[d.category]}
           </Tag>
           {d.confirmStatus === "PENDING" && (
-            <Tag className="h-5 shrink-0 bg-[var(--amber-bg)] px-1.5 text-[9px] text-[var(--amber)] hover:bg-[var(--amber-bg)]" color="teal">
+            <Tag className="h-5 shrink-0 bg-[var(--semi-color-warning-light-default)] px-1.5 text-[9px] text-[var(--semi-color-warning)] hover:bg-[var(--semi-color-warning-light-default)]" color="teal">
               待确认
             </Tag>
           )}
           {d.confirmStatus === "ADJUSTED" && (
-            <Tag className="h-5 shrink-0 border-[var(--blue-line)] px-1.5 text-[9px] text-[var(--blue)]" color="grey" type="ghost">
+            <Tag className="h-5 shrink-0 border-[var(--semi-color-info-light-active)] px-1.5 text-[9px] text-[var(--semi-color-info)]" color="grey" type="ghost">
               已调整
             </Tag>
           )}
@@ -656,9 +645,9 @@ function DeadlineRow({
           ) : isOverdue ? (
             <span className="text-destructive">{deadlineRelative(d.dueAt, d.duePrecision)}</span>
           ) : days === 0 ? (
-            <span className="text-[var(--amber)]">今天</span>
+            <span className="text-[var(--semi-color-warning)]">今天</span>
           ) : isWarn ? (
-            <span className="text-[var(--amber)]">{days}d</span>
+            <span className="text-[var(--semi-color-warning)]">{days}d</span>
           ) : (
             <span>{days}d</span>
           )}
@@ -671,37 +660,37 @@ function DeadlineRow({
       {canManage && !d.completed && (
         <div className="flex shrink-0 items-center gap-1">
           {d.confirmStatus === "PENDING" && (
-            <button
-              type="button"
+            <SemiButton theme="outline" type="tertiary" size="small"
+              htmlType="button"
               onClick={onConfirm}
               disabled={pending}
-              className="rounded border border-[var(--amber-line)] px-1.5 py-0.5 text-[10px] text-[var(--amber)] hover:bg-[var(--amber-bg)]"
+              className="rounded border border-[var(--semi-color-warning-light-active)] px-1.5 py-0.5 text-[10px] text-[var(--semi-color-warning)] hover:bg-[var(--semi-color-warning-light-default)]"
               title="核对起算事实后确认该期限"
             >
               确认
-            </button>
+            </SemiButton>
           )}
-          <button
-            type="button"
+          <SemiButton theme="borderless" type="tertiary" size="small"
+            htmlType="button"
             onClick={onAdjust}
             disabled={pending}
             className="rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:bg-accent"
             title="调整到期日（记录原因，规则重算不再覆盖）"
           >
             调整
-          </button>
+          </SemiButton>
         </div>
       )}
 
       {canManage && (
-        <button
-          type="button"
+        <SemiButton theme="borderless" type="tertiary" size="small"
+          htmlType="button"
           onClick={onDelete}
           className="opacity-0 transition-opacity group-hover:opacity-100"
           aria-label="删除"
         >
           <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-        </button>
+        </SemiButton>
       )}
     </li>
   );
@@ -744,13 +733,13 @@ function HearingRow({
         </span>
       </div>
       {canManage && (
-        <button
-          type="button"
+        <SemiButton theme="borderless" type="tertiary" size="small"
+          htmlType="button"
           onClick={onDelete}
           className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
         >
           <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-        </button>
+        </SemiButton>
       )}
     </li>
   );
@@ -772,8 +761,8 @@ function ExpressRow({
         className={cn(
           "flex h-6 w-6 shrink-0 items-center justify-center rounded-md",
           isOutbound
-            ? "bg-[var(--amber-bg)] text-[var(--amber)]"
-            : "bg-[var(--green-bg)] text-[var(--green)]"
+            ? "bg-[var(--semi-color-warning-light-default)] text-[var(--semi-color-warning)]"
+            : "bg-[var(--semi-color-success-light-default)] text-[var(--semi-color-success)]"
         )}
       >
         {isOutbound ? (
@@ -804,14 +793,14 @@ function ExpressRow({
         </div>
       </div>
       {canManage && (
-        <button
-          type="button"
+        <SemiButton theme="borderless" type="tertiary" size="small"
+          htmlType="button"
           onClick={onDelete}
           className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
           aria-label="删除"
         >
           <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-        </button>
+        </SemiButton>
       )}
     </li>
   );
@@ -845,14 +834,14 @@ function MemoRow({
         </div>
       </div>
       {canManage && (
-        <button
-          type="button"
+        <SemiButton theme="borderless" type="tertiary" size="small"
+          htmlType="button"
           onClick={onDelete}
           className="mt-1 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
           aria-label="删除"
         >
           <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-        </button>
+        </SemiButton>
       )}
     </li>
   );
@@ -1179,9 +1168,9 @@ export function ImportantItemDialog({
               {types.map((key) => {
                 const Icon = importantTypeMeta[key].icon;
                 return (
-                  <button
+                  <SemiButton theme="outline" type="primary" size="small"
                     key={key}
-                    type="button"
+                    htmlType="button"
                     onClick={() => setType(key)}
                     className={cn(
                       "flex h-9 items-center justify-center gap-1.5 rounded-md border px-2 text-xs transition-colors",
@@ -1192,7 +1181,7 @@ export function ImportantItemDialog({
                   >
                     <Icon className="h-3.5 w-3.5" />
                     {importantTypeMeta[key].label}
-                  </button>
+                  </SemiButton>
                 );
               })}
             </div>
@@ -1200,7 +1189,7 @@ export function ImportantItemDialog({
 
           <div className="flex-1 space-y-3 overflow-y-auto px-6 py-5">
             {procedureMissing && (
-              <div className="rounded-md border border-[var(--amber-line)] bg-[var(--amber-bg)] px-3 py-2 text-xs text-[var(--amber)]">
+              <div className="rounded-md border border-[var(--semi-color-warning-light-active)] bg-[var(--semi-color-warning-light-default)] px-3 py-2 text-xs text-[var(--semi-color-warning)]">
                 请先添加案件程序后，再录入开庭安排、重要时限或其他备忘。
               </div>
             )}

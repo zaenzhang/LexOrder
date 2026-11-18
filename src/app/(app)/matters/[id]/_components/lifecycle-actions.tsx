@@ -1,5 +1,7 @@
 "use client";
 
+import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
+import { FocusButton } from "@/components/patterns/focus-button";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Dropdown, Notification, TextArea, Toast } from "@douyinfe/semi-ui";
@@ -103,7 +105,7 @@ export function LifecycleActions({
 
   const extras = extraItems.map((it) => (
     <Dropdown.Item key={it.key} onClick={() => { setMoreOpen(false); it.onSelect(); }}>
-      <it.icon className="mr-2 h-4 w-4 text-[var(--t-muted)]" />
+      <it.icon className="mr-2 h-4 w-4 text-[var(--semi-color-text-2)]" />
       {it.label}
     </Dropdown.Item>
   ));
@@ -118,10 +120,10 @@ export function LifecycleActions({
   if (isArchived) {
     return (
       <>
-        <span className="badge b-bronze" style={{ height: 29, padding: "0 10px" }}>
+        <SemiTag size="small" color="amber">
           <Lock className="h-3.5 w-3.5" />
           已归档（只读）
-        </span>
+        </SemiTag>
         <a href={`/api/archive/${matterId}/export`} className="btn btn-secondary btn-sm" title="导出归档 ZIP（含材料 + 结构化数据 + 卷宗封皮目录）">
           <Download />
           导出 ZIP
@@ -132,9 +134,9 @@ export function LifecycleActions({
           render={<Dropdown.Menu className="w-48">
             {extras}
           </Dropdown.Menu>}>
-          <button ref={moreTriggerRef} type="button" className="btn btn-secondary btn-sm btn-icon" aria-label="更多操作" aria-haspopup="menu" aria-expanded={moreOpen}>
+          <FocusButton theme="outline" type="tertiary" size="small" ref={moreTriggerRef} htmlType="button" aria-label="更多操作" aria-haspopup="menu" aria-expanded={moreOpen}>
                 <MoreHorizontal />
-              </button>
+              </FocusButton>
         </Dropdown>
         ) : null}
       </>
@@ -165,7 +167,7 @@ export function LifecycleActions({
             )}
             {status !== "CLOSED" && (
               <Dropdown.Item onClick={() => { setMoreOpen(false); open("close"); }}>
-                <CheckCircle2 className="mr-2 h-4 w-4 text-[var(--green)]" />
+                <CheckCircle2 className="mr-2 h-4 w-4 text-[var(--semi-color-success)]" />
                 结案
               </Dropdown.Item>
             )}
@@ -174,7 +176,7 @@ export function LifecycleActions({
                 <Dropdown.Divider />
                 <Dropdown.Item
                   onClick={() => { setMoreOpen(false); setArchiveOpen(true); }}
-                  className="text-[var(--bronze)] focus:text-[var(--bronze)]"
+                  className="text-[var(--semi-color-warning)] focus:text-[var(--semi-color-warning)]"
                 >
                   <Archive className="mr-2 h-4 w-4" />
                   归档（不可逆）
@@ -183,9 +185,9 @@ export function LifecycleActions({
             )}
             </>) : null}
           </Dropdown.Menu>}>
-          <button ref={moreTriggerRef} type="button" disabled={isPending} className="btn btn-secondary btn-sm btn-icon" aria-label="更多操作" aria-haspopup="menu" aria-expanded={moreOpen}>
+          <FocusButton theme="outline" type="tertiary" size="small" ref={moreTriggerRef} htmlType="button" disabled={isPending} aria-label="更多操作" aria-haspopup="menu" aria-expanded={moreOpen}>
               {isPending ? <Loader2 className="animate-spin" /> : <MoreHorizontal />}
-            </button>
+            </FocusButton>
         </Dropdown>
       ) : null}
 

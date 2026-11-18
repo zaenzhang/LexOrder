@@ -163,7 +163,7 @@ export function EngagementPanel({
 
   return (
     <section className="ll-surface">
-      <header className="flex items-center justify-between border-b border-[var(--bd-hair)] px-4 py-3">
+      <header className="flex items-center justify-between border-b border-[var(--semi-color-border)] px-4 py-3">
         <span className="panel-title">
           <Handshake className="h-3.5 w-3.5 text-primary" />
           委托

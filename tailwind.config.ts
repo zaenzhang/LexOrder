@@ -18,41 +18,41 @@ const config: Config = {
     },
     extend: {
       colors: {
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
+        border: "color-mix(in srgb, var(--semi-color-border) calc(<alpha-value> * 100%), transparent)",
+        input: "color-mix(in srgb, var(--semi-color-border) calc(<alpha-value> * 100%), transparent)",
+        ring: "color-mix(in srgb, var(--semi-color-primary) calc(<alpha-value> * 100%), transparent)",
+        background: "color-mix(in srgb, var(--semi-color-fill-0) calc(<alpha-value> * 100%), transparent)",
+        foreground: "color-mix(in srgb, var(--semi-color-text-0) calc(<alpha-value> * 100%), transparent)",
         primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))"
+          DEFAULT: "color-mix(in srgb, var(--semi-color-primary) calc(<alpha-value> * 100%), transparent)",
+          foreground: "color-mix(in srgb, var(--semi-color-white) calc(<alpha-value> * 100%), transparent)"
         },
         secondary: {
-          DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))"
+          DEFAULT: "color-mix(in srgb, var(--semi-color-fill-1) calc(<alpha-value> * 100%), transparent)",
+          foreground: "color-mix(in srgb, var(--semi-color-text-0) calc(<alpha-value> * 100%), transparent)"
         },
         destructive: {
-          DEFAULT: "hsl(var(--destructive))",
-          foreground: "hsl(var(--destructive-foreground))"
+          DEFAULT: "color-mix(in srgb, var(--semi-color-danger) calc(<alpha-value> * 100%), transparent)",
+          foreground: "color-mix(in srgb, var(--semi-color-white) calc(<alpha-value> * 100%), transparent)"
         },
         muted: {
-          DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))"
+          DEFAULT: "color-mix(in srgb, var(--semi-color-fill-0) calc(<alpha-value> * 100%), transparent)",
+          foreground: "color-mix(in srgb, var(--semi-color-text-2) calc(<alpha-value> * 100%), transparent)"
         },
         accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))"
+          DEFAULT: "color-mix(in srgb, var(--semi-color-primary-light-default) calc(<alpha-value> * 100%), transparent)",
+          foreground: "color-mix(in srgb, var(--semi-color-primary-active) calc(<alpha-value> * 100%), transparent)"
         },
         popover: {
-          DEFAULT: "hsl(var(--popover))",
-          foreground: "hsl(var(--popover-foreground))"
+          DEFAULT: "color-mix(in srgb, var(--semi-color-bg-3) calc(<alpha-value> * 100%), transparent)",
+          foreground: "color-mix(in srgb, var(--semi-color-text-0) calc(<alpha-value> * 100%), transparent)"
         },
         card: {
-          DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))"
+          DEFAULT: "color-mix(in srgb, var(--semi-color-bg-0) calc(<alpha-value> * 100%), transparent)",
+          foreground: "color-mix(in srgb, var(--semi-color-text-0) calc(<alpha-value> * 100%), transparent)"
         },
-        sidebar: "hsl(var(--sidebar-bg))",
-        hairline: "hsl(var(--hairline))",
+        sidebar: "color-mix(in srgb, var(--semi-color-nav-bg) calc(<alpha-value> * 100%), transparent)",
+        hairline: "color-mix(in srgb, var(--semi-color-border) calc(<alpha-value> * 100%), transparent)",
       },
       borderRadius: {
         lg: "var(--radius-lg)",
@@ -60,8 +60,8 @@ const config: Config = {
         sm: "var(--radius-sm)"
       },
       fontFamily: {
-        sans: ["-apple-system", "BlinkMacSystemFont", "SF Pro Text", "PingFang SC", "Inter", "Helvetica Neue", "Microsoft YaHei", "system-ui", "sans-serif"],
-        serif: ["Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", "serif"],
+        sans: ["var(--font-sans)"],
+        serif: ["var(--font-serif)"],
         mono: ["SF Mono", "JetBrains Mono", "ui-monospace", "Cascadia Code", "Consolas", "monospace"],
       },
       boxShadow: {
@@ -69,20 +69,6 @@ const config: Config = {
         "ll-hover": "0 6px 16px -4px rgba(12,25,39,0.10), 0 2px 4px rgba(12,25,39,0.04)",
         "ll-pop": "0 12px 32px -8px rgba(12,25,39,0.16), 0 4px 8px -2px rgba(12,25,39,0.06)",
         "ll-float": "0 24px 64px -12px rgba(12,25,39,0.24), 0 8px 20px -8px rgba(12,25,39,0.12)",
-      },
-      keyframes: {
-        "accordion-down": {
-          from: { height: "0" },
-          to: { height: "var(--radix-accordion-content-height)" }
-        },
-        "accordion-up": {
-          from: { height: "var(--radix-accordion-content-height)" },
-          to: { height: "0" }
-        }
-      },
-      animation: {
-        "accordion-down": "accordion-down 200ms ease-out",
-        "accordion-up": "accordion-up 200ms ease-out"
       }
     }
   }

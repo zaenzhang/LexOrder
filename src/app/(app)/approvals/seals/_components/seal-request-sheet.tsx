@@ -5,7 +5,8 @@ import { FormDialogContent as DialogContent, FormDialogBody, FormSection } from 
 
 import { useRef, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, Loader2, Paperclip, Link2 } from "lucide-react";
+import { FileInput } from "@/components/patterns/file-input";
+import { Loader2, Link2 } from "lucide-react";
 import {
   WorkspaceDialog,
   DialogFooter,
@@ -326,21 +327,9 @@ export function SealRequestSheet({
             <div className="md:col-span-2">
               <label className="text-xs">待盖章稿 *</label>
               <div className="mt-1">
-                <label className="flex cursor-pointer items-center gap-2 rounded border border-dashed border-border px-3 py-3 text-[12px] text-muted-foreground hover:bg-muted/30">
-                  <Paperclip className="h-3.5 w-3.5" />
-                  {file ? (
-                    <span className="flex items-center gap-1 text-foreground">
-                      <FileText className="h-3 w-3" />
-                      {file.name}
-                    </span>
-                  ) : (
-                    "选择 PDF 文件"
-                  )}
-                  <input disabled={pending}
-                    type="file"
+                <FileInput aria-label="待盖章稿" disabled={pending}
                     accept="application/pdf,.pdf"
-                    className="hidden"
-                    onChange={(e) => {
+                    onChange={e => {
                       const picked = e.target.files?.[0] ?? null;
                       if (picked && !isPdfFile(picked)) {
                         Notification.error({ title: "需上传 pdf 格式文件", duration: 6 });
@@ -351,7 +340,6 @@ export function SealRequestSheet({
                       setFile(picked);
                     }}
                   />
-                </label>
               </div>
             </div>
           )}

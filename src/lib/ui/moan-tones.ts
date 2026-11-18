@@ -4,7 +4,7 @@
  * red 只表达风险或阻断；amber 临期/待办；bronze 归档金线。
  * 页面只取语义色调，不自行判断颜色。
  */
-import type { DocumentSourceOrigin, MatterStatus } from "@prisma/client";
+import type { ClientCooperationStatus, DocumentSourceOrigin, MatterStatus } from "@prisma/client";
 
 export type MoanTone = "teal" | "blue" | "green" | "amber" | "red" | "violet" | "slate" | "bronze";
 
@@ -84,3 +84,14 @@ export function approvalActionTone(action: string): MoanTone {
   if (action.includes("DOCUMENT")) return "violet";
   return "slate";
 }
+
+export function statusTagColor(tone: MoanTone) {
+  return ({ teal: "teal", blue: "blue", green: "green", amber: "amber", red: "red", violet: "violet", slate: "grey", bronze: "amber" } as const)[tone];
+}
+
+export const clientCooperationTone: Record<ClientCooperationStatus, MoanTone> = {
+  POTENTIAL: "slate",
+  NEGOTIATING: "amber",
+  SIGNED: "teal",
+  TERMINATED: "bronze",
+};

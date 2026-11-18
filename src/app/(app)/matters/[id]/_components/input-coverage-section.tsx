@@ -1,5 +1,8 @@
 "use client";
 
+import { Disclosure } from "@/components/patterns/disclosure";
+import { Button as SemiButton } from "@douyinfe/semi-ui";
+
 import { Checkbox } from "@douyinfe/semi-ui";
 import { useEffect, useId, useRef, useState } from "react";
 import { ActionError, actionErrorMessage } from "@/lib/action-error";
@@ -104,10 +107,10 @@ function CoverageSection({ matterId, documents, showHeading }: Omit<Props, "refr
           <p className="text-xs text-muted-foreground">本地检查 · 未调用 AI</p>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-muted-foreground">已选 {selected.length} 份</span>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={clearSelection} disabled={!selected.length}>取消全部勾选</button>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => { void check(); }} disabled={!selected.length || state.status === "loading"}>
+            <SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={clearSelection} disabled={!selected.length}>取消全部勾选</SemiButton>
+            <SemiButton htmlType="button" theme="outline" type="tertiary" onClick={() => { void check(); }} disabled={!selected.length || state.status === "loading"}>
               {state.status === "loading" ? "正在检查材料…" : state.status === "error" ? "重试材料检查" : state.status === "ready" ? "重新检查所选材料" : "检查所选材料"}
-            </button>
+            </SemiButton>
           </div>
         </div>
       </>}
@@ -119,7 +122,7 @@ function CoverageSection({ matterId, documents, showHeading }: Omit<Props, "refr
 }
 
 function CoverageResult({ view }: { view: MatterInputCoverageView }) {
-  return <section aria-label="读取检查结果" className="flex flex-col gap-3 border-t border-[var(--bd-hair)] pt-3">
+  return <section aria-label="读取检查结果" className="flex flex-col gap-3 border-t border-[var(--semi-color-border)] pt-3">
     <dl className="flex flex-wrap gap-x-8 gap-y-3">
       <div>
         <dt className="text-xs text-muted-foreground">可查看材料</dt>
@@ -144,7 +147,7 @@ function CoverageResult({ view }: { view: MatterInputCoverageView }) {
         {view.summary.omittedRangeCount > 0 && view.summary.omittedUnitCount > 0 ? "；" : ""}
         {view.summary.omittedUnitCount > 0 ? `${count(view.summary.omittedUnitCount)} 个处理单元的明细未展开` : ""}。统计仍包含已知范围。
     </p> : null}
-    <ul className="divide-y divide-[var(--bd-hair)]">
+    <ul className="divide-y divide-[var(--semi-color-border)]">
       {view.items.map((item, index) => <li key={item.documentId} className="space-y-2 py-3 first:pt-0 last:pb-0">
         {item.status === "UNAVAILABLE" ? <>
           <h4 className="text-xs font-medium">所选材料 {index + 1} 当前不可用</h4>
@@ -189,22 +192,20 @@ function AvailableCoverage({ item }: { item: AvailableInputCoverageItem }) {
         <span className="font-medium">{issue.label}</span>{issue.detail ? <span className="text-muted-foreground">：{issue.detail}</span> : null}
       </li>)}
     </ul> : null}
-    {unprocessed.length > 0 || (item.coverage?.omittedUnitCount ?? 0) > 0 ? <details className="text-xs">
-      <summary className="cursor-pointer">{unprocessed.length > 0 ? "查看未处理部分" : "查看处理范围说明"}</summary>
+    {unprocessed.length > 0 || (item.coverage?.omittedUnitCount ?? 0) > 0 ? <Disclosure className="text-xs" heading={<>{unprocessed.length > 0 ? "查看未处理部分" : "查看处理范围说明"}</>}>
       <ul className="mt-1 space-y-1 text-muted-foreground">
         {unprocessed.map(entry => <li key={entry.unit}>第 {entry.unit} {unit}：{unitStatusLabels[entry.status]}</li>)}
       </ul>
       {(item.coverage?.omittedUnitCount ?? 0) > 0 ? <p className="mt-1 text-muted-foreground">另有 {count(item.coverage!.omittedUnitCount)} 个处理单元的明细未展开，不能从当前明细推断其状态。</p> : null}
-    </details> : null}
-    {item.preparation.ranges.length > 0 || item.preparation.omittedRangeCount > 0 ? <details className="text-xs">
-      <summary className="cursor-pointer">查看本次可用文本的位置</summary>
+    </Disclosure> : null}
+    {item.preparation.ranges.length > 0 || item.preparation.omittedRangeCount > 0 ? <Disclosure className="text-xs" heading="查看本次可用文本的位置">
       <p className="mt-1 text-muted-foreground">范围对应已提取的文本片段，不代表原件整页或整段均已覆盖。</p>
       <p className="mt-1 text-muted-foreground">字符数按 UTF-16 长度统计，字符位置相对于各文本片段。</p>
       <ul className="mt-2 space-y-1 text-muted-foreground">
         {item.preparation.ranges.map(range => <RangeRow key={`${range.anchorId}:${range.start}:${range.end}`} range={range} />)}
       </ul>
       {item.preparation.omittedRangeCount > 0 ? <p className="mt-1 text-muted-foreground">另有 {count(item.preparation.omittedRangeCount)} 条范围明细未展开。</p> : null}
-    </details> : null}
+    </Disclosure> : null}
   </>;
 }
 

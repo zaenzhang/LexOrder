@@ -621,7 +621,7 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
                               />
                               {(() => {
                                 const err = isOrg ? personIdError("USCC", draft.enterpriseSocialCode) : personIdError(draft.idType, draft.idNumber);
-                                return err ? <p className="text-[11px] text-[var(--amber,#b7791f)]">{err}</p> : null;
+                                return err ? <p className="text-[11px] text-[var(--semi-color-warning,#b7791f)]">{err}</p> : null;
                               })()}
                             </div>
                             {isOrg && (
@@ -682,8 +682,8 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
                             ? party.idNumber
                             : party.enterpriseSocialCode}
                         </span>
-                        <button
-                          type="button"
+                        <Button theme="borderless" type="danger" size="small"
+                          htmlType="button"
                           onClick={() =>
                             setNewProcedureParties((rows) =>
                               rows.filter((row) => row.tempId !== party.tempId)
@@ -693,7 +693,7 @@ export function ProcedureInfoEditor({ currentProcedure, parties, category, initi
                           aria-label={`移除待添加的${party.name}`}
                         >
                           <X className="h-3.5 w-3.5" />
-                        </button>
+                        </Button>
                       </div>
                       <div className="flex flex-wrap gap-x-3 gap-y-2">
                         {partyStandingOptions.map((standing) => (

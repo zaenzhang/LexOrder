@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>律序 · 案件文书预览</title>
+<title>律迹 · 案件文书预览</title>
 <style>
 :root{color-scheme:light;--navy:#10283b;--ink:#172934;--muted:#5a6b73;--teal:#007b7d;--pale:#e3f0ee;--line:#dce6e3;--bg:#eff3f1;--white:#fff;--amber:#935700;--red:#aa302b;font-family:"Noto Sans CJK SC","Microsoft YaHei",system-ui,sans-serif}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-size:14px}button,input,select,textarea{font:inherit}button{cursor:pointer;color:inherit}button:disabled{cursor:default;opacity:.48}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #4fa6a5;outline-offset:2px}h1,h2,h3,p{margin:0}button,abbr{border:0}
@@ -87,10 +87,10 @@ function navItem(label,glyph,view){
   return '<button class="nav-item'+inside+'" data-action="nav" data-id="'+view+'" aria-label="'+label+'">'+inner+'</button>';
 }
 function shell(contents){
-  return '<div class="app"><aside class="nav"><div class="brand"><div class="mark">'+icon('file')+'</div><div class="brand-text"><strong>律序 · LexOrder</strong><small>律师工作台</small></div></div>'+
+  return '<div class="app"><aside class="nav"><div class="brand"><div class="mark">'+icon('file')+'</div><div class="brand-text"><strong>律迹 · LexOrder</strong><small>律师工作台</small></div></div>'+
     navItem('工作台','home')+navItem('案件','folder','case')+navItem('文书','file','docs')+navItem('审批','check')+navItem('日程','calendar')+navItem('客户','users')+navItem('财务','money')+
     '<div class="profile"><span class="avatar">李</span><div class="profile-text"><strong>李安</strong><div class="dim">办案律师</div></div></div></aside>'+
-    '<div class="main"><header class="top"><div class="top-title">律序桌面版</div><div class="top-actions">'+chip(state.online?'已连接':'断网演示',state.online?'teal':'warn',true)+btn('同步设置','settings',{style:'sm'})+'</div></header><main class="content">'+contents+'</main></div></div>'+
+    '<div class="main"><header class="top"><div class="top-title">律迹桌面版</div><div class="top-actions">'+chip(state.online?'已连接':'断网演示',state.online?'teal':'warn',true)+btn('同步设置','settings',{style:'sm'})+'</div></header><main class="content">'+contents+'</main></div></div>'+
     '<footer class="statebar"><button class="status-link" data-action="tab" data-id="sync">'+icon('cloud')+' 同步记录</button><span>交互预览 · 模拟数据</span></footer>';
 }
 function fileRow(doc){
@@ -142,8 +142,8 @@ function announce(message){
 function selectCase(doc){state.view='case';state.proc=doc.proc;state.stage=doc.stage;render();}
 function openEdit(doc){
   if(doc.sync==='conflict'){
-    show(doc.name,'版本冲突 · 我的工作稿基于 V'+doc.localBase+'，律序已有 V'+doc.version,
-      '<div class="dialog-tip warn">两份稿都已保留。打开律序最新版核对，或继续查看本地工作稿。</div><label class="field">我的工作稿<textarea readonly>'+safe(doc.body)+'</textarea></label>',
+    show(doc.name,'版本冲突 · 我的工作稿基于 V'+doc.localBase+'，律迹已有 V'+doc.version,
+      '<div class="dialog-tip warn">两份稿都已保留。打开律迹最新版核对，或继续查看本地工作稿。</div><label class="field">我的工作稿<textarea readonly>'+safe(doc.body)+'</textarea></label>',
       btn('打开最新版','latest',{id:doc.id})+btn('保留我的稿件','keep',{id:doc.id,style:'primary'}));
     return;
   }
@@ -205,7 +205,7 @@ function dispatch(action,id){
     case 'preview':if(doc)show(doc.name,'原件 · V'+doc.version,
       '<p class="dialog-tip">'+safe(doc.body).replace(/\n/g,'<br>')+'</p>',
       btn('关闭','close')+btn('版本记录','versions',{id}));break;
-    case 'latest':if(doc)show(doc.name,'律序最新版 · V'+doc.version,
+    case 'latest':if(doc)show(doc.name,'律迹最新版 · V'+doc.version,
       '<label class="field">共享稿<textarea readonly>'+safe(doc.latestBody)+'</textarea></label>',
       btn('关闭','close')+btn('查看我的稿件','edit',{id}));break;
     case 'keep':dialog.close();announce('本地工作稿已保留，可从同步记录查看冲突。');break;

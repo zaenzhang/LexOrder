@@ -18,9 +18,9 @@ export function ReviewSummaryCard({
   }
 
   return (
-    <section className="rounded-lg border border-[var(--violet-line)] bg-[var(--violet-bg)] p-3">
+    <section className="rounded-lg border border-[var(--semi-color-secondary-light-active)] bg-[var(--semi-color-secondary-light-default)] p-3">
       <header className="mb-2 flex items-center justify-between">
-        <h3 className="flex items-center gap-1.5 text-xs font-medium text-[var(--violet)]">
+        <h3 className="flex items-center gap-1.5 text-xs font-medium text-[var(--semi-color-secondary)]">
           <Sparkles className="h-3.5 w-3.5" />
           AI 审查总览
         </h3>
@@ -43,7 +43,7 @@ export function ReviewSummaryCard({
 
       {summary.topHighItems.length > 0 && (
         <div className="mt-3 space-y-1.5">
-          <div className="flex items-center gap-1 text-[10px] text-[var(--red)]">
+          <div className="flex items-center gap-1 text-[10px] text-[var(--semi-color-danger)]">
             <AlertTriangle className="h-3 w-3" />
             最近高风险（最多 3 条）
           </div>
@@ -51,7 +51,7 @@ export function ReviewSummaryCard({
             {summary.topHighItems.map((it, i) => (
               <li
                 key={`${it.documentId}-${i}`}
-                className="rounded border border-[var(--red-line)] bg-background px-2 py-1.5 text-xs"
+                className="rounded border border-[var(--semi-color-danger-light-active)] bg-background px-2 py-1.5 text-xs"
               >
                 <div className="font-medium">{it.title}</div>
                 <p className="mt-0.5 text-[11px] leading-relaxed text-foreground/70">
@@ -72,9 +72,9 @@ export function ReviewSummaryCard({
 
 function SevTile({ sev, n }: { sev: "HIGH" | "MEDIUM" | "LOW"; n: number }) {
   const meta = {
-    HIGH: { label: "高风险", cls: "border-[var(--red-line)] bg-[var(--red-bg)] text-[var(--red)]" },
-    MEDIUM: { label: "中风险", cls: "border-[var(--amber-line)] bg-[var(--amber-bg)] text-[var(--amber)]" },
-    LOW: { label: "低风险", cls: "border-[var(--bd-subtle)] bg-[var(--bg-hover)] text-[var(--t-muted)]" }
+    HIGH: { label: "高风险", cls: "border-[var(--semi-color-danger-light-active)] bg-[var(--semi-color-danger-light-default)] text-[var(--semi-color-danger)]" },
+    MEDIUM: { label: "中风险", cls: "border-[var(--semi-color-warning-light-active)] bg-[var(--semi-color-warning-light-default)] text-[var(--semi-color-warning)]" },
+    LOW: { label: "低风险", cls: "border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] text-[var(--semi-color-text-2)]" }
   }[sev];
   return (
     <div className={cn("rounded border px-2 py-1.5", meta.cls)}>

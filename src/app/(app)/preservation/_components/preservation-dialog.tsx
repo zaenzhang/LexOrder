@@ -266,12 +266,12 @@ function ExpiryHint({ startDate, expiryDate, propertyType }: { startDate: string
   try { f = expiryFacts(startDate, expiryDate, propertyType); }
   catch { return <p role="status" className="text-xs text-muted-foreground">日期尚未完整或无效，请核对后查看期限参考。</p>; }
   return (
-    <div className="text-xs space-y-1" style={{ color: "var(--t-muted)" }}>
+    <div className="text-xs space-y-1" style={{ color: "var(--semi-color-text-2)" }}>
       <div>法定上限（民诉法解释第 485 条）：{f.refKey}{f.days != null ? ` · 按录入到期日折算 ${f.days} 天` : ""}</div>
       {f.overLimit ? (
-        <div style={{ color: "var(--red)" }}>⚠ 录入的到期日晚于法定上限——超出部分不受强制保护，请核对法院协助执行通知书后确认保存。</div>
+        <div style={{ color: "var(--semi-color-danger)" }}>⚠ 录入的到期日晚于法定上限——超出部分不受强制保护，请核对法院协助执行通知书后确认保存。</div>
       ) : f.underLimit ? (
-        <div style={{ color: "var(--amber)" }}>录入的到期日短于法定上限（法院裁定更短属常见，以文书为准）。</div>
+        <div style={{ color: "var(--semi-color-warning)" }}>录入的到期日短于法定上限（法院裁定更短属常见，以文书为准）。</div>
       ) : null}
     </div>
   );

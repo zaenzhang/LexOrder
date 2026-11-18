@@ -2,7 +2,7 @@
  * v0.42 律所信息 / 编号体系配置（项 1 + 项 11）
  *
  * 单 SystemSetting key `firmProfile`，value 为 JSON：
- *   - firmName / firmSubtitle / logoDataUrl：侧栏品牌（默认 律序 · LexOrder / 律师工作台）
+ *   - firmName / firmSubtitle / logoDataUrl：侧栏品牌（默认 律迹 · LexOrder / 律师工作台）
  *   - matterCodePrefix：内部编号前缀（internalCode 的 LL 段，默认 LL）
  *   - firmShortName / caseNoTemplate / categoryWords：所内案号模板与各段映射
  *

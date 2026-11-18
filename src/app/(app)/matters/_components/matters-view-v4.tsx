@@ -235,13 +235,13 @@ export function MattersViewV4({
               }}>
                 <label className="block text-xs">
                   起
-                  <input ref={initialFocusRef as RefObject<HTMLInputElement> | undefined} type="date" name="from" defaultValue={f.from ?? ""}
-                    className="mt-1 block min-h-8 w-full rounded border border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] px-2 text-sm" />
+                  <Input ref={initialFocusRef as RefObject<HTMLInputElement> | undefined} type="date" name="from" defaultValue={f.from ?? ""}
+                    className="mt-1 w-full" />
                 </label>
                 <label className="block text-xs">
                   止
-                  <input type="date" name="to" defaultValue={f.to ?? ""}
-                    className="mt-1 block min-h-8 w-full rounded border border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] px-2 text-sm" />
+                  <Input type="date" name="to" defaultValue={f.to ?? ""}
+                    className="mt-1 w-full" />
                 </label>
                 <div className="flex items-center justify-between gap-2">
                   <Button htmlType="button" theme="borderless" type="tertiary" size="small" onClick={() => {
@@ -298,7 +298,7 @@ export function MattersViewV4({
             <MattersTable items={matterData?.items ?? []} columns={columns} listQuery={appliedListQuery.toString()} />
           )}
           {total > 0 ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--bd-hair)] px-4 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--semi-color-border)] px-4 py-2">
               <span className="text-xs text-muted-foreground">
                 {page <= lastPage ? <>第 {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} 条 · 共 {total} 件</> : <>第 {page} 页无结果 · 共 {total} 件</>}
               </span>

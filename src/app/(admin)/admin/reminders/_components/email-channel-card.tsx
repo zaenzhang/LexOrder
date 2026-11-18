@@ -40,13 +40,13 @@ export function EmailChannelCard({
       </div>
       <div className="panel-body" style={{ paddingTop: 8 }}>
         {configured ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 8, background: "var(--green-bg)", border: "1px solid var(--green-line)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 8, background: "var(--semi-color-success-light-default)", border: "1px solid var(--semi-color-success-light-active)" }}>
             <span className="dot dot-green" />
             <span className="t-sm" style={{ flex: 1 }}>期限、开庭与保全提醒在站内通知之外，另按人发送邮件摘要</span>
             {mailFrom ? <span className="t-xs t-mute font-mono">{mailFrom}</span> : null}
           </div>
         ) : (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 8, background: "var(--amber-bg)", border: "1px solid var(--amber-line)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 8, background: "var(--semi-color-warning-light-default)", border: "1px solid var(--semi-color-warning-light-active)" }}>
             <span className="dot dot-amber" />
             <span className="t-sm" style={{ flex: 1 }}>
               SMTP 未配置：提醒仅站内可见，律师不登录收不到邮件。在服务器 <code className="font-mono">.env</code> 配置{" "}

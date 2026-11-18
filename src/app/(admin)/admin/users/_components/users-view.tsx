@@ -1,11 +1,12 @@
 "use client";
 
-import { Button, Form, Input, Notification, Select, Tag, Toast } from "@douyinfe/semi-ui";
-import { useId, useState, useTransition } from "react";
+import { Table, Empty, Button, Dropdown, Form, Input, Notification, Select, Tag, Toast } from "@douyinfe/semi-ui";
+import { useId, useRef, useState, useTransition } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, KeyRound, CircleOff, CircleDot, LockOpen, Search, ShieldCheck, ShieldOff, Smartphone } from "lucide-react";
+import { IconMore } from "@douyinfe/semi-icons";
+import { Plus, Search } from "lucide-react";
 import type { SystemRole, UserRole } from "@prisma/client";
 import { WorkspaceDialog, DrawerContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogContent } from "@/components/patterns/workspace-dialog";
 import {
@@ -77,6 +78,7 @@ export function UsersView({
   customRoles?: CustomRoleOption[];
   builtinNames?: Record<string, string>;
 }) {
+  const [isPending, startTransition] = useTransition();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -111,35 +113,52 @@ export function UsersView({
         <a className="shrink-0 text-sm text-primary" href="/admin/approval-permissions">管理审批权限</a>
       </div>
       <div className="overflow-x-auto card">
-        <table className="w-full text-sm">
-          <thead className="border-b border-border bg-popover">
-            <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
-              <th className="px-5 py-3 font-medium">姓名 / 邮箱</th>
-              <th className="px-5 py-3 font-medium">角色</th>
-              <th className="px-5 py-3 font-medium">系统管理</th>
-              <th className="px-5 py-3 font-medium">案件</th>
-              <th className="px-5 py-3 font-medium">最近登录</th>
-              <th className="px-5 py-3 font-medium">状态</th>
-              <th className="px-5 py-3 font-medium">登录安全</th>
-              <th className="px-5 py-3 font-medium">操作</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {visibleUsers.length === 0 && (
-              <tr><td colSpan={8} className="p-8 text-center text-muted-foreground">{users.length ? "没有匹配的账号" : "暂无账号"}</td></tr>
-            )}
-            {visibleUsers.map((u) => (
-              <UserRow
-                key={u.id}
-                user={u}
-                customRoles={customRoles} builtinNames={builtinNames}
-                isSelf={u.id === currentUserId}
-                onResetPassword={() => setResetUser(u)}
-                onEdit={() => setEditingId(u.id)}
-              />
-            ))}
-          </tbody>
-        </table>
+        <Table<UserRow>
+          size="small"
+          rowKey="id"
+          pagination={false}
+          scroll={{ x: 986 }}
+          dataSource={visibleUsers}
+          empty={<Empty description={users.length ? "没有匹配的账号" : "暂无账号"} />}
+          columns={[
+            { title: "姓名 / 邮箱", key: "name", width: 200, render: (_, user) => (<> <div className="font-medium">{user.name}</div>
+        <div className="truncate text-xs text-muted-foreground" title={user.email}>{user.email}</div>
+        {user.lockedUntil && new Date(user.lockedUntil) > new Date() && (
+          <div className="mt-0.5 text-xs text-[var(--semi-color-warning)]">登录锁定至 {formatDateTime(new Date(user.lockedUntil))}</div>
+        )}
+        <div className="mt-1 text-xs text-muted-foreground">审批权限组：{user.approvalMemberships.map(m => m.group.name).join("、") || "未分配"}</div></>) },
+            { title: "角色", key: "role", width: 138, render: (_, user) => (<UserActionCell cell="role" user={user} customRoles={customRoles} builtinNames={builtinNames}
+                  isSelf={user.id === currentUserId} isPending={isPending} startTransition={startTransition}
+                  onResetPassword={() => setResetUser(user)} onEdit={() => setEditingId(user.id)} />) },
+            { title: "系统管理", key: "system", width: 124, render: (_, user) => (<div className="flex flex-col items-start gap-1">
+          <Tag color={user.systemRole === "SUPER_ADMIN" ? "violet" : "grey"}>
+            {user.systemRole === "SUPER_ADMIN" ? "系统超级管理员" : "无"}
+          </Tag>
+          <Tag color={user.managerAuthorized || user.role === "PRINCIPAL_LAWYER" ? "blue" : "grey"}>
+            {user.role === "PRINCIPAL_LAWYER" ? "岗位自带" : user.managerAuthorized ? "业务管理权" : "无业务管理权"}
+          </Tag>
+        </div>) },
+            { title: "案件", key: "matters", width: 112, render: (_, user) => (<span className="whitespace-nowrap">主办 {user._count.ownedMatters} · 参与 {user._count.memberships}</span>) },
+            { title: "最近登录", key: "lastLogin", width: 112, render: (_, user) => (
+              <span className="whitespace-nowrap">{user.lastLoginAt ? formatDate(new Date(user.lastLoginAt)) : "从未登录"}</span>
+            ) },
+            { title: "状态", key: "status", width: 80, render: (_, user) => (<> <Tag color={user.active ? "green" : "grey"}>
+          {user.active ? "已激活" : "已禁用"}
+        </Tag>
+        {(!user.active||!user.roleActive)&&Boolean(user.openResponsibilityCount)&&<p className="mt-1 text-xs text-amber-700">{user.openResponsibilityCount} 项责任待交接</p>}</>) },
+            { title: "登录安全", key: "security", width: 110, render: (_, user) => (<div className="flex flex-col items-start gap-1">
+          <Tag size="small" color={user.totpEnabled ? "green" : "grey"}>
+            {user.totpEnabled ? "双步已绑定" : "双步未开启"}
+          </Tag>
+          {user.totpEnforced && (
+            <Tag color="amber">已强制要求</Tag>
+          )}
+        </div>) },
+            { title: "操作", key: "actions", width: 110, fixed: "right", render: (_, user) => (<UserActionCell cell="actions" user={user} customRoles={customRoles} builtinNames={builtinNames}
+                  isSelf={user.id === currentUserId} isPending={isPending} startTransition={startTransition}
+                  onResetPassword={() => setResetUser(user)} onEdit={() => setEditingId(user.id)} />) },
+          ]}
+        />
       </div>
 
       <WorkspaceDialog open={!!editing} onOpenChange={open => { if (!open) setEditingId(null); }}>
@@ -161,7 +180,10 @@ export function UsersView({
   );
 }
 
-function UserRow({
+function UserActionCell({
+  cell,
+  isPending,
+  startTransition,
   user,
   customRoles,
   builtinNames,
@@ -169,6 +191,9 @@ function UserRow({
   onResetPassword,
   onEdit
 }: {
+  cell: "role" | "actions";
+  isPending: boolean;
+  startTransition: React.TransitionStartFunction;
   user: UserRow;
   customRoles: CustomRoleOption[];
   builtinNames: Record<string, string>;
@@ -176,7 +201,12 @@ function UserRow({
   onResetPassword: () => void;
   onEdit: () => void;
 }) {
-  const [isPending, startTransition] = useTransition();
+  const moreActions = useRef<HTMLDivElement>(null);
+
+  function runMenuAction(action: () => void | Promise<void>) {
+    moreActions.current?.querySelector("button")?.focus();
+    void action();
+  }
 
   async function handleRoleChange(value: string) {
     if (value === (user.roleDefinitionId ?? user.role)) return;
@@ -207,7 +237,7 @@ function UserRow({
 
   async function handleToggleActive() {
     if (
-      !(await confirmDialog(user.active ? { title: `禁用 ${user.name}？`, description: "禁用后该用户无法登录。", confirmText: "禁用", danger: true } : { title: `重新激活 ${user.name}？`, confirmText: "激活" }))
+      !(await confirmDialog(user.active ? { title: `禁用 ${user.name}？`, description: "禁用后该用户无法登录。", confirmText: "禁用", danger: true, initialFocus: "cancel" } : { title: `重新激活 ${user.name}？`, confirmText: "激活" }))
     )
       return;
     startTransition(async () => {
@@ -280,23 +310,13 @@ function UserRow({
   }
 
   return (
-    <tr className={user.active ? "" : "opacity-60"}>
-      <td className="px-5 py-3">
-        <div className="font-medium">{user.name}</div>
-        <div className="font-mono text-xs text-muted-foreground">{user.email}</div>
-        {user.lockedUntil && new Date(user.lockedUntil) > new Date() && (
-          <div className="mt-0.5 text-xs text-[var(--amber)]">登录锁定至 {formatDateTime(new Date(user.lockedUntil))}</div>
-        )}
-        <div className="mt-1 text-xs text-muted-foreground">审批权限组：{user.approvalMemberships.map(m => m.group.name).join("、") || "未分配"}</div>
-      </td>
-      <td className="px-5 py-3">
-        {isSelf ? (
+    cell === "role" ? (isSelf ? (
           <Tag color="grey">
             {user.roleName ?? userRoleLabel[user.role]}（自己）
           </Tag>
         ) : (
           <Select<string>
-            className="w-36"
+            className="w-full"
             insetLabelId={`user-role-${user.id}`}
             aria-labelledby={`user-role-${user.id}`}
             insetLabel={<span className="sr-only">{user.name}的岗位</span>}
@@ -312,95 +332,39 @@ function UserRow({
               ))}
               {customRoles.filter(r => r.active || r.id === user.roleDefinitionId).map(r => <Select.Option key={r.id} value={r.id} disabled={!r.active}>{r.name}{!r.active ? "（已停用）" : ""}</Select.Option>)}
             </Select>
-        )}
-      </td>
-      <td className="px-5 py-3">
-        <div className="flex flex-col items-start gap-1">
-          <Tag color={user.systemRole === "SUPER_ADMIN" ? "violet" : "grey"}>
-            {user.systemRole === "SUPER_ADMIN" ? "系统超级管理员" : "无"}
-          </Tag>
-          <Tag color={user.managerAuthorized || user.role === "PRINCIPAL_LAWYER" ? "blue" : "grey"}>
-            {user.role === "PRINCIPAL_LAWYER" ? "岗位自带" : user.managerAuthorized ? "业务管理权" : "无业务管理权"}
-          </Tag>
-        </div>
-      </td>
-      <td className="whitespace-nowrap px-5 py-3 font-mono text-xs tabular text-muted-foreground">
-        主办 {user._count.ownedMatters} · 参与 {user._count.memberships}
-      </td>
-      <td className="whitespace-nowrap px-5 py-3 font-mono text-xs text-muted-foreground tabular">
-        {user.lastLoginAt
-          ? formatDate(new Date(user.lastLoginAt))
-          : "从未登录"}
-      </td>
-      <td className="px-5 py-3">
-        <Tag color={user.active ? "green" : "grey"}>
-          {user.active ? "已激活" : "已禁用"}
-        </Tag>
-        {(!user.active||!user.roleActive)&&Boolean(user.openResponsibilityCount)&&<p className="mt-1 text-xs text-amber-700">{user.openResponsibilityCount} 项责任待交接</p>}
-      </td>
-      <td className="px-5 py-3">
-        <div className="flex flex-col items-start gap-1">
-          <Tag color={user.totpEnabled ? "green" : "grey"} prefixIcon={<Smartphone size={12} aria-hidden />}>
-            {user.totpEnabled ? "双步已绑定" : "双步未开启"}
-          </Tag>
-          {user.totpEnforced && (
-            <Tag color="amber">已强制要求</Tag>
-          )}
-        </div>
-      </td>
-      <td className="px-5 py-3">
-        <div className="flex gap-1">
-          <Button theme="borderless" type="tertiary" size="small" onClick={onEdit}>资料</Button>
-          <Button
-            theme="borderless" type="tertiary"
-            size="small"
-            onClick={onResetPassword}
-            disabled={isPending}
-            className="h-7 gap-1 text-xs"
-          >
-            <KeyRound className="h-3.5 w-3.5" />
-            改密码
-          </Button>
-          <Button
-            theme="borderless" type="tertiary"
-            size="small"
-            onClick={handleToggleTotpEnforce}
-            disabled={isPending}
-            className="h-7 gap-1 text-xs"
-          >
-            <Smartphone className="h-3.5 w-3.5" />
-            {user.totpEnforced ? "解除强制" : "强制双步"}
-          </Button>
-          {user.role !== "PRINCIPAL_LAWYER" && (
-            <Button theme="borderless" type="tertiary" size="small" onClick={handleManagerAuthorizationChange} disabled={isPending} className="h-7 gap-1 text-xs">
-              {user.managerAuthorized ? "撤管理权" : "授管理权"}
-            </Button>
-          )}
-          {!isSelf && (
-            <>
-              <Button theme="borderless" type="tertiary" size="small" onClick={handleSystemRoleChange} disabled={isPending} className="h-7 gap-1 text-xs">
-                {user.systemRole === "SUPER_ADMIN" ? <ShieldOff className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-                {user.systemRole === "SUPER_ADMIN" ? "撤销管理" : "授予管理"}
-              </Button>
-              {user.lockedUntil && new Date(user.lockedUntil) > new Date() && (
-                <Button theme="borderless" type="tertiary" size="small" onClick={handleUnlock} disabled={isPending} className="h-7 gap-1 text-xs text-[var(--amber)]">
-                  <LockOpen className="h-3.5 w-3.5" />解锁
-                </Button>
+        )) : (
+      <div className="flex items-center gap-1">
+        <Button theme="borderless" type="primary" size="small" onClick={onEdit}>资料</Button>
+        <div ref={moreActions}>
+          <Dropdown trigger="click" position="bottomRight" motion={false} render={
+            <Dropdown.Menu>
+              <Dropdown.Item disabled={isPending} onClick={() => runMenuAction(onResetPassword)}>改密码</Dropdown.Item>
+              <Dropdown.Item disabled={isPending} onClick={() => runMenuAction(handleToggleTotpEnforce)}>
+                {user.totpEnforced ? "解除强制" : "强制双步"}
+              </Dropdown.Item>
+              {user.role !== "PRINCIPAL_LAWYER" && (
+                <Dropdown.Item disabled={isPending} onClick={() => runMenuAction(handleManagerAuthorizationChange)}>
+                  {user.managerAuthorized ? "撤销业务管理权" : "授予业务管理权"}
+                </Dropdown.Item>
               )}
-              <Button
-                theme="borderless" type="tertiary"
-                size="small"
-                onClick={handleToggleActive}
-                disabled={isPending}
-                className={`h-7 gap-1 text-xs ${user.active ? "text-destructive" : "text-[#1A7F45]"}`}
-              >
-                {user.active ? <><CircleOff className="h-3.5 w-3.5" />禁用</> : <><CircleDot className="h-3.5 w-3.5" />激活</>}
-              </Button>
-            </>
-          )}
+              {!isSelf && <>
+                <Dropdown.Item disabled={isPending} onClick={() => runMenuAction(handleSystemRoleChange)}>
+                  {user.systemRole === "SUPER_ADMIN" ? "撤销系统管理资格" : "授予系统管理资格"}
+                </Dropdown.Item>
+                {user.lockedUntil && new Date(user.lockedUntil) > new Date() && (
+                  <Dropdown.Item disabled={isPending} onClick={() => runMenuAction(handleUnlock)}>解除登录锁定</Dropdown.Item>
+                )}
+                <Dropdown.Item type={user.active ? "danger" : "primary"} disabled={isPending} onClick={() => runMenuAction(handleToggleActive)}>
+                  {user.active ? "禁用账号" : "激活账号"}
+                </Dropdown.Item>
+              </>}
+            </Dropdown.Menu>
+          }>
+            <Button theme="borderless" type="tertiary" size="small" icon={<IconMore aria-hidden />} aria-label={`更多操作：${user.name}`} />
+          </Dropdown>
         </div>
-      </td>
-    </tr>
+      </div>
+    )
   );
 }
 

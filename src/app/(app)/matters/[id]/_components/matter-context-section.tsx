@@ -1,10 +1,14 @@
 "use client";
 
+import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
+import { FocusButton } from "@/components/patterns/focus-button";
+import { Button as SemiButton } from "@douyinfe/semi-ui";
+
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Check, FileText, History, Loader2, Pencil, Plus } from "lucide-react";
-import { Input, Notification, TextArea, Toast } from "@douyinfe/semi-ui";
+import { Select, Input, Notification, TextArea, Toast } from "@douyinfe/semi-ui";
 import { WorkspaceDialog, DrawerContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/patterns/workspace-dialog";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { ContextInputPicker, ContextInputsSummary } from "@/components/matters/context-input-picker";
@@ -238,26 +242,26 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
     <section hidden={!overviewVisible} className="dos-group scroll-mt-44" aria-labelledby={titleId} id="matter-context" aria-busy={page.pending}>
       <div className="dos-group-h">
         <FileText className="ic" strokeWidth={1.9} /><h2 ref={sectionTitle} tabIndex={-1} id={titleId} className="t">目标与指示</h2>
-        {page.data?.canWrite ? <span className="a"><button ref={addTrigger} type="button" className="btn btn-secondary btn-sm" disabled={pending} onClick={event => begin(null, event.currentTarget)}><Plus />记录目标或指示</button></span> : null}
+        {page.data?.canWrite ? <span className="a"><FocusButton theme="outline" type="tertiary" size="small" ref={addTrigger} htmlType="button" disabled={pending} onClick={event => begin(null, event.currentTarget)}><Plus />记录目标或指示</FocusButton></span> : null}
       </div>
       <div className="dos-group-b">
         {page.pending ? <p role="status" className="t-sm t-mute">正在读取记录…</p> : null}
-        {page.error ? <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive"><span>{page.error}</span><button type="button" className="btn btn-secondary btn-sm" onClick={() => void loadRecords(page.cursor, page.previous)}>重新读取记录</button></div> : null}
+        {page.error ? <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive"><span>{page.error}</span><SemiButton htmlType="button" theme="outline" type="tertiary" onClick={() => void loadRecords(page.cursor, page.previous)}>重新读取记录</SemiButton></div> : null}
         {page.data?.records.length === 0 ? <p className="t-sm t-mute">{page.cursor ? "本页暂无记录。" : "尚未记录目标或指示。"}</p> : null}
         {page.data?.records.length ? <ol className="space-y-4">
-          {page.data.records.map(record => <li key={record.id} className="border-b border-[var(--bd-hair)] pb-4 last:border-0 last:pb-0">
+          {page.data.records.map(record => <li key={record.id} className="border-b border-[var(--semi-color-border)] pb-4 last:border-0 last:pb-0">
             <RecordContent matterId={matterId} record={record} onSource={trigger => showSource(record, trigger)} />
             <div className="mt-2 flex flex-wrap gap-1">
-              <button type="button" className="btn btn-ghost btn-sm" disabled={pending} aria-label={`查看${contextKindLabels[record.kind]}记录的历史版本`} onClick={event => showHistory(record, undefined, event.currentTarget)}><History />查看历史版本</button>
-              {record.canRevise ? <button type="button" className="btn btn-ghost btn-sm" disabled={pending} aria-label={`更正${contextKindLabels[record.kind]}第 ${record.version} 版记录`} onClick={event => begin(record, event.currentTarget)}><Pencil />更正此记录</button> : null}
-              {record.canConfirm ? <button type="button" className="btn btn-secondary btn-sm" disabled={pending} aria-label={`核对确认${contextKindLabels[record.kind]}第 ${record.version} 版记录`} onClick={() => void confirmRecord(record)}><Check />核对确认此版本</button> : null}
+              <SemiButton htmlType="button" theme="borderless" type="tertiary" disabled={pending} aria-label={`查看${contextKindLabels[record.kind]}记录的历史版本`} onClick={event => showHistory(record, undefined, event.currentTarget)}><History />查看历史版本</SemiButton>
+              {record.canRevise ? <SemiButton htmlType="button" theme="borderless" type="tertiary" disabled={pending} aria-label={`更正${contextKindLabels[record.kind]}第 ${record.version} 版记录`} onClick={event => begin(record, event.currentTarget)}><Pencil />更正此记录</SemiButton> : null}
+              {record.canConfirm ? <SemiButton htmlType="button" theme="outline" type="tertiary" disabled={pending} aria-label={`核对确认${contextKindLabels[record.kind]}第 ${record.version} 版记录`} onClick={() => void confirmRecord(record)}><Check />核对确认此版本</SemiButton> : null}
             </div>
           </li>)}
         </ol> : null}
         {page.previous.length > 0 || page.data?.nextCursor ? <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" className="btn btn-secondary btn-sm" disabled={page.pending || page.previous.length === 0} aria-label="目标与指示上一页" onClick={() => void loadRecords(page.previous.at(-1) ?? null, page.previous.slice(0, -1))}>上一页</button>
-          <button type="button" className="btn btn-secondary btn-sm" disabled={page.pending || !page.data?.nextCursor} aria-label="更多目标与指示" onClick={() => { if (page.data?.nextCursor) void loadRecords(page.data.nextCursor, [...page.previous, page.cursor]); }}>更多</button>
-          {page.error ? <button type="button" className="btn btn-ghost btn-sm" disabled={page.pending} onClick={() => void loadRecords(null, [])}>最新记录</button> : null}
+          <SemiButton htmlType="button" theme="outline" type="tertiary" disabled={page.pending || page.previous.length === 0} aria-label="目标与指示上一页" onClick={() => void loadRecords(page.previous.at(-1) ?? null, page.previous.slice(0, -1))}>上一页</SemiButton>
+          <SemiButton htmlType="button" theme="outline" type="tertiary" disabled={page.pending || !page.data?.nextCursor} aria-label="更多目标与指示" onClick={() => { if (page.data?.nextCursor) void loadRecords(page.data.nextCursor, [...page.previous, page.cursor]); }}>更多</SemiButton>
+          {page.error ? <SemiButton htmlType="button" theme="borderless" type="tertiary" disabled={page.pending} onClick={() => void loadRecords(null, [])}>最新记录</SemiButton> : null}
         </div> : null}
       </div>
     </section>
@@ -278,9 +282,9 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
           <div className="mt-5 space-y-5">
             {historyError ? <p role="alert" className="text-sm text-destructive">{historyError}</p> : null}
             {historyLoading ? <p role="status" className="t-sm t-mute">正在读取历史…</p> : null}
-            {historyData?.records.map(record => <article key={record.id} className="border-b border-[var(--bd-hair)] pb-4"><RecordContent matterId={matterId} record={record} onSource={trigger => showSource(record, trigger, true)} /></article>)}
-            {history && historyData?.nextBeforeVersion ? <button type="button" disabled={historyLoading} className="btn btn-secondary btn-sm" onClick={() => void showHistory(history, historyData.nextBeforeVersion!)}>查看更早版本</button> : null}
-            {history && historyError ? <button type="button" disabled={historyLoading} className="btn btn-secondary btn-sm" onClick={() => void showHistory(history)}>重新读取历史版本</button> : null}
+            {historyData?.records.map(record => <article key={record.id} className="border-b border-[var(--semi-color-border)] pb-4"><RecordContent matterId={matterId} record={record} onSource={trigger => showSource(record, trigger, true)} /></article>)}
+            {history && historyData?.nextBeforeVersion ? <SemiButton htmlType="button" disabled={historyLoading} theme="outline" type="tertiary" onClick={() => void showHistory(history, historyData.nextBeforeVersion!)}>查看更早版本</SemiButton> : null}
+            {history && historyError ? <SemiButton htmlType="button" disabled={historyLoading} theme="outline" type="tertiary" onClick={() => void showHistory(history)}>重新读取历史版本</SemiButton> : null}
           </div>
         </DrawerContent>
       </WorkspaceDialog>
@@ -295,7 +299,7 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
           <div className="mt-5 space-y-4">
             {!exactCurrent || exactCurrent.loading ? <p role="status" className="text-sm text-muted-foreground">正在读取指定记录…</p> : null}
             {exactCurrent?.error ? <div className="space-y-3"><p role="alert" className="text-sm text-destructive">{exactCurrent.error}</p>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setExactAttempt(value => value + 1)}>重新读取这版记录</button></div> : null}
+              <SemiButton htmlType="button" theme="outline" type="tertiary" onClick={() => setExactAttempt(value => value + 1)}>重新读取这版记录</SemiButton></div> : null}
             {exactCurrent?.data ? <RecordContent matterId={matterId} record={exactCurrent.data} onSource={trigger => showSource(exactCurrent.data!, trigger, false, true)} /> : null}
             {historyReturnHref ? <Link className="btn btn-secondary btn-sm" href={historyReturnHref}>返回客户动态</Link> : null}
           </div>
@@ -314,7 +318,7 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
             {sourceLoading ? <p role="status" className="t-sm t-mute">正在读取来源…</p> : null}
             {sourceData?.content ? <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{sourceData.content}</p> : null}
             {sourceData?.href ? <a className="btn btn-secondary" href={sourceData.href} target="_blank" rel="noopener noreferrer">打开来源原件</a> : null}
-            {source && sourceError ? <button type="button" className="btn btn-secondary btn-sm" disabled={sourceLoading} onClick={() => void loadSource(source.id, source.recordLabel, source.exactRecordId)}>重新读取来源</button> : null}
+            {source && sourceError ? <SemiButton htmlType="button" theme="outline" type="tertiary" disabled={sourceLoading} onClick={() => void loadSource(source.id, source.recordLabel, source.exactRecordId)}>重新读取来源</SemiButton> : null}
           </div>
         </DrawerContent>
       </WorkspaceDialog>
@@ -324,19 +328,19 @@ function ContextSection({ matterId, view, error: initialError = null }: Props) {
 
 function RecordContent({ matterId, record, onSource }: { matterId: string; record: ContextRecordView; onSource: (trigger: HTMLButtonElement) => void }) {
   return <>
-    <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-[var(--t-muted)]">
+    <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-[var(--semi-color-text-2)]">
       <span className="font-medium text-foreground">{contextKindLabels[record.kind]}</span><span>第 {record.version} 版</span>
-      <span className={`badge ${record.confirmationStatus === "CONFIRMED" ? "b-teal" : "b-amber"}`}>{record.confirmationStatus === "CONFIRMED" ? "已核对" : record.version > 1 ? "新版待核对" : "待核对"}</span>
-      {record.visibility === "FINANCE" ? <span className="badge b-white">财务范围</span> : null}
+      <SemiTag size="small" color={record.confirmationStatus === "CONFIRMED" ? "teal" : "amber"}>{record.confirmationStatus === "CONFIRMED" ? "已核对" : record.version > 1 ? "新版待核对" : "待核对"}</SemiTag>
+      {record.visibility === "FINANCE" ? <SemiTag size="small" color="grey">财务范围</SemiTag> : null}
     </div>
     {record.readable ? <>
       <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{record.content}</p>
       {record.reason ? <p className="mt-2 whitespace-pre-wrap break-words text-sm"><span className="t-mute">理由：</span>{record.reason}</p> : null}
-      <p className="mt-2 whitespace-pre-wrap break-words text-xs text-[var(--t-muted)]">来源：{record.sourceDescription}</p>
+      <p className="mt-2 whitespace-pre-wrap break-words text-xs text-[var(--semi-color-text-2)]">来源：{record.sourceDescription}</p>
       {record.contextInputs && <div className="mt-3"><ContextInputsSummary summary={record.contextInputs} matterId={matterId} /></div>}
-      {record.source?.available ? <button type="button" className="link-inline mt-1 text-xs" aria-label={`查看${contextKindLabels[record.kind]}第 ${record.version} 版的来源：${record.source.label}`} onClick={event => onSource(event.currentTarget)}>查看来源：{record.source.label}</button> : null}
-    </> : <p className="text-sm text-[var(--t-muted)]">关联来源已不可读取，记录正文暂不显示。</p>}
-    <p className="mt-2 flex flex-wrap gap-x-2 text-xs text-[var(--t-muted)]"><span>{record.authorName}</span><time dateTime={record.occurredAt}>{when(record.occurredAt)}</time>
+      {record.source?.available ? <SemiButton theme="borderless" type="tertiary" size="small" htmlType="button" className="link-inline mt-1 text-xs" aria-label={`查看${contextKindLabels[record.kind]}第 ${record.version} 版的来源：${record.source.label}`} onClick={event => onSource(event.currentTarget)}>查看来源：{record.source.label}</SemiButton> : null}
+    </> : <p className="text-sm text-[var(--semi-color-text-2)]">关联来源已不可读取，记录正文暂不显示。</p>}
+    <p className="mt-2 flex flex-wrap gap-x-2 text-xs text-[var(--semi-color-text-2)]"><span>{record.authorName}</span><time dateTime={record.occurredAt}>{when(record.occurredAt)}</time>
       {record.confirmedAt ? <span>核对：{record.confirmedByName} · {when(record.confirmedAt)}</span> : null}
     </p>
   </>;
@@ -390,23 +394,23 @@ function ContextEditor({ matterId, state, canReadFinance, onSaved, onSaving, onD
   return <form onSubmit={submit} className="mt-5 space-y-4">
     <fieldset disabled={pending} className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1.5"><label htmlFor={`${prefix}-kind`} className="text-sm font-medium text-[var(--semi-color-text-1)]">记录类型</label><select id={`${prefix}-kind`} value={kind} disabled={Boolean(record)} onChange={event => setKind(event.target.value as ContextKind)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">{Object.entries(contextKindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
-        <div className="space-y-1.5"><label htmlFor={`${prefix}-visibility`} className="text-sm font-medium text-[var(--semi-color-text-1)]">可见范围</label><select id={`${prefix}-visibility`} value={visibility} disabled={Boolean(record)} onChange={event => setVisibility(event.target.value as ContextVisibility)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">{Object.entries(contextVisibilityLabels).filter(([value]) => value !== "FINANCE" || canReadFinance || visibility === "FINANCE").map(([value, label]) => <option key={value} value={value} disabled={value === "FINANCE" && !canReadFinance}>{label}</option>)}</select></div>
+        <div className="space-y-1.5"><label htmlFor={`${prefix}-kind`} className="text-sm font-medium text-[var(--semi-color-text-1)]">记录类型</label><Select<string> id={`${prefix}-kind`} aria-label="记录类型" value={kind} disabled={pending || Boolean(record)} onChange={value => { if (typeof value === "string") setKind(value as ContextKind); }} className="w-full">{Object.entries(contextKindLabels).map(([value, label]) => <Select.Option key={value} value={value}>{label}</Select.Option>)}</Select></div>
+        <div className="space-y-1.5"><label htmlFor={`${prefix}-visibility`} className="text-sm font-medium text-[var(--semi-color-text-1)]">可见范围</label><Select<string> id={`${prefix}-visibility`} aria-label="可见范围" value={visibility} disabled={pending || Boolean(record)} onChange={value => { if (typeof value === "string") setVisibility(value as ContextVisibility); }} className="w-full">{Object.entries(contextVisibilityLabels).filter(([value]) => value !== "FINANCE" || canReadFinance || visibility === "FINANCE").map(([value, label]) => <Select.Option key={value} value={value} disabled={value === "FINANCE" && !canReadFinance}>{label}</Select.Option>)}</Select></div>
       </div>
       <div className="space-y-1.5"><label htmlFor={`${prefix}-content`} className="text-sm font-medium text-[var(--semi-color-text-1)]">内容 *</label><TextArea id={`${prefix}-content`} required maxLength={8000} rows={6} value={content} onChange={inputValue => setContent(inputValue)} /></div>
       {kind === "OPTION" && <ContextInputPicker matterId={matterId} value={contextInputs} onChange={setContextInputs} initial={record?.contextInputs} disabled={pending} />}
       {kind === "CONSTRAINT" ? <p className="t-xs t-mute">费用及预算约束请选择财务可见范围。</p> : null}
       <div className="space-y-1.5"><label htmlFor={`${prefix}-occurred`} className="text-sm font-medium text-[var(--semi-color-text-1)]">发生时间（北京时间）*</label><Input id={`${prefix}-occurred`} type="datetime-local" required value={occurredAt} onChange={inputValue => setOccurredAt(inputValue)} /></div>
       <div className="space-y-1.5"><label htmlFor={`${prefix}-reason`} className="text-sm font-medium text-[var(--semi-color-text-1)]">{record ? "更正或决定理由" : "理由"}</label><TextArea id={`${prefix}-reason`} rows={2} maxLength={3000} value={reason} onChange={inputValue => setReason(inputValue)} /></div>
-      <div className="space-y-1.5"><label htmlFor={`${prefix}-source`} className="text-sm font-medium text-[var(--semi-color-text-1)]">关联来源</label><select id={`${prefix}-source`} value={sourceKey} onChange={event => { setSourceKey(event.target.value); setSourceLabel(choices.find(choice => `${choice.type}:${choice.id}` === event.target.value)?.label ?? ""); }} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"><option value="">仅填写来源说明</option>
-        {selectedSourceMissing ? <option value={sourceKey}>{sourceLabel}（保存时重新核验）</option> : null}
-        {choices.map(choice => <option key={`${choice.type}:${choice.id}`} value={`${choice.type}:${choice.id}`}>{choice.label}</option>)}
-      </select>{state.loading ? <p role="status" className="t-xs t-mute">正在读取可关联来源…</p> : null}
-      {state.error ? <div role="alert" className="flex flex-wrap items-center gap-2 text-xs text-destructive"><span>{state.error}</span><button type="button" className="btn btn-secondary btn-sm" disabled={state.loading} onClick={() => onLoadSources(state.failedPage)}>重试</button>{state.failedPage ? <button type="button" className="btn btn-ghost btn-sm" disabled={state.loading} onClick={() => onLoadSources()}>重新读取来源</button> : null}</div> : null}
-      {state.options ? <div className="flex flex-wrap gap-2">{(Object.keys(sourceMoreLabels) as ContextSourceType[]).map(type => state.options!.nextCursors[type] ? <button key={type} type="button" className="btn btn-secondary btn-sm" disabled={state.loading} onClick={() => onLoadSources({ type, cursor: state.options!.nextCursors[type]! })}>{sourceMoreLabels[type]}</button> : null)}</div> : null}</div>
+      <div className="space-y-1.5"><label htmlFor={`${prefix}-source`} className="text-sm font-medium text-[var(--semi-color-text-1)]">关联来源</label><Select<string> id={`${prefix}-source`} aria-label="关联来源" value={sourceKey} disabled={pending} onChange={value => { if (typeof value !== "string") return; setSourceKey(value); setSourceLabel(choices.find(choice => `${choice.type}:${choice.id}` === value)?.label ?? ""); }} className="w-full"><Select.Option value="">仅填写来源说明</Select.Option>
+        {selectedSourceMissing ? <Select.Option value={sourceKey}>{sourceLabel}（保存时重新核验）</Select.Option> : null}
+        {choices.map(choice => <Select.Option key={`${choice.type}:${choice.id}`} value={`${choice.type}:${choice.id}`}>{choice.label}</Select.Option>)}
+      </Select>{state.loading ? <p role="status" className="t-xs t-mute">正在读取可关联来源…</p> : null}
+      {state.error ? <div role="alert" className="flex flex-wrap items-center gap-2 text-xs text-destructive"><span>{state.error}</span><SemiButton htmlType="button" theme="outline" type="tertiary" disabled={state.loading} onClick={() => onLoadSources(state.failedPage)}>重试</SemiButton>{state.failedPage ? <SemiButton htmlType="button" theme="borderless" type="tertiary" disabled={state.loading} onClick={() => onLoadSources()}>重新读取来源</SemiButton> : null}</div> : null}
+      {state.options ? <div className="flex flex-wrap gap-2">{(Object.keys(sourceMoreLabels) as ContextSourceType[]).map(type => state.options!.nextCursors[type] ? <SemiButton key={type} htmlType="button" theme="outline" type="tertiary" disabled={state.loading} onClick={() => onLoadSources({ type, cursor: state.options!.nextCursors[type]! })}>{sourceMoreLabels[type]}</SemiButton> : null)}</div> : null}</div>
       <div className="space-y-1.5"><label htmlFor={`${prefix}-source-description`} className="text-sm font-medium text-[var(--semi-color-text-1)]">来源说明 *</label><TextArea id={`${prefix}-source-description`} required rows={3} maxLength={1200} value={sourceDescription} onChange={inputValue => setSourceDescription(inputValue)} placeholder="指示人、沟通方式、原件位置或其他真实依据" /></div>
     </fieldset>
     {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
-    <div className="flex justify-end"><button type="submit" disabled={pending} className="btn btn-primary">{pending ? <Loader2 className="animate-spin" /> : <Check />}{record ? "保存更正版" : "保存记录"}</button></div>
+    <div className="flex justify-end"><SemiButton htmlType="submit" disabled={pending} theme="solid" type="primary">{pending ? <Loader2 className="animate-spin" /> : <Check />}{record ? "保存更正版" : "保存记录"}</SemiButton></div>
   </form>;
 }

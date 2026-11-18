@@ -1,4 +1,5 @@
 "use client";
+import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
 import { Button, Input, TextArea, Select, Popover, Steps, Notification, Spin, Toast } from "@douyinfe/semi-ui";
 
 import type { z } from "zod";
@@ -645,11 +646,11 @@ export function IntakeWizard({
 
             <div ref={bodyRef} className="id-body">
               {errCount > 0 ? (
-                <div role="alert" className="match-banner" style={{ background: "var(--red-bg)", borderColor: "var(--red-line)" }}>
-                  <AlertTriangle style={{ color: "var(--red)" }} />
+                <div role="alert" className="match-banner" style={{ background: "var(--semi-color-danger-light-default)", borderColor: "var(--semi-color-danger-light-active)" }}>
+                  <AlertTriangle style={{ color: "var(--semi-color-danger)" }} />
                   <div className="match-body">
-                    <div className="match-title" style={{ color: "var(--red)" }}>尚有信息需要检查</div>
-                    <div className="match-desc" style={{ color: "var(--red)" }}>{firstFormErrorMessage(errors) ?? "请检查表单中的红色提示"}</div>
+                    <div className="match-title" style={{ color: "var(--semi-color-danger)" }}>尚有信息需要检查</div>
+                    <div className="match-desc" style={{ color: "var(--semi-color-danger)" }}>{firstFormErrorMessage(errors) ?? "请检查表单中的红色提示"}</div>
                   </div>
                 </div>
               ) : null}
@@ -667,7 +668,7 @@ export function IntakeWizard({
                             placeholder="留空时按「委托方与对方 + 案由」自动生成"
                             onChange={value => { field.onChange(value); setTitleTouched(true); }} />
                         )} />
-                        {errors.title?.message ? <div className="mt-1 text-[11px] text-[var(--red)]">{errors.title.message}</div> : null}
+                        {errors.title?.message ? <div className="mt-1 text-[11px] text-[var(--semi-color-danger)]">{errors.title.message}</div> : null}
                       </div>
                     </div>
                     <div className="frow">
@@ -682,7 +683,7 @@ export function IntakeWizard({
                         <div className="fitem">
                             <label className="flabel">代理程序</label>
                             <ChoiceField ariaLabel="代理程序" placeholder="选择代理程序" invalid={Boolean(errors.firstProcedureType)} options={procedureOptions.map((p) => ({ value: p, label: procedureTypeLabel[p] }))} value={firstProcedureType} onChange={handleProcedureChange} />
-                            {errors.firstProcedureType?.message ? <div className="mt-1 text-[11px] text-[var(--red)]">{errors.firstProcedureType.message}</div> : null}
+                            {errors.firstProcedureType?.message ? <div className="mt-1 text-[11px] text-[var(--semi-color-danger)]">{errors.firstProcedureType.message}</div> : null}
                           </div>
                       ) : null}
                     </div>
@@ -725,7 +726,7 @@ export function IntakeWizard({
                           <div className="fitem" style={{ maxWidth: 200 }}>
                             <label className="flabel" htmlFor={`${fieldId}-amount`}>标的额（元）</label>
                             <Controller name="claimAmount" control={control} render={({ field }) => <Input id={`${fieldId}-amount`} type="number" inputMode="decimal" step="0.01" placeholder="0.00" name={field.name} value={typeof field.value === "number" || typeof field.value === "string" ? field.value : ""} onBlur={field.onBlur} ref={field.ref} onChange={value => field.onChange(value === "" ? undefined : Number(value))} />} />
-                            {errors.claimAmount?.message ? <div className="mt-1 text-[11px] text-[var(--red)]">{errors.claimAmount.message}</div> : null}
+                            {errors.claimAmount?.message ? <div className="mt-1 text-[11px] text-[var(--semi-color-danger)]">{errors.claimAmount.message}</div> : null}
                           </div>
                           <div className="fitem">
                             <label className="flabel" htmlFor={`${fieldId}-claim`}>标的描述（非金钱标的或其他诉求）</label>
@@ -905,7 +906,7 @@ export function IntakeWizard({
                       <div className="fitem mb-3">
                         <label className="flabel">委托方诉讼地位<span className="star">*</span></label>
                         {standingSelect(ourStanding, ourStandingOptions, (v) => setValue("ourStanding", v, { shouldDirty: true, shouldValidate: true }), "委托方诉讼地位")}
-                        {errors.ourStanding?.message ? <div className="mt-1 text-[11px] text-[var(--red)]">{errors.ourStanding.message}</div> : null}
+                        {errors.ourStanding?.message ? <div className="mt-1 text-[11px] text-[var(--semi-color-danger)]">{errors.ourStanding.message}</div> : null}
                       </div>
                     ) : null}
                     {parties[clientIndex] ? (
@@ -919,8 +920,8 @@ export function IntakeWizard({
                         errors={errors as never}
                         logoTone="teal"
                         defaultExpanded={!clientId}
-                        roleSlot={<span className="badge b-teal" style={{ fontSize: 10 }}>{clientLabel}</span>}
-                        badge={clientId ? <span className="badge b-teal" style={{ fontSize: 10 }}>已关联档案</span> : null}
+                        roleSlot={<SemiTag size="small" color="teal">{clientLabel}</SemiTag>}
+                        badge={clientId ? <SemiTag size="small" color="teal">已关联档案</SemiTag> : null}
                         nameSlot={<Input  value={party0Name} readOnly aria-readonly title="请在上方客户选择框中修改" />}
                       />
                     ) : null}
@@ -935,11 +936,11 @@ export function IntakeWizard({
                     </div>
                     <div className="fsec-body">
                       {kind === "litigation" && ourStanding && RECEIVING_STANDINGS.has(ourStanding) ? (
-                        <div className="match-banner" style={{ background: "var(--violet-bg)", borderColor: "var(--violet-line)" }}>
-                          <ScanLine style={{ color: "var(--violet)" }} />
+                        <div className="match-banner" style={{ background: "var(--semi-color-secondary-light-default)", borderColor: "var(--semi-color-secondary-light-active)" }}>
+                          <ScanLine style={{ color: "var(--semi-color-secondary)" }} />
                           <div className="match-body">
-                            <div className="match-title" style={{ color: "var(--violet)" }}>识别起诉状 / 申请书</div>
-                            <div className="match-desc" style={{ color: "var(--t-secondary)" }}>我方为被动方，可上传对方起诉状或申请书（JPG / PNG / WebP / PDF，≤ 20MB），AI 抽取对方主体、诉求与法院，识别结果须人工核对。</div>
+                            <div className="match-title" style={{ color: "var(--semi-color-secondary)" }}>识别起诉状 / 申请书</div>
+                            <div className="match-desc" style={{ color: "var(--semi-color-text-1)" }}>我方为被动方，可上传对方起诉状或申请书（JPG / PNG / WebP / PDF，≤ 20MB），AI 抽取对方主体、诉求与法院，识别结果须人工核对。</div>
                             <div className="match-acts">
                               <input ref={pleadingRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePleadingFile(f); }} />
                               <Button theme="outline" htmlType="button" onClick={() => pleadingRef.current?.click()} disabled={ocrPending}>
@@ -1006,7 +1007,7 @@ export function IntakeWizard({
                         <div className="fitem" style={{ maxWidth: 220 }}>
                           <label className="flabel">{feeType === "TIMED" ? "小时费率（元/时）" : feeType === "CONTINGENCY" ? "基础办案费（元）" : "总金额（元）"}</label>
                           <Controller name="feeAmount" control={control} render={({ field }) => <Input type="number" inputMode="decimal" step="0.01" placeholder="0.00" name={field.name} value={typeof field.value === "number" || typeof field.value === "string" ? field.value : ""} onBlur={field.onBlur} ref={field.ref} onChange={value => field.onChange(value === "" ? undefined : Number(value))} />} />
-                          {errors.feeAmount?.message ? <div className="mt-1 text-[11px] text-[var(--red)]">{errors.feeAmount.message}</div> : null}
+                          {errors.feeAmount?.message ? <div className="mt-1 text-[11px] text-[var(--semi-color-danger)]">{errors.feeAmount.message}</div> : null}
                         </div>
                         <div className="fitem">
                           <label className="flabel">{feeType === "TIMED" ? "计费说明 / 结算周期" : "付款节点 / 分期约定"}</label>
@@ -1019,7 +1020,7 @@ export function IntakeWizard({
                         <div className="fitem">
                           <label className="flabel">风险代理收费方式</label>
                           <Controller name="contingencyTerms" control={control} render={({ field }) => <TextArea rows={3} placeholder="详细描述风险代理收费方式 / 触发条件 / 计提比例" name={field.name} value={field.value ?? ""} onBlur={field.onBlur} ref={field.ref} onChange={field.onChange} />} />
-                          {errors.contingencyTerms?.message ? <div className="mt-1 text-[11px] text-[var(--red)]">{errors.contingencyTerms.message}</div> : null}
+                          {errors.contingencyTerms?.message ? <div className="mt-1 text-[11px] text-[var(--semi-color-danger)]">{errors.contingencyTerms.message}</div> : null}
                         </div>
                       </div>
                     ) : null}
@@ -1046,7 +1047,7 @@ export function IntakeWizard({
                           aria-labelledby={`${fieldId}-owner`} onDropdownVisibleChange={visible => trackPopup("owner", visible)} placeholder="选择主办律师" optionList={colleagues.map(value => ({ value: value.id, label: value.name }))}
                           filter motion={false} getPopupContainer={() => sheetRef.current!}
                           onChange={value => { if (typeof value === "string") setValue("ownerUserId", value, { shouldDirty: true }); }} />
-                        {errors.ownerUserId?.message ? <div className="mt-1 text-[11px] text-[var(--red)]">{errors.ownerUserId.message}</div> : null}
+                        {errors.ownerUserId?.message ? <div className="mt-1 text-[11px] text-[var(--semi-color-danger)]">{errors.ownerUserId.message}</div> : null}
                       </div>
                       <div className="fitem">
                         <label className="flabel">协办人员（可多选）</label>
@@ -1081,11 +1082,11 @@ export function IntakeWizard({
                   </div>
                   <div className="fsec-body">
                     {contracts.length === 0 ? (
-                      <div className="t-xs t-mute rounded-[10px] border border-dashed border-[var(--bd-default)] py-4 text-center">上传委托代理合同、授权委托书等</div>
+                      <div className="t-xs t-mute rounded-[10px] border border-dashed border-[var(--semi-color-border)] py-4 text-center">上传委托代理合同、授权委托书等</div>
                     ) : (
                       contracts.map((f, i) => (
                         <div key={i} className="entity-card">
-                          <FileText className="h-4 w-4 text-[var(--teal)]" />
+                          <FileText className="h-4 w-4 text-[var(--semi-color-primary)]" />
                           <span className="min-w-0 flex-1 truncate text-[12.5px] font-[550]">{f.name}</span>
                           <span className="num-sm t-mute">{Math.max(1, Math.round(f.size / 1024))} KB</span>
                           <Button theme="borderless" htmlType="button" onClick={() => setContracts((c) => c.filter((_, j) => j !== i))} aria-label={`移除 ${f.name}`}>
@@ -1101,7 +1102,7 @@ export function IntakeWizard({
                   <div className="fsec-head"><span className="t">补充说明</span></div>
                   <div className="fsec-body">
                     <Controller name="description" control={control} render={({ field }) => <TextArea rows={4} placeholder="客户来源、核心诉求、注意事项…" name={field.name} value={field.value ?? ""} onBlur={field.onBlur} ref={field.ref} onChange={field.onChange} />} />
-                    {errors.description?.message ? <div className="mt-1 text-[11px] text-[var(--red)]">{errors.description.message}</div> : null}
+                    {errors.description?.message ? <div className="mt-1 text-[11px] text-[var(--semi-color-danger)]">{errors.description.message}</div> : null}
                   </div>
                 </div>
 
@@ -1121,8 +1122,8 @@ export function IntakeWizard({
                         ["主办律师", colleagues.find((u) => u.id === ownerUserId)?.name ?? "未选择"],
                         ["附件", `${contracts.length} 份`]
                       ].map(([k, v]) => (
-                        <div key={k} className={cn("flex items-baseline gap-3 border-b border-[var(--bd-hair)] py-2", (k === nameLabel || k === clientLabel || k === "其他当事人" || k === "标的描述") && "col-span-2")}>
-                          <dt className="w-[72px] shrink-0 text-[12px] text-[var(--t-muted)]">{k}</dt>
+                        <div key={k} className={cn("flex items-baseline gap-3 border-b border-[var(--semi-color-border)] py-2", (k === nameLabel || k === clientLabel || k === "其他当事人" || k === "标的描述") && "col-span-2")}>
+                          <dt className="w-[72px] shrink-0 text-[12px] text-[var(--semi-color-text-2)]">{k}</dt>
                           <dd className="min-w-0 whitespace-pre-wrap break-words text-[12.75px] font-[550]">{v}</dd>
                         </div>
                       ))}

@@ -5,10 +5,12 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { signIn } from "next-auth/react";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button, Card, Checkbox, Form, Input, Notification, Spin } from "@douyinfe/semi-ui";
 import { Eye, EyeOff } from "lucide-react";
 import { checkLoginTotpEnforcement } from "@/server/auth/totp-actions";
+import { PRODUCT_SHORT_NAME } from "@/lib/product";
 import styles from "./login.module.css";
 
 const schema = z.object({
@@ -24,10 +26,12 @@ const LOGIN_NOTICE = "login-error";
 export function LoginPanel() {
   return (
     <Card className={styles.card} bodyStyle={{ padding: "clamp(24px, 3.5vw, 40px)" }}>
+      <h1 className={styles.cardHeading}>
+        <Image src="/brand/lvji-wordmark.png" width={92} height={40} alt={PRODUCT_SHORT_NAME} unoptimized />
+      </h1>
       <Suspense fallback={<div className={styles.loading}><Spin /></div>}>
         <LoginForm />
       </Suspense>
-
     </Card>
   );
 }

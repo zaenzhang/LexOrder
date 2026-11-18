@@ -1,4 +1,8 @@
 "use client";
+
+import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
+import { statusTagColor } from "@/lib/ui/moan-tones";
+import { Button as SemiButton } from "@douyinfe/semi-ui";
 import { deadlineOverdue, deadlineRelative, formatDeadlineDue, type DeadlineDuePrecision } from "@/lib/deadline-due";
 
 import { useId, useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -891,17 +895,20 @@ export function ProcedureWorkflowPanel({
 
   return (
     <>
-      <div className="dos-views" role="tablist" aria-label="案件视图">
-        {VIEWS.filter((v) => v.show).map((v) => {
-          const Icon = v.icon;
-          return (
-            <button key={v.key} type="button" role="tab" aria-selected={view === v.key} className={cn("dos-view", view === v.key && "on")} onClick={() => selectView(v.key)}>
-              <Icon strokeWidth={1.9} />
-              {v.label}
-              {v.count ? <span className={cn("n", v.hot && "hot")}>{v.count}</span> : null}
-            </button>
-          );
-        })}
+      <div className="dossier-view-tabs" role="group" aria-label="案件视图">
+        <Tabs
+          type="line"
+          activeKey={view}
+          onChange={key => selectView(key as DossierView)}
+          tabList={VIEWS.filter(item => item.show).map(item => ({
+            itemKey: item.key,
+            tab: <span className="inline-flex items-center gap-2">
+              <item.icon size={16} aria-hidden />
+              {item.label}
+              {item.count ? <SemiTag size="small" color={item.hot ? "red" : "grey"}>{item.count}</SemiTag> : null}
+            </span>,
+          }))}
+        />
       </div>
 
       {/* 团队信息常驻；工作区按业务切换，其余视图保留待办与记录摘要。 */}
@@ -1157,16 +1164,16 @@ function StageBar({
   return (
     <section className="card dos-stage" aria-label={`环节：${stage.name}`}>
       <div className="dos-stage-head">
-        <div className="ic-wrap" style={stage.status === "risk" ? { background: "var(--amber-bg)", color: "var(--amber)" } : undefined}>
+        <div className="ic-wrap" style={stage.status === "risk" ? { background: "var(--semi-color-warning-light-default)", color: "var(--semi-color-warning)" } : undefined}>
           <StageGlyph name={stage.name} kind={stage.kind} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="dos-stage-name">{stage.name}</h2>
-            <span className={cn("badge", `b-${tone}`)}>
-              <span className="bdot" />
+            <SemiTag size="small" color={statusTagColor(tone)}>
+
               {STAGE_STATUS_TEXT[stage.status]}
-            </span>
+            </SemiTag>
           </div>
           <div className="dos-stage-meta">
             {[
@@ -1179,16 +1186,16 @@ function StageBar({
             {` · 材料 ${docCount} 份`}
           </div>
         </div>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setGuideOpen((v) => !v)} aria-expanded={guideOpen}>
+        <SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={() => setGuideOpen((v) => !v)} aria-expanded={guideOpen}>
           {guideOpen ? "收起说明" : "环节说明"}
-        </button>
+        </SemiButton>
       </div>
       {guideOpen ? <StageGuideBody guide={guide} /> : <p className="dos-stage-summary">{guide.summary}</p>}
       {canManage && onRemoveStage ? (
         <div className="dos-stage-acts">
-          <button type="button" className="btn btn-ghost btn-sm text-[var(--t-muted)]" onClick={onRemoveStage}>
+          <SemiButton htmlType="button" theme="borderless" type="tertiary" className="text-[var(--semi-color-text-2)]" onClick={onRemoveStage}>
             移除环节
-          </button>
+          </SemiButton>
         </div>
       ) : null}
     </section>
@@ -1197,18 +1204,18 @@ function StageBar({
 
 function StageGuideBody({ guide }: { guide: StageGuide }) {
   return (
-    <div className="mx-4 mb-3 rounded-[8px] bg-[var(--bg-sunken)] px-3 py-2.5">
-      <div className="text-[11.5px] font-semibold text-[var(--t-secondary)]">{guide.checklistTitle}</div>
+    <div className="mx-4 mb-3 rounded-[8px] bg-[var(--semi-color-fill-1)] px-3 py-2.5">
+      <div className="text-[11.5px] font-semibold text-[var(--semi-color-text-1)]">{guide.checklistTitle}</div>
       <ul className="mt-1.5 space-y-1">
         {guide.checklist.map((item) => (
-          <li key={item} className="flex items-start gap-2 text-[12px] leading-5 text-[var(--t-secondary)]">
-            <span className="mt-[7px] h-[5px] w-[5px] shrink-0 rounded-full bg-[var(--teal)]" />
+          <li key={item} className="flex items-start gap-2 text-[12px] leading-5 text-[var(--semi-color-text-1)]">
+            <span className="mt-[7px] h-[5px] w-[5px] shrink-0 rounded-full bg-[var(--semi-color-primary)]" />
             {item}
           </li>
         ))}
       </ul>
       {guide.actions.length > 0 ? (
-        <p className="mt-1.5 text-[11px] leading-5 text-[var(--t-muted)]">常用文书：{guide.actions.join("、")}（在「从模板生成」中选用）</p>
+        <p className="mt-1.5 text-[11px] leading-5 text-[var(--semi-color-text-2)]">常用文书：{guide.actions.join("、")}（在「从模板生成」中选用）</p>
       ) : null}
     </div>
   );
@@ -1236,13 +1243,13 @@ const NOTE_CHANNEL_LABEL: Record<string, string> = {
 };
 
 const EVENT_TONE: Record<string, { bg: string; fg: string; icon: typeof FileText }> = {
-  FEE_RECEIVED: { bg: "var(--green-bg)", fg: "var(--green)", icon: CircleDollarSign },
-  DOCUMENT_UPLOADED: { bg: "var(--blue-bg)", fg: "var(--blue)", icon: FileText },
-  HEARING_SCHEDULED: { bg: "var(--blue-bg)", fg: "var(--blue)", icon: Landmark },
-  DEADLINE_ADDED: { bg: "var(--amber-bg)", fg: "var(--amber)", icon: CalendarClock },
-  MATTER_ARCHIVED: { bg: "var(--bronze-bg)", fg: "var(--bronze)", icon: Archive },
-  MATTER_ARCHIVE_REQUESTED: { bg: "var(--bronze-bg)", fg: "var(--bronze)", icon: Archive },
-  MATTER_CLOSED: { bg: "var(--green-bg)", fg: "var(--green)", icon: Check }
+  FEE_RECEIVED: { bg: "var(--semi-color-success-light-default)", fg: "var(--semi-color-success)", icon: CircleDollarSign },
+  DOCUMENT_UPLOADED: { bg: "var(--semi-color-info-light-default)", fg: "var(--semi-color-info)", icon: FileText },
+  HEARING_SCHEDULED: { bg: "var(--semi-color-info-light-default)", fg: "var(--semi-color-info)", icon: Landmark },
+  DEADLINE_ADDED: { bg: "var(--semi-color-warning-light-default)", fg: "var(--semi-color-warning)", icon: CalendarClock },
+  MATTER_ARCHIVED: { bg: "var(--semi-color-warning-light-default)", fg: "var(--semi-color-warning)", icon: Archive },
+  MATTER_ARCHIVE_REQUESTED: { bg: "var(--semi-color-warning-light-default)", fg: "var(--semi-color-warning)", icon: Archive },
+  MATTER_CLOSED: { bg: "var(--semi-color-success-light-default)", fg: "var(--semi-color-success)", icon: Check }
 };
 
 /* ------------------------------------------------------------------ */
@@ -1266,13 +1273,13 @@ function StageLine({ procedure, stages, selectedKey, onSelect, onAddStage }: {
       const state = stage.status === "done" ? "done" : stage.status === "active" ? "cur" : "todo";
       const overdue = stage.tasks.filter(task => !task.completed && task.dueAt && daysUntil(task.dueAt) < 0).length;
       return <li key={stage.key} className={cn("dos-vnode", state, stage.key === selectedKey && "sel")}>
-        <button type="button" onClick={() => onSelect(stage.key)} aria-pressed={stage.key === selectedKey} title={`${stage.name} · ${STAGE_STATUS_TEXT[stage.status]}`}>
+        <SemiButton theme="borderless" type="tertiary" size="small" contentClassName="flex min-w-0 items-center gap-2" htmlType="button" onClick={() => onSelect(stage.key)} aria-pressed={stage.key === selectedKey} title={`${stage.name} · ${STAGE_STATUS_TEXT[stage.status]}`}>
           <span className="pin" aria-hidden>{state === "done" ? <Check strokeWidth={3} /> : null}</span>
           <span className="body"><span className="nm">{stage.name}</span><span className="sub">
             {overdue > 0 ? <span className="dos-flag red">任务逾期 {overdue}</span> : null}
             <span className="dt">{stageChainDate(stage, procedure) ?? (stage.id ? "未记录进度" : "尚未启用")}</span>
           </span></span>
-        </button>
+        </SemiButton>
       </li>;
     })}</ol> : null}
     {onAddStage ? <Button className="m-3" onClick={onAddStage} type="tertiary" theme="borderless" size="small"><Plus />添加环节</Button> : null}
@@ -1299,7 +1306,7 @@ function AddMenu({
           const Icon = item.icon;
           return (
             <Dropdown.Item key={item.key} onClick={() => { setOpen(false); item.onSelect(); }} className="items-start gap-2.5 py-2">
-              <Icon className="mt-0.5 h-4 w-4 text-[var(--t-muted)]" strokeWidth={1.8} />
+              <Icon className="mt-0.5 h-4 w-4 text-[var(--semi-color-text-2)]" strokeWidth={1.8} />
               <span className="flex flex-col">
                 <span className="text-[13px] font-medium">{item.label}</span>
                 <span className="text-[11px] text-muted-foreground">{item.hint}</span>
@@ -1308,10 +1315,10 @@ function AddMenu({
           );
         })}
           </Dropdown.Menu>}>
-          <button type="button" aria-haspopup="menu" aria-expanded={open} className={cn("btn btn-sm", primary ? "btn-primary" : "btn-secondary")}>
+          <SemiButton theme={primary ? "solid" : "outline"} type={primary ? "primary" : "tertiary"} size="small" htmlType="button" aria-haspopup="menu" aria-expanded={open}>
           <Plus />
           {label}
-        </button>
+        </SemiButton>
         </Dropdown>
   );
 }
@@ -1513,23 +1520,23 @@ function NextActions({
               </span>
               <span className="ops">
                 {canManage && item.kind === "memo" && item.memoId ? (
-                  <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => run(() => toggleProcedureMemo(item.memoId!), "已办结，转入记录")}>
+                  <SemiButton htmlType="button" theme="borderless" type="tertiary" disabled={pending} onClick={() => run(() => toggleProcedureMemo(item.memoId!), "已办结，转入记录")}>
                     办结
-                  </button>
+                  </SemiButton>
                 ) : null}
                 {canManage && item.kind === "deadline" && item.deadlineId ? (
                   <>
                     {item.pendingConfirm && item.deadlineUpdatedAt ? (
-                      <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => run(() => confirmDeadline({ id: item.deadlineId!, expectedUpdatedAt: item.deadlineUpdatedAt! }), "期限已确认")}>
+                      <SemiButton htmlType="button" theme="borderless" type="tertiary" disabled={pending} onClick={() => run(() => confirmDeadline({ id: item.deadlineId!, expectedUpdatedAt: item.deadlineUpdatedAt! }), "期限已确认")}>
                         确认日期
-                      </button>
+                      </SemiButton>
                     ) : null}
-                    {canAdjustActionDeadline(item, canManage) ? <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => setAdjusting({ id: item.deadlineId!, title: item.title, dueAt: item.at!, duePrecision: item.duePrecision ?? null, updatedAt: item.deadlineUpdatedAt! })}>
+                    {canAdjustActionDeadline(item, canManage) ? <SemiButton htmlType="button" theme="borderless" type="tertiary" disabled={pending} onClick={() => setAdjusting({ id: item.deadlineId!, title: item.title, dueAt: item.at!, duePrecision: item.duePrecision ?? null, updatedAt: item.deadlineUpdatedAt! })}>
                       调整日期
-                    </button> : null}
-                    {responsibility === null ? <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => completeDeadline(item)}>
+                    </SemiButton> : null}
+                    {responsibility === null ? <SemiButton htmlType="button" theme="borderless" type="tertiary" disabled={pending} onClick={() => completeDeadline(item)}>
                       完成
-                    </button> : null}
+                    </SemiButton> : null}
                   </>
                 ) : null}
               </span>
@@ -1549,10 +1556,10 @@ function NextActions({
         <div className="what">
           <div className="t">
             {item.title}
-            {item.kind === "deadline" ? <span className="badge b-outline-red" style={{ fontSize: 10 }}>法定期限</span> : null}
-            {item.kind === "hearing" ? <span className="badge b-blue" style={{ fontSize: 10 }}>开庭</span> : null}
-            {item.kind === "memo" ? <span className="badge b-slate" style={{ fontSize: 10 }}>备忘</span> : null}
-            {item.pendingConfirm ? <span className="badge b-amber" style={{ fontSize: 10 }}>期限待确认</span> : null}
+            {item.kind === "deadline" ? <SemiTag size="small" color="red" type="ghost">法定期限</SemiTag> : null}
+            {item.kind === "hearing" ? <SemiTag size="small" color="blue">开庭</SemiTag> : null}
+            {item.kind === "memo" ? <SemiTag size="small" color="grey">备忘</SemiTag> : null}
+            {item.pendingConfirm ? <SemiTag size="small" color="amber">期限待确认</SemiTag> : null}
           </div>
           <div className="d">{[scope === "all" ? item.stageName : null, item.meta || null].filter(Boolean).join(" · ") || " "}</div>
           {responsibility}
@@ -1560,12 +1567,12 @@ function NextActions({
         <div className="op">
           {canManage && item.kind === "memo" && item.memoId ? (
             <>
-              <button type="button" className="btn btn-secondary btn-sm" disabled={pending} onClick={() => run(() => toggleProcedureMemo(item.memoId!), "已办结，转入记录")}>
+              <SemiButton htmlType="button" theme="outline" type="tertiary" disabled={pending} onClick={() => run(() => toggleProcedureMemo(item.memoId!), "已办结，转入记录")}>
                 办结
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm text-[var(--t-muted)]"
+              </SemiButton>
+              <SemiButton
+                htmlType="button"
+                theme="borderless" type="tertiary" className="text-[var(--semi-color-text-2)]"
                 disabled={pending}
                 onClick={async () => {
                   if (!(await confirmDialog({ title: "删除这条备忘？", confirmText: "删除", danger: true }))) return;
@@ -1573,22 +1580,22 @@ function NextActions({
                 }}
               >
                 删除
-              </button>
+              </SemiButton>
             </>
           ) : null}
           {canManage && item.kind === "deadline" && item.deadlineId ? (
             <>
               {item.pendingConfirm && item.deadlineUpdatedAt ? (
-                <button type="button" className="btn btn-secondary btn-sm" disabled={pending} onClick={() => run(() => confirmDeadline({ id: item.deadlineId!, expectedUpdatedAt: item.deadlineUpdatedAt! }), "期限已确认")}>
+                <SemiButton htmlType="button" theme="outline" type="tertiary" disabled={pending} onClick={() => run(() => confirmDeadline({ id: item.deadlineId!, expectedUpdatedAt: item.deadlineUpdatedAt! }), "期限已确认")}>
                   确认日期
-                </button>
+                </SemiButton>
               ) : null}
-              {canAdjustActionDeadline(item, canManage) ? <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => setAdjusting({ id: item.deadlineId!, title: item.title, dueAt: item.at!, duePrecision: item.duePrecision ?? null, updatedAt: item.deadlineUpdatedAt! })}>
+              {canAdjustActionDeadline(item, canManage) ? <SemiButton htmlType="button" theme="borderless" type="tertiary" disabled={pending} onClick={() => setAdjusting({ id: item.deadlineId!, title: item.title, dueAt: item.at!, duePrecision: item.duePrecision ?? null, updatedAt: item.deadlineUpdatedAt! })}>
                 调整日期
-              </button> : null}
-              {responsibility === null ? <button type="button" className="btn btn-secondary btn-sm" disabled={pending} onClick={() => completeDeadline(item)}>
+              </SemiButton> : null}
+              {responsibility === null ? <SemiButton htmlType="button" theme="outline" type="tertiary" disabled={pending} onClick={() => completeDeadline(item)}>
                 完成
-              </button> : null}
+              </SemiButton> : null}
             </>
           ) : null}
         </div>
@@ -1602,7 +1609,7 @@ function NextActions({
     <section ref={sectionRef} tabIndex={-1} className={cn("card scroll-mt-44", compact && "dos-todo-rail")} aria-label="期限与庭期">
       <div className={cn("panel-head flex-wrap", compact && "rail-sec-head")}>
         <div className={compact ? "flex items-center gap-2" : "panel-title"}>
-          <ListChecks className={compact ? "h-[15px] w-[15px] text-[var(--t-muted)]" : "ic"} strokeWidth={1.8} />
+          <ListChecks className={compact ? "h-[15px] w-[15px] text-[var(--semi-color-text-2)]" : "ic"} strokeWidth={1.8} />
           期限与庭期
           <span className="t-xs t-mute" style={{ fontWeight: 400 }}>{scope === "stage" && selectedStage ? selectedStage.name : allScopeLabel}</span>
         </div>
@@ -1636,9 +1643,9 @@ function NextActions({
       ) : null}
       {later.length ? (
         <div className="dos-lane">
-          <button type="button" className={cn("dos-lane-h as-btn", compact && "chip slate")} onClick={() => setShowLater((v) => !v)} aria-expanded={showLater}>
+          <SemiButton theme="borderless" type="tertiary" size="small" htmlType="button" className={cn("dos-lane-h as-btn", compact && "chip slate")} onClick={() => setShowLater((v) => !v)} aria-expanded={showLater}>
             之后 · {later.length} {showLater ? "（收起）" : "（展开）"}
-          </button>
+          </SemiButton>
           {showLater ? later.map((i) => row(i)) : null}
         </div>
       ) : null}
@@ -1650,9 +1657,9 @@ function NextActions({
               其他环节 · {others.length}
               {othersOverdue ? `（逾期 ${othersOverdue}）` : ""}
             </span>
-            <button type="button" className="more" onClick={() => setShowOthers((v) => !v)} aria-expanded={showOthers}>
+            <SemiButton theme="borderless" type="tertiary" size="small" contentClassName="flex min-w-0 items-center gap-2" htmlType="button" className="more" onClick={() => setShowOthers((v) => !v)} aria-expanded={showOthers}>
               {showOthers ? "收起" : "展开"}
-            </button>
+            </SemiButton>
           </div>
           {showOthers ? others.map((i) => row(i, true)) : null}
         </div>
@@ -1675,9 +1682,9 @@ function NextActions({
                 <span className="m">{w.meta}</span>
                 <span className="ops">
                   {w.onOpen ? (
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={w.onOpen}>
+                    <SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={w.onOpen}>
                       查看
-                    </button>
+                    </SemiButton>
                   ) : null}
                 </span>
               </div>
@@ -1696,9 +1703,9 @@ function NextActions({
               </div>
               <div className="op">
                 {w.onOpen ? (
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={w.onOpen}>
+                  <SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={w.onOpen}>
                     查看
-                  </button>
+                  </SemiButton>
                 ) : null}
               </div>
             </div>
@@ -1823,13 +1830,13 @@ function LogRow({ item, canManage, onEditNote }: { item: LogItem; canManage?: bo
     canManage && (item.memo || item.express) ? (
       <div className="dos-log-ops">
         {item.memo ? (
-          <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => run(() => toggleProcedureMemo(item.memo!.id), item.memo!.done ? "已恢复为待办" : "备忘已办结")}>
+          <SemiButton htmlType="button" theme="borderless" type="tertiary" disabled={pending} onClick={() => run(() => toggleProcedureMemo(item.memo!.id), item.memo!.done ? "已恢复为待办" : "备忘已办结")}>
             {item.memo.done ? "恢复" : "办结"}
-          </button>
+          </SemiButton>
         ) : null}
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm text-[var(--t-muted)]"
+        <SemiButton
+          htmlType="button"
+          theme="borderless" type="tertiary" className="text-[var(--semi-color-text-2)]"
           disabled={pending}
           onClick={async () => {
             if (!(await confirmDialog({ title: item.memo ? "删除这条备忘？" : "删除这条快递记录？", confirmText: "删除", danger: true }))) return;
@@ -1837,21 +1844,21 @@ function LogRow({ item, canManage, onEditNote }: { item: LogItem; canManage?: bo
           }}
         >
           删除
-        </button>
+        </SemiButton>
       </div>
     ) : null;
   const noteOps = item.note && onEditNote ? <Button onClick={() => onEditNote(item.note!)} htmlType="button" type="tertiary" theme="borderless" size="small">编辑</Button> : null;
   if (item.kind === "note") {
     return (
       <div className="rec">
-        <div className="rec-ic" style={{ background: "var(--violet-bg)", color: "var(--violet)" }}>
+        <div className="rec-ic" style={{ background: "var(--semi-color-secondary-light-default)", color: "var(--semi-color-secondary)" }}>
           <PenLine strokeWidth={2} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="rec-title">
             研判笔记
-            {item.stageTag ? <span className="badge b-white" style={{ fontSize: 9.5, padding: "0 6px", marginLeft: 6 }}>{item.stageTag}</span> : null}
-            <span className="badge b-violet" style={{ fontSize: 9.5, padding: "0 6px", marginLeft: 6 }}>人工判断</span>
+            {item.stageTag ? <SemiTag size="small" color="grey" style={{ marginLeft: 6 }}>{item.stageTag}</SemiTag> : null}
+            <SemiTag size="small" color="violet" style={{ marginLeft: 6 }}>人工判断</SemiTag>
           </div>
           <div className="rec-note whitespace-pre-wrap">{item.body}</div>
           <div className="rec-meta">{item.meta}</div>
@@ -1862,16 +1869,16 @@ function LogRow({ item, canManage, onEditNote }: { item: LogItem; canManage?: bo
   }
   const tone =
     item.kind === "express"
-      ? { bg: item.express?.outbound ? "var(--amber-bg)" : "var(--green-bg)", fg: item.express?.outbound ? "var(--amber)" : "var(--green)", icon: Truck }
+      ? { bg: item.express?.outbound ? "var(--semi-color-warning-light-default)" : "var(--semi-color-success-light-default)", fg: item.express?.outbound ? "var(--semi-color-warning)" : "var(--semi-color-success)", icon: Truck }
       : item.kind === "memo"
-        ? { bg: "var(--slate-bg)", fg: "var(--slate)", icon: StickyNote }
+        ? { bg: "var(--semi-color-fill-0)", fg: "var(--semi-color-text-1)", icon: StickyNote }
         : item.kind === "court"
-      ? { bg: "var(--bronze-bg)", fg: "var(--bronze)", icon: Landmark }
+      ? { bg: "var(--semi-color-warning-light-default)", fg: "var(--semi-color-warning)", icon: Landmark }
       : item.kind === "talk"
-        ? { bg: "var(--teal-soft)", fg: "var(--teal-deep)", icon: MessageSquare }
+        ? { bg: "var(--semi-color-primary-light-default)", fg: "var(--semi-color-primary-active)", icon: MessageSquare }
         : item.kind === "task"
-          ? { bg: "var(--green-bg)", fg: "var(--green)", icon: Check }
-          : EVENT_TONE[item.eventType ?? ""] ?? { bg: "var(--slate-bg)", fg: "var(--slate)", icon: ListChecks };
+          ? { bg: "var(--semi-color-success-light-default)", fg: "var(--semi-color-success)", icon: Check }
+          : EVENT_TONE[item.eventType ?? ""] ?? { bg: "var(--semi-color-fill-0)", fg: "var(--semi-color-text-1)", icon: ListChecks };
   const Icon = tone.icon;
   return (
     <div className="rec">
@@ -1880,7 +1887,7 @@ function LogRow({ item, canManage, onEditNote }: { item: LogItem; canManage?: bo
       </div>
       <div className="min-w-0 flex-1">
         <div className="rec-title">{item.title}</div>
-        {item.body ? <div className={cn("dos-note-text whitespace-pre-wrap", item.memo?.done && "line-through text-[var(--t-muted)]")}>{item.body}</div> : null}
+        {item.body ? <div className={cn("dos-note-text whitespace-pre-wrap", item.memo?.done && "line-through text-[var(--semi-color-text-2)]")}>{item.body}</div> : null}
         <div className="rec-meta">{item.meta}</div>
       </div>
       {ledgerOps}
@@ -1940,10 +1947,10 @@ function CaseLog({
         </div>
         <div className="flex items-center gap-[7px]">
         {onCaseSearch ? (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onCaseSearch}>
+          <SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={onCaseSearch}>
             <Scale />
             类案检索
-          </button>
+          </SemiButton>
         ) : null}
           <AddMenu
             label="记录"
@@ -1959,10 +1966,10 @@ function CaseLog({
         {LOG_FILTERS.map((f) => {
           const count = f.key === "all" ? scoped.length : scoped.filter((e) => e.kind === f.key).length;
           return (
-            <button key={f.key} type="button" className={cn("dos-filter", filter === f.key && "on")} aria-pressed={filter === f.key} onClick={() => setFilter(f.key)}>
+            <SemiButton theme="borderless" type="tertiary" size="small" key={f.key} htmlType="button" className={cn("dos-filter", filter === f.key && "on")} aria-pressed={filter === f.key} onClick={() => setFilter(f.key)}>
               {f.label}
               {count ? <span>{count}</span> : null}
-            </button>
+            </SemiButton>
           );
         })}
       </div>
@@ -1994,10 +2001,10 @@ function ArchiveGlance({
     <>
       <div className="card">
         <div className="rail-sec-head">
-          <ListChecks className="h-[15px] w-[15px] text-[var(--t-muted)]" strokeWidth={1.8} />
+          <ListChecks className="h-[15px] w-[15px] text-[var(--semi-color-text-2)]" strokeWidth={1.8} />
           近期日程与审批
           {procedureLabel ? <span className="t-xs t-mute" style={{ fontWeight: 400 }}>{procedureLabel}</span> : null}
-          <button type="button" className="link border-0 bg-transparent p-0" onClick={() => onOpenWork("tasks")}>查看全部任务与日程</button>
+          <SemiButton theme="borderless" type="primary" size="small" htmlType="button" onClick={() => onOpenWork("tasks")}>查看全部任务与日程</SemiButton>
         </div>
         {actions.length === 0 && waiting.length === 0 ? (
           <div className="panel-body t-xs t-mute">{canReadSchedule ? "当前范围没有未结日程或审批" : "无日程查看权限"}</div>
@@ -2007,38 +2014,38 @@ function ArchiveGlance({
             {actions.slice(0, 3).map((a) => {
               const when = actionWhen(a);
               return (
-                <button key={a.key} type="button" className="dos-glance-row" onClick={() => onOpenWork("tasks")}>
+                <SemiButton theme="borderless" type="tertiary" size="small" contentClassName="flex w-full min-w-0 flex-wrap items-center gap-2 text-left" style={{ height: "auto" }} key={a.key} htmlType="button" className="dos-glance-row" onClick={() => onOpenWork("tasks")}>
                   <span className={cn("w", when.tone)}>{when.main}</span>
                   <span className="t">{a.title}</span>
-                </button>
+                </SemiButton>
               );
             })}
             {waiting.slice(0, actions.length >= 3 ? 0 : 3 - actions.length).map((w) => (
-              <button key={w.key} type="button" className="dos-glance-row" onClick={w.onOpen ?? (() => onOpenWork("tasks"))}>
+              <SemiButton theme="borderless" type="tertiary" size="small" contentClassName="flex w-full min-w-0 flex-wrap items-center gap-2 text-left" style={{ height: "auto" }} key={w.key} htmlType="button" className="dos-glance-row" onClick={w.onOpen ?? (() => onOpenWork("tasks"))}>
                 <span className="w teal">审批中</span>
                 <span className="t">{w.title}</span>
-              </button>
+              </SemiButton>
             ))}
           </>
         )}
       </div>
       <div className="card">
         <div className="rail-sec-head">
-          <BookOpen className="h-[15px] w-[15px] text-[var(--t-muted)]" strokeWidth={1.8} />
+          <BookOpen className="h-[15px] w-[15px] text-[var(--semi-color-text-2)]" strokeWidth={1.8} />
           最近记录
-          {logItems.length > 0 ? <button type="button" className="link border-0 bg-transparent p-0" onClick={() => onOpenWork("records")}>
+          {logItems.length > 0 ? <SemiButton theme="borderless" type="primary" size="small" htmlType="button" onClick={() => onOpenWork("records")}>
             查看全部记录 <span className="mono">{logItems.length}</span>
-          </button> : null}
+          </SemiButton> : null}
         </div>
         {logItems.length === 0 ? (
           <div className="panel-body t-xs t-mute">暂无记录</div>
         ) : (
           logItems.slice(0, 3).map((l) => (
-            <button key={l.key} type="button" className="dos-glance-row col" onClick={() => onOpenWork("records")}>
+            <SemiButton theme="borderless" type="tertiary" size="small" contentClassName="flex w-full min-w-0 flex-col items-start gap-1 text-left" style={{ height: "auto" }} key={l.key} htmlType="button" className="dos-glance-row col" onClick={() => onOpenWork("records")}>
               <span className="t">{l.title}</span>
               {l.body ? <span className="b">{l.body}</span> : null}
               <span className="m">{l.meta}</span>
-            </button>
+            </SemiButton>
           ))
         )}
       </div>
@@ -2087,8 +2094,8 @@ function DocRow({ doc, versionCount = 1, compact = false }: { doc: WorkflowDocum
       <div className="doc-row">
         <DocIcon tone={tone} />
         <div className="min-w-0 flex-1">
-          {onOpenDocument ? <button type="button" className="doc-name block w-full truncate text-left hover:text-[var(--teal-deep)]" onClick={() => onOpenDocument(doc.id)}>{doc.name}</button> : pUrl ? (
-            <a href={pUrl} target="_blank" rel="noreferrer" className="doc-name block truncate hover:text-[var(--teal-deep)]">
+          {onOpenDocument ? <SemiButton theme="borderless" type="tertiary" size="small" htmlType="button" className="doc-name block w-full truncate text-left hover:text-[var(--semi-color-primary-active)]" onClick={() => onOpenDocument(doc.id)}>{doc.name}</SemiButton> : pUrl ? (
+            <a href={pUrl} target="_blank" rel="noreferrer" className="doc-name block truncate hover:text-[var(--semi-color-primary-active)]">
               {doc.name}
             </a>
           ) : (
@@ -2098,16 +2105,16 @@ function DocRow({ doc, versionCount = 1, compact = false }: { doc: WorkflowDocum
           <div className="dos-doc-tags">
             <span className={cn("dos-doc-cat", doc.category === "EVIDENCE" && "ev")}>{documentCategoryLabel[doc.category]}</span>
             {chip ? <SourceChip kind={chip.kind}>{chip.label}</SourceChip> : doc.sourceParty ? <SourceChip kind="plain">{doc.sourceParty}</SourceChip> : null}
-            {doc.ocrStatus === "FAILED" ? <span className="src-chip" style={{ color: "var(--red)", borderColor: "var(--red-line)", background: "var(--red-bg)" }}>识别失败</span> : null}
+            {doc.ocrStatus === "FAILED" ? <span className="src-chip" style={{ color: "var(--semi-color-danger)", borderColor: "var(--semi-color-danger-light-active)", background: "var(--semi-color-danger-light-default)" }}>识别失败</span> : null}
             {doc.ocrStatus === "PARTIAL" ? <SourceChip kind="plain">部分文本可用</SourceChip> : null}
             {doc.textSource === "OCR" && doc.ocrStatus === "READY" ? <SourceChip kind="ai">AI 识别</SourceChip> : null}
             {evidence.length ? (
-              <button type="button" className="dos-doc-ev" aria-expanded={evOpen} onClick={() => setEvOpen((v) => !v)}>
+              <SemiButton theme="borderless" type="tertiary" size="small" htmlType="button" className="dos-doc-ev" aria-expanded={evOpen} onClick={() => setEvOpen((v) => !v)}>
                 证据要点 {evidence.length}
                 {[...new Set(evidence.map((e) => evidenceKindLabel[e.kind]))].slice(0, 2).map((k) => (
                   <span key={k}>· {k}</span>
                 ))}
-              </button>
+              </SemiButton>
             ) : null}
             <span className="doc-meta truncate">{meta.join(" · ")}</span>
           </div>
@@ -2115,9 +2122,9 @@ function DocRow({ doc, versionCount = 1, compact = false }: { doc: WorkflowDocum
         {!compact ? (
           <div className="dos-doc-ops">
             {onAddEvidence ? (
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => onAddEvidence(doc.id)} title="记录这份材料证明的事实、主张或分析">
+              <SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={() => onAddEvidence(doc.id)} title="记录这份材料证明的事实、主张或分析">
                 ＋证据要点
-              </button>
+              </SemiButton>
             ) : null}
             {pUrl ? (
               <a href={pUrl} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm">
@@ -2128,9 +2135,9 @@ function DocRow({ doc, versionCount = 1, compact = false }: { doc: WorkflowDocum
               下载
             </a>
             {onReview && doc.ocrStatus !== "FAILED" ? (
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => onReview(doc.id)} title="AI 审查缺失要素、法律风险与条款问题">
+              <SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={() => onReview(doc.id)} title="AI 审查缺失要素、法律风险与条款问题">
                 AI 审查
-              </button>
+              </SemiButton>
             ) : null}
           </div>
         ) : null}
@@ -2203,7 +2210,7 @@ export function MatterPreservationContent({
     <div className="card">
       <div className="panel-head" style={{ borderBottom: "none", paddingBottom: 8 }}>
         <div className="ws-head min-w-0 flex-1">
-          <div className="ic-wrap" style={expiringCount > 0 ? { background: "var(--amber-bg)", color: "var(--amber)" } : undefined}>
+          <div className="ic-wrap" style={expiringCount > 0 ? { background: "var(--semi-color-warning-light-default)", color: "var(--semi-color-warning)" } : undefined}>
             <Shield strokeWidth={1.8} />
           </div>
           <div className="min-w-0">
@@ -2216,10 +2223,10 @@ export function MatterPreservationContent({
           <div className="acts">
             {canManage ? (
               <>
-                <button type="button" className="btn btn-primary btn-sm" onClick={() => setCreateOpen(true)}>
+                <SemiButton htmlType="button" theme="solid" type="primary" onClick={() => setCreateOpen(true)}>
                   <Plus />
                   新建保全
-                </button>
+                </SemiButton>
               </>
             ) : null}
           </div>
@@ -2228,8 +2235,8 @@ export function MatterPreservationContent({
       <div className="panel-body" style={{ paddingTop: 4 }}>
         <div className="space-y-3">
           {cases.map((item) => (
-            <div key={item.id} className="rounded-[10px] border border-[var(--bd-hair)] bg-card">
-              <div className="flex flex-wrap items-start justify-between gap-2 border-b border-[var(--bd-hair)] px-3 py-2">
+            <div key={item.id} className="rounded-[10px] border border-[var(--semi-color-border)] bg-card">
+              <div className="flex flex-wrap items-start justify-between gap-2 border-b border-[var(--semi-color-border)] px-3 py-2">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-[13px] font-medium">{PRES_TYPE_CN[item.type]}</span>
@@ -2266,13 +2273,13 @@ export function MatterPreservationContent({
                         <Landmark className="h-3.5 w-3.5 text-muted-foreground" />
                         <span className="text-xs font-medium">{target.name}</span>
                         {canManage && (
-                          <button
-                            type="button"
+                          <SemiButton theme="borderless" type="primary" size="small"
+                            htmlType="button"
                             onClick={() => setAddPropertyTargetId(target.id)}
                             className="ml-auto text-[11px] text-primary hover:underline"
                           >
                             + 添加财产
-                          </button>
+                          </SemiButton>
                         )}
                       </div>
                       {target.properties.length === 0 ? (
@@ -2350,7 +2357,7 @@ function PreservationPropertyRow({
   const isActive = property.status === "ACTIVE" || property.status === "RENEWED";
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-[8px] border border-[var(--bd-hair)] bg-[var(--bg-hover)] px-2.5 py-2 text-[11.5px]">
+    <div className="flex flex-wrap items-center gap-2 rounded-[8px] border border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] px-2.5 py-2 text-[11.5px]">
       <span className="font-medium">{PROPERTY_TYPE_CN[property.propertyType]}</span>
       {property.amount && (
         <span className="font-mono text-muted-foreground tabular">
@@ -2363,9 +2370,9 @@ function PreservationPropertyRow({
       <span
         className={cn(
           "ml-auto shrink-0 font-medium",
-          expiry.tone === "danger" && "text-[var(--red)]",
-          expiry.tone === "warn" && "text-[var(--amber)]",
-          expiry.tone === "ok" && "text-[var(--green)]"
+          expiry.tone === "danger" && "text-[var(--semi-color-danger)]",
+          expiry.tone === "warn" && "text-[var(--semi-color-warning)]",
+          expiry.tone === "ok" && "text-[var(--semi-color-success)]"
         )}
       >
         {expiry.label}
@@ -2382,12 +2389,12 @@ function PreservationPropertyRow({
       </span>
       {canManage && isActive && (
         <>
-          <button type="button" onClick={onRenew} className="shrink-0 text-primary hover:underline">
+          <SemiButton theme="borderless" type="primary" size="small" htmlType="button" onClick={onRenew} className="shrink-0 text-primary hover:underline">
             续保
-          </button>
-          <button type="button" onClick={onLift} className="shrink-0 text-muted-foreground hover:text-foreground">
+          </SemiButton>
+          <SemiButton theme="borderless" type="tertiary" size="small" htmlType="button" onClick={onLift} className="shrink-0 text-muted-foreground hover:text-foreground">
             解除
-          </button>
+          </SemiButton>
         </>
       )}
     </div>
@@ -2435,16 +2442,16 @@ function StageMaterialsPanel({
   const originChips = (
   <>
           {(Object.keys(originCounts) as DocumentSourceOrigin[]).map((origin, i) => (
-            <button
+            <SemiButton theme="borderless" type="tertiary" size="small"
               key={origin}
-              type="button"
+              htmlType="button"
               onClick={() => setOriginFilter((v) => (v === origin ? "ALL" : origin))}
               className={cn("src-chip cursor-pointer", originFilter === origin && documentSourceChip[origin].kind !== "team" && documentSourceChip[origin].kind)}
               aria-pressed={originFilter === origin}
             >
               {i === 0 ? "来源：" : ""}
               <b style={{ fontWeight: i === 0 ? 600 : 550 }}>{documentSourceChip[origin].label} {originCounts[origin]}</b>
-            </button>
+            </SemiButton>
           ))}
   </>
   );
@@ -2456,42 +2463,42 @@ function StageMaterialsPanel({
         <div className="panel-title min-w-0">
           <FileText className="ic" strokeWidth={1.8} />
           材料
-          <span className="badge b-white" style={{ marginLeft: 2 }}>{familyRows.length}</span>
+          <SemiTag size="small" color="grey" style={{ marginLeft: 2 }}>{familyRows.length}</SemiTag>
         </div>
         <div className="flex shrink-0 items-center gap-[7px]">
           {canManage && onOpenTemplate ? (
-            <button type="button" className="btn btn-ghost btn-sm" onClick={onOpenTemplate}>
+            <SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={onOpenTemplate}>
               <Sparkles />
               从模板生成
-            </button>
+            </SemiButton>
           ) : null}
           {canManage ? (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={onRequestUpload}>
+            <SemiButton htmlType="button" theme="outline" type="tertiary" onClick={onRequestUpload}>
               <Upload />
               上传
-            </button>
+            </SemiButton>
           ) : null}
         </div>
       </div>
       {documents.length > 0 ? (
         <div className="dos-mat-filters" role="group" aria-label="材料筛选">
-          <button
-            type="button"
+          <SemiButton theme="borderless" type="tertiary" size="small"
+            htmlType="button"
             className={cn("src-chip cursor-pointer", !writtenOnly && !evidenceOnly && originFilter === "ALL" && "self")}
             aria-pressed={!writtenOnly && !evidenceOnly && originFilter === "ALL"}
             onClick={() => { setWrittenOnly(false); setEvidenceOnly(false); setOriginFilter("ALL"); }}
           >
             <b style={{ fontWeight: 550 }}>全部 {familyRows.length}</b>
-          </button>
+          </SemiButton>
           {evidenceDocCount > 0 ? (
-            <button type="button" className={cn("src-chip cursor-pointer", evidenceOnly && "self")} aria-pressed={evidenceOnly} onClick={() => setEvidenceOnly((v) => !v)}>
+            <SemiButton theme="borderless" type="tertiary" size="small" htmlType="button" className={cn("src-chip cursor-pointer", evidenceOnly && "self")} aria-pressed={evidenceOnly} onClick={() => setEvidenceOnly((v) => !v)}>
               <b style={{ fontWeight: 550 }}>有证据要点 {evidenceDocCount}</b>
-            </button>
+            </SemiButton>
           ) : null}
           {writtenCount > 0 ? (
-            <button type="button" className={cn("src-chip cursor-pointer", writtenOnly && "self")} aria-pressed={writtenOnly} onClick={() => setWrittenOnly((v) => !v)}>
+            <SemiButton theme="borderless" type="tertiary" size="small" htmlType="button" className={cn("src-chip cursor-pointer", writtenOnly && "self")} aria-pressed={writtenOnly} onClick={() => setWrittenOnly((v) => !v)}>
               <b style={{ fontWeight: 550 }}>文书 {writtenCount}</b>
-            </button>
+            </SemiButton>
           ) : null}
           {Object.keys(originCounts).length ? <span className="dos-mat-sep" aria-hidden /> : null}
           {originChips}
@@ -2637,7 +2644,7 @@ function StageCreateDialog({
                 onChange={inputValue => setCustomName(inputValue)}
                 placeholder="如：二次庭询 / 专家论证 / 履行谈判"
               />
-              {duplicate && <p className="text-[10px] text-[var(--amber)]">该环节已在列表中</p>}
+              {duplicate && <p className="text-[10px] text-[var(--semi-color-warning)]">该环节已在列表中</p>}
             </div>
           )}
 
@@ -2659,13 +2666,13 @@ function StageCreateDialog({
               placeholder={customMode ? "记录该环节的目标或注意事项" : selectedPreset?.description ?? ""}
             />
           </div>
-          <button
-            type="button"
+          <SemiButton theme="borderless" type="primary" size="small"
+            htmlType="button"
             onClick={() => setCustomMode((value) => !value)}
             className="text-[11px] text-primary hover:underline"
           >
             {customMode ? "返回预设环节" : "预设没有覆盖，添加自定义环节"}
-          </button>
+          </SemiButton>
         </div>
         <DialogFooter>
           <Button onClick={() => void close()} disabled={isPending} type="tertiary" theme="outline">

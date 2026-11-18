@@ -1,5 +1,6 @@
 "use client";
 
+import { Disclosure } from "@/components/patterns/disclosure";
 import { Select, Button, Input, TextArea } from "@douyinfe/semi-ui";
 import { useId, useState } from "react";
 import { MaterialSourceLocationPicker, type MaterialSourceLocation } from "@/components/documents/material-source-location-picker";
@@ -57,7 +58,7 @@ export function ResearchSourceEditor({ matterId, value, documents, disabled, onC
           <p className="text-xs text-muted-foreground">{sourceRelationLabels[source.relation]} · {source.anchorId ? locationLabels[locationKey(source)] ?? "固定原文片段" : source.page ? `第 ${source.page} 页` : "原件"}</p></div>
           <div className="flex gap-2"><Button disabled={disabled} onClick={() => onPreview(source)} htmlType="button" type="tertiary" theme="outline" size="small">查看原文</Button><Button disabled={disabled} onClick={() => onChange(value.filter((_, i) => i !== index))} htmlType="button" type="tertiary" theme="borderless" size="small">移除</Button></div>
         </div>
-        <details><summary className="cursor-pointer text-sm">来源身份与使用范围</summary>
+        <Disclosure heading="来源身份与使用范围">
           <div className="mt-3 grid grid-cols-2 gap-3">
             <div className="space-y-1.5"><label id={selectLabelId + "-law-kind-" + index} className="text-sm font-medium text-[var(--semi-color-text-1)]">资料类别</label><Select disabled={disabled} value={source.lawMetadata.kind} onChange={kind => { if (typeof kind === "string") updateLaw(index, { kind: kind as LawMetadata["kind"], verification: "PENDING" }); }} aria-labelledby={selectLabelId + "-law-kind-" + index} className="w-full" motion={false}>{Object.entries(lawKindLabels).map(([key, label]) => <Select.Option key={key} value={key}>{label}</Select.Option>)}</Select></div>
             <div className="space-y-1.5"><label id={selectLabelId + "-verification-" + index} className="text-sm font-medium text-[var(--semi-color-text-1)]">来源核实状态{" "}<span className="sr-only">{index + 1}</span></label><Select disabled={disabled} value={source.lawMetadata.verification} onChange={verification => { if (typeof verification === "string") updateLaw(index, { verification: verification as LawMetadata["verification"] }); }} aria-labelledby={selectLabelId + "-verification-" + index} className="w-full" motion={false}><Select.Option value="PENDING">待核实</Select.Option><Select.Option value="CHECKED">已核实</Select.Option></Select></div>
@@ -70,7 +71,7 @@ export function ResearchSourceEditor({ matterId, value, documents, disabled, onC
             <div className="space-y-1.5"><label htmlFor={`law-${index}-via`} className="text-sm font-medium text-[var(--semi-color-text-1)]">取得途径</label><Input id={`law-${index}-via`} value={source.lawMetadata.acquiredVia} onChange={inputValue => updateLaw(index, { acquiredVia: inputValue })} disabled={disabled} /></div>
             <div className="col-span-2 space-y-1.5"><label htmlFor={`law-${index}-scope`} className="text-sm font-medium text-[var(--semi-color-text-1)]">授权使用范围</label><TextArea id={`law-${index}-scope`} rows={2} value={source.lawMetadata.usageScope} onChange={inputValue => updateLaw(index, { usageScope: inputValue })} disabled={disabled} /></div>
           </div>
-        </details>
+        </Disclosure>
       </div>;
     })}
   </div>;

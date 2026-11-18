@@ -10,7 +10,7 @@ import {
   BookmarkPlus,
   Check
 } from "lucide-react";
-import { Button, Input, Notification, Toast } from "@douyinfe/semi-ui";
+import { Select, Button, Input, Notification, Tabs, TextArea, Toast } from "@douyinfe/semi-ui";
 import type { MatterCategory } from "@prisma/client";
 import {
   searchSimilarCases,
@@ -230,60 +230,12 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
             连接已配置的数据源；接口费用以服务商实际计费为准
           </p>
         </div>
-        <div className="flex flex-wrap rounded-md border border-border bg-card p-0.5">
-          <button
-            type="button"
-            disabled={!providers.yuandian || pending}
-            onClick={() => setMode("keyword")}
-            className={cn(
-              "rounded px-2.5 py-1 text-[11px] disabled:cursor-not-allowed disabled:opacity-40",
-              mode === "keyword"
-                ? "bg-primary/15 text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            关键词
-          </button>
-          <button
-            type="button"
-            disabled={!providers.yuandian || pending}
-            onClick={() => setMode("vector")}
-            className={cn(
-              "rounded px-2.5 py-1 text-[11px] disabled:cursor-not-allowed disabled:opacity-40",
-              mode === "vector"
-                ? "bg-primary/15 text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            语义
-          </button>
-          <button
-            type="button"
-            disabled={!providers.localJudgments || pending}
-            onClick={() => setMode("cncases")}
-            className={cn(
-              "rounded px-2.5 py-1 text-[11px] disabled:cursor-not-allowed disabled:opacity-40",
-              mode === "cncases"
-                ? "bg-primary/15 text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            本地文书
-          </button>
-          <button
-            type="button"
-            disabled={!providers.yuandian || pending}
-            onClick={() => setMode("regulation")}
-            className={cn(
-              "rounded px-2.5 py-1 text-[11px] disabled:cursor-not-allowed disabled:opacity-40",
-              mode === "regulation"
-                ? "bg-primary/15 text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            法规检索
-          </button>
-        </div>
+        <Tabs activeKey={mode} type="line" size="small" onChange={key => setMode(key as typeof mode)} tabList={[
+          { itemKey: "keyword", tab: "关键词", disabled: !providers.yuandian || pending },
+          { itemKey: "vector", tab: "语义", disabled: !providers.yuandian || pending },
+          { itemKey: "cncases", tab: "本地文书", disabled: !providers.localJudgments || pending },
+          { itemKey: "regulation", tab: "法规检索", disabled: !providers.yuandian || pending },
+        ]} />
       </header>
 
       {/* 检索表单 */}
@@ -329,49 +281,49 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
               <label htmlFor="case-regulation-level" className="text-[11px]">效力级别（可选）</label>
-              <select
-                id="case-regulation-level"
+              <Select<string>
+                id="case-regulation-level" aria-label="效力级别（可选）"
                 value={regXljb}
-                onChange={(e) => setRegXljb(e.target.value)}
-                className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                onChange={value => { if (typeof value === "string") setRegXljb(value); }}
+                className="mt-1 w-full"
               >
-                <option value="">全部</option>
-                <option value="宪法">宪法</option>
-                <option value="法律">法律</option>
-                <option value="司法解释">司法解释</option>
-                <option value="行政法规">行政法规</option>
-                <option value="部门规章">部门规章</option>
-                <option value="地方性法规">地方性法规</option>
-                <option value="地方政府规章">地方政府规章</option>
-              </select>
+                <Select.Option value="">全部</Select.Option>
+                <Select.Option value="宪法">宪法</Select.Option>
+                <Select.Option value="法律">法律</Select.Option>
+                <Select.Option value="司法解释">司法解释</Select.Option>
+                <Select.Option value="行政法规">行政法规</Select.Option>
+                <Select.Option value="部门规章">部门规章</Select.Option>
+                <Select.Option value="地方性法规">地方性法规</Select.Option>
+                <Select.Option value="地方政府规章">地方政府规章</Select.Option>
+              </Select>
             </div>
             <div>
               <label htmlFor="case-regulation-status" className="text-[11px]">时效性（可选）</label>
-              <select
-                id="case-regulation-status"
+              <Select<string>
+                id="case-regulation-status" aria-label="时效性（可选）"
                 value={regSxx}
-                onChange={(e) => setRegSxx(e.target.value)}
-                className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                onChange={value => { if (typeof value === "string") setRegSxx(value); }}
+                className="mt-1 w-full"
               >
-                <option value="">全部</option>
-                <option value="现行有效">现行有效</option>
-                <option value="失效">失效</option>
-                <option value="已被修改">已被修改</option>
-                <option value="部分失效">部分失效</option>
-                <option value="尚未生效">尚未生效</option>
-              </select>
+                <Select.Option value="">全部</Select.Option>
+                <Select.Option value="现行有效">现行有效</Select.Option>
+                <Select.Option value="失效">失效</Select.Option>
+                <Select.Option value="已被修改">已被修改</Select.Option>
+                <Select.Option value="部分失效">部分失效</Select.Option>
+                <Select.Option value="尚未生效">尚未生效</Select.Option>
+              </Select>
             </div>
           </div>
         )}
         {mode === "vector" && (
           <div>
-            <label className="text-[11px]">案情描述（自然语言）</label>
-            <textarea
+            <label className="text-sm" htmlFor="matter-case-search-vector">案情描述（自然语言）</label>
+            <TextArea id="matter-case-search-vector"
               value={vectorQuery}
-              onChange={(e) => setVectorQuery(e.target.value)}
+              onChange={setVectorQuery}
               placeholder="如：被告借款 50 万元到期未还，原告主张违约金和资金占用费"
               rows={3}
-              className="mt-1 w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground"
+              className="mt-1 w-full"
             />
           </div>
         )}
@@ -407,9 +359,9 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
           </label>
           <div className="mt-1.5 flex flex-wrap gap-1">
             {PROVINCES.map((p) => (
-              <button
+              <Button theme="outline" type="primary" size="small"
                 key={p}
-                type="button"
+                htmlType="button"
                 onClick={() => toggleProvince(p)}
                 className={cn(
                   "rounded-full border px-2 py-0.5 text-[11px] transition-colors",
@@ -419,7 +371,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
                 )}
               >
                 {p}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -429,9 +381,9 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
             <label className="text-[11px]">文书种类</label>
             <div className="mt-1.5 flex flex-wrap gap-1">
               {WSZL_OPTIONS.map((w) => (
-                <button
+                <Button theme="outline" type="primary" size="small"
                   key={w}
-                  type="button"
+                  htmlType="button"
                   onClick={() => toggleWszl(w)}
                   className={cn(
                     "rounded-full border px-2 py-0.5 text-[11px]",
@@ -441,7 +393,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
                   )}
                 >
                   {w}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -529,13 +481,13 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
                   </div>
                   <div className="shrink-0 flex items-center gap-1.5">
                     {savedIds.has(c.id) ? (
-                      <span className="inline-flex items-center gap-1 rounded-md border border-[var(--green-line)] bg-[var(--green-bg)] px-2 py-1 text-[11px] text-[var(--green)]">
+                      <span className="inline-flex items-center gap-1 rounded-md border border-[var(--semi-color-success-light-active)] bg-[var(--semi-color-success-light-default)] px-2 py-1 text-[11px] text-[var(--semi-color-success)]">
                         <Check className="h-3 w-3" />
                         已存
                       </span>
                     ) : (
-                      <button
-                        type="button"
+                      <Button theme="outline" type="primary" size="small"
+                        htmlType="button"
                         onClick={() => handleSave(c)}
                         disabled={savingId === c.id}
                         className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[11px] text-foreground hover:bg-popover hover:text-primary disabled:opacity-50"
@@ -547,7 +499,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
                           <BookmarkPlus className="h-3 w-3" />
                         )}
                         存档
-                      </button>
+                      </Button>
                     )}
                     <a
                       href={c.detailUrl}
@@ -584,7 +536,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
                   <div className="flex-1 overflow-hidden">
                     <div className="flex items-baseline gap-2">
                       <span className="text-sm font-medium leading-snug">{c.title}</span>
-                      <span className="shrink-0 rounded border border-[var(--violet-line)] bg-[var(--violet-bg)] px-1 py-0.5 text-[10px] text-[var(--violet)]">
+                      <span className="shrink-0 rounded border border-[var(--semi-color-secondary-light-active)] bg-[var(--semi-color-secondary-light-default)] px-1 py-0.5 text-[10px] text-[var(--semi-color-secondary)]">
                         相似度 {c.score.toFixed(2)}
                       </span>
                     </div>
@@ -613,13 +565,13 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
                   </div>
                   <div className="shrink-0 flex items-center gap-1.5">
                     {savedIds.has(c.scid) ? (
-                      <span className="inline-flex items-center gap-1 rounded-md border border-[var(--green-line)] bg-[var(--green-bg)] px-2 py-1 text-[11px] text-[var(--green)]">
+                      <span className="inline-flex items-center gap-1 rounded-md border border-[var(--semi-color-success-light-active)] bg-[var(--semi-color-success-light-default)] px-2 py-1 text-[11px] text-[var(--semi-color-success)]">
                         <Check className="h-3 w-3" />
                         已存
                       </span>
                     ) : (
-                      <button
-                        type="button"
+                      <Button theme="outline" type="primary" size="small"
+                        htmlType="button"
                         onClick={() => handleSaveVector(c)}
                         disabled={savingId === c.scid}
                         className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[11px] text-foreground hover:bg-popover hover:text-primary disabled:opacity-50"
@@ -631,7 +583,7 @@ export function CaseSearchPanel({ matterId, matterCategory, defaultCauseName, pr
                           <BookmarkPlus className="h-3 w-3" />
                         )}
                         存档
-                      </button>
+                      </Button>
                     )}
                     <a
                       href={c.detailUrl}

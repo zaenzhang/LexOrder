@@ -1,5 +1,6 @@
 "use client";
 
+import { Disclosure } from "@/components/patterns/disclosure";
 import { Button, Checkbox, Form, Input, Select, TextArea, Toast } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -108,8 +109,7 @@ function McpServiceEditor({ config, initiallyOpen = false, onSaved, onCancel }: 
     });
   }
   return (
-    <details className="py-3" open={onCancel || initiallyOpen ? true : undefined}>
-      <summary className="flex cursor-pointer flex-wrap items-center gap-3 text-sm"><span className="font-medium">{config.name || "新建自定义服务"}</span><span className="text-xs text-muted-foreground">{MCP_STATE_LABELS[state]}</span></summary>
+    <Disclosure className="py-3" defaultOpen={onCancel || initiallyOpen ? true : undefined} heading={<><span className="font-medium">{config.name || "新建自定义服务"}</span><span className="text-xs text-muted-foreground">{MCP_STATE_LABELS[state]}</span></>}>
       <fieldset disabled={pending} className="mt-4 min-w-0 space-y-4">
         {preset && <p className="text-xs text-muted-foreground">{preset.note} <a href={preset.documentation} target="_blank" rel="noreferrer" className="text-primary underline">官方说明</a></p>}
         {config.configurationError && <p role="alert" className="text-sm text-destructive">{config.configurationError}</p>}
@@ -137,7 +137,7 @@ function McpServiceEditor({ config, initiallyOpen = false, onSaved, onCancel }: 
         {dirty && <p className="text-xs text-muted-foreground">请先保存变更，再对已保存的地址执行检查或检索。</p>}
         <dl className="flex flex-wrap gap-x-6 gap-y-2 text-xs">{(["connection", "tools", "query"] as const).map(phase => <div key={phase}><dt className="text-muted-foreground">{PHASE_LABELS[phase]}</dt><dd>{checks[phase] ? `${checks[phase]!.ok ? "通过" : "失败"} · ${shMonthDayTime(checks[phase]!.at)}` : "未验证"}{checks[phase]?.code && <span className="block text-destructive">{MCP_FAILURE_LABELS[checks[phase]!.code!]}</span>}</dd></div>)}</dl>
         {message && <p role="status" className={`text-sm ${message.ok ? "text-muted-foreground" : "text-destructive"}`}>{message.text}</p>}
-        {tools.length > 0 && <details className="text-sm"><summary className="cursor-pointer">查看已发现的工具（{tools.length}）</summary><div className="mt-2 divide-y rounded-md border px-3">{tools.map(item => <details key={item.name} className="py-2"><summary className="cursor-pointer break-all font-mono text-xs">{item.name}{item.title ? ` · ${item.title}` : ""}</summary><p className="mt-2 whitespace-pre-wrap text-xs">{item.description || "服务未提供说明"}</p><pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap break-all rounded bg-muted p-2 text-xs">{JSON.stringify(item.inputSchema, null, 2)}</pre></details>)}</div></details>}
+        {tools.length > 0 && <Disclosure className="text-sm" heading={<>查看已发现的工具（{tools.length}）</>}><div className="mt-2 divide-y rounded-md border px-3">{tools.map(item => <Disclosure key={item.name} className="py-2" heading={<>{item.name}{item.title ? ` · ${item.title}` : ""}</>}><p className="mt-2 whitespace-pre-wrap text-xs">{item.description || "服务未提供说明"}</p><pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap break-all rounded bg-muted p-2 text-xs">{JSON.stringify(item.inputSchema, null, 2)}</pre></Disclosure>)}</div></Disclosure>}
         {config.allowedTools.length > 0 && <div className="space-y-3 border-t pt-4">
           <h3 className="text-sm font-medium">手动检索</h3>
           <div className="space-y-1.5">
@@ -146,7 +146,7 @@ function McpServiceEditor({ config, initiallyOpen = false, onSaved, onCancel }: 
               {config.allowedTools.map(name => <Select.Option key={name} value={name}>{name}</Select.Option>)}
             </Select>
           </div>
-          {selected && <details className="text-xs"><summary className="cursor-pointer">该工具声明的输入格式</summary><pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap break-all rounded bg-muted p-2">{JSON.stringify(selected.inputSchema, null, 2)}</pre></details>}
+          {selected && <Disclosure className="text-xs" heading="该工具声明的输入格式"><pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap break-all rounded bg-muted p-2">{JSON.stringify(selected.inputSchema, null, 2)}</pre></Disclosure>}
           <div><Form.Label name={`${prefix}-args`}>本次检索参数（JSON 对象）</Form.Label><TextArea id={`${prefix}-args`} rows={4} value={argumentsJson} onChange={value => setArgumentsJson(value)} className="font-mono text-xs" /><p className="mt-1 text-xs text-muted-foreground">只发送此处本次输入的参数；不会自动读取或上传案件、客户、材料或历史对话。</p></div>
           <Button theme="outline" disabled={!canOperate || !tool} onClick={() => run("query")} loading={busy === "query"}>{busy === "query" ? "检索中…" : "执行本次检索"}</Button>
         </div>}
@@ -158,6 +158,6 @@ function McpServiceEditor({ config, initiallyOpen = false, onSaved, onCancel }: 
           <p className="text-xs text-muted-foreground">来源由服务提供，需核对原文与适用性；此结果尚未写入证据、事项上下文或确认结论。</p>
         </div>}
       </fieldset>
-    </details>
+    </Disclosure>
   );
 }

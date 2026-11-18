@@ -1,5 +1,6 @@
 "use client";
 
+import { Disclosure } from "@/components/patterns/disclosure";
 import { Button, Tag } from "@douyinfe/semi-ui";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -17,16 +18,15 @@ export function ContextInputsSummary({ summary, matterId }: { summary?: ContextI
     <h3 className="font-medium">采用的目标与客户指示</h3>
     {!summary.inputs.length && !summary.unavailable && <p className="text-xs text-muted-foreground">未记录采用关系，尚未检查。</p>}
     {summary.unavailable && <p className="text-sm text-muted-foreground">部分采用记录当前不可读取。</p>}
-    {summary.inputs.map(row => <details key={row.selection.recordId} className="rounded-md border p-3">
-      <summary className="cursor-pointer">{contextKindLabels[row.kind]} · 第 {row.version} 版
+    {summary.inputs.map(row => <Disclosure key={row.selection.recordId} heading={<>{contextKindLabels[row.kind]} · 第 {row.version} 版
         {row.historical && <span className="ml-2 rounded-full border px-2 py-0.5 text-xs">采用历史版</span>}
-        {row.changed && <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">采用后发生变化，待核对</span>}</summary>
+        {row.changed && <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs">采用后发生变化，待核对</span>}</>}>
       <p className="mt-2 whitespace-pre-wrap break-words">{row.content}</p>
       <p className="mt-2 text-xs text-muted-foreground">来源：{row.sourceDescription}</p>
       <p className="mt-1 text-xs text-muted-foreground">采用时：{confirmation(row.adoptedConfirmedAt)}</p>
       {matterId && <Link className="mt-2 inline-block text-xs text-primary" target="_blank" rel="noopener noreferrer"
         href={`/matters/${encodeURIComponent(matterId)}?view=archive&contextRecord=${encodeURIComponent(row.selection.recordId)}`}>查看这版记录</Link>}
-    </details>)}
+    </Disclosure>)}
   </section>;
 }
 
@@ -101,7 +101,7 @@ function Picker({ matterId, value, onChange, initial, disabled = false }: Props)
         <div className="text-sm">{row ? `${contextKindLabels[row.kind]} · 第 ${row.version} 版` : "已选固定记录"}
           {selection.recordId !== selection.expectedCurrentRecordId && <Tag className="ml-2" color="grey" type="ghost">采用历史版</Tag>}
           {changed && <Tag className="ml-2" color="grey">已有变化，请重新核对</Tag>}</div>
-        {row && <details><summary className="cursor-pointer text-xs">查看选中内容</summary><p className="mt-2 whitespace-pre-wrap break-words text-sm">{row.content}</p></details>}
+        {row && <Disclosure heading="查看选中内容"><p className="mt-2 whitespace-pre-wrap break-words text-sm">{row.content}</p></Disclosure>}
         {unavailable.includes(selection.recordId) && <p className="text-xs text-muted-foreground">这版记录读取未完成或当前不可读取，固定选择已保留。</p>}
         <p className="text-xs text-muted-foreground">所见确认：{confirmation(selection.expectedConfirmedAt)}</p>
         <div className="flex gap-2"><Button disabled={disabled || pending} onClick={() => reread(selection.recordId)} htmlType="button" type="tertiary" theme="borderless" size="small">重新读取这版</Button>

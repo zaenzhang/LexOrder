@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Toast } from "@douyinfe/semi-ui";
+import { Table, Tag, Button, Toast } from "@douyinfe/semi-ui";
 import { useRef, useState, useTransition } from "react";
 import { Download, Upload, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet } from "lucide-react";
 
@@ -108,7 +108,7 @@ export function MatterImportView() {
               预览
               <span className="ml-2 text-[12px] font-normal text-muted-foreground">
                 共 {preview.total} 行 · 可导入{" "}
-                <span className="text-[var(--green)]">{preview.validCount}</span> · 有误{" "}
+                <span className="text-[var(--semi-color-success)]">{preview.validCount}</span> · 有误{" "}
                 <span className={preview.total - preview.validCount > 0 ? "text-destructive" : ""}>
                   {preview.total - preview.validCount}
                 </span>
@@ -126,48 +126,26 @@ export function MatterImportView() {
           </header>
 
           <div className="overflow-x-auto rounded-md border border-border">
-            <table className="w-full text-[12px]">
-              <thead>
-                <tr className="border-b border-border bg-muted/40 text-left">
-                  <th className="whitespace-nowrap px-2 py-1.5 font-medium">行</th>
-                  <th className="whitespace-nowrap px-2 py-1.5 font-medium">校验</th>
-                  {preview.columns.map((c) => (
-                    <th key={c.key} className="whitespace-nowrap px-2 py-1.5 font-medium">
-                      {c.header}
-                      {c.required && <span className="text-destructive">*</span>}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {preview.rows.map((r) => (
-                  <tr
-                    key={r.rowNo}
-                    className={r.valid ? "border-b border-border" : "border-b border-border bg-destructive/5"}
-                  >
-                    <td className="px-2 py-1.5 font-mono text-muted-foreground">{r.rowNo}</td>
-                    <td className="px-2 py-1.5">
-                      {r.valid ? (
-                        <CheckCircle2 className="h-3.5 w-3.5 text-[var(--green)]" />
-                      ) : (
-                        <span
-                          className="inline-flex items-center gap-1 text-destructive"
-                          title={r.errors.join("；")}
-                        >
-                          <AlertCircle className="h-3.5 w-3.5" />
-                          <span className="max-w-[220px] truncate">{r.errors.join("；")}</span>
-                        </span>
-                      )}
-                    </td>
-                    {preview.columns.map((c) => (
-                      <td key={c.key} className="whitespace-nowrap px-2 py-1.5">
-                        {r.raw[c.key] || <span className="text-muted-foreground/40">—</span>}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <Table<(typeof preview.rows)[number]>
+              size="small"
+              pagination={false}
+              rowKey="rowNo"
+              dataSource={preview.rows}
+              scroll={{ x: 320 + preview.columns.length * 120, y: 480 }}
+              columns={[
+                { title: "行", dataIndex: "rowNo", width: 64 },
+                { title: "校验", key: "validation", width: 256, render: (_, row) => row.valid
+                  ? <Tag color="green">通过</Tag>
+                  : <span className="block truncate text-destructive" title={row.errors.join("；")}>{row.errors.join("；")}</span> },
+                ...preview.columns.map(column => ({
+                  title: <>{column.header}{column.required && <span className="text-destructive"> *</span>}</>,
+                  key: column.key,
+                  width: 120,
+                  render: (_: unknown, row: (typeof preview.rows)[number]) =>
+                    <span className="block truncate" title={row.raw[column.key]}>{row.raw[column.key] || "—"}</span>,
+                })),
+              ]}
+            />
           </div>
         </section>
       )}
@@ -177,7 +155,7 @@ export function MatterImportView() {
         <section className="ll-surface rounded-lg border border-border p-5">
           <header className="mb-3 flex items-center justify-between">
             <h3 className="text-[14px] font-medium">
-              导入结果 · 成功 <span className="text-[var(--green)]">{result.succeeded.length}</span> · 失败{" "}
+              导入结果 · 成功 <span className="text-[var(--semi-color-success)]">{result.succeeded.length}</span> · 失败{" "}
               <span className={result.failed.length > 0 ? "text-destructive" : ""}>{result.failed.length}</span>
             </h3>
             <Button theme="borderless" type="tertiary" size="small" onClick={reset}>
@@ -192,14 +170,14 @@ export function MatterImportView() {
                 {result.succeeded.map((s) => (
                   <li key={s.rowNo} className="space-y-0.5">
                     <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-3 w-3 shrink-0 text-[var(--green)]" />
+                      <CheckCircle2 className="h-3 w-3 shrink-0 text-[var(--semi-color-success)]" />
                       <span className="font-mono text-muted-foreground">第{s.rowNo}行</span>
                       <span className="font-mono">{s.internalCode}</span>
                       {s.firmCaseNo && <span className="font-mono text-muted-foreground">{s.firmCaseNo}</span>}
                       <span className="truncate">{s.title}</span>
                     </div>
                     {s.causeDowngradeReason && (
-                      <div className="ml-5 flex items-start gap-1.5 text-[11px] text-[var(--amber)]">
+                      <div className="ml-5 flex items-start gap-1.5 text-[11px] text-[var(--semi-color-warning)]">
                         <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
                         <span>
                           案由已降级为自由文本（{s.causeDowngradeReason}），案件已导入，请事后人工核对案由

@@ -1,5 +1,6 @@
 "use client";
 
+import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
 import { Button, Checkbox, TextArea } from "@douyinfe/semi-ui";
 import { useEffect, useState, type ReactNode } from "react";
 import { Check, Paperclip } from "lucide-react";
@@ -51,7 +52,7 @@ export function IntakeApprovalDialog({ detail, intakeDetail, note, onNoteChange,
     <ReviewDialogContent
       title={detail.title}
       eyebrow="收案审批"
-      status={<span className={`badge ${detail.task ? "b-amber" : detail.status === "REJECTED" ? "b-outline-red" : "b-green"}`}><span className="bdot" />{APPROVAL_STATUS_LABELS[detail.status] ?? "状态待核实"}</span>}
+      status={<SemiTag size="small" color={detail.task ? "amber" : detail.status === "REJECTED" ? "red" : "green"}>{APPROVAL_STATUS_LABELS[detail.status] ?? "状态待核实"}</SemiTag>}
       description={<><span>申请人 {detail.requester}</span><span>· {detail.submittedAt ? `提交于 ${dateText(detail.submittedAt)}` : "提交时间未记录"}</span>{detail.task && waited !== null ? <span>· 已等待 {waited} 天</span> : null}{returnControl}</>}
       summary={<>
         <ReviewSummaryItem k="案件类别" v={[value("案件类别"), value("首个程序 / 审级")].filter(v => v !== "未填写").join(" · ") || "未填写"} />
@@ -67,7 +68,7 @@ export function IntakeApprovalDialog({ detail, intakeDetail, note, onNoteChange,
       tabs={[
         { id: "overview", label: "申请资料", content: <IntakeApprovalContent detail={intakeDetail} view="overview" onOpenConflicts={() => setTab("conflicts")} /> },
         { id: "conflicts", label: "冲突核查", count: hitCount, countTone: "red", content: <IntakeApprovalContent detail={intakeDetail} view="conflicts" /> },
-        { id: "attachments", label: "附件", count: detail.attachments.length, content: detail.attachments.length ? <div className="rv-section"><div className="rv-sec-head"><Paperclip className="h-[14px] w-[14px] text-[var(--teal)]" />申请附件</div>{detail.attachments.map(file => <ReviewFileRow key={file.id} id={file.id} name={file.name} readable={file.readable} />)}</div> : <ReviewEmpty icon={<Paperclip />} title="申请人尚未上传附件" desc="可结合申请资料判断是否需要退回补充。" /> },
+        { id: "attachments", label: "附件", count: detail.attachments.length, content: detail.attachments.length ? <div className="rv-section"><div className="rv-sec-head"><Paperclip className="h-[14px] w-[14px] text-[var(--semi-color-primary)]" />申请附件</div>{detail.attachments.map(file => <ReviewFileRow key={file.id} id={file.id} name={file.name} readable={file.readable} />)}</div> : <ReviewEmpty icon={<Paperclip />} title="申请人尚未上传附件" desc="可结合申请资料判断是否需要退回补充。" /> },
         { id: "history", label: "处理记录", count: detail.history.length, content: <ReviewHistory items={detail.history} emptyText={detail.status === "PENDING" ? "尚无处理记录" : "此记录未保存逐次处理历史"} emptyDesc={detail.status === "PENDING" ? "处理后将在这里显示审批意见与结果。" : "当前结果见申请状态。"} /> }
       ]}
       sidebarTitle={detail.task ? "审批" : "申请进度"}

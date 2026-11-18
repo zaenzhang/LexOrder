@@ -3,6 +3,7 @@
 /**
  * 证件号加密迁移卡（P1 §三 存量回填入口，管理后台概览页）。
  */
+import { Button } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import { KeyRound, Loader2 } from "lucide-react";
 import { backfillClientIdEncryption } from "@/server/clients/backfill-crypto";
@@ -32,7 +33,7 @@ export function ClientIdCryptoCard({ initialStats }: { initialStats: Stats }) {
             客户总数 {stats.total} · 已加密 {stats.sealed} · 待迁移 {stats.pending}
           </div>
         </div>
-        <button
+        <Button theme="outline" type="tertiary" size="default" contentClassName="inline-flex items-center gap-1.5"
           onClick={() => {
             setError(null);
             startTransition(async () => {
@@ -46,11 +47,11 @@ export function ClientIdCryptoCard({ initialStats }: { initialStats: Stats }) {
             });
           }}
           disabled={pending || stats.pending === 0}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-3 py-1.5 text-[13px] hover:bg-accent disabled:opacity-50"
+          className="shrink-0"
         >
           {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {stats.pending > 0 ? "迁移一批（50）" : "无待迁移"}
-        </button>
+        </Button>
       </div>
       {lastRun && (
         <div className="mt-2 text-[12px] text-muted-foreground">

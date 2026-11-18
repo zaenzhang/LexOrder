@@ -10,7 +10,7 @@ import { approvalHref } from "@/lib/approvals/workspace";
 import { matterHref } from "@/lib/matters/route";
 import { cn, formatDateTime } from "@/lib/utils";
 import { taskProgressLabels } from "@/lib/tasks/workflow";
-import { Tabs, Tag } from "@douyinfe/semi-ui";
+import { Card, Empty, Tabs, Tag } from "@douyinfe/semi-ui";
 import type { WorkQueue } from "@/server/dashboard/actions";
 import type { AlertItem } from "./alerts-list";
 import { shParts } from "@/lib/ui/sh-time";
@@ -30,14 +30,7 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
   const fmt = (d: Date | null) => (d ? `${shParts(d).m}月${shParts(d).d}日` : "");
 
   return (
-    <div className="card" style={{ display: "flex", flexDirection: "column" }}>
-      <div className="panel-head">
-        <div className="panel-title">
-          <SquareCheck className="ic" strokeWidth={1.8} />
-          待我处理
-        </div>
-      </div>
-
+    <Card title={<h2 className="flex items-center gap-2"><SquareCheck size={16} aria-hidden />待我处理</h2>}>
       <Tabs
         type="button"
         size="small"
@@ -48,26 +41,25 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
           itemKey: key,
           tab: `${label} ${(key === "tasks" && !queue.tasksAvailable) || (key === "followups" && !queue.followUps.available) ? "—" : count}`
         }))}
-        tabBarStyle={{ padding: "0 16px 12px" }}
-        style={{ flex: 1 }}
+        tabBarStyle={{ marginBottom: 8 }}
       >
         {seg === "approvals" ? (
           queue.approvals.length === 0 ? (
-            <div className="empty mo-empty-compact"><div className="empty-ic"><SquareCheck /></div><div className="mo-empty-title">暂无待你审批的申请</div></div>
+            <Empty description="暂无待你审批的申请" />
           ) : (
             queue.approvals.map((a) => {
               const urgent = a.waitDays !== null && a.waitDays >= 2;
               return (
-                <Link key={a.action + a.id} href={approvalHref(a.action as ApprovalAction, a.id)} className="todo-item">
+                <Link key={a.action + a.id} href={approvalHref(a.action as ApprovalAction, a.id)} className="flex items-start gap-3 rounded px-2 py-3 hover:bg-[var(--semi-color-fill-0)]">
                   <span className={cn("type-ic", urgent ? "t-red" : "t-bronze")} aria-hidden>
                     <Stamp strokeWidth={2} />
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="todo-title truncate">{ACTION_LABELS[a.action as ApprovalAction]} · {a.title}</div>
-                    <div className="todo-meta">
+                    <div className="textext-sm font-medium truncate">{ACTION_LABELS[a.action as ApprovalAction]} · {a.title}</div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-[var(--semi-color-text-2)]">
                       <span>申请人 {a.requester}</span>
-                      {a.matter ? (<><span className="todo-sep" /><span className="truncate">{a.matter}</span></>) : null}
-                      <span className="todo-sep" />
+                      {a.matter ? (<><span className="h-0.5 w-0.5 shrink-0 rounded-full bg-[var(--semi-color-text-2)]" /><span className="truncate">{a.matter}</span></>) : null}
+                      <span className="h-0.5 w-0.5 shrink-0 rounded-full bg-[var(--semi-color-text-2)]" />
                       <span>{a.task === "issue" ? "待开票" : a.task === "stamp" ? "待盖章回填" : "待审批"}</span>
                     </div>
                   </div>
@@ -80,23 +72,23 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
 
         {seg === "tasks" ? (
           !queue.tasksAvailable ? (
-            <div className="empty mo-empty-compact"><div className="mo-empty-title">当前资格不能读取任务详情</div></div>
+            <Empty description="当前资格不能读取任务详情" />
           ) : queue.tasks.length === 0 ? (
-            <div className="empty mo-empty-compact"><div className="mo-empty-title">暂无指派给你的未完成任务</div></div>
+            <Empty description="暂无指派给你的未完成任务" />
           ) : (
             queue.tasks.map((t) => (
-              <Link key={t.id} href={matterHref({ internalCode: t.matterCode }, `?view=work&workPane=tasks${t.hasResponsibility ? `&task=${encodeURIComponent(t.id)}` : ""}`)} className="todo-item">
+              <Link key={t.id} href={matterHref({ internalCode: t.matterCode }, `?view=work&workPane=tasks${t.hasResponsibility ? `&task=${encodeURIComponent(t.id)}` : ""}`)} className="flex items-start gap-3 rounded px-2 py-3 hover:bg-[var(--semi-color-fill-0)]">
                 <span className={cn("type-ic", t.overdue ? "t-red" : "t-teal")} aria-hidden>
                   <ListChecks strokeWidth={2} />
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="todo-title truncate">{t.title}</div>
-                  <div className="todo-meta">
+                  <div className="textext-sm font-medium truncate">{t.title}</div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-[var(--semi-color-text-2)]">
                     <span className="code">{t.matterCode}</span>
-                    <span className="todo-sep" />
+                    <span className="h-0.5 w-0.5 shrink-0 rounded-full bg-[var(--semi-color-text-2)]" />
                     <span className="truncate">{t.matterTitle}</span>
-                    {t.dueAt ? (<><span className="todo-sep" /><span>{fmt(t.dueAt)} 截止</span></>) : null}
-                    {t.priority >= 2 ? (<><span className="todo-sep" /><span>紧急</span></>) : null}
+                    {t.dueAt ? (<><span className="h-0.5 w-0.5 shrink-0 rounded-full bg-[var(--semi-color-text-2)]" /><span>{fmt(t.dueAt)} 截止</span></>) : null}
+                    {t.priority >= 2 ? (<><span className="h-0.5 w-0.5 shrink-0 rounded-full bg-[var(--semi-color-text-2)]" /><span>紧急</span></>) : null}
                   </div>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {taskProgressLabels(t.progress).map(label => <Tag key={label} color="grey" style={{ height: "auto", whiteSpace: "normal" }}>{label}</Tag>)}
@@ -110,25 +102,25 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
           )
         ) : null}
 
-        {seg === "followups" && (!queue.followUps.available ? <p className="p-4 text-sm text-muted-foreground">当前资格不能读取客户跟进</p>
-          : queue.followUps.items.length === 0 ? <p className="p-4 text-sm text-muted-foreground">暂无本人待跟进</p>
-          : queue.followUps.items.map(item => <Link key={item.id} href={personalFollowUpHref({}, { followUpId: item.id, clientId: item.client.id })} className="todo-item">
+        {seg === "followups" && (!queue.followUps.available ? <p className="p-4 textext-sm text-muted-foreground">当前资格不能读取客户跟进</p>
+          : queue.followUps.items.length === 0 ? <p className="p-4 textext-sm text-muted-foreground">暂无本人待跟进</p>
+          : queue.followUps.items.map(item => <Link key={item.id} href={personalFollowUpHref({}, { followUpId: item.id, clientId: item.client.id })} className="flex items-start gap-3 rounded px-2 py-3 hover:bg-[var(--semi-color-fill-0)]">
             <span className={cn("type-ic", item.overdue ? "t-red" : "t-teal")} aria-hidden><CalendarClock /></span>
-            <div className="min-w-0 flex-1"><div className="todo-title truncate">{item.title}</div><div className="todo-meta"><span>{item.client.name}</span><span>{formatDateTime(item.dueAt)}</span></div></div>
+            <div className="min-w-0 flex-1"><div className="textext-sm font-medium truncate">{item.title}</div><div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-[var(--semi-color-text-2)]"><span>{item.client.name}</span><span>{formatDateTime(item.dueAt)}</span></div></div>
             <Tag color={item.overdue ? "red" : "grey"}>{item.overdue ? "已逾期" : "待跟进"}</Tag>
           </Link>))}
         {seg === "alerts" ? (
           reminders.length === 0 ? (
-            <div className="empty mo-empty-compact"><div className="mo-empty-title">暂无保全到期与法院短信提醒</div></div>
+            <Empty description="暂无保全到期与法院短信提醒" />
           ) : (
             reminders.map((a) => (
-              <Link key={a.id} href={a.href} className="todo-item">
+              <Link key={a.id} href={a.href} className="flex items-start gap-3 rounded px-2 py-3 hover:bg-[var(--semi-color-fill-0)]">
                 <span className={cn("type-ic", a.tone === "danger" ? "t-red" : a.tone === "warn" ? "t-amber" : "t-slate")} aria-hidden>
                   <AlertTriangle strokeWidth={2} />
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="todo-title truncate">{a.title}</div>
-                  <div className="todo-meta"><span className="truncate">{a.detail}</span></div>
+                  <div className="textext-sm font-medium truncate">{a.title}</div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-[var(--semi-color-text-2)]"><span className="truncate">{a.detail}</span></div>
                 </div>
                 <Tag color={a.tone === "danger" ? "red" : a.tone === "warn" ? "orange" : "grey"}>{a.source === "sms" ? "法院短信" : "保全"}</Tag>
               </Link>
@@ -137,14 +129,14 @@ export function WorkQueueCard({ queue, alerts }: { queue: WorkQueue; alerts: Ale
         ) : null}
       </Tabs>
 
-      <div className="panel-foot" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span className="t-xs t-mute">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--semi-color-border)] pt-3">
+        <span className="text-xs text-[var(--semi-color-text-2)]">
           {seg === "approvals" ? `共 ${queue.approvalTotal} 件审批${queue.tasksAvailable ? ` · ${queue.taskTotal} 项任务` : ""}` : seg === "tasks" ? queue.tasksAvailable ? `本人共 ${queue.taskTotal} 项任务，逾期任务优先` : "任务详情当前不可读取" : seg === "followups" ? queue.followUps.available ? `本人共 ${queue.followUps.total} 项待跟进，按时间先后显示前五项` : "客户跟进当前不可读取" : "保全到期 · 法院短信"}
         </span>
-        <Link href={seg === "approvals" ? "/approvals" : seg === "tasks" ? "/schedule#work-responsibilities" : seg === "followups" ? "/clients/follow-ups" : "/inbox"} className="t-sm" style={{ color: "var(--teal-deep)", fontWeight: 550 }}>
+        <Link href={seg === "approvals" ? "/approvals" : seg === "tasks" ? "/schedule#work-responsibilities" : seg === "followups" ? "/clients/follow-ups" : "/inbox"} className="text-sm" style={{ color: "var(--semi-color-primary)", fontWeight: 550 }}>
           {seg === "approvals" ? "进入审批工作台 →" : seg === "tasks" ? "打开任务责任总览 →" : seg === "followups" ? "查看全部待跟进 →" : "进入法院短信 →"}
         </Link>
       </div>
-    </div>
+    </Card>
   );
 }

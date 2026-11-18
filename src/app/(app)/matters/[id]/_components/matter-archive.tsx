@@ -1,5 +1,8 @@
 "use client";
 
+import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
+import { Button as SemiButton } from "@douyinfe/semi-ui";
+
 /**
  * 案卷工作台「案件档案」页签（默认首屏，docs/UI-MATTER-DOSSIER-PLAN.md 第二版）：
  * 基本信息 → 当事人完整卡片 → 本程序信息 → 委托与收费 → 承办团队 → 自定义字段。
@@ -170,10 +173,10 @@ export function MatterArchive({
   const outcome = currentProcedure?.outcomeNote?.trim() || (currentProcedure?.outcome ? PROCEDURE_OUTCOME_LABEL[currentProcedure.outcome] : "");
   const procLabel = currentProcedure ? currentProcedure.customLabel ?? procedureTypeLabel[currentProcedure.type] : null;
   const editButton = (section: "matter" | "procedure" | "parties", label: string) => (
-    <button type="button" className="btn btn-ghost btn-sm" onClick={() => onEdit(section)}>
+    <SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={() => onEdit(section)}>
       <Pencil />
       {label}
-    </button>
+    </SemiButton>
   );
 
   // 本程序诉讼地位：一个当事人在同一程序可有多个地位（如被告兼反诉原告）
@@ -276,7 +279,7 @@ export function MatterArchive({
                   {currentProcedure.presidingJudge?.trim() ? (
                     <span>
                       {currentProcedure.presidingJudge}
-                      {currentProcedure.presidingJudgeContact ? <span className="ml-2 font-mono text-[12px] font-normal text-[var(--t-secondary)]">{currentProcedure.presidingJudgeContact}</span> : null}
+                      {currentProcedure.presidingJudgeContact ? <span className="ml-2 font-mono text-[12px] font-normal text-[var(--semi-color-text-1)]">{currentProcedure.presidingJudgeContact}</span> : null}
                     </span>
                   ) : null}
                 </FieldItem>
@@ -284,7 +287,7 @@ export function MatterArchive({
                   {currentProcedure.judgeAssistant?.trim() ? (
                     <span>
                       {currentProcedure.judgeAssistant}
-                      {currentProcedure.judgeAssistantContact ? <span className="ml-2 font-mono text-[12px] font-normal text-[var(--t-secondary)]">{currentProcedure.judgeAssistantContact}</span> : null}
+                      {currentProcedure.judgeAssistantContact ? <span className="ml-2 font-mono text-[12px] font-normal text-[var(--semi-color-text-1)]">{currentProcedure.judgeAssistantContact}</span> : null}
                     </span>
                   ) : null}
                 </FieldItem>
@@ -299,7 +302,7 @@ export function MatterArchive({
             </Group>
           ) : null}
 
-          <Group icon={Wallet} title="委托与收费" action={<button type="button" className="btn btn-ghost btn-sm" onClick={onOpenFinance}>收付与开票</button>}>
+          <Group icon={Wallet} title="委托与收费" action={<SemiButton htmlType="button" theme="borderless" type="tertiary" onClick={onOpenFinance}>收付与开票</SemiButton>}>
             <FieldGrid cols={2} className="mo-field-grid-auto">
               <FieldItem label="收费方式">{matter.intake?.feeType ? feeTypeLabel[matter.intake.feeType] : null}</FieldItem>
               {canReadFinance ? (
@@ -326,9 +329,9 @@ export function MatterArchive({
                       {billings.map((b) => (
                         <span key={b.id} className="it">
                           <span className="nm">{b.title}</span>
-                          <span className={cn("badge", b.status === "ACTIVE" ? "b-teal" : b.status === "CLOSED" ? "b-slate" : "b-white")}>
+                          <SemiTag size="small" color={b.status === "ACTIVE" ? "teal" : b.status === "CLOSED" ? "grey" : "grey"}>
                             {b.status === "ACTIVE" ? "执行中" : b.status === "CLOSED" ? "已结束" : "草稿"}
-                          </span>
+                          </SemiTag>
                           <span className="amt">{formatCurrency(b.contractAmount)}</span>
                           {b.signedAt ? <span className="mt">{formatDate(b.signedAt)} 签署</span> : null}
                           {b.schedule ? <span className="mt">{b.schedule}</span> : null}
@@ -393,12 +396,12 @@ export function TeamRailCard({ matter, canManage, onManage }: { matter: MatterPa
   return (
     <div className="card">
       <div className="rail-sec-head">
-        <Users className="h-[15px] w-[15px] text-[var(--t-muted)]" strokeWidth={1.8} />
+        <Users className="h-[15px] w-[15px] text-[var(--semi-color-text-2)]" strokeWidth={1.8} />
         承办团队
         {canManage ? (
-          <button type="button" className="link border-0 bg-transparent p-0" onClick={onManage}>
+          <SemiButton theme="borderless" type="primary" size="small" htmlType="button" onClick={onManage}>
             管理承办团队
-          </button>
+          </SemiButton>
         ) : null}
       </div>
       {members.length === 0 ? (
@@ -411,9 +414,9 @@ export function TeamRailCard({ matter, canManage, onManage }: { matter: MatterPa
               <div className="n truncate">{m.name}</div>
               <div className="r truncate">{m.roleName ?? "—"}</div>
             </div>
-            <span className={cn("badge role-tag", m.role === "LEAD" ? "b-teal" : "b-slate")} style={{ fontSize: 10 }}>
+            <SemiTag size="small" color={m.role === "LEAD" ? "teal" : "grey"} className="role-tag">
               {m.role === "LEAD" ? "主办" : m.role === "CO_LEAD" ? "协办" : "助理"}
-            </span>
+            </SemiTag>
           </div>
         ))
       )}

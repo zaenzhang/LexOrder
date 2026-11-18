@@ -1,13 +1,13 @@
 "use client";
 
-import { Button, Input, Notification } from "@douyinfe/semi-ui";
+import { Button, Input, Notification, Pagination } from "@douyinfe/semi-ui";
 
 import { useState, useTransition, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Search, X } from "lucide-react";
 import type { Client, ClientType, Contact } from "@prisma/client";
-import { PageHeader, Pager, Segmented } from "@/components/patterns/moan";
+import { PageHeader, WorkspaceTabs } from "@/components/patterns/moan";
 import { ClientSheet } from "./client-sheet";
 import { ClientsTable } from "./clients-table";
 import { useTopbarAction } from "@/components/layout/topbar-action";
@@ -111,7 +111,6 @@ export function ClientsView({ initialData, initialFilters, canCreate, editableCl
     });
   }
 
-  const totalPages = Math.max(1, Math.ceil(initialData.total / initialData.pageSize));
   const hrefFor = (page: number) => clientListHref({ ...initialFilters, page });
   const filtersChanged = search !== initialFilters.search || type !== initialFilters.type;
   // Displayed rows/pagination still belong to initialFilters. A changed return query starts at page 1.
@@ -127,7 +126,7 @@ export function ClientsView({ initialData, initialFilters, canCreate, editableCl
       />
       <Link href="/clients/follow-ups" className="mb-3 inline-flex text-sm font-medium text-primary">查看本人待跟进 →</Link>
 
-      <Segmented
+      <WorkspaceTabs
         className="mb-3"
         items={TYPE_TABS}
         value={type}
@@ -151,8 +150,12 @@ export function ClientsView({ initialData, initialFilters, canCreate, editableCl
       <div className="card" style={{ overflow: "hidden" }}>
         <ClientsTable items={initialData.items} onEdit={handleEdit} canCreate={canCreate} editableClientIds={editableClientIds} loadingClientId={loadingClientId} returnTo={returnTo} />
         {initialData.total > 0 ? (
-          <div className="border-t border-[var(--bd-hair)]">
-            <Pager page={initialData.page} totalPages={totalPages} hrefFor={hrefFor} summary={<>第 {from}–{to} 条，共 {initialData.total} 条</>} />
+          <div className="border-t border-[var(--semi-color-border)]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--semi-color-border)] px-4 py-3">
+              <span className="text-sm text-muted-foreground">第 {from}–{to} 条，共 {initialData.total} 条</span>
+              <Pagination currentPage={initialData.page} pageSize={initialData.pageSize} total={initialData.total}
+                hideOnSinglePage onPageChange={page => startTransition(() => router.replace(hrefFor(page)))} />
+            </div>
           </div>
         ) : null}
       </div>

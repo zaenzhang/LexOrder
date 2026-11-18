@@ -32,9 +32,9 @@ type Props = {
 };
 
 const confidenceStyle = {
-  HIGH: { label: "高置信", cls: "bg-[var(--green-bg)] text-[var(--green)] border-[var(--green-line)]" },
-  MEDIUM: { label: "中置信", cls: "bg-[var(--amber-bg)] text-[var(--amber)] border-[var(--amber-line)]" },
-  LOW: { label: "低置信", cls: "bg-[var(--bg-hover)] text-[var(--t-muted)] border-[var(--bd-subtle)]" }
+  HIGH: { label: "高置信", cls: "bg-[var(--semi-color-success-light-default)] text-[var(--semi-color-success)] border-[var(--semi-color-success-light-active)]" },
+  MEDIUM: { label: "中置信", cls: "bg-[var(--semi-color-warning-light-default)] text-[var(--semi-color-warning)] border-[var(--semi-color-warning-light-active)]" },
+  LOW: { label: "低置信", cls: "bg-[var(--semi-color-fill-0)] text-[var(--semi-color-text-2)] border-[var(--semi-color-border)]" }
 } as const;
 
 export function CauseAiManualDialog({
@@ -90,7 +90,7 @@ export function CauseAiManualDialog({
       <DialogContent className="max-w-lg gap-0 p-0">
         <DialogHeader className="border-b border-border px-5 py-3">
           <DialogTitle className="flex items-center gap-2 text-base">
-            <Sparkles className="h-4 w-4 text-[var(--violet)]" />
+            <Sparkles className="h-4 w-4 text-[var(--semi-color-secondary)]" />
             AI 案由推荐
           </DialogTitle>
           <DialogDescription className="text-xs">
@@ -140,7 +140,7 @@ export function CauseAiManualDialog({
 
           {/* 结果区 */}
           {error && (
-            <div className="rounded border border-[var(--red-line)] bg-[var(--red-bg)] p-3 text-xs text-[var(--red)]">
+            <div className="rounded border border-[var(--semi-color-danger-light-active)] bg-[var(--semi-color-danger-light-default)] p-3 text-xs text-[var(--semi-color-danger)]">
               {error}
             </div>
           )}
@@ -150,9 +150,9 @@ export function CauseAiManualDialog({
                 const conf = confidenceStyle[c.confidence];
                 const path = [c.cause.l1Name, c.cause.l2Name].filter(Boolean).join(" / ");
                 return (
-                  <button
+                  <Button theme="outline" type="tertiary" size="small" contentClassName="flex w-full min-w-0 flex-col items-start gap-1 text-left"
                     key={c.cause.id}
-                    type="button"
+                    htmlType="button"
                     onClick={() => {
                       onSelect(c.cause.id, c.cause.name);
                       onOpenChange(false);
@@ -176,7 +176,7 @@ export function CauseAiManualDialog({
                     {c.reason && (
                       <span className="text-xs text-foreground/70">{c.reason}</span>
                     )}
-                  </button>
+                  </Button>
                 );
               })}
             </div>
@@ -204,8 +204,8 @@ function TabBtn({
   children: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
+    <Button theme="borderless" type="primary" size="small"
+      htmlType="button"
       onClick={onClick}
       className={cn(
         "flex-1 rounded px-2 py-1 text-xs transition-colors",
@@ -215,6 +215,6 @@ function TabBtn({
       )}
     >
       {children}
-    </button>
+    </Button>
   );
 }

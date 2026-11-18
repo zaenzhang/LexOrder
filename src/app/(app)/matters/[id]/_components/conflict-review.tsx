@@ -1,4 +1,7 @@
 'use client';
+
+import { Tag as SemiTag } from "@/components/patterns/semi-surfaces";
+import { Button as SemiButton } from "@douyinfe/semi-ui";
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { TextArea, Toast } from "@douyinfe/semi-ui";
@@ -34,16 +37,16 @@ export function MatterConflictReview({ matterId, data, canWrite }: { matterId: s
   return (
     <div className="card" aria-label="利益冲突复核">
       <div className="rail-sec-head">
-        <ShieldAlert className="h-[15px] w-[15px] text-[var(--amber)]" strokeWidth={1.8} />
+        <ShieldAlert className="h-[15px] w-[15px] text-[var(--semi-color-warning)]" strokeWidth={1.8} />
         利益冲突复核
-        <span className="badge b-amber" style={{ fontSize: 10 }}>待复核</span>
+        <SemiTag size="small" color="amber">待复核</SemiTag>
       </div>
       <div className="panel-body space-y-2">
         <p className="t-xs t-mute">{data.reviewReason}</p>
         {canWrite ? (
-          <button disabled={busy} className="btn btn-secondary btn-sm w-full" onClick={() => void run(() => runMatterReview(matterId))}>
+          <SemiButton disabled={busy} theme="outline" type="tertiary" className="w-full" onClick={() => void run(() => runMatterReview(matterId))}>
             按当前主体重新检索
-          </button>
+          </SemiButton>
         ) : null}
         {data.checks.map((c) => (
           <article key={c.id} className="border-t pt-2 text-xs">
@@ -59,9 +62,9 @@ export function MatterConflictReview({ matterId, data, canWrite }: { matterId: s
             <TextArea aria-label="冲突复核理由" placeholder="排除冲突的依据，或存在冲突后的处理措施" value={note} onChange={inputValue => setNote(inputValue)} rows={3} />
             <div className="flex flex-wrap gap-2">
               {(['DIFFERENT', 'SAME_SUBJECT', 'NEED_INFO'] as const).map((conclusion) => (
-                <button key={conclusion} disabled={busy || !note.trim()} className="btn btn-secondary btn-sm" onClick={() => void run(() => decideMatterReview({ matterId, checkId: latest.id, expectedDecidedAt: latest.decidedAt, conclusion, note }))}>
+                <SemiButton key={conclusion} disabled={busy || !note.trim()} theme="outline" type="tertiary" onClick={() => void run(() => decideMatterReview({ matterId, checkId: latest.id, expectedDecidedAt: latest.decidedAt, conclusion, note }))}>
                   {conflictConclusionLabel[conclusion]}
-                </button>
+                </SemiButton>
               ))}
             </div>
           </div>

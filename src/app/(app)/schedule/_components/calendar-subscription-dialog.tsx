@@ -11,6 +11,7 @@ import { WorkspaceDialog, DialogContent, DialogDescription, DialogHeader, Dialog
 import { getCalendarToken, regenerateCalendarToken } from "@/server/calendar/actions";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
+import { PRODUCT_SHORT_NAME } from "@/lib/product";
 
 export function CalendarSubscriptionDialog() {
   const [open, setOpen] = useState(false);
@@ -45,7 +46,7 @@ export function CalendarSubscriptionDialog() {
         <DialogHeader>
           <DialogTitle>订阅日历</DialogTitle>
           <DialogDescription>
-            在手机或电脑日历中查看律序日程。
+            在手机或电脑日历中查看{PRODUCT_SHORT_NAME}日程。
           </DialogDescription>
         </DialogHeader>
         <CalendarSubscriptionContent />

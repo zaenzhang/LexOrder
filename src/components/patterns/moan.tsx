@@ -4,7 +4,8 @@
  */
 import * as React from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { IconChevronLeft, IconFile } from "@douyinfe/semi-icons";
+import { Avatar, Card, Empty, PageTitle, Tabs, Tag as SemiTag } from "./semi-surfaces";
 import { cn } from "@/lib/utils";
 import type { AvatarTone, MoanTone } from "@/lib/ui/moan-tones";
 
@@ -25,19 +26,19 @@ export function PageHeader({
   className?: string;
 }) {
   return (
-    <div className={cn("mo-page-head", className)}>
+    <div className={cn("mb-4 flex flex-wrap items-end justify-between gap-4", className)}>
       <div className="min-w-0">
         {back ? (
           <Link href={back.href} className="mo-back">
-            <ChevronLeft className="h-3.5 w-3.5" />
+            <IconChevronLeft aria-hidden />
             {back.label}
           </Link>
         ) : null}
-        {breadcrumb ? <div className="mo-crumb">{breadcrumb}</div> : null}
-        <h1 className="mo-ph-title">{title}</h1>
-        {sub ? <div className="mo-ph-sub">{sub}</div> : null}
+        {breadcrumb ? <div className="mb-2 flex items-center gap-2 text-xs text-[var(--semi-color-text-2)]">{breadcrumb}</div> : null}
+        <PageTitle heading={1}>{title}</PageTitle>
+        {sub ? <div className="mt-1 max-w-[760px] text-sm leading-relaxed text-[var(--semi-color-text-2)]">{sub}</div> : null}
       </div>
-      {actions ? <div className="mo-ph-actions">{actions}</div> : null}
+      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </div>
   );
 }
@@ -70,140 +71,45 @@ export function Panel({
   id?: string;
 }) {
   return (
-    <As id={id} className={cn("card", className)}>
-      {title !== undefined || extra ? (
-        <div className="panel-head">
-          <div className="panel-title min-w-0">
-            {Icon ? <Icon className="ic" /> : null}
-            <span className="truncate">{title}</span>
-            {count !== undefined && count !== null ? <span className="mo-count">{count}</span> : null}
-          </div>
-          {extra ? <div className="flex shrink-0 items-center gap-2">{extra}</div> : null}
-        </div>
-      ) : null}
-      {children !== undefined ? (
-        <div className={cn(flush ? "" : "panel-body", bodyClassName)}>{children}</div>
-      ) : null}
-      {footer ? <div className="panel-foot">{footer}</div> : null}
+    <As id={id} className={className}>
+      <Card
+        title={title !== undefined || count !== undefined ? (
+          <span className="flex min-w-0 items-center gap-2">
+            {Icon ? <Icon className="h-4 w-4 shrink-0" /> : null}
+            <span className="min-w-0 truncate">{title}</span>
+            {count != null ? <SemiTag color="grey">{count}</SemiTag> : null}
+          </span>
+        ) : undefined}
+        headerExtraContent={extra}
+        bodyStyle={flush ? { padding: 0 } : undefined}
+        footer={footer}
+      >
+        {bodyClassName ? <div className={bodyClassName}>{children}</div> : children}
+      </Card>
     </As>
   );
 }
 
-export function PanelLink({ href, children, onClick }: { href?: string; children: React.ReactNode; onClick?: () => void }) {
-  if (href) {
-    return (
-      <Link href={href} className="mo-panel-link">
-        {children}
-        <ChevronRight className="h-3 w-3" />
-      </Link>
-    );
-  }
-  return (
-    <button type="button" onClick={onClick} className="mo-panel-link">
-      {children}
-      <ChevronRight className="h-3 w-3" />
-    </button>
-  );
-}
-
-/* ---------------- 分段控制器 ---------------- */
-export type SegmentItem<K extends string> = { key: K; label: React.ReactNode; count?: number | null; href?: string };
-
-export function Segmented<K extends string>({
-  items,
-  value,
-  onChange,
-  className,
-  size = "md"
-}: {
-  items: SegmentItem<K>[];
-  value: K;
-  onChange?: (key: K) => void;
-  className?: string;
-  size?: "md" | "lg";
-}) {
-  return (
-    <div role="tablist" className={cn("segmented", size === "lg" && "mo-seg-lg", className)}>
-      {items.map((it) => {
-        const active = it.key === value;
-        const inner = (
-          <>
-            {it.label}
-            {typeof it.count === "number" ? <span className="count">{it.count}</span> : null}
-          </>
-        );
-        if (it.href) {
-          return (
-            <Link key={it.key} href={it.href} role="tab" aria-selected={active} className={cn("seg", active && "active")}>
-              {inner}
-            </Link>
-          );
-        }
-        return (
-          <button key={it.key} type="button" role="tab" aria-selected={active} onClick={() => onChange?.(it.key)} className={cn("seg", active && "active")}>
-            {inner}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/* 下划线页签（.tabs / .tab） */
-export function UnderlineTabs<K extends string>({
-  items,
-  value,
-  onChange,
-  className
-}: {
-  items: SegmentItem<K>[];
+export function WorkspaceTabs<K extends string>({ items, value, onChange, className }: {
+  items: { key: K; label: React.ReactNode; count?: number | null }[];
   value: K;
   onChange: (key: K) => void;
   className?: string;
 }) {
   return (
-    <div role="tablist" className={cn("tabs", className)}>
-      {items.map((it) => {
-        const active = it.key === value;
-        return (
-          <button key={it.key} type="button" role="tab" aria-selected={active} onClick={() => onChange(it.key)} className={cn("tab", active && "active")}>
-            {it.label}
-            {typeof it.count === "number" ? <span className="mo-tab-count">{it.count}</span> : null}
-          </button>
-        );
-      })}
-    </div>
+    <Tabs
+      className={className}
+      type="line"
+      activeKey={value}
+      onChange={key => onChange(key as K)}
+      tabList={items.map(({ key, label, count }) => ({
+        itemKey: key,
+        tab: <span className="inline-flex items-center gap-1.5">{label}{typeof count === "number" && <SemiTag size="small" color="grey">{count}</SemiTag>}</span>,
+      }))}
+    />
   );
 }
 
-/* ---------------- 徽章 / 状态 ---------------- */
-export function Tag({
-  tone = "slate",
-  dot,
-  children,
-  className,
-  title
-}: {
-  tone?: MoanTone | "white" | "outline-red";
-  dot?: boolean;
-  children: React.ReactNode;
-  className?: string;
-  title?: string;
-}) {
-  return (
-    <span title={title} className={cn("badge", `b-${tone}`, className)}>
-      {dot ? <span className="bdot" /> : null}
-      {children}
-    </span>
-  );
-}
-
-export function Dot({ tone, pulse, className }: { tone: MoanTone; pulse?: boolean; className?: string }) {
-  const t = tone === "bronze" ? "amber" : tone;
-  return <span aria-hidden className={cn("dot", `dot-${t}`, pulse && (t === "red" || t === "amber" || t === "teal") && `dot-pulse-${t}`, className)} />;
-}
-
-/* ---------------- 签名母版 ---------------- */
 /** 风险阶梯：四格递增，level 0–4 */
 export function RiskLadder({ level, tone, className, label }: { level: number; tone: MoanTone; className?: string; label?: string }) {
   const lt = tone === "red" || tone === "amber" || tone === "blue" || tone === "green" ? tone : "blue";
@@ -216,85 +122,26 @@ export function RiskLadder({ level, tone, className, label }: { level: number; t
   );
 }
 
-export type ChainNode = {
-  key: string;
-  label: string;
-  date?: string | null;
-  state: "done" | "current" | "risk" | "blocked" | "todo";
-  onClick?: () => void;
-};
-
-/** 程序链：环节横向推进，当前环节 teal 呼吸环 */
-export function ProcedureChain({ nodes, className }: { nodes: ChainNode[]; className?: string }) {
-  return (
-    <div className={cn("chain mo-chain", className)}>
-      {nodes.map((n, i) => (
-        <React.Fragment key={n.key}>
-          {i > 0 ? <div className={cn("chain-line", nodes[i - 1].state === "done" && (n.state === "done" || n.state === "current") && "done")} /> : null}
-          <button
-            type="button"
-            onClick={n.onClick}
-            disabled={!n.onClick}
-            className={cn("chain-node", n.state !== "todo" && n.state)}
-            aria-current={n.state === "current" ? "step" : undefined}
-          >
-            <span className="chain-dot">
-              {n.state === "done" ? "✓" : n.state === "current" ? <span className="mo-chain-core" /> : n.state === "risk" || n.state === "blocked" ? "!" : i + 1}
-            </span>
-            <span className="chain-label">{n.label}</span>
-            <span className="chain-date">{n.date || "—"}</span>
-          </button>
-        </React.Fragment>
-      ))}
-    </div>
-  );
-}
-
-/** 审阅印：审批终局与用印回填的收口意象 */
-export function ReviewSeal({ top = "审", bottom = "毕", tone = "teal", className }: { top?: string; bottom?: string; tone?: "teal" | "red"; className?: string }) {
-  return (
-    <span aria-hidden className={cn("seal", tone === "teal" && "teal", "mo-seal-sm", className)}>
-      <span className="seal-star">★</span>
-      <span>
-        {top}
-        {bottom}
-      </span>
-    </span>
-  );
-}
-
 /* ---------------- 头像 ---------------- */
 export function InitialAvatar({ name, tone, size = 27, className }: { name?: string | null; tone: AvatarTone; size?: number; className?: string }) {
+  const color = ({ teal: "cyan", navy: "blue", violet: "violet", amber: "amber", green: "green", slate: "grey" } as const)[tone];
   return (
-    <span
-      className={cn("avatar", `av-${tone}`, className)}
-      style={size !== 27 ? { width: size, height: size, fontSize: Math.round(size * 0.39) } : undefined}
-      aria-hidden
-    >
+    <Avatar color={color} size={size <= 22 ? "extra-extra-small" : "extra-small"} className={className} aria-hidden>
       {(name ?? "?").trim().charAt(0) || "?"}
-    </span>
+    </Avatar>
   );
-}
-
-/* ---------------- 倒计时 chip ---------------- */
-export function Countdown({ tone, children, className }: { tone: "urgent" | "soon" | "normal"; children: React.ReactNode; className?: string }) {
-  return <span className={cn("mo-cd", `mo-cd-${tone}`, className)}>{children}</span>;
 }
 
 /* ---------------- 材料 ---------------- */
 export function SourceChip({ kind, children }: { kind: "party" | "court" | "ai" | "self" | "team" | "plain"; children: React.ReactNode }) {
-  return <span className={cn("src-chip", kind !== "plain" && kind !== "team" && kind, kind === "team" && "self")}>{children}</span>;
+  const color = ({ party: "blue", court: "amber", ai: "violet", self: "teal", team: "teal", plain: "grey" } as const)[kind];
+  return <SemiTag size="small" color={color}>{children}</SemiTag>;
 }
 
 export function DocIcon({ tone = "red" }: { tone?: "red" | "violet" | "blue" | "slate" }) {
-  const color = { red: "var(--red)", violet: "var(--violet)", blue: "var(--blue)", slate: "var(--t-muted)" }[tone];
+  const color = { red: "var(--semi-color-danger)", violet: "var(--semi-color-secondary)", blue: "var(--semi-color-info)", slate: "var(--semi-color-text-2)" }[tone];
   return (
-    <span className="doc-ic" aria-hidden>
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
-        <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-        <path d="M14 3v6h6" />
-      </svg>
-    </span>
+    <IconFile aria-hidden style={{ color }} />
   );
 }
 
@@ -315,16 +162,14 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div className={cn("empty", compact && "mo-empty-compact", className)}>
-      {Icon ? (
-        <div className="empty-ic">
-          <Icon />
-        </div>
-      ) : null}
-      <div className="mo-empty-title">{title}</div>
-      {description ? <div className="mo-empty-desc">{description}</div> : null}
+    <Empty
+      className={cn(compact && "py-4", className)}
+      image={Icon ? <Icon className="mx-auto h-6 w-6 text-[var(--semi-color-text-2)]" /> : undefined}
+      title={title}
+      description={description}
+    >
       {action ? <div className="mt-3">{action}</div> : null}
-    </div>
+    </Empty>
   );
 }
 
@@ -342,85 +187,7 @@ export function FieldItem({ label, children, wide, grow, mono }: { label: React.
   );
 }
 
-/* ---------------- 分页 ---------------- */
-export function Pager({
-  page,
-  totalPages,
-  summary,
-  hrefFor,
-  onChange
-}: {
-  page: number;
-  totalPages: number;
-  summary?: React.ReactNode;
-  hrefFor?: (page: number) => string;
-  onChange?: (page: number) => void;
-}) {
-  const pages = pagerWindow(page, totalPages);
-  const btn = (p: number, label: React.ReactNode, key: string, disabled = false, active = false) => {
-    const cls = cn("mo-pg", active && "active", disabled && "disabled");
-    if (disabled) return <span key={key} className={cls} aria-disabled>{label}</span>;
-    if (hrefFor) return <Link key={key} href={hrefFor(p)} className={cls} aria-current={active ? "page" : undefined}>{label}</Link>;
-    return <button key={key} type="button" className={cls} onClick={() => onChange?.(p)} aria-current={active ? "page" : undefined}>{label}</button>;
-  };
-  return (
-    <div className="mo-pager">
-      <span className="mo-pager-sum">{summary}</span>
-      {totalPages > 1 ? (
-        <div className="mo-pager-btns">
-          {btn(page - 1, "‹", "prev", page <= 1)}
-          {pages.map((p, i) => (p === "…" ? <span key={`e${i}`} className="mo-pg disabled">…</span> : btn(p, p, `p${p}`, false, p === page)))}
-          {btn(page + 1, "›", "next", page >= totalPages)}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function pagerWindow(page: number, total: number): (number | "…")[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-  const out: (number | "…")[] = [1];
-  const start = Math.max(2, page - 1);
-  const end = Math.min(total - 1, page + 1);
-  if (start > 2) out.push("…");
-  for (let i = start; i <= end; i++) out.push(i);
-  if (end < total - 1) out.push("…");
-  out.push(total);
-  return out;
-}
-
-/* ---------------- 行动卡 / 指标卡 ---------------- */
-export function ActionTile({
-  href,
-  tone,
-  icon: Icon,
-  value,
-  label,
-  onClick
-}: {
-  href?: string;
-  tone: "red" | "amber" | "blue" | "bronze" | "teal" | "green";
-  icon: React.ComponentType<{ className?: string }>;
-  value: React.ReactNode;
-  label: React.ReactNode;
-  onClick?: () => void;
-}) {
-  const body = (
-    <>
-      <span className={cn("mo-action-ic", `mo-ai-${tone}`)}>
-        <Icon />
-      </span>
-      <span className="min-w-0">
-        <span className={cn("mo-action-num", `mo-tx-${tone}`)}>{value}</span>
-        <span className="mo-action-label">{label}</span>
-      </span>
-      <ChevronRight className="mo-action-arrow" />
-    </>
-  );
-  if (href) return <Link href={href} className="card card-hover mo-action-tile">{body}</Link>;
-  return <button type="button" onClick={onClick} className="card card-hover mo-action-tile text-left">{body}</button>;
-}
-
+/* ---------------- 指标卡 ---------------- */
 export function MetricCard({
   label,
   value,
@@ -439,30 +206,14 @@ export function MetricCard({
   className?: string;
 }) {
   return (
-    <div className={cn("card kpi mo-metric", hot && "mo-metric-hot", className)}>
-      <div className="mo-metric-top">
-        <span className="kpi-label">{label}</span>
-        {trend ? <span className={cn("trend", `t-${trend.tone}`)}>{trend.text}</span> : null}
+    <Card className={className}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs text-[var(--semi-color-text-2)]">{label}</span>
+        {trend ? <SemiTag color={({ up: "green", warn: "amber", down: "red", info: "blue" } as const)[trend.tone]}>{trend.text}</SemiTag> : null}
       </div>
-      <div className={cn("mo-metric-num", hot && "t-red")}>{value}</div>
-      {sub ? <div className={cn("mo-metric-sub", hot && "t-red")}>{sub}</div> : null}
+      <div className={cn("mt-2 text-xl font-semibold tabular-nums", hot && "text-[var(--semi-color-danger)]")}>{value}</div>
+      {sub ? <div className={cn("mt-1 text-xs", hot ? "text-[var(--semi-color-danger)]" : "text-[var(--semi-color-text-2)]")}>{sub}</div> : null}
       {children}
-    </div>
-  );
-}
-
-/* ---------------- 筛选按钮 ---------------- */
-export function FilterChipStatic({ label, value, on, onClear, children }: { label: string; value?: React.ReactNode; on?: boolean; onClear?: () => void; children?: React.ReactNode }) {
-  return (
-    <span className={cn("mo-filter-btn", on && "on")}>
-      {label}
-      {value ? <span className="fv">{value}</span> : null}
-      {children}
-      {on && onClear ? (
-        <button type="button" aria-label={`清除${label}筛选`} onClick={onClear} className="x">
-          ×
-        </button>
-      ) : null}
-    </span>
+    </Card>
   );
 }

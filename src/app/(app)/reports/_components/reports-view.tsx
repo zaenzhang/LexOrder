@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Input, Notification, Toast } from "@douyinfe/semi-ui";
+import { Table, Button, Input, Notification, Toast } from "@douyinfe/semi-ui";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -227,7 +227,7 @@ export function ReportsView({
       )}
 
       {resolveError && (
-        <div className="flex items-start gap-2 rounded-md border border-[var(--amber-line)] bg-[var(--amber-bg)] p-3 text-xs text-[var(--amber)]">
+        <div className="flex items-start gap-2 rounded-md border border-[var(--semi-color-warning-light-active)] bg-[var(--semi-color-warning-light-default)] p-3 text-xs text-[var(--semi-color-warning)]">
           <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>{resolveError}</span>
         </div>
@@ -319,31 +319,21 @@ export function ReportsView({
             <p className="py-6 text-center text-sm text-muted-foreground">本期无产出数据</p>
           ) : (
             <div className="overflow-hidden rounded border border-border">
-              <table className="w-full text-xs">
-                <thead className="bg-muted/30 text-muted-foreground">
-                  <tr>
-                    <th className="px-2 py-1.5 text-left font-normal">律师</th>
-                    <th className="px-2 py-1.5 text-right font-normal">新收</th>
-                    <th className="px-2 py-1.5 text-right font-normal">已结</th>
-                    <th className="px-2 py-1.5 text-right font-normal">收款（元）</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {data.byLawyer.map((r) => (
-                    <tr key={r.userId}>
-                      <td className="px-2 py-1.5">{r.name}</td>
-                      <td className="px-2 py-1.5 text-right font-mono">{r.ownedCount}</td>
-                      <td className="px-2 py-1.5 text-right font-mono">{r.closedCount}</td>
-                      <td className="px-2 py-1.5 text-right font-mono">
-                        {r.receivedAmount.toLocaleString("zh-CN", {
+              <Table<(typeof data.byLawyer)[number]>
+                size="small"
+                pagination={false}
+                rowKey="userId"
+                dataSource={data.byLawyer}
+                columns={[
+                  { title: "律师", dataIndex: "name" },
+                  { title: "新收", align: "right", key: "column2", render: (_, r) => <span className="font-mono">{r.ownedCount}</span> },
+                  { title: "已结", align: "right", key: "column3", render: (_, r) => <span className="font-mono">{r.closedCount}</span> },
+                  { title: "收款（元）", align: "right", key: "column4", render: (_, r) => <span className="font-mono">{r.receivedAmount.toLocaleString("zh-CN", {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2
-                        })}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        })}</span> },
+                ]}
+              />
             </div>
           )}
         </section>
@@ -355,37 +345,18 @@ export function ReportsView({
             <p className="py-6 text-center text-sm text-muted-foreground">暂无应收数据</p>
           ) : (
             <div className="overflow-hidden rounded border border-border">
-              <table className="w-full text-xs">
-                <thead className="bg-muted/30 text-muted-foreground">
-                  <tr>
-                    <th className="px-2 py-1.5 text-left font-normal">客户</th>
-                    <th className="px-2 py-1.5 text-right font-normal">应收</th>
-                    <th className="px-2 py-1.5 text-right font-normal">{data.financeReady?"已核销":"已收"}</th>
-                    <th className="px-2 py-1.5 text-right font-normal">余额</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {data.byClientReceivable.map((r) => (
-                    <tr key={r.clientId}>
-                      <td className="px-2 py-1.5">{r.name}</td>
-                      <td className="px-2 py-1.5 text-right font-mono">
-                        {r.receivable.toLocaleString("zh-CN", { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-2 py-1.5 text-right font-mono text-[var(--green)]">
-                        {r.received.toLocaleString("zh-CN", { minimumFractionDigits: 2 })}
-                      </td>
-                      <td
-                        className={cn(
-                          "px-2 py-1.5 text-right font-mono",
-                          r.balance > 0 ? "text-[var(--red)]" : "text-muted-foreground"
-                        )}
-                      >
-                        {r.balance.toLocaleString("zh-CN", { minimumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <Table<(typeof data.byClientReceivable)[number]>
+                size="small"
+                pagination={false}
+                rowKey="clientId"
+                dataSource={data.byClientReceivable}
+                columns={[
+                  { title: "客户", dataIndex: "name" },
+                  { title: "应收", align: "right", key: "column2", render: (_, r) => <span className="font-mono">{r.receivable.toLocaleString("zh-CN", { minimumFractionDigits: 2 })}</span> },
+                  { title: data.financeReady?"已核销":"已收", align: "right", key: "column3", render: (_, r) => <span className="font-mono">{r.received.toLocaleString("zh-CN", { minimumFractionDigits: 2 })}</span> },
+                  { title: "余额", align: "right", key: "column4", render: (_, r) => r.balance.toLocaleString("zh-CN", { minimumFractionDigits: 2 }) },
+                ]}
+              />
             </div>
           )}
         </section>
@@ -398,30 +369,20 @@ export function ReportsView({
           <p className="py-6 text-center text-sm text-muted-foreground">本期无已结案件</p>
         ) : (
           <div className="overflow-hidden rounded border border-border">
-            <table className="w-full text-xs">
-              <thead className="bg-muted/30 text-muted-foreground">
-                <tr>
-                  <th className="px-2 py-1.5 text-left font-normal">类别</th>
-                  <th className="px-2 py-1.5 text-right font-normal">样本数</th>
-                  <th className="px-2 py-1.5 text-right font-normal">均值（天）</th>
-                  <th className="px-2 py-1.5 text-right font-normal">中位数（天）</th>
-                  <th className="px-2 py-1.5 text-right font-normal">最快（天）</th>
-                  <th className="px-2 py-1.5 text-right font-normal">最慢（天）</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {cycle.map((r) => (
-                  <tr key={r.category}>
-                    <td className="px-2 py-1.5">{matterCategoryLabel[r.category]}</td>
-                    <td className="px-2 py-1.5 text-right font-mono">{r.count}</td>
-                    <td className="px-2 py-1.5 text-right font-mono">{r.avgDays}</td>
-                    <td className="px-2 py-1.5 text-right font-mono">{r.medianDays}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-[var(--green)]">{r.minDays}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-[var(--red)]">{r.maxDays}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <Table<(typeof cycle)[number]>
+              size="small"
+              pagination={false}
+              rowKey="category"
+              dataSource={cycle}
+              columns={[
+                { title: "类别", key: "column1", render: (_, r) => matterCategoryLabel[r.category] },
+                { title: "样本数", align: "right", key: "column2", render: (_, r) => <span className="font-mono">{r.count}</span> },
+                { title: "均值（天）", align: "right", key: "column3", render: (_, r) => <span className="font-mono">{r.avgDays}</span> },
+                { title: "中位数（天）", align: "right", key: "column4", render: (_, r) => <span className="font-mono">{r.medianDays}</span> },
+                { title: "最快（天）", align: "right", key: "column5", render: (_, r) => <span className="font-mono">{r.minDays}</span> },
+                { title: "最慢（天）", align: "right", key: "column6", render: (_, r) => <span className="font-mono">{r.maxDays}</span> },
+              ]}
+            />
           </div>
         )}
       </section>
@@ -445,32 +406,22 @@ export function ReportsView({
               <SevTotalChip sev="LOW" n={reviewAnalysis.bySeverity.LOW} />
             </div>
             <div className="overflow-hidden rounded border border-border">
-              <table className="w-full text-xs">
-                <thead className="bg-muted/30 text-muted-foreground">
-                  <tr>
-                    <th className="px-2 py-1.5 text-left font-normal">问题标题</th>
-                    <th className="px-2 py-1.5 text-left font-normal w-20">类型</th>
-                    <th className="px-2 py-1.5 text-right font-normal w-16">次数</th>
-                    <th className="px-2 py-1.5 text-right font-normal w-32">高/中/低</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {reviewAnalysis.topIssues.map((iss) => (
-                    <tr key={iss.title}>
-                      <td className="px-2 py-1.5">{iss.title}</td>
-                      <td className="px-2 py-1.5 text-muted-foreground">{TYPE_CN[iss.type]}</td>
-                      <td className="px-2 py-1.5 text-right font-mono">{iss.occurrences}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-[10px]">
-                        <span className="text-[var(--red)]">{iss.severityCounts.HIGH}</span>
+              <Table<(typeof reviewAnalysis.topIssues)[number]>
+                size="small"
+                pagination={false}
+                rowKey="title"
+                dataSource={reviewAnalysis.topIssues}
+                columns={[
+                  { title: "问题标题", dataIndex: "title" },
+                  { title: "类型", key: "column2", render: (_, iss) => <span className="text-muted-foreground">{TYPE_CN[iss.type]}</span> },
+                  { title: "次数", align: "right", key: "column3", render: (_, iss) => <span className="font-mono">{iss.occurrences}</span> },
+                  { title: "高/中/低", align: "right", key: "column4", render: (_, iss) => <span className="font-mono"><><span className="text-[var(--semi-color-danger)]">{iss.severityCounts.HIGH}</span>
                         <span className="mx-0.5 text-muted-foreground">/</span>
-                        <span className="text-[var(--amber)]">{iss.severityCounts.MEDIUM}</span>
+                        <span className="text-[var(--semi-color-warning)]">{iss.severityCounts.MEDIUM}</span>
                         <span className="mx-0.5 text-muted-foreground">/</span>
-                        <span className="text-[var(--t-muted)]">{iss.severityCounts.LOW}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        <span className="text-[var(--semi-color-text-2)]">{iss.severityCounts.LOW}</span></></span> },
+                ]}
+              />
             </div>
           </div>
         )}
@@ -488,9 +439,9 @@ const TYPE_CN = {
 
 function SevTotalChip({ sev, n }: { sev: "HIGH" | "MEDIUM" | "LOW"; n: number }) {
   const meta = {
-    HIGH: { label: "高严重", cls: "border-[var(--red-line)] bg-[var(--red-bg)] text-[var(--red)]" },
-    MEDIUM: { label: "中严重", cls: "border-[var(--amber-line)] bg-[var(--amber-bg)] text-[var(--amber)]" },
-    LOW: { label: "低严重", cls: "border-[var(--bd-subtle)] bg-[var(--bg-hover)] text-[var(--t-muted)]" }
+    HIGH: { label: "高严重", cls: "border-[var(--semi-color-danger-light-active)] bg-[var(--semi-color-danger-light-default)] text-[var(--semi-color-danger)]" },
+    MEDIUM: { label: "中严重", cls: "border-[var(--semi-color-warning-light-active)] bg-[var(--semi-color-warning-light-default)] text-[var(--semi-color-warning)]" },
+    LOW: { label: "低严重", cls: "border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] text-[var(--semi-color-text-2)]" }
   }[sev];
   return (
     <div className={cn("rounded border px-3 py-2 text-xs", meta.cls)}>

@@ -14,6 +14,7 @@
  *   7. 民事起诉状
  *   8. 民事答辩状
  */
+import { PRODUCT_SHORT_NAME } from "@/lib/product";
 import {
   Document,
   Packer,
@@ -144,7 +145,7 @@ function sectionDefaults(children: (Paragraph | Table)[]): ISectionOptions {
 export async function pack(children: (Paragraph | Table)[]): Promise<Buffer> {
   const doc = new Document({
     creator: "LexOrder",
-    title: "律序文书模板",
+    title: `${PRODUCT_SHORT_NAME}文书模板`,
     sections: [sectionDefaults(children)]
   });
   return Packer.toBuffer(doc);

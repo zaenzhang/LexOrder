@@ -8,7 +8,7 @@ import type { InvoiceRequestStatus } from "@prisma/client";
 import { invoiceRequestStatusLabel, invoiceRequestStatusColor } from "@/lib/enums";
 import { formatCurrency, cn } from "@/lib/utils";
 import { approvalHref } from "@/lib/approvals/workspace";
-import type { InvoiceRequestRow } from "./finance-view";
+import type { InvoiceRequestRow } from "./invoice-types";
 import { matterHref } from "@/lib/matters/route";
 import { shMonthDayTime } from "@/lib/ui/sh-time";
 
@@ -117,7 +117,7 @@ export function InvoiceManagementSection({
                         <span className="truncate">{r.matter.title}</span>
                       </Link>
                     ) : (
-                      <div className="mt-0.5 text-xs text-[var(--amber)]" title={r.noMatterReason ?? ""}>
+                      <div className="mt-0.5 text-xs text-[var(--semi-color-warning)]" title={r.noMatterReason ?? ""}>
                         无关联案件{r.noMatterReason ? ` · ${r.noMatterReason}` : ""}
                       </div>
                     )}
