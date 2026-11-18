@@ -3,13 +3,13 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RoleGrant } from "@/lib/roles/catalog";
 
-const { db, resolveRole, canRead } = vi.hoisted(() => ({
+const { db, resolveRole, canRead, readGrant } = vi.hoisted(() => ({
   db: { $transaction: vi.fn(), user: { findUnique: vi.fn() }, matter: { count: vi.fn(), findFirst: vi.fn() },
     matterContextRecord: { findMany: vi.fn() }, document: { findMany: vi.fn(), findFirst: vi.fn() },
     note: { findMany: vi.fn(), findFirst: vi.fn() }, clientActivity: { findMany: vi.fn(), findFirst: vi.fn() } },
-  resolveRole: vi.fn(), canRead: vi.fn(),
+  resolveRole: vi.fn(), canRead: vi.fn(), readGrant: vi.fn(),
 }));
-vi.mock("@/lib/approvals/documents", () => ({ canReadDocument: canRead }));
+vi.mock("@/lib/approvals/documents", () => ({ canReadDocument: canRead, documentReadGrant: readGrant }));
 vi.mock("@/lib/roles/service", () => ({ resolveRoleUser: resolveRole }));
 vi.mock("@/lib/permissions", () => ({ matterAssociationFilter: () => ({}), matterFinanceVisibilityFilter: () => ({}), matterReadVisibilityFilter: () => ({}), customMatterFilter: () => ({}) }));
 vi.mock("@/server/clients/relationship-access", () => ({ clientRelationshipFilter: () => ({ ownerUserId: "authorized-owner" }) }));
@@ -65,8 +65,9 @@ describe("上下文分页的当前资格及位置", () => {
     const token = encodeContextCursor(matterId, actor.id, "records", { at: at.toISOString(), id: recordId(10) });
     db.matterContextRecord.findMany.mockResolvedValue([{ ...row(1), sourceDocumentId: recordId(99) }]);
     db.document.findFirst.mockResolvedValue({ id: recordId(99), matterId, name: "受限合成原件" });
-    canRead.mockResolvedValue(false);
+    readGrant.mockResolvedValue(null);
     const next = await readMatterContext(db as unknown as PrismaClient, actor, matterId, token);
+    expect(readGrant).toHaveBeenCalledWith(actor.id, expect.objectContaining({ id: recordId(99), matterId }), db, "READ");
     expect(next.records[0]).toMatchObject({ readable: false, content: null, sourceDescription: null, source: { id: null, label: null }, canRevise: false, canConfirm: false });
     db.user.findUnique.mockResolvedValue({ active: false, role: "CUSTOM" });
     await expect(readMatterContext(db as unknown as PrismaClient, actor, matterId, token)).rejects.toThrow("账号或岗位");

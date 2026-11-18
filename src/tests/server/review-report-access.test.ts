@@ -4,7 +4,7 @@ const db = vi.hoisted(() => ({
   user: { findUnique: vi.fn() }, document: { findUnique: vi.fn() }, matter: { count: vi.fn() },
   sealRequest: { findFirst: vi.fn() }, invoiceRequest: { findMany: vi.fn() }, archiveRecord: { findMany: vi.fn() },
   auditLog: { findFirst: vi.fn() }, systemSetting: { findUnique: vi.fn() },
-  documentResearchSource: { findMany: vi.fn() },
+  documentContextInput: { findMany: vi.fn() }, documentResearchSource: { findMany: vi.fn() },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 vi.mock("@/lib/approvals/service", () => ({ canApproveItem: vi.fn(async () => false), canExecuteInvoice: vi.fn(async () => false) }));
@@ -26,6 +26,7 @@ beforeEach(() => {
   db.matter.count.mockResolvedValue(1); db.sealRequest.findFirst.mockResolvedValue(null);
   db.invoiceRequest.findMany.mockResolvedValue([]); db.archiveRecord.findMany.mockResolvedValue([]);
   db.auditLog.findFirst.mockResolvedValue(null);
+  db.documentContextInput.findMany.mockResolvedValue([]);
   db.documentResearchSource.findMany.mockResolvedValue([]);
 });
 describe("审阅报告与原文共同经过现行材料读取边界", () => {

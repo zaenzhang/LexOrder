@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const { db, canApprove } = vi.hoisted(() => ({ db: {
   systemSetting: { findUnique: vi.fn() }, user: { findUnique: vi.fn() }, matter: { count: vi.fn() }, intake: { findUnique: vi.fn() },
-  document: { findUnique: vi.fn(), findMany: vi.fn() }, documentResearchSource: { findMany: vi.fn() }, auditLog: { findFirst: vi.fn() }, sealRequest: { findFirst: vi.fn() }, invoiceRequest: { findMany: vi.fn() }, archiveRecord: { findMany: vi.fn() }
+  document: { findUnique: vi.fn(), findMany: vi.fn() }, documentContextInput: { findMany: vi.fn() }, documentResearchSource: { findMany: vi.fn() }, auditLog: { findFirst: vi.fn() }, sealRequest: { findFirst: vi.fn() }, invoiceRequest: { findMany: vi.fn() }, archiveRecord: { findMany: vi.fn() }
 }, canApprove: vi.fn() }));
 vi.mock("@/lib/approvals/history-access", () => ({ hasHandledApproval: vi.fn(async () => false) }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
@@ -13,6 +13,7 @@ const doc = { id: "doc-id", uploadedById: "uploader", matterId: null, intakeId: 
 beforeEach(() => {
   vi.resetAllMocks(); resolveSource.mockImplementation(async (id: string) => ({ kind: "ORDINARY", document: { ...doc, id, deletedAt: null } })); db.user.findUnique.mockResolvedValue({ active: true, role: "LAWYER" });
   db.matter.count.mockResolvedValue(0); db.document.findUnique.mockResolvedValue({ status: "DRAFT" });
+  db.documentContextInput.findMany.mockResolvedValue([]);
   db.documentResearchSource.findMany.mockResolvedValue([]); db.document.findMany.mockResolvedValue([]);
   db.auditLog.findFirst.mockResolvedValue(null);
   db.sealRequest.findFirst.mockResolvedValue(null); db.invoiceRequest.findMany.mockResolvedValue([]); db.archiveRecord.findMany.mockResolvedValue([]); canApprove.mockResolvedValue(false);

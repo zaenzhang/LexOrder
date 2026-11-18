@@ -7,6 +7,7 @@ const { actor, state, db, autoConfirm } = vi.hoisted(() => ({
     user: { findUnique: vi.fn() }, systemSetting: { findUnique: vi.fn() },
     matter: { findUnique: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
     document: { findUnique: vi.fn(), findUniqueOrThrow: vi.fn(), update: vi.fn(), create: vi.fn() },
+    sealRequest: { findFirst: vi.fn() }, documentContextInput: { findMany: vi.fn() }, documentResearchSource: { findMany: vi.fn() },
     invoiceRequest: { findUnique: vi.fn(), findUniqueOrThrow: vi.fn(), update: vi.fn(), count: vi.fn() },
     $transaction: vi.fn(), $queryRaw: vi.fn(), auditLog: { create: vi.fn() },
   },
@@ -31,6 +32,9 @@ beforeEach(() => {
   autoConfirm.mockResolvedValue(true);
   db.user.findUnique.mockResolvedValue({ ...actor, active: true });
   db.systemSetting.findUnique.mockResolvedValue(null);
+  db.sealRequest.findFirst.mockResolvedValue(null);
+  db.documentContextInput.findMany.mockResolvedValue([]);
+  db.documentResearchSource.findMany.mockResolvedValue([]);
   db.matter.count.mockResolvedValue(1);
   db.matter.findFirst.mockResolvedValue({ id: "matter", status: "IN_PROGRESS" });
   db.matter.findUnique.mockResolvedValue({ category: "CIVIL_COMMERCIAL" });
