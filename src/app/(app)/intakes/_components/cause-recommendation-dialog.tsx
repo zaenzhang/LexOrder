@@ -1,4 +1,5 @@
 "use client";
+import { Button, Tag } from "@douyinfe/semi-ui";
 
 import { Loader2, Sparkles, X } from "lucide-react";
 import {
@@ -9,12 +10,11 @@ import {
   DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
-import { Button } from "@douyinfe/semi-ui";
+
 import type {
   CauseRecommendation,
   CauseConfidence
 } from "@/server/ai/recommend-cause";
-import { cn } from "@/lib/utils";
 
 type Props = {
   open: boolean;
@@ -26,10 +26,10 @@ type Props = {
   onRetry?: () => void;
 };
 
-const confidenceStyle: Record<CauseConfidence, { label: string; cls: string }> = {
-  HIGH: { label: "高置信", cls: "bg-[var(--green-bg)] text-[var(--green)] border-[var(--green-line)]" },
-  MEDIUM: { label: "中置信", cls: "bg-[var(--amber-bg)] text-[var(--amber)] border-[var(--amber-line)]" },
-  LOW: { label: "低置信", cls: "bg-[var(--bg-hover)] text-[var(--t-muted)] border-[var(--bd-subtle)]" }
+const confidenceStyle: Record<CauseConfidence, { label: string; color: "green" | "amber" | "grey" }> = {
+  HIGH: { label: "高置信", color: "green" },
+  MEDIUM: { label: "中置信", color: "amber" },
+  LOW: { label: "低置信", color: "grey" }
 };
 
 export function CauseRecommendationDialog({
@@ -64,7 +64,7 @@ export function CauseRecommendationDialog({
             <div className="flex flex-col items-center gap-3 py-8 text-sm">
               <p className="text-center text-[var(--red)]">{errorMessage}</p>
               {onRetry && (
-                <Button size="small" theme="outline" onClick={onRetry}>
+                <Button htmlType="button" size="small" theme="outline" onClick={onRetry}>
                   重试
                 </Button>
               )}
@@ -78,30 +78,28 @@ export function CauseRecommendationDialog({
               const conf = confidenceStyle[c.confidence];
               const path = [c.cause.l1Name, c.cause.l2Name].filter(Boolean).join(" / ");
               return (
-                <button
+                <Button
+                  theme="outline"
                   key={c.cause.id}
-                  type="button"
+                  htmlType="button"
                   onClick={() => onSelect(c.cause.id, c.cause.name)}
-                  className="flex flex-col items-start gap-1 rounded-sm border border-border bg-background px-3 py-2.5 text-left transition-colors hover:border-input hover:bg-muted hover:text-foreground"
+                  block
+                  style={{ height: "auto", paddingBlock: 12 }}
+                  contentClassName="flex-col items-start gap-1 whitespace-normal text-left"
                 >
-                  <div className="flex w-full items-center justify-between gap-2">
+                  <span className="flex w-full items-center justify-between gap-2">
                     <span className="text-sm font-medium">{c.cause.name}</span>
-                    <span
-                      className={cn(
-                        "shrink-0 rounded border px-1.5 py-0.5 text-[10px] leading-none",
-                        conf.cls
-                      )}
-                    >
+                    <Tag color={conf.color}>
                       {conf.label}
-                    </span>
-                  </div>
+                    </Tag>
+                  </span>
                   {path && (
                     <span className="text-[11px] text-muted-foreground">{path}</span>
                   )}
                   {c.reason && (
                     <span className="text-xs text-foreground/70">{c.reason}</span>
                   )}
-                </button>
+                </Button>
               );
             })
           )}

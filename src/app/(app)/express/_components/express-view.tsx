@@ -1,14 +1,12 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { Tabs, Select, Button, Input, RadioGroup, Tag } from "@douyinfe/semi-ui";
+import { useRef, useState, useMemo, useTransition } from "react";
 import Link from "next/link";
 import { Package, Search, RefreshCw, Trash2, Briefcase, ArrowDownToLine, ArrowUpFromLine, ExternalLink, AlertTriangle } from "lucide-react";
 import type { Prisma, ExpressDirection } from "@prisma/client";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+
 import {
   Dialog,
   DialogContent,
@@ -17,13 +15,13 @@ import {
   DialogTitle,
   DialogDescription
 } from "@/components/ui/dialog";
-import { RadioChips } from "@/components/ui/radio-chips";
+
 import { MatterCombobox } from "@/app/(app)/approvals/seals/_components/matter-combobox";
 import { cn, formatDateTime } from "@/lib/utils";
 import { createExpress, refreshExpress, deleteExpress } from "@/server/express/actions";
 import { SUPPORTED_COMPANIES, detectCompany } from "@/lib/express/companies";
 import { matterHref } from "@/lib/matters/route";
-import { PageHeader, Segmented } from "@/components/patterns/moan";
+import { PageHeader } from "@/components/patterns/moan";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { useTopbarAction } from "@/components/layout/topbar-action";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -109,25 +107,19 @@ export function ExpressView({
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-0 sm:min-w-64 flex-1">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
-            strokeWidth={1.8}
-          />
           <Input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => setSearch(e)}
             placeholder="搜索单号 / 用途 / 收件人 / 案件"
-            className="h-9 border-border bg-card pl-9"
+            prefix={<Search size={16} />}
           />
         </div>
-        <Segmented
-          items={[
-            { key: "ALL", label: "全部" },
-            { key: "OUTBOUND", label: "寄出" },
-            { key: "INBOUND", label: "收到" }
+        <Tabs activeKey={direction} onChange={key => setDirection(key as DirectionFilter)}
+          tabList={[
+            { itemKey: "ALL", tab: "全部" },
+            { itemKey: "OUTBOUND", tab: "寄出" },
+            { itemKey: "INBOUND", tab: "收到" }
           ]}
-          value={direction}
-          onChange={(v) => setDirection(v as DirectionFilter)}
         />
       </div>
 
@@ -205,18 +197,12 @@ function Card({ e }: { e: Row }) {
           <span className="text-muted-foreground">{e.companyCode}</span>
         )}
         {e.lastState && (
-          <Badge
-            variant="outline"
-            className={cn(
-              "px-1.5 py-0 text-[10px] font-normal",
-              tone === "danger" && "border-[var(--red-line)] bg-[var(--red-bg)] text-[var(--red)]",
-              tone === "ok" && "border-[var(--green-line)] bg-[var(--green-bg)] text-[var(--green)]",
-              tone === "warn" && "border-[var(--amber-line)] bg-[var(--amber-bg)] text-[var(--amber)]",
-              tone === "muted" && "border-border bg-muted/40 text-muted-foreground"
-            )}
+          <Tag
+            color={tone === "danger" ? "red" : tone === "ok" ? "green" : tone === "warn" ? "amber" : "grey"}
+            type="light"
           >
             {e.lastState}
-          </Badge>
+          </Tag>
         )}
       </div>
 
@@ -258,34 +244,34 @@ function Card({ e }: { e: Row }) {
       <div className="mt-auto flex items-center justify-end gap-1 pt-2">
         {traces.length > 0 && (
           <Button
-            size="sm"
-            variant="ghost"
+            size="small"
+            theme="borderless" type="tertiary"
             onClick={() => setTracesOpen(true)}
-            className="h-7 gap-1 px-2 text-[11px]"
+            className="h-7 gap-1 px-2 text-[11px]" htmlType="button"
           >
             <ExternalLink className="h-3 w-3" />
             轨迹 {traces.length}
           </Button>
         )}
         <Button
-          size="sm"
-          variant="ghost"
+          size="small"
+          theme="borderless" type="tertiary"
           onClick={onRefresh}
           disabled={pending}
-          className="h-7 gap-1 px-2 text-[11px] text-primary"
+          className="h-7 gap-1 px-2 text-[11px] text-primary" htmlType="button"
         >
           <RefreshCw className={cn("h-3 w-3", pending && "animate-spin")} />
           刷新
         </Button>
-        <button
-          type="button"
+        <Button
+          htmlType="button"
           onClick={onDelete}
           disabled={pending}
           className="rounded p-1 text-muted-foreground hover:text-destructive"
-          title="删除"
+          title="删除" theme="borderless" type="tertiary"
         >
           <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        </Button>
       </div>
 
       <Dialog open={tracesOpen} onOpenChange={setTracesOpen}>
@@ -334,6 +320,8 @@ function NewExpressDialog({
   configured: boolean;
 }) {
   const [trackingNo, setTrackingNo] = useState("");
+  const popupContainer = useRef<HTMLDivElement>(null);
+  const openDropdown = useRef(false);
   const [companyCode, setCompanyCode] = useState("");
   const [direction, setDirection] = useState<ExpressDirection>("OUTBOUND");
   const [matterId, setMatterId] = useState("");
@@ -398,11 +386,12 @@ function NewExpressDialog({
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (!o && !pending) reset();
+        if (pending) return;
+        if (!o) reset();
         onOpenChange(o);
       }}
     >
-      <DialogContent className="max-h-[88vh] w-[92vw] max-w-2xl overflow-y-auto">
+      <DialogContent ref={popupContainer} className="max-h-[88vh] w-[92vw] max-w-2xl overflow-y-auto" onEscapeKeyDown={event => { if (pending || openDropdown.current) event.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle>新建快递追踪</DialogTitle>
           <DialogDescription className="text-xs">
@@ -412,51 +401,50 @@ function NewExpressDialog({
 
         <div className="space-y-3">
           <div>
-            <Label className="text-[11px]">方向 *</Label>
-            <RadioChips
-              size="sm"
+            <label className="text-[11px]">方向 *</label>
+            <RadioGroup
+              buttonSize="small"
               className="mt-2"
-              items={[
+              options={[
                 { value: "OUTBOUND", label: "寄出" },
                 { value: "INBOUND", label: "收到" }
               ]}
               value={direction}
-              onChange={(v) => setDirection(v as ExpressDirection)}
+              disabled={pending}
+              onChange={event => ((v) => setDirection(v as ExpressDirection))(String(event.target.value))} type="button"
             />
           </div>
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <Label className="text-[11px]">快递单号 *</Label>
+              <label className="text-[11px]">快递单号 *</label>
               <Input
                 value={trackingNo}
-                onChange={(e) => onTrackingChange(e.target.value)}
+                disabled={pending}
+                onChange={(e) => onTrackingChange(e)}
                 placeholder="如 SF1234567890123"
                 className="mt-1 font-mono"
               />
             </div>
             <div>
-              <Label className="text-[11px]">快递公司</Label>
-              <select
-                value={companyCode}
-                onChange={(e) => setCompanyCode(e.target.value)}
-                className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="">自动识别 / 未知</option>
+              <label className="text-[11px]">快递公司</label>
+              <Select<string> insetLabel="快递公司" insetLabelId="express-company-label" aria-labelledby="express-company-label" disabled={pending} getPopupContainer={() => popupContainer.current!} onDropdownVisibleChange={visible => { openDropdown.current = visible; }} value={companyCode} onChange={value => ((e) => setCompanyCode(e))(String(value ?? ""))} className="mt-1" style={{ width: "100%" }} motion={false}>
+                <Select.Option value="">自动识别 / 未知</Select.Option>
                 {SUPPORTED_COMPANIES.map((c) => (
-                  <option key={c} value={c}>
+                  <Select.Option key={c} value={c}>
                     {c}
-                  </option>
+                  </Select.Option>
                 ))}
-              </select>
+              </Select>
             </div>
           </div>
 
           <div>
-            <Label className="text-[11px]">用途 *</Label>
+            <label className="text-[11px]">用途 *</label>
             <Input
               value={purpose}
-              onChange={(e) => setPurpose(e.target.value)}
+              disabled={pending}
+              onChange={(e) => setPurpose(e)}
               placeholder={
                 direction === "OUTBOUND"
                   ? "如：起诉状寄朝阳区法院立案庭"
@@ -467,12 +455,14 @@ function NewExpressDialog({
           </div>
 
           <div>
-            <Label className="text-[11px]">关联案件（可选）</Label>
+            <label className="text-[11px]">关联案件（可选）</label>
             <div className="mt-1">
               <MatterCombobox
                 matters={matters}
                 value={matterId}
                 onChange={setMatterId}
+                disabled={pending}
+                onDropdownVisibleChange={visible => { openDropdown.current = visible; }}
                 placeholder="搜索案件编号 / 名称"
               />
             </div>
@@ -480,19 +470,21 @@ function NewExpressDialog({
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div>
-              <Label className="text-[11px]">{direction === "OUTBOUND" ? "收件人" : "寄件人"}</Label>
+              <label className="text-[11px]">{direction === "OUTBOUND" ? "收件人" : "寄件人"}</label>
               <Input
                 value={recipient}
-                onChange={(e) => setRecipient(e.target.value)}
+                disabled={pending}
+                onChange={(e) => setRecipient(e)}
                 placeholder="姓名或单位"
                 className="mt-1"
               />
             </div>
             <div>
-              <Label className="text-[11px]">联系电话</Label>
+              <label className="text-[11px]">联系电话</label>
               <Input
                 value={recipientPhone}
-                onChange={(e) => setRecipientPhone(e.target.value)}
+                disabled={pending}
+                onChange={(e) => setRecipientPhone(e)}
                 className="mt-1 font-mono"
               />
             </div>
@@ -500,10 +492,10 @@ function NewExpressDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
+          <Button theme="outline" type="tertiary" onClick={() => onOpenChange(false)} disabled={pending} htmlType="button">
             取消
           </Button>
-          <Button onClick={submit} disabled={pending}>
+          <Button onClick={submit} disabled={pending} theme="solid" type="primary" htmlType="button">
             {pending ? "创建中..." : "创建并查询"}
           </Button>
         </DialogFooter>

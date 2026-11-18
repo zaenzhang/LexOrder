@@ -3,14 +3,12 @@
  * 归档借阅面板（F-6）：我的借阅（查阅/归还）+ 待我审批（批准天数/驳回理由）
  * + 申请借阅（搜索归档号/案号/案名 → 事由）。审批人视图同页就地下钻。
  */
+import { Button, Input, Modal, Radio, TextArea } from "@douyinfe/semi-ui";
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { BookOpen, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+
 import { confirmDialog, promptDialog } from "@/components/patterns/confirm-dialog";
 import { formatDate } from "@/lib/utils";
 import { matterHref } from "@/lib/matters/route";
@@ -39,7 +37,7 @@ export function BorrowPanel({ mine, pending, canApply }: { mine: BorrowRow[]; pe
           案卷借阅
         </div>
         {canApply ? (
-          <Button size="sm" variant="outline" onClick={() => setOpen(true)}>申请借阅</Button>
+          <Button size="small" theme="outline" type="tertiary" onClick={() => setOpen(true)} htmlType="button">申请借阅</Button>
         ) : null}
       </div>
       <div className="panel-body" style={{ paddingTop: 8 }}>
@@ -97,7 +95,7 @@ function ReturnButton({ id }: { id: string }) {
   const [isPending, startTransition] = useTransition();
   return (
     <Button
-      size="sm" variant="outline" disabled={isPending}
+      size="small" theme="outline" type="tertiary" disabled={isPending}
       onClick={() => startTransition(async () => {
         try {
           await returnArchiveBorrow(id);
@@ -105,7 +103,7 @@ function ReturnButton({ id }: { id: string }) {
         } catch (err) {
           toast.error("操作失败", { description: actionErrorMessage(err) });
         }
-      })}
+      })} htmlType="button"
     >
       {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}阅毕归还
     </Button>
@@ -152,8 +150,8 @@ function DecideRow({ row }: { row: BorrowRow }) {
         {row.archiveRecord.matter.internalCode} {row.archiveRecord.matter.title}
         <span className="t-xs t-mute block truncate">{row.applicant.name}：{row.reason}</span>
       </span>
-      <Button size="sm" variant="outline" disabled={isPending} onClick={() => decide("APPROVED")}>批准</Button>
-      <Button size="sm" variant="outline" disabled={isPending} onClick={() => decide("REJECTED")}>驳回</Button>
+      <Button size="small" theme="outline" type="tertiary" disabled={isPending} onClick={() => decide("APPROVED")} htmlType="button">批准</Button>
+      <Button size="small" theme="outline" type="tertiary" disabled={isPending} onClick={() => decide("REJECTED")} htmlType="button">驳回</Button>
     </div>
   );
 }
@@ -166,6 +164,7 @@ function BorrowApplyDialog({ open, onOpenChange }: { open: boolean; onOpenChange
   const [isPending, startTransition] = useTransition();
 
   function search() {
+    if (isPending) return;
     startTransition(async () => {
       try {
         const r = await searchArchiveForBorrow(q);
@@ -178,6 +177,7 @@ function BorrowApplyDialog({ open, onOpenChange }: { open: boolean; onOpenChange
   }
 
   function submit() {
+    if (isPending || !picked || reason.trim().length < 5) return;
     startTransition(async () => {
       try {
         await createArchiveBorrow({ archiveRecordId: picked, reason, scope: "WHOLE_VOLUME" });
@@ -191,37 +191,34 @@ function BorrowApplyDialog({ open, onOpenChange }: { open: boolean; onOpenChange
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>申请借阅案卷</DialogTitle></DialogHeader>
+    <Modal visible={open} onCancel={() => { if (!isPending) onOpenChange(false); }} title="申请借阅案卷" footer={null} width={560} motion={false} closable={!isPending} maskClosable={!isPending} closeOnEsc={!isPending}>
         <div className="space-y-3">
           <div className="flex gap-2">
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="归档号 / 所内案号 / 案件名称" className="text-xs"
+            <Input disabled={isPending} value={q} onChange={(e) => setQ(e)} placeholder="归档号 / 所内案号 / 案件名称" className="text-xs"
               onKeyDown={(e) => e.key === "Enter" && search()} />
-            <Button size="sm" variant="outline" onClick={search} disabled={isPending} className="gap-1.5 shrink-0">
+            <Button size="small" theme="outline" type="tertiary" onClick={search} disabled={isPending} className="gap-1.5 shrink-0" htmlType="button">
               {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}检索
             </Button>
           </div>
           {results.length > 0 ? (
             <div className="space-y-1">
               {results.map((r) => (
-                <label key={r.id} className="flex items-center gap-2 t-sm" style={{ padding: "4px 8px", borderRadius: 7, background: picked === r.id ? "var(--blue-bg)" : "var(--bg-sunken)", cursor: "pointer" }}>
-                  <input type="radio" checked={picked === r.id} onChange={() => setPicked(r.id)} />
+                <Radio disabled={isPending} checked={picked === r.id} onChange={() => setPicked(r.id)} key={r.id} className="flex items-center gap-2 py-1 text-sm">
+
                   <span style={{ flex: 1 }}>{r.matter.internalCode} {r.matter.title}</span>
                   <span className="t-xs t-mute">{r.archiveNo} · {formatDate(r.archivedAt)}</span>
-                </label>
+                </Radio>
               ))}
             </div>
           ) : null}
-          <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="借阅事由（必填，如：客户回头咨询再审准备）" className="text-xs" />
+          <TextArea aria-label="借阅事由" disabled={isPending} value={reason} onChange={(e) => setReason(e)} rows={3} placeholder="借阅事由（必填，如：客户回头咨询再审准备）" className="text-xs" />
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
-          <Button onClick={submit} disabled={isPending || !picked || reason.trim().length < 5} className="gap-1.5">
+        <div className="mt-4 flex justify-end gap-2">
+          <Button theme="outline" type="tertiary" disabled={isPending} onClick={() => onOpenChange(false)} htmlType="button">取消</Button>
+          <Button onClick={submit} disabled={isPending || !picked || reason.trim().length < 5} className="gap-1.5" theme="solid" type="primary" htmlType="button">
             {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}提交申请
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+    </Modal>
   );
 }

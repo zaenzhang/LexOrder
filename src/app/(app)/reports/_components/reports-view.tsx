@@ -1,5 +1,6 @@
 "use client";
 
+import { Button, Input } from "@douyinfe/semi-ui";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -14,8 +15,8 @@ import type {
 } from "@/server/reports/analytics";
 import { pushWeeklyReportToAll } from "@/server/reports/push-weekly";
 import { triggerArchiveOverdueScanNow } from "@/server/cron/manual-triggers";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+
+
 import { cn } from "@/lib/utils";
 import { confirmDialog } from "@/components/patterns/confirm-dialog";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -131,39 +132,36 @@ export function ReportsView({
           </p>
         </div>
         <div className="flex items-center gap-2 ll-no-print">
-          <div className="ll-segmented">
+          <div className="flex items-center gap-1">
             {(["month", "quarter", "year", "lastYear"] as const).map((k) => (
-              <button
+              <Button
                 key={k}
-                type="button"
+                htmlType="button"
                 onClick={() => switchPreset(k)}
-                className={cn(
-                  "ll-seg shrink-0",
-                  periodKey === k ? "ll-seg-active text-primary" : "text-muted-foreground hover:text-foreground"
-                )}
-                title={presetLabels[k]}
+                className="shrink-0"
+                aria-pressed={periodKey === k}
+                title={presetLabels[k]} theme={periodKey === k ? "solid" : "borderless"}
               >
                 {PERIOD_LABEL[k]}
-              </button>
+              </Button>
             ))}
-            <button
-              type="button"
+            <Button
+              htmlType="button"
               onClick={() => setCustomOpen((v) => !v)}
-              className={cn(
-                "ll-seg shrink-0",
-                periodKey === "custom" ? "ll-seg-active text-primary" : "text-muted-foreground hover:text-foreground"
-              )}
+              className="shrink-0"
+              aria-pressed={periodKey === "custom"}
+              theme={periodKey === "custom" ? "solid" : "borderless"}
             >
               自定义
-            </button>
+            </Button>
           </div>
           <Button
-            size="sm"
-            variant="outline"
+            size="small"
+            theme="outline" type="tertiary"
             onClick={handleScanOverdue}
             disabled={scanning}
             className="gap-1.5"
-            title="扫描已结超过 30 天未归档的案件"
+            title="扫描已结超过 30 天未归档的案件" htmlType="button"
           >
             {scanning ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -173,12 +171,12 @@ export function ReportsView({
             扫归档逾期
           </Button>
           <Button
-            size="sm"
-            variant="outline"
+            size="small"
+            theme="outline" type="tertiary"
             onClick={handlePushWeekly}
             disabled={pushing}
             className="gap-1.5"
-            title="给所有律师推送本周报告通知"
+            title="给所有律师推送本周报告通知" htmlType="button"
           >
             {pushing ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -188,17 +186,17 @@ export function ReportsView({
             推送周报
           </Button>
           <Button
-            size="sm"
-            variant="outline"
+            size="small"
+            theme="outline" type="tertiary"
             onClick={() => window.print()}
             className="gap-1.5"
-            title="Cmd/Ctrl+P 同样可触发，可以「另存为 PDF」"
+            title="Cmd/Ctrl+P 同样可触发，可以「另存为 PDF」" htmlType="button"
           >
             <Printer className="h-3.5 w-3.5" />
             打印 / PDF
           </Button>
           <Link href={exportHref} prefetch={false}>
-            <Button size="sm" className="gap-1.5">
+            <Button size="small" className="gap-1.5" theme="solid" type="primary" htmlType="button">
               <Download className="h-3.5 w-3.5" />
               导出 xlsx
             </Button>
@@ -213,7 +211,7 @@ export function ReportsView({
             <Input
               type="date"
               value={start}
-              onChange={(e) => setStart(e.target.value)}
+              onChange={(e) => setStart(e)}
               className="mt-0.5 h-8 w-36 text-[12px]"
             />
           </div>
@@ -223,11 +221,11 @@ export function ReportsView({
             <Input
               type="date"
               value={end}
-              onChange={(e) => setEnd(e.target.value)}
+              onChange={(e) => setEnd(e)}
               className="mt-0.5 h-8 w-36 text-[12px]"
             />
           </div>
-          <Button size="sm" onClick={applyCustom} disabled={!start || !end}>
+          <Button size="small" onClick={applyCustom} disabled={!start || !end} theme="solid" type="primary" htmlType="button">
             应用
           </Button>
           <span className="ml-2 text-[10px] text-muted-foreground">最大跨度 5 年</span>

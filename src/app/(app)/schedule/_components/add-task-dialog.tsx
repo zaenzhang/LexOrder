@@ -1,13 +1,22 @@
 "use client";
 
+import { Button, Checkbox, Input, RadioGroup, Select, TextArea } from "@douyinfe/semi-ui";
+
 import { FormDialogContent as DialogContent, FormDialogBody } from "@/components/patterns/form-dialog";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Clock } from "lucide-react";
-import { Button, Checkbox, Input, RadioGroup, Select, TextArea } from "@douyinfe/semi-ui";
-import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Loader2, Clock } from "lucide-react";
+
+import {
+  Dialog,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
+
 import { createTask } from "@/server/tasks/actions";
 import { civilKey, shParts, WEEKDAY_CN } from "@/lib/ui/sh-time";
 import { actionErrorMessage } from "@/lib/action-error";
@@ -34,13 +43,13 @@ export function AddTaskDialog({
   const [allDay, setAllDay] = useState(false);
   const [time, setTime] = useState("09:00");
   const requestKey = useRef(crypto.randomUUID());
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const [matterPickerOpen, setMatterPickerOpen] = useState(false);
+  const formId = useId();
+  const editorContent = useRef<HTMLDivElement>(null);
+  const [openSelect, setOpenSelect] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) { setOpenSelect(null); return; }
     requestKey.current = crypto.randomUUID();
-    setMatterPickerOpen(false);
     setMatterId("");
     setTitle("");
     setDescription("");
@@ -50,6 +59,7 @@ export function AddTaskDialog({
   }, [open]);
 
   function submit() {
+    if (isPending) return;
     if (!matterId) {
       toast.warning("请选择关联案件");
       return;
@@ -94,10 +104,12 @@ export function AddTaskDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => { if (!isPending) onOpenChange(nextOpen); }}>
-      <DialogContent ref={dialogRef} className="max-w-md" onEscapeKeyDown={(event) => { if (matterPickerOpen) event.preventDefault(); }}>
+    <Dialog open={open} onOpenChange={value => { if (!isPending) onOpenChange(value); }}>
+      <DialogContent ref={editorContent} className="max-w-md" onEscapeKeyDown={event => { if (openSelect) event.preventDefault(); }}>
         <DialogHeader>
-          <DialogTitle>新建任务</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            新建任务
+          </DialogTitle>
           <DialogDescription className="text-xs">
             {date
               ? (() => {
@@ -108,49 +120,86 @@ export function AddTaskDialog({
           </DialogDescription>
         </DialogHeader>
         <FormDialogBody>
-          <form id="schedule-add-task" onSubmit={(event) => { event.preventDefault(); if (!isPending) submit(); }} className="space-y-3">
-            <div className="space-y-1.5">
-              <label id="schedule-task-matter-label" className="text-xs">关联案件 <span className="text-destructive">*</span></label>
-              <Select
-                aria-labelledby="schedule-task-matter-label"
-                value={matterId || undefined}
-                onChange={(value) => setMatterId(value as string)}
-                disabled={isPending}
-                placeholder="请选择"
-                filter
-                optionList={matters.map((matter) => ({ value: matter.id, label: `${matter.internalCode} ${matter.title}` }))}
-                style={{ width: "100%" }}
-                motion={false}
-                getPopupContainer={() => dialogRef.current!}
-                onDropdownVisibleChange={setMatterPickerOpen}
+        <form id={formId} onSubmit={event => { event.preventDefault(); submit(); }}>
+        <fieldset disabled={isPending} className="space-y-3">
+          <div className="space-y-1.5">
+            <label id="task-matter-label" htmlFor="task-matter" className="text-xs">
+              关联案件 <span className="text-destructive">*</span>
+            </label>
+            <Select id="task-matter" aria-labelledby="task-matter-label" className="w-full" disabled={isPending} motion={false} getPopupContainer={() => editorContent.current!} placeholder="请选择" onDropdownVisibleChange={visible => setOpenSelect(previous => visible ? "task-matter" : previous === "task-matter" ? null : previous)} value={matterId || undefined} onChange={value => { if (typeof value === "string") setMatterId(value); }}
+              filter searchPlaceholder="搜索编号或案件名" optionList={matters.map(matter => ({ value: matter.id, label: `${matter.internalCode} ${matter.title}` }))} />
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="task-title" className="text-xs">
+              事项标题 <span className="text-destructive">*</span>
+            </label>
+            <Input
+              id="task-title"
+              placeholder="如：起草起诉状 / 提交证据清单"
+              value={title}
+              onChange={value => setTitle(value)}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="task-time" className="flex items-center gap-1 text-xs">
+              <Clock className="h-3 w-3" />
+              时间
+            </label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="task-time"
+                type="time"
+                step={300}
+                value={time}
+                disabled={allDay || isPending}
+                onChange={setTime}
+                className="max-w-40 font-mono"
               />
+                <Checkbox
+                  checked={allDay}
+                  disabled={isPending}
+                  onChange={event => setAllDay(event.target.checked === true)}
+                >全天</Checkbox>
             </div>
-            <div className="space-y-1.5">
-              <label htmlFor="schedule-task-title" className="text-xs">事项标题 <span className="text-destructive">*</span></label>
-              <Input id="schedule-task-title" placeholder="如：起草起诉状 / 提交证据清单" value={title} onChange={setTitle} disabled={isPending} />
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="schedule-task-time" className="flex items-center gap-1 text-xs"><Clock className="h-3 w-3" />时间</label>
-              <div className="flex items-center gap-2">
-                <Input id="schedule-task-time" type="time" step={300} value={time} disabled={allDay || isPending} onChange={setTime} style={{ width: 140 }} />
-                <Checkbox checked={allDay} onChange={(event) => setAllDay(Boolean(event.target.checked))} disabled={isPending}>全天</Checkbox>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="schedule-task-description" className="text-xs">描述（可选）</label>
-              <TextArea id="schedule-task-description" rows={2} placeholder="事项详情、相关材料等" value={description} onChange={setDescription} disabled={isPending} />
-            </div>
-            <div className="space-y-1.5">
-              <div id="schedule-task-priority-label" className="text-xs">优先级</div>
-              <RadioGroup aria-labelledby="schedule-task-priority-label" type="button" buttonSize="small" value={priority} onChange={(event) => setPriority(event.target.value as 0 | 1 | 2)} disabled={isPending} options={[
-                { value: 0, label: "普通" }, { value: 1, label: "高" }, { value: 2, label: "紧急" }
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="task-description" className="text-xs">描述（可选）</label>
+            <TextArea
+              id="task-description"
+              rows={2}
+              placeholder="事项详情、相关材料等"
+              value={description}
+              onChange={value => setDescription(value)}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label id="task-priority-label" className="text-xs">优先级</label>
+            <RadioGroup type="button" aria-labelledby="task-priority-label" value={priority} disabled={isPending}
+              onChange={event => setPriority(event.target.value as 0 | 1 | 2)} options={[
+                { value: 0, label: "普通" },
+                { value: 1, label: "高" },
+                { value: 2, label: "紧急" }
               ]} />
-            </div>
-          </form>
+          </div>
+        </fieldset>
+        </form>
         </FormDialogBody>
         <DialogFooter>
-          <Button theme="outline" onClick={() => onOpenChange(false)} disabled={isPending}>取消</Button>
-          <Button htmlType="submit" form="schedule-add-task" theme="solid" loading={isPending} disabled={isPending}>创建任务</Button>
+          <Button
+            theme="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isPending}
+          >
+            取消
+          </Button>
+          <Button theme="solid" htmlType="submit" form={formId} disabled={isPending} className="gap-1.5">
+            {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            创建任务
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { getApprovalDetail, listApprovalWorkspace } from "@/server/approval-permissions/inbox";
 
-const mocks = vi.hoisted(() => ({ detail: vi.fn(), approve: vi.fn(), convert: vi.fn(), ask: vi.fn(), push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), params: "" }));
+const mocks = vi.hoisted(() => ({ detail: vi.fn(), approve: vi.fn(), stamp: vi.fn(), convert: vi.fn(), ask: vi.fn(), push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), params: "" }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push, replace: mocks.replace, refresh: mocks.refresh }), useSearchParams: () => new URLSearchParams(mocks.params) }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/components/patterns/confirm-dialog", () => ({ confirmDialog: mocks.ask }));
@@ -14,7 +14,7 @@ vi.mock("@/server/invoices/actions", () => ({ approveInvoiceRequest: mocks.appro
 vi.mock("@/server/intakes/actions", () => ({ convertIntakeToMatter: mocks.convert, declineIntake: vi.fn(), markIntakeNeedsRevision: vi.fn(), resubmitIntake: vi.fn() }));
 vi.mock("@/server/documents/actions", () => ({ approveDocument: vi.fn(), rejectDocument: vi.fn(), submitDocumentForReview: vi.fn() }));
 vi.mock("@/server/archive/actions", () => ({ approveArchiveRecord: vi.fn(), rejectArchiveRecord: vi.fn() }));
-vi.mock("@/server/seals/actions", () => ({ approveSealRequest: vi.fn(), rejectSealRequest: vi.fn(), stampSealRequest: vi.fn(), cancelSealRequest: vi.fn(), listSealTypeConfigs: vi.fn() }));
+vi.mock("@/server/seals/actions", () => ({ approveSealRequest: vi.fn(), rejectSealRequest: vi.fn(), stampSealRequest: mocks.stamp, cancelSealRequest: vi.fn(), listSealTypeConfigs: vi.fn() }));
 vi.mock("@/app/(app)/approvals/seals/_components/seal-request-sheet", () => ({ SealRequestSheet: () => null }));
 import { ApprovalInbox } from "@/app/(app)/approvals/approval-inbox";
 import { ApprovalsPanel } from "@/app/(app)/matters/[id]/_components/approvals-panel";
@@ -58,6 +58,45 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("审批详情读取、轮次与返回案件", () => {
+  it.each([
+    { task: "issue" as const, selection: first, status: "WAITING_INVOICE", title: "合成待开票申请", label: "电子发票（上传后记为已开具）", button: "完成开票", idField: "requestId", fileField: "invoiceFile", filename: "合成电子发票.pdf" },
+    { task: "stamp" as const, selection: { id: "cseal000000000000000000001", action: "SEAL_APPROVE" as const }, status: "WAITING_STAMP", title: "合成待盖章申请", label: "盖章后的 PDF 扫描件（必传）", button: "完成盖章回填", idField: "id", fileField: "stampedDoc", filename: "合成盖章扫描件.pdf" },
+  ])("$title 使用真实文件与原申请 ID，处理期间锁定文件，失败保留后可重试", async scenario => {
+    const execute = scenario.task === "issue" ? mocks.approve : mocks.stamp;
+    let fail!: (error: Error) => void;
+    execute.mockImplementationOnce(() => new Promise((_, reject) => { fail = reject; })).mockResolvedValueOnce({ ok: true });
+    mocks.params = new URLSearchParams({ type: scenario.selection.action, id: scenario.selection.id, returnTo: returnA }).toString();
+    mocks.detail.mockResolvedValue({ ...detail(scenario.title), status: scenario.status, task: scenario.task });
+    render(<ApprovalInbox data={data} initialSelection={scenario.selection} returnTo={returnA} />);
+
+    const fileInput = await screen.findByLabelText<HTMLInputElement>(scenario.label);
+    const file = new File(["%PDF-1.7\nsynthetic execution proof"], scenario.filename, { type: "application/pdf" });
+    expect(fileInput).toHaveAttribute("type", "file");
+    fireEvent.change(fileInput, { target: { files: [file] } });
+    if (scenario.task === "issue") fireEvent.change(screen.getByLabelText("发票号码"), { target: { value: "SYNTHETIC-INVOICE-001" } });
+    fireEvent.click(screen.getByRole("button", { name: scenario.button }));
+    await waitFor(() => expect(execute).toHaveBeenCalledOnce());
+    expect(fileInput).toBeDisabled();
+    expect(screen.getByRole("button", { name: scenario.button })).toBeDisabled();
+    const firstSubmission = execute.mock.calls[0][0] as FormData;
+    expect(firstSubmission.get(scenario.idField)).toBe(scenario.selection.id);
+    expect(firstSubmission.get(scenario.fileField)).toBe(file);
+
+    await act(async () => fail(new Error("合成执行失败")));
+    await waitFor(() => expect(screen.getByRole("button", { name: scenario.button })).toBeEnabled());
+    expect(screen.getByRole("dialog", { name: scenario.title })).toBeInTheDocument();
+    expect(screen.getByLabelText<HTMLInputElement>(scenario.label).files?.[0]).toBe(file);
+    expect(mocks.detail).toHaveBeenLastCalledWith({ ...scenario.selection, returnTo: returnA });
+    fireEvent.click(screen.getByRole("button", { name: scenario.button }));
+    await waitFor(() => expect(execute).toHaveBeenCalledTimes(2));
+    const retry = execute.mock.calls[1][0] as FormData;
+    expect(retry.get(scenario.idField)).toBe(scenario.selection.id);
+    expect(retry.get(scenario.fileField)).toBe(file);
+    if (scenario.task === "issue") expect(retry.get("invoiceNo")).toBe("SYNTHETIC-INVOICE-001");
+    expect(scenario.task === "issue" ? mocks.stamp : mocks.approve).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
   it("案件用印详情直达现行审批入口，并将程序和列表位置带入获准回程", async () => {
     const seal = { id: "cseal000000000000000000001", action: "SEAL_APPROVE" as const };
     const returnTo = "/matters/LL-2026-CC-0001?view=seal&procedure=one&list=tab%3Dactive%26page%3D2";

@@ -1,11 +1,12 @@
 "use client";
+
+import { Button, Input, Select } from "@douyinfe/semi-ui";
 import { formatDeadlineDue } from "@/lib/deadline-due";
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Button, Input, Select } from "@douyinfe/semi-ui";
 import { actionErrorMessage } from "@/lib/action-error";
 import { formatDateTime } from "@/lib/utils";
 import { matterHref } from "@/lib/matters/route";
@@ -55,7 +56,7 @@ export function SmsSuggestions({ sms, busy }: { sms: SmsRow; busy: boolean }) {
   return <section className="mt-3 space-y-3 border-t border-border pt-3" aria-label="来件整理建议">
     <div className="flex flex-wrap items-center gap-2">
       <span className="text-sm font-medium">整理建议 · {waiting.length} 项待确认</span>
-      {analyzable ? <Button size="small" theme="outline" disabled={locked} onClick={() => startTransition(async () => {
+      {analyzable ? <Button size="small" theme="outline" type="tertiary" disabled={locked} onClick={() => startTransition(async () => {
         try {
           const result = await analyzeSmsInboundFiles({ smsId: sms.id });
           const successful = result.results.filter(row => row.state === "ANALYZED").length;
@@ -63,7 +64,7 @@ export function SmsSuggestions({ sms, busy }: { sms: SmsRow; busy: boolean }) {
           router.refresh();
         } catch (error) { setMessage(error instanceof Error ? actionErrorMessage(error) : "分析失败"); }
       })}>阅读并整理</Button> : null}
-      {needsFiling ? <Button size="small" theme="outline" disabled={locked} onClick={() => startTransition(async () => {
+      {needsFiling ? <Button size="small" theme="outline" type="tertiary" disabled={locked} onClick={() => startTransition(async () => {
         try {
           const result = await retrySmsSuggestionFiling(sms.id);
           setMessage(result.warning ?? result.remaining.processingNote ?? `本次入卷 ${result.filedFiles} 个；仍有 ${result.remaining.remainingFiles} 个文件待处理`);
@@ -83,7 +84,7 @@ export function SmsSuggestions({ sms, busy }: { sms: SmsRow; busy: boolean }) {
             {row.kind === "FIELD_CHANGE" ? `${row.fieldKey === "caseNumber" ? "案号" : "法院"}：${row.currentValue || "（空）"} → ${row.suggestedValue}` : row.suggestedValue}
           </div>
           <div className="flex gap-2">
-            <Button size="small" theme="outline" disabled={locked} onClick={() => decide([row], "REJECTED")}>不采用</Button>
+            <Button size="small" theme="outline" type="tertiary" disabled={locked} onClick={() => decide([row], "REJECTED")}>不采用</Button>
             <Button size="small" disabled={locked || !ready(row)} onClick={() => decide([row], "ACCEPTED")}>采用</Button>
           </div>
         </div>
@@ -145,13 +146,29 @@ function EventChoiceEditor({ sms, row, disabled, onChange }: { sms: SmsRow; row:
   const prefix = `suggestion-${row.id}`;
   return <div className="space-y-3">
     <div className="grid grid-cols-2 gap-3">
-      <div className="space-y-1"><label id={`${prefix}-procedure-label`} htmlFor={`${prefix}-procedure`}>程序</label>
-        <Select id={`${prefix}-procedure`} aria-labelledby={`${prefix}-procedure-label`} className="w-full" motion={false} placeholder="选择实际程序" value={procedureId || undefined} onChange={value => { setProcedureId(value as string); setTargetId(""); }} disabled={disabled}
-          optionList={procedures.map(procedure => ({ value: procedure.id, label: `${procedure.customLabel ?? procedureTypeLabel[procedure.type]}${procedure.caseNumber ? ` · ${procedure.caseNumber}` : ""}` }))} />
+      <div className="space-y-1"><label id={`${prefix}-procedure-label`}>程序</label>
+        <Select
+          aria-labelledby={`${prefix}-procedure-label`}
+          placeholder="选择实际程序"
+          style={{ width: "100%" }}
+          motion={false}
+          value={procedureId}
+          onChange={value => { if (typeof value === "string") { setProcedureId(value); setTargetId(""); } }}
+          disabled={disabled}
+          optionList={procedures.map(procedure => ({ value: procedure.id, label: `${procedure.customLabel ?? procedureTypeLabel[procedure.type]}${procedure.caseNumber ? ` · ${procedure.caseNumber}` : ""}` }))}
+        />
       </div>
-      <div className="space-y-1"><label id={`${prefix}-mode-label`} htmlFor={`${prefix}-mode`}>采用方式</label>
-        <Select id={`${prefix}-mode`} aria-labelledby={`${prefix}-mode-label`} className="w-full" motion={false} placeholder="核对后选择" value={mode || undefined} onChange={value => { setMode(value as "CREATE" | "LINK"); setTargetId(""); }} disabled={disabled || !procedureId}
-          optionList={[{ value: "CREATE", label: "新建事项" }, { value: "LINK", label: "关联已有事项" }]} />
+      <div className="space-y-1"><label id={`${prefix}-mode-label`}>采用方式</label>
+        <Select
+          aria-labelledby={`${prefix}-mode-label`}
+          placeholder="核对后选择"
+          style={{ width: "100%" }}
+          motion={false}
+          value={mode}
+          onChange={value => { if (value === "CREATE" || value === "LINK") { setMode(value); setTargetId(""); } }}
+          disabled={disabled || !procedureId}
+          optionList={[{ value: "CREATE", label: "新建事项" }, { value: "LINK", label: "关联已有事项" }]}
+        />
       </div>
     </div>
     {mode === "CREATE" ? <div className="space-y-2">
@@ -163,9 +180,18 @@ function EventChoiceEditor({ sms, row, disabled, onChange }: { sms: SmsRow; row:
       {!timeText ? <p className="text-xs text-muted-foreground">时刻未确定时先保留本建议。只有日期的期限，可到 <Link className="underline" href={matterHref(sms.matchedMatter, `?view=work&workPane=tasks&procedure=${procedureId}`)} target="_blank">本程序的期限与庭期</Link> 手工登记，再返回此处关联已有事项。</p> : null}
     </div> : null}
     {mode === "LINK" ? <div className="space-y-2">
-      <div className="flex gap-2"><Input aria-label="查找同日已有事项" placeholder="在来源日期内按标题查找" value={query} disabled={disabled} onChange={setQuery} /><Button theme="outline" size="small" disabled={disabled || loading} onClick={() => { setSearch(query); setReload(value => value + 1); }}>查找</Button></div>
+      <div className="flex gap-2"><Input aria-label="查找同日已有事项" placeholder="在来源日期内按标题查找" value={query} disabled={disabled} onChange={setQuery} /><Button theme="outline" type="tertiary" size="small" disabled={disabled || loading} onClick={() => { setSearch(query); setReload(value => value + 1); }}>查找</Button></div>
       {loading ? <p className="text-sm text-muted-foreground">正在读取实际事项…</p> : error ? <p role="alert" className="text-sm text-destructive">{error}</p> : targets ? <>
-        {targets.targets.length ? <><span id={`${prefix}-target-label`} className="sr-only">已有事项</span><Select aria-labelledby={`${prefix}-target-label`} className="w-full" motion={false} placeholder="选择并核对原事项" value={targetId || undefined} onChange={value => setTargetId(value as string)} disabled={disabled} optionList={targets.targets.map(target => ({ value: target.id, label: `${target.title} · ${row.kind === "DEADLINE" ? formatDeadlineDue(target.at, target.duePrecision) : formatDateTime(target.at)}` }))} /></> : <p className="text-sm text-muted-foreground">所选程序在来源日期没有符合条件的事项；可核对程序、缩小查询或先手工登记。</p>}
+        {targets.targets.length ? <><label id={`${prefix}-target-label`} className="sr-only">已有事项</label><Select
+          aria-labelledby={`${prefix}-target-label`}
+          placeholder="选择并核对原事项"
+          style={{ width: "100%" }}
+          motion={false}
+          value={targetId}
+          onChange={value => { if (typeof value === "string") setTargetId(value); }}
+          disabled={disabled}
+          optionList={targets.targets.map(target => ({ value: target.id, label: `${target.title} · ${row.kind === "DEADLINE" ? formatDeadlineDue(target.at, target.duePrecision) : formatDateTime(target.at)}` }))}
+        /></> : <p className="text-sm text-muted-foreground">所选程序在来源日期没有符合条件的事项；可核对程序、缩小查询或先手工登记。</p>}
         {targets.truncated ? <p className="text-xs text-muted-foreground">显示前100项，请按标题继续查找。</p> : null}
       </> : null}
     </div> : null}

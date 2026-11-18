@@ -37,6 +37,11 @@ beforeEach(() => {
   mocks.confirmDialog.mockResolvedValue(false);
 });
 
+async function chooseSource(name: string) {
+  fireEvent.click(screen.getByRole("combobox", { name }));
+  fireEvent.click(await screen.findByRole("option", { name: /普通来源附件/ }));
+}
+
 async function enterPreparation() {
   fireEvent.click(await screen.findByRole("button", { name: "准备交付" }));
   fireEvent.change(screen.getByLabelText("交付目的"), { target: { value: "合成阶段说明" } });
@@ -47,6 +52,21 @@ async function enterPreparation() {
 }
 
 describe("交付面板", () => {
+  it("下拉菜单内首次 Escape 仅关闭选项，第二次才询问是否放弃草稿", async () => {
+    render(<DeliveryPanel matterId={matterId} />);
+    await enterPreparation();
+    const recipient = screen.getByRole("combobox", { name: "接收对象" });
+    fireEvent.click(recipient);
+    expect(await screen.findByRole("option", { name: /其他接收人/ })).toBeInTheDocument();
+    fireEvent.keyDown(recipient, { key: "Escape", code: "Escape", keyCode: 27 });
+    await waitFor(() => expect(recipient).toHaveAttribute("aria-expanded", "false"));
+    expect(mocks.confirmDialog).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("交付目的")).toHaveValue("合成阶段说明");
+    fireEvent.keyDown(recipient, { key: "Escape", code: "Escape", keyCode: 27 });
+    await waitFor(() => expect(mocks.confirmDialog).toHaveBeenCalledOnce());
+    expect(screen.getByLabelText("实际接收人")).toHaveValue("合成客户");
+  });
+
   it("从顺序清单移除一份已声明材料后，剩余材料及其来源声明仍可真实校验保存", async () => {
     const removedId = "cdocdelivery00000000000003";
     mocks.getDeliveryOptions.mockResolvedValue({
@@ -63,9 +83,9 @@ describe("交付面板", () => {
     const onLocationChange = vi.fn();
     render(<DeliveryPanel matterId={matterId} onLocationChange={onLocationChange} />);
     await enterPreparation();
-    fireEvent.change(screen.getByLabelText("确认 合成分析稿 第 1 版来源"), { target: { value: "EXTERNAL_ATTACHMENT" } });
+    await chooseSource("确认 合成分析稿 第 1 版来源");
     fireEvent.click(screen.getByRole("checkbox", { name: "选择 合成待移除附件 第 1 版" }));
-    fireEvent.change(screen.getByLabelText("确认 合成待移除附件 第 1 版来源"), { target: { value: "EXTERNAL_ATTACHMENT" } });
+    await chooseSource("确认 合成待移除附件 第 1 版来源");
     const selectedRow = screen.getByText("2. 合成待移除附件 · 第 1 版").closest("li")!;
     fireEvent.click(within(selectedRow).getByRole("button", { name: "移除" }));
     fireEvent.click(screen.getByRole("button", { name: "核对并保存清单" }));

@@ -4,6 +4,7 @@
  * 财务（墨案 08 效果图）：KPI 四卡 → 分段（收付流水 / 开票管理 / 律师分成 / 应收账龄）→
  * 趋势 + 开票进度 → 收付流水表。已确认口径沿用 P0-6 规则（关联已签署合同或已登记发票号）。
  */
+import { Tabs, Select, Button, Input } from "@douyinfe/semi-ui";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -15,8 +16,8 @@ import { RevenueChart } from "@/components/dashboard/revenue-chart";
 import { InvoiceManagementSection } from "./invoice-management";
 import { InvoiceCreateDialog } from "./invoice-create-dialog";
 import { RecordFeeLauncher } from "./record-fee-launcher";
-import { MetricCard, PageHeader, Segmented } from "@/components/patterns/moan";
-import { FilterSelect } from "@/components/patterns/filter-select";
+import { MetricCard, PageHeader } from "@/components/patterns/moan";
+
 import { confirmFeeEntry, rejectFeeEntry } from "@/server/finance/actions";
 import { promptDialog } from "@/components/patterns/confirm-dialog";
 import { toast } from "sonner";
@@ -179,8 +180,8 @@ export function FinanceViewV4({ entries, monthly, aging, stats, invoiceRequests,
         title="财务"
         sub={`${nowSh.y} 年 ${nowSh.m} 月 · 数据截至 ${mmdd(now)} · 金额按财务查看权限范围汇总`}
         actions={
-          <div className="flex gap-2"><Link href="/finance/reconciliation" className="btn btn-secondary btn-sm">应收与收款分配</Link>{canExport ? (
-            <a href={`/api/finance/export${range ? `?days=${range}` : ""}`} className="btn btn-secondary btn-sm">导出流水</a>
+          <div className="flex gap-2"><Link href="/finance/reconciliation" className="text-sm text-primary underline">应收与收款分配</Link>{canExport ? (
+            <a href={`/api/finance/export${range ? `?days=${range}` : ""}`} className="text-sm text-primary underline">导出流水</a>
           ) : null}</div>
         }
       />
@@ -209,15 +210,13 @@ export function FinanceViewV4({ entries, monthly, aging, stats, invoiceRequests,
       </div>
 
       <div className="fin-tabs">
-        <Segmented
-          items={[
-            { key: "ledger", label: "收付流水" },
-            { key: "invoices", label: "开票管理", count: stats.pendingInvoiceCount || null },
-            { key: "commission", label: "律师分成" },
-            { key: "aging", label: "应收账龄", count: overdueRows.length || null }
+        <Tabs activeKey={tab} onChange={key => setTab(key as Tab)}
+          tabList={[
+            { itemKey: "ledger", tab: "收付流水" },
+            { itemKey: "invoices", tab: <>开票管理{stats.pendingInvoiceCount > 0 && <span className="ml-1">{stats.pendingInvoiceCount}</span>}</> },
+            { itemKey: "commission", tab: "律师分成" },
+            { itemKey: "aging", tab: <>应收账龄{overdueRows.length > 0 && <span className="ml-1">{overdueRows.length}</span>}</> }
           ]}
-          value={tab}
-          onChange={setTab}
         />
       </div>
 
@@ -231,7 +230,7 @@ export function FinanceViewV4({ entries, monthly, aging, stats, invoiceRequests,
                   <FileText className="ic" strokeWidth={1.8} />
                   开票进度
                 </div>
-                <button type="button" className="t-sm t-mute" onClick={() => setTab("invoices")}>开票管理 →</button>
+                <Button htmlType="button" className="t-sm t-mute" onClick={() => setTab("invoices")} theme="borderless" type="tertiary">开票管理 →</Button>
               </div>
               {invoiceRows.length === 0 && overdueRows.length === 0 ? (
                 <div className="empty mo-empty-compact"><div className="mo-empty-title">暂无开票申请</div></div>
@@ -254,7 +253,7 @@ export function FinanceViewV4({ entries, monthly, aging, stats, invoiceRequests,
                         <div className="inv-title truncate">{r.matter.clientName ?? r.matter.title} · {r.title}</div>
                         <div className="inv-meta">{yuan(r.outstanding)} · 逾期 {r.overdueDays} 天未回款</div>
                       </div>
-                      <button type="button" className="badge b-outline-red" onClick={() => setTab("aging")}>催收跟进</button>
+                      <Button htmlType="button" className="badge b-outline-red" onClick={() => setTab("aging")} theme="borderless" type="tertiary">催收跟进</Button>
                     </div>
                   ))}
                 </>
@@ -301,8 +300,8 @@ export function FinanceViewV4({ entries, monthly, aging, stats, invoiceRequests,
                         <td>
                           {canConfirmReceipt ? (
                             <div className="flex items-center gap-1.5">
-                              <button type="button" className="btn btn-primary btn-sm" disabled={busyId === e.id} onClick={() => void confirmOne(e.id)}>确认到账</button>
-                              <button type="button" className="btn btn-ghost btn-sm" disabled={busyId === e.id} onClick={() => void rejectOne(e.id)}>退回</button>
+                              <Button htmlType="button"  disabled={busyId === e.id} onClick={() => void confirmOne(e.id)} size="small" theme="solid" type="primary">确认到账</Button>
+                              <Button htmlType="button"  disabled={busyId === e.id} onClick={() => void rejectOne(e.id)} size="small" theme="borderless" type="tertiary">退回</Button>
                             </div>
                           ) : (
                             <span className="badge b-amber">待确认到账</span>
@@ -323,12 +322,9 @@ export function FinanceViewV4({ entries, monthly, aging, stats, invoiceRequests,
                 收付流水 <span className="mo-count">{filtered.length}</span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <label className="mo-toolbar-input" style={{ width: 220, height: 30 }}>
-                  <Search aria-hidden />
-                  <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="按案件、对方户名搜索" aria-label="搜索流水" />
-                </label>
-                <FilterSelect label="类型" value={typeFilter} options={(Object.keys(TYPE_META) as Entry["type"][]).map((t) => ({ value: t, label: TYPE_META[t].label }))} onChange={(v) => setTypeFilter(v as Entry["type"] | undefined)} />
-                <FilterSelect label="期间" allLabel="全部" value={range} options={[{ value: "30", label: "近 30 天" }, { value: "90", label: "近 90 天" }, { value: "365", label: "近一年" }]} onChange={setRange} />
+                <Input value={q} onChange={setQ} placeholder="按案件、对方户名搜索" aria-label="搜索流水" prefix={<Search size={16} />} style={{ width: 240 }} />
+                <Select<string> value={typeFilter} optionList={(Object.keys(TYPE_META) as Entry["type"][]).map((t) => ({ value: t, label: TYPE_META[t].label }))} onChange={value => ((v) => setTypeFilter(v as Entry["type"] | undefined))(typeof value === "string" && value ? value : undefined)} insetLabel="类型" insetLabelId="finance-type-label" aria-labelledby="finance-type-label" placeholder="全部" showClear motion={false} style={{ minWidth: 130 }} />
+                <Select<string> value={range} optionList={[{ value: "30", label: "近 30 天" }, { value: "90", label: "近 90 天" }, { value: "365", label: "近一年" }]} onChange={value => (setRange)(typeof value === "string" && value ? value : undefined)} insetLabel="期间" insetLabelId="finance-range-label" aria-labelledby="finance-range-label" placeholder="全部" showClear motion={false} style={{ minWidth: 130 }} />
               </div>
             </div>
             {filtered.length === 0 ? (
@@ -395,10 +391,10 @@ export function FinanceViewV4({ entries, monthly, aging, stats, invoiceRequests,
               <FileText className="ic" strokeWidth={1.8} />
               开票管理
             </div>
-            <button type="button" onClick={() => setInvoiceCreateOpen(true)} className="btn btn-primary btn-sm">
+            <Button htmlType="button" onClick={() => setInvoiceCreateOpen(true)}  size="small" theme="solid" type="primary">
               <Plus />
               新建开票申请
-            </button>
+            </Button>
           </div>
           <div className="panel-body">
             <InvoiceManagementSection requests={invoiceRequests} canApprove={canApproveInvoice} />
