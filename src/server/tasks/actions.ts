@@ -12,6 +12,7 @@ import { auditTx } from "@/server/audit";
 import { assertLiveAssignees } from "@/server/intakes/workflow";
 import { revalidateMatter } from "@/server/matters/route";
 import { changeWorkTx } from "@/server/reminders/responsibility";
+import { assertPersonalProcedureOpen } from "@/server/procedures/personal-schedule";
 import { recordTimelineEvent } from "@/server/timeline/record";
 import { assertTaskMatterAccess, getTaskForChange } from "./workflow-service";
 
@@ -33,8 +34,9 @@ export type TaskUpdateInput = z.infer<typeof taskUpdateSchema>;
 async function assertTaskStage(db: Prisma.TransactionClient, matterId: string, stageId?: string, allowHidden = false) {
   if (!stageId) return;
   await db.$queryRaw`SELECT id FROM "MatterStage" WHERE id=${stageId} FOR SHARE`;
-  const stage = await db.matterStage.findFirst({ where: { id: stageId, procedure: { matterId }, ...(allowHidden ? {} : { status: "ACTIVE" }) }, select: { id: true } });
+  const stage = await db.matterStage.findFirst({ where: { id: stageId, procedure: { matterId }, ...(allowHidden ? {} : { status: "ACTIVE" }) }, select: { procedureId: true } });
   if (!stage) throw new ActionError("环节不存在或不属于当前事项");
+  return stage.procedureId;
 }
 
 async function refreshTasks(matterId: string) {
@@ -60,7 +62,8 @@ export async function createTask(input: TaskCreateInput) {
         return previous;
       }
     }
-    await assertTaskStage(db, matter.id, data.stageId);
+    const procedureId = await assertTaskStage(db, matter.id, data.stageId);
+    if (procedureId && session.user.runtimeMode === "PERSONAL") await assertPersonalProcedureOpen(db, matter.id, procedureId);
     const assigneeId = data.assigneeId || matter.ownerId;
     if (![matter.ownerId, ...matter.members.map(member => member.userId)].includes(assigneeId)) {
       throw new ActionError("请先将责任人加入本事项团队");
@@ -106,7 +109,8 @@ export async function updateTask(input: TaskUpdateInput) {
     if (data.dueAt !== undefined && data.dueAt.getTime() !== task.dueAt?.getTime()) {
       throw new ActionError("任务安排改期请从责任操作填写新日期和原因");
     }
-    await assertTaskStage(db, task.matterId, data.stageId, data.stageId === task.stageId);
+    const procedureId = await assertTaskStage(db, task.matterId, data.stageId, data.stageId === task.stageId);
+    if (procedureId && data.stageId !== task.stageId && session.user.runtimeMode === "PERSONAL") await assertPersonalProcedureOpen(db, task.matterId, procedureId);
     await db.task.update({
       where: { id: task.id, matterId: task.matterId },
       data: {

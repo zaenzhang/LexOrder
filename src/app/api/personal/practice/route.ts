@@ -62,9 +62,15 @@ import {
   markNotificationRead,
 } from "@/server/notifications/actions";
 import { listScheduleItems } from "@/server/schedule/actions";
+import {
+  personalTaskAction,
+  readPersonalTaskBoard,
+  resolvePersonalTask,
+} from "@/server/tasks/personal-schedule";
 
 const id = z.cuid();
 const action = z.discriminatedUnion("action", [
+  personalTaskAction,
   z.object({ action: z.literal("create-client"), input: clientCreateSchema }),
   z.object({
     action: z.literal("client-contact"),
@@ -169,6 +175,7 @@ async function read(query: URLSearchParams) {
       await getDashboardHeroData();
     return { todayDeadlineCount, weekHearingCount, overdueDeadlineCount };
   }
+  if (view === "responsibilities") return readPersonalTaskBoard(query.get("closed") === "1");
   if (view === "schedule") {
     const month = z
       .string()
@@ -309,6 +316,8 @@ async function handle(request: Request) {
       return json(await read(new URL(request.url).searchParams));
     const data = action.parse(await request.json().catch(() => null));
     switch (data.action) {
+      case "resolve-schedule-task":
+        return json(await resolvePersonalTask(data));
       case "create-client":
         return json(await createClient(data.input));
       case "client-contact":

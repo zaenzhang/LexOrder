@@ -61,7 +61,7 @@ beforeEach(() => {
   db.matter.findUniqueOrThrow.mockResolvedValue({ category: "CIVIL_COMMERCIAL" });
   db.task.findUnique.mockResolvedValue({ matterId: mine });
   db.task.create.mockResolvedValue({ id: taskId, title: "测试事项" });
-  db.matterStage.findFirst.mockResolvedValue({ id: stageId });
+  db.matterStage.findFirst.mockResolvedValue({ procedureId: "cprocedure000000000000001" });
   db.client.findMany.mockResolvedValue([]); db.client.count.mockResolvedValue(0);
   db.client.findFirst.mockResolvedValue({ id: "shared-client" });
   db.billing.findMany.mockResolvedValue([]); db.feeEntry.findMany.mockResolvedValue([]); db.matter.count.mockResolvedValue(0);
@@ -146,7 +146,7 @@ describe("任务必须绑定真实事项及可选环节", () => {
   it.each([createTask, updateTask])("创建及修改均拒绝其他案件的阶段", async action => {
     db.matterStage.findFirst.mockResolvedValue(null);
     await expect(action({ id: taskId, matterId: mine, title: "修改", priority: 0, stageId, revision: 0 })).rejects.toThrow("环节不存在");
-    expect(db.matterStage.findFirst).toHaveBeenCalledWith({ where: { id: stageId, procedure: { matterId: mine }, status: "ACTIVE" }, select: { id: true } });
+    expect(db.matterStage.findFirst).toHaveBeenCalledWith({ where: { id: stageId, procedure: { matterId: mine }, status: "ACTIVE" }, select: { procedureId: true } });
     expect(db.task.create).not.toHaveBeenCalled(); expect(db.task.update).not.toHaveBeenCalled();
   });
   it("同案阶段可以更新，写入条件包含真实案件", async () => {

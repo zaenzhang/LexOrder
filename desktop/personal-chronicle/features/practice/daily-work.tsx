@@ -3,6 +3,8 @@
 import Link from "next/link"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { TaskResponsibilities } from "./task-responsibilities"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { PageHeader } from "@/kit/ui-patterns/page-header"
@@ -44,7 +46,7 @@ const columns: DataColumn<Schedule>[] = [
   {
     id: "completed",
     header: "状态",
-    cell: (row) => (row.completed ? "已完成" : "待办"),
+    cell: (row) => (row.completed ? "已结束" : "待办"),
   },
 ]
 const currentMonth = () =>
@@ -267,7 +269,11 @@ export function DailyWork({ view }: { view: View }) {
       {view === "today" ? (
         <Today />
       ) : view === "schedule" ? (
-        <ScheduleList />
+        <Tabs defaultValue="month">
+          <TabsList aria-label="日程视图"><TabsTrigger value="month">月度日程</TabsTrigger><TabsTrigger value="board">跨案任务责任板</TabsTrigger></TabsList>
+          <TabsContent value="month" className="grid gap-3"><ScheduleList /></TabsContent>
+          <TabsContent value="board"><TaskResponsibilities /></TabsContent>
+        </Tabs>
       ) : view === "follow-ups" ? (
         <FollowUps />
       ) : (

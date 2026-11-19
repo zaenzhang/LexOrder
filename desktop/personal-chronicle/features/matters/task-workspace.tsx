@@ -1,6 +1,8 @@
 "use client"
 
 import { ProcedureActions, type ProcedureInfo } from "./case-management"
+import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -30,15 +32,16 @@ const states = { OPEN: "待办", DONE: "已办结", CANCELLED: "已取消" }
 const businessTime = new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", dateStyle: "medium", timeStyle: "short" })
 
 export function TaskWorkspace({ matterId, data, reload }: { matterId: string; data: TaskData; reload: () => void }) {
+  const target = useSearchParams().get("task")
   const [editing, setEditing] = useState<Task | "new" | null>(null)
   const [includeClosed, setIncludeClosed] = useState(false)
   const [scope, setScope] = useState("all")
   const [status, setStatus] = useState("")
   const [workingId, setWorkingId] = useState("")
   const stages = data.procedures.flatMap(proc => proc.stages.map(stage => ({ id: stage.id, name: proc.name + " · " + stage.name })))
-  const tasks = data.tasks.filter(item => (includeClosed || item.state === "OPEN")
+  const tasks = data.tasks.filter(item => target ? item.id === target : (includeClosed || item.state === "OPEN")
     && (scope === "all" || (item.stageId || "unassigned") === scope))
-  const untracked = data.untracked.filter(item => (includeClosed || !item.completed)
+  const untracked = target ? [] : data.untracked.filter(item => (includeClosed || !item.completed)
     && (scope === "all" || (item.stageId || "unassigned") === scope))
 
   async function complete(task: Task) {
@@ -58,12 +61,13 @@ export function TaskWorkspace({ matterId, data, reload }: { matterId: string; da
     <TabsList aria-label="程序与任务视图"><TabsTrigger value="tasks">任务</TabsTrigger><TabsTrigger value="calendar">程序、期限与庭期</TabsTrigger></TabsList>
     <TabsContent value="tasks"><Card><CardHeader><CardTitle>案件任务</CardTitle></CardHeader><CardContent className="grid gap-3">
       <div className="flex flex-wrap items-center gap-2">
+        {target ? <Link className="text-sm underline" href={`/matters/${matterId}/tasks`}>查看本案全部任务</Link> : <>
         <NativeSelect aria-label="任务范围" value={scope} onChange={e => setScope(e.target.value)}>
           <NativeSelectOption value="all">全案</NativeSelectOption><NativeSelectOption value="unassigned">未归属环节</NativeSelectOption>
           {stages.map(s => <NativeSelectOption key={s.id} value={s.id}>{s.name}</NativeSelectOption>)}
         </NativeSelect>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={includeClosed} onChange={e => setIncludeClosed(e.target.checked)} />含已结束</label>
-        {data.canWrite && <Button className="ms-auto" size="sm" onClick={() => setEditing("new")}>新建任务</Button>}
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={includeClosed} onChange={e => setIncludeClosed(e.target.checked)} />含已结束</label></>}
+        {data.canWrite && !target && <Button className="ms-auto" size="sm" onClick={() => setEditing("new")}>新建任务</Button>}
       </div>
       {status && <p role="status" className="text-sm">{status}</p>}
       {tasks.length === 0 && untracked.length === 0 && <p className="text-sm text-muted-foreground">当前范围没有任务。</p>}
@@ -94,13 +98,13 @@ export function TaskWorkspace({ matterId, data, reload }: { matterId: string; da
         {proc.deadlines.length === 0 && proc.hearings.length === 0 && <p className="text-muted-foreground">暂无期限与庭期。</p>}
       </CardContent></Card>)}
     </TabsContent>
-    {editing !== null && <TaskEditor matterId={matterId} stages={stages} task={editing === "new" ? null : editing}
+    {editing !== null && <TaskEditor matterId={matterId} stages={stages} initialStageId={stages.some(stage => stage.id === scope) ? scope : ""} task={editing === "new" ? null : editing}
       onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setStatus("任务已保存。"); reload() }} />}
   </Tabs>
 }
 
-function TaskEditor({ matterId, stages, task, onClose, onSaved }: {
-  matterId: string; stages: { id: string; name: string }[]; task: Task | null; onClose: () => void; onSaved: () => void
+function TaskEditor({ matterId, stages, initialStageId, task, onClose, onSaved }: {
+  matterId: string; stages: { id: string; name: string }[]; initialStageId: string; task: Task | null; onClose: () => void; onSaved: () => void
 }) {
   const [requestKey, setKey] = useState(() => crypto.randomUUID())
   const [dirty, setDirty] = useState(false)
@@ -133,7 +137,7 @@ function TaskEditor({ matterId, stages, task, onClose, onSaved }: {
         <fieldset disabled={busy} className="grid gap-3">
           <label className="grid gap-1 text-sm">任务标题<Input name="title" defaultValue={task?.title} required maxLength={200} /></label>
           <label className="grid gap-1 text-sm">说明<Textarea name="description" defaultValue={task?.description ?? ""} maxLength={2000} /></label>
-          <label className="grid gap-1 text-sm">所属环节<NativeSelect name="stageId" defaultValue={task?.stageId ?? ""}><NativeSelectOption value="">事项级任务</NativeSelectOption>
+          <label className="grid gap-1 text-sm">所属环节<NativeSelect name="stageId" defaultValue={task ? task.stageId ?? "" : initialStageId}><NativeSelectOption value="">事项级任务</NativeSelectOption>
             {task?.stageId && !stages.some(row => row.id === task.stageId) && <NativeSelectOption value={task.stageId}>{task.stageName}（已停用）</NativeSelectOption>}
             {stages.map(stage => <NativeSelectOption key={stage.id} value={stage.id}>{stage.name}</NativeSelectOption>)}
           </NativeSelect></label>

@@ -39,6 +39,7 @@ import { shDayKey, civilFromKey, civilKey } from "@/lib/ui/sh-time";
 import { computeDeadlineDate } from "@/lib/deadline-rules";
 import { adjustDeadlineForHolidays } from "@/lib/calendar/holidays";
 import { ActionError } from "@/lib/action-error";
+import { assertPersonalProcedureOpen } from "./personal-schedule";
 import { assertActualProcedureConclusion } from "./lifecycle";
 
 function emptyToNull<T extends Record<string, unknown>>(obj: T): T {
@@ -450,7 +451,7 @@ export async function addDeadline(input: DeadlineCreateInput) {
     }
   }
 
-  const created = await roleMutation(session.user, "schedule.write", async roleDb => roleDb.deadline.create({
+  const insertDeadline = (db: Prisma.TransactionClient) => db.deadline.create({
     data: {
       procedureId: data.procedureId,
       title: data.title,
@@ -466,7 +467,14 @@ export async function addDeadline(input: DeadlineCreateInput) {
       sourceDocumentId: data.sourceDocumentId || null,
       confirmStatus: data.sourceRuleId ? "PENDING" : "CONFIRMED"
     }
-  }));
+  });
+  const created = session.user.runtimeMode === "PERSONAL"
+    ? await approvalTransaction(async db => {
+      await lockWritableMatters(db, session.user, "schedule.write", [procedureForGuard.matterId]);
+      await assertPersonalProcedureOpen(db, procedureForGuard.matterId, data.procedureId);
+      return insertDeadline(db);
+    }, Prisma.TransactionIsolationLevel.ReadCommitted)
+    : await roleMutation(session.user, "schedule.write", insertDeadline);
 
   const procedure = await prisma.matterProcedure.findUnique({
     where: { id: data.procedureId },
