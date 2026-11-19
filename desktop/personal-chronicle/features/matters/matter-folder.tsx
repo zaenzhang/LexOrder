@@ -69,7 +69,7 @@ function FolderForm({ matterId }: { matterId: string }) {
     <CardContent className="grid gap-3">
       {binding?.path ? <p className="break-all text-sm">{binding.path}</p> : null}
       {binding?.path && !binding.available ? <p role="alert" className="text-sm text-destructive">当前目录不可用。请连接原磁盘，或重新定位到移动后的案件文件夹。</p> : null}
-      {retained && <p role="status" className="break-all text-sm">已停止复制，私有原件可继续使用。外盘暂存保留在 {retained}</p>}
+      {retained && <p role="status" className="break-all text-sm">上次停止复制时保留的外盘暂存：{retained}</p>}
       {binding?.copyStagePath && <div className="grid gap-2">
         <p className="break-all text-sm">复制尚未完成。可重新选择原父目录继续，或保留外盘暂存后改选磁盘。暂存位置：{binding.copyStagePath}</p>
         <Button variant="outline" className="justify-self-start" size="sm" disabled={busy || picking} onClick={() => void save(true)}>停止复制并保留外盘暂存</Button>
