@@ -1,6 +1,6 @@
 # LexOrder 文档导航
 
-更新日期：2026-11-18。`docs/` 的文字入口为以下四份主文档和本导航页；另保留主文档引用的演练证据和交互预览。需求、架构、任务与研究各有一个现行入口，不另建平行报告。
+更新日期：2026-11-19。`docs/` 的文字入口为以下四份主文档和本导航页；另保留主文档引用的演练证据和交互预览。需求、架构、任务与研究各有一个现行入口，不另建平行报告。
 
 | 需要回答的问题 | 主文档 | 内容 |
 | --- | --- | --- |
@@ -18,6 +18,8 @@
 案件文书交互预览已获用户认可。可以下载[独立 HTML](evidence/2026-11-18-document-preview/lexorder-case-documents-preview.html)后用浏览器打开，也可以查看[案件材料截图](evidence/2026-11-18-document-preview/lexorder-case-documents-preview.png)和[文书模板截图](evidence/2026-11-18-document-preview/lexorder-case-templates-preview.png)。设计见[需求 §9.4.9](PRODUCT_REQUIREMENTS_ACCEPTANCE.md#949-案件内的文书模板与连续编辑g052026-11-18)，真实演练与模拟验证见[计划 §8.55](WORKBENCH_PLAN.md#855-案件流程演练与文书交互预览2026-11-18)。
 
 **本次 Semi 迁移分派见[协作计划 §7.17](WORKBENCH_PLAN.md#717-semi-迁移协作计划2026-11-18)。** 集成人先定公共基线，四个页面组按独占文件并行迁移。
+
+**法律 AI 研究结论：** [研究 §3.50](RESEARCH_AND_DECISIONS.md#350-claude-法律-artifacts技能与竞品的采用研究2026-11-19)记录 Claude 法律 Artifacts、固定中英文 Skills、竞品与公开实践，给出事实/来源、稿件复核及多材料审阅的候选采用建议；微信原文和逐产品实测的未覆盖范围明确保留。文档交接见[计划 §8.61](WORKBENCH_PLAN.md#861-法律-ai-研究结论与-pr-交接2026-11-19)，不改变当前业务排期。
 
 ## 维护方式
 
