@@ -198,7 +198,7 @@ it("不支持硬链接的卷在首次绑定或重定位前失败，保留旧原�
   expect((await changeMatterFolder(a, { action: "bind", root }, storageRoot)).available).toBe(true);
 });
 
-async function interruptFirstBind(point: "registered" | "published", matter: typeof a & { intakeId: string }) {
+async function interruptFirstBind(point: "registered" | "published" | "copying" | "retiring" | "discarding", matter: typeof a & { intakeId?: string }) {
   const child = `
     const fs = require('node:fs/promises');
     const path = require('node:path');
@@ -211,13 +211,34 @@ async function interruptFirstBind(point: "registered" | "published", matter: typ
       if (process.platform === 'win32') process.exit(86);
       process.kill(process.pid, 'SIGKILL');
     }
-    const rename = fs.rename, lstat = fs.lstat;
+    const rename = fs.rename, lstat = fs.lstat, open = fs.open, rm = fs.rm, rmdir = fs.rmdir;
+    fs.open = async (...args) => {
+      const handle = await open(...args);
+      if (point === 'copying' && String(args[0]).endsWith(path.sep + 'original.bin') && args[1] === 'wx') {
+        const write = handle.writeFile.bind(handle);
+        handle.writeFile = async bytes => { await write(bytes.subarray(0, 3)); await handle.sync(); stop(); };
+      }
+      return handle;
+    };
+    fs.rm = async (...args) => {
+      const result = await rm(...args);
+      if (point === 'retiring' && args[0] === path.join(storage, 'm_' + matter.id)) stop();
+      return result;
+    };
+    fs.rmdir = async (...args) => {
+      const result = await rmdir(...args);
+      if (point === 'discarding' && path.basename(args[0]) === '工作稿') stop();
+      return result;
+    };
     fs.rename = async (...args) => {
       const result = await rename(...args);
       if (point === 'registered' && args[1] === record && JSON.parse(await fs.readFile(record, 'utf8')).stage) stop();
       return result;
     };
     fs.lstat = async (...args) => {
+      if (point === 'discarding' && args[0] === path.dirname(marker) && require('node:fs').existsSync(record) && !require('node:fs').existsSync(args[0])) {
+        await fs.mkdir(args[0]);
+      }
       const result = await lstat(...args);
       if (point === 'published' && args[0] === marker) stop();
       return result;
@@ -251,6 +272,112 @@ it.each(["registered", "published"] as const)("首次绑定在 %s 强退，重�
   for (const key of keys) expect((await storage.readFile(key)).toString()).toBe(key);
   expect(await changeMatterFolder(matter, { action: "bind", root }, storageRoot)).toEqual(state);
   expect(await fs.readdir(root)).toEqual([path.basename(state.path!)]);
+});
+
+it.each(["copying", "retiring"] as const)("在 %s 强退后继续登记的同一份暂存，清理私有副本", async point => {
+  const matter = { ...a, intakeId: "c" + "i".repeat(24) };
+  const key = "m_" + a.id + "/original.bin", intake = "i_" + matter.intakeId + "/intake.bin";
+  const bytes = Buffer.from("fixed case bytes");
+  await storage.writeFileAt(key, bytes);
+  await storage.writeFileAt(intake, Buffer.from("intake"));
+  await interruptFirstBind(point, matter);
+  if (point === "copying") {
+    const [stage] = await fs.readdir(root);
+    const partial = path.join(root, stage, a.internalCode + " · " + a.title, "已入卷", "original.bin");
+    expect(await fs.readFile(partial)).toEqual(bytes.subarray(0, 3));
+    await fs.writeFile(partial, "externally changed");
+    await expect(changeMatterFolder(matter, { action: "bind", root }, storageRoot)).rejects.toThrow("内容已变化");
+    expect(await fs.readFile(partial, "utf8")).toBe("externally changed");
+    expect(await fs.readFile(path.join(storageRoot, key))).toEqual(bytes);
+    await fs.writeFile(partial, bytes.subarray(0, 3));
+  } else {
+    expect(await fs.readFile(path.join(storageRoot, intake), "utf8")).toBe("intake");
+  }
+  expect((await changeMatterFolder(matter, { action: "bind", root }, storageRoot)).available).toBe(true);
+  expect(await fs.readdir(root)).toEqual([a.internalCode + " · " + a.title]);
+  expect(await storage.readFile(key)).toEqual(bytes);
+  expect(await storage.readFile(intake)).toEqual(Buffer.from("intake"));
+  for (const file of [key, intake]) await expect(fs.access(path.join(storageRoot, file))).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+it("外盘 ENOSPC 后即使断开仍可明确停止复制、继续私有读写并换盘，保留编辑过的暂存", async () => {
+  const key = "m_" + a.id + "/original.bin", bytes = Buffer.from("first version");
+  await storage.writeFileAt(key, bytes);
+  const originalOpen = fsPromises.open.bind(fsPromises);
+  const full = vi.spyOn(fsPromises, "open").mockImplementation(async (file, flags, mode) => {
+    const handle = await originalOpen(file, flags, mode);
+    if (String(file).startsWith(root + path.sep) && String(file).endsWith("original.bin") && flags === "wx") {
+      vi.spyOn(handle, "writeFile").mockImplementation(async () => {
+        await handle.write(bytes.subarray(0, 3));
+        throw Object.assign(new Error("disk full"), { code: "ENOSPC" });
+      });
+    }
+    return handle;
+  });
+  syncBuiltinESMExports();
+  try { await expect(changeMatterFolder(a, { action: "bind", root }, storageRoot)).rejects.toMatchObject({ code: "ENOSPC" }); }
+  finally { full.mockRestore(); syncBuiltinESMExports(); }
+  const state = await matterFolderState(a);
+  expect(state.copyStagePath).toBeTruthy();
+  const stageFile = path.join(state.copyStagePath!, state.suggestedName, "已入卷", "original.bin");
+  expect(await fs.readFile(stageFile)).toEqual(bytes.subarray(0, 3));
+  await fs.writeFile(stageFile, "手工保留的内容");
+  await fs.rename(root, root + "-离线");
+  await expect(changeMatterFolder(a, { action: "cancel-copy", stagePath: "另一个复制" }, storageRoot)).rejects.toThrow("已变化");
+  expect((await changeMatterFolder(a, { action: "cancel-copy", stagePath: state.copyStagePath! }, storageRoot)).copyStagePath).toBeNull();
+  expect(await storage.readFile(key)).toEqual(bytes);
+  const later = await storage.writeFile("m_" + a.id, Buffer.from("新原件"));
+  const next = path.join(scratch, "新磁盘"); await fs.mkdir(next);
+  expect((await changeMatterFolder(a, { action: "bind", root: next }, storageRoot)).available).toBe(true);
+  expect(await storage.readFile(key)).toEqual(bytes);
+  expect((await storage.readFile(later)).toString()).toBe("新原件");
+  await fs.rename(root + "-离线", root);
+  expect(await fs.readFile(stageFile, "utf8")).toBe("手工保留的内容");
+  await expect(changeMatterFolder(a, { action: "cancel-copy", stagePath: state.copyStagePath! }, storageRoot)).rejects.toThrow("已变化");
+});
+
+it("写盘中途 ENOSPC 不发布半份原件，腾出空间后可按原键重新发布", async () => {
+  const bound = await changeMatterFolder(a, { action: "bind", root }, storageRoot);
+  const key = "m_" + a.id + "/reserved.bin", bytes = Buffer.from("原件");
+  const originalOpen = fsPromises.open.bind(fsPromises);
+  const full = vi.spyOn(fsPromises, "open").mockImplementation(async (file, flags, mode) => {
+    const handle = await originalOpen(file, flags, mode);
+    if (String(file).endsWith(".upload")) vi.spyOn(handle, "writeFile").mockImplementation(async () => {
+      await handle.write(bytes.subarray(0, 1));
+      throw Object.assign(new Error("disk full"), { code: "ENOSPC" });
+    });
+    return handle;
+  });
+  syncBuiltinESMExports();
+  try { await expect(storage.writeFileAt(key, bytes)).rejects.toMatchObject({ code: "ENOSPC" }); }
+  finally { full.mockRestore(); syncBuiltinESMExports(); }
+  expect(await fs.readdir(path.join(bound.path!, "已入卷"))).toEqual([]);
+  await expect(storage.readFile(key)).rejects.toMatchObject({ code: "ENOENT" });
+  await storage.writeFileAt(key, bytes);
+  expect(await storage.readFile(key)).toEqual(bytes);
+});
+
+it("碰撞后清理空暂存中途强退，陌生目录仍保留并可改选父目录", async () => {
+  await interruptFirstBind("discarding", a);
+  expect(await fs.readdir(path.join(root, a.internalCode + " · " + a.title))).toEqual([]);
+  expect((await matterFolderState(a)).path).toBeNull();
+  const next = path.join(scratch, "新位置"); await fs.mkdir(next);
+  expect((await changeMatterFolder(a, { action: "bind", root: next }, storageRoot)).available).toBe(true);
+});
+
+it("带原件的暂存发生同名碰撞时保留两边，移开冲突后从原登记收尾", async () => {
+  const matter = { ...a, intakeId: "c" + "i".repeat(24) };
+  const key = "m_" + a.id + "/original.bin";
+  await storage.writeFileAt(key, Buffer.from("原件"));
+  await interruptFirstBind("registered", matter);
+  const destination = path.join(root, a.internalCode + " · " + a.title);
+  await fs.mkdir(destination);
+  await fs.writeFile(path.join(destination, "用户文件"), "原目录");
+  await expect(changeMatterFolder(matter, { action: "bind", root }, storageRoot)).rejects.toThrow("暂存材料已保留");
+  expect(await fs.readFile(path.join(destination, "用户文件"), "utf8")).toBe("原目录");
+  await fs.rename(destination, destination + "-原目录");
+  expect((await changeMatterFolder(matter, { action: "bind", root }, storageRoot)).available).toBe(true);
+  expect(await storage.readFile(key)).toEqual(Buffer.from("原件"));
 });
 
 it("中断后拒绝同案标记的替换副本和改写的原件，保留私有原件供核对", async () => {

@@ -13,6 +13,7 @@ const location = z.string().min(1).max(4096);
 const changes = z.discriminatedUnion("action", [
   z.object({ matterId: id, action: z.literal("bind"), root: location }),
   z.object({ matterId: id, action: z.literal("relocate"), path: location }),
+  z.object({ matterId: id, action: z.literal("cancel-copy"), stagePath: location }),
 ]);
 const headers = { "Cache-Control": "no-store" };
 const fail = (error: string, status: number) => Response.json({ error }, { status, headers });
