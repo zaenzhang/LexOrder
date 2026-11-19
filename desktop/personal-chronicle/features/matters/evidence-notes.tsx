@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
@@ -10,28 +9,17 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { PageHeader } from "@/kit/ui-patterns/page-header"
 import { EvidenceReview } from "./evidence-review"
+import { CaseChronology, kinds, relations, type EvidenceNote as Item, type EventDate } from "./case-chronology"
 import { readPersonal, workspaceEndpoint } from "./personal-client"
 
-const kinds = { FACT: "事实", CLAIM: "当事人陈述", ANALYSIS: "分析", ISSUE: "争点", TODO_VERIFY: "待核实" }
-const relations = { SUPPORTS: "支持", REBUTS: "反驳", CONTEXT: "背景" }
-type Kind = keyof typeof kinds
-type Source = { id: string; documentName: string | null; documentVersion: number | null; relation: keyof typeof relations | null; legacy: boolean; status: string; locationLabel: string | null }
-type EventDate = { precision: "EXACT" | "RANGE" | "UNKNOWN"; start: string | null; end: string | null; text: string | null }
-type Item = { id: string; kind: Kind; title: string; content: string; revision: number; confirmedAt: string | null;
-  restricted: boolean; canEdit: boolean; sources: Source[]; eventDate: EventDate | null }
 type FormOptions = { canWrite: boolean; documents: { id: string; name: string; version: number; isPdf: boolean; pageCount: number | null; hasIdentity: boolean }[] }
 type Action = "create" | "revise" | "link" | "unlink"
 type Editing = { action: Action; item?: Item }
-function when(row: Item) {
-  const date = row.eventDate
-  return [date?.start, date?.end].filter(Boolean).join(" 至 ") || date?.text || "时间未明"
-}
-
 export function EvidencePage({ matterId }: { matterId: string }) {
-  return <Tabs defaultValue="compare">
-    <TabsList aria-label="事实与争点视图"><TabsTrigger value="compare">争点证据对照</TabsTrigger><TabsTrigger value="notes">事实与要点</TabsTrigger></TabsList>
+  return <Tabs defaultValue="notes">
+    <TabsList aria-label="事实与争点视图"><TabsTrigger value="notes">案件看板</TabsTrigger><TabsTrigger value="compare">争点证据对照</TabsTrigger></TabsList>
     <TabsContent value="compare"><EvidenceReview key={matterId} matterId={matterId}/></TabsContent>
-    <TabsContent value="notes"><EvidenceNotes matterId={matterId}/></TabsContent>
+    <TabsContent value="notes"><EvidenceNotes key={matterId} matterId={matterId}/></TabsContent>
   </Tabs>
 }
 
@@ -54,24 +42,15 @@ function EvidenceNotes({ matterId }: { matterId: string }) {
   function reload() { setItems(undefined); setOptions(undefined); setError(""); setRefresh(value => value + 1) }
   const visible = items?.filter(item => !kind || kind === item.kind)
   return <section className="grid gap-4">
-    <PageHeader title="事实与要点" actions={options?.canWrite ? <Button size="sm" onClick={() => setEditing({ action: "create" })}>记录要点</Button> : null} />
+    <PageHeader title="案件事实看板" actions={options?.canWrite ? <Button size="sm" onClick={() => setEditing({ action: "create" })}>记录要点</Button> : null} />
     <NativeSelect aria-label="要点性质" value={kind} onChange={e => setKind(e.target.value)}>
       <NativeSelectOption value="">全部性质</NativeSelectOption>{Object.entries(kinds).map(([id,label]) => <NativeSelectOption key={id} value={id}>{label}</NativeSelectOption>)}
     </NativeSelect>
     {error ? <div role="alert" className="flex gap-2 text-sm">{error}<Button size="sm" variant="outline" onClick={reload}>重试</Button></div>
-      : !visible ? <p role="status">正在读取要点…</p> : !visible.length && <p className="text-muted-foreground">没有符合条件的记录。</p>}
-    {visible?.map(item => <Card key={item.id}><CardHeader><CardTitle>{item.title}</CardTitle>
-      <p className="text-xs text-muted-foreground">{kinds[item.kind]} · {when(item)} · V{item.revision} · {item.confirmedAt ? "已核对" : "待核对"}</p></CardHeader>
-      <CardContent className="grid gap-2 text-sm">{item.restricted ? <p>部分出处不可读。</p> : <>
-        <p className="whitespace-pre-wrap">{item.content}</p>
-        {item.eventDate?.start && item.eventDate.text && <p>原始时间表述 · {item.eventDate.text}</p>}
-        {item.sources.map(source => <p key={source.id} className="text-xs text-muted-foreground">
-          {relations[source.relation ?? "CONTEXT"]} · {source.documentName} · V{source.documentVersion} · {source.locationLabel}</p>)}
-        {item.canEdit && <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => setEditing({ action: "revise", item })}>修订要点</Button>
-          <Button size="sm" variant="outline" onClick={() => setEditing({ action: "link", item })}>关联来源</Button>
-          {item.sources.some(s => !s.legacy) && <Button size="sm" variant="ghost" onClick={() => setEditing({ action: "unlink", item })}>撤回来源关系</Button>}
-        </div>}
-      </>}</CardContent></Card>)}
+      : !visible ? <p role="status">正在读取要点…</p> : null}
+    <div hidden={!visible || Boolean(error)}>
+      <CaseChronology matterId={matterId} items={visible ?? []} onEdit={(item, action) => setEditing({ item, action })} />
+    </div>
     {editing && options && <EvidenceEditor editing={editing} options={options} matterId={matterId} onClose={() => setEditing(undefined)} onSaved={() => { setEditing(undefined); reload() }} />}
   </section>
 }

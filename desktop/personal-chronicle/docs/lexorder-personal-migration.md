@@ -96,3 +96,11 @@ Chronicle v3 是个人版新基线。按网页原流程逐项迁移、文件夹�
 运行验证使用临时个人工作区、本人角色和 PostgreSQL 16。含数据库的定向回归共 10 个套件、90 项通过，覆盖摄入、工作稿、法院来件、保全及财务。目录回归另含 7 项，私有数据库连接通道另有 8 项。Linux Tauri 宿主构建与目录命令授权测试通过。各项业务断言可用[定向验收脚本](../../../tools/workbench-m1/chronicle-smoke/README.md)复跑。此前 Windows 的壳验收详见上节，本批默认编辑器和文件系统监听仍需在 Windows Word 和 macOS 分别复验。
 
 首次启动另用全新 PGlite 私有目录跑原迁移与种子，再重开读取同一工作区。20 个迁移完成，保留单一本机独立律师，读回 25 份模板与 16 条期限规则。单连接的私有回环传输加入上一连接短暂交接及 TCP 无延迟设置；持续争用仍拒绝。验证范围到工作区初始化和重开，Tauri 窗口的跨案业务验收使用独立 PostgreSQL。外部编辑器启动仅传必要系统桌面环境；私有运行时、数据库和存储凭据留在宿主。待回传快照受 SHA-256 与刷盘保护，截断快照拒绝入卷，只能使用摘要相符的工作稿恢复。
+
+## V8 案件看板与研究成果 · 2026-11-19
+
+W06/W09.1、SK02/SK04、AC04/07。本批在现有 `codex/local-chronicle-main` 工作树接续。个人版 `EvidencePage` 使用「案件看板」作为默认视图，保留同页「争点证据对照」。看板使用已有 `evidence-items` 和 `open-evidence-source`，读取一次案内要点，按日期精度展示位置，按具体材料版本组织矩阵，事实经过只展示事实和当事人陈述。选择以要点 ID、修订和来源 ID 绑定，数据刷新时受限或旧修订的预览退出。律师继续在原要点动作编辑或管理来源。矩阵展示已记录的关系和位置，逐条来源独立日期、金额、自动抽取和 V8 全部导出未纳入本批。
+
+主参考为 [MiaoQichuan V8 固定实现](https://github.com/MiaoQichuan/new-litigation-visualization/tree/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master)，具体审查了 `web/src/app.js` 的比例时间线、逐材料矩阵及抽屉，`web/src/features.js` 的事实经过，和 `references/schema.md` 的独立记载。Chronicle 复用现有 Card、Badge、Sheet 与原文预览。研究成果的字段顺序参考 [中文 claim-chart](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/litigation-legal/skills/claim-chart/SKILL.md)，双栏原文与编辑交互对照 [assistant-ui 成果工作台](https://github.com/assistant-ui/assistant-ui/tree/1663da7d94cfeb80b54745ebd4f1527c398f281d/examples/with-artifacts)。原 V8 页面由固定仓库 `ingest.py` 和 `make.py` 重新生成，4 份合成材料、7 条事实、9 条引语核对通过，1 条算式差异进入待审。
+
+工程验证覆盖看板三视图、固定原文、失权清理、研究编辑过程的原文回查和失败保稿。隔离 PostgreSQL 的 3 项集成通过，包括个人通道拒绝、固定 DOCX 段落、原请求重放、旧基线拒绝、跨案拒绝和另存后回读。测试环境曾出现两个问题：共享依赖的 Prisma 客户端落后于当前 schema，已用本工作树的依赖重新生成；首次个人接口集成夹具缺少本机工作区有效身份，被拒绝后已改用合成个人清单和操作者复验。沿用的 pg 驱动并行查询弃用警告仍出现，本次业务检查通过。真实浏览器、Windows WebView 和律师专业验收待执行。

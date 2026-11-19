@@ -21,7 +21,7 @@ import { getMatterFinance } from "@/server/finance/actions";
 import { getMatterById, updateMatterBasicInfo } from "@/server/matters/actions";
 import { createNote, listNotes, updateNote } from "@/server/notes/actions";
 import { getResearchList, getResearch, saveResearchRevision, checkResearchRevision, formResearchDraft } from "@/server/research/actions";
-import { emptyResearchContent, researchCheckSchema, researchDraftSchema } from "@/server/research/contracts";
+import { emptyResearchContent, researchAnalysisSchema, researchCheckSchema, researchDraftSchema } from "@/server/research/contracts";
 import { getMatterBrief, getMatterContext, getMatterContextInputOptions, getMatterContextSourceOptions, recordMatterContext, confirmMatterContextRecord, getMatterContextHistory } from "@/server/matters/context-actions";
 import { getTaskWorkspace } from "@/server/tasks/workflow-actions";
 import { createTask, toggleTaskCompleted, updateTask } from "@/server/tasks/actions";
@@ -85,6 +85,11 @@ const mutation = z.discriminatedUnion("action", [
   z.object({ action: z.literal("complete-task"), matterId: idSchema, id: idSchema, revision: z.number().int().nonnegative() }),
   z.object({ action: z.literal("create-research"), matterId: idSchema, requestKey: z.string().uuid(), researchedAt: z.iso.datetime({ offset: true }),
     question: z.string(), scope: z.string(), conclusion: z.string(), unresolved: z.string() }),
+  z.object({
+    action: z.literal("revise-research"), matterId: idSchema, supersedesId: idSchema,
+    expectedVersion: z.number().int().positive(), requestKey: z.string().uuid(),
+    analysis: researchAnalysisSchema,
+  }),
   researchCheckSchema.extend({ action: z.literal("check-research") }),
   researchDraftSchema.extend({ action: z.literal("draft-research") }),
   createSchema.extend({
@@ -322,6 +327,14 @@ export async function POST(request: Request) {
     if (input.action === "create-research") return json(await saveResearchRevision({
       ...emptyResearchContent(), ...input, supersedesId: null, expectedVersion: null,
     }));
+    if (input.action === "revise-research") {
+      const { matterId, supersedesId, expectedVersion, requestKey, analysis } = input;
+      const previous = await getResearch(matterId, supersedesId);
+      if (!previous.readable || !previous.content) throw new ActionError("当前无法读取原研究及其来源");
+      return json(await saveResearchRevision({
+        ...previous.content, ...analysis, matterId, supersedesId, expectedVersion, requestKey,
+      }));
+    }
     if (input.action === "check-research") return json(await checkResearchRevision(input));
     if (input.action === "draft-research") return json(await formResearchDraft(input));
     if (input.action === "confirm-evidence") return json(await confirmEvidenceItem(input));

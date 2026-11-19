@@ -64,12 +64,16 @@ export function researchIssueSelectionKey(selection: ResearchIssueSelection | nu
   return selection.kind === "SAVED" ? `saved:${selection.researchRevisionId}` : `historical:${selection.revisionId}`;
 }
 
+export const researchAnalysisSchema = z.object({
+  rule: text(15000), exceptions: text(10000), supportingAnalysis: text(15000), opposingAnalysis: text(15000),
+  conclusion: text(15000), unresolved: text(10000), nextSteps: text(5000),
+});
+
 export const researchContentSchema = z.object({
   question: text(300).min(1, "请填写研究问题"), purpose: text(2000), jurisdiction: text(150),
   relevantDate: optionalDay, researchedAt: z.string().datetime({ offset: true }),
   scope: text(5000), queryLog: z.array(researchQuerySchema).max(40),
-  rule: text(15000), exceptions: text(10000), supportingAnalysis: text(15000), opposingAnalysis: text(15000),
-  conclusion: text(15000), unresolved: text(10000), nextSteps: text(5000),
+  ...researchAnalysisSchema.shape,
   issueSelection: researchIssueSelectionSchema.nullable(),
   sources: z.array(researchSourceInputSchema).max(50),
 }).superRefine((value, ctx) => {

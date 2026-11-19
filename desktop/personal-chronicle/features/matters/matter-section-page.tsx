@@ -133,7 +133,7 @@ export function MatterSectionPage({ matterId, section, title }: { matterId: stri
       key: row.id, title: row.readable ? row.question ?? "研究记录" : "研究内容不可用", meta: `V${row.version} · ${row.checkedAt ? "已核对" : "待核对"}`,
       action: row.readable || row.version > 1 ? <Button variant="outline" size="sm" onClick={() => setResearchId(row.id)}>查看修订</Button> : null,
     }))} /></Panel> : null}
-    {section === "research" && researchId && <ResearchRevision key={researchId} matterId={matterId} recordId={researchId} onClose={() => setResearchId("")} onUpdated={() => setRefresh(value => value + 1)} />}
+    {section === "research" && researchId && <ResearchRevision key={researchId} matterId={matterId} recordId={researchId} onClose={() => setResearchId("")} onUpdated={() => setRefresh(value => value + 1)} onRevised={id => { setResearchId(id); setRefresh(value => value + 1) }} />}
     {section === "tasks" && data?.schedule && <TaskWorkspace matterId={matterId} data={data.schedule} reload={() => setRefresh(value => value + 1)} />}
     {section === "delivery" && data && <TemplateDrafts matterId={matterId} onGenerated={() => setRefresh(value => value + 1)} />}
     {section === "delivery" && data && <DocumentReviewDesk key={matterId} matterId={matterId} />}
