@@ -1,6 +1,8 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { isPersonalMode } from "../runtime/mode";
+import { withPersonalOriginal } from "../runtime/matter-folders";
 import type { StorageProvider } from "./provider";
 import { ActionError } from "@/lib/action-error";
 
@@ -20,8 +22,24 @@ export class LocalStorageProvider implements StorageProvider {
     return resolved;
   }
 
+  private atPath<T>(key: string, operation: (root: string, file: string) => Promise<T>) {
+    const file = this.resolvePath(key);
+    const [scope, ...parts] = key.split("/");
+    if (isPersonalMode()) {
+      if (key !== path.posix.normalize(key) || parts.some(part => !part)) throw new ActionError("非法路径");
+      if (/^[mi]_c[a-z0-9]{24,}$/.test(scope)) {
+        if (!parts.length) throw new ActionError("原件文件名缺失");
+        return withPersonalOriginal(scope, STORAGE_ROOT, parts, operation);
+      }
+    }
+    return operation(STORAGE_ROOT, file);
+  }
+
   async writeFileAt(relPath: string, data: Buffer): Promise<void> {
-    const destination = this.resolvePath(relPath);
+    return this.atPath(relPath, (root, destination) => this.publish(root, destination, data));
+  }
+
+  private async publish(root: string, destination: string, data: Buffer) {
     await fs.mkdir(path.dirname(destination), { recursive: true });
     const temporary = `${destination}.${randomUUID()}.upload`;
     const file = await fs.open(temporary, "wx", 0o600);
@@ -38,7 +56,7 @@ export class LocalStorageProvider implements StorageProvider {
         for (let directory = path.dirname(destination);; directory = path.dirname(directory)) {
           const handle = await fs.open(directory, "r");
           try { await handle.sync(); } finally { await handle.close(); }
-          if (directory === path.dirname(STORAGE_ROOT) || directory === path.dirname(directory)) break;
+          if (directory === path.dirname(root) || directory === path.dirname(directory)) break;
         }
       }
     } finally { await fs.unlink(temporary).catch(() => undefined); }
@@ -52,8 +70,6 @@ export class LocalStorageProvider implements StorageProvider {
     const yyyymm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
     const safeScope = scope.split("/").filter(Boolean).map(part => part.replace(/[^a-zA-Z0-9_-]/g, "_")).join("/");
     if (!safeScope) throw new ActionError("存储范围不能为空");
-    const dir = path.join(STORAGE_ROOT, safeScope, yyyymm);
-    await fs.mkdir(dir, { recursive: true });
 
     const filename = `${randomUUID()}.bin`;
     const relPath = path.posix.join(safeScope, yyyymm, filename);
@@ -62,18 +78,14 @@ export class LocalStorageProvider implements StorageProvider {
   }
 
   async readFile(relPath: string): Promise<Buffer> {
-    const resolved = this.resolvePath(relPath);
-    return fs.readFile(resolved);
+    return this.atPath(relPath, (_root, file) => fs.readFile(file));
   }
 
   async deleteFile(relPath: string): Promise<void> {
-    const resolved = this.resolvePath(relPath);
-    try {
-      await fs.unlink(resolved);
-    } catch (err) {
-      // 容忍文件已不存在
-      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-    }
+    await this.atPath(relPath, async (_root, file) => {
+      try { await fs.unlink(file); }
+      catch (err) { if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err; }
+    });
   }
 }
 

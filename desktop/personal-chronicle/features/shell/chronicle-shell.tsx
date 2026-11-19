@@ -10,6 +10,7 @@ import { SITE } from "@/config/site"
 import type { User } from "@/data/schema"
 import { useDemoCommands } from "@/features/demo/demo-commands"
 import { workspace } from "@/data/generate"
+import { useRecentMatter } from "@/features/matters/recent-matter"
 import { MatterSessionProvider } from "@/features/matters/matter-session"
 import { MatterWorkspaceSwitcher } from "@/features/matters/matter-workspace-switcher"
 import { matterSections, type MatterSection } from "@/features/matters/sections"
@@ -61,6 +62,7 @@ function resolveCaseBreadcrumbs(pathname: string) {
 
 function Frame({ children }: { children: React.ReactNode }) {
   const route = caseRoute(usePathname())
+  useRecentMatter(route?.id, route?.section)
   const [session, setSession] = useState<{ current?: string; sections: Record<string, MatterSection> }>({ sections: {} })
   if (route && (session.current !== route.id || session.sections[route.id] !== route.section)) {
     setSession({ current: route.id, sections: { ...session.sections, [route.id]: route.section } })

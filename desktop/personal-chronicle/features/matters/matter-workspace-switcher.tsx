@@ -9,6 +9,8 @@ import {
   DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar"
+import { usePractice } from "@/features/practice/data"
+import { readRecentMatters } from "./recent-matter"
 import type { MatterSection } from "./sections"
 import { evidenceEndpoint, readPersonal, workspaceEndpoint, type Matter } from "./personal-client"
 
@@ -17,6 +19,8 @@ type MatterChoices = { matters: Matter[]; hasMore: boolean }
 export function MatterWorkspaceSwitcher({ matterId, lastSections }: { matterId?: string; lastSections: Record<string, MatterSection> }) {
   const { isMobile, setOpenMobile } = useSidebar()
   const [open, setOpen] = useState(false)
+  const workspace = usePractice<{id:string}>("workspace", {}, open)
+  const saved = workspace.data && open ? readRecentMatters(workspace.data.id) : []
   const [choices, setChoices] = useState<MatterChoices>()
   const [choiceError, setChoiceError] = useState("")
   const [identity, setIdentity] = useState<{ id: string; title: string; internalCode?: string }>()
@@ -70,7 +74,7 @@ export function MatterWorkspaceSwitcher({ matterId, lastSections }: { matterId?:
               <DropdownMenuLabel>切换案件</DropdownMenuLabel>
               {choices?.matters.map(matter => (
                 <DropdownMenuItem key={matter.id} nativeButton={false}
-                  render={<Link href={"/matters/" + matter.id + "/" + (lastSections[matter.id] ?? "overview")} onClick={closeMobile} />}
+                  render={<Link href={"/matters/" + matter.id + "/" + (lastSections[matter.id] ?? saved.find(visit => visit.id === matter.id)?.section ?? "overview")} onClick={closeMobile} />}
                   aria-current={matter.id === matterId ? "true" : undefined} className="gap-2 p-2">
                   <BriefcaseBusinessIcon className="shrink-0" />
                   <span className="truncate">{matter.title}</span>

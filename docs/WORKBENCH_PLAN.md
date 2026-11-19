@@ -2721,6 +2721,10 @@ Personal/Windows、M4及全部非业务维护、知识发布、结构化方案�
 
 **跨宿主联合验收候选。** 以合成案卷运行 Codex 候选提交、LexOrder 律师逐条确认、WorkBuddy 回读当前状态。范围包括无权跨案/越权写入、撤权后调用、旧修订冲突、重试幂等以及补入材料后的待复核提示。版面和模型都复用现有材料、事实和来源；原文按需读取。尚未实施或联调。
 
+### 8.62 Chronicle 个人 Tauri 案卷迁移（2026-11-19）
+
+基于草稿 PR #27。W02/W03/W17 对应每案目录与双案重开，G04/G06 对应工作稿签出、OS 默认编辑器保存回传及不可变版本，W06/W07/W10–12 对应本轮迁入的个人业务操作。43 个原网页路由的处置、适用需求编号、已验证边界与后续批次已写回[桌面迁移计划](../desktop/personal-chronicle/docs/lexorder-desktop-migration-plan.md)和[案内操作清单](../desktop/personal-chronicle/docs/lexorder-matter-ui-audit.md)。
+
 ## 9. 继续工作时的约束
 
 - 用户已授权研究、文档、提交并上传 `zaenzhang/LexOrder`，不再重复询问；每阶段完成后先提交并确认上传，再继续下一实施阶段。本次 Semi 迁移按 §7.17 提 PR 到 `ui/semi-integration`，其他业务沿原 main 发布分工。本轮不包含生产迁移、部署、真实客户数据或对外消息。

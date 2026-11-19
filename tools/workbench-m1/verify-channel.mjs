@@ -79,10 +79,6 @@ class Client {
   }
   async close() { this.socket.destroy(); await this.closedPromise; }
 }
-async function until(predicate, timeout = 5000) {
-  const end = Date.now() + timeout;
-  while (!predicate()) { if (Date.now() >= end) throw new Error('Condition timed out'); await wait(2); }
-}
 async function boundedClose(client) {
   await Promise.race([client.closedPromise, wait(5000).then(() => { throw new Error('Rejected connection did not close'); })]);
 }
@@ -147,10 +143,16 @@ try {
   await owner.sql('BEGIN'); await owner.sql('INSERT INTO gateway_probe VALUES(2)');
   assert.equal(db.isInTransaction(), true);
   assert.deepEqual(rows(await owner.sql('SELECT count(*) FROM gateway_probe')), [['2']]);
-  await owner.close(); await until(() => !db.isInTransaction()); await wait(10);
-  const successor = connect(); await successor.auth();
+  // A migration probe can still own the socket when the next authenticated
+  // connection arrives. Its uncommitted row must disappear before handoff.
+  const successor = connect(); await successor.challenge();
+  successor.socket.write(password(credential));
+  await wait(20);
+  await owner.close();
+  await successor.takeUntil(message => message.type === 'Z');
+  assert.equal(db.isInTransaction(), false);
   assert.deepEqual(rows(await successor.sql('SELECT id FROM gateway_probe ORDER BY id')), [['1']]);
-  reports.push({ check: 'disconnect_rolls_back_uncommitted_write_and_successor_preserves_committed_row', status: 'PASS' });
+  reports.push({ check: 'overlapping_successor_waits_for_rollback_and_reads_only_committed_row', status: 'PASS' });
   {
     failNextQuery = true; successor.socket.write(query('SELECT 1000')); await boundedClose(successor);
     assert.equal(fatalCalls, 1);

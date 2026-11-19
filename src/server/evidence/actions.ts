@@ -290,6 +290,14 @@ async function itemViews(items: Item[], session: Session, matterId: string): Pro
   });
 }
 
+export async function getEvidenceFormOptions(matterId: string) {
+  const session = await requireSession("matters.read");
+  const id = z.string().cuid().parse(matterId);
+  await assertCanReadMatter(session.user.id, session.user.role, id, session.user.rolePermissions);
+  const canWrite = await canEditMatter(session, id);
+  return { canWrite, documents: canWrite ? await readableDocumentOptions(session.user.id, id) : [] };
+}
+
 export async function listEvidenceItems(matterId: string): Promise<EvidenceItemView[]> {
   const session = await requireSession("matters.read");
   const id = z.string().cuid().parse(matterId);

@@ -3,27 +3,41 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
+import { MatterFolder } from "./matter-folder"
+import { FinanceDesk } from "@/features/practice/finance-desk"
+import { ContextRecords, type ContextData } from "./matter-context"
+import { EditCase, type CaseBasic } from "./case-management"
+import { DocumentReviewDesk } from "./document-review-desk"
+import { TemplateDrafts } from "./template-drafts"
+import { SealWorkspace, type SealData } from "./seal-workspace"
+import { DeliveryWorkspace, type DeliverySummary } from "./delivery-workspace"
+import { TaskWorkspace, type TaskData } from "./task-workspace"
+import { NewResearch, ResearchRevision } from "./research-revision"
 import { PageHeader } from "@/kit/ui-patterns/page-header"
 import { readPersonal, workspaceEndpoint } from "./personal-client"
-import { MaterialsWorkspace, type Material } from "./materials-workspace"
+import { MaterialsWorkspace, type Material, type MaterialFilters } from "./materials-workspace"
 import type { MatterSection } from "./sections"
 
-type Entry = { id: string; title: string; dueAt: string | null; completed: boolean }
 type Note = { id: string; channel: string; content: string; author: string; occurredAt: string; updatedAt: string; withWhom: string | null; tags: string[]; editable: boolean }
 type Index = {
-  title?: string; internalCode?: string; status?: string; category?: string; cause?: string; owner?: string; client?: string; claimAmount?: string
+  title?: string; internalCode?: string; status?: string; statusLabel?: string; category?: string; cause?: string; owner?: string; client?: string; claimAmount?: string
+  folders?: { id: string; name: string }[]
   documents?: Material[]
   records?: { id: string; question: string | null; version: number; checkedAt: string | null; readable: boolean }[]
-  procedures?: { id: string; name: string; deadlines: Entry[]; hearings: { id: string; startsAt: string }[]; stages: { id: string; name: string; tasks: Entry[] }[] }[]
-  items?: { id: string; purpose: string | null; recipientName: string | null; createdAt: string; state: string; itemCount: number }[]
+  editor?: CaseBasic | null
+  canWrite?: boolean
+  schedule?: TaskData
+  brief?: { serviceScope: string | null; deliverables: string | null; nextActions: { id: string; title: string; dueAt: string | null }[]
+    context: ContextData
+  }
+  items?: DeliverySummary[]
   notes?: Note[]
   events?: { id: string; title: string; occurredAt: string }[]
   entries?: { id: string; type: string; amount: string; occurredAt: string }[]
-  seals?: { id: string; code: string; documentTitle: string; status: string; requestedAt: string }[]
+  sealWorkspace?: SealData
   stats?: { contractAmount: number; receivable: number; received: number; outstanding: number }
   nextCursor?: string | null
 }
@@ -31,10 +45,9 @@ type Index = {
 const date = (value: string | null) => value
   ? new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", dateStyle: "medium" }).format(new Date(value))
   : "—"
-const hearingTime = new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", dateStyle: "medium", timeStyle: "short" })
+const contextKinds: Record<string, string> = { GOAL: "客户目标", CONSTRAINT: "约束", INSTRUCTION: "客户指示", OPTION: "备选方案", DECISION: "决定" }
 const money = (value: number | string | undefined) => value == null ? "—" : new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY" }).format(Number(value))
 const noteChannels = [["PHONE", "电话"], ["WECHAT", "微信"], ["EMAIL", "邮件"], ["MEETING", "会见"], ["COURT", "法院沟通"], ["OTHER", "其他"]] as const
-const statuses: Record<string,string> = { OPEN: "在办", ACTIVE: "在办", ON_HOLD: "暂停", CLOSED: "结案", ARCHIVED: "已归档", PENDING: "待审批", APPROVED: "已批准", REJECTED: "已驳回", STAMPED: "已用印", CANCELLED: "已撤销", PREPARED: "已准备", SENT: "已送出", DELIVERED: "已交付", UNAVAILABLE: "不可查看", RECEIVABLE: "应收", RECEIVED: "实收", REFUND: "退款", COST: "费用", COMMISSION: "分成" }
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return <Card><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent className="grid gap-3">{children}</CardContent></Card>
@@ -47,13 +60,10 @@ function Rows({ items, empty }: { items: { key: string; title: string; meta?: st
   </li>)}</ul>
 }
 
-function entryRows(items: Entry[]) {
-  return items.map(item => ({ key: item.id, title: item.title, meta: `${date(item.dueAt)} · ${item.completed ? "完成" : "未完成"}` }))
-}
-
 export function MatterSectionPage({ matterId, section, title }: { matterId: string; section: Exclude<MatterSection, "evidence">; title: string }) {
   const [data, setData] = useState<Index>()
   const [refresh, setRefresh] = useState(0)
+  const [filters, setFilters] = useState<MaterialFilters>({q:"", folder:"*", version:"all"})
   const [cursor, setCursor] = useState<string>()
   const [error, setError] = useState("")
   const [note, setNote] = useState("")
@@ -61,16 +71,22 @@ export function MatterSectionPage({ matterId, section, title }: { matterId: stri
   const [channel, setChannel] = useState("OTHER")
   const [saving, setSaving] = useState(false)
   const [writeStatus, setWriteStatus] = useState("")
+  const [researchId, setResearchId] = useState("")
 
   useEffect(() => {
+    if (section === "finance") return
     const controller = new AbortController()
     const query = new URLSearchParams({ matter: matterId, section })
     if (cursor) query.set("cursor", cursor)
-    void readPersonal<Index>(`${workspaceEndpoint}?${query}`, { signal: controller.signal })
-      .then(value => { if (!controller.signal.aborted) setData(value) })
+    if (section === "materials") {
+      for (const [key,value] of Object.entries(filters)) query.set(key,value)
+    }
+    const timer = window.setTimeout(() => { void readPersonal<Index>(`${workspaceEndpoint}?${query}`, { signal: controller.signal })
+      .then(value => { if (!controller.signal.aborted) { setData(value); setError("") } })
       .catch(error => { if (!controller.signal.aborted) setError(error.message) })
-    return () => controller.abort()
-  }, [matterId, section, refresh, cursor])
+    }, section === "materials" && filters.q ? 180 : 0)
+    return () => { window.clearTimeout(timer); controller.abort() }
+  }, [matterId, section, refresh, cursor, filters])
 
   async function saveNote(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -93,24 +109,35 @@ export function MatterSectionPage({ matterId, section, title }: { matterId: stri
   }
 
   return <section className="grid min-w-0 gap-5">
-    <PageHeader title={section === "overview" && data?.title ? data.title : title} description={section === "overview" ? data?.internalCode : undefined} />
+    <PageHeader title={section === "overview" && data?.title ? data.title : title} description={section === "overview" ? data?.internalCode : undefined} actions={section === "overview" && data?.editor ? <EditCase editor={data.editor} reload={() => setRefresh(n => n + 1)}/> : undefined} />
     {error ? <div role="alert" className="flex items-center gap-2"><span>{error}</span><Button variant="outline" size="sm" onClick={() => { setError(""); setRefresh(value => value + 1) }}>重试</Button></div> : null}
-    {!error && !data ? <p role="status" className="text-sm text-muted-foreground">正在读取案件…</p> : null}
+    {section !== "finance" && !error && !data ? <p role="status" className="text-sm text-muted-foreground">正在读取案件…</p> : null}
     {section === "overview" && data ? <Panel title="案件基本信息"><dl className="grid gap-4 sm:grid-cols-2">
-      {([["状态", statuses[data.status ?? ""] ?? data.status], ["案由", data.cause], ["主办", data.owner], ["委托人", data.client], ["标的金额", money(data.claimAmount)]]).map(([label,value]) =>
+      {([["状态", data.statusLabel], ["案由", data.cause], ["主办", data.owner], ["委托人", data.client], ["标的金额", money(data.claimAmount)]]).map(([label,value]) =>
         <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="text-sm">{value || "—"}</dd></div>)}
     </dl></Panel> : null}
-    {section === "materials" && data ? <MaterialsWorkspace matterId={matterId} documents={data.documents ?? []} onUploaded={() => setRefresh(value => value + 1)} /> : null}
-    {section === "research" && data ? <Panel title="研究修订"><Rows empty="暂无研究记录。" items={(data.records ?? []).map(row => ({
+    {(section === "overview" || section === "materials") && data && <MatterFolder matterId={matterId} />}
+    {section === "overview" && data?.brief && <Panel title="事项摘要">
+      {data.brief.serviceScope && <p className="text-sm">委托范围 · {data.brief.serviceScope}</p>}
+      {data.brief.deliverables && <p className="text-sm">约定成果 · {data.brief.deliverables}</p>}
+      <h3 className="text-sm font-medium">下一步工作</h3><Rows empty="暂无待办任务。" items={data.brief.nextActions.map(item => ({
+        key: item.id, title: item.title, meta: item.dueAt ? date(item.dueAt) : undefined,
+      }))} />
+      <ContextRecords matterId={matterId} initial={data.brief.context} reload={() => setRefresh(n => n + 1)}/>
+      <h3 className="text-sm font-medium">近期目标、指示与决定</h3><Rows empty="暂无可查看的记录。" items={data.brief.context.records.filter(item => item.readable && item.content && (!item.source || item.source.available)).slice(0, 5).map(item => ({
+        key: item.id, title: item.content!, meta: (contextKinds[item.kind] ?? item.kind) + " · " + (item.confirmationStatus === "CONFIRMED" ? "已确认" : "待确认"),
+      }))} />
+    </Panel>}
+    {section === "materials" && data ? <MaterialsWorkspace matterId={matterId} documents={data.documents ?? []} folders={data.folders ?? []} filters={filters} onFilter={value => { setCursor(undefined); setFilters(value) }} onUploaded={() => setRefresh(value => value + 1)} /> : null}
+    {section === "research" && data ? <Panel title="研究修订">{data.canWrite && <NewResearch matterId={matterId} onCreated={id => { setResearchId(id); setRefresh(value => value + 1) }} />}<Rows empty="暂无研究记录。" items={(data.records ?? []).map(row => ({
       key: row.id, title: row.readable ? row.question ?? "研究记录" : "研究内容不可用", meta: `V${row.version} · ${row.checkedAt ? "已核对" : "待核对"}`,
+      action: row.readable ? <Button variant="outline" size="sm" onClick={() => setResearchId(row.id)}>查看修订</Button> : null,
     }))} /></Panel> : null}
-    {section === "tasks" && data ? (data.procedures?.length ? data.procedures.map(procedure => <Panel key={procedure.id} title={procedure.name}>
-      <h3 className="text-sm font-semibold">期限与开庭</h3><Rows empty="暂无期限或开庭。" items={[...entryRows(procedure.deadlines), ...procedure.hearings.map(item => ({ key: item.id, title: "开庭", meta: hearingTime.format(new Date(item.startsAt)) }))]} />
-      {procedure.stages.map(stage => <div key={stage.id}><h3 className="text-sm font-semibold">{stage.name}</h3><Rows empty="暂无环节任务。" items={entryRows(stage.tasks)} /></div>)}
-    </Panel>) : <p className="text-sm text-muted-foreground">暂无案件程序。</p>) : null}
-    {section === "delivery" && data ? <Panel title="交付记录"><Rows empty="暂无交付记录。" items={(data.items ?? []).map(row => ({
-      key: row.id, title: row.purpose ?? "交付内容不可用", meta: [row.recipientName, statuses[row.state] ?? row.state, `${row.itemCount} 份材料`, date(row.createdAt)].filter(Boolean).join(" · "),
-    }))} /></Panel> : null}
+    {section === "research" && researchId && <ResearchRevision key={researchId} matterId={matterId} recordId={researchId} onClose={() => setResearchId("")} onUpdated={() => setRefresh(value => value + 1)} />}
+    {section === "tasks" && data?.schedule && <TaskWorkspace matterId={matterId} data={data.schedule} reload={() => setRefresh(value => value + 1)} />}
+    {section === "delivery" && data && <TemplateDrafts matterId={matterId} onGenerated={() => setRefresh(value => value + 1)} />}
+    {section === "delivery" && data && <DocumentReviewDesk key={matterId} matterId={matterId} />}
+    {section === "delivery" && data && <DeliveryWorkspace matterId={matterId} rows={data.items ?? []} reload={() => setRefresh(value => value + 1)} />}
     {section === "records" && data ? <Tabs defaultValue="communications">
       <TabsList aria-label="办理记录类型">
         <TabsTrigger value="communications">沟通记录（{data.notes?.length ?? 0}）</TabsTrigger>
@@ -139,15 +166,8 @@ export function MatterSectionPage({ matterId, section, title }: { matterId: stri
       <TabsContent value="progress"><Panel title="案件进展"><Rows empty="暂无案件进展。" items={(data.events ?? []).map(row => ({ key: row.id, title: row.title, meta: date(row.occurredAt) }))} /></Panel>
       </TabsContent>
     </Tabs> : null}
-    {section === "finance" && data ? <>
-      <Panel title="案款概况"><dl className="grid gap-4 sm:grid-cols-4">
-        {([["合同金额", data.stats?.contractAmount], ["应收", data.stats?.receivable], ["已收", data.stats?.received], ["未收", data.stats?.outstanding]] as const).map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="text-base font-medium">{money(value)}</dd></div>)}
-      </dl></Panel>
-      <Panel title="财务流水"><Rows empty="暂无财务流水。" items={(data.entries ?? []).map(row => ({ key: row.id, title: statuses[row.type] ?? row.type, meta: date(row.occurredAt), action: <Badge variant="outline">{money(row.amount)}</Badge> }))} /></Panel>
-    </> : null}
-    {section === "seal" && data ? <Panel title="用印申请"><Rows empty="暂无可查看的用印申请。" items={(data.seals ?? []).map(row => ({
-      key: row.id, title: row.documentTitle, meta: `${row.code} · ${date(row.requestedAt)}`, action: <Badge variant="outline">{statuses[row.status] ?? row.status}</Badge>,
-    }))} /></Panel> : null}
+    {section === "finance" && <FinanceDesk key={matterId} matterId={matterId} />}
+    {section === "seal" && data?.sealWorkspace && <SealWorkspace matterId={matterId} data={data.sealWorkspace} reload={() => setRefresh(value => value + 1)} />}
     {data && (cursor || data.nextCursor) ? <div className="flex gap-2">
       {cursor ? <Button size="sm" variant="outline" onClick={() => { setError(""); setData(undefined); setCursor(undefined) }}>返回第一页</Button> : null}
       {data.nextCursor ? <Button size="sm" variant="outline" onClick={() => { setError(""); setData(undefined); setCursor(data.nextCursor ?? undefined) }}>下一页</Button> : null}

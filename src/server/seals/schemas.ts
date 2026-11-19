@@ -38,6 +38,7 @@ export const sealCancelSchema = z.object({
 });
 
 export const sealListFilterSchema = z.object({
+  matterId: z.string().cuid().optional(),
   scope: z.enum(["mine", "approval", "all"]).default("mine"),
   status: z
     .enum(["PENDING", "APPROVED", "STAMPED", "REJECTED", "CANCELLED"])

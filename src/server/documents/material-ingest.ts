@@ -1,3 +1,4 @@
+import { draftExtension } from "@/lib/desktop/working-format";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { DocumentCategory, DocumentSourceOrigin, Prisma } from "@prisma/client";
@@ -8,6 +9,7 @@ import { ActionError } from "@/lib/action-error";
 import { resolveRoleUser } from "@/lib/roles/service";
 import { hasCustomPermission, scopeFor } from "@/lib/roles/catalog";
 import { matterAssociationFilter } from "@/lib/permissions";
+import { hasPersonalCapability } from "@/lib/runtime/capabilities";
 import { isArchiveFolderName } from "@/lib/archive/guard";
 import { approvalTransaction } from "@/lib/approvals/service";
 import { archiveSnapshotDocumentIds } from "@/lib/archive/snapshot";
@@ -36,7 +38,7 @@ const documentInput = z.object({
 export type MaterialDocumentInput = z.input<typeof documentInput>;
 const metadataSchema = z.object({ document: documentInput, priorDocumentId: nullableId,
   contextInputs: contextInputSelectionsSchema.optional().default([]),
-  checkout: z.object({ jti: z.string(), baselineVersion: z.number().int() }).nullable().default(null) });
+  checkout: z.object({ jti: z.string(), baselineVersion: z.number().int(), draftOnly: z.boolean().optional() }).nullable().default(null) });
 
 /** Only explicit validation before this invocation creates an intent may carry this marker. */
 export class UploadRejectedBeforeReservation extends ActionError {}
@@ -82,8 +84,10 @@ async function assertUploadAuthority(tx: Prisma.TransactionClient, userId: strin
         ...(data.procedureId ? { procedureId: data.procedureId } : {}),
         ...(newReservation && !priorId ? { status: "ACTIVE" } : {}) } })) throw new ActionError("环节与案件不匹配或已不可用");
     }
-    if (matter.status === "ARCHIVED" && (priorId || scopeFor(actor, "archive.supplement") !== "OWN" || !isArchiveFolderName(folder?.name))) {
-      throw new ActionError("归档案件仅允许有补充归档权限者向归档卷宗追加材料");
+    if (matter.status === "ARCHIVED") {
+      const maySupplement = hasPersonalCapability(actor, "archive.supplement") || scopeFor(actor, "archive.supplement") === "OWN";
+      if (priorId || !maySupplement || !isArchiveFolderName(folder?.name))
+        throw new ActionError("归档案件仅允许有补充归档权限者向归档卷宗追加材料");
     }
   } else {
     if (!data.intakeId) throw new ActionError("材料必须归属案件或收案");
@@ -107,7 +111,7 @@ async function assertUploadAuthority(tx: Prisma.TransactionClient, userId: strin
 
 /** The intent is durable before file I/O; originals use a reserved non-overwriting key. */
 export async function ingestMaterial(input: { userId: string; document: MaterialDocumentInput; bytes: Buffer;
-  priorDocumentId?: string; requestKey?: string; checkout?: { jti: string; baselineVersion: number } | null; contextInputs?: ContextInputSelection[] }) {
+  priorDocumentId?: string; requestKey?: string; checkout?: { jti: string; baselineVersion: number; draftOnly?: boolean } | null; contextInputs?: ContextInputSelection[] }) {
   const priorDocumentId = input.priorDocumentId ?? null;
   let data: z.output<typeof documentInput>, id: string, metadata: z.output<typeof metadataSchema>;
   try {
@@ -178,6 +182,7 @@ async function commitStoredIngest(intentId: string, userId: string, lease?: JobL
       await tx.$queryRaw`SELECT id FROM "Document" WHERE id=${priorDocumentId} FOR UPDATE`;
       const prior = await tx.document.findUnique({ where: { id: priorDocumentId } });
       if (!prior || prior.deletedAt || !prior.isLatest || prior.matterId !== data.matterId || prior.intakeId !== data.intakeId) throw new ActionError("原材料版本已变化，请刷新后重传");
+      if (checkout?.draftOnly && !draftExtension(prior)) throw new ActionError("当前材料状态只能查看，本机工作稿已保留");
       if (prior.tags.includes("AI审查") || await tx.reviewRecord.count({ where: { reportDocumentId: prior.id } })) {
         throw new ActionError("审查报告为固定记录，请重新审查原材料或独立上传修订文件");
       }

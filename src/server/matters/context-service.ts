@@ -24,13 +24,14 @@ type SourceIds = Pick<ContextRow, "sourceNoteId" | "sourceClientActivityId" | "s
 
 /** Internal service, never a client-callable actor/permission endpoint. */
 export async function contextAccess(tx: Prisma.TransactionClient, actor: ContextActor, matterId: string, write = false) {
-  if (actor.runtimeMode === "PERSONAL") throw new ActionError("此功能当前仅在部署版开放");
   if (write) await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(72606101)`;
   const identity = await tx.user.findUnique({ where: { id: actor.id }, select: { active: true, role: true } });
   if (!identity?.active || (write && identity.role !== actor.role)) throw new ActionError("账号或岗位已变化，请重新登录");
   const role = await resolveRoleUser(actor.id, identity.role, tx);
   if (!role.enabled || !hasCustomPermission(role, "matters.read")) throw new ActionError("无权读取事项上下文");
-  const user = { ...role, id: actor.id, runtimeMode: "SERVER" as const };
+  const runtimeMode = role.runtimeMode ?? "SERVER";
+  if (actor.runtimeMode !== undefined && actor.runtimeMode !== runtimeMode) throw new ActionError("当前操作者与工作区不一致");
+  const user = { ...role, id: actor.id, runtimeMode };
   if (write) await tx.$queryRaw`SELECT id FROM "Matter" WHERE id = ${matterId} FOR UPDATE`;
   const where = { id: matterId, deletedAt: null };
   const visible = await tx.matter.count({ where: { ...where, AND: [matterReadVisibilityFilter(user.id, user.role, user.rolePermissions)] } });

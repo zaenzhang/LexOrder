@@ -18,7 +18,11 @@
       }
     ],
     "security": {
-      "capabilities": []
+      "capabilities": [{
+        "identifier": "case-folder-picker",
+        "windows": ["main"],
+        "permissions": ["allow-choose-case-directory"]
+      }]
     }
   },
   "bundle": {

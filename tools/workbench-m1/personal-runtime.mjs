@@ -7,7 +7,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PGlite } from '@electric-sql/pglite';
 import { startPrivatePostgres } from './private-pg.mjs';
-import { PrismaClient } from '@prisma/client';
+import { tsImport } from 'tsx/esm/api';
+
+const { createPrismaClient } = await tsImport('../../src/lib/prisma-client.ts', import.meta.url);
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../..');
@@ -70,8 +72,8 @@ try {
   const url = `postgresql://postgres:${dbCredential}@127.0.0.1:${socket.port}/postgres?schema=public&connection_limit=1&sslmode=disable&statement_cache_size=0&connect_timeout=10&pool_timeout=10`;
   const env = { ...process.env, DATABASE_URL: url };
   delete env.PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK;
-  await command(process.execPath, [path.join(root, 'node_modules/prisma/build/index.js'), 'migrate', 'deploy', '--schema', path.join(here, '.runtime/prisma/schema.prisma')], env);
-  prisma = new PrismaClient({ datasources: { db: { url } }, log: [] });
+  await command(process.execPath, [path.join(root, 'node_modules/prisma/build/index.js'), 'migrate', 'deploy', '--config', path.join(root, 'prisma.config.ts')], env, root);
+  prisma = createPrismaClient(url);
   let manifest;
   if (hasManifest) {
     manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
@@ -109,7 +111,7 @@ try {
   });
   if (!referencesReady) {
     await command(process.execPath, ['--import', 'tsx', path.join(root, 'prisma/seed.ts')], env, root);
-    prisma = new PrismaClient({ datasources: { db: { url } }, log: [] });
+    prisma = createPrismaClient(url);
     await prisma.systemSetting.upsert({ where: { key: 'personal-reference-data' }, update: { value: { version: 1 } }, create: { key: 'personal-reference-data', value: { version: 1 } } });
     await prisma.$disconnect(); prisma = undefined;
   }

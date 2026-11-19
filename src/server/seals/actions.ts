@@ -78,7 +78,7 @@ export async function listSealRequests(input?: z.input<typeof sealListFilterSche
   const session = await requireSession("approval");
   const filter = sealListFilterSchema.parse(input ?? {});
   const rows = await prisma.sealRequest.findMany({
-    where: { ...(filter.status ? { status: filter.status } : {}), ...(filter.sealType ? { sealType: filter.sealType } : {}), ...(filter.scope === "mine" ? { requestedById: session.user.id } : {}), ...(filter.scope === "approval" ? { status: "PENDING" } : {}) },
+    where: { ...(filter.matterId ? { matterId: filter.matterId } : {}), ...(filter.status ? { status: filter.status } : {}), ...(filter.sealType ? { sealType: filter.sealType } : {}), ...(filter.scope === "mine" ? { requestedById: session.user.id } : {}), ...(filter.scope === "approval" ? { status: "PENDING" } : {}) },
     orderBy: [{ status: "asc" }, { requestedAt: "desc" }],
     include: {
       matter: { select: { id: true, internalCode: true, title: true } },

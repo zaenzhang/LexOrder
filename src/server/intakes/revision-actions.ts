@@ -79,3 +79,29 @@ export async function saveIntakeRevision(id:string,revision:number,input:IntakeC
  revalidatePath(`/intakes/${id}`);revalidatePath('/approvals');revalidatePath('/matters');return {ok:true,id,workflowEnabled:true};
 }
 export async function withdrawIntake(id:string,reason:string){const session=await requireSession('matters.write');await approvalTransaction(async db=>{if(!await intakeWorkflowReady(db))throw new ActionError('撤回补正功能尚未启用');return withdrawIntakeTx(db,session.user.id,id,z.string().trim().min(1).max(1000).parse(reason));});revalidatePath(`/intakes/${id}`);revalidatePath('/approvals');return {ok:true};}
+
+/** A caption-only correction preserves party identities, intake materials and fee instructions. */
+export async function reviseIntakeSummary(input: {
+  id: string; revision: number; title: string; description: string;
+}) {
+  const session = await requireSession("matters.write");
+  const { id, revision, title, description } = z.object({
+    id: z.cuid(), revision: z.number().int().nonnegative(),
+    title: z.string().trim().min(1).max(200), description: z.string().max(2000),
+  }).parse(input);
+  await approvalTransaction(async db => {
+    if (!await intakeWorkflowReady(db)) throw new ActionError("收案补正尚未启用");
+    await assertIntakeEditor(db, session.user.id, id);
+    const { count } = await db.intake.updateMany({
+      where: { id, workflowRevision: revision, status: { in: ["INTAKE", "NEEDS_REVISION"] } },
+      data: { title, description: description || null, workflowRevision: { increment: 1 } },
+    });
+    if (count !== 1) throw new ActionError("收案已更新，请重新读取。");
+    await auditTx(db, { userId: session.user.id, action: "INTAKE_REVISION_SAVE",
+      targetType: "Intake", targetId: id, detail: { previousRevision: revision, fields: ["title", "description"] } });
+  });
+  revalidatePath(`/intakes/${id}`);
+  revalidatePath("/approvals");
+  revalidatePath("/matters");
+  return { ok: true };
+}

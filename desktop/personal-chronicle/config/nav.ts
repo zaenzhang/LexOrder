@@ -65,6 +65,19 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    label: "律师工作台",
+    items: [
+      { title: "我的工作台", href: "/practice/today", icon: LayoutDashboardIcon },
+      { title: "客户与收案", href: "/practice/clients", icon: UsersIcon, expandOnly: true, items: [
+        { title: "客户", href: "/practice/clients" }, { title: "收案", href: "/practice/intakes" },
+        { title: "外部联系人", href: "/practice/contacts" }, { title: "利益冲突预检", href: "/practice/conflicts" },
+      ] },
+      { title: "办案事务", href: "/practice/operations", icon: FolderOpenIcon },
+      { title: "资料与设置", href: "/practice/resources", icon: SettingsIcon },
+      { title: "财务", href: "/practice/finance", icon: BarChart3Icon },
+    ],
+  },
+  {
     label: "Apps",
     items: [
       { title: "Mail", href: "/mail", icon: MailIcon, shortcut: "m", badge: "mail" },

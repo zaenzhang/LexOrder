@@ -36,10 +36,10 @@ export function issueCheckoutToken(input: {
   userId: string;
   baselineVersion: number;
   fileName: string;
-}): { token: string; payload: CheckoutPayload } {
+}, jti: string = randomUUID()): { token: string; payload: CheckoutPayload } {
   const payload: CheckoutPayload = {
     ...input,
-    jti: randomUUID(),
+    jti,
     exp: Date.now() + TOKEN_TTL_MS
   };
   const body = Buffer.from(JSON.stringify(payload)).toString("base64url");

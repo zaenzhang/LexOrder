@@ -73,7 +73,7 @@ export async function listFirmFiles(input: {
     archivedAt: null
   };
   if (input.category) where.category = input.category;
-  if (!input.includeSuperseded) where.supersedes = { none: {} };
+  if (!input.includeSuperseded) where.supersededById = null;
 
   if (input.search?.trim()) {
     const q = input.search.trim();
@@ -219,12 +219,17 @@ export async function uploadFirmFile(formData: FormData): Promise<{
       select: { id: true, name: true }
     });
     if (supersedesId) {
-      await tx.firmFile.update({
-        where: { id: supersedesId },
+      const linked = await tx.firmFile.updateMany({
+        where: { id: supersedesId, archivedAt: null, supersededById: null },
         data: { supersededById: doc.id }
       });
+      if (!linked.count) throw new ActionError("该版本已变化，请刷新后重试");
     }
     return doc;
+  }).catch(async error => {
+    // Only an explicit version conflict guarantees that this transaction rolled back.
+    if (error instanceof ActionError) await storage.deleteFile(path);
+    throw error;
   });
 
   await audit({

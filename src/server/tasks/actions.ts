@@ -125,20 +125,23 @@ export async function updateTask(input: TaskUpdateInput) {
   return { ok: true };
 }
 
-async function completeTaskTx(db: Prisma.TransactionClient, userId: string, id: string, reason: string) {
+async function completeTaskTx(db: Prisma.TransactionClient, userId: string, id: string, reason: string, expected?: { matterId: string; revision: number }) {
   const task = await getTaskForChange(db, userId, id);
+  if (expected && task.matterId !== expected.matterId) throw new ActionError("任务不属于当前事项");
   // Even a completed replay first checks the current actor, membership and archive state.
   if (task.responsibility.state === "DONE") return task.matterId;
+  if (expected && task.responsibility.revision !== expected.revision) throw new ActionError("任务已变化，请重新读取后确认");
   if (task.responsibility.state === "CANCELLED") throw new ActionError("任务已取消，不能作为已办结处理；如需继续办理请先重开");
   await changeWorkTx(db, userId, { id: task.responsibility.id, revision: task.responsibility.revision, action: "COMPLETE", reason });
   return task.matterId;
 }
 
 /** Existing task buttons complete work; reopening always requires an explicit reason. */
-export async function toggleTaskCompleted(id: string) {
+export async function toggleTaskCompleted(id: string, expected?: { matterId: string; revision: number }) {
   const session = await requireSession("schedule.write");
   const taskId = z.string().cuid().parse(id);
-  const matterId = await approvalTransaction(db => completeTaskTx(db, session.user.id, taskId, "经办通过完成操作确认已办结"), Prisma.TransactionIsolationLevel.ReadCommitted);
+  const current = z.object({ matterId: z.string().cuid(), revision: z.number().int().nonnegative() }).optional().parse(expected);
+  const matterId = await approvalTransaction(db => completeTaskTx(db, session.user.id, taskId, "经办通过完成操作确认已办结", current), Prisma.TransactionIsolationLevel.ReadCommitted);
   await refreshTasks(matterId);
   return { ok: true };
 }

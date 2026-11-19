@@ -310,13 +310,13 @@ export async function matchSmsToMatter(input: z.infer<typeof smsMatchToMatterSch
     await assertMatterWritable(data.matterId);
   }
 
-  await roleMutation(session.user, "matters.write", async roleDb => roleDb.smsMessage.update({
-    where: { id: data.smsId },
-    data: {
-      matchedMatterId: data.matterId,
-      matchedBy: data.matterId ? "MANUAL" : "UNMATCHED"
-    }
-  }));
+  await roleMutation(session.user, "matters.write", async roleDb => {
+    const changed = await roleDb.smsMessage.updateMany({
+      where: { id: data.smsId, ...(data.expectedMatterId !== undefined ? { matchedMatterId: data.expectedMatterId } : {}) },
+      data: { matchedMatterId: data.matterId, matchedBy: data.matterId ? "MANUAL" : "UNMATCHED" }
+    });
+    if (!changed.count) throw new ActionError("来件归属已变化，请重新核对。");
+  });
 
   // B1：匹配案件后把私有来件区的暂存文件转正为正式材料（先取件后匹配的收口）
   let filedCount = 0;
