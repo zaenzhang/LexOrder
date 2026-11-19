@@ -22,7 +22,7 @@ import { storage } from "@/lib/storage";
 import { GET as download } from "@/app/api/documents/[id]/download/route";
 import { saveFactReview } from "@/app/api/personal/evidence-review/fact-review";
 import { addEvidenceSource, confirmEvidenceItem, createEvidenceItem, listEvidenceItems, removeEvidenceSource } from "@/server/evidence/actions";
-import { getResearch, checkResearchRevision, getResearchHistory, getResearchSource, saveResearchRevision } from "@/server/research/actions";
+import { getResearch, checkResearchRevision, getResearchHistory, getResearchList, getResearchSource, saveResearchRevision } from "@/server/research/actions";
 
 const files: string[] = [];
 const matters: string[] = [];
@@ -123,7 +123,9 @@ describe.skipIf(!config.url)("桌面争点取舍 → 固定研究修订 / Postgr
     expect((await saveFactReview(input)).id).toBe(saved.id);
     await expect(saveFactReview({ ...input, requestKey: randomUUID() })).rejects.toThrow("已变化");
 
+    const supplement = await material(matterId, ["ONLY REFERENCED BY V2"]);
     const successor = await saveResearchRevision({ ...firstRead.content!, conclusion: "另行复核后修订", matterId,
+      sources: [{ ...firstRead.content!.sources[0], documentId: supplement.id, page: 1 }],
       requestKey: randomUUID(), supersedesId: saved.id, expectedVersion: saved.version,
       issueSelection: { kind: "SAVED", researchRevisionId: saved.id } });
     const history = await getResearchHistory(matterId, successor.id);
@@ -132,6 +134,20 @@ describe.skipIf(!config.url)("桌面争点取舍 → 固定研究修订 / Postgr
     const historical = await getResearch(matterId, history.records[1].id);
     expect(historical).toMatchObject({ current: false, checkedAt: firstRead.checkedAt, content: { conclusion: input.value, supportingAnalysis: input.reason } });
     expect(await openPage(matterId, historical.id, historical.sources[0].id, a.id, 2)).toContain("A1-P2 CT-01 03-01 CNY 120000");
+
+    await db.document.update({ where: { id: supplement.id }, data: { deletedAt: new Date() } });
+    const { records } = await getResearchList(matterId);
+    expect(records.find(row => row.id === successor.id)).toMatchObject({ version: 2, readable: false, question: null });
+    expect(records.some(row => row.id === saved.id)).toBe(false);
+    const restrictedHistory = await getResearchHistory(matterId, successor.id);
+    expect(restrictedHistory.records).toMatchObject([
+      { id: successor.id, readable: false, content: null, issue: null, sources: [], canCheck: false, canDraft: false },
+      { id: saved.id, readable: true, content: { conclusion: input.value } },
+    ]);
+    await expect(getResearchSource(matterId, successor.id, history.records[0].sources[0].id)).rejects.toThrow("撤回");
+    const older = restrictedHistory.records[1];
+    expect(await openPage(matterId, older.id, older.sources[0].id, a.id, 2)).toContain("A1-P2 CT-01 03-01 CNY 120000");
+    await expect(getResearchHistory(await makeMatter(), successor.id)).rejects.toThrow("不属于");
   });
 
   it("两个可办理案件混用争点、来源、研究修订或出处时拒绝，原件撤回后旧引证停止展示", async () => {

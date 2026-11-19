@@ -84,17 +84,17 @@ export function ResearchRevision({ matterId, recordId, onClose, onUpdated }: {
       <SheetHeader><SheetTitle>{revision?.content?.question || "研究修订"}</SheetTitle></SheetHeader>
       <div className="grid gap-4 px-4 pb-4 text-sm">
         {error && <p role="alert" className="text-destructive">{error}</p>}
+        {revision && <p className="text-xs text-muted-foreground">第 {revision.version} 版 · {revision.checkedAt ? "已核对" : "待核对"}</p>}
+        {revision && (revision.version > 1 || !revision.current) && <div className="grid gap-2">
+          {!history ? <Button size="sm" variant="outline" disabled={busy} onClick={() => void loadHistory()}>查看修订历史</Button>
+            : history.records.map(row => <div key={row.id}>
+              {row.id !== recordId && row.readable && !note && !busy ? <Link className="underline" href={`/matters/${matterId}/research/${row.id}`}>查看第 {row.version} 版</Link> : `第 ${row.version} 版`}
+              {row.id === recordId ? " · 正在查看" : ""} · {row.readable ? (row.checkedAt ? "已核对" : "待核对") : "来源受限"}
+            </div>)}
+          {history?.nextVersion && <Button size="sm" variant="outline" disabled={busy} onClick={() => void loadHistory(history.nextVersion!)}>更早修订</Button>}
+        </div>}
         {!revision ? (error ? <Button variant="outline" onClick={() => { setError(""); setRefresh(value => value + 1) }}>重新读取</Button>
           : <p role="status">正在读取修订…</p>) : revision.content && revision.readable ? <>
-          <p className="text-xs text-muted-foreground">第 {revision.version} 版 · {revision.checkedAt ? "已核对" : "待核对"}</p>
-          {(revision.version > 1 || !revision.current) && <div className="grid gap-2">
-            {!history ? <Button size="sm" variant="outline" disabled={busy} onClick={() => void loadHistory()}>查看修订历史</Button>
-              : history.records.map(row => <div key={row.id}>
-                {row.id !== recordId && row.readable && !note && !busy ? <Link className="underline" href={`/matters/${matterId}/research/${row.id}`}>查看第 {row.version} 版</Link> : `第 ${row.version} 版`}
-                {row.id === recordId ? " · 正在查看" : ""} · {row.readable ? (row.checkedAt ? "已核对" : "待核对") : "来源受限"}
-              </div>)}
-            {history?.nextVersion && <Button size="sm" variant="outline" disabled={busy} onClick={() => void loadHistory(history.nextVersion!)}>更早修订</Button>}
-          </div>}
           <dl className="grid gap-3">{([
             ["研究目的", revision.content.purpose], ["法域", revision.content.jurisdiction], ["适用日期", revision.content.relevantDate],
             ["研究范围", revision.content.scope], ["适用规则", revision.content.rule], ["例外", revision.content.exceptions],
