@@ -30,7 +30,7 @@ function when(row: Item) {
 export function EvidencePage({ matterId }: { matterId: string }) {
   return <Tabs defaultValue="compare">
     <TabsList aria-label="事实与争点视图"><TabsTrigger value="compare">争点证据对照</TabsTrigger><TabsTrigger value="notes">事实与要点</TabsTrigger></TabsList>
-    <TabsContent value="compare"><EvidenceReview matterId={matterId}/></TabsContent>
+    <TabsContent value="compare"><EvidenceReview key={matterId} matterId={matterId}/></TabsContent>
     <TabsContent value="notes"><EvidenceNotes matterId={matterId}/></TabsContent>
   </Tabs>
 }
