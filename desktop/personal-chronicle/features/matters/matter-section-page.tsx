@@ -10,6 +10,7 @@ import { MatterFolder } from "./matter-folder"
 import { FinanceDesk } from "@/features/practice/finance-desk"
 import { ContextRecords, type ContextData } from "./matter-context"
 import { EditCase, type CaseBasic } from "./case-management"
+import { DocumentReviewDesk } from "./document-review-desk"
 import { TemplateDrafts } from "./template-drafts"
 import { SealWorkspace, type SealData } from "./seal-workspace"
 import { DeliveryWorkspace, type DeliverySummary } from "./delivery-workspace"
@@ -17,7 +18,7 @@ import { TaskWorkspace, type TaskData } from "./task-workspace"
 import { NewResearch, ResearchRevision } from "./research-revision"
 import { PageHeader } from "@/kit/ui-patterns/page-header"
 import { readPersonal, workspaceEndpoint } from "./personal-client"
-import { MaterialsWorkspace, type Material } from "./materials-workspace"
+import { MaterialsWorkspace, type Material, type MaterialFilters } from "./materials-workspace"
 import type { MatterSection } from "./sections"
 
 type Note = { id: string; channel: string; content: string; author: string; occurredAt: string; updatedAt: string; withWhom: string | null; tags: string[]; editable: boolean }
@@ -62,6 +63,7 @@ function Rows({ items, empty }: { items: { key: string; title: string; meta?: st
 export function MatterSectionPage({ matterId, section, title }: { matterId: string; section: Exclude<MatterSection, "evidence">; title: string }) {
   const [data, setData] = useState<Index>()
   const [refresh, setRefresh] = useState(0)
+  const [filters, setFilters] = useState<MaterialFilters>({q:"", folder:"*", version:"all"})
   const [cursor, setCursor] = useState<string>()
   const [error, setError] = useState("")
   const [note, setNote] = useState("")
@@ -76,11 +78,15 @@ export function MatterSectionPage({ matterId, section, title }: { matterId: stri
     const controller = new AbortController()
     const query = new URLSearchParams({ matter: matterId, section })
     if (cursor) query.set("cursor", cursor)
-    void readPersonal<Index>(`${workspaceEndpoint}?${query}`, { signal: controller.signal })
-      .then(value => { if (!controller.signal.aborted) setData(value) })
+    if (section === "materials") {
+      for (const [key,value] of Object.entries(filters)) query.set(key,value)
+    }
+    const timer = window.setTimeout(() => { void readPersonal<Index>(`${workspaceEndpoint}?${query}`, { signal: controller.signal })
+      .then(value => { if (!controller.signal.aborted) { setData(value); setError("") } })
       .catch(error => { if (!controller.signal.aborted) setError(error.message) })
-    return () => controller.abort()
-  }, [matterId, section, refresh, cursor])
+    }, section === "materials" && filters.q ? 180 : 0)
+    return () => { window.clearTimeout(timer); controller.abort() }
+  }, [matterId, section, refresh, cursor, filters])
 
   async function saveNote(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -122,7 +128,7 @@ export function MatterSectionPage({ matterId, section, title }: { matterId: stri
         key: item.id, title: item.content!, meta: (contextKinds[item.kind] ?? item.kind) + " · " + (item.confirmationStatus === "CONFIRMED" ? "已确认" : "待确认"),
       }))} />
     </Panel>}
-    {section === "materials" && data ? <MaterialsWorkspace matterId={matterId} documents={data.documents ?? []} folders={data.folders ?? []} onUploaded={() => setRefresh(value => value + 1)} /> : null}
+    {section === "materials" && data ? <MaterialsWorkspace matterId={matterId} documents={data.documents ?? []} folders={data.folders ?? []} filters={filters} onFilter={value => { setCursor(undefined); setFilters(value) }} onUploaded={() => setRefresh(value => value + 1)} /> : null}
     {section === "research" && data ? <Panel title="研究修订">{data.canWrite && <NewResearch matterId={matterId} onCreated={id => { setResearchId(id); setRefresh(value => value + 1) }} />}<Rows empty="暂无研究记录。" items={(data.records ?? []).map(row => ({
       key: row.id, title: row.readable ? row.question ?? "研究记录" : "研究内容不可用", meta: `V${row.version} · ${row.checkedAt ? "已核对" : "待核对"}`,
       action: row.readable ? <Button variant="outline" size="sm" onClick={() => setResearchId(row.id)}>查看修订</Button> : null,
@@ -130,6 +136,7 @@ export function MatterSectionPage({ matterId, section, title }: { matterId: stri
     {section === "research" && researchId && <ResearchRevision key={researchId} matterId={matterId} recordId={researchId} onClose={() => setResearchId("")} onUpdated={() => setRefresh(value => value + 1)} />}
     {section === "tasks" && data?.schedule && <TaskWorkspace matterId={matterId} data={data.schedule} reload={() => setRefresh(value => value + 1)} />}
     {section === "delivery" && data && <TemplateDrafts matterId={matterId} onGenerated={() => setRefresh(value => value + 1)} />}
+    {section === "delivery" && data && <DocumentReviewDesk key={matterId} matterId={matterId} />}
     {section === "delivery" && data && <DeliveryWorkspace matterId={matterId} rows={data.items ?? []} reload={() => setRefresh(value => value + 1)} />}
     {section === "records" && data ? <Tabs defaultValue="communications">
       <TabsList aria-label="办理记录类型">

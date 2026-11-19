@@ -40,6 +40,7 @@ node "$suite/matter-workflows.mjs"
 node "$suite/matter-management.mjs"
 node "$suite/templates-seal.mjs"
 node "$suite/archive.mjs"
+node "$suite/document-review.mjs"
 ```
 
 ## 检查内容

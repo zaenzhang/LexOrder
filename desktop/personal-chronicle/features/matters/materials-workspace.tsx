@@ -16,6 +16,7 @@ import { materialUrl, readPersonal, workspaceEndpoint } from "./personal-client"
 
 import { useWorkingCopies } from "./working-copies"
 
+export type MaterialFilters = { q: string; folder: string; version: string }
 export type Material = { folderId?: string | null; id: string; name: string; version: number; isLatest: boolean; editable: boolean; mimeType: string | null }
 const categories = [["EVIDENCE", "证据"], ["PLEADING", "诉讼文书"], ["PROCEDURE", "程序材料"], ["JUDGMENT", "裁判文书"], ["CONTRACT", "合同"], ["OTHER", "其他"]] as const
 
@@ -23,7 +24,7 @@ function download(material: Material, inline = false) {
   return materialUrl("/api/documents/" + material.id + "/download" + (inline ? "?inline=1" : ""))
 }
 
-export function MaterialsWorkspace({ matterId, documents, folders, onUploaded }: { matterId: string; documents: Material[]; folders: {id:string;name:string}[]; onUploaded: () => void }) {
+export function MaterialsWorkspace({ matterId, documents, folders, filters, onFilter, onUploaded }: { filters: MaterialFilters; onFilter: (filters: MaterialFilters) => void; matterId: string; documents: Material[]; folders: {id:string;name:string}[]; onUploaded: () => void }) {
   const { copies, offline, act } = useWorkingCopies()
   const [asDraft, setAsDraft] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -40,9 +41,6 @@ export function MaterialsWorkspace({ matterId, documents, folders, onUploaded }:
     setEditorError("")
     try { await act(input) } catch (err) { setEditorError(err instanceof Error ? err.message : "工作稿请求失败。") } finally { setBusy(false) }
   }
-  const [search, setSearch] = useState("")
-  const [folder,setFolder] = useState("*")
-  const [version, setVersion] = useState("all")
   const [preview, setPreview] = useState<Material>()
   const closePreview = useRef<HTMLButtonElement>(null)
   const [uploadOpen, setUploadOpen] = useState(false)
@@ -53,8 +51,6 @@ export function MaterialsWorkspace({ matterId, documents, folders, onUploaded }:
   const [pending, setPending] = useState(false)
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
-  const rows = documents.filter(item => (folder==="*" || (item.folderId ?? "") === folder) && item.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())
-    && (version === "all" || (version === "latest") === item.isLatest))
   const columns: DataColumn<Material>[] = [
     { id: "name", header: "材料名称", cell: item => <span className="font-medium">{item.name}</span> },
     { id: "version", header: "版本", cell: item => <span className="num">V{item.version}</span> },
@@ -93,8 +89,7 @@ export function MaterialsWorkspace({ matterId, documents, folders, onUploaded }:
       setName("")
       setCategory("OTHER")
       setRequestKey("")
-      setSearch("")
-      setVersion("all")
+      onFilter({ q:"", folder:"*", version:"all" })
       onUploaded()
     } catch (error) {
       setError(error instanceof Error ? error.message : "上传失败。")
@@ -105,11 +100,11 @@ export function MaterialsWorkspace({ matterId, documents, folders, onUploaded }:
 
   return <div className="grid min-w-0 gap-4">
     <div className="flex flex-wrap items-center gap-2">
-      <Input className="max-w-xs" aria-label="搜索案内材料" placeholder="搜索材料名称" value={search} onChange={event => setSearch(event.target.value)} />
-      <NativeSelect aria-label="筛选材料版本" value={version} onChange={event => setVersion(event.target.value)}>
+      <Input className="max-w-xs" aria-label="搜索案内材料" placeholder="搜索材料名称" maxLength={200} value={filters.q} onChange={event => onFilter({...filters,q:event.target.value})} />
+      <NativeSelect aria-label="筛选材料版本" value={filters.version} onChange={event => onFilter({...filters,version:event.target.value})}>
         <NativeSelectOption value="all">全部版本</NativeSelectOption><NativeSelectOption value="latest">当前版本</NativeSelectOption><NativeSelectOption value="historical">历史版本</NativeSelectOption>
       </NativeSelect>
-      <NativeSelect aria-label="筛选案内卷宗" value={folder} onChange={event=>setFolder(event.target.value)}>
+      <NativeSelect aria-label="筛选案内卷宗" value={filters.folder} onChange={event=>onFilter({...filters,folder:event.target.value})}>
         <NativeSelectOption value="*">全部卷宗</NativeSelectOption><NativeSelectOption value="">未分卷</NativeSelectOption>
         {folders.map(v=><NativeSelectOption key={v.id} value={v.id}>{v.name}</NativeSelectOption>)}
       </NativeSelect>
@@ -137,7 +132,7 @@ export function MaterialsWorkspace({ matterId, documents, folders, onUploaded }:
     </div>
     {editorError && <p role="alert" className="text-sm text-destructive">{editorError}</p>}
     {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
-    <DataTable columns={columns} rows={rows} getRowId={item => item.id} loading={false} sort={[]} onSortChange={() => {}} label="案内材料"
+    <DataTable columns={columns} rows={documents} getRowId={item => item.id} loading={false} sort={[]} onSortChange={() => {}} label="案内材料"
       empty={<p className="text-sm text-muted-foreground">{documents.length ? "没有匹配的材料。" : "暂无可查看的材料。"}</p>} />
     <Sheet open={!!preview} onOpenChange={open => { if (!open) setPreview(undefined) }}>
       <SheetContent initialFocus={closePreview} showCloseButton={false} className="w-[min(100%,60rem)] sm:max-w-none motion-reduce:transition-none">

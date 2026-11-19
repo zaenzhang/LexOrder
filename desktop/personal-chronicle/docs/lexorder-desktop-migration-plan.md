@@ -118,6 +118,8 @@
 
 需求核对使用仓库的[需求与验收](../../../docs/PRODUCT_REQUIREMENTS_ACCEPTANCE.md)、[实施清单](../../../docs/WORKBENCH_PLAN.md)、[研究与决策](../../../docs/RESEARCH_AND_DECISIONS.md)及[桌面与团队改造](../../../docs/REFACTOR_DESKTOP_TEAM_RAG.md)。原计划提及的个人研究归档《LexOrder 需求、调研与实施总清单》在本次可读材料中没有独立原件，表中引用的是仓库可核查编号。
 
+正式文书在「文书与交付」内按版本送审。V1 的问题、回应、核验、退回、重送和本人逐项批准已跑通；漏核或过期问题修订会拒绝。V1 才能进入对应的交付清单。另传 V2 后重新送审，旧清单与历史字节仍可回查。正式归档后补传的文件经独立快照重新核验，导出的新包包含补件，原 ZIP 内容保持原样。
+
 ### 后续验收边界
 
-应优先补验卷宗排序与批量分类、完整事实冲突与时间精度、文书复核流、复杂任务依赖及跨版本影响。连接器、向量检索、OCR 和外部通知需各自的授权和配置。台账与界面已接的操作以[隔离验收脚本](../../../tools/workbench-m1/chronicle-smoke/README.md)和[迁移记录](lexorder-personal-migration.md)为准。
+应优先补验卷宗排序与批量分类、完整事实冲突与时间精度、批量复核和外部审查配置、复杂任务依赖及跨版本影响。连接器、向量检索、OCR 和外部通知需各自的授权和配置。台账与界面已接的操作以[隔离验收脚本](../../../tools/workbench-m1/chronicle-smoke/README.md)和[迁移记录](lexorder-personal-migration.md)为准。

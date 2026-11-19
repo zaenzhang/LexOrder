@@ -27,6 +27,7 @@ import type { UploadDocumentResult } from "@/lib/documents/upload-contract";
 import { contextInputSelectionsSchema, type ContextInputSelection } from "@/lib/matters/context-inputs";
 import { ActionError } from "@/lib/action-error";
 import { assertDocumentDerivationAccess } from "./derivation-access";
+import { assertFixedReview, type FixedReview } from "@/server/document-reviews/fixed-approval";
 import { canReadDocument } from "@/lib/approvals/documents";
 
 const documentCategorySchema = z.enum([
@@ -245,11 +246,17 @@ async function extractIntakeText(id: string, raw: Buffer, mimeType: string) {
 const docListQuerySchema = z.object({
   search: z.string().optional(),
   category: documentCategorySchema.optional(),
+  folderId: z.cuid().nullable().optional(),
+  isLatest: z.boolean().optional(),
   matterId: z.string().cuid().optional(),
   limit: z.coerce.number().int().min(1).max(500).default(200)
 });
 
 export async function listAllDocuments(input: Partial<z.infer<typeof docListQuerySchema>> = {}) {
+  return (await listDocumentPage(input)).items;
+}
+
+export async function listDocumentPage(input: Partial<z.infer<typeof docListQuerySchema>> = {}, cursor?: string) {
   const session = await requireSession("documents.read");
   const query = docListQuerySchema.parse(input);
 
@@ -257,6 +264,8 @@ export async function listAllDocuments(input: Partial<z.infer<typeof docListQuer
   const where: Prisma.DocumentWhereInput = {
     deletedAt: null,
     matter: { deletedAt: null, ...visFilter },
+    ...(query.folderId === undefined ? {} : { folderId: query.folderId }),
+    ...(query.isLatest === undefined ? {} : { isLatest: query.isLatest }),
     ...(query.category ? { category: query.category } : {}),
     ...(query.matterId ? { matterId: query.matterId } : {}),
     ...(query.search
@@ -271,20 +280,22 @@ export async function listAllDocuments(input: Partial<z.infer<typeof docListQuer
 
   const rows = await prisma.document.findMany({
     where,
-    orderBy: { createdAt: "desc" },
-    take: query.limit,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    ...(cursor ? { cursor: { id: z.cuid().parse(cursor) }, skip: 1 } : {}),
+    take: query.limit + 1,
     include: {
       matter: { select: { id: true, internalCode: true, title: true } },
       uploadedBy: { select: { id: true, name: true } }
     }
   });
-  const readable = await Promise.all(rows.map(row => canReadDocument(session.user.id, row)));
-  return rows.filter((_, index) => readable[index]);
+  const page = rows.slice(0, query.limit);
+  const readable = await Promise.all(page.map(row => canReadDocument(session.user.id, row)));
+  return { items: page.filter((_, index) => readable[index]), nextCursor: rows.length > page.length ? page.at(-1)!.id : null };
 }
 
 // ============ v0.10: 文书审批流程 ============
 
-export async function submitDocumentForReview(id: string) {
+export async function submitDocumentForReview(id: string, expected?: FixedReview) {
   const session = await requireSession("documents.write");
   const doc = await prisma.document.findUnique({ where: { id, deletedAt: null } });
   if (!doc) throw new ActionError("材料不存在");
@@ -304,6 +315,7 @@ export async function submitDocumentForReview(id: string) {
   if (!isPersonalMode() && await selfConfirmEligible(docContext, prisma)) {
     if (doc.status !== "DRAFT") throw new ActionError("只有草稿状态的材料才能提交审核");
     await documentMutation(session.user, doc, async db => {
+      if (expected) await assertFixedReview(db, id, expected);
       await assertDocumentDerivationAccess(session.user.id, id, { purpose: "SUBMIT", db });
       await db.document.update({
         where: { id, status: "DRAFT", updatedAt: doc.updatedAt },
@@ -330,6 +342,7 @@ export async function submitDocumentForReview(id: string) {
   if (doc.status !== "DRAFT") throw new ActionError("只有草稿状态的材料才能提交审核");
 
   await documentMutation(session.user, doc, async db => {
+      if (expected) await assertFixedReview(db, id, expected);
     await assertDocumentDerivationAccess(session.user.id, id, { purpose: "SUBMIT", db });
     await db.document.update({
       where: { id, status: "DRAFT", updatedAt: doc.updatedAt },
@@ -346,13 +359,14 @@ export async function submitDocumentForReview(id: string) {
   return { ok: true };
 }
 
-export async function approveDocument(id: string, note?: string) {
+export async function approveDocument(id: string, note?: string, expected?: FixedReview) {
   const session = await requireSession("approval");
   const doc = await prisma.document.findUnique({ where: { id, deletedAt: null } });
   if (!doc) throw new ActionError("材料不存在");
   if (doc.status !== "PENDING_REVIEW") throw new ActionError("材料不在待审核状态");
 
   await approvalTransaction(async tx => {
+    const checked = expected ? await assertFixedReview(tx, id, expected) : undefined;
     await assertApprovalItem(session.user.id, "DOCUMENT_APPROVE", id, tx);
     await assertDocumentDerivationAccess(session.user.id, id, { purpose: "READ", db: tx });
   await tx.document.update({
@@ -363,7 +377,7 @@ export async function approveDocument(id: string, note?: string) {
       approvedAt: new Date(),
     },
   });
-    await approvalAudit(tx, session.user.id, "DOCUMENT_APPROVE", id, { note: note?.trim().slice(0, 500) ?? "", attachmentIds: [id] });
+    await approvalAudit(tx, session.user.id, "DOCUMENT_APPROVE", id, { note: note?.trim().slice(0, 500) ?? "", attachmentIds: [id], ...(checked ? { checkedVersion: checked.version, checkedIssues: checked.issues } : {}) });
   });
 
 
@@ -372,13 +386,14 @@ export async function approveDocument(id: string, note?: string) {
   return { ok: true };
 }
 
-export async function rejectDocument(id: string, reason?: string) {
+export async function rejectDocument(id: string, reason?: string, expected?: FixedReview) {
   const session = await requireSession("approval");
   const doc = await prisma.document.findUnique({ where: { id, deletedAt: null } });
   if (!doc) throw new ActionError("材料不存在");
   if (doc.status !== "PENDING_REVIEW") throw new ActionError("材料不在待审核状态");
 
   await approvalTransaction(async tx => {
+    if (expected) await assertFixedReview(tx, id, expected, false);
     await assertApprovalItem(session.user.id, "DOCUMENT_APPROVE", id, tx);
   await tx.document.update({
     where: { id, status: "PENDING_REVIEW", updatedAt: doc.updatedAt },

@@ -14,7 +14,7 @@ import { exportDeliveryForActor } from "@/server/deliveries/export";
 import { getDeliveryDetail, getDeliveryOptions, prepareDelivery, registerDeliveryEvent, listDeliveryRecords } from "@/server/deliveries/actions";
 import { canReadDocument } from "@/lib/approvals/documents";
 import { listFoldersByMatter, createFolder, renameFolder, moveDocumentToFolder } from "@/server/document-folders/actions";
-import { listAllDocuments, uploadDocument } from "@/server/documents/actions";
+import { listDocumentPage, uploadDocument } from "@/server/documents/actions";
 import { evidenceTextSchema, revisionInputSchema, sourceInputSchema } from "@/server/evidence/contracts";
 import { createEvidenceItem, updateEvidenceItem, addEvidenceSource, removeEvidenceSource, listEvidenceItems, getEvidenceFormOptions, confirmEvidenceItem } from "@/server/evidence/actions";
 import { getMatterFinance } from "@/server/finance/actions";
@@ -124,8 +124,14 @@ export async function GET(request: Request) {
     const section = sections.parse(query.get("section"));
     const cursor = query.has("cursor") ? idSchema.parse(query.get("cursor")) : undefined;
     if (section === "materials") {
-      const [documents, folders] = await Promise.all([listAllDocuments({ matterId: id, limit: 500 }), listFoldersByMatter(id)]);
-      return json({ folders: folders.map(({ id, name }) => ({ id, name })), documents: documents.map(({ id, name, version, isLatest, mimeType, status, sourceOrigin, folderId }) => ({
+      const version = z.enum(["all", "latest", "historical"]).parse(query.get("version") ?? "all");
+      const folder = query.get("folder") ?? "*";
+      const [documents, folders] = await Promise.all([listDocumentPage({
+        matterId: id, limit: 100, search: z.string().trim().max(200).parse(query.get("q") ?? ""),
+        folderId: folder === "*" ? undefined : folder === "" ? null : idSchema.parse(folder),
+        isLatest: version === "all" ? undefined : version === "latest",
+      }, cursor), listFoldersByMatter(id)]);
+      return json({ nextCursor: documents.nextCursor, folders: folders.map(({ id, name }) => ({ id, name })), documents: documents.items.map(({ id, name, version, isLatest, mimeType, status, sourceOrigin, folderId }) => ({
         id, name, version, isLatest, mimeType, status, sourceOrigin, folderId, editable: isLatest && !!draftExtension({ status, sourceOrigin, mimeType }),
       })) });
     }
