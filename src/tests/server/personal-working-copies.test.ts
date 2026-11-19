@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { cp, mkdtemp, mkdir, readFile, readdir, rename, rm, utimes, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, readdir, realpath, rename, rm, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { ActionError } from "@/lib/action-error";
 import { WorkingCopies, type DraftAdapter, type DraftDocument } from "@/server/desktop/working-copies";
 
 let root: string;
-beforeEach(async () => { root = await mkdtemp(path.join(os.tmpdir(), "lex-drafts-")); });
+beforeEach(async () => {
+  // The production binding resolves its root before supplying a drafts directory.
+  // Windows TEMP can point at the same directory through a DOS short name.
+  root = await realpath(await mkdtemp(path.join(os.tmpdir(), "lex-drafts-")));
+});
 afterEach(async () => { await rm(root, { recursive: true, force: true }); });
 
 it("归属随签出持久保留；原地与替换保存各回传一版，丢回执重启按原键恢复，过期工作稿保留", async () => {
