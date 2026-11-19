@@ -15,6 +15,8 @@ export async function startPrivatePostgres(db, credential, onFatal = () => undef
   let owner, serial = Promise.resolve(), closing = false, failed = false;
   const server = createServer(socket => {
     if (closing || failed || sockets.size >= 8) { socket.destroy(); return; }
+    // Prisma sends many small, synchronous protocol messages during first-run seed.
+    socket.setNoDelay(true);
     sockets.add(socket);
     let buffer = Buffer.alloc(0), startup, stage = 'startup', processing = false;
     const timer = setTimeout(() => socket.destroy(), 5000);
@@ -65,6 +67,16 @@ export async function startPrivatePostgres(db, credential, onFatal = () => undef
           if (stage === 'password') {
             const password = frame.subarray(5, -1), expected = Buffer.from(credential);
             if (frame[0] !== 112 || frame.at(-1) !== 0 || password.length !== expected.length || !timingSafeEqual(password, expected)) { reject(); break; }
+            // Prisma migrate may authenticate its next connection while its probe
+            // is still closing. Allow a brief handoff without sharing the engine.
+            if (owner && !owner.destroyed) {
+              const prior = owner;
+              await new Promise(resolve => {
+                const done = () => { clearTimeout(timer); prior.off('close', done); resolve(); };
+                const timer = setTimeout(done, 250);
+                prior.once('close', done);
+              });
+            }
             // A closed previous socket may still be finishing its rollback.
             if (owner?.destroyed) await serial;
             if (owner || socket.destroyed || closing || failed) { reject(); break; }

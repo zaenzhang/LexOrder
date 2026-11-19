@@ -28,6 +28,7 @@ export const smsListFilterSchema = z.object({
 });
 
 export const smsMatchToMatterSchema = z.object({
+  expectedMatterId: z.string().cuid().nullable().optional(),
   smsId: z.string().cuid(),
   matterId: z.string().cuid().nullable()
 });

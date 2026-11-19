@@ -12,6 +12,7 @@ export const installmentInput = z.object({
   if (r.dueState === "CONDITIONAL" && !r.dueCondition) ctx.addIssue({code:"custom",path:["dueCondition"],message:"请填写到期条件"});
 });
 export const billingRegistrationInput = z.object({
+  draftRequestKey: z.uuid().optional(),
   matterId: id, title: z.string().trim().min(1).max(120), moneyKind: z.enum(moneyKinds),
   amount: z.union([z.string(),z.number()]).transform(String).refine(v=>/^(?:0|[1-9]\d{0,9})(?:\.\d{1,2})?$/.test(v),"收费金额须非负且最多两位小数"),
   signedAt: z.coerce.date().refine(d=>d<=new Date(),"实际签署日期不能在未来").optional(), installments: z.array(installmentInput).max(100),
@@ -22,6 +23,7 @@ export const billingRegistrationInput = z.object({
   if (!r.signedAt && r.installments.length) ctx.addIssue({code:"custom",path:["installments"],message:"草稿暂不生成应收，请签署时确认分期"});
 });
 export const receiptRegistrationInput = z.object({
+  requestKey: z.uuid().optional(),
   matterId: id, billingId: id.optional(), amount: moneyInput, moneyKind: z.enum(moneyKinds),
   occurredAt: z.coerce.date().refine(d=>d<=new Date(),"实际发生日期不能在未来"), payerOrPayee: z.string().trim().max(80).optional(), note: z.string().trim().max(500).optional(),
 });

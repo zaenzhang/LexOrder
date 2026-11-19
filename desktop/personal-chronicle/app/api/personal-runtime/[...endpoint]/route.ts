@@ -23,13 +23,15 @@ async function forward(request: NextRequest, context: Context) {
     return new Response("请从个人桌面预览打开工作区。", { status: 403, headers })
   }
   const path = (await context.params).endpoint.join("/")
-  const isCaseAction = path === "evidence-review" || path === "matter-workspace"
+  const isCaseAction = ["evidence-review", "matter-workspace", "matter-folder", "working-copies", "practice", "finance-desk", "practice-operations", "practice-resources", "court-inbox", "archive", "document-review"].includes(path)
   const isDocument = /^documents\/c[a-z0-9]{24,}\/(preview|download)$/.test(path)
-  if (!isCaseAction && !(isDocument && request.method === "GET")) return new Response(null, { status: 404, headers })
+  const isDownload = /^firm-files\/c[a-z0-9]{24,}\/download$/.test(path) || path === "reports/export"
+  if (!isCaseAction && !((isDocument || isDownload) && request.method === "GET")) return new Response(null, { status: 404, headers })
   const contentType = request.headers.get("content-type") ?? ""
-  const multipart = request.method === "POST" && path === "matter-workspace" && contentType.startsWith("multipart/form-data;")
-  if (multipart && Number(request.headers.get("content-length")) > 21 * 1024 * 1024) {
-    return Response.json({ error: "材料大小不能超过 20 MB。" }, { status: 413, headers })
+  const multipart = request.method === "POST" && ["matter-workspace", "practice-resources", "court-inbox", "archive", "document-review"].includes(path) && contentType.startsWith("multipart/form-data;")
+  const limit = path === "practice-resources" ? 51 : 21
+  if (multipart && Number(request.headers.get("content-length")) > limit * 1024 * 1024) {
+    return Response.json({ error: `文件大小不能超过 ${limit - 1} MB。` }, { status: 413, headers })
   }
   const url = new URL(isCaseAction ? "/api/personal/" + path : "/api/" + path, runtime)
   url.search = request.nextUrl.search

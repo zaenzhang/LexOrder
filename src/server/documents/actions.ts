@@ -456,6 +456,7 @@ export async function uploadNewVersion(input: {
   category?: string;
   /** 受控回传（桌面连接器）：取件令牌，校验归属与基线 */
   checkoutToken?: string;
+  draftOnly?: boolean;
   requestKey?: string;
 }): Promise<{ ok: true; id: string; version: number }> {
   const session = await requireSession("documents.write");
@@ -476,7 +477,7 @@ export async function uploadNewVersion(input: {
 
   // 受控回传冲突拦截（DESKTOP-CONNECTOR-PLAN §二）：取件后他人已传新版
   // → 拒绝直传，提示基于新版另存；法律文本不自动合并。
-  let checkout: { jti: string; baselineVersion: number } | null = null;
+  let checkout: { jti: string; baselineVersion: number; draftOnly?: boolean } | null = null;
   if (input.checkoutToken) {
     const payload = verifyCheckoutToken(input.checkoutToken);
     if (!payload) throw new ActionError("取件令牌无效或已过期，请重新取件");
@@ -485,7 +486,7 @@ export async function uploadNewVersion(input: {
     if (payload.baselineVersion !== prior.version) {
       throw new ActionError(`文件已被他人更新为第 ${prior.version} 版（取件基线为第 ${payload.baselineVersion} 版）。请重新取件基于最新版另存副本，勿直接覆盖。`);
     }
-    checkout = { jti: payload.jti, baselineVersion: payload.baselineVersion };
+    checkout = { jti: payload.jti, baselineVersion: payload.baselineVersion, ...(input.draftOnly ? { draftOnly: true } : {}) };
   }
 
   const raw = Buffer.from(await input.file.arrayBuffer());

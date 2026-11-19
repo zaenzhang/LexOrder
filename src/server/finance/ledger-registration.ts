@@ -25,7 +25,17 @@ export async function registerBillingTx(db:Prisma.TransactionClient,userId:strin
   await assertLedgerWrite(db,userId,data.matterId,"finance.write",{allowTail:false});
   // 直接登记与草稿后签署使用同一正式承接条件；草稿保存不要求已作承接决定。
   if(data.signedAt)await assertMatterReviewCurrent(db,data.matterId);
-  const id=randomUUID();
+  if (data.draftRequestKey) {
+    if (data.signedAt) throw new ActionError("草稿登记与实际签署请分别提交");
+    const audit = await db.auditLog.findFirst({ where: { action: "BILLING_CREATE", targetType: "Billing", targetId: data.draftRequestKey }, select: { userId: true } });
+    if (audit) {
+      const previous = await db.billing.findUnique({ where: { id: data.draftRequestKey } });
+      if (audit.userId !== userId || !previous || previous.matterId !== data.matterId || previous.title !== data.title ||
+        !previous.contractAmount.eq(data.amount) || previous.moneyKind !== data.moneyKind) throw new ActionError("该草稿登记已处理，请核对合同列表");
+      return { id: previous.id, matterId: previous.matterId };
+    }
+  }
+  const id=data.draftRequestKey ?? randomUUID();
   await db.$executeRaw`INSERT INTO "Billing" (id,"matterId",title,"contractAmount",status,"signedAt","moneyKind","amendmentType","updatedAt") VALUES
     (${id},${data.matterId},${data.title},${new Prisma.Decimal(data.amount)},${data.signedAt?'ACTIVE':'DRAFT'}::"BillingStatus",${data.signedAt??null},${data.moneyKind}::"MoneyKind",'ORIGINAL',NOW())`;
   await createInstallments(db,{id,matterId:data.matterId,moneyKind:data.moneyKind},data.installments);
@@ -50,15 +60,33 @@ export async function signBillingTx(db:Prisma.TransactionClient,userId:string,in
   await auditTx(db,{userId,action:"BILLING_SIGN",targetType:"Billing",targetId:billing.id,detail:{matterId:billing.matterId,previousRevision:data.revision,installments:data.installments.length}});
   return {id:billing.id,matterId:billing.matterId};
 }
+// The receipt id doubles as a retry key for clients that can lose an HTTP reply.
+// Rejected receipts are removed from FeeEntry but retain their original audit.
+async function registeredEntry(db: Prisma.TransactionClient, userId: string, type: "COST" | "RECEIVED", input: z.output<typeof receiptRegistrationInput>) {
+  if (!input.requestKey) return;
+  const entry = await db.feeEntry.findUnique({ where: { id: input.requestKey } });
+  if (entry) {
+    if (entry.matterId !== input.matterId || entry.recordedById !== userId || entry.type !== type ||
+      !entry.amount.eq(input.amount) || entry.moneyKind !== input.moneyKind || entry.occurredAt.getTime() !== input.occurredAt.getTime() ||
+      entry.payerOrPayee !== (input.payerOrPayee ?? null) || entry.note !== (input.note ?? null) || entry.billingId !== (input.billingId ?? null))
+      throw new ActionError("该登记标识已有其他流水，请核对台账");
+    return { id: entry.id, matterId: entry.matterId };
+  }
+  if (await db.auditLog.count({ where: { targetType: "FeeEntry", targetId: input.requestKey, action: { in: ["FEE_ENTRY_SUBMIT", "FEE_ENTRY_CREATE"] } } }))
+    throw new ActionError("该笔登记已处理，请核对台账后另行登记");
+}
+
 export async function registerReceiptTx(db:Prisma.TransactionClient,userId:string,input:ReceiptRegistration) {
   const data=receiptRegistrationInput.parse(input);
   await requireFinanceLedger(db);
   const personal = await assertLedgerWrite(db,userId,data.matterId,"finance.write");
+  const previous = await registeredEntry(db, userId, "RECEIVED", data);
+  if (previous) return previous;
   if(data.billingId) {
     const [billing]=await db.$queryRaw<{matterId:string;moneyKind:string}[]>`SELECT "matterId","moneyKind"::text FROM "Billing" WHERE id=${data.billingId} FOR SHARE`;
     if(!billing || billing.matterId!==data.matterId || billing.moneyKind!==data.moneyKind)throw new ActionError("来源合同须属于本案且款项性质相同");
   }
-  const id=randomUUID();
+  const id=data.requestKey ?? randomUUID();
   await db.$executeRaw`INSERT INTO "FeeEntry" (id,"matterId","billingId",type,amount,"moneyKind","occurredAt","payerOrPayee",note,"recordedById","confirmState","updatedAt") VALUES
     (${id},${data.matterId},${data.billingId??null},'RECEIVED',${new Prisma.Decimal(data.amount)},${data.moneyKind}::"MoneyKind",${data.occurredAt},${data.payerOrPayee??null},${data.note??null},${userId},'PENDING',NOW())`;
   await auditTx(db,{userId,action:"FEE_ENTRY_SUBMIT",targetType:"FeeEntry",targetId:id,detail:{matterId:data.matterId,amount:String(data.amount),moneyKind:data.moneyKind,pendingConfirm:true,...personalAuditMetadata(personal,"SUBMISSION")}});
@@ -125,7 +153,9 @@ export async function registerExpenseTx(db:Prisma.TransactionClient,userId:strin
   const data=receiptRegistrationInput.parse(input);
   await requireFinanceLedger(db);await assertLedgerWrite(db,userId,data.matterId,"finance.write");
   if(data.billingId)throw new ActionError("支出请按案件登记，不关联收费合同");
-  const id=randomUUID();
+  const previous = await registeredEntry(db, userId, "COST", data);
+  if (previous) return previous;
+  const id=data.requestKey ?? randomUUID();
   await db.$executeRaw`INSERT INTO "FeeEntry" (id,"matterId",type,amount,"moneyKind","occurredAt","payerOrPayee",note,"recordedById","confirmState","updatedAt") VALUES (${id},${data.matterId},'COST',${new Prisma.Decimal(data.amount)},${data.moneyKind}::"MoneyKind",${data.occurredAt},${data.payerOrPayee??null},${data.note??null},${userId},'CONFIRMED',NOW())`;
   await auditTx(db,{userId,action:"FEE_ENTRY_CREATE",targetType:"FeeEntry",targetId:id,detail:{matterId:data.matterId,type:"COST",amount:String(data.amount),moneyKind:data.moneyKind}});
   return {id,matterId:data.matterId};

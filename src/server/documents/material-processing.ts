@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { ActionError } from "@/lib/action-error";
 import { canReadDocument } from "@/lib/approvals/documents";
 import { matterAssociationFilter } from "@/lib/permissions";
+import { hasPersonalCapability } from "@/lib/runtime/capabilities";
 import { hasCustomPermission, scopeFor } from "@/lib/roles/catalog";
 import { checkRoleMutation, resolveRoleUser } from "@/lib/roles/service";
 import { isArchiveFolderName } from "@/lib/archive/guard";
@@ -105,7 +106,8 @@ async function processingActor(db: Prisma.TransactionClient, userId: string, doc
   if (matter.status === "ARCHIVED") {
     if (!allowArchivedUpload) throw new ActionError("案件已归档，材料不可重新处理");
     const folder = doc.folderId ? await db.documentFolder.findUnique({ where: { id: doc.folderId }, select: { name: true } }) : null;
-    if (scopeFor(actor, "archive.supplement") !== "OWN" || !isArchiveFolderName(folder?.name)) throw new ActionError("案件已归档，材料不可重新处理");
+    const maySupplement = hasPersonalCapability(actor, "archive.supplement") || scopeFor(actor, "archive.supplement") === "OWN";
+    if (!maySupplement || !isArchiveFolderName(folder?.name)) throw new ActionError("案件已归档，材料不可重新处理");
   }
   return actor;
 }

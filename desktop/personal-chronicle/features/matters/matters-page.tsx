@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTable, type DataColumn } from "@/kit/data-table/data-table"
 import { PageHeader } from "@/kit/ui-patterns/page-header"
+import { ResumeMatter } from "./recent-matter"
 import { evidenceEndpoint, readPersonal, type Matter } from "./personal-client"
 
 const href = (matter: Matter) => `/matters/${matter.id}/evidence`
@@ -38,7 +39,7 @@ export function MattersPage() {
   }
 
   return <section className="flex flex-col gap-5">
-    <PageHeader title="案件总览" description="搜索已有案件，打开独立的案件工作空间。" />
+    <PageHeader title="案件总览" actions={<ResumeMatter />} description="搜索已有案件，打开独立的案件工作空间。" />
     <form className="flex flex-wrap gap-2" onSubmit={event => { event.preventDefault(); load(draft.trim(), 1) }}>
       <Input className="w-full max-w-xs" aria-label="搜索案件" placeholder="案件名称或案号" value={draft} onChange={event => setDraft(event.target.value)} />
       <Button variant="outline" type="submit"><SearchIcon data-icon="inline-start" />搜索</Button>
