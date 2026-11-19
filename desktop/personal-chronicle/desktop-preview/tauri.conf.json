@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "LexOrder Chronicle Preview",
+  "version": "0.1.0",
+  "identifier": "cn.lexorder.chroniclepreview",
+  "build": {
+    "devUrl": "http://127.0.0.1:55313/"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "LexOrder · Chronicle 本地预览",
+        "width": 1440,
+        "height": 900,
+        "center": true,
+        "create": false
+      }
+    ],
+    "security": {
+      "capabilities": []
+    }
+  },
+  "bundle": {
+    "active": false,
+    "icon": [
+      "icons/icon.ico"
+    ]
+  }
+}

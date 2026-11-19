@@ -47,6 +47,7 @@
     "outputs",
     ".npm-cache",
     "tools/workbench-m1",
+    "desktop/personal-chronicle",
     ".next",
     ".next-dev",
     ".next-build",
