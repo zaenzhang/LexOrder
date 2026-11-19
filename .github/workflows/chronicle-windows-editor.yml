@@ -2,7 +2,8 @@ name: Chronicle Windows editor acceptance
 
 on:
   pull_request:
-    branches: [codex/lexorder-chronicle-personal]
+    branches: [codex/lexorder-chronicle-personal, main]
+    types: [opened, synchronize, reopened, edited]
     paths:
       - .github/workflows/chronicle-windows-editor.yml
       - src/server/desktop/**
@@ -22,7 +23,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:

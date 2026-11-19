@@ -1,13 +1,16 @@
-import { randomUUID } from "node:crypto";
+import { execFile } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
+import { createReadStream } from "node:fs";
 import * as fs from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
 import { ActionError } from "../action-error";
 import { decryptBuffer, sha256 } from "../storage/crypto";
 import { personalRuntime } from "./personal-channel";
 
 const marker = ".lexorder-matter.json";
 type Matter = { id: string; internalCode: string; title: string; intakeId?: string | null };
-type Binding = { path: string; directoryKey: string | null };
+type Binding = { path: string; directoryKey: string | null; stage?: string };
 export type MovedOriginal = { path: string; encrypted: boolean; iv: string | null; authTag: string | null; sha256: string | null; size: number | null };
 type Change = { action: "bind"; root: string } | { action: "relocate"; path: string };
 
@@ -38,7 +41,10 @@ async function registeredFolder(matterId: string): Promise<Binding | null> {
   if (data.workspaceId !== personalRuntime().workspaceId || data.matterId !== matterId || typeof data.path !== "string" || !path.isAbsolute(data.path) || (data.directoryKey !== undefined && (typeof data.directoryKey !== "string" || !/^\d+\/\d+$/.test(data.directoryKey)))) {
     throw new ActionError("本机案件目录登记损坏");
   }
-  return { path: data.path, directoryKey: data.directoryKey ?? null };
+  if (data.stage !== undefined && (typeof data.stage !== "string" || !/^\.lexorder-bind-[a-zA-Z0-9]{6}$/.test(data.stage) || !data.directoryKey)) {
+    throw new ActionError("本机案件目录登记损坏");
+  }
+  return { path: data.path, directoryKey: data.directoryKey ?? null, stage: data.stage };
 }
 
 async function directoryKey(directory: string) {
@@ -63,6 +69,7 @@ async function verifyFolder(directory: string, matterId: string, expectedKey?: s
 }
 
 async function verifyBinding(binding: Binding, matterId: string) {
+  if (binding.stage) throw new ActionError("案件目录绑定尚未完成，请重新选择原父目录以继续绑定");
   if (!binding.directoryKey) throw new ActionError("此目录需要重新定位并核对原案材料");
   await verifyFolder(binding.path, matterId, binding.directoryKey);
 }
@@ -81,11 +88,11 @@ export async function matterSubdirectory(matterId: string, name: "工作稿" | "
 export async function matterFolderState(matter: Matter) {
   const location = await registeredFolder(matter.id);
   let available = false;
-  if (location) {
+  if (location && !location.stage) {
     try { await verifyBinding(location, matter.id); available = true; }
     catch (error) { if (!(error instanceof ActionError)) throw error; }
   }
-  return { matterId: matter.id, path: location?.path ?? null, available, suggestedName: suggestedName(matter) };
+  return { matterId: matter.id, path: location?.stage ? null : location?.path ?? null, available, suggestedName: location?.stage ? path.basename(location.path) : suggestedName(matter) };
 }
 
 // The Personal runtime already holds the workspace's exclusive owner lock. Share
@@ -126,16 +133,20 @@ async function flush(file: string, directory = false) {
   try { await handle.sync(); } finally { await handle.close(); }
 }
 
-async function storeMapping(matterId: string, directory: string) {
-  const destination = registry(matterId);
+async function writeRecord(destination: string, contents: string) {
   await fs.mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
   const temporary = destination + "." + randomUUID();
   try {
-    await fs.writeFile(temporary, JSON.stringify({ workspaceId: personalRuntime().workspaceId, matterId, path: directory, directoryKey: await directoryKey(directory) }), { flag: "wx", mode: 0o600 });
+    await fs.writeFile(temporary, contents, { flag: "wx", mode: 0o600 });
     await flush(temporary);
     await flush(path.dirname(path.dirname(destination)), true);
     await fs.rename(temporary, destination);
+    await flush(path.dirname(destination), true);
   } finally { await fs.rm(temporary, { force: true }); }
+}
+
+async function storeMapping(matterId: string, binding: Binding) {
+  await writeRecord(registry(matterId), JSON.stringify({ workspaceId: personalRuntime().workspaceId, matterId, ...binding }));
 }
 
 // LocalStorageProvider publishes a complete immutable original using link(). A
@@ -178,63 +189,115 @@ async function prepareOriginals(source: string, destination: string) {
   await flush(destination, true);
 }
 
-async function bind(matter: Matter, root: string, storageRoot: string, old: Binding | null) {
-  await checkParents(root);
+async function exists(file: string) {
+  try { await fs.lstat(file); return true; }
+  catch (error) { if (hasCode(error, "ENOENT")) return false; throw error; }
+}
+
+async function fileDigest(file: string) {
+  const digest = createHash("sha256");
+  for await (const chunk of createReadStream(file)) digest.update(chunk);
+  return digest.digest("hex");
+}
+
+// Before retiring a private original after a restart, check the corresponding
+// bytes in the user-accessible directory. A changed copy leaves both sides intact.
+async function verifyStagedOriginals(source: string, destination: string) {
+  if (!await exists(source)) return;
+  if (!(await fs.lstat(destination)).isDirectory()) throw new ActionError("绑定中断后的原件目录已变化");
+  for (const entry of await fs.readdir(source, { withFileTypes: true })) {
+    const from = path.join(source, entry.name), to = path.join(destination, entry.name);
+    if (entry.isDirectory()) await verifyStagedOriginals(from, to);
+    else if (!entry.isFile() || !(await fs.lstat(to)).isFile() || await fileDigest(from) !== await fileDigest(to)) {
+      throw new ActionError("绑定中断后的原件无法核对，已保留私有原件");
+    }
+  }
+}
+
+async function finishBinding(matter: Matter, pending: Binding, storageRoot: string, recovering: boolean) {
+  const directory = pending.path, root = path.dirname(directory);
+  const stage = path.join(root, pending.stage!);
+  const prepared = path.join(stage, path.basename(directory));
+  if (!await exists(directory)) {
+    await verifyFolder(prepared, matter.id, pending.directoryKey!);
+    // POSIX rename can replace an unrelated empty directory. Move the prepared
+    // directory to its parent with no-clobber semantics. Windows refuses to
+    // replace an existing directory through MoveFileEx.
+    try {
+      if (process.platform === "win32") await fs.rename(prepared, directory);
+      else await promisify(execFile)("/bin/mv", ["-n", prepared, root]);
+    } catch (error) {
+      if (!await exists(directory)) throw error;
+    }
+  }
+  // The destination appeared before our physical directory could be published.
+  // Release the reservation so the user can select another parent. A restarted
+  // process leaves the external staging copy untouched in case it was edited.
+  if (await exists(prepared)) {
+    await verifyFolder(prepared, matter.id, pending.directoryKey!);
+    await fs.unlink(registry(matter.id));
+    await flush(path.dirname(registry(matter.id)), true);
+    if (!recovering) await fs.rm(stage, { recursive: true, force: true });
+    throw new ActionError("同名目录已存在，请选择其他父目录");
+  }
+  await verifyFolder(directory, matter.id, pending.directoryKey!);
+  await flush(root, true);
   const source = path.join(storageRoot, "m_" + matter.id);
   const intakeSource = matter.intakeId ? path.join(storageRoot, "i_" + matter.intakeId) : null;
-  if (old) {
-    if (path.relative(path.dirname(old.path), root) !== "") throw new ActionError("本案已绑定其他目录，请使用重新定位");
-    await verifyBinding(old, matter.id);
-    return;
-  } else {
-    const directory = path.join(root, suggestedName(matter));
-    // All expensive work happens in our own temporary directory. Bad media
-    // or unreadable old objects leave the case and destination untouched.
-    const stage = await fs.mkdtemp(path.join(root, ".lexorder-bind-"));
-    try {
-      await verifyPublication(stage);
-      await prepareOriginals(source, path.join(stage, "已入卷"));
-      if (intakeSource) await prepareOriginals(intakeSource, path.join(stage, "已入卷", "收案原件"));
-      await fs.mkdir(path.join(stage, "工作稿"), { mode: 0o700 });
-      await fs.writeFile(path.join(stage, marker), JSON.stringify({ workspaceId: personalRuntime().workspaceId, matterId: matter.id }), { flag: "wx", mode: 0o600 });
-      try { await fs.mkdir(directory, { mode: 0o700 }); }
-      catch (error) { if (hasCode(error, "EEXIST")) throw new ActionError("同名目录已存在，请选择其他父目录"); throw error; }
-      // The external directory was exclusively created here. Only clean names
-      // we installed if publication fails, never recursively remove that case.
-      const installed: string[] = [];
-      try {
-        for (const name of ["已入卷", "工作稿", marker]) {
-          await fs.rename(path.join(stage, name), path.join(directory, name));
-          installed.push(name);
-        }
-        await flush(path.join(directory, marker));
-        await flush(directory, true);
-        await flush(root, true);
-        if (matter.intakeId) {
-          // Conversion keeps the original i_<intake> document keys. The
-          // unique Matter.intakeId relationship is resolved once at binding.
-          const existing = await intakeMatter(matter.intakeId);
-          if (existing && existing !== matter.id) throw new ActionError("收案材料已归属其他案件");
-          if (!existing) {
-            const lookup = intakeLookup(matter.intakeId);
-            await fs.mkdir(path.dirname(lookup), { recursive: true, mode: 0o700 });
-            await fs.writeFile(lookup, matter.id, { flag: "wx", mode: 0o600 });
-            await flush(lookup);
-          }
-        }
-        await storeMapping(matter.id, directory);
-      } catch (error) {
-        for (const name of installed) await fs.rename(path.join(directory, name), path.join(stage, name));
-        await fs.rmdir(directory);
-        throw error;
-      }
-    } finally { await fs.rm(stage, { recursive: true, force: true }); }
+  if (recovering) {
+    await verifyStagedOriginals(source, path.join(directory, "已入卷"));
+    if (intakeSource) await verifyStagedOriginals(intakeSource, path.join(directory, "已入卷", "收案原件"));
   }
-  // The mapping is committed and all case writes now target 已入卷. Retire
-  // the old private case scope after the complete objects have been published.
-  await flush(path.dirname(registry(matter.id)), true);
+  await storeMapping(matter.id, { path: directory, directoryKey: pending.directoryKey });
+  // Only committed, durably registered publication can retire a private copy.
   await fs.rm(source, { recursive: true, force: true });
   if (intakeSource) await fs.rm(intakeSource, { recursive: true, force: true });
+  await fs.rmdir(stage).catch(error => {
+    if (!["ENOENT", "ENOTEMPTY", "EEXIST"].some(code => hasCode(error, code))) throw error;
+  });
+}
+
+async function bind(matter: Matter, root: string, storageRoot: string, old: Binding | null) {
+  await checkParents(root);
+  if (old) {
+    if (path.relative(path.dirname(old.path), root) !== "") {
+      throw new ActionError(old.stage ? "请重新选择原父目录以继续绑定：" + path.dirname(old.path) : "本案已绑定其他目录，请使用重新定位");
+    }
+    if (old.stage) await finishBinding(matter, old, storageRoot, true);
+    else await verifyBinding(old, matter.id);
+    return;
+  }
+
+  const directory = path.join(root, suggestedName(matter));
+  if (await exists(directory)) throw new ActionError("同名目录已存在，请选择其他父目录");
+  const stage = await fs.mkdtemp(path.join(root, ".lexorder-bind-"));
+  const prepared = path.join(stage, path.basename(directory));
+  let pending: Binding;
+  try {
+    await fs.mkdir(prepared, { mode: 0o700 });
+    await verifyPublication(prepared);
+    await prepareOriginals(path.join(storageRoot, "m_" + matter.id), path.join(prepared, "已入卷"));
+    if (matter.intakeId) {
+      await prepareOriginals(path.join(storageRoot, "i_" + matter.intakeId), path.join(prepared, "已入卷", "收案原件"));
+      const existing = await intakeMatter(matter.intakeId);
+      if (existing && existing !== matter.id) throw new ActionError("收案材料已归属其他案件");
+      if (!existing) await writeRecord(intakeLookup(matter.intakeId), matter.id);
+    }
+    await fs.mkdir(path.join(prepared, "工作稿"), { mode: 0o700 });
+    await fs.writeFile(path.join(prepared, marker), JSON.stringify({ workspaceId: personalRuntime().workspaceId, matterId: matter.id }), { flag: "wx", mode: 0o600 });
+    await flush(path.join(prepared, marker));
+    await flush(prepared, true);
+    await flush(stage, true);
+    await flush(root, true);
+    pending = { path: directory, directoryKey: await directoryKey(prepared), stage: path.basename(stage) };
+  } catch (error) {
+    await fs.rm(stage, { recursive: true, force: true });
+    throw error;
+  }
+  // Persist the physical identity before the final name first becomes visible.
+  // Pending mappings also prevent uploads from racing the prepared snapshot after restart.
+  await storeMapping(matter.id, pending);
+  await finishBinding(matter, pending, storageRoot, false);
 }
 
 async function verifyMovedOriginals(matter: Matter, directory: string, documents: MovedOriginal[]) {
@@ -264,6 +327,7 @@ export async function changeMatterFolder(matter: Matter, change: Change, storage
       await bind(matter, await checkedLocation(change.root), storageRoot, old);
     } else {
       if (!old) throw new ActionError("本案尚未绑定目录");
+      if (old.stage) throw new ActionError("请重新选择原父目录以继续绑定");
       const moved = await checkedLocation(change.path);
       await checkParents(path.dirname(moved));
       await verifyFolder(moved, matter.id);
@@ -278,8 +342,7 @@ export async function changeMatterFolder(matter: Matter, change: Change, storage
         if (!documents) throw new ActionError("需核对转移的案件原件");
         await verifyMovedOriginals(matter, moved, documents);
       }
-      await storeMapping(matter.id, moved);
-      await flush(path.dirname(registry(matter.id)), true);
+      await storeMapping(matter.id, { path: moved, directoryKey: await directoryKey(moved) });
     }
     return matterFolderState(matter);
   });
