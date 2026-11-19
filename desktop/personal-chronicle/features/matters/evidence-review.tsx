@@ -1,18 +1,19 @@
 "use client"
 
 import { PageHeader } from "@/kit/ui-patterns/page-header"
-import { evidenceEndpoint, materialUrl, readPersonal, workspaceEndpoint } from "./personal-client"
+import { evidenceEndpoint, readPersonal } from "./personal-client"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { FileText, Pin, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { FactReviewForm } from "./fact-review-form"
+import { FixedSourcePreview, type FixedSource } from "./fixed-source-preview"
 import { usePinnedSources } from "./matter-session"
 
 type Source = { id: string; relation: "SUPPORTS" | "REBUTS" | "CONTEXT" | null; status: string; documentName: string | null; documentVersion: number | null; locationLabel: string | null; superseded?: boolean }
 type Issue = { id: string; revision: number; title: string; content: string; confirmedAt: string | null; restricted: boolean; canEdit: boolean; sources: Source[] }
-type Preview = { status: "AVAILABLE"; documentName: string; documentVersion: number; locationLabel: string; previewUrl: string | null; downloadUrl: string; text: string | null; legacy: boolean; historicalParse: boolean; previewKind: string }
 type Tab = { key: string; issue: Issue; source: Source; pinned: boolean }
 const tabKey = (item: Issue, source: Source) => JSON.stringify([item.id, item.revision, source.id])
 const groups = [{ title: "支持证据", relation: "SUPPORTS" }, { title: "反证", relation: "REBUTS" }, { title: "背景材料", relation: "CONTEXT" }] as const
@@ -25,7 +26,7 @@ export function EvidenceReview({ matterId }: { matterId: string }) {
   const [tabs, setTabs] = useState<Tab[]>([])
   const [active, setActive] = useState<Tab>()
   const [visible, setVisible] = useState(false)
-  const [preview, setPreview] = useState<Preview>()
+  const [preview, setPreview] = useState<FixedSource>()
   const [sourceError, setSourceError] = useState("")
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmPending, setConfirmPending] = useState(false)
@@ -41,9 +42,9 @@ export function EvidenceReview({ matterId }: { matterId: string }) {
     setActive(tab); setVisible(true); setPreview(undefined); setSourceError("")
     setTabs(rows => rows.some(row => row.key === tab.key) ? rows : [...rows.filter(row => row.pinned), tab])
     try {
-      const result = await readPersonal<Preview | { status: "UNAVAILABLE" }>(evidenceEndpoint, {
+      const result = await readPersonal<FixedSource | { status: "UNAVAILABLE" }>(evidenceEndpoint, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ evidenceItemId: tab.issue.id, revision: tab.issue.revision, sourceId: tab.source.id }),
+        body: JSON.stringify({ action: "open-evidence-source", matterId, evidenceItemId: tab.issue.id, revision: tab.issue.revision, sourceId: tab.source.id }),
       })
       if (requestId.current !== id) return
       if (result.status === "AVAILABLE") setPreview(result)
@@ -51,7 +52,7 @@ export function EvidenceReview({ matterId }: { matterId: string }) {
     } catch (error) {
       if (requestId.current === id) setSourceError(error instanceof Error ? error.message : "无法打开出处。")
     }
-  }, [])
+  }, [matterId])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -93,9 +94,9 @@ export function EvidenceReview({ matterId }: { matterId: string }) {
     if (!issue) return
     setConfirmPending(true); setConfirmStatus("")
     try {
-      await readPersonal(workspaceEndpoint, {
+      await readPersonal(evidenceEndpoint, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "confirm-evidence", evidenceItemId: issue.id, expectedRevision: issue.revision, confirm: true }),
+        body: JSON.stringify({ action: "confirm-issue", matterId, evidenceItemId: issue.id, expectedRevision: issue.revision, confirm: true }),
       })
       setConfirmOpen(false)
       setConfirmStatus("本版已核对。")
@@ -164,6 +165,7 @@ export function EvidenceReview({ matterId }: { matterId: string }) {
             </div> : null}
             {!confirmOpen && confirmStatus ? <p role="status" className="text-sm">{confirmStatus}</p> : null}
             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{issue.restricted ? "部分出处不可用，争点内容已隐藏。" : issue.content}</p>
+            {issue.canEdit && !issue.restricted && <FactReviewForm key={issue.id} matterId={matterId} issue={issue} onReload={() => setReload(value => value + 1)} />}
             {groups.map(group => {
               const sources = issue.sources.filter(source => (source.relation ?? "CONTEXT") === group.relation)
               return <section key={group.relation} className="grid gap-1 rounded-lg border p-3"><h3 className="text-sm font-medium">{group.title}</h3>{sources.length ? sources.map(source => sourceButton(source, issue)) : <p className="text-xs text-muted-foreground">暂无材料</p>}</section>
@@ -178,15 +180,7 @@ export function EvidenceReview({ matterId }: { matterId: string }) {
             <div><Button variant="outline" size="sm" onClick={() => togglePin(active)}><Pin aria-hidden />{active.pinned ? "取消固定" : "固定页签"}</Button></div>
             {sourceError ? <p role="alert" className="text-sm text-destructive">{sourceError}</p> : null}
             {!preview && !sourceError ? <p role="status" className="text-sm text-muted-foreground">正在打开出处…</p> : null}
-            {preview ? <>
-              <div><h3 className="font-medium">{preview.documentName}</h3><p className="text-sm text-muted-foreground">第 {preview.documentVersion} 版 · {preview.locationLabel}</p></div>
-              {preview.legacy ? <p className="text-sm text-muted-foreground">历史引用未固定原件校验值，请核对原文。</p> : null}
-              {preview.historicalParse ? <p className="text-sm text-muted-foreground">显示引用时保留的解析版本。</p> : null}
-              {preview.previewKind === "CONVERTED" ? <p className="text-sm text-muted-foreground">转换预览显示整份文件。</p> : null}
-              {preview.text ? <blockquote className="whitespace-pre-wrap break-words border-l-2 pl-3 text-sm">{preview.text}</blockquote> : null}
-              {preview.previewUrl ? <iframe title="固定版本原文" src={materialUrl(preview.previewUrl)} className="h-96 w-full rounded-md border" /> : null}
-              <a className="text-sm underline" href={materialUrl(preview.downloadUrl)} download>下载此版本</a>
-            </> : null}
+            {preview && <FixedSourcePreview source={preview} />}
           </CardContent>
         </Card> : null}
       </div> : null}
