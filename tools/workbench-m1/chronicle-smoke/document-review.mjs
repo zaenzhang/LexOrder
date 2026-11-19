@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import PizZip from "pizzip";
 import { fixture } from "./fixture.mjs";
 
 const {
@@ -99,6 +100,90 @@ await post("approve", { expected: fresh.expected, note: "逐项核对，批准�
 await post("approve", { expected: fresh.expected, note: "逐项核对，批准本版", acknowledged: true });
 assert.equal((await read(doc.id)).status, "APPROVED");
 const exact = await freeze(doc.id);
+const delivery = (matter, record) =>
+  workspace + "?" + new URLSearchParams({ section: "delivery", matter, ...(record && { record }) });
+const deliveryState = async () => {
+  const list = await api(delivery(a.id));
+  return list.items.find(item => item.id === exact.id)?.state;
+};
+const exportV1 = async () => {
+  const response = await request(workspace, {
+    action: "export-delivery", matterId: a.id, deliveryId: exact.id, requestKey: randomUUID(),
+  });
+  assert.equal(response.headers.get("content-type"), "application/zip");
+  const zip = new PizZip(await response.arrayBuffer());
+  assert.equal(zip.file("材料/01_" + name)?.asText(), v1);
+};
+await exportV1();
+assert.equal(await deliveryState(), "EXPORTED");
+assert.deepEqual((await api(delivery(a.id, exact.id))).events.map(event => event.kind), ["EXPORTED"]);
+
+const proofName = "签收回单-" + tag + ".txt";
+const proofText = "Signed receipt for " + tag;
+async function uploadProof(matterId, text) {
+  const form = new FormData();
+  form.set("matterId", matterId);
+  form.set("name", proofName);
+  form.set("category", "EVIDENCE");
+  form.set("requestKey", randomUUID());
+  form.set("file", new File([text], proofName, { type: "text/plain" }));
+  await api(workspace, form);
+  const options = await api(delivery(matterId) + "&options=1");
+  const proof = options.documents.find(item => item.name === proofName);
+  assert.ok(proof, "Uploaded proof must be selectable in its own case");
+  return proof.id;
+}
+const proofId = await uploadProof(a.id, proofText);
+const foreignProof = await uploadProof(b.id, "Other case receipt");
+const decision = await api(workspace, {
+  action: "save-context",
+  data: {
+    matterId: a.id,
+    requestKey: randomUUID(),
+    kind: "DECISION",
+    visibility: "MATTER",
+    content: "和解方案仍待客户核准",
+    contextInputs: [],
+    sourceDocumentId: doc.id,
+    sourceDescription: "本次交付的和解方案 V1",
+    occurredAt: new Date().toISOString(),
+  },
+});
+const decisionHistory = () =>
+  api(workspace + "?" + new URLSearchParams({ section: "context", matter: a.id, history: decision.id }));
+const beforeReceipt = await decisionHistory();
+assert.equal(beforeReceipt.records[0].source.id, doc.id);
+assert.equal(beforeReceipt.records[0].confirmationStatus, "PENDING");
+
+const recordEvent = (matterId, data, status) =>
+  api(workspace, { action: "record-delivery-event", matterId, data }, status);
+const receivedData = {
+  deliveryId: exact.id,
+  kind: "RECEIVED",
+  requestKey: randomUUID(),
+  occurredAt: new Date(Date.now() - 60_000).toISOString(),
+  channel: "回执",
+  note: "客户签收，内容仍待核准",
+  proofDocumentId: proofId,
+};
+await recordEvent(a.id, receivedData, 403);
+const sentData = {
+  deliveryId: exact.id,
+  kind: "SENT",
+  requestKey: randomUUID(),
+  occurredAt: new Date(Date.now() - 120_000).toISOString(),
+  channel: "当面交接",
+  note: "经办人登记当面交付",
+};
+await request(delivery(b.id, exact.id), null, 403);
+await recordEvent(b.id, sentData, 403);
+const sent = await recordEvent(a.id, sentData);
+assert.equal((await recordEvent(a.id, sentData)).id, sent.id);
+await recordEvent(a.id, { ...receivedData, proofDocumentId: foreignProof }, 403);
+const received = await recordEvent(a.id, receivedData);
+assert.equal((await recordEvent(a.id, receivedData)).id, received.id);
+assert.equal(await deliveryState(), "SENT");
+assert.deepEqual(await decisionHistory(), beforeReceipt);
 const next = new FormData();
 next.set("matterId", a.id);
 next.set("documentId", doc.id);
@@ -119,13 +204,30 @@ await post("submit", { expected: draft.expected }, 200, latest.id);
 const second = await read(latest.id);
 await post("approve", { expected: second.expected, note: "独立核对新版", acknowledged: true }, 200, latest.id);
 await freeze(latest.id);
-const locked = await api(
-  workspace + "?" + new URLSearchParams({ section: "delivery", matter: a.id, record: exact.id }),
-);
+const locked = await api(delivery(a.id, exact.id));
 assert.equal(locked.items[0].documentId, doc.id);
 assert.equal(locked.items[0].documentVersion, 1);
-assert.equal(await (await request("/api/documents/" + doc.id + "/download")).text(), v1);
+assert.equal(locked.items[0].newerVersionAvailable, true);
+assert.equal(locked.recipientName, "模拟客户");
+assert.equal(locked.recipientContact, "合成现场");
+assert.deepEqual(locked.events.map(event => event.kind), ["EXPORTED", "SENT", "RECEIVED"]);
+const [, shipment, receipt] = locked.events;
+assert.equal(shipment.id, sent.id);
+assert.equal(shipment.proofDocumentId, null);
+for (const [event, input] of [[shipment, sentData], [receipt, receivedData]]) {
+  assert.equal(event.occurredAt, input.occurredAt);
+  assert.equal(event.channel, input.channel);
+  assert.equal(event.note, input.note);
+  assert.ok(event.actorName);
+  assert.ok(Date.parse(event.recordedAt) > Date.parse(event.occurredAt));
+}
+assert.equal(receipt.id, received.id);
+assert.equal(receipt.proofDocumentId, proofId);
+assert.equal(receipt.proofName, proofName);
+assert.equal(await (await request("/api/documents/" + receipt.proofDocumentId + "/download")).text(), proofText);
+assert.equal(await (await request("/api/documents/" + locked.items[0].documentId + "/download")).text(), v1);
 assert.equal(await (await request("/api/documents/" + latest.id + "/download")).text(), v2);
+await exportV1();
 console.log(
-  "PASS fixed V1 issue, response, check, omission/stale refusal, return/resubmit and manual approval; delivery freeze exact V1; uploaded V2 requires independent review, both original byte streams and V1 manifest preserved.",
+  "PASS V1 review and approval, frozen ZIP before sending, independent sent and received facts with same-case proof, unchanged pending decision, cross-case refusals, V2 review and reopened V1 original and ZIP.",
 );
