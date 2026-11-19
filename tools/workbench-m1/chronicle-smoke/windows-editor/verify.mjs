@@ -62,7 +62,10 @@ async function worker(fixture, version) {
   });
   let saved;
   if (version === 2) {
-    await Promise.all([fs.mkdir(storage, { recursive: true }), fs.mkdir(cases), fs.mkdir(receipts)]);
+    await Promise.all([fs.mkdir(storage, { recursive: true }), fs.mkdir(receipts)]);
+    const created = await fs.mkdir(cases, { recursive: true });
+    assert.equal(path.toNamespacedPath(created), path.toNamespacedPath(cases));
+    console.log("Windows %s / Node %s; recursive mkdir returned a different path spelling: %s", os.release(), process.version, created !== cases);
     const first = await changeMatterFolder(a, { action: "bind", root: cases }, storage);
     const second = await changeMatterFolder(b, { action: "bind", root: cases }, storage);
     assert.notEqual(first.path, second.path);
@@ -126,4 +129,8 @@ async function main() {
   } finally { await fs.rm(fixture, { recursive: true, force: true }); }
 }
 
-main().catch(error => { console.error(error.stderr || error); process.exitCode = 1; });
+main().catch(error => {
+  if (error.stdout) process.stdout.write(error.stdout);
+  console.error(error.stderr || error);
+  process.exitCode = 1;
+});

@@ -62,7 +62,9 @@ export class WorkingCopies {
 
   private async records(): Promise<Copy[]> {
     const created = await mkdir(this.registry, { recursive: true, mode: 0o700 });
-    if (created) {
+    // Windows skips directory fsync. Its first-created path may also carry
+    // a namespace prefix that the ordinary registry path's parents never have.
+    if (created && process.platform !== "win32") {
       for (let dir = this.registry; dir !== path.dirname(created); dir = path.dirname(dir)) {
         await syncDirectory(path.dirname(dir));
       }
