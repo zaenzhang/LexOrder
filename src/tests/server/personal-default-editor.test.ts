@@ -21,3 +21,29 @@ it("默认编辑器只收到系统桌面会话环境", async () => {
   expect(options.env?.XDG_CONFIG_HOME).toBe("/synthetic/desktop");
   for (const key of secrets) expect(options.env).not.toHaveProperty(key);
 });
+
+it.each([0, 7])("Windows 等待默认程序关联结果，即使启动助手延迟退出（退出码 %i）", async code => {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform")!;
+  const child = Object.assign(new EventEmitter(), { unref: vi.fn() });
+  const file = "C:\\测试案 [A]\\工作稿\\合同.txt";
+  vi.mocked(spawn).mockReturnValue(child as unknown as ReturnType<typeof spawn>);
+  vi.useFakeTimers();
+  Object.defineProperty(process, "platform", { ...platform, value: "win32" });
+  try {
+    const settled = vi.fn();
+    const opened = openDefaultEditor(file).then(() => settled("ok"), error => settled(error.message));
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(settled).not.toHaveBeenCalled();
+    expect(child.unref).not.toHaveBeenCalled();
+    const [command, args, options] = vi.mocked(spawn).mock.calls[0];
+    expect(command).toBe("powershell.exe");
+    expect(args).not.toContain(file);
+    expect(options).toMatchObject({ shell: false, env: { LEXORDER_OPEN_WORKING_COPY: file } });
+    child.emit("exit", code);
+    await opened;
+    expect(settled).toHaveBeenCalledWith(code === 0 ? "ok" : expect.stringContaining("系统未能打开"));
+  } finally {
+    Object.defineProperty(process, "platform", platform);
+    vi.useRealTimers();
+  }
+});

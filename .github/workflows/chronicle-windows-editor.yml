@@ -1,0 +1,33 @@
+name: Chronicle Windows editor acceptance
+
+on:
+  pull_request:
+    branches: [codex/lexorder-chronicle-personal]
+    paths:
+      - .github/workflows/chronicle-windows-editor.yml
+      - src/server/desktop/**
+      - src/lib/runtime/matter-folders.ts
+      - src/tests/server/personal-*.test.ts
+      - src/tests/lib/personal-matter-folders.test.ts
+      - tools/workbench-m1/chronicle-smoke/windows-editor/**
+
+permissions:
+  contents: read
+
+jobs:
+  cases:
+    if: github.event.pull_request.number == 28 && github.head_ref == 'codex/tauri-case-workspace'
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Two case folders, restart, conflicts and launch receipt
+        run: npx vitest run src/tests/lib/personal-matter-folders.test.ts src/tests/server/personal-working-copies.test.ts src/tests/server/personal-default-editor.test.ts
