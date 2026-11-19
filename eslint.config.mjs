@@ -25,6 +25,7 @@ const eslintConfig = defineConfig([
     "tools/workbench-m1/prototype/.runtime/**",
     "tools/workbench-m1/prototype/.next/**",
     "tools/workbench-m1/prototype/next-env.d.ts",
+    "desktop/personal-chronicle/**",
     "node_modules/**",
     "dist/**",
     "coverage/**",
