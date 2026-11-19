@@ -24,6 +24,8 @@ export type ScheduleItem = {
   matter: { id: string; internalCode: string; title: string };
   clientName: string | null;
   href?:string;
+  /** Intake to open for an urgent item that has not yet been converted to a matter. */
+  intakeId?: string;
   procedureLabel?: string;
   completed?: boolean;
   remindDays?: number;
@@ -264,7 +266,16 @@ export async function queryScheduleItems(
     const allowed=await prisma.matter.findMany({where:{deletedAt:null,...matterFilter},select:{id:true}});
     const ids=allowed.map(m=>m.id);
     const urgent=await prisma.$queryRaw<{id:string;title:string;dueAt:Date;kind:string;state:string;matterId:string|null;intakeId:string;caseTitle:string;code:string|null}[]>(Prisma.sql`SELECT w.id,w.title,w."dueAt",w.kind,w.state::text,w."matterId",w."intakeId",COALESCE(m.title,i.title) AS "caseTitle",m."internalCode" AS code FROM "IntakeUrgentItem" w JOIN "Intake" i ON i.id=w."intakeId" LEFT JOIN "Matter" m ON m.id=w."matterId" WHERE w."dueAt">=${from} AND w."dueAt"<=${to} AND w.state<>'CANCELLED' ${params.includeCompleted?Prisma.empty:Prisma.sql`AND w.state='OPEN'`} AND ((w."matterId" IS NULL AND (i."createdById"=${userId} OR i."ownerUserId"=${userId} OR ${userId}=ANY(i."coUserIds"))) ${ids.length?Prisma.sql`OR w."matterId" IN (${Prisma.join(ids)})`:Prisma.empty})`);
-    for(const w of urgent)items.push({id:`u-${w.id}`,type:w.kind==='HEARING'?'hearing':w.kind==='DEADLINE'?'deadline':'task',title:w.title,occurredAt:w.dueAt,matter:{id:w.matterId??w.intakeId,internalCode:w.code??'收案',title:w.caseTitle},href:w.matterId?`/matters/${w.matterId}`:`/intakes/${w.intakeId}`,clientName:null,procedureLabel:'收案紧急事项',completed:w.state==='DONE'});
+    for (const row of urgent) {
+      items.push({
+        id: `u-${row.id}`, type: row.kind === "HEARING" ? "hearing" : row.kind === "DEADLINE" ? "deadline" : "task",
+        title: row.title, occurredAt: row.dueAt,
+        matter: { id: row.matterId ?? row.intakeId, internalCode: row.code ?? "收案", title: row.caseTitle },
+        intakeId: row.matterId ? undefined : row.intakeId,
+        href: row.matterId ? `/matters/${row.matterId}` : `/intakes/${row.intakeId}`,
+        clientName: null, procedureLabel: "收案紧急事项", completed: row.state === "DONE"
+      });
+    }
   }
   items.sort((a, b) => new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime());
   return items;

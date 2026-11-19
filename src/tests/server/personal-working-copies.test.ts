@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { cp, mkdtemp, mkdir, readFile, readdir, realpath, rename, rm, utimes, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, readdir, realpath, rename, rm, truncate, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { ActionError } from "@/lib/action-error";
@@ -133,5 +133,38 @@ it.each(["truncated", "missing"] as const)("校验 %s 快照，保留后续修�
     expect(attempted).toHaveLength(1);
     const kept = (await readdir(dir)).find(name => name.includes("_待回传_"));
     expect(await readFile(path.join(dir, kept!), "utf8")).toBe(frozen);
+  }
+});
+
+
+it.each(["改名", "超限"] as const)("工作稿%s后可保留本机文件并重新签出，保留任何待回传快照", async kind => {
+  const folder = path.join(root, "案");
+  await mkdir(folder);
+  const doc: DraftDocument = { id: "A1", matterId: "A", familyId: "A", name: "诉状.txt", version: 1, extension: ".txt", checkoutJti: "ticket" };
+  let working = "";
+  const adapter: DraftAdapter = {
+    drafts: async () => folder, checkout: async () => ({ doc, bytes: Buffer.from("原件") }),
+    launch: async file => { working = file; }, read: async () => {},
+    save: async () => { throw new ActionError("已撤回"); },
+  };
+  const registry = path.join(root, "private");
+  const copies = new WorkingCopies(registry, adapter);
+  for (const pending of [false, true]) {
+    const { sessionId } = await copies.open("A", "A1");
+    if (pending) {
+      await writeFile(working, "待回传编辑");
+      await utimes(working, new Date(0), new Date(0));
+      expect((await copies.sync())[0].message).toBe("已撤回");
+    }
+    if (kind === "改名") await rename(working, working + ".bak");
+    else await truncate(working, 20 * 1024 * 1024 + 1);
+    await copies.finish("A", sessionId, true);
+    expect(await copies.sync()).toEqual([]);
+    const retained = await readdir(folder);
+    expect(retained).toContain(path.basename(working) + (kind === "改名" ? ".bak" : ""));
+    if (pending) {
+      const snapshot = retained.find(name => name.includes("_待回传_"))!;
+      expect(await readFile(path.join(folder, snapshot), "utf8")).toBe("待回传编辑");
+    }
   }
 });

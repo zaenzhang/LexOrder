@@ -3,6 +3,7 @@
  * 查询失败必须中止本次规则核对；未录入年度安排与已录入年度内无特殊安排分开。
  */
 import dayjs from "dayjs";
+import type { Prisma } from "@prisma/client";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import { prisma } from "@/lib/prisma";
@@ -45,11 +46,11 @@ export function holidayDateRange(fromKey: string, toKey: string): { gte: Date; l
 }
 
 /** 成功查询可以返回空表；数据库不可用不能被当作空配置。 */
-export async function loadHolidayMap(fromKey: string, toKey: string): Promise<HolidayMap> {
+export async function loadHolidayMap(fromKey: string, toKey: string, db: Pick<Prisma.TransactionClient, "holiday"> = prisma): Promise<HolidayMap> {
   const date = holidayDateRange(fromKey, toKey);
   let rows;
   try {
-    rows = await prisma.holiday.findMany({
+    rows = await db.holiday.findMany({
       where: { date },
       select: { date: true, name: true, kind: true }
     });
@@ -98,11 +99,11 @@ export type AdjustedDeadline =
  * 只核当前所需年份是否已有录入，不据此声称该年安排完整。
  * 无该年记录不给出顺延结果；读取故障抛错。调用方始终保留人工提交的 dueAt。
  */
-export async function adjustDeadlineForHolidays(dueKey: string): Promise<AdjustedDeadline> {
+export async function adjustDeadlineForHolidays(dueKey: string, db: Pick<Prisma.TransactionClient, "holiday"> = prisma): Promise<AdjustedDeadline> {
   const start = calendarDay(dueKey);
   const end = start.add(SEARCH_DAYS - 1, "day");
   // 读取搜索窗口所跨的完整年份，既覆盖全部候选日，也能区分窗口无安排与年度未录入。
-  const map = await loadHolidayMap(`${start.format("YYYY")}-01-01`, `${end.format("YYYY")}-12-31`);
+  const map = await loadHolidayMap(`${start.format("YYYY")}-01-01`, `${end.format("YYYY")}-12-31`, db);
   const configuredYears = new Set([...map.keys()].map(key => Number(key.slice(0, 4))));
   if (!configuredYears.has(start.year())) return { status: "UNCONFIGURED", missingYears: [start.year()] };
 

@@ -196,6 +196,7 @@ async function read(query: URLSearchParams) {
         type: item.type,
         title: item.title,
         matter: item.matter,
+        href: item.intakeId ? `/practice/intakes/${item.intakeId}` : `/matters/${item.matter.id}/tasks`,
         when:
           item.type === "deadline"
             ? formatDeadlineDue(item.occurredAt, item.duePrecision ?? null)

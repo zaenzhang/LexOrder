@@ -33,13 +33,24 @@ export function encryptBuffer(plain: Buffer): {
   authTag: Buffer;
   algorithm: string;
 } {
-  const iv = randomBytes(IV_LENGTH);
+  return encryptWithIv(plain, randomBytes(IV_LENGTH));
+}
+
+function encryptWithIv(plain: Buffer, iv: Buffer) {
   const cipher = createCipheriv("aes-256-gcm", getStorageEncryptionKey(), iv, {
     authTagLength: AUTH_TAG_LENGTH
   });
   const ct = Buffer.concat([cipher.update(plain), cipher.final()]);
   const tag = cipher.getAuthTag();
   return { ciphertext: ct, iv, authTag: tag, algorithm: ALGORITHM };
+}
+
+// Only the original plaintext may reuse a reserved GCM envelope after a failed upload.
+export function restoreEncryptedOriginal(plain: Buffer, original: { size: number; sha256: string; iv: string; authTag: string }) {
+  if (plain.length !== original.size || sha256(plain) !== original.sha256) throw new ActionError("重传原件与上传登记不一致");
+  const encrypted = encryptWithIv(plain, Buffer.from(original.iv, "base64"));
+  if (encrypted.authTag.toString("base64") !== original.authTag) throw new ActionError("无法核对原上传的加密登记");
+  return encrypted.ciphertext;
 }
 
 /**

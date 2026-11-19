@@ -46,17 +46,27 @@ export function DeliveryWorkspace({ matterId, rows, reload }: { matterId: string
       .catch(cause => { if (!controller.signal.aborted) setOptionsError(cause.message) })
     return () => controller.abort()
   }, [matterId, attempt])
+  function prepare(previous: string | null) {
+    setPriorId(previous)
+    setOptions(undefined)
+    setOptionsError("")
+    setActive("new")
+    setAttempt(n => n + 1)
+  }
   return <Card><CardHeader><CardTitle>交付记录</CardTitle></CardHeader><CardContent className="grid gap-3">
-    {options?.canPrepare && <Button className="justify-self-start" size="sm" onClick={() => { setPriorId(null); setActive("new") }}>准备交付</Button>}
+    {options?.canPrepare && <Button className="justify-self-start" size="sm" onClick={() => prepare(null)}>准备交付</Button>}
     {optionsError && <div role="alert" className="flex items-center gap-2 text-sm">{optionsError}<Button size="sm" variant="outline" onClick={() => { setOptionsError(""); setAttempt(n => n + 1) }}>重新读取材料选项</Button></div>}
     {!rows.length && <p className="text-sm text-muted-foreground">暂无交付记录。</p>}
     <ul className="divide-y">{rows.map(row => <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
       <div><p className="text-sm font-medium">{row.purpose ?? "不可查看的清单"}</p><p className="text-xs text-muted-foreground">{[row.recipientName, statusNames[row.state], row.itemCount + " 份材料"].filter(Boolean).join(" · ")}</p></div>
+      {row.state === "UNAVAILABLE" && options?.canPrepare && <Button size="sm" variant="outline" onClick={() => prepare(row.id)}>另建补发清单</Button>}
       {row.state !== "UNAVAILABLE" && <Button size="sm" variant="outline" onClick={() => setActive(row.id)}>查看清单</Button>}
     </li>)}</ul>
-    {active === "new" && options && <PrepareDelivery matterId={matterId} options={options} priorId={priorId} onClose={() => setActive("")} onSaved={id => { setActive(id); reload() }} />}
+    {active === "new" && !options && !optionsError && <p role="status">正在读取可交付的材料…</p>}
+    {active === "new" && options && !options.canPrepare && <p role="status">当前案件不可准备交付。</p>}
+    {active === "new" && options?.canPrepare && <PrepareDelivery matterId={matterId} options={options} priorId={priorId} onClose={() => setActive("")} onSaved={id => { setActive(id); reload() }} />}
     {active && active !== "new" && <DeliveryDetail key={active} matterId={matterId} id={active} options={options} reload={reload} onClose={() => setActive("")}
-      onPrepare={() => { setPriorId(active); setActive("new") }} />}
+      onPrepare={() => prepare(active)} />}
   </CardContent></Card>
 }
 

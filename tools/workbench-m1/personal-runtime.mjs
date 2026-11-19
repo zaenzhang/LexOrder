@@ -2,11 +2,12 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer } from 'node:net';
 import { spawn } from 'node:child_process';
-import { open, mkdir, readdir, readFile, writeFile, rename, rm, lstat } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile, rename, rm, lstat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PGlite } from '@electric-sql/pglite';
 import { startPrivatePostgres } from './private-pg.mjs';
+import { acquireWorkspaceOwner } from './workspace-owner.mjs';
 import { tsImport } from 'tsx/esm/api';
 
 const { createPrismaClient } = await tsImport('../../src/lib/prisma-client.ts', import.meta.url);
@@ -19,13 +20,9 @@ await mkdir(workspace, { recursive: true, mode: 0o700 });
 const info = await lstat(workspace);
 if (!info.isDirectory() || info.isSymbolicLink() || (info.mode & 0o077)) throw new Error('WORKSPACE_MUST_BE_PRIVATE');
 const manifestPath = path.join(workspace, 'workspace.json');
-const existing = await readdir(workspace);
-const hasManifest = existing.includes('workspace.json');
-if (!hasManifest && existing.some(name => name !== '.owner')) throw new Error('WORKSPACE_INCOMPLETE');
-if (hasManifest && !existing.includes('data')) throw new Error('WORKSPACE_INCOMPLETE');
-let lock;
-try { lock = await open(path.join(workspace, '.owner'), 'wx', 0o600); await lock.writeFile(String(process.pid)); }
-catch { throw new Error('WORKSPACE_BUSY'); }
+const lock = await acquireWorkspaceOwner(workspace);
+const childOptions = { stdio: ['ignore', 'pipe', 'pipe', 'ipc', lock.fd] };
+const ownerGuard = ['--import', new URL('./exit-with-owner.mjs', import.meta.url).href];
 let database, socket, prisma, child, migration, childExit;
 let childEnded = false;
 let stopping = false, runtimeFailed = false;
@@ -33,7 +30,7 @@ const terminate = () => { stopping = true; migration?.kill('SIGTERM'); child?.ki
 process.on('SIGTERM', terminate); process.on('SIGINT', terminate);
 const command = (file, args, env, cwd = path.join(here, '.runtime')) => new Promise((resolve, reject) => {
   if (stopping) { reject(new Error('M1_CANCELLED')); return; }
-  const proc = spawn(file, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  const proc = spawn(file, [...ownerGuard, ...args], { cwd, env, ...childOptions });
   migration = proc;
   const timer = setTimeout(() => proc.kill('SIGKILL'), 90_000);
   let output = ''; proc.stdout.on('data', chunk => { output += chunk; }); proc.stderr.on('data', chunk => { output += chunk; });
@@ -58,6 +55,11 @@ async function stopChild() {
   if (!childEnded) throw new Error('M1_OWNER_STOP_FAILED');
 }
 try {
+  if (process.env.M1_READY_FILE) await rm(process.env.M1_READY_FILE, { force: true });
+  const existing = await readdir(workspace);
+  const hasManifest = existing.includes('workspace.json');
+  if (!hasManifest && existing.some(name => name !== '.owner')) throw new Error('WORKSPACE_INCOMPLETE');
+  if (hasManifest && !existing.includes('data')) throw new Error('WORKSPACE_INCOMPLETE');
   const keyPath = path.join(workspace, 'storage-key');
   if (hasManifest && !existing.includes('storage-key')) throw new Error('WORKSPACE_KEY_MISSING');
   if (!hasManifest) await writeFile(keyPath, randomBytes(32).toString('base64'), { mode: 0o600, flag: 'wx' });
@@ -117,7 +119,7 @@ try {
   }
   const app = path.join(root, '.next-personal/standalone');
   if (stopping) throw new Error('M1_CANCELLED');
-  child = spawn(process.execPath, [path.join(app, 'server.js')], { cwd: app, stdio: ['ignore', 'pipe', 'pipe'], env: {
+  child = spawn(process.execPath, [...ownerGuard, path.join(app, 'server.js')], { cwd: app, ...childOptions, env: {
     ...env, NODE_ENV: 'production', HOSTNAME: '127.0.0.1', PORT: String(port), NEXT_TELEMETRY_DISABLED: '1',
     M1_WORKSPACE: workspace,
   } });
@@ -149,6 +151,6 @@ try {
   await prisma?.$disconnect();
   await socket?.stop();
   await database?.close();
-  await lock.close(); await rm(path.join(workspace, '.owner'), { force: true });
   if (process.env.M1_READY_FILE) await rm(process.env.M1_READY_FILE, { force: true });
+  await lock.close();
 }

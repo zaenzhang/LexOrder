@@ -132,6 +132,12 @@ export function MaterialsWorkspace({ matterId, documents, folders, filters, onFi
     </div>
     {editorError && <p role="alert" className="text-sm text-destructive">{editorError}</p>}
     {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
+    {mine.filter(copy => !documents.some(item => item.id === copy.id)).map(copy =>
+      <div key={copy.sessionId} className="flex flex-wrap items-center gap-2">
+        <span className="text-sm">列表外的本机工作稿 · V{copy.version} · {copy.sessionId.slice(0, 8)}</span>
+        <Button variant="outline" size="sm" disabled={busy} onClick={() => edit({ action: "finish", matterId, sessionId: copy.sessionId, keepLocal: true })}>保留本机稿并结束</Button>
+      </div>
+    )}
     <DataTable columns={columns} rows={documents} getRowId={item => item.id} loading={false} sort={[]} onSortChange={() => {}} label="案内材料"
       empty={<p className="text-sm text-muted-foreground">{documents.length ? "没有匹配的材料。" : "暂无可查看的材料。"}</p>} />
     <Sheet open={!!preview} onOpenChange={open => { if (!open) setPreview(undefined) }}>

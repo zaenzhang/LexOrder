@@ -4,7 +4,7 @@ import { z } from "zod";
 import { DocumentCategory, DocumentSourceOrigin, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { storage } from "@/lib/storage";
-import { decryptBuffer, sha256 } from "@/lib/storage/crypto";
+import { decryptBuffer, restoreEncryptedOriginal, sha256 } from "@/lib/storage/crypto";
 import { ActionError } from "@/lib/action-error";
 import { resolveRoleUser } from "@/lib/roles/service";
 import { hasCustomPermission, scopeFor } from "@/lib/roles/catalog";
@@ -123,7 +123,7 @@ export async function ingestMaterial(input: { userId: string; document: Material
   if (existing) {
     const previous = metadataSchema.parse(existing.metadata);
     if (existing.requestedById !== input.userId || !sameUpload(previous, metadata)) throw new ActionError("上传请求标识已用于其他内容，请重新选择文件");
-    return resumeMaterialIngest(id, input.userId);
+    return resumeMaterialIngest(id, input.userId, undefined, { bytes: input.bytes, document: data });
   }
   const storagePath = `${data.matterId ? `m_${data.matterId}` : `i_${data.intakeId}`}/${new Date().toISOString().slice(0, 7).replace("-", "")}/${id}.bin`;
   try { await approvalTransaction(async tx => {
@@ -144,7 +144,7 @@ export async function ingestMaterial(input: { userId: string; document: Material
   }, Prisma.TransactionIsolationLevel.ReadCommitted); } catch (error) {
     const raced = await prisma.materialIngestIntent.findUnique({ where: { id } });
     if (raced) {
-      if (raced.requestedById === input.userId && sameUpload(metadataSchema.parse(raced.metadata), metadata)) return resumeMaterialIngest(id, input.userId);
+      if (raced.requestedById === input.userId && sameUpload(metadataSchema.parse(raced.metadata), metadata)) return resumeMaterialIngest(id, input.userId, undefined, { bytes: input.bytes, document: data });
       throw new ActionError("上传请求标识已用于其他内容，请核对原上传");
     }
     throw error;
@@ -217,8 +217,37 @@ async function commitStoredIngest(intentId: string, userId: string, lease?: JobL
   }, Prisma.TransactionIsolationLevel.ReadCommitted);
 }
 
+type Replay = { bytes: Buffer; document: z.output<typeof documentInput> };
+
+function reservedBytes(replay: Replay, reserved: z.output<typeof documentInput>) {
+  const plain = replay.document.encrypted
+    ? decryptBuffer(replay.bytes, replay.document.iv!, replay.document.authTag!) : replay.bytes;
+  if (reserved.encrypted) {
+    if (!reserved.iv || !reserved.authTag) throw new ActionError("原上传的加密登记不完整");
+    return restoreEncryptedOriginal(plain, { size: reserved.size, sha256: reserved.sha256, iv: reserved.iv, authTag: reserved.authTag });
+  }
+  if (plain.length !== reserved.size || sha256(plain) !== reserved.sha256) throw new ActionError("重传原件与上传登记不一致");
+  return plain;
+}
+
+async function readReservedOriginal(storagePath: string, document: z.output<typeof documentInput>, replay?: Replay) {
+  try { return await storage.readFile(storagePath); }
+  catch (error) {
+    const missing = (error as NodeJS.ErrnoException)?.code === "ENOENT" || ["NoSuchKey", "NotFound"].includes((error as Error)?.name);
+    if (!missing || !replay) throw error;
+  }
+  const replacement = reservedBytes(replay, document);
+  try {
+    await storage.writeFileAt(storagePath, replacement);
+    return replacement;
+  } catch {
+    // Another retry may have won exclusive publication or its reply was lost.
+    return storage.readFile(storagePath);
+  }
+}
+
 /** Recovery examines this intent's object only, never scans or re-hashes the material store. */
-export async function resumeMaterialIngest(intentId: string, userId: string, lease?: JobLease) {
+export async function resumeMaterialIngest(intentId: string, userId: string, lease?: JobLease, replay?: Replay) {
   const intent = await prisma.materialIngestIntent.findUnique({ where: { id: intentId } });
   if (!intent || intent.requestedById !== userId) throw new ActionError("上传记录不存在或无权处理");
   if (intent.errorCode === "UPLOAD_ABANDONED") throw new ActionError("此上传已关闭，请重新选择文件开始新上传");
@@ -231,12 +260,12 @@ export async function resumeMaterialIngest(intentId: string, userId: string, lea
   }, Prisma.TransactionIsolationLevel.ReadCommitted);
   const recoverState = async (state: "FAILED" | "STORED", errorCode: string | null) => approvalTransaction(async tx => {
     if (lease) await assertCurrentJobLease(tx, lease);
-    await tx.materialIngestIntent.updateMany({ where: { id: intentId, state: { not: "COMMITTED" }, documentId: null,
+    await tx.materialIngestIntent.updateMany({ where: { id: intentId, state: state === "FAILED" ? intent.state : { not: "COMMITTED" }, documentId: null,
       OR: [{ errorCode: null }, { errorCode: { not: "UPLOAD_ABANDONED" } }] }, data: { state, errorCode } });
-  });
+  }, Prisma.TransactionIsolationLevel.ReadCommitted);
   let bytes: Buffer;
   try {
-    const stored = await storage.readFile(intent.storagePath);
+    const stored = await readReservedOriginal(intent.storagePath, data, replay);
     bytes = data.encrypted ? decryptBuffer(stored, data.iv!, data.authTag!) : stored;
   } catch {
     await recoverState("FAILED", "ORIGINAL_UNAVAILABLE");

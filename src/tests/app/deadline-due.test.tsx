@@ -109,6 +109,7 @@ describe("F01 真实期限表单（组件环境，服务动作边界受控）", 
     expect(screen.getByLabelText("准确时刻（北京时间）")).toHaveValue("17:00");
     fireEvent.click(screen.getByRole("button", { name: "添加期限" }));
     await waitFor(() => expect(mock.add).toHaveBeenCalledTimes(2));
+    expect(mock.add.mock.calls[0][0].requestKey).toMatch(/^[0-9a-f-]{36}$/);
     expect(mock.add.mock.calls[1][0]).toEqual(mock.add.mock.calls[0][0]);
     expect(mock.add.mock.calls[1][0]).toMatchObject({ procedureId, dueAt: new Date("2027-02-05T17:00:00+08:00"), duePrecision: "DATETIME" });
   });

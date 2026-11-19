@@ -27,7 +27,8 @@ vi.mock("@/lib/roles/service", () => ({
 }));
 vi.mock("@/lib/permissions", () => ({ assertCanHandleMatter: vi.fn(), assertCanLeadMatter: vi.fn() }));
 vi.mock("@/lib/archive/guard", () => ({ assertMatterWritable: vi.fn() }));
-vi.mock("@/server/audit", () => ({ audit: vi.fn() }));
+vi.mock("@/lib/approvals/service", () => ({ approvalTransaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(db)) }));
+vi.mock("@/server/audit", () => ({ auditTx: vi.fn() }));
 vi.mock("@/server/matters/route", () => ({ revalidateMatter: vi.fn() }));
 vi.mock("@/server/timeline/record", () => ({ recordTimelineEvent: vi.fn() }));
 vi.mock("@/server/reminders/schedule", () => ({

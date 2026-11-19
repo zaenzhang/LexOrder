@@ -80,7 +80,7 @@ beforeEach(() => {
   syntheticStorage.read.mockReset().mockImplementation(async (key: string) => {
     await syntheticStorage.beforeRead?.();
     const bytes = syntheticStorage.objects.get(key);
-    if (!bytes) throw new Error("synthetic object missing");
+    if (!bytes) throw Object.assign(new Error("synthetic object missing"), { code: "ENOENT" });
     return Buffer.from(bytes);
   });
   syntheticStorage.remove.mockReset().mockImplementation(async (key: string) => { syntheticStorage.objects.delete(key); });
@@ -188,11 +188,27 @@ describe.skipIf(!databaseUrl)("Server 原件摄入：真实 PG 恢复与幂等�
     const reads = syntheticStorage.read.mock.calls.length;
     expect(await getMaterialUploadReceipt({ matterId: f.matter.id, requestKey: key })).toMatchObject({ status: "INCOMPLETE", waiting: false });
     expect(syntheticStorage.read).toHaveBeenCalledTimes(reads);
-    await expect(uploadDocument(uploadForm(f, key))).rejects.toThrow("未找到完整原件");
-    expect(syntheticStorage.write).toHaveBeenCalledOnce();
-    expect(await db.document.count({ where: { matterId: f.matter.id } })).toBe(0);
+    await expect(resumeMaterialIngest(key, f.user.id)).rejects.toThrow("未找到完整原件");
+    const recovered = await uploadDocument(uploadForm(f, key));
+    expect(recovered.ok).toBe(true);
+    expect(syntheticStorage.write).toHaveBeenCalledTimes(2);
+    expect(await db.document.count({ where: { matterId: f.matter.id } })).toBe(1);
     expect(await getMaterialUploadReceipt({ matterId: f.matter.id, requestKey: randomUUID() })).toEqual({ status: "NOT_RESERVED" });
   }, 30_000);
+
+  it("首次加密写盘失败后，两次同键重试恢复原加密登记且只入卷一次", async () => {
+    const f = await fixture(); signIn(f); const key = request(f).requestKey;
+    const upload = () => uploadDocument(uploadForm(f, key, { encrypted: "true" }));
+    syntheticStorage.write.mockRejectedValueOnce(new Error("disk full"));
+    await expect(upload()).rejects.toThrow("原件");
+    const [path, originalCiphertext] = syntheticStorage.write.mock.calls[0];
+    const [first, second] = await Promise.all([upload(), upload()]);
+    expect(first).toMatchObject({ ok: true });
+    expect(second).toEqual(first);
+    expect(syntheticStorage.objects.get(path)).toEqual(originalCiphertext);
+    expect(originalCiphertext).not.toEqual(f.bytes);
+    expect(await db.document.count({ where: { matterId: f.matter.id } })).toBe(1);
+  });
 
   it("G04 精确回执限定当前岗位/经办/本人及事项，COMMITTED 无当前原件资格只确认保存", async () => {
     const f = await fixture(), other = await fixture(); signIn(f); const key = request(f).requestKey;

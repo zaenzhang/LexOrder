@@ -34,15 +34,18 @@ async function procedure(matter) {
 }
 const pa = await procedure(a);
 const pb = await procedure(b);
-const addDeadline = (matter, procedureId, precision, date, status) => write(matter, {
-  action: "add-deadline", data: { procedureId, title: "举证期限 " + tag, duePrecision: precision, dueAt: date, remindDays: 3 },
+const addDeadline = (matter, procedureId, precision, date, status, requestKey = randomUUID()) => write(matter, {
+  action: "add-deadline", data: { requestKey, procedureId, title: "举证期限 " + tag, duePrecision: precision, dueAt: date, remindDays: 3 },
 }, status);
 const addTask = (matter, stageId, status) => write(matter, {
   action: "create-task", requestKey: randomUUID(), title: "核对材料 " + tag, description: "", stageId,
   dueAt: "2030-05-01T00:15:00+08:00", priority: 0,
 }, status);
 try {
-  const da = await addDeadline(a, pa.id, "DATE", "2030-05-01");
+  const key = randomUUID();
+  const da = await addDeadline(a, pa.id, "DATE", "2030-05-01", 200, key);
+  assert.equal((await addDeadline(a, pa.id, "DATE", "2030-05-01", 200, key)).id, da.id);
+  await addDeadline(a, pa.id, "DATE", "2030-05-02", 403, key);
   const db = await addDeadline(b, pb.id, "DATETIME", "2030-05-01T00:15:00+08:00");
   const deadlineIn = async (matter, procedureId, id) =>
     (await inside(matter)).procedures.find(p => p.id === procedureId).deadlines.find(d => d.id === id);
@@ -64,7 +67,12 @@ try {
   assert.equal((await taskIn(a, ta.id)).stageId, pa.stageId);
   assert.equal((await taskIn(b, tb.id)).stageId, pb.stageId);
   assert.equal((await taskIn(a, ta.id)).dueAt, "2030-04-30T16:15:00.000Z");
+  const intake = await store.intake.create({ data: { title: "合成未转案 " + tag, createdById: manifest.actorId } });
+  const urgent = await store.intakeUrgentItem.create({ data: { intakeId: intake.id, title: "合成收案紧急期限",
+    assigneeId: manifest.actorId, dueAt: new Date("2030-05-01T00:00:00+08:00"), kind: "DEADLINE" } });
   const month = await monthly();
+  assert.equal(month.find(row => row.id === "u-" + urgent.id)?.href, "/practice/intakes/" + intake.id);
+  assert.equal(month.find(row => row.id === "d-" + da.id)?.href, "/matters/" + a.id + "/tasks");
   for (const [id, matter, when] of [
     ["d-" + da.id, a, deadlineA.dueLabel], ["d-" + db.id, b, deadlineB.dueLabel],
     ["t-" + ta.id, a, "2030-05-01 00:15"], ["t-" + tb.id, b, "2030-05-01 00:15"],

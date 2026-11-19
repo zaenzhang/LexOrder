@@ -216,26 +216,29 @@ export class WorkingCopies {
     if (!keepLocal) {
       await this.syncOne(copy);
       if (copy.pending || stamp((await this.file(copy)).stat) !== copy.stamp) throw new ActionError("文件仍在保存，请稍后结束编辑。");
-    } else {
-      const { file } = await this.file(copy);
-      if (copy.pending) {
-        const snapshot = await this.verifiedSnapshot(copy, copy.pending, path.join(this.registry, (copy.pending.snapshot ?? copy.pending.key) + ".pending"));
-        const sibling = file.slice(0, -copy.extension.length) + "_待回传_" + copy.pending.key + copy.extension;
-        try { await writeExclusive(sibling, snapshot); }
-        catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-          // FlushFileBuffers on Windows requires write access, including on a retry.
-          const access = process.platform === "win32" ? constants.O_RDWR : constants.O_RDONLY;
-          const saved = await open(sibling, access | (constants.O_NOFOLLOW || 0));
-          try {
-            const stored = await saved.stat();
-            if (!stored.isFile() || stored.nlink !== 1 || hash(await saved.readFile()) !== copy.pending.hash) {
-              throw new ActionError("同名保留稿已变化，请核对文件后重试。");
-            }
-            await saved.sync();
-          } finally { await saved.close(); }
-          await syncDirectory(path.dirname(sibling));
-        }
+    } else if (copy.pending) {
+      const base = await this.adapter.drafts(copy.matterId);
+      const file = path.join(base, copy.file);
+      if (path.dirname(file) !== base || await realpath(base) !== base ||
+          (copy.directoryIdentity && await directoryIdentity(base) !== copy.directoryIdentity)) {
+        throw new ActionError("工作稿目录已变化，请核对原案目录。");
+      }
+      const snapshot = await this.verifiedSnapshot(copy, copy.pending, path.join(this.registry, (copy.pending.snapshot ?? copy.pending.key) + ".pending"));
+      const sibling = file.slice(0, -copy.extension.length) + "_待回传_" + copy.pending.key + copy.extension;
+      try { await writeExclusive(sibling, snapshot); }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+        // FlushFileBuffers on Windows requires write access, including on a retry.
+        const access = process.platform === "win32" ? constants.O_RDWR : constants.O_RDONLY;
+        const saved = await open(sibling, access | (constants.O_NOFOLLOW || 0));
+        try {
+          const stored = await saved.stat();
+          if (!stored.isFile() || stored.nlink !== 1 || hash(await saved.readFile()) !== copy.pending.hash) {
+            throw new ActionError("同名保留稿已变化，请核对文件后重试。");
+          }
+          await saved.sync();
+        } finally { await saved.close(); }
+        await syncDirectory(path.dirname(sibling));
       }
     }
     await rm(this.record(sessionId));

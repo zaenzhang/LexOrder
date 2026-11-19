@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { readPersonal } from "./personal-client"
 
-type Binding = { matterId: string; path: string | null; available: boolean; suggestedName: string }
+type Binding = { matterId: string; path: string | null; available: boolean; copyStagePath: string | null; suggestedName: string }
 const endpoint = "/api/personal-runtime/matter-folder"
 
 export function MatterFolder({ matterId }: { matterId: string }) {
@@ -20,6 +20,7 @@ function FolderForm({ matterId }: { matterId: string }) {
   const [location, setLocation] = useState("")
   const [editing, setEditing] = useState(false)
   const [error, setError] = useState("")
+  const [retained, setRetained] = useState("")
   const [busy, setBusy] = useState(false)
   const [refresh, setRefresh] = useState(0)
   useEffect(() => {
@@ -41,23 +42,25 @@ function FolderForm({ matterId }: { matterId: string }) {
     } finally { setPicking(false) }
   }
 
-  async function save(event: React.FormEvent) {
-    event.preventDefault()
+  async function save(cancelCopy = false) {
     if (!binding || busy || picking) return
     setError("")
     setBusy(true)
     try {
-      await readPersonal(endpoint, {
+      const change = cancelCopy ? { matterId, action: "cancel-copy", stagePath: binding.copyStagePath }
+        : binding.path ? { matterId, action: "relocate", path: location } : { matterId, action: "bind", root: location }
+      const next = await readPersonal<Binding>(endpoint, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(binding.path
-          ? { matterId, action: "relocate", path: location }
-          : { matterId, action: "bind", root: location }),
+        body: JSON.stringify(change),
       })
       setLocation("")
       setEditing(false)
-      setBinding(undefined)
+      setBinding(next)
+      if (cancelCopy && binding.copyStagePath) setRetained(binding.copyStagePath)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "无法保存目录。")
       setRefresh(value => value + 1)
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "无法保存目录。") }
+    }
     finally { setBusy(false) }
   }
 
@@ -66,12 +69,17 @@ function FolderForm({ matterId }: { matterId: string }) {
     <CardContent className="grid gap-3">
       {binding?.path ? <p className="break-all text-sm">{binding.path}</p> : null}
       {binding?.path && !binding.available ? <p role="alert" className="text-sm text-destructive">当前目录不可用。请连接原磁盘，或重新定位到移动后的案件文件夹。</p> : null}
+      {retained && <p role="status" className="break-all text-sm">上次停止复制时保留的外盘暂存：{retained}</p>}
+      {binding?.copyStagePath && <div className="grid gap-2">
+        <p className="break-all text-sm">复制尚未完成。可重新选择原父目录继续，或保留外盘暂存后改选磁盘。暂存位置：{binding.copyStagePath}</p>
+        <Button variant="outline" className="justify-self-start" size="sm" disabled={busy || picking} onClick={() => void save(true)}>停止复制并保留外盘暂存</Button>
+      </div>}
       {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
       {!binding ? (error
         ? <Button className="justify-self-start" variant="outline" size="sm" onClick={() => { setError(""); setRefresh(value => value + 1) }}>重新读取</Button>
         : <p role="status" className="text-sm text-muted-foreground">正在读取目录…</p>) : null}
       {binding && (editing || !binding.path) ?
-        <form onSubmit={save} className="grid gap-2">
+        <form onSubmit={event => { event.preventDefault(); void save() }} className="grid gap-2">
           <label className="grid gap-2 text-sm">{binding.path ? "移动后案目录的绝对路径" : "保存案件的父目录（绝对路径）"}
             <Input disabled={busy || picking} required value={location} onChange={event => setLocation(event.target.value)} />
           </label>

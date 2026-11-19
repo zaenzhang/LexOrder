@@ -1,14 +1,15 @@
 // Isolated acceptance helper. It runs only while the application owner is stopped.
 import assert from 'node:assert/strict';
-import { open, readFile, writeFile, rm } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
+import { acquireWorkspaceOwner } from './workspace-owner.mjs';
 import { startPrivatePostgres } from './private-pg.mjs';
 
 const workspace = process.env.M1_WORKSPACE;
 if (process.env.M1_ACCEPTANCE !== '1' || !workspace || !process.env.M1_BUSINESS_RESULT) throw new Error('ISOLATED_ACCEPTANCE_REQUIRED');
-const owner = await open(path.join(workspace, '.owner'), 'wx', 0o600);
+const owner = await acquireWorkspaceOwner(workspace);
 let database, socket, prisma;
 try {
   const manifest = JSON.parse(await readFile(path.join(workspace, 'workspace.json'), 'utf8'));
@@ -66,10 +67,10 @@ try {
   await assert.rejects(prisma.auditLog.delete({ where: { id: audit.id } }));
   assert.equal(await prisma.auditLog.count({ where: { id: audit.id } }), 1);
   await assert.rejects(resolvePersonalActor(prisma, 'cother000000000000000000001'));
-  await writeFile(process.env.M1_BUSINESS_RESULT, JSON.stringify({ actorId: actor.id, matterId: matter.id,
+  await writeFile(process.env.M1_BUSINESS_RESULT, JSON.stringify({ actorId: actor.id, matterId: matter.id, matterCode: matter.internalCode,
     clientId: client.id, documentId: document.id, originalSha256: sha256(original), receiptId: receipt.id }), { mode: 0o600 });
   console.log('PASS real_shared_services_pending_manual_confirmation_money_guard_and_encrypted_original');
 } finally {
   await prisma?.$disconnect(); await socket?.stop(); await database?.close();
-  await owner.close(); await rm(path.join(workspace, '.owner'), { force: true });
+  await owner.close();
 }
