@@ -1,4 +1,5 @@
 "use server";
+import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import {assertMatterReviewCurrent} from "@/server/conflicts/matter-review";
 import {assertProcedureCovered} from "@/server/finance/ledger-contracts";
@@ -400,25 +401,14 @@ export async function removeProcedureStage(input: ProcedureStageRemoveInput) {
 
 // ============ Deadline ============
 
-export async function addDeadline(input: DeadlineCreateInput) {
-  const session = await requireSession("schedule.write");
-  const data = deadlineCreateSchema.parse(input);
-
-  const procedureForGuard = await prisma.matterProcedure.findUnique({
-    where: { id: data.procedureId },
-    select: { matterId: true }
-  });
-  if (!procedureForGuard) throw new ActionError("程序不存在");
-  await assertCanHandleMatter(session.user, procedureForGuard.matterId);
-  await assertMatterWritable(procedureForGuard.matterId);
-
+async function deadlineBasis(db: Prisma.TransactionClient, data: DeadlineCreateInput) {
   // 第六轮体检 P2-1：规则生成的期限此前日期值系统自己没算过也没验过。服务端按
   // sourceTriggerDate + 规则重算（上海日历口径，civilFromKey 本地正午载体与
   // 生产客户端同一套 civil 算法，时区无关），与提交值不一致不拒绝（允许人工调整
   // ——表单明示「可再人工调整」），但在 basis 追加提示，确认律师核对时可见。
   let basis = data.basis || null;
   if (data.sourceRuleId && data.sourceTriggerDate) {
-    const rule = await prisma.deadlineRule.findUnique({
+    const rule = await db.deadlineRule.findUnique({
       where: { id: data.sourceRuleId },
       select: { name: true, periodValue: true, periodUnit: true }
     });
@@ -427,7 +417,7 @@ export async function addDeadline(input: DeadlineCreateInput) {
         civilFromKey(shDayKey(data.sourceTriggerDate)), rule.periodValue, rule.periodUnit
       ));
       // 读取故障必须在写入前中止；年度未录入则保留人工日期与待核对提示。
-      const adjusted = await adjustDeadlineForHolidays(rawKey);
+      const adjusted = await adjustDeadlineForHolidays(rawKey, db);
       const submittedKey = shDayKey(data.dueAt);
       let note = "";
       if (adjusted.status === "UNCONFIGURED") {
@@ -451,56 +441,73 @@ export async function addDeadline(input: DeadlineCreateInput) {
     }
   }
 
-  const insertDeadline = (db: Prisma.TransactionClient) => db.deadline.create({
-    data: {
-      procedureId: data.procedureId,
-      title: data.title,
-      category: data.category,
-      dueAt: data.dueAt,
-      duePrecision: data.duePrecision,
-      basis,
-      remindDays: data.remindDays,
-      // v1.x P0-8: 带来源规则的期限为"待确认"（律师核对起算事实后确认）；
-      // 人工录入的期限由录入者负责，直接视为已确认。
-      sourceRuleId: data.sourceRuleId || null,
-      startFact: data.startFact || null,
-      sourceDocumentId: data.sourceDocumentId || null,
-      confirmStatus: data.sourceRuleId ? "PENDING" : "CONFIRMED"
-    }
-  });
-  const created = session.user.runtimeMode === "PERSONAL"
-    ? await approvalTransaction(async db => {
-      await lockWritableMatters(db, session.user, "schedule.write", [procedureForGuard.matterId]);
-      await assertPersonalProcedureOpen(db, procedureForGuard.matterId, data.procedureId);
-      return insertDeadline(db);
-    }, Prisma.TransactionIsolationLevel.ReadCommitted)
-    : await roleMutation(session.user, "schedule.write", insertDeadline);
+  return basis;
+}
 
-  const procedure = await prisma.matterProcedure.findUnique({
+export async function addDeadline(input: DeadlineCreateInput) {
+  const session = await requireSession("schedule.write");
+  const data = deadlineCreateSchema.parse(input);
+
+  const procedureForGuard = await prisma.matterProcedure.findUnique({
     where: { id: data.procedureId },
     select: { matterId: true }
   });
+  if (!procedureForGuard) throw new ActionError("程序不存在");
+  await assertCanHandleMatter(session.user, procedureForGuard.matterId);
+  await assertMatterWritable(procedureForGuard.matterId);
 
-  if (procedure) {
-    await audit({
-      userId: session.user.id,
-      action: "DEADLINE_CREATE",
-      targetType: "Deadline",
-      targetId: created.id,
-      detail: { matterId: procedure.matterId, procedureId: data.procedureId, dueAt: data.dueAt.toISOString(), duePrecision: data.duePrecision }
+  const { matterId } = procedureForGuard;
+  const created = await approvalTransaction(async db => {
+    const personal = session.user.runtimeMode === "PERSONAL";
+    if (personal) await lockWritableMatters(db, session.user, "schedule.write", [matterId]);
+    else await checkRoleMutation(db, session.user, "schedule.write");
+
+    const requestHash = data.requestKey ? createHash("sha256").update(JSON.stringify({
+      actorId: session.user.id, matterId, procedureId: data.procedureId, title: data.title, category: data.category,
+      dueAt: data.dueAt, duePrecision: data.duePrecision, remindDays: data.remindDays, basis: data.basis || null,
+      sourceRuleId: data.sourceRuleId || null, startFact: data.startFact || null,
+      sourceDocumentId: data.sourceDocumentId || null, sourceTriggerDate: data.sourceTriggerDate ?? null
+    })).digest("hex") : null;
+    if (data.requestKey) {
+      const existing = await db.deadline.findUnique({
+        where: { createRequestKey: data.requestKey }, select: { id: true, createRequestHash: true }
+      });
+      if (existing) {
+        if (existing.createRequestHash !== requestHash) throw new ActionError("此提交标识已用于不同的期限内容，请核对原登记");
+        return existing;
+      }
+    }
+    if (personal) await assertPersonalProcedureOpen(db, matterId, data.procedureId);
+    const basis = await deadlineBasis(db, data);
+    const deadline = await db.deadline.create({
+      data: {
+        procedureId: data.procedureId,
+        createRequestKey: data.requestKey,
+        createRequestHash: requestHash,
+        title: data.title,
+        category: data.category,
+        dueAt: data.dueAt,
+        duePrecision: data.duePrecision,
+        basis,
+        remindDays: data.remindDays,
+        // v1.x P0-8: 带来源规则的期限为"待确认"（律师核对起算事实后确认）；
+        // 人工录入的期限由录入者负责，直接视为已确认。
+        sourceRuleId: data.sourceRuleId || null,
+        startFact: data.startFact || null,
+        sourceDocumentId: data.sourceDocumentId || null,
+        confirmStatus: data.sourceRuleId ? "PENDING" : "CONFIRMED"
+      }
     });
-    // v0.43 项4：写入案件动态时间线
-    await roleMutation(session.user, "schedule.write", async roleDb => recordTimelineEvent(roleDb, {
-        matterId: procedure.matterId,
-        eventType: "DEADLINE_ADDED",
-        title: `新增期限：${data.title}`,
-        occurredAt: new Date(),
-        refType: "Deadline",
-        refId: created.id
-      }));
-    await revalidateMatter(procedure.matterId);
-  }
-
+    await auditTx(db, {
+      userId: session.user.id, action: "DEADLINE_CREATE", targetType: "Deadline", targetId: deadline.id,
+      detail: { matterId, procedureId: data.procedureId, dueAt: data.dueAt.toISOString(), duePrecision: data.duePrecision }
+    });
+    await recordTimelineEvent(db, {
+      matterId, eventType: "DEADLINE_ADDED", title: `新增期限：${data.title}`, refType: "Deadline", refId: deadline.id
+    });
+    return deadline;
+  }, Prisma.TransactionIsolationLevel.ReadCommitted);
+  await revalidateMatter(matterId);
   await refreshScheduleReminderAfterSave("Deadline", created.id);
   return { ok: true, id: created.id };
 }

@@ -342,6 +342,8 @@ export function AddDeadlineDialog({
 }) {
   const selectLabelId = useId();
   const [isPending, startTransition] = useTransition();
+  const deadlineKey = useRef<string | null>(null);
+  useEffect(() => { if (!open) deadlineKey.current = null; }, [open]);
   const [dueDraft, setDueDraft] = useState<DeadlineDueDraft>(() => deadlineDueDraft());
 
   const {
@@ -450,7 +452,7 @@ export function AddDeadlineDialog({
   function onSubmit(values: DeadlineCreateInput) {
     startTransition(async () => {
       try {
-        await addDeadline(values);
+        await addDeadline({ ...values, requestKey: deadlineKey.current ??= crypto.randomUUID() });
         Toast.success("期限已添加");
         reset();
         onOpenChange(false);

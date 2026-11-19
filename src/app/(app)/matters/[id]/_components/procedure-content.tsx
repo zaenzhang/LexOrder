@@ -912,6 +912,8 @@ export function ImportantItemDialog({
   const [hearingNotes, setHearingNotes] = useState("");
 
   const [deadlineProcedureId, setDeadlineProcedureId] = useState(defaultProcedureId);
+  const deadlineKey = useRef<string | null>(null);
+  useEffect(() => { if (!open) deadlineKey.current = null; }, [open]);
   const [deadlineTitle, setDeadlineTitle] = useState("");
   const [deadlineCategory, setDeadlineCategory] =
     useState<DeadlineCreateInput["category"]>("CUSTOM");
@@ -1068,6 +1070,7 @@ export function ImportantItemDialog({
     startTransition(async () => {
       try {
         await addDeadline({
+          requestKey: deadlineKey.current ??= crypto.randomUUID(),
           procedureId: deadlineProcedureId,
           title: deadlineTitle.trim(),
           category: deadlineCategory,

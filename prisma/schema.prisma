@@ -1165,6 +1165,8 @@ model Hearing {
 }
 
 model Deadline {
+  createRequestKey  String? @unique
+  createRequestHash String?
   responsibility WorkResponsibility?
   id               String                @id @default(cuid())
   procedureId      String

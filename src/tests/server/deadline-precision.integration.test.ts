@@ -16,6 +16,12 @@ vi.mock("@/lib/auth/session", () => ({ requireSession: vi.fn(async () => ({ user
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/server/reminders/schedule", async () => ({ ...await vi.importActual<typeof import("@/server/reminders/schedule")>("@/server/reminders/schedule"), refreshScheduleReminderAfterSave: vi.fn() }));
 vi.mock("@/server/reminders/urgent", async () => ({ ...await vi.importActual<typeof import("@/server/reminders/urgent")>("@/server/reminders/urgent"), scanAdditionalWorkReminders: vi.fn() }));
+vi.mock("@/server/timeline/record", async importOriginal => {
+  const actual = await importOriginal<typeof import("@/server/timeline/record")>();
+  return { ...actual, recordTimelineEvent: vi.fn(actual.recordTimelineEvent) };
+});
+import { recordTimelineEvent } from "@/server/timeline/record";
+import { revalidatePath } from "next/cache";
 import { prisma as db } from "@/lib/prisma";
 import { resolveRoleUser } from "@/lib/roles/service";
 import { approvalTransaction } from "@/lib/approvals/service";
@@ -46,6 +52,32 @@ describe.skipIf(!config.url)("F01 期限真实精度与责任：PostgreSQL", () 
     await db.matter.updateMany({ where: { id: { in: matters } }, data: { deletedAt: new Date() } });
     await db.user.updateMany({ where: { id: { in: users } }, data: { active: false } });
     await db.$disconnect();
+  });
+  it("桌面期限在事务失败后完整回滚，回执丢失和并发重试只保留一次登记", async () => {
+    const f = await fixture();
+    config.actor = { ...config.actor!, runtimeMode: "PERSONAL" };
+    const request = { procedureId: f.procedure.id, requestKey: randomUUID(), title: "合成回执重试期限",
+      duePrecision: "DATE" as const, dueAt: new Date("2027-02-03T00:00:00+08:00"), remindDays: 3, category: "CUSTOM" as const };
+    vi.mocked(recordTimelineEvent).mockRejectedValueOnce(new Error("合成时间线失败"));
+    await expect(addDeadline(request)).rejects.toThrow("合成时间线失败");
+    expect(await db.deadline.count({ where: { procedureId: f.procedure.id } })).toBe(0);
+    expect(await db.auditLog.count({ where: { userId: f.user.id, action: "DEADLINE_CREATE" } })).toBe(0);
+
+    vi.mocked(revalidatePath).mockImplementationOnce(() => { throw new Error("合成提交后回执中断"); });
+    await expect(addDeadline(request)).rejects.toThrow("合成提交后回执中断");
+    const [first, second] = await Promise.all([addDeadline(request), addDeadline(request)]);
+    expect(first.id).toBe(second.id);
+    await expect(addDeadline({ ...request, title: "已修改期限" })).rejects.toThrow("不同的期限内容");
+    expect(await db.deadline.count({ where: { procedureId: f.procedure.id } })).toBe(1);
+    expect(await db.workResponsibility.count({ where: { deadlineId: first.id } })).toBe(1);
+    expect(await db.auditLog.count({ where: { targetId: first.id, action: "DEADLINE_CREATE" } })).toBe(1);
+    expect(await db.timelineEvent.count({ where: { refId: first.id, eventType: "DEADLINE_ADDED" } })).toBe(1);
+
+    const other = { ...request, requestKey: randomUUID(), title: "另一次期限登记" };
+    const racing = await Promise.all([addDeadline(other), addDeadline(other)]);
+    expect(racing[0].id).toBe(racing[1].id);
+    expect(racing[0].id).not.toBe(first.id);
+    expect(await db.deadline.count({ where: { procedureId: f.procedure.id } })).toBe(2);
   });
   it("公开新增入口保存日期/准确午夜/17点，数据库拒绝不合法DATE载体", async () => {
     const f = await fixture(), date = await create(f, "DATE"), midnight = await create(f, "DATETIME"), timed = await create(f, "DATETIME", new Date("2027-02-03T17:00:03.456+08:00"));

@@ -28,6 +28,7 @@ export function TaskResponsibilities() {
   const [editing, setEditing] = useState<{
     task: Task
     outcome: Outcome
+    blocked?: boolean
   } | null>(null)
   const [message, setMessage] = useState("")
   const { data, error, refetch } = usePractice<{ items: Task[] }>(
@@ -96,6 +97,7 @@ export function TaskResponsibilities() {
         <CaseForm
           title={actions[editing.outcome] + " · " + editing.task.title}
           close={() => setEditing(null)}
+          submitDisabled={editing.blocked}
           onSave={async (fields) => {
             try {
               await writePractice({
@@ -107,7 +109,19 @@ export function TaskResponsibilities() {
                 reason: fields.get("reason"),
               })
             } catch (cause) {
-              await refetch()
+              const latest = await refetch()
+              if (latest.isSuccess) {
+                const task = latest.data.items.find(row => row.id === editing.task.id && row.matterId === editing.task.matterId)
+                const canApply = task?.canWrite && (editing.outcome === "REOPEN" ? task.state !== "OPEN" : task.state === "OPEN")
+                if (!task || !canApply) {
+                  setEditing({ ...editing, task: task ?? editing.task, blocked: true })
+                  throw new Error("当前已不能执行此操作，处理原因仍可复制。")
+                }
+                if (task.revision !== editing.task.revision) {
+                  setEditing({ task, outcome: editing.outcome })
+                  throw new Error("任务已变化，已重读当前记录。请核对后再次提交。")
+                }
+              }
               throw cause
             }
           }}
@@ -123,7 +137,7 @@ export function TaskResponsibilities() {
             void client.invalidateQueries({ queryKey: ["practice"] })
           }}
         >
-          <p>{editing.task.matterTitle}</p>
+          <p>{editing.task.matterTitle} · {statuses[editing.task.state]} · {editing.task.dueAt ? chinaDate(editing.task.dueAt) : "未安排时间"}</p>
           <label className="grid gap-1">
             处理原因
             <Textarea name="reason" required maxLength={1000} />

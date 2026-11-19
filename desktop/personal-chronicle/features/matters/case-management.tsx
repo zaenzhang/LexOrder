@@ -20,12 +20,14 @@ export function CaseForm({
   onSave,
   close,
   saved,
+  submitDisabled = false,
 }: {
   title: string
   children: ReactNode
   onSave: (fields: FormData) => Promise<unknown>
   close: () => void
   saved: () => void
+  submitDisabled?: boolean
 }) {
   const [busy, setBusy] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -53,7 +55,7 @@ export function CaseForm({
           }}
           onSubmit={async (e) => {
             e.preventDefault()
-            if (busy) return
+            if (busy || submitDisabled) return
             const form = new FormData(e.currentTarget)
             setBusy(true)
             setError("")
@@ -69,7 +71,7 @@ export function CaseForm({
         >
           <fieldset disabled={busy} className="grid gap-3">
             {children}
-            <Button type="submit">{busy ? "正在保存…" : title}</Button>
+            <Button type="submit" disabled={submitDisabled}>{busy ? "正在保存…" : title}</Button>
           </fieldset>
           {error && (
             <p className="text-destructive" role="alert">
@@ -196,6 +198,7 @@ export function ProcedureActions({
 }) {
   const [action, setAction] = useState<ProcAction>()
   const [precise, setPrecise] = useState(false)
+  const [deadlineKey, setDeadlineKey] = useState("")
   async function save(fields: FormData) {
     const values = Object.fromEntries(fields)
     if (action === "create") return actionRequest("add-procedure", { ...values, matterId })
@@ -220,6 +223,7 @@ export function ProcedureActions({
         {
           ...values,
           procedureId,
+          requestKey: deadlineKey,
           duePrecision: precise ? "DATETIME" : "DATE",
           dueAt: precise ? String(values.dueAt) + ":00+08:00" : values.dueAt,
         },
@@ -235,6 +239,7 @@ export function ProcedureActions({
             size="sm"
             variant="outline"
             onClick={() => {
+              if (key === "deadline") setDeadlineKey(crypto.randomUUID())
               setAction(key)
               setPrecise(false)
             }}

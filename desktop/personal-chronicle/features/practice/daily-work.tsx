@@ -24,6 +24,7 @@ type Schedule = {
   title: string
   when: string
   matter: { id: string; title: string }
+  href: string
   completed: boolean
 }
 const types = { hearing: "庭期", task: "任务", deadline: "期限" }
@@ -35,7 +36,7 @@ const columns: DataColumn<Schedule>[] = [
     header: "案件",
     cell: (row) =>
       /^c[a-z0-9]{24,}$/.test(row.matter.id) ? (
-        <Link className="underline" href={`/matters/${row.matter.id}/tasks`}>
+        <Link className="underline" href={row.href}>
           {row.matter.title}
         </Link>
       ) : (
