@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { cp, mkdtemp, mkdir, readFile, readdir, rename, rm, utimes, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, readdir, realpath, rename, rm, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { ActionError } from "@/lib/action-error";
 import { WorkingCopies, type DraftAdapter, type DraftDocument } from "@/server/desktop/working-copies";
 
 let root: string;
-beforeEach(async () => { root = await mkdtemp(path.join(os.tmpdir(), "lex-drafts-")); });
+beforeEach(async () => {
+  // The production binding resolves its root before supplying a drafts directory.
+  // Windows TEMP can point at the same directory through a DOS short name.
+  root = await realpath(await mkdtemp(path.join(os.tmpdir(), "lex-drafts-")));
+});
 afterEach(async () => { await rm(root, { recursive: true, force: true }); });
 
 it("归属随签出持久保留；原地与替换保存各回传一版，丢回执重启按原键恢复，过期工作稿保留", async () => {
@@ -72,6 +76,14 @@ it("归属随签出持久保留；原地与替换保存各回传一版，丢回�
   await copies.reopen("A", a.sessionId);
   expect(opened.at(-1)).toBe(opened[0]);
   await settle(opened[0], "冲突后继续修改", true);
+  // Restart after the retention file was created but before deregistration.
+  const record = JSON.parse(await readFile(path.join(registry, a.sessionId + ".json"), "utf8"));
+  const retained = opened[0].slice(0, -record.extension.length) + "_待回传_" + record.pending.key + record.extension;
+  await writeFile(retained, "已有的其他文件");
+  copies = new WorkingCopies(registry, adapter);
+  await expect(copies.finish("A", a.sessionId, true)).rejects.toThrow("同名保留稿已变化");
+  expect(await readFile(retained, "utf8")).toBe("已有的其他文件");
+  await writeFile(retained, "应保留的冲突版本");
   await copies.finish("A", a.sessionId, true);
   const files = await readdir(path.dirname(opened[0]));
   expect(await Promise.all(files.map(name => readFile(path.join(root, "A", name), "utf8")))).toEqual(expect.arrayContaining(["应保留的冲突版本", "冲突后继续修改"]));

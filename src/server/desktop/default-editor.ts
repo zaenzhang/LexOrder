@@ -31,9 +31,9 @@ export async function openDefaultEditor(file: string) {
   await new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, { shell: false, windowsHide: true, stdio: "ignore",
       env });
-    // Some Linux associations keep xdg-open attached until the editor closes.
-    // Wait for an immediate launch error, then return the user to their case.
-    const started = setTimeout(() => { child.unref(); resolve(); }, 1500);
+    // PowerShell exits when Start-Process hands the file to its association.
+    // xdg-open may stay attached until the editor closes.
+    const started = windows ? undefined : setTimeout(() => { child.unref(); resolve(); }, 1500);
     const failed = () => reject(new ActionError("系统未能打开工作稿，请检查该文件类型的默认编辑器。"));
     child.once("error", () => { clearTimeout(started); failed(); });
     child.once("exit", code => { clearTimeout(started); if (code === 0) resolve(); else failed(); });

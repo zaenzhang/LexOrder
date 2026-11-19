@@ -131,7 +131,7 @@ export function MatterSectionPage({ matterId, section, title }: { matterId: stri
     {section === "materials" && data ? <MaterialsWorkspace matterId={matterId} documents={data.documents ?? []} folders={data.folders ?? []} filters={filters} onFilter={value => { setCursor(undefined); setFilters(value) }} onUploaded={() => setRefresh(value => value + 1)} /> : null}
     {section === "research" && data ? <Panel title="研究修订">{data.canWrite && <NewResearch matterId={matterId} onCreated={id => { setResearchId(id); setRefresh(value => value + 1) }} />}<Rows empty="暂无研究记录。" items={(data.records ?? []).map(row => ({
       key: row.id, title: row.readable ? row.question ?? "研究记录" : "研究内容不可用", meta: `V${row.version} · ${row.checkedAt ? "已核对" : "待核对"}`,
-      action: row.readable ? <Button variant="outline" size="sm" onClick={() => setResearchId(row.id)}>查看修订</Button> : null,
+      action: row.readable || row.version > 1 ? <Button variant="outline" size="sm" onClick={() => setResearchId(row.id)}>查看修订</Button> : null,
     }))} /></Panel> : null}
     {section === "research" && researchId && <ResearchRevision key={researchId} matterId={matterId} recordId={researchId} onClose={() => setResearchId("")} onUpdated={() => setRefresh(value => value + 1)} />}
     {section === "tasks" && data?.schedule && <TaskWorkspace matterId={matterId} data={data.schedule} reload={() => setRefresh(value => value + 1)} />}
