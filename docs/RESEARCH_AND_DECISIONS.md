@@ -2,7 +2,7 @@
 
 **现行执行范围（2026-11-17，用户最新决定）：只实现直接服务律师办案的业务需求。发行、打包安装、部署完善、旧实例升级、备份与整套恢复、运维、性能/容量专项及通用基础设施优化等非业务维护，连同预研、环境准备、独立测试和验收全部延期；M4/W13/AC15 无当前排期，不分配本期 owner，不作为业务开发、提交、验收或里程碑门禁，不因 M3 完成或进入后续阶段自动启动，须用户以后明确重新安排。保留已有代码和历史证据，延期不记为完成。直接支撑业务的权限、审批、来源版本、事务、审计、幂等、材料提交失败处理、实际交付和案件归档继续保留；必要数据库结构变更按受影响业务验证。开发侧只做受影响 API/静态及必要隔离数据库检查，浏览器由用户统一验收，律师专业验收单独记账。**
 
-更新日期：2026-11-17；外部来源核查仍以各条登记时点为准。本文合并原项目来源/许可和全球律所招聘研究；保留来源、固定版本、适用范围、时点与采用边界。产品行为见[需求与技能](PRODUCT_REQUIREMENTS_ACCEPTANCE.md)，技术取舍与试验见[架构与发布](REFACTOR_DESKTOP_TEAM_RAG.md)，不另开按话题拆分的研究文档。
+更新日期：2026-11-19；外部来源核查仍以各条登记时点为准。本文合并原项目来源/许可和全球律所招聘研究；保留来源、固定版本、适用范围、时点与采用边界。产品行为见[需求与技能](PRODUCT_REQUIREMENTS_ACCEPTANCE.md)，技术取舍与试验见[架构与发布](REFACTOR_DESKTOP_TEAM_RAG.md)，不另开按话题拆分的研究文档。
 
 ## 当前研究结论与使用方式
 
@@ -16,7 +16,13 @@
 
 研究采用“观察到的行为 → 输入输出与规则 → LexOrder 设计 → 场景验证”。来源事实、产品推论和已运行结果分别标明。动态页面不自动等于固定版本能力；新增依赖固定版本和完整性，实际采用源码时登记文件与许可。招聘页面状态按核查当日记录，后续实现时复核需要更新的来源。
 
-**最近一次业务对照：** [§3.24](#324-业务与参考项目静态对照审查2026-11-17) 以 LexOrder `89d3245` 为业务源码基线，沿模型、服务、实际入口与失败接续对照十个固定参考项目的指定模块。分别登记当前缺陷、日常接续差距、可选 AI 问题和后置能力；本轮仅静态审查，没有实施修复或运行验收。收尾同步 `a887859` 的文档范围调整，该提交未改业务源码。用户要求将本轮问题报告合入主线后，本节末尾补齐[逐项改动与处理状态](#六本轮问题报告与改动清单2026-11-17)，完整证据仍沿用同号发现。
+**法律 Artifacts 与文书技能补读：**[§3.49](#349-claude-法律-artifacts-与案件看板源码研究2026-11-19)登记两篇用户提供原文、三个固定源码基线、V8 校验边界及 ZH 文书/执行链的云端审查。研究事实、实际执行结果和候选设计分别标明；不等于功能已实现或当前排期已变更。
+
+**竞品与实现参考。** [§3.50](#350-ai-admin-脚手架选型与源码核对2026-11-19)保留 Vercel Chatbot、Ant Design Pro、assistant-ui 的脚手架源码和接入取舍。[§3.51](#351-claude-法律-artifacts技能与竞品的采用研究2026-11-19)补充商业产品官方资料、有限公开实测和中英文 Skills。§3.49 已核对收到的两篇 HTML，§3.51 的范围声明沿用其原审查批次，完整 Deep Research 原稿仍未取得。
+
+**综合候选顺序。** 先在现有「事实与争点」研究同一事件的多来源事实对照，再验证跨宿主办理同一案卷。律师决定绑定具体记载及修订，验证来源重排、补入或撤回来源、保存后重新打开，保留已确认决定并明确提示新材料需要复核。跨宿主采用同一条流程验证：Codex 提交带固定出处的候选事实，律师在 LexOrder 核对原文并保存决定，WorkBuddy 通过受权的 MCP 查询读取同一记录的当前状态。两端官方接入机制已有文档，实际账号绑定、撤权、写回和回读仍待联调。详见[计划 §8.61](WORKBENCH_PLAN.md#861-法律-artifacts-与文书技能源码研究归档2026-11-19)。
+
+**2026-11-17 业务对照：** [§3.24](#324-业务与参考项目静态对照审查2026-11-17) 以 LexOrder `89d3245` 为业务源码基线，沿模型、服务、实际入口与失败接续对照十个固定参考项目的指定模块。分别登记当前缺陷、日常接续差距、可选 AI 问题和后置能力；本轮仅静态审查，没有实施修复或运行验收。收尾同步 `a887859` 的文档范围调整，该提交未改业务源码。用户要求将本轮问题报告合入主线后，本节末尾补齐[逐项改动与处理状态](#六本轮问题报告与改动清单2026-11-17)，完整证据仍沿用同号发现。
 
 **云端案件演练证据：** [§3.25](#325-云端案件演练与界面审查2026-11-17)归档2026-11-17当轮界面操作、10组问题、8组设计建议、22张合成截图和关键操作摘录；原归档提交仅整理证据。后续独立收案组7项修复的研究取舍见[§3.27](#327-收案与审批独立修复的参考取舍2026-11-17)，实现与开发验证见[计划§8.32](WORKBENCH_PLAN.md#832-独立收案审批与案由修复2026-11-17)，未以旧截图冒充修复后浏览器验收。
 
@@ -1265,6 +1271,686 @@ C8沿真实卡片/弹窗到Action确认编辑误调用create。只读方案/实�
 - 套用模板时优先保留办案上下文。侧栏的权限、业务计数和工作身份需要与路由相邻。案件页面先显示案件标题与状态，再给出程序范围和办案分区。行内低频管理操作归入菜单，主要资料入口与当前账号同一行。记录来源、确认和失败后继续填写均有原业务入口。
 
 
+### 3.49 Claude 法律 Artifacts 与案件看板源码研究（2026-11-19）
+
+**本轮授权与状态：**用户要求深入分析两篇文章及相关仓库，随后要求将研究结果落文档并提 PR，并补充要求在云端拉取代码仔细审查，包括 `claude-for-legal-ZH` 的文书相关内容。本节归档原文、固定源码、离线校验和候选设计；未实施产品功能、未移植第三方代码、未新增模型或迁移、未改变现行任务优先级及延期范围。当前核查基线与证据见下文，执行记录与既有任务归口见[计划 §8.61](WORKBENCH_PLAN.md#861-法律-artifacts-与文书技能源码研究归档2026-11-19)。
+
+本轮补读 V8、文书工作流与执行脚本；§3.5、§3.24 对同一诉讼可视化提交中其他模块的旧阅读记录继续保留，不回写为当时已完成本轮研究。代码已在云端分别检出并 fetch 核对，下列提交仍与本次获取的各仓库 `origin/main` 一致。
+
+#### 3.49.1 结论
+
+这些效果可以在 LexOrder 实现，而且与现有案件工作区有较好的结合点。建议优先建设**能持续更新、能回看证据、能保留争议的案件事实看板**，再扩展批量表格审查和基于指定审查指引的合同偏离分析。
+
+文章值得吸收的核心是：把模型输出转成律师可以检查、修改、保存和继续使用的工作成果；原始材料、模型理解和律师工作判断各有明确位置。实现重点包括多来源记载、冲突处理、精确来源定位、人工判断保存和成果导出。
+
+参考仓库提供了真实的交互界面和确定性脚本，但其交付方式是“外部 Agent 分析材料，生成本地网页与底稿”。LexOrder 应承接的是完整业务流程，不能把下载的 HTML 当成主数据库，也不能把所有视觉效果都交给模型临时编写。
+
+当前 LexOrder 已有事实分类、来源版本、人工核对、文书版本和导出基础；同时仍缺少逐来源日期／金额、工作采用理由、候选分析批次等核心数据。因此，工作量不只是加一个时间轴页面。
+
+#### 3.49.2 证据与固定基线
+
+##### 2.1 用户提供的文章
+
+| 编号 | 文章 | 页面显示日期 | 本轮读取方式 |
+| --- | --- | --- | --- |
+| A1 | 《当我们还在量产电子垃圾时，Claude已经捏出了下一代法律AI的雏形》 | 2026-11-04 | 上传 HTML 正文 |
+| A2 | 《连封2个账号，我逆向了Claude最强的法律神器，现已开源》 | 2026-11-11 | 上传 HTML 正文 |
+
+作者栏为缪奇川，公众号为“奇川律师”。
+
+- [A1：文章公开地址（本轮读取用户上传 HTML）](https://mp.weixin.qq.com/s/qdIHM0ZLdYn-umb-yekaLA)
+- [A2：文章公开地址（本轮读取用户上传 HTML）](https://mp.weixin.qq.com/s/TD3f9_PyD_ovNIwr6B8-hg)
+
+A1 明确说明文中动图使用 SVG 重绘，HTML 中也存在大量内联动画及“界面示意”标签。因此，本节研究把图示用于理解作者表达的工作流，不把图示等同于本轮实际运行 Claude 的验证。
+
+##### 2.2 源码基线
+
+| 项目 | 固定提交 | 本轮用途 |
+| --- | --- | --- |
+| MiaoQichuan/new-litigation-visualization | `16c480c3947e78ba49623423ea0486277f5fe99d`，v3.1.0 | 核查 V8 案件看板及相关模块 |
+| CSlawyer1985/claude-for-legal-ZH | `59f37f1c8851b8277e24f7a45f4e773bee97bab9` | 核查中国法技能、工作流及连接器边界 |
+| zaenzhang/LexOrder | `a49c27e95aee5593349f4cc665ad2cd71e7bd44f` | 核查当前业务对象、UI、模型调用和可复用能力 |
+
+仓库均做了只读源码检查。没有调用真实模型、收费法律数据库或真实案卷；没有进行 Claude 产品交互验收，也没有运行 LexOrder 应用或全套测试。实际执行的校验与合成脚本试验见 §3.49.5、§3.49.13—3.49.14。
+
+#### 3.49.3 两篇文章的实质
+
+##### 3.1 三种工作对象
+
+| 工作对象 | 律师先定义什么 | AI 做什么 | 律师继续决定什么 |
+| --- | --- | --- | --- |
+| 审查指引偏离看板 | 审查尺度、可接受退让、必备条款、例外审批人 | 对照合同与指引，定位偏离及缺失 | 采用标准文本、要求起草、手工改写或保留原文 |
+| 案件事实看板 | 本次材料范围、分析目的和关注问题 | 提取记载、候选事件、分歧及疑似重复 | 工作采用日期、保留争议、是否归并、哪些需要补证 |
+| 批量表格审查 | 问题列、答案类型和枚举选项 | 在全部选定文件上按相同结构抽取 | 核对异常单元格、补资料、基于表格作进一步判断 |
+
+共通价值在于：输入范围可见、结果结构一致、例外状态明确、证据可回看、工作判断可以持续积累。它们不是只能读一遍的答案，而是案件或交易的工作记录。
+
+Anthropic 官方发布说明确认：法律 Artifacts 是可供团队使用与分享的交互工具，每个工具带示例，答案或输出带来源链接；其列举的能力包括审查指引偏离、表格审查、引用核查、事项看板和监管跟踪。[官方发布说明](https://claude.com/resources/articles/introducing-artifacts-for-legal-work)
+
+##### 3.2 合同偏离看板：把客户尺度放进流程
+
+A1 §3 展示 19 条审查指引，每条包含标准立场、可退让范围和不可接受内容；遇到不明确的规则先提示补充，未上传附件标记为未审，未覆盖条款独立列出。偏离项对应具体原文，并提供多种处置方式。
+
+对 LexOrder 的直接启发是：审查必须绑定**具体合同版本和具体指引版本**。偏离程度、规则匹配状态和律师决定应分别保存。不能把“指引未覆盖”“附件缺失”“未找到该条款”都压成同一个低风险结果。
+
+人机交互也不应机械照搬成连续六个确认弹窗。复用已设定的指引和已选材料范围，仅在规则模糊、关键缺口或取舍冲突处请求判断，其余条目可以继续完成。
+
+##### 3.3 案件事实看板：一个事件保留多份记载
+
+A1 §4 展示按事件类型或来源材料分泳道、时间窗口缩放、原文联动、冲突日期并列、无日期记录、疑似重复和仅单方陈述的事项。
+
+A2 进一步加入金额对比、算术核对、待审侧栏、对照矩阵、案情回放、按阶段筛选和事实经过导出。作者明确说明没有取得 Claude 原版源码，重做的是 Fact chronology 这一项，不能把它称为整套 Legal Artifacts 的开源源码。
+
+最重要的建模区别是：同一个“交付款项”事件，可以对应借条、银行回单和起诉状中的不同记载。每条记载都保留自己的日期、金额、说话主体、材料位置和原句。律师的整理采用值位于这些记载之上，不能覆盖不一致的原话。
+
+##### 3.4 表格审查：把回答变成可比较的数据
+
+A1 §5 的案例是 8 份合同、14 列、112 格。列在运行前定义为日期、金额、枚举或简短文字。逐格保留来源，缺失资料和文字冲突显式标记；进一步的风险排序单独标注为判断。
+
+LexOrder 对应功能应区分：已回答、已检索但未找到、材料不完整、存在冲突、需律师判断、读取失败。尤其不能让读取失败或材料范围不完整的单元格呈现为“没有风险”。
+
+##### 3.5 对文章观点的保留
+
+文章对泛化、缺少验证的工具有合理批评，但以下说法不能直接转成技术结论：
+
+- **Skill 与 Artifact 不互斥。** 参考仓库正是通过 Skill 和脚本生成 Artifact。Skill 可以承载规则、资源和执行步骤；Artifact 承载可操作的结果。
+- **文件大小不能判断能力。** 短提示词可能有效，长技能也可能冗余；应看任务、工具、来源和验证结果。
+- **强模型不代表可以删除业务约束。** 可以减掉重复叮嘱和无意义流程；来源、权限、输出结构、金额规则和既有人工决定仍需明确处理。
+- **自测成功不是普遍准确率。** A2 的 37 份材料是作者按预设答案与 24 个问题构造的用例，有回归价值，但不足以证明未知案卷全部正确。
+- **价格不是可直接迁移的预算。** 文中每合同或每材料的美元金额属于当时示例；本项目成本还受模型、页数、OCR、重复处理和核验范围影响。
+
+Agent Skills 官方文档描述的是按需加载说明与资源，并不把技能限定为不可配置的一段提示词。[官方技能接入说明](https://github.com/agentskills/agentskills/blob/main/docs/client-implementation/adding-skills-support.mdx)
+
+#### 3.49.4 开源仓库的真实结构与复用价值
+
+##### 4.1 八个模块
+
+| 模块 | 输出方向 | 对本项目的研究优先级 |
+| --- | --- | --- |
+| V1 诉讼图重画 | 对既有图或描述重排，生成图形文件 | 后续按实际材料需求选择 |
+| V2 时间轴 | 案件经过与来源索引 | 参考日期和来源处理 |
+| V3 法律关系图 | 主体、标的和关系 | 案件看板稳定后再选择具体需求 |
+| V4 大事记 | Word／Excel 方向的事实整理 | 可研究导出信息组织 |
+| V5 庭审对抗图 | 主张、抗辩与审查点 | 后续直接办案功能候选 |
+| V6 法律图表 | 统计图和演示图 | 非首期核心 |
+| V7 法律课件 | 课件与演示文件 | 非首期核心 |
+| V8 案件看板 | 交互时间轴、矩阵、事实经过和待审 | 第一优先 |
+
+八个模块并非统一的服务端产品。V8 的 `v8-base/1` 与 V4 的 `mqc-casefile/1` 不同，本轮没有发现 V8 到 V4 的完整自动适配链，不能假定装上八个模块后数据就能无缝流转。[仓库 README](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/README.md)
+
+##### 4.2 V8 的执行分工
+
+| 环节 | 实际责任 | 关键文件 |
+| --- | --- | --- |
+| 材料摄入 | 提取文本、建立行号及材料清单 | `scripts/ingest.py` |
+| 事实理解 | 宿主 Agent 读取原文并写 `事实.json` | `SKILL.md`、`references/reading-guide.md` |
+| 底稿组装 | 按行号取引语、有限文本归一化、算式重算、按旧 ID 续接决定（稳定性见 §3.49.13） | `scripts/make.py` |
+| 机械检查 | 引用身份、引语存在、日期格式、结构与覆盖提示 | `scripts/check_base.py` |
+| 页面生成 | 将底稿注入固定 HTML 模板 | `scripts/build_page.py`、`assets/template.html` |
+| 交互与导出 | 时间轴、矩阵、待审、原文抽屉及下载 | `web/src/app.js`、`web/src/features.js` |
+
+这套分工是最值得借鉴的工程思想：模型负责理解与提议，代码负责可确定的操作，律师负责关键判断。页面没有模型 API，并不表示整个项目没有使用 AI；AI 在生成网页前由宿主 Agent 执行。
+
+[V8 执行说明](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master/SKILL.md) · [底稿结构](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master/references/schema.md) · [组装代码](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master/scripts/make.py)
+
+##### 4.3 真实能力与集成缺口
+
+| 表现或承诺 | 源码事实 | 接入 LexOrder 时的处理 |
+| --- | --- | --- |
+| 时间轴、泳道、缩放、冲突带 | 有原生 JS／SVG 实现 | 用案件事实数据在现有 React／Semi 页面承接 |
+| 逐份读取并生成的前端进度 | `startBuild()` 用定时器展示既有数据 | 显示真实材料处理状态，区分示例演示与实际分析 |
+| 新增材料 | 读入后放入 `pending`，仍等外部 Agent 分析 | 在案件内完成处理、复核和结果接入 |
+| 保存律师决定 | 内存状态，导出 `base.json` 后才能持久保留 | 服务端保存，重新打开可恢复，写入失败可见 |
+| 来源定位 | 定位到内嵌提取文本 | 复用原件版本、解析定位；扫描件可回看原图 |
+| 读扫描件 | 缺文字层／乱码时标记，交给宿主识读 | 复用可选 OCR，覆盖不足必须可见 |
+| Excel 导出 | V8 是 CSV | 使用现有 exceljs 生成需要的 XLSX |
+| Word 导出 | V8 是 HTML 内容命名为 `.doc` | 使用现有 docx／docxtemplater 生成真实 DOCX |
+| 多人协作 | 未见服务端存储、账号或并发控制 | 复用案件权限、版本检查和现有事务 |
+| 增量材料判断 | 文件相对路径和大小相同会跳过 | 使用 LexOrder 现有文档版本身份 |
+
+其中，能回到提取文本并不等于能直接定位扫描原件的页内坐标；可用 Word 打开也不等于原生 DOCX。这些差异会直接影响实际办案交付。
+
+[页面状态与导出底稿](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master/web/src/app.js) · [导出实现](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master/web/src/features.js) · [摄入实现](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master/scripts/ingest.py)
+
+#### 3.49.5 本轮实际校验：引用正确不等于解释正确
+
+本轮调用 V8 自带虚构样例 `examples/lending.base.json` 的纯函数 `check(c)`。没有调用模型，没有修改仓库文件。随后对原样例各自建立内存副本，每次只改一个字段。
+
+| 检查对象 | 数据或改动 | 实际结果 |
+| --- | --- | --- |
+| 原始样例 | 7 份材料、15 个事实、26 条记载 | 0 错误、3 提醒；26 条引语通过 |
+| 日期扰动 | `$.facts[0].recs[0].s`：`2023-03-01` → `2023-03-11` | 仍为 0 错误、3 提醒 |
+| 金额扰动 | `$.facts[0].recs[0].amt`：50 → 623，单位万元 | 仍为 0 错误、3 提醒 |
+
+两次扰动均保留原文、引语和补充引语。日期原文仍是“2023年3月1日”。检查器校验日期是否有效、原文日期是否存在，但没有完成规范化日期与原文的语义一致性证明；金额字段主要检查数字类型。
+
+**本实验只能证明这些机械检查的覆盖边界，不能据此判断模型本身会如何抽取，更不能据此宣称全部工作流失败。** 同时，它也说明不能把“引语核对通过”包装成“事实已验证”。
+
+建议在 LexOrder 明确区分三件事：
+
+1. 原文定位和引用是否有效；
+2. 日期、单位、金额、主体及事件解释是否已核对；
+3. 律师本次采用什么判断，是否仍存在反向材料。
+
+对于有确定表示的日期和金额可以用代码重算、转换和核对；对上下文推断、事件归并与证明关系仍保留复核。扫描件识别错误还须回到原图处理，不能仅与 OCR 文本互相印证。
+
+仓库 `tests/baseline.json` 包含 57 项检查的基线计数。本轮没有运行该完整测试集，文章中的 24 个问题全中和 130 句引语核验也没有被本轮重新复现。
+
+[检查器源码](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master/scripts/check_base.py) · [虚构样例](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master/examples/lending.base.json)
+
+#### 3.49.6 中国法技能仓库应怎样使用
+
+`CSlawyer1985/claude-for-legal-ZH` 在固定提交下实际登记 16 个领域，逐目录统计为 174 个技能、12 个领域 Agent。它的主要价值是法律工作方法、输出约定、来源纪律和适配入口；它并不提供 LexOrder 可直接导入的完整交互系统。
+
+| 候选参考 | 值得吸收的内容 | 接入时需要改写的部分 |
+| --- | --- | --- |
+| `corporate-legal/skills/tabular-review` | 类型化问题列、值／状态／逐字引语／位置、单格核实 | 本地路径、并行宿主 Agent 约定和表格文件操作改成案件业务服务 |
+| `commercial-legal/skills/review` 及相关审查技能 | 团队指引、偏离项、修订建议与例外处置 | 用指定 Document／指引版本替代用户目录配置 |
+| `litigation-legal/skills/chronology` | 事件提取、来源、重要性、矛盾保留 | 与 V8 多记载结构统一，不能自动归并冲突或创建第二套事实 |
+| `legal-research-cn/skills/authority-check` | 法源名称、版本、时点、地域、原文与核验状态 | 绑定现有 ResearchSource；只有实际查到原始来源才改变核验状态 |
+
+不建议把 174 份技能一次性塞入模型上下文或做成 174 个入口。已有的团队偏好可以形成明确表单；执行只加载当前业务需要的规则。具体的法律判断方法仍需律师根据使用场景复核，不能因为仓库有“法条原文”标签就认定现行法已核验。
+
+仓库 `CONNECTORS.md` 明确区分公开文档、仓库声明、宿主配置、当前可调用和实际验证五种状态。`.mcp.json` 中存在服务地址，不能证明 LexOrder 已获得数据权限，也不能证明工具、额度及内容范围可用。
+
+这与项目现行策略相容：案卷事实整理使用已授权材料；法律检索按需要接入。RAGFlow 与律所知识沉淀不需要成为案件看板的前置条件。
+
+[仓库 README](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/README.md) · [表格审查](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/corporate-legal/skills/tabular-review/SKILL.md) · [合同审查](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/commercial-legal/skills/review/SKILL.md) · [来源核验](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/legal-research-cn/skills/authority-check/SKILL.md) · [连接器边界](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/CONNECTORS.md)
+
+#### 3.49.7 LexOrder 当前已有与确切缺口
+
+##### 7.1 已有能力
+
+| 领域 | 已核实的实现 | 对本次接入的意义 |
+| --- | --- | --- |
+| 技术与界面 | Next.js／React／TypeScript，Semi 2.105.0，DSM Timeless | 沿用现有页面及组件体系 |
+| 事实 | `EvidenceItem` 区分 FACT、CLAIM、ANALYSIS、ISSUE、TODO_VERIFY | 不另建平行 Fact／Case 身份 |
+| 日期 | EXACT、RANGE、UNKNOWN；保留日期原文 | 能承接基本时间表达，需补细精度与来源差异 |
+| 来源 | `EvidenceSourceLink` 绑定文档版本、解析批次、定位及支持／反驳／背景关系 | 来源链可以复用 |
+| 历史 | `EvidenceItemRevision`、确认人与确认时间 | 扩展后保存人工工作判断 |
+| 材料处理 | `DocumentParseRun` 含覆盖、anchors 与处理状态 | 展示真实处理范围及失败 |
+| 文书 | 文件版本族、模板填充、真实 DOCX、人工复核及交付 | 直接承接事实经过与审查交付 |
+| AI 审查 | 单件审查、严格 JSON 项、分段覆盖；批量每次最多 5 件 | 复用授权与覆盖处理经验 |
+| 法律研究 | 研究修订、固定来源、核验状态 | 与争点和事实看板相连 |
+
+来源：[数据结构](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/prisma/schema.prisma)、[依赖清单](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/package.json)、[事实服务](https://github.com/zaenzhang/LexOrder/tree/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/evidence)。
+
+##### 7.2 不能夸大的现状
+
+当前 `EvidenceItem` 只有单一组事件日期；`EvidenceSourceLink` 没有逐来源的日期和金额，也没有选择某一记载的理由。文章中的多源对照需要领域数据扩展。
+
+当前审查项只有 `type / severity / title / detail`，不能直接表达“这一条指引、这一段合同、这一项偏离、这一种处置”。批量审查只是逐件调用同类审查，并不是按统一列抽取的文档矩阵。
+
+`src/lib/ai/client.ts` 采用一次 OpenAI-compatible `chat/completions` 调用，没有工具执行循环、技能加载器或通用 Artifact 模型。当前法律 MCP 是管理员显式触发的只读工具操作，不是模型已能自主查法的证据。
+
+研究页面“形成分析稿”由结构化研究字段装配 DOCX，不能称为 AI 深度研究。文书详情的预览、人工复核和版本上传也不等于连续 Word 编辑能力已经接通。
+
+[模型客户端](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/lib/ai/client.ts) · [审查输出](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/lib/ai/review-parser.ts) · [批量审查](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/ai/batch-review-matter.ts) · [法律 MCP](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/legal/mcp-actions.ts) · [研究稿生成](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/research/draft.ts)
+
+#### 3.49.8 建议的最小数据扩展
+
+以下是建议，不代表已建立新模型。
+
+##### 8.1 复用现有身份，补足当前业务
+
+| 对象 | 建议 |
+| --- | --- |
+| 案件与材料 | 继续使用 Matter／Document 及其具体版本 |
+| 单份来源记载 | 沿 EvidenceSourceLink 增加原文记载、主体／性质、日期原文与规范值、金额原文与规范值／币种；只覆盖本看板所需字段 |
+| 事件要点 | 沿 EvidenceItem 保存当前工作采用值、保留分歧状态和依据的来源链接 |
+| 人工判断 | 记录采用／保留争议／排除本次整理、理由和操作者；不能用 confirmedAt 代替全部语义 |
+| 修订历史 | 将逐来源记载和工作判断纳入既有 EvidenceItemRevision；新来源不覆盖旧判断 |
+| 分析批次 | 只记录本业务需要的材料版本、模型／规则版本、覆盖、候选及处理结果，不先建立通用 Agent 平台 |
+
+候选只需要支持三个真实动作：作为新要点采用、关联到已有要点并补充来源、拒绝或保留待核实。采用时在同一事务复查来源权限与目标修订，并记录已采用的对象 ID，防止重试重复创建。
+
+模型输出定位和候选值，服务端从已保存的解析文本回填原句。不能让模型提供的自由文本充当唯一证据，也不能把外部脚本中的整份底稿作为第二个事实数据库。
+
+现有 `sourceReferenceSchema` 会按既定字段解析来源快照，仅向 JSON 偷加字段并不能可靠保留新语义。需一起修改 `contracts.ts`、`source-links.ts`、`actions.ts` 的读写与历史契约。
+
+##### 8.2 四种容易混淆的判断应分开
+
+1. 文件是什么类型；
+2. 具体段落是谁在陈述、引述或认定；
+3. 律师本次如何整理和采用；
+4. 裁判文书实际记载了何种认定。
+
+材料是判决书，不代表其中每段都是法院认定；其中也有诉称、辩称及引用证言。律师选择一个日期，也不能自动改变成“法院已确认”的状态。沿用当前“核对不等于认定事实”的业务语义。
+
+##### 8.3 三种时间应分开
+
+| 时间 | 用途 |
+| --- | --- |
+| 事件发生时间 | 放到事实时间轴 |
+| 文书形成或落款时间 | 解释该材料是什么时候形成的 |
+| 我方取得材料的时间及依据 | 回看已登记的历史材料范围 |
+
+目前 Document.createdAt 表示版本录入系统的时间，不能推断律师首次取得、阅读或知悉时间。首版若只使用现有字段，应标为“截至某日已录入系统的材料”。若要复现文章的历史资料视角，需要补充取得时间、精度、依据、记录人和更正历史；未知允许保留未知。
+
+即便补充取得记录，也不应宣称系统可以重建律师当时的全部认知。它只能依据已登记的历史材料回看。
+
+#### 3.49.9 界面与交互建议
+
+##### 9.1 入口
+
+放在现有案件的“事实与争点”工作区。使用“整理材料”进入分析范围选择；分析完成后直接留在该案件内。时间轴、对照矩阵和事实经过是同一批事实的视图切换，材料来源用侧栏查看。
+
+建议的信息分配：
+
+- 顶部：当前案件、材料范围和新增材料入口。
+- 主区：时间轴／对照矩阵／事实经过三种视图，每次呈现一种主要工作。
+- 侧栏：选中事件的多来源记载、原文位置及待处理分歧。
+- 待核对入口：按日期、金额、疑似重复、仅陈述、缺资料分组，支持逐项和合理批量处理。
+- 导出：根据当前保存版本生成所选格式，保留争议和推断标记。
+
+##### 9.2 首期要保留用户看中的效果
+
+首期至少包含：泳道切换、缩放与概览窗口、选中事件与原文联动、多来源对照、冲突待核对，以及保存后重新进入可继续处理。
+
+不能把首期压缩成普通纵向列表后就宣称实现了文章效果。另一方面，回放、复杂关系连线和资料取得视角可以在基础工作链完成后继续加上，明确列入后续范围。
+
+##### 9.3 动画应表达实际状态
+
+缩放、选择和侧栏转场可以沿用组件交互；分析进度必须来自真实文件处理状态。数据尚未处理时标明等待、失败或范围不足，不使用固定计时模拟“AI 已读完”。
+
+时间先后不等于因果。关系线只在有明确材料支持时展示为因果或程序关系；模型提出的关联须显式标注为待核实。
+
+##### 9.4 组件取舍
+
+普通表格、抽屉、选项和筛选继续使用 Semi；导出复用现有 docx、docxtemplater、exceljs。精确时间缩放和泳道可评估专门时间轴库，例如 vis-timeline，其官方仓库提供点／区间、缩放和平移能力。具体与当前 React／Semi 的结合仍需定点验证，本轮没有安装或完成适配。[vis-timeline](https://github.com/visjs/vis-timeline)
+
+静态交互 HTML 如以后需要，应作为受控导出格式。LexOrder 当前文档预览禁止脚本，不应为嵌入参考页面而直接放宽原有预览路由。
+
+#### 3.49.10 候选能力的建议顺序与未来验收
+
+以下只排列这些候选能力内部的建议先后，未变更当前 W/RQ/SK/AC 排期、未分配实施 owner。具体选入时先更新原需求与架构合同，再在原计划认领；不重建同义任务体系。
+
+##### 优先候选：案件事实看板
+
+**完整链路：**选择具体材料版本 → 展示解析覆盖 → 提取候选与来源 → 律师整理采用或保留 → 时间轴／多源对照 → 持续保存 → 导出事实经过。
+
+| 验收场景 | 预期 |
+| --- | --- |
+| 两份材料给出不同开工日 | 两条记载同时保留，不自动选真值 |
+| 相同事件多份重复材料 | 允许建议归并，用户决定后保留每个来源 |
+| 扫描件存在未识别页 | 不得把部分读取显示为全量完成 |
+| 日期没有年份、农历或相对日期 | 保留原文、精度与推断依据；未知不能伪造成精确日 |
+| 金额单位或大写小写冲突 | 显示原文及规范化值，不能仅凭数字类型认为核对完成 |
+| 重新打开案件 | 已保存的工作判断和待核对项目保持一致 |
+| 新材料出现相反记载 | 保留旧判断，提示受影响要点需复核 |
+| 来源撤权 | 保留身份与历史，原文按当前权限隐藏 |
+| 导出事实经过 | 与保存版本一致，推定、争议与来源继续可见 |
+
+针对 API、类型、来源和事务做必要验证；用户执行真实浏览器验收，律师专业验收另记。不要把发行、性能容量和部署维护引入本阶段门禁。
+
+##### 后续候选：案件看板增强
+
+补充完整对照矩阵、回放、关键事实路线、称谓切换；根据真实资料取得字段完成历史材料范围视图。关系图与庭审对抗图只按具体办案场景推进，不直接做无限规模关系画布。
+
+##### 后续候选：批量表格审查
+
+复用材料版本与来源定位，新增本次问题列定义和逐格结果：值、状态、引语、位置、人工核对。先允许明确的常用列类型和模板；支持失败／待核对格的定向重试。列定义变化时要标明受影响范围，不能让旧结果伪装成按新问题生成。
+
+已有“最多五件逐件扫描”的代码可以借鉴授权和覆盖处理，不能直接换成网格外观就算完成。
+
+##### 后续候选：审查指引偏离看板
+
+选择本次指引文件与版本，解析并确认实际规则；同时选择合同版本。输出逐条对应关系、原文、偏离程度、缺失／未覆盖状态和修订建议，进入现有人工复核及文书版本流程。
+
+先完成案件内或该次审查使用的指引，不以全所知识库发布、自动知识沉淀或通用规则平台作为前置条件。例外审批复用真实业务需要，不能把每一条普通建议都变成审批申请。
+
+##### 其余画廊能力
+
+文章中的工具数量是作者观察到的页面状态，不是可以下载的完整实现清单。引用核查、续约提醒、事项／收案看板可按现有业务逐项评估；涉及美国特定制度、公益资格筛查或商业伙伴数据库的工具，需要另行做法域和数据接入分析。
+
+#### 3.49.11 许可证与复用路径
+
+| 项目 | 本轮核实的许可证 | 采用建议 |
+| --- | --- | --- |
+| new-litigation-visualization 当前 V8 | AGPL-3.0-only | 优先研究功能规格；直接复用前决定开放范围或另行授权 |
+| claude-for-legal-ZH | Apache-2.0 | 可选择性改造，保留许可、归属与改动说明；第三方资料另核实 |
+| anthropics/claude-for-legal | Apache-2.0 | 可研究工作流与官方插件结构；不代表 Artifacts 产品源码一并开放 |
+| LexOrder 当前主线 | MIT | 保留上游版权和已采用来源，不把其 MIT 声明用于覆盖外来 AGPL 文件 |
+
+AGPL 不禁止商业用途，但修改后以网络交互方式提供服务会涉及对应源代码提供义务；分成子进程或 API 服务并不自动消除组合与修改带来的义务。当前方案是否触发哪些范围，需要按实际采用文件、修改方式与分发／服务方式确定。[GNU AGPL 第 13 条](https://www.gnu.org/licenses/agpl-3.0.html) · [GNU FAQ](https://www.gnu.org/licenses/gpl-faq.en.html)
+
+建议的默认实现路线是：以明确的业务规格为依据，在 LexOrder 已有对象与 Semi 组件中原生实现；不直接复制或逐行翻译 V8 的 JavaScript、CSS 和模板。若原样复用价值很高，再选择符合许可证的发布方式或向作者取得许可。不能将“重写”“改名”“拆服务”当作自动免责保证。
+
+Apache-2.0 要求的许可、归属及修改标记也须落实；技能包中的法学资料和第三方服务内容不能仅凭代码仓库许可就假定获得所有使用权。[Apache 许可证](https://www.apache.org/licenses/LICENSE-2.0)
+
+#### 3.49.12 成本、质量与当前不确定项
+
+##### 成本模型
+
+本项目成本主要来自材料解析／OCR、模型抽取、必要补充核验和结果生成。缩放、筛选、来源抽屉、矩阵切换及已保存数据的回放可以由客户端和业务服务完成，不应每次触发模型。
+
+减少重复读取应依靠现有文档版本和受影响范围，不额外重复扫描同一文件。小范围精确重试优于每次重跑整案。具体单案金额需在选择模型和样例后测量，本轮不沿用文章美元数字作承诺。
+
+##### 质量验证建议
+
+使用少量有代表性的合成或已授权脱敏材料，分别覆盖日期分歧、金额单位、复制件、诉称与认定段落、扫描质量、新材料更新和导出。分别记录事件提取、来源定位、标准化解释、冲突保留和人工判断保存的结果；不能只看最终图是否好看。
+
+本轮没有证明任何国产模型与作者使用的模型效果相同；现有 OpenAI-compatible 接口兼容也不等于自动拥有稳定结构化输出、工具调用和长材料理解能力。首个业务链只需补当前真正用到的结构化结果能力，通用 Agent 编排不是必须先做的工作。
+
+##### 仍待实测
+
+- 选定模型对中文法律材料、表格和 OCR 的实际抽取质量。
+- 新看板在真实桌面浏览器中的交互、密集事件显示与原文定位。
+- 原生 DOCX／XLSX 导出在用户实际办公环境的可用性。
+- 律师对材料性质、工作采用措辞和最终输出的专业验收。
+- 若决定直接复用 AGPL 文件，实际复用范围与授权安排。
+
+当前项目规则以已读取的 [AGENTS.md](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/AGENTS.md) 为准：优先直接办案业务；Personal、知识沉淀、部署完善、性能容量与备份等延期范围不因本研究自动恢复。
+
+#### 3.49.13 云端源码补充审查：文书资源与执行链
+
+用户追加“代码拉到云端仔细审查，包括 ZH 文书库”后，继续在 §3.49.2 的三个固定检出上追踪实际消费者、输入/输出及失败出口。以下区分**可复用工作方法、确定代码/契约问题、接入差距和未验证能力**；没有将技能文本内的命令当成本轮授权，也未安装这些技能或调用宿主模型。Miao 补充试验仅用合成材料，在临时目录生成底稿/HTML或渲染 JSON；没有运行真实浏览器或生成最终 DOCX/XLSX 成品。
+
+##### ZH 的“文书库”实际包含什么
+
+固定提交共有 16 个领域、174 个领域技能、12 个领域 Agent、5 个托管工作流示例；Codex、dsh、WorkBuddy 各有 21 个适配入口。对 Git 跟踪文件盘点为 470 个文件，其中 339 个 Markdown、9 个 Python、6 个 Shell；没有 `.docx`、`.xlsx`、`.pdf` 实体模板。实际资源是章节骨架、文书方法、列模式、法源/审查参考和宿主安装/编排脚本。
+
+| 工作方法 | 实际阅读的内容 | LexOrder 的候选承接方式 |
+| --- | --- | --- |
+| 锁定基准稿与修改范围 | [诉讼领域规则](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/litigation-legal/CLAUDE.md#L228)：保留用户手改版、另存新稿、只改授权段落；另列称谓、金额、日期和主文一致性 | 显式选择具体 Document 版本和本次修改范围，新稿继续进入既有版本链 |
+| 区分证据、陈述、判断 | 同文件第 198—216、238—247 行区分证据列举、质证、认定、事实及分析 | 按实际作者角色选模板；代理人的工作整理不能显示为法院认定 |
+| 逐命题来源与未核项 | [章节起草](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/litigation-legal/skills/brief-section-drafter/SKILL.md#L32)：引用支持整个命题，事实/法源缺口明确；输出为章节草案 | 用来源关系和复核项保存状态，正文中的标签不能代替底层核对记录 |
+| 文字修正与商业选择分流 | [合同质量规则](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/references/contract-review-quality-gates.md#L54)：修订、批注、权限与商业选择 | 依据本次指引、委托立场及授权决定动作，不默认替律师作商业取舍 |
+| 表格状态与人工核验 | [表格审查](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/corporate-legal/skills/tabular-review/SKILL.md#L180)：逐格来源、Flags、人工 Verified 默认空白，无法读取仍保留材料行 | 由 Semi 表格和复核侧栏呈现，读取失败不静默跳过，人工核验独立于生成完成 |
+
+这些内容可以形成起草要求、输出结构约定和复核清单，但文件自身没有文书渲染或法律核验执行能力。`demand-draft` 的“软模板”是函件章节提纲；`vendor-agreement-review` 的带修订 DOCX 依赖外部 docx 技能；`tabular-review` 依赖宿主 Office 工具或 openpyxl。托管 `grid-writer.yaml` 第 49—53 行更明确仅输出 CSV，由部署方另转工作簿。[函件骨架](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/litigation-legal/skills/demand-draft/SKILL.md) · [修订稿依赖](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/commercial-legal/skills/vendor-agreement-review/SKILL.md#L232) · [工作簿出口](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/managed-agent-cookbooks/diligence-grid/subagents/grid-writer.yaml#L49)
+
+##### ZH 确定问题与接入边界
+
+| 编号 / 分类 | 触发条件与实际证据 | 采用时的处理 |
+| --- | --- | --- |
+| ZH-01 · 托管示例校验未接线 | `deploy-managed-agent.sh` 第 11 行声称生成校验 wrapper，实际第 173 行删除 `output_schema`；部署/编排链未调用 `validate.py`，也未保存这些 worker schema 供输出校验。测试只检查 schema 不进入 API 请求体 | 独立校验器存在不代表生成链使用它。由具体业务服务实际验证结果；不直接移植该部署示例作为已完成的执行器 |
+| ZH-02 · 已回答单元格约束不足 | `extractor.yaml` 第 57 行只要求 `column_id/state`；纯 schema 实验中，缺 value/quote/location 的 answered 和空 currency 对象均为 **0 个 schema 错误**。第 85 行定义 `note`，技能却要求 `notes`，且 schema 禁止额外字段 | 按列类型和状态验证必需字段、非空来源与单位；统一字段名；来源不足进入待核，不能只信 answered |
+| ZH-03 · 引文核对流程互相矛盾 | 表格技能第 154—178 行要求在原位置回读逐字核对；`normalizer.yaml` 第 23—27 行明确不能重读，只看疑似转述信号 | 分开实现定位/文字匹配/语义支持检查，不能将提示词中的“机械核验”写成实际能力 |
+| ZH-04 · 列模板混用法律表达与数值类型 | 默认并购列把 liability_cap 设为 currency 却同时问金额或倍数；minimum_commitments 以 currency 表示采购数量或支出；保险要求为单选 | 倍数/公式/范围、实物数量及单位、多项组合分别表达。该结论是模板契约缺口，未测模型实际误判率 |
+| ZH-05 · Codex copy 安装资源定位不完整 | `install-codex.sh` 第 28—35 行只复制 adapter，adapter 仍要求相对路径读取原领域文件；与 WorkBuddy/dsh 的仓库路径登记不同。在其他案件目录、无额外源码位置的条件下，copy 包不自包含 | 不把 21 个路由入口当完整资源包。接入工作台时使用实际案件/材料/用户配置，不让模型猜目录；未执行用户级安装或宿主交互 |
+| ZH-06 · 可选 handoff 解析失败 | `orchestrate.py` 第 141—143 行的非贪婪正则在首个右花括号结束；合法嵌套 payload 的 135 字符 JSON 被截成 133 字符，随后 `json.loads` 报错。第 310—319 行又逐 delta 解析，没有累积缓冲 | 仅影响该可选托管示例；不据此断言普通技能无法运行。未来确需编排时用完整结构化事件处理，并保留现行业务权限 |
+
+固定源码：[部署脚本](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/scripts/deploy-managed-agent.sh#L150) · [独立校验器](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/scripts/validate.py) · [抽取 schema](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/managed-agent-cookbooks/diligence-grid/subagents/extractor.yaml#L45) · [归一化说明](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/managed-agent-cookbooks/diligence-grid/subagents/normalizer.yaml#L18) · [并购列模板](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/corporate-legal/skills/tabular-review/references/ma-diligence-columns.md#L65) · [Codex 安装](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/scripts/install-codex.sh) · [Codex 路由](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/.agents/skills/chinese-legal-litigation/SKILL.md#L10) · [handoff 解析](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/scripts/orchestrate.py#L239)。
+
+##### Miao V8/V4 的补充复现
+
+| 编号 | 合成触发与实际结果 | 对 LexOrder 的影响 |
+| --- | --- | --- |
+| NLV-01 · 旧工作采用错绑来源 | V8 `loadCase` 按数组位置重建 `rid`，`baseJSON` 去掉 rid 却保留采用编号。原函数流程中仅将同一事件的两条 recs 从 A/B 逆序为 B/A，保存编号仍是 F01.1，采用来源从 A 变 B，日期 3 月 1 日变 3 月 3 日，金额 50 万元变 48 万元；rev 仍 done、当前日期/金额冲突均 false | 采用关系必须绑定稳定来源身份与对应修订。所有原 recs 和 wasConflict=true 仍保留；问题是采用错绑与旧完成状态继承，不是全部反证被删除 |
+| NLV-02 · 检查失败已覆盖旧底稿 | `make.py` 第 269 行先覆盖 base，再于第 271 行检查；第 279—281 行失败退出。临时目录先成功生成，再把 s 改成 2023-02-31，第二次退出码 1，base 已含无效日期，旧 HTML 内容保持不变 | 生成候选先校验，再发布新工作版本；失败应保留上次可用成果，不能让底稿与展示无声分叉 |
+| NLV-03 · 过时编辑句仍导出 | `drawNarr` 会标记底稿改变后的旧手改句；`narrPlain/exportNarr` 仍优先使用旧文本，导出没有同步的过时说明。原导出函数配合内存 saveFile 捕获复现；未使用浏览器 | 新来源影响已编辑事实经过时，应显式复核或连同未复核标记交付；不能把旧句当成当前事实重新生成的结果 |
+| NLV-04 · V4 内容和日期检查有限 | `check_facts.check` 以去标点后的子序列核对内容。原文“甲未支付50万元。”改成“甲支付50万元。”仍无错误；2023-02-31 也仅因格式匹配而通过；非空 sources 缺当前材料 ID 时跳过该条原文核对 | 连续引文与语义摘要应分开；明确标记未核来源，校验真实日历日期，不能把该检查通过记成事实正确 |
+| NLV-05 · V4 导出映射遗漏定位/部分警示 | `check_facts` 要求 locator，但 `to_render.py` 不把它放入渲染结果；扫描警示进入 note_parts，XLSX 生成器实际使用的列不消费它。合成 to_render 结果没有原 locator，XLSX 所消费字段没有该扫描警示 | 正式导出保持位置和未核状态；此处实际验证到渲染 JSON 与消费者代码，未生成或打开最终 Word/Excel 文件 |
+
+固定源码：[V8 加载与派生](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master/web/src/app.js#L18) · [V8 底稿导出](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master/web/src/app.js#L841) · [V8 写入顺序](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master/scripts/make.py#L254) · [V8 事实经过](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master/web/src/features.js#L126) · [V4 检查](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-chronicle-master/scripts/check_facts.py#L20) · [V4 渲染映射](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-chronicle-master/scripts/to_render.py#L46) · [XLSX 生成器](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-chronicle-master/scripts/build_xlsx.py)。
+
+上表是固定版本、具体路径的代码和合成复现结论；不推断作者示例必然触发，也不将可视化布局、全部模块或其他版本一概判为不可用。V4 有真实 DOCX/XLSX 生成器的事实保留，NLV-05 说明其中某些元数据未传到对应产物链。
+
+##### 对照 LexOrder 的文书真实能力
+
+| 需求 | 当前确切能力与缺口 | 最小候选接法 |
+| --- | --- | --- |
+| 按案卷起草章节 | `draft-document.ts` 只接文种/双方/背景/请求等文本，单次模型返回 Markdown；不含 matterId、事实修订或来源，src 检索未发现现行 UI 调用。模板则已能使用具体主体/程序字段 | 在原案件文书入口选章节与获准输入，生成候选正文，再沿已有文书服务保存 |
+| 采用案件上下文 | DocumentContextInput 当前硬性接受 GOAL/INSTRUCTION，带采用修订与确认状态；不能把全部 CONSTRAINT/OPTION/DECISION 或案件理论写成已装配 | 显式选择已有事实/研究修订，新增所需关联列为候选；不能从备注推断案件理论或伪造既往采用 |
+| 引用与金额核对 | 人工复核已有固定 documentSha256/location/parseRunId/anchorId；AI 审查项只有 type/severity/title/detail，数字检查主要是提示词要求 | 一起调整具体业务的结构化输出和实际验证，不只改 prompt；复用来源解析与权限 |
+| 指引偏离与人工处理 | AI 按文书类别选通用 prompt，无选定指引/规则 ID；人工复核已支持接受/部分接受/拒绝、理由、后续修订及独立核对 | 绑定本次指引版本，将核对后的具体问题接既有人工复核，文书批准仍是另一动作 |
+| Word 交付 | 模板与研究稿能生成真实 DOCX，人工复核和同 family 新稿已实现；AI 审查报告实际为 Markdown，现有预览/上传不等于原 DOCX 批注或修订痕迹 | 先复用普通草稿、外部 Word 修改、上传新稿及复核；自动批注/修订另按明确场景验证，不以在线编辑器为前置 |
+| 技能执行与外部工具 | aiChat 没有工具调用循环；法律 MCP 为显式只读操作。材料外发资格、逐段发送、发布和来源再读已有守卫 | 先做一个具体“选材起草”或“按指引审查”服务动作；安装通用 harness 不能替代业务授权或结果校验 |
+
+固定源码：[AI 起草方法](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/ai/draft-document.ts#L15) · [上下文输入](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/matters/context-inputs.ts#L19) · [模板准备/生成](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/document-templates/actions.ts#L123) · [人工复核](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/document-reviews/service.ts#L267) · [审查报告保存](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/ai/save-review.ts#L71) · [外发资格](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/ai/document-access.ts#L28)。以上为源码核实，没有把动作存在记成端到端运行或律师专业验收。
+
+**对候选方案的修正：**§3.49.8 的来源记载、工作采用与修订必须具有稳定业务身份；校验通过后才发布新成果。未来定点验收增加“重排记载不改采用对象”“失败不覆盖上次可用成果”“旧编辑句与新事实冲突可见”“导出保留原位置/未核提示”，其余现行业务和延期范围不变。
+
+#### 3.49.14 实际检查、复现方法与未覆盖范围
+
+**ZH 静态检查已执行：**在固定仓库根目录运行 `python3 -B scripts/check-connectors.py`、`python3 -B scripts/lint-tool-scope.py`、`python3 -B scripts/check-upgrade.py`，均退出 0。输出分别为 16 个领域声明/4 个目录提供商/9 个可选端点，5 个 cookbook 的父代理工具作用域，以及 6 个受影响领域/17 个新增技能/3 个适配宿主/12 个静态用例。最后一项检查文件存在及边界关键词，不运行提示词或模型；这些计数不代表 174 个技能法律正确性通过，更不代表 MCP 可用。
+
+下面给出关键复现入口。命令须在对应上游仓库检出本节固定 SHA 后运行；没有安装或部署命令，不读真实案卷。所用环境为云端 Python 3、Node.js；ZH schema 实验使用已安装的 PyYAML/jsonschema。小型探针不代替完整流水线、宿主 UI、浏览器或 Office 成品验收。
+
+**V8 原样与日期/金额扰动：**在 Miao 仓库根目录运行，直接调用 check，不调用 CLI 或写回夹具。
+
+```bash
+python3 -B - <<'PY'
+import copy, json, subprocess, sys
+from pathlib import Path
+assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == '16c480c3947e78ba49623423ea0486277f5fe99d'
+root = Path('plugins/mqc-nlv/skills/mqc-fact-chronology-master')
+sys.path.insert(0, str(root / 'scripts'))
+from check_base import check
+base = json.loads((root / 'examples/lending.base.json').read_text(encoding='utf-8'))
+for label, field, value in [('baseline', None, None), ('date_only', 's', '2023-03-11'), ('amount_only', 'amt', 623)]:
+    sample = copy.deepcopy(base)
+    if field:
+        sample['facts'][0]['recs'][0][field] = value
+    errors, warnings, stats = check(sample)
+    print(label, 'errors =', len(errors), 'warnings =', len(warnings))
+PY
+```
+
+三次均为 `errors = 0 warnings = 3`。仓库 `tests/baseline.json` 的 `checks: 57`、`checks_outside_repo: 49` 是静态最低计数，本轮未运行该完整集合。
+
+**V8 来源错绑：**同样在 Miao 根目录运行。读取固定源文件内实际加载/派生/导出函数，PACKS 仅提供呈现元数据；不模拟 DOM，不调用模型，不修改来源代码。
+
+```bash
+node - <<'JS'
+const fs = require('node:fs'), vm = require('node:vm'), cp = require('node:child_process');
+if (cp.execFileSync('git', ['rev-parse', 'HEAD'], {encoding:'utf8'}).trim() !== '16c480c3947e78ba49623423ea0486277f5fe99d') throw Error('请检出固定提交');
+const dir = 'plugins/mqc-nlv/skills/mqc-fact-chronology-master/web/src/';
+const app = fs.readFileSync(dir+'app.js','utf8').split('\n');
+const skin = fs.readFileSync(dir+'skin.js','utf8').split('\n');
+const lines = (a,s,e) => a.slice(s-1,e).join('\n');
+const code = [fs.readFileSync(dir+'core.js','utf8'), 'const PACKS={general:{types:{}}};',
+  lines(skin,149,149), lines(skin,209,209), lines(app,1,126), lines(app,805,805), lines(app,841,851), `
+const c={schema:'v8-base/1',id:'test',title:'合成样例',pack:'general',unit:'万元',
+ materials:[{id:'A',kind:'record',lines:[]},{id:'B',kind:'record',lines:[]}],
+ facts:[{id:'F01',t:'pay',title:'支付借款',recs:[
+ {d:'A',p:'day',s:'2023-03-01',raw:'2023年3月1日',q:'3月1日支付50万元',amt:50},
+ {d:'B',p:'day',s:'2023-03-03',raw:'2023年3月3日',q:'3月3日支付48万元',amt:48}]}],
+ decisions:{adopt:{F01:'F01.1'},rev:{F01:'done'}}};
+function show(label){const e=deriveOne(FACTS[0],FACTS[0].recs);
+ console.log(label,{adopt:S.adopt.F01,source:REC[e.adopted].d,date:isoOf(e.main.lo),
+ amount:e.amt,rev:e.rev,conflict:e.conflict,amtConflict:e.amtConflict,wasConflict:e.wasConflict});}
+loadCase(c);show('before');const saved=JSON.parse(baseJSON());
+saved.facts[0].recs.reverse();loadCase(saved);show('after');
+`].join('\n');
+vm.runInNewContext(code,{console},{timeout:2000});
+JS
+```
+
+预期采用编号不变，但来源/日期/金额 A→B、2023-03-01→2023-03-03、50→48；rev 为 done，conflict/amtConflict 为 false，wasConflict 为 true。该试验单独验证重载身份，不证明新增材料模型必然采用某种排列。
+
+**ZH 的单元格 schema 与 handoff：**在 ZH 根目录运行。只加载 YAML schema 和从 Python AST 读出的实际正则，没有导入部署/API 客户端。
+
+```bash
+python3 -B - <<'PY'
+import ast, json, re, subprocess
+from pathlib import Path
+import yaml, jsonschema
+assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == '59f37f1c8851b8277e24f7a45f4e773bee97bab9'
+p = Path('managed-agent-cookbooks/diligence-grid/subagents/extractor.yaml')
+schema = yaml.safe_load(p.read_text(encoding='utf-8'))['output_schema']
+for cell in [{'column_id':'payment','state':'answered'},
+             {'column_id':'payment','state':'answered','value_structured':{'currency':{}}}]:
+    errors = list(jsonschema.Draft202012Validator(schema).iter_errors({'doc_id':'D1','cells':[cell]}))
+    print('schema_errors =', len(errors))
+tree = ast.parse(Path('scripts/orchestrate.py').read_text(encoding='utf-8'))
+n = next(n for n in tree.body if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'HANDOFF_RE' for t in n.targets))
+pattern = re.compile(ast.literal_eval(n.value.args[0]), re.DOTALL)
+text = json.dumps({'type':'handoff_request','target_agent':'launch-radar',
+                   'payload':{'intent':'launch_review','params':{'ticket_id':'LEGAL-1'}}})
+json.loads(text)
+matched = pattern.search(text).group(0)
+print('complete / matched length =', len(text), len(matched))
+try:
+    json.loads(matched)
+except json.JSONDecodeError as e:
+    print(type(e).__name__, e.msg)
+PY
+```
+
+预期两次 `schema_errors = 0`，JSON 长度 `135 133`，随后输出 `JSONDecodeError Expecting ',' delimiter`。这验证静态 schema 和示例解析边界，未测托管 API。
+
+**其他已执行的定点场景：**NLV-02 在临时目录实际调用 make.py 两次（成功后引入无效日期）；NLV-03 调用实际 narrPlain/exportNarr，内存捕获 saveFile，不运行浏览器；NLV-04 直接调用 check_facts.check 并分别变更 content/date/sources；NLV-05 实际调用 to_render.py，再按 build_xlsx.py 消费的列检查结果。前置合成数据、变化与结果见 §3.49.13，对应原始日志只留研究环境。未运行完整上游回归、真实模型/法库/宿主会话、LexOrder 应用或数据库、最终 Office 排版/修订痕迹及律师专业验收。
+
+
+#### 3.49.15 最短复核路径
+
+1. 读 A1 第三至五部分，确认三种工作对象及关键人工决定。
+2. 读 A2 第一至三部分，区分作者功能重做与 Claude 原产品。
+3. 在 V8 依次读 `SKILL.md`、`references/schema.md`、`scripts/check_base.py`、`web/src/app.js` 的 `startBuild/baseJSON`、`web/src/features.js` 的导出函数。
+4. 在 LexOrder 检查 `EvidenceItem/EvidenceSourceLink/EvidenceItemRevision`，随后读取 `src/server/evidence` 的服务契约和 `facts-workspace.tsx`。
+5. 阅读 `claude-for-legal-ZH` 的 `tabular-review`、`review` 和 `authority-check`，把可复用规则对应到实际业务字段。
+6. 先完成一个案件的材料进入、结构化整理、来源对照、人工决定、重新打开和真实文书导出，再评估后续共用组件。
+
+**建议决策：优先推进原生案件事实看板；把现有来源与人工复核基础补成多来源、可持续更新的办案工作区。**
+
+
+### 3.50 AI Admin 脚手架选型与源码核对（2026-11-19）
+
+本次核对以 LexOrder `a49c27e` 为基线，范围是案卷内的 AI 成果工作区，以及后台配置和外部工具的接入位置。关联 RQ04、RQ06、RQ08、RQ11、RQ14、RQ18 和 RQ20。下列结论来自固定提交的源码和官方文档。文书审查是脚手架的试验场景，产品优先级以[实施计划](WORKBENCH_PLAN.md)为准。
+
+#### 候选源码与采用判断
+
+| 候选与固定版本 | 实际核对的能力 | LexOrder 采用判断 |
+| --- | --- | --- |
+| Vercel Chatbot `a8989b5` | Text Artifacts 有独立成果面板、流式文本、编辑器、前后版本、差异视图和修改建议。核对了展示与状态切换源码。[面板](https://github.com/vercel/chatbot/blob/a8989b522fa3672a2ae52f053105e40993b36ca1/components/chat/artifact.tsx) · [文本成果](https://github.com/vercel/chatbot/blob/a8989b522fa3672a2ae52f053105e40993b36ca1/artifacts/text/client.tsx) · [官方文档](https://chatbot.ai-sdk.dev/docs/customization/artifacts) | **首选参考。** 借用文书与审查意见并排、切换版本和展示修订的交互。整套模板采用 shadcn/ui、Drizzle、Auth.js 及默认 AI Gateway，和 LexOrder 的 Semi、Prisma、认证与模型配置存在接入成本。[依赖](https://github.com/vercel/chatbot/blob/a8989b522fa3672a2ae52f053105e40993b36ca1/package.json) · [项目说明](https://github.com/vercel/chatbot/blob/a8989b522fa3672a2ae52f053105e40993b36ca1/README.md) · [Apache 2.0 许可](https://github.com/vercel/chatbot/blob/a8989b522fa3672a2ae52f053105e40993b36ca1/LICENSE) |
+| Ant Design Pro v6 `42f2cb1` | 管理后台模板内置基于 Ant Design X 的 AI 助手示例，依赖 Umi Max 和 Ant Design。[官方预览](https://preview.pro.ant.design/welcome/) · [依赖](https://github.com/ant-design/ant-design-pro/blob/42f2cb1d303380909ea04c73b5e60679d09c321a/package.json) | 可参考后台导航、设置入口与助手入口。案卷内的布局与控件使用 LexOrder 的 Semi Design 标准组合。[项目界面约束](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/AGENTS.md#5-工程与运行纪律) |
+| assistant-ui `1663da7` | `with-artifacts` 的原始示例是 HTML 实时预览，工具实现使用 `unstable_interactableTool`。同一提交另有文档编辑示例，提供用户与模型共同编辑及逐块版本差异，可单独复核。[成果定义](https://github.com/assistant-ui/assistant-ui/blob/1663da7d94cfeb80b54745ebd4f1527c398f281d/examples/with-artifacts/app/artifact-state.ts) · [工具代码](https://github.com/assistant-ui/assistant-ui/blob/1663da7d94cfeb80b54745ebd4f1527c398f281d/examples/with-artifacts/app/toolkit.tsx) · [文档编辑示例](https://github.com/assistant-ui/assistant-ui/blob/1663da7d94cfeb80b54745ebd4f1527c398f281d/examples/with-agent-document-editor/README.md) · [版本面板](https://github.com/assistant-ui/assistant-ui/blob/1663da7d94cfeb80b54745ebd4f1527c398f281d/examples/with-agent-document-editor/components/panels/history-panel.tsx) | HTML 示例适合参考时间线、关系图如何从会话打开。文档编辑示例可作为选区改写和逐块差异的后续对照。 |
+
+#### 现有入口、数据边界与验证场景
+
+- **服务管理。** 当前 `/admin/ai` 受工作区配置权限约束，包含模型、OCR、法律数据库、MCP 和调用记录，适合作为 AI 与外部服务的配置入口。部署版业务界面已使用 Next.js、React 和 Semi Design，项目锁定 Semi 2.105.0。[AI 后台页面](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/app/%28admin%29/admin/ai/page.tsx) · [标签页](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/app/%28admin%29/admin/ai/_components/settings-tabs.tsx) · [依赖](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/package.json)
+- **文书审查。** 现有案卷入口按事项和材料版本开始审查，能打开历史记录并保存报告。报告以 `DRAFT` 文档入卷，通过审查记录关联其材料版本。源材料的读取和审查资格沿用既有权限。当前审查项结构只有 `type`、`severity`、`title`、`detail`，首个并排视图可以展示对应版本的原文。若后续需要逐条点击跳页或高亮，须在审查结果中记录可验证的来源锚点。[审查入口](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/app/%28app%29/matters/%5Bid%5D/_components/document-review-dialog.tsx) · [结果结构](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/lib/ai/review-parser.ts) · [审查资格](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/ai/document-access.ts) · [报告保存](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/ai/save-review.ts) · [原文关联](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/ai/review-report-source.ts)
+- **首个试验。** 在案卷中选定文书版本，并排查看 AI 意见和对应原文，核对后使用现有「保存到案卷」，再从历史打开报告和原文。用同一材料的两个版本验证对应关系，用未授权的账号验证读取与保存，用未配置模型的环境验证普通办案入口可用。先检查受影响 API、类型与来源关系，桌面交互由用户验收，律师实务另行记录。[产品需求与验收](PRODUCT_REQUIREMENTS_ACCEPTANCE.md)
+- **外部 Harness。** 当前「法律 MCP」是 LexOrder 主动请求外部法库的客户端。Codex 和 WorkBuddy 的官方文档有 MCP 连接方式，`claude-for-legal-ZH` 已提供两端的技能适配。拟接入的 LexOrder MCP 服务需要将调用者映射到现有业务身份，按事项和材料权限读取指定版本，并将提交的结果保存为待复核草稿。两端的连接、授权及回写要在实际调用中分别验证。[LexOrder 法库调用](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/legal/mcp-actions.ts) · [Codex MCP](https://developers.openai.com/codex/mcp/) · [WorkBuddy 连接器](https://open.workbuddy.cn/docs/connector) · [法律技能的 Codex 适配](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/INSTALL_CODEX.md) · [WorkBuddy 适配](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/INSTALL_WORKBUDDY.md)
+
+本轮完成源码与文档核对。本次访问 Vercel 在线演示遇到重定向循环，本次取舍以源码为依据。LexOrder 集成后的界面、真实模型输出、外部调用者的身份映射与回写均待实测。
+
+### 3.51 Claude 法律 Artifacts、技能与竞品的采用研究（2026-11-19）
+
+#### 3.51.1 用户任务、结论与证据边界
+
+用户希望参考一篇微信分析，结合法律技能和网络实践，判断哪些能力值得纳入 LexOrder，并要求将发现与结论落入文档、提交 PR。本节补充本轮实际可读取的官方页面、固定源码和公开实践；属于**研究结论与候选采用建议，不是新增业务实施批准或验收通过记录**。文档交接见[计划 §8.61](WORKBENCH_PLAN.md#861-法律-artifacts-与文书技能源码研究归档2026-11-19)。
+
+**结论：优先吸收“可保存的业务结果、逐项来源、人工处理状态与返回原文”的工作方式，把选定 Skills 的方法接入既有案件对象。** 首先考虑增强 SK02 事实与来源、SK07 固定稿件复核，再评估有界的多材料审阅表与合同偏离审查。顺序是研究建议；现有待办、owner 和里程碑不随本节改变。图库、技能文件、模型工具调用和 LexOrder 的权限/版本/审计分别承担不同职责，不能因为有演示或 Markdown 技能，就把完整业务闭环记为已经具备。
+
+| 证据类型 | 本轮实际取得的材料 | 能支持的结论与限制 |
+| --- | --- | --- |
+| 用户给定微信链接 | [原始链接](https://mp.weixin.qq.com/s/qdIHM0ZLdYn-umb-yekaLA)未能取得正文 | 不归纳其原文论点，不声称核对过标题、案例、截图或源代码；本节不是该文逐段复评 |
+| 官方产品说明与帮助 | Anthropic、Legora、Harvey、CoCounsel、Spellbook、AlphaGPT 的下列官方页面；阅读日为 2026-11-19 | 可以确认厂商公开描述的能力；不证明本账号可用、实际效果、全部法域适用性或真实业务接通 |
+| 固定技能源码 | 上游 `anthropics/claude-for-legal@4a6c651889c97cc9140580363c73e0eb17379c2b`；中文库 `CSlawyer1985/claude-for-legal-ZH@59f37f1c8851b8277e24f7a45f4e773bee97bab9` | 证明已读文件规定的方法、输入输出及静态缺口；不证明模型必然遵循、法律准确性或外部工具可用 |
+| 外部实践分享 | 下文 Stanford 的受限账户观察与小样本操作记录；BetterLawyer 文章索引摘要 | 保留各自账户、日期、样本和阅读边界；不是本项目亲测或统计基准 |
+| LexOrder 现状 | `main@a49c27e95aee5593349f4cc665ad2cd71e7bd44f` 的指定模型/服务与现行主文档 | 区分现有代码、历史验证、设计及候选；本轮没有重跑产品、浏览器、真实模型或专业验收 |
+
+PR #25 初稿登记的 Deep Research 完整正文仍未取得。本节用实际读到的资料补实相关条目，**没有完成图库全量枚举、所有竞品调查或原报告的逐条核验**；此前框架的待研究对象在 §3.51.4 继续明确保留。
+
+#### 3.51.2 Claude Artifacts、Skills 与自有应用的分工
+
+[Anthropic 2026-10-28 发布页](https://claude.com/resources/articles/introducing-artifacts-for-legal-work)列出六种法律 Artifact 示例：引文核查、多法域调查表、事项看板、合同立场偏离板、监管动态扫描、多材料表格审阅。它们把输入、可操作结果和来源放进交互界面；这些产品说明不能代替真实律师工作包验收。
+
+| 层次 | 已核实的边界 | LexOrder 的采用判断 |
+| --- | --- | --- |
+| Artifacts 产品 | [当前帮助](https://support.claude.com/en/articles/17153992-what-are-artifacts-and-how-do-i-use-them)描述 AI 调用、连接器、持久化和共享；AI 应用运行依赖 Claude 的账户与额度安排 | 研究结果组织和人工操作方式；不把它描述成只能展示静态 HTML，也不把 Claude 托管应用当成本项目后端 |
+| 开源法律插件 | [固定 README](https://github.com/anthropics/claude-for-legal/blob/4a6c651889c97cc9140580363c73e0eb17379c2b/README.md)提供 Skills、agents、hooks、profile、connectors 等，可用于 Cowork/Code 或 Managed Agents；[LICENSE](https://github.com/anthropics/claude-for-legal/blob/4a6c651889c97cc9140580363c73e0eb17379c2b/LICENSE)为 Apache-2.0 | 可挑选方法或在实际采用代码时按许可登记；已读来源没有证明整套法律图库 UI 或任意 OEM/自托管授权已经开源 |
+| Skill 格式 | [Agent Skills 规范](https://agentskills.io/specification)规定 `SKILL.md`、元数据及可选脚本/参考资料/资源 | 适合封装任务方法；格式本身没有提供持久业务模型、团队权限、版本并发、审批或交付 |
+| 嵌入与分发 | [分享帮助](https://support.claude.com/en/articles/9547008-share-artifacts)包含旧版已发布聊天 Artifact 的嵌入与域名设置说明 | 不能把该局部能力外推为所有新法律应用均可嵌入，或免除各产品、数据和连接器授权 |
+| 自有业务应用 | LexOrder 已有 Matter、Document、事实、研究、复核、任务和交付链 | 继续由现有服务落实身份、当前权限、固定版本、状态改变及保存/重开；不新增平行 Artifact 身份或通用技能平台作为前置 |
+
+开源插件许可不自动授予商业法库订阅、用户数据、检索结果再分发或连接器权益。上游 README 明确部分连接器需要独立账号、订阅或密钥。本轮未采购、安装插件或调用付费法律服务。
+
+#### 3.51.3 实际读过的技能及中文适配
+
+下表是方法采用建议，不是把技能目录整体安装进生产的决定。模型输出仍须由现有服务校验对象归属、权限、版本和允许的状态变化，再进入人工处理。
+
+| 固定技能来源 | 实际方法 | 对 LexOrder 的价值与裁剪 |
+| --- | --- | --- |
+| [上游 tabular-review](https://github.com/anthropics/claude-for-legal/blob/4a6c651889c97cc9140580363c73e0eb17379c2b/corporate-legal/skills/tabular-review/SKILL.md) | 先以少量材料校准类型化问题；单元格含值、状态、原文引句及位置；保留不可读/不清楚材料，人工核对独立于模型回答 | 可作多材料审阅表的输出约束；`answered` 不等于人工已核验，不以无解释的置信度分数替代来源；表格仅候选 |
+| [上游 chronology](https://github.com/anthropics/claude-for-legal/blob/4a6c651889c97cc9140580363c73e0eb17379c2b/litigation-legal/skills/chronology/SKILL.md) | 按事件日期组织事实，关联来源，合并重复时保留不同说法，说明修订 | 用于 SK02 自动候选方法；不重复建设已存在的手工事实/多来源，不把事实时间线混同办案活动或程序进度 |
+| [上游 claim-chart](https://github.com/anthropics/claude-for-legal/blob/4a6c651889c97cc9140580363c73e0eb17379c2b/litigation-legal/skills/claim-chart/SKILL.md) | 先识别请求/抗辩、立场、法域及要件，再列支持、反对与缺口 | 对应 SK04；需要按实际中国业务核对要件和法源，不能照搬美国专利/诉讼默认假设 |
+| [上游 vendor-agreement-review](https://github.com/anthropics/claude-for-legal/blob/4a6c651889c97cc9140580363c73e0eb17379c2b/commercial-legal/skills/vendor-agreement-review/SKILL.md) | 对照实际合同与选定 playbook，提出有定位的风险、业务影响、修订及退让位置 | 对应 SK06/07；只评估用户选定的当前审查指引，不恢复暂停的知识提炼、条款立场治理或发布链 |
+| [上游 skills-qa](https://github.com/anthropics/claude-for-legal/blob/4a6c651889c97cc9140580363c73e0eb17379c2b/legal-builder-hub/skills/skills-qa/SKILL.md) | 检查范围、输入、输出、失败出口和真实人工决策步骤 | 可作选定技能的质量审查清单；通过清单不等于专业法律结论正确 |
+| [中文 authority-check](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/legal-research-cn/skills/authority-check/SKILL.md) | 官方原文优先；核对机构、条号/案号、原句、版本、事实时点与地域；区分已核验/部分/未核验/不适用；原文缺失时明确受阻结论 | 对应 SK03/07；MCP 命中不等于已核验。复用现有案件上下文，不把源技能的初始化问答变成每次强制访谈 |
+| [中文 chronology](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/litigation-legal/skills/chronology/SKILL.md)、[合同质量门槛](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/references/contract-review-quality-gates.md)、[庭审准备框架](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/references/trial-preparation-framework.md) | 增加中国业务语境、合同检查、争点/事实/法律/提问的组织方法 | 中文库有实质适配价值；本地文件输出和配置不能直接替代 Web 应用的实体、保存、授权及人工状态 |
+
+**中文库需选择性吸收的具体理由。** 以下是该固定提交中已读文件的定点问题，不是全库审计，也不推断全部技能失效。
+
+| 已核实问题 | 固定证据 | 采用前如何处理 |
+| --- | --- | --- |
+| 文本配置契约不一致 | [claim-chart](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/litigation-legal/skills/claim-chart/SKILL.md)查 `## Matter workspaces`、`Enabled` 与 `## Outputs`；chronology 也查 Outputs；实际 [litigation CLAUDE](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/litigation-legal/CLAUDE.md)使用中文标题/字段 | 明确本项目的真实输入配置，不照抄文本定位约定；不能据此断言模型必然无法运行 |
+| 法条条号示例不一致 | 同一 CLAUDE 文件把法院向单位、个人调查取证且不得拒绝的内容标为第 67 条；[最高法知识产权法庭发布的《民事诉讼法（2023 年修正）》](https://ipc.court.gov.cn/zh-cn/news/view-6231.html)对应内容在第 70 条，第 67 条为举证与法院调查收集等内容 | 说明技能中的法律文字也需要绑定正式原文及明确版本；该对照仅针对上述版本，不冒充全库实体法复核 |
+| 法域提示与默认标头有张力 | 同一 CLAUDE 文件要求默认“受律师-客户特权保护”等标头，同时解释美国 work-product 概念在中国不存在相同独立制度 | 不直接沿用统一特权标记；按实际委托和适用规则处理文书表达，不由此扩展为完整法律意见 |
+| 检索优先级不一致 | [knowledge-base-crossref](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/references/knowledge-base-crossref.md)要求先查本地路由、概念层与原始材料层，只有本地所有层级不足时才启动 MCP/联网外查；authority-check 则明确官方原文优先 | 法源核验采用权威原文、版本和时点要求；不为遵循本地目录流程而强制建设全量知识库或接入 RAGFlow |
+| 静态检查不能冒充服务或法律质量验证 | [upgrade audit](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/docs/upgrade-audit-2026-09.md)记录 17 个新技能、3 个宿主、12 个静态用例，明确真实认证 MCP、跨宿主模型路由和法律输出质量未验证，157 个旧技能未逐条更新实体法；[CONNECTORS](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/CONNECTORS.md)区分声明、配置、可调用与实际测试 | 引用其审计的真实范围；不把声明数量、适配文件或静态通过数记为接通能力。本轮也未验证该库提及的本地法律资料是否完整随库提供及可再分发 |
+
+#### 3.51.4 竞品与公开实践：采用什么、证据止于哪里
+
+本轮以对应**官方指定页面**判断产品公开描述的交互，不作厂商质量排名，不外推价格、全部 API、数据驻留/训练政策或采购权益。
+
+| 对象及来源 | 本轮可确认的公开描述 | 借鉴与限制 |
+| --- | --- | --- |
+| [Legora Tabular Review](https://legora.com/product/tabular-review) | 问题列与文档行，单元格理由/来源，人工 reviewed、锁定与 review mode | 吸收逐格来源和人工状态；未亲测权限、锁定并发或模型效果 |
+| [Harvey 2025-08 更新](https://www.harvey.ai/blog/the-brief-aug-2025) | 文档行分配、标记单元格、按已核验筛选、来源摘录与导出 | 人工分工和复核状态应可见；该 dated 更新不能作为所有功能在当前所有套餐可用的证明 |
+| [CoCounsel Timeline 帮助](https://www.thomsonreuters.com/en-ca/help/cocounsel/legal/skills/understanding-cocounsel-skills/timeline) | 时间线事件可编辑/删除/标星，来源、筛选和 Word 下载 | 借鉴事实处理与原文返回；页面为加拿大帮助范围，不等于中国法域适用或本项目已实现全部能力 |
+| [Spellbook Redline Review](https://help.spellbook.legal/en/articles/13875622-first-party-playbooks-redline-review) | 在 Word 中按 playbook 审查所选范围或全文，并逐项接受、拒绝或修改红线 | 借鉴原文、建议、人工决定的就近关系；不推定完整桌面同步/多人冲突处理已可移植 |
+| [AlphaGPT](https://www.icourt.cc/product/alphaGPT) | 官方介绍合同审查、案例检索、文书及多材料能力 | 国内任务覆盖的参考；营销页不能证明准确率、节省时长或可供本项目调用的接口 |
+| [OpenContracts 官方文档](https://open-source-legal.github.io/OpenContracts/) | 文档标注、来源位置和结构化提取相关模块 | 可研究具体标注/引用组织；本轮未运行，不将整个知识库平台引入作为当前前置 |
+
+两类网络分享提供了更接近日常使用的观察，但样本必须保留：
+
+- [Stanford 法律 Artifacts 观察](https://ailearninghub.law.stanford.edu/claude-legal-artifacts/)记录 2026-10-29 的一个受管账户：能看样例，但复制创建受限，没有完成真实案件上传。这支持“必须核对账户能力与实际工作流”，不能证明所有用户均有相同限制。
+- [Stanford Legora Tabular Review](https://ailearninghub.law.stanford.edu/legora-at-sls/tabular-review/)记录 2026-10-13 的两轮受控操作、三份虚构单页 NDA 和四个字段；可以研究持久表格、来源与复核方式，不能泛化为大案卷质量基准。
+- [BetterLawyer 索引页](https://betterlawyer.cn/news?page=3)收录《Artifact：法律工程师交付的最后一环》及《当我们还在量产电子垃圾时，Claude已经捏出了下一代法律AI的雏形》的摘要，涉及案件看板、时间线、合同表与核验边界。**本轮只取得索引摘要，未读这两篇全文，也未确认其中任何一篇就是用户链接。** 不沿用摘要中的价格、容量或性能说法，不把其案例记成本项目测试。
+
+**仍未核验的原框架项目：** 法律图库全量逐项操作、Lexis+ Protégé、法大大 iTerms，以及北大法宝/威科先行 MCP 的真实认证与业务调用。本轮读到技能连接器声明不等于验证这些商业服务；也未完成所有产品的公开价格、采购、接口、数据政策或完整许可调查。它们继续属于研究余额，不形成实施依赖或任务 owner。
+
+#### 3.51.5 LexOrder 现有能力与候选增量
+
+本节代码基线为 `a49c27e`。模型存在不等于全部工作流验收；以下既有能力由指定服务和既有文档共同支持，历史测试证据仍归原批次。本次没有把旧通过数重新记作新验证。
+
+| 业务 / 代码依据 | 现有基础 | 本轮建议及不能夸大的范围 |
+| --- | --- | --- |
+| 材料版本与定位：[schema](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/prisma/schema.prisma)、[来源服务](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/evidence/source-links.ts) | Document 一行一个版本，以 familyId 关联；DocumentParseRun 有解析范围/锚点，EvidenceSourceLink 绑定具体材料、hash、位置及解析身份 | 复用现有来源合同；`SourceAnchor` 不是需要另建的独立 Prisma 表，也没有独立 `DocumentVersion` 表；不为展示重复计算已有指纹 |
+| SK02 事实与来源：[事实服务](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/evidence/actions.ts) | 手工事实、多个来源、日期精度/区间/原始表述、修订和人工核对；同案、固定版本及当前读取资格检查 | 可增强跨材料候选抽取、冲突呈现及人工处理接续；这些自动化不记为已有全链。记录已核对不等于法院查明事实 |
+| SK03/04 研究与争点：[schema](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/prisma/schema.prisma)、[需求 §10—13](PRODUCT_REQUIREMENTS_ACCEPTANCE.md) | ResearchRevision/ResearchSource 保留问题快照、法域/时点、支持/反对/未知和来源；已有研究与文书接续 | 引入 authority-check 的核验方法；不能把检索命中、来源存在、引文吻合、支持论点和适用时点压成同一绿色状态 |
+| SK07 文书复核：[review service](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/document-reviews/service.ts)、[positions](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/document-reviews/positions.ts) | DocumentReviewIssue/Event 已支持固定稿件、意见/依据/修订位置、作者回应、真实后续版本及前版未决只读接续 | 增强准确来源与引用核对，不从零新建复核体系；自动引用真实性/论点支持校验与完整跨文档审阅仍不能记为完成 |
+| 可选 AI：[reviewDocument](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/ai/review-document.ts)、[架构](REFACTOR_DESKTOP_TEAM_RAG.md) | ReviewRecord 已有真实分段模型调用与覆盖记录；`SkillContext`、`SkillResult`、完整 `AiRun` 属于设计草案 | 不能写成“完全未接 AI”，也不能写成通用 Skills 运行平台已经完成；本轮不新增 registry/executor 或通用多 agent 平台 |
+| SK08/09 责任、行动与交付：[schema](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/prisma/schema.prisma)、[计划](WORKBENCH_PLAN.md) | Task、TaskDependency、TaskWaiting、WorkResponsibility、DeliveryRecord/Item/Event 已存在，交付绑定版本，实际发送与回执分开 | Matter board 复用原案件/责任/任务入口；不再把交付模型标成仅设计，不让生成自动等于批准、发送或客户确认 |
+| 文书连续编辑：[需求 §9.4.9](PRODUCT_REQUIREMENTS_ACCEPTANCE.md#949-案件内的文书模板与连续编辑g052026-11-18)、[计划 §8.55](WORKBENCH_PLAN.md#855-案件流程演练与文书交互预览2026-11-18) | 交互预览获认可，已记录演练与模拟边界 | 不能借竞品 Word 体验宣称本项目桌面同步、冲突处理或多人编辑已经完成 |
+
+**用户合理性与 UI 取舍：** 入口留在当前案件的事实、研究、文书或任务区。用户先看本次结果及待处理项，在具体事件/单元格/审查意见旁打开来源，查看后回到原对象和筛选位置。保留 Semi Design 与现行 Timeless 主题，优先标准表格、列表、表单及按需来源面板；不为功能数量新增一级菜单、巨大综合页或平行全局界面。事实事件日期、活动记录时间与程序阶段各有原语义。
+
+结果需要分别表达三件事：**解析/抽取是否覆盖、内容是什么性质、谁做过何种人工核对**。对所选检索片段“未找到”不能写成整份材料不存在；不可读和未纳入也不能输出成否定结论。服务端仍按原规则复核当前资格、固定版本及状态，撤权后不从历史结果透露已失权来源。重新生成保留人工修订，模型只能提供候选；具体操作能力尚未实现时不显示虚假的成功。
+
+#### 3.51.6 采用建议、先后次序及保持的范围
+
+| 候选顺序 | 用户任务与建议的最小成果 | 沿用对象 / 失败出口 | 本次状态 |
+| --- | --- | --- | --- |
+| 1. SK02 事实与来源 | 对当前选定材料提出事件候选，保留冲突日期/金额、多条出处，人工接受、修改或不采用 | 复用 EvidenceItem、来源与修订；失败材料仍列出，已有手工办理可继续；不静默覆盖人工记录 | 优先研究建议；手工链已存在，自动提取与处理记忆未在此批准或排期 |
+| 2. SK07 引用与稿件复核 | 围绕确切稿件，分开检查来源可得、原句是否吻合、能否支持论点、版本/时点是否适用；意见可回应并指向实际修订 | 复用 DocumentReviewIssue/Event 和固定来源；工具失败保留待核，不伪造核验；是否采用由人决定 | 建议增强既有复核；不是承诺一次实现通用法律准确性引擎 |
+| 3. 多材料审阅表 / 合同偏离 | 对有限材料和明确问题形成逐格来源表；合同仅对照用户明确选定的当前指引提出偏离及修订 | 沿现有材料、研究或复核入口；单格失败/不清楚独立呈现，人工决定独立保留 | 后续候选；不是已暂停的 B 方案评分/成本收益比较矩阵，也不恢复 SK12 条款治理 |
+| 后续专项 | 多法域调查、监管持续扫描、跨案件复用 | 法域、持续数据授权、更新责任和具体用户需求需先明确 | 仅记录研究方向，不新增自动任务/调度或 M5/M6 默认排期 |
+
+当前范围按 [AGENTS.md](../AGENTS.md)及[计划 §7.11](WORKBENCH_PLAN.md#711-m3-详细执行计划与审查2026-11-16)保持：只推进 Server 直接办案业务；Personal/Windows 搁置；知识沉淀 W09.3/SK12/RQ16/AC14、B 结构化方案比较、C 通用访谈/递归依赖/AI 补问、E 期限规则/日历版本化重算、F 自动客户简报继续暂缓。实际模板字段补全、轻量同案依赖、人工沟通及交付保留。M4/W13/AC15 与发行、恢复、运维、容量等非业务维护及其准备不恢复，不新增 owner 或门禁。
+
+默认仍使用内置材料处理和现有 PostgreSQL 正文检索；AI/OCR/嵌入/重排/RAGFlow/法库 MCP 按需配置，未配置或失败只限制对应能力，普通业务继续可用。按具体需求选择模型能力，不把原生 Skill 执行、某个模型供应商、完整知识库或通用运行框架强制为前置。实际源码采用时另核固定文件及许可；本 PR 只有研究文档，没有复制外部运行代码或语料。
+
+#### 3.51.7 可用于后续业务切片的验收场景
+
+下表为**建议的场景与判定口径，均未在本轮执行**。优先复用现有合成民事诉讼/仲裁工作包，只为实际获准的切片补必要数据和受影响检查；不新建独立评测平台或扩张当前里程碑。
+
+| 场景 | 必须观察到的行为 |
+| --- | --- |
+| 同一事件有冲突日期/金额及反证 | 各说法保留对应来源，人工选择不抹去冲突历史，不把客户陈述自动改成 FACT |
+| 某扫描页未解析或某文件未纳入 | 覆盖和失败明确可见；没有内容不被解释成不存在事实/条款，允许人工补办 |
+| 真实引文不支持所写论点 | 区分“来源存在”“文字吻合”“支持论点”“时点适用”；保留疑问与人工处理，不能因前两项成功直接通过 |
+| 人工改过结果后重新运行 | 原人工修订和核对记录保留；新增建议可辨识，不能以模型输出静默覆盖 |
+| 材料出现新版本或来源被撤权 | 旧引用继续绑定旧版本；当前权限失效时不泄漏原文或受限来源元数据，不自动改指新版本 |
+| MCP/模型未配置、报错或超时 | 显示对应未核验/未完成原因，保留手工路径；工具错误不等于“无法律规定”或“无风险” |
+| 保存、离开再打开与原文往返 | 结果、对应版本和实际人工处理状态一致；回到原对象/筛选；未实现的持久恢复不以说明文字冒充完成 |
+
+评估重点是完成一条真实任务的能力：是否减少重复阅读，是否准确暴露遗漏和冲突，能否回到证据并接续人工办理。后续若度量耗时、修订次数、来源可回读比例或漏报，应说明同一工作包、样本与判定者，不能从演示、静态测试或供应商宣传推算效率百分比。开发侧 API/静态及必要隔离数据库、用户浏览器、律师专业判断继续分别登记。
+
 ## 4. 可选法律服务 MCP 与来源
 
 核查日期 2026-11-16；以下为官方公开的接入信息，不是本项目已取得账号、权益或实测成功。机构目录可扩展，自定义远程 MCP 为未预置服务保留入口；不虚构“市面所有机构都提供官方 MCP”。
@@ -1289,6 +1975,8 @@ C8沿真实卡片/弹窗到Action确认编辑误调用create。只读方案/实�
 | ANQI、Kosmos、Frappe CRM | AGPLv3 项目基础 | 默认独立实现所需业务行为；直接采用源码时按许可处理 |
 | Paperless-ngx | GPLv3 项目基础 | 默认参考处理流程；实际分发、修改或集成另核边界 |
 | Twenty | 主体 AGPL，指定包 MIT，标记文件商业许可 | 逐文件和包判断，不能统一按 MIT 或 AGPL 处理 |
+| new-litigation-visualization `16c480c`（含 V8） | [AGPL-3.0-only](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/LICENSE) | 本轮仅研究行为和数据关系；实际采用文件时另记许可履行范围，详见 §3.49 |
+| claude-for-legal-ZH `59f37f1` | [Apache-2.0](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/LICENSE) | 选择性参考文书工作流和输出约定；尚未安装/移植，第三方资料与服务权益另核 |
 | j-lawyer | 需按选中的具体仓库和模块核对 | 当前仅登记行为参考，不登记已采用源码 |
 
 改变量名、翻译到另一种语言或稍作改写，不会自动将复制的实现变成独立实现。独立服务和 API 是工程边界，不能仅凭调用方式断言没有许可证义务。修改版 AGPL 的远程交互还需核对其第 13 条要求。[GNU AGPL 正文](https://www.gnu.org/licenses/agpl-3.0.html)
