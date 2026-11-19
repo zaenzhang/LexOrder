@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
-import { open, readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { acquireWorkspaceOwner } from '../workspace-owner.mjs';
 import { startPrivatePostgres } from "../private-pg.mjs";
 
 const load = createRequire(new URL("../../../package.json", import.meta.url));
@@ -27,7 +28,7 @@ try {
     assert(["localhost", "127.0.0.1", "[::1]"].includes(new URL(url).hostname));
   } else {
     // Match the runtime's single-owner rule when preparing an embedded DB.
-    owner = await open(path.join(workspace, ".owner"), "wx", 0o600);
+    owner = await acquireWorkspaceOwner(workspace);
     const { PGlite } = await import("@electric-sql/pglite");
     database = await PGlite.create(path.join(workspace, "data"));
     const credential = randomBytes(32).toString("hex");
@@ -129,8 +130,5 @@ try {
   await db?.$disconnect();
   if (socket) await socket.stop();
   if (database) await database.close();
-  if (owner) {
-    await owner.close();
-    await rm(path.join(workspace, ".owner"));
-  }
+  await owner?.close();
 }

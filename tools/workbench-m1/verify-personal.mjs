@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, writeFile, mkdir, access, rm } from 'node:fs/promises';
@@ -22,7 +23,10 @@ async function start() {
   processHandle = launch();
   for (let i = 0; i < 480; i++) {
     if (processHandle.child.exitCode !== null) throw new Error(processHandle.output());
-    try { return JSON.parse(await readFile(readyFile, 'utf8')); } catch { /* not ready */ }
+    try {
+      const ready = JSON.parse(await readFile(readyFile, 'utf8'));
+      if (ready.pid === processHandle.child.pid) return ready;
+    } catch { /* not ready */ }
     await new Promise(resolve => setTimeout(resolve, 250));
   }
   throw new Error('M1 ready timeout');
@@ -51,13 +55,33 @@ async function verifyBusiness() {
   assert.equal(code, 0, output);
   return JSON.parse(await readFile(resultPath, 'utf8'));
 }
+async function verifyOwnerRestart(ready, business, manifest, storageKey) {
+  processHandle.child.kill('SIGKILL');
+  assert.equal((await processHandle.exit).signal, 'SIGKILL');
+  processHandle = undefined;
+  // The app child must relinquish the old workspace and stop serving the prior channel.
+  let closed = false;
+  for (let i = 0; i < 40 && !closed; i++) {
+    try { await pageRequest(ready, '/api/health'); }
+    catch { closed = true; }
+    if (!closed) await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  assert.ok(closed, 'Previous app still serves its channel after the owner was killed');
+  ready = await start();
+  assert.equal(await readFile(path.join(workspace, 'workspace.json'), 'utf8'), manifest);
+  assert.equal(await readFile(path.join(workspace, 'storage-key'), 'utf8'), storageKey);
+  const reopened = await pageRequest(ready, '/api/documents/' + business.documentId + '/download');
+  assert.equal(reopened.status, 200);
+  assert.equal(createHash('sha256').update(Buffer.from(await reopened.arrayBuffer())).digest('hex'), business.originalSha256);
+  pass('hard_killed_owner_reopens_same_workspace_and_original');
+}
 try {
   let ready = await start();
   const opened = await fetch(ready.openUrl, { redirect: 'manual' });
   assert.equal(opened.status, 303);
   assert.match(opened.headers.get('set-cookie'), /HttpOnly/i);
   assert.match(opened.headers.get('set-cookie'), /SameSite=Strict/i);
-  assert.equal(opened.headers.get('location'), ready.origin + '/');
+  assert.equal(new URL(opened.headers.get('location'), ready.origin).href, ready.origin + '/');
   const page = await pageRequest(ready);
   assert.equal(page.status, 200);
   const html = await page.text();
@@ -69,7 +93,7 @@ try {
   for (const resource of new Set(resources)) assert.equal((await fetch(new URL(resource.replaceAll('&amp;', '&'), ready.origin))).status, 200);
   pass('bootstrap_private_cookie_and_original_shared_application_html_assets');
   const oldLogin = await pageRequest(ready, '/login');
-  assert.equal(oldLogin.status, 307); assert.equal(oldLogin.headers.get('location'), ready.origin + '/');
+  assert.equal(oldLogin.status, 307); assert.equal(new URL(oldLogin.headers.get('location'), ready.origin).href, ready.origin + '/');
   for (const route of ['/api/auth/session', '/admin/users', '/admin/roles', '/admin/teams', '/admin/approval-permissions']) {
     assert.equal((await pageRequest(ready, route)).status, 404, route);
   }
@@ -77,7 +101,10 @@ try {
   assert.equal((await fetch(ready.origin + '/', { method: 'POST', headers: { Cookie: 'lexorder_local_channel=' + ready.token }, body: '{}' })).status, 403);
   assert.equal((await fetch(ready.origin + '/', { headers: { Cookie: 'lexorder_local_channel=' + ready.token, Origin: 'https://untrusted.invalid' } })).status, 403);
   pass('no_account_routes_and_local_channel_cross_origin_rejection');
-  for (const route of ['/matters', '/intakes', '/clients', '/finance', '/finance/reconciliation', '/reports', '/approvals', '/schedule', '/contacts', '/settings/profile',
+  const intakes = await pageRequest(ready, '/intakes');
+  assert.equal(intakes.status, 307);
+  assert.equal(new URL(intakes.headers.get('location'), ready.origin).href, ready.origin + '/matters?tab=intake');
+  for (const route of ['/matters', '/matters?tab=intake', '/clients', '/finance', '/finance/reconciliation', '/reports', '/approvals', '/schedule', '/contacts', '/settings/profile',
     '/admin', '/admin/ai', '/admin/templates', '/admin/document-templates', '/admin/archive-policy', '/admin/reminders', '/admin/import', '/admin/audit']) {
     const response = await pageRequest(ready, route);
     assert.equal(response.status, 200, route + ' remains available in the shared application');
@@ -97,14 +124,18 @@ try {
   ready = await start();
   assert.equal(await readFile(path.join(workspace, 'workspace.json'), 'utf8'), manifest);
   assert.equal(await readFile(path.join(workspace, 'storage-key'), 'utf8'), storageKey);
-  const matterPage = await pageRequest(ready, '/matters/' + business.matterId);
+  const canonical = '/matters/' + encodeURIComponent(business.matterCode);
+  const byId = await pageRequest(ready, '/matters/' + business.matterId);
+  assert.equal(byId.status, 307);
+  assert.equal(new URL(byId.headers.get('location'), ready.origin).href, ready.origin + canonical);
+  const matterPage = await pageRequest(ready, canonical);
   assert.equal(matterPage.status, 200);
   assert.ok((await matterPage.text()).includes('M1 合成业务连续性验证'));
   const original = await pageRequest(ready, '/api/documents/' + business.documentId + '/download');
   assert.equal(original.status, 200);
-  const { createHash } = await import('node:crypto');
   assert.equal(createHash('sha256').update(Buffer.from(await original.arrayBuffer())).digest('hex'), business.originalSha256);
   pass('normal_close_reopen_preserves_actor_money_encryption_key_and_original_download');
+  await verifyOwnerRestart(ready, business, manifest, storageKey);
   await stop();
   const changed = JSON.parse(manifest); changed.actorId = 'wrong-actor';
   await writeFile(path.join(workspace, 'workspace.json'), JSON.stringify(changed));
