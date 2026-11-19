@@ -31,3 +31,5 @@ jobs:
       - run: npm ci
       - name: Two case folders, restart, conflicts and launch receipt
         run: npx vitest run src/tests/lib/personal-matter-folders.test.ts src/tests/server/personal-working-copies.test.ts src/tests/server/personal-default-editor.test.ts
+      - name: Save in the default TXT editor and reopen in a fresh process
+        run: node tools/workbench-m1/chronicle-smoke/windows-editor/verify.cjs
