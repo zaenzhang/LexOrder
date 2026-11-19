@@ -2,6 +2,10 @@
 
 该目录是独立的 Next.js / Chronicle 个人桌面前端。网页业务和数据由仓库根目录的 LexOrder 应用提供。先看 [迁移工作计划](docs/lexorder-desktop-migration-plan.md)、[本机运行与实测](docs/lexorder-personal-migration.md) 和 [界面约束](AGENTS.md)。在本目录使用 pnpm 安装依赖和运行检查。下文保留上游 Chronicle 的说明和 MIT 版权。
 
+## 云端接续
+
+在此目录运行 `pnpm install --frozen-lockfile` 和 `pnpm exec tsc --noEmit --project tsconfig.build.json`。模板页可直接在开发服务器查看。案卷联调需要根仓库 [个人运行时](../../tools/workbench-m1) 和隔离样本。运行时生成的会话凭据只留在测试环境。Windows 原生缩放、系统浏览器与默认编辑器按迁移计划另做实机验收。
+
 # Chronicle: free shadcn admin dashboard template
 
 **Chronicle is a free, MIT-licensed admin dashboard template for Next.js, built with shadcn/ui on Base UI, Tailwind CSS v4 and the ShadcnStore Dashboard Kit.** Clone it, install, run it, and you have an admin panel with real screens, real interactions and sample data where every number adds up.
