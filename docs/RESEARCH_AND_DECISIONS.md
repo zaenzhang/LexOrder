@@ -1264,6 +1264,27 @@ C8沿真实卡片/弹窗到Action确认编辑误调用create。只读方案/实�
 - LexOrder 将业务侧栏与管理侧栏按 [Layout](https://semi.design/zh-CN/basic/layout) 组合，使用 Nav 的当前项、分组和底部操作。列表使用 [Table](https://semi.design/zh-CN/show/table) 的列、行标识和滚动能力，服务端筛选、分页及具体记录链接由现有路由负责。收案和执行表单按 [Form](https://semi.design/zh-CN/input/form) 的字段布局组织，字段值、校验和提交继续交给现有表单流程。
 - 套用模板时优先保留办案上下文。侧栏的权限、业务计数和工作身份需要与路由相邻。案件页面先显示案件标题与状态，再给出程序范围和办案分区。行内低频管理操作归入菜单，主要资料入口与当前账号同一行。记录来源、确认和失败后继续填写均有原业务入口。
 
+### 3.49 AI Admin 脚手架选型与源码核对（2026-11-19）
+
+本次核对以 LexOrder `a49c27e` 为基线，范围是案卷内的 AI 成果工作区，以及后台配置和外部工具的接入位置。关联 RQ04、RQ06、RQ08、RQ11、RQ14、RQ18 和 RQ20。下列结论来自固定提交的源码和官方文档。文书审查是脚手架的试验场景，产品优先级以[实施计划](WORKBENCH_PLAN.md)为准。
+
+#### 候选源码与采用判断
+
+| 候选与固定版本 | 实际核对的能力 | LexOrder 采用判断 |
+| --- | --- | --- |
+| Vercel Chatbot `a8989b5` | Text Artifacts 有独立成果面板、流式文本、编辑器、前后版本、差异视图和修改建议。核对了展示与状态切换源码。[面板](https://github.com/vercel/chatbot/blob/a8989b522fa3672a2ae52f053105e40993b36ca1/components/chat/artifact.tsx) · [文本成果](https://github.com/vercel/chatbot/blob/a8989b522fa3672a2ae52f053105e40993b36ca1/artifacts/text/client.tsx) · [官方文档](https://chatbot.ai-sdk.dev/docs/customization/artifacts) | **首选参考。** 借用文书与审查意见并排、切换版本和展示修订的交互。整套模板采用 shadcn/ui、Drizzle、Auth.js 及默认 AI Gateway，和 LexOrder 的 Semi、Prisma、认证与模型配置存在接入成本。[依赖](https://github.com/vercel/chatbot/blob/a8989b522fa3672a2ae52f053105e40993b36ca1/package.json) · [项目说明](https://github.com/vercel/chatbot/blob/a8989b522fa3672a2ae52f053105e40993b36ca1/README.md) · [Apache 2.0 许可](https://github.com/vercel/chatbot/blob/a8989b522fa3672a2ae52f053105e40993b36ca1/LICENSE) |
+| Ant Design Pro v6 `42f2cb1` | 管理后台模板内置基于 Ant Design X 的 AI 助手示例，依赖 Umi Max 和 Ant Design。[官方预览](https://preview.pro.ant.design/welcome/) · [依赖](https://github.com/ant-design/ant-design-pro/blob/42f2cb1d303380909ea04c73b5e60679d09c321a/package.json) | 可参考后台导航、设置入口与助手入口。案卷内的布局与控件使用 LexOrder 的 Semi Design 标准组合。[项目界面约束](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/AGENTS.md#5-工程与运行纪律) |
+| assistant-ui `1663da7` | `with-artifacts` 的原始示例是 HTML 实时预览，工具实现使用 `unstable_interactableTool`。同一提交另有文档编辑示例，提供用户与模型共同编辑及逐块版本差异，可单独复核。[成果定义](https://github.com/assistant-ui/assistant-ui/blob/1663da7d94cfeb80b54745ebd4f1527c398f281d/examples/with-artifacts/app/artifact-state.ts) · [工具代码](https://github.com/assistant-ui/assistant-ui/blob/1663da7d94cfeb80b54745ebd4f1527c398f281d/examples/with-artifacts/app/toolkit.tsx) · [文档编辑示例](https://github.com/assistant-ui/assistant-ui/blob/1663da7d94cfeb80b54745ebd4f1527c398f281d/examples/with-agent-document-editor/README.md) · [版本面板](https://github.com/assistant-ui/assistant-ui/blob/1663da7d94cfeb80b54745ebd4f1527c398f281d/examples/with-agent-document-editor/components/panels/history-panel.tsx) | HTML 示例适合参考时间线、关系图如何从会话打开。文档编辑示例可作为选区改写和逐块差异的后续对照。 |
+
+#### 现有入口、数据边界与验证场景
+
+- **服务管理。** 当前 `/admin/ai` 受工作区配置权限约束，包含模型、OCR、法律数据库、MCP 和调用记录，适合作为 AI 与外部服务的配置入口。部署版业务界面已使用 Next.js、React 和 Semi Design，项目锁定 Semi 2.105.0。[AI 后台页面](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/app/%28admin%29/admin/ai/page.tsx) · [标签页](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/app/%28admin%29/admin/ai/_components/settings-tabs.tsx) · [依赖](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/package.json)
+- **文书审查。** 现有案卷入口按事项和材料版本开始审查，能打开历史记录并保存报告。报告以 `DRAFT` 文档入卷，通过审查记录关联其材料版本。源材料的读取和审查资格沿用既有权限。当前审查项结构只有 `type`、`severity`、`title`、`detail`，首个并排视图可以展示对应版本的原文。若后续需要逐条点击跳页或高亮，须在审查结果中记录可验证的来源锚点。[审查入口](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/app/%28app%29/matters/%5Bid%5D/_components/document-review-dialog.tsx) · [结果结构](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/lib/ai/review-parser.ts) · [审查资格](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/ai/document-access.ts) · [报告保存](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/ai/save-review.ts) · [原文关联](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/ai/review-report-source.ts)
+- **首个试验。** 在案卷中选定文书版本，并排查看 AI 意见和对应原文，核对后使用现有「保存到案卷」，再从历史打开报告和原文。用同一材料的两个版本验证对应关系，用未授权的账号验证读取与保存，用未配置模型的环境验证普通办案入口可用。先检查受影响 API、类型与来源关系，桌面交互由用户验收，律师实务另行记录。[产品需求与验收](PRODUCT_REQUIREMENTS_ACCEPTANCE.md)
+- **外部 Harness。** 当前「法律 MCP」是 LexOrder 主动请求外部法库的客户端。Codex 和 WorkBuddy 的官方文档有 MCP 连接方式，`claude-for-legal-ZH` 已提供两端的技能适配。拟接入的 LexOrder MCP 服务需要将调用者映射到现有业务身份，按事项和材料权限读取指定版本，并将提交的结果保存为待复核草稿。两端的连接、授权及回写要在实际调用中分别验证。[LexOrder 法库调用](https://github.com/zaenzhang/LexOrder/blob/a49c27e95aee5593349f4cc665ad2cd71e7bd44f/src/server/legal/mcp-actions.ts) · [Codex MCP](https://developers.openai.com/codex/mcp/) · [WorkBuddy 连接器](https://open.workbuddy.cn/docs/connector) · [法律技能的 Codex 适配](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/INSTALL_CODEX.md) · [WorkBuddy 适配](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/INSTALL_WORKBUDDY.md)
+
+本轮完成源码与文档核对。本次访问 Vercel 在线演示遇到重定向循环，本次取舍以源码为依据。LexOrder 集成后的界面、真实模型输出、外部调用者的身份映射与回写均待实测。
+
 
 ## 4. 可选法律服务 MCP 与来源
 
