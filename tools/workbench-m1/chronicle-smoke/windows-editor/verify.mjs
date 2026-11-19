@@ -1,15 +1,18 @@
 // Run from the repository root on Windows with classic Notepad as the .txt association.
 // Only the business checkout/save adapter is a fixture. The launcher, watcher,
 // directory binding, working-copy registry and process restart are production paths.
+import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import * as fs from "node:fs/promises";
+import { createRequire } from "node:module";
+import os from "node:os";
+import path from "node:path";
+import { setTimeout as wait } from "node:timers/promises";
+import { promisify } from "node:util";
+
+const require = createRequire(import.meta.url);
 require("tsx/cjs");
-const assert = require("node:assert/strict");
-const fs = require("node:fs/promises");
-const os = require("node:os");
-const path = require("node:path");
-const { randomUUID } = require("node:crypto");
-const { execFile } = require("node:child_process");
-const { promisify } = require("node:util");
-const { setTimeout: wait } = require("node:timers/promises");
 const { WorkingCopies } = require("../../../../src/server/desktop/working-copies.ts");
 const { openDefaultEditor } = require("../../../../src/server/desktop/default-editor.ts");
 const { watchWorkingFile, unwatchWorkingFile } = require("../../../../src/server/desktop/working-watch.ts");
@@ -21,7 +24,7 @@ const [a, b] = ["a", "b"].map(letter => ({
 }));
 const filename = "同名 [修订].txt";
 const content = ["", "A original", "LexOrder native V2", "LexOrder native V3"];
-const helper = path.join(__dirname, "save-notepad.ps1");
+const helper = path.join(import.meta.dirname, "save-notepad.ps1");
 const otherFile = async () => path.join(await matterSubdirectory(b.id, "工作稿"), filename);
 
 async function worker(fixture, version) {
@@ -117,7 +120,7 @@ async function main() {
     LEXORDER_PERSONAL_CHANNEL_TOKEN: "a".repeat(64), LEXORDER_PERSONAL_MANIFEST: path.join(fixture, "private", "workspace.json") };
   try {
     for (const version of [2, 3]) {
-      const result = await run(process.execPath, [__filename, "--worker", fixture, String(version)], { env, timeout: 90000 });
+      const result = await run(process.execPath, [import.meta.filename, "--worker", fixture, String(version)], { env, timeout: 90000 });
       process.stdout.write(result.stdout);
     }
   } finally { await fs.rm(fixture, { recursive: true, force: true }); }

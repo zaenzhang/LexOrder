@@ -28,8 +28,12 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - name: Two case folders, restart, conflicts and launch receipt
-        run: npx vitest run src/tests/lib/personal-matter-folders.test.ts src/tests/server/personal-working-copies.test.ts src/tests/server/personal-default-editor.test.ts
+      - id: install
+        run: npm ci
       - name: Save in the default TXT editor and reopen in a fresh process
-        run: node tools/workbench-m1/chronicle-smoke/windows-editor/verify.cjs
+        timeout-minutes: 4
+        run: node tools/workbench-m1/chronicle-smoke/windows-editor/verify.mjs
+      - name: Two case folders, restart, conflicts and launch receipt
+        if: "!cancelled() && steps.install.outcome == 'success'"
+        timeout-minutes: 5
+        run: npx vitest run src/tests/lib/personal-matter-folders.test.ts src/tests/server/personal-working-copies.test.ts src/tests/server/personal-default-editor.test.ts
