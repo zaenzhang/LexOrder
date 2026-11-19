@@ -17,7 +17,10 @@ permissions:
 
 jobs:
   cases:
-    if: github.event.pull_request.number == 28 && github.head_ref == 'codex/tauri-case-workspace'
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.base_ref == 'main' ||
+       (github.event.pull_request.number == 28 && github.head_ref == 'codex/tauri-case-workspace'))
     runs-on: windows-2022
     timeout-minutes: 15
     steps:
