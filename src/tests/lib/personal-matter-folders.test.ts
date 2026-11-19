@@ -14,7 +14,7 @@ const b = { id: "c" + "b".repeat(24), internalCode: "案-02", title: "中文同�
 let scratch: string, root: string, storageRoot: string;
 let storage: import("@/lib/storage/local").LocalStorageProvider;
 beforeEach(async () => {
-  scratch = await fs.mkdtemp(path.join(os.tmpdir(), "lexorder-folder-"));
+  scratch = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "lexorder-folder-")));
   root = path.join(scratch, "我的案件");
   const workspace = path.join(scratch, "工作区");
   storageRoot = path.join(workspace, "storage");
@@ -196,4 +196,114 @@ it("不支持硬链接的卷在首次绑定或重定位前失败，保留旧原�
   await fs.rename(moved, bBound.path!);
   expect(await storage.readFile(bKey)).toEqual(Buffer.from("第二案原件"));
   expect((await changeMatterFolder(a, { action: "bind", root }, storageRoot)).available).toBe(true);
+});
+
+async function interruptFirstBind(point: "registered" | "published", matter: typeof a & { intakeId: string }) {
+  const child = `
+    const fs = require('node:fs/promises');
+    const path = require('node:path');
+    const [point, data, root, storage] = process.argv.slice(1);
+    const matter = JSON.parse(data);
+    const record = path.join(path.dirname(storage), 'matter-folders', matter.id + '.json');
+    const marker = path.join(root, matter.internalCode + ' · ' + matter.title, '.lexorder-matter.json');
+    function stop() {
+      require('node:fs').writeFileSync(path.join(path.dirname(storage), 'checkpoint'), point);
+      if (process.platform === 'win32') process.exit(86);
+      process.kill(process.pid, 'SIGKILL');
+    }
+    const rename = fs.rename, lstat = fs.lstat;
+    fs.rename = async (...args) => {
+      const result = await rename(...args);
+      if (point === 'registered' && args[1] === record && JSON.parse(await fs.readFile(record, 'utf8')).stage) stop();
+      return result;
+    };
+    fs.lstat = async (...args) => {
+      const result = await lstat(...args);
+      if (point === 'published' && args[0] === marker) stop();
+      return result;
+    };
+    require('node:module').syncBuiltinESMExports();
+    const { changeMatterFolder } = require('./src/lib/runtime/matter-folders.ts');
+    changeMatterFolder(matter, { action: 'bind', root }, storage).catch(e => { console.error(e); process.exitCode = 1; });
+  `;
+  await expect(promisify(execFile)(process.execPath, ["--import", "tsx", "-e", child,
+    point, JSON.stringify(matter), root, storageRoot])).rejects.toMatchObject(
+    process.platform === "win32" ? { code: 86 } : { signal: "SIGKILL" });
+  expect(await fs.readFile(path.join(path.dirname(storageRoot), "checkpoint"), "utf8")).toBe(point);
+}
+
+it.each(["registered", "published"] as const)("首次绑定在 %s 强退，重开可从原父目录恢复两类原件", async point => {
+  const matter = { ...a, intakeId: "c" + "i".repeat(24) };
+  const keys = ["m_" + a.id + "/original.bin", "i_" + matter.intakeId + "/intake.bin"];
+  for (const key of keys) await storage.writeFileAt(key, Buffer.from(key));
+  await interruptFirstBind(point, matter);
+
+  expect(await matterFolderState(a)).toMatchObject({ path: null, available: false });
+  for (const key of keys) {
+    expect(await fs.readFile(path.join(storageRoot, key), "utf8")).toBe(key);
+    await expect(storage.writeFileAt(key + ".new", Buffer.from("new"))).rejects.toThrow("绑定尚未完成");
+  }
+  const otherRoot = path.join(scratch, "另一个父目录");
+  await fs.mkdir(otherRoot);
+  await expect(changeMatterFolder(matter, { action: "bind", root: otherRoot }, storageRoot)).rejects.toThrow("原父目录");
+  const state = await changeMatterFolder(matter, { action: "bind", root }, storageRoot);
+  expect(state).toMatchObject({ path: path.join(root, a.internalCode + " · " + a.title), available: true });
+  for (const key of keys) expect((await storage.readFile(key)).toString()).toBe(key);
+  expect(await changeMatterFolder(matter, { action: "bind", root }, storageRoot)).toEqual(state);
+  expect(await fs.readdir(root)).toEqual([path.basename(state.path!)]);
+});
+
+it("中断后拒绝同案标记的替换副本和改写的原件，保留私有原件供核对", async () => {
+  const matter = { ...a, intakeId: "c" + "i".repeat(24) };
+  const key = "m_" + a.id + "/original.bin";
+  const bytes = Buffer.from("固定原件");
+  await storage.writeFileAt(key, bytes);
+  await interruptFirstBind("published", matter);
+  const destination = path.join(root, a.internalCode + " · " + a.title);
+  const saved = path.join(root, "物理原目录");
+  await fs.rename(destination, saved);
+  await fs.cp(saved, destination, { recursive: true });
+  await expect(changeMatterFolder(matter, { action: "bind", root }, storageRoot)).rejects.toThrow("归属不符");
+  await expect(changeMatterFolder(matter, { action: "relocate", path: destination }, storageRoot)).rejects.toThrow("原父目录");
+  await fs.rename(destination, path.join(root, "保留替换副本"));
+  await fs.rename(saved, destination);
+  const copied = path.join(destination, "已入卷", "original.bin");
+  await fs.writeFile(copied, Buffer.from("外部改写"));
+  await expect(changeMatterFolder(matter, { action: "bind", root }, storageRoot)).rejects.toThrow("原件无法核对");
+  expect(await fs.readFile(path.join(storageRoot, key))).toEqual(bytes);
+  expect(await fs.readFile(copied, "utf8")).toBe("外部改写");
+  await fs.writeFile(copied, bytes);
+  expect((await changeMatterFolder(matter, { action: "bind", root }, storageRoot)).available).toBe(true);
+  expect(await storage.readFile(key)).toEqual(bytes);
+});
+
+it("目录检查和发布之间出现的陌生空目录保留原身份，允许改选其他父目录", async () => {
+  const destination = path.join(root, a.internalCode + " · " + a.title);
+  const originalLstat = fsPromises.lstat.bind(fsPromises);
+  const record = path.join(path.dirname(storageRoot), "matter-folders", a.id + ".json");
+  let foreignInode: bigint | undefined;
+  const competing = vi.spyOn(fsPromises, "lstat").mockImplementation(async (...args) => {
+    try { return await originalLstat(...args); }
+    catch (error) {
+      if (args[0] === destination && !foreignInode && await fs.access(record).then(() => true, () => false)) {
+        await fs.mkdir(destination);
+        foreignInode = (await fs.stat(destination, { bigint: true })).ino;
+      }
+      throw error;
+    }
+  });
+  syncBuiltinESMExports();
+  try {
+    await expect(changeMatterFolder(a, { action: "bind", root }, storageRoot)).rejects.toThrow("同名目录");
+    expect(foreignInode).toBeDefined();
+    expect((await fs.stat(destination, { bigint: true })).ino).toBe(foreignInode);
+    expect(await fs.readdir(destination)).toEqual([]);
+    expect(await fs.readdir(root)).toEqual([path.basename(destination)]);
+  } finally {
+    competing.mockRestore();
+    syncBuiltinESMExports();
+  }
+  const other = path.join(scratch, "合适的父目录");
+  await fs.mkdir(other);
+  expect((await changeMatterFolder(a, { action: "bind", root: other }, storageRoot)).available).toBe(true);
 });

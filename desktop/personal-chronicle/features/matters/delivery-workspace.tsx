@@ -9,8 +9,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Textarea } from "@/components/ui/textarea"
 import { materialUrl, readPersonal, workspaceEndpoint } from "./personal-client"
 
-const statusNames = { PREPARED: "已准备", EXPORTED: "已导出", SENT: "已登记发送", UNAVAILABLE: "记录暂不可查看" }
-const eventNames = { EXPORTED: "导出", SENT: "发送", RECEIVED: "收悉", REPLIED: "客户回复", CONTENT_CONFIRMED: "客户确认内容", SEND_CORRECTION: "更正发送登记" }
+const statusNames = { PREPARED: "已准备", EXPORTED: "已导出，未登记发送", SENT: "已登记发送", UNAVAILABLE: "记录暂不可查看" }
+const eventNames = { EXPORTED: "导出", SENT: "实际送出", RECEIVED: "收悉", REPLIED: "客户回复", CONTENT_CONFIRMED: "客户确认内容", SEND_CORRECTION: "发送更正" }
 type Kind = keyof typeof eventNames
 export type DeliverySummary = { id: string; purpose: string | null; recipientName: string | null; state: keyof typeof statusNames; itemCount: number }
 type Options = {
@@ -190,7 +190,10 @@ function DeliveryDetail({ matterId, id, options, onClose, onPrepare, reload }: {
       <div className="grid gap-3 px-4 pb-4 text-sm">
         {error && <p role="alert" className="text-destructive">{error}</p>}
         {!detail ? error ? <Button variant="outline" size="sm" onClick={() => { setError(""); setRefresh(n => n + 1) }}>重读清单</Button> : <p role="status">正在读取交付记录…</p> : <>
-          <p>{detail.recipientName} · {detail.recipientContact}</p>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+            <dt className="text-muted-foreground">接收人</dt><dd className="break-words">{detail.recipientName}</dd>
+            <dt className="text-muted-foreground">联系方式或交接地点</dt><dd className="break-words">{detail.recipientContact}</dd>
+          </dl>
           <p className="whitespace-pre-wrap">披露范围 · {detail.disclosureScope}</p>
           {detail.unresolvedItems && <p className="whitespace-pre-wrap">未决事项 · {detail.unresolvedItems}</p>}
           {detail.supersedesId && <p className="text-muted-foreground">原清单编号 · {detail.supersedesId}</p>}
@@ -201,18 +204,22 @@ function DeliveryDetail({ matterId, id, options, onClose, onPrepare, reload }: {
           <h3 className="font-medium">发生记录</h3>
           {!detail.events.length && <p className="text-muted-foreground">暂无导出或实际交付登记。</p>}
           {detail.events.map(event => <div key={event.id} className="grid gap-1 border-b pb-2">
-            <p>{eventNames[event.kind]} · {time.format(new Date(event.occurredAt))} · {event.actorName}</p>
-            <p className="whitespace-pre-wrap">{[event.channel, event.note].filter(Boolean).join(" · ")}</p>
+            <p className="font-medium">{eventNames[event.kind]}</p>
+            <p>发生时间 · <time dateTime={event.occurredAt}>{time.format(new Date(event.occurredAt))}</time>（上海）</p>
+            <p className="text-xs text-muted-foreground">{event.actorName} 登记于 <time dateTime={event.recordedAt}>{time.format(new Date(event.recordedAt))}</time>（上海）</p>
+            {event.channel && <p>渠道 · {event.channel}</p>}
+            {event.note && <p className="whitespace-pre-wrap">{event.note}</p>}
             {event.correctsEventId && <p className="text-xs">更正原登记 · {event.correctsEventId}</p>}
             {event.proofName && event.proofDocumentId && <a href={download(event.proofDocumentId)} download className="underline">凭据 · {event.proofName}</a>}
             {event.proofUnavailable && <p>凭据当前不可查看。</p>}
+            {event.kind !== "EXPORTED" && !event.proofUnavailable && !event.proofDocumentId && <p className="text-muted-foreground">仅人工登记，未附凭据</p>}
           </div>)}
           {detail.canWrite && options?.canPrepare && !kind && <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" disabled={busy} onClick={() => void exportZip()}>导出固定材料</Button>
             <Button size="sm" variant="outline" disabled={busy} onClick={onPrepare}>另建补发清单</Button>
             {(sent ? ["RECEIVED", "REPLIED", "CONTENT_CONFIRMED", "SEND_CORRECTION"] as const : ["SENT"] as const).map(next =>
               <Button key={next} size="sm" variant="outline" disabled={busy} onClick={() => { setError(""); setDiscard(false); setEventKey(crypto.randomUUID()); setKind(next) }}>
-                {eventNames[next]}</Button>)}
+                登记{eventNames[next]}</Button>)}
           </div>}
           {kind && <form onSubmit={saveEvent} onChange={() => setEventKey(crypto.randomUUID())} className="grid gap-2">
             <fieldset disabled={busy} className="grid gap-2"><legend className="mb-2 font-medium">{eventNames[kind]}</legend>

@@ -62,7 +62,9 @@ export class WorkingCopies {
 
   private async records(): Promise<Copy[]> {
     const created = await mkdir(this.registry, { recursive: true, mode: 0o700 });
-    if (created) {
+    // Windows skips directory fsync. Its first-created path may also carry
+    // a namespace prefix that the ordinary registry path's parents never have.
+    if (created && process.platform !== "win32") {
       for (let dir = this.registry; dir !== path.dirname(created); dir = path.dirname(dir)) {
         await syncDirectory(path.dirname(dir));
       }
@@ -222,7 +224,9 @@ export class WorkingCopies {
         try { await writeExclusive(sibling, snapshot); }
         catch (error) {
           if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-          const saved = await open(sibling, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
+          // FlushFileBuffers on Windows requires write access, including on a retry.
+          const access = process.platform === "win32" ? constants.O_RDWR : constants.O_RDONLY;
+          const saved = await open(sibling, access | (constants.O_NOFOLLOW || 0));
           try {
             const stored = await saved.stat();
             if (!stored.isFile() || stored.nlink !== 1 || hash(await saved.readFile()) !== copy.pending.hash) {
