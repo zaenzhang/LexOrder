@@ -1,0 +1,8 @@
+PASS original index.html updated in place; no second preview HTML required
+PASS unified Chronicle case menu: eight top-level entries, facts/documents submenus, and global workspace groups
+PASS unified document/delivery list, detail and inspector structure
+PASS full-page template wizard, readable form typography, factual inspector and dirty Back guard
+PASS short Sheet operations render as centered modal dialogs
+PASS switchable fixed-file preview preserves the current business route and review object
+PASS original app bundle preserved and appended script parses
+STATIC CHECKS PASS — browser click results are recorded separately; native Tauri validation remains pending
