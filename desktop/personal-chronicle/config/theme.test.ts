@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url"
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join } from "node:path"
 
@@ -8,7 +9,7 @@ import { checkGlobalsCss, checkThemeContract, resolvePreset } from "@/kit/theme/
 
 import { THEME } from "./theme"
 
-const root = new URL("../", import.meta.url).pathname
+const root = fileURLToPath(new URL("../", import.meta.url))
 const css = readFileSync(join(root, "app/globals.css"), "utf8")
 const globals = parseThemeCss(css)!
 

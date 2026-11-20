@@ -120,6 +120,7 @@
     "shell/nav-main.tsx": "af3d4eaa690ac73f15694100684ed0d941f4b94e3e869433277d4be48e5e7ef1",
     "shell/top-nav.tsx": "82f683f234523e6fb5d5ab84fd5228f44d3c915f000507471f1bffa8904c947c",
     "shell/types.ts": "dac3c0209953932fcdddf3ccfd02dcd7a39b9a168b710135fd9311c1db6bc355",
+    "theme/theme.test.ts": "b80ff5c35e7cc3fb3abaf66f519319ffaae46093eba28e1b095ce78b0f9276b7",
     "ui-patterns/page-loading.tsx": "fadbea9a6a8735c6a49dd5b43e1677fb7843ada91c16f7b1bb4194d5550ed2de",
     "ui-patterns/workspace-loading.tsx": "e52f2bd811acbe18501cfd1b9d7b6733477ef42f2a2160ab79c491a5b73ec1d3"
   }

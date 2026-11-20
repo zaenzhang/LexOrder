@@ -38,6 +38,10 @@
 - 改动图谱后，用实际 Tauri WebView2 对照检查侧栏高亮、展开后的下拉框、右侧详情和鼠标滚轮。验收时核对滚动到底及缩窄窗口后操作入口仍可达。
 - WebView2 内的点击、滚轮和宽窄布局，优先使用 [独立 Tauri 验收脚本](../../tools/workbench-m1/chronicle-smoke/README.md#webview2-后台验收)。脚本向测试实例发送浏览器输入事件，验收时可继续使用日常工作台。Windows 文件选择器、外部编辑器和系统窗口行为需另行实机核验。
 
+## Dashboard Kit
+
+- `kit.lock.json` 的 `files` 记录上游快照，`local` 单独记录 LexOrder 已审阅的框架适配、导航外壳、主题、通知、查询和加载组件。用 `pnpm run kit:check` 核对两层的实际文件。升级上游时先审查差异并重新应用这些定制。
+
 ## 页面切换和动效
 
 - 普通导航用现有 React Router 路由和持久的 Chronicle 布局，切页时侧栏、顶栏与工具条保持稳定。普通切页使用个人工作区共用的等待层。短等待显示窗口顶边进度线，等待超过 500 ms 时复用 Base UI Dialog 与 Chronicle Spinner 覆盖窗口，包含侧栏和工具条。路由与首屏数据分别申报等待，数据就绪或失败即解除遮罩。可继续使用当前页的补充读取沿用局部反馈。正文路由过渡为 100 ms 轻淡入。主题预览的 View Transition 继续由 `kit/customizer/cross-fade.ts` 管理。

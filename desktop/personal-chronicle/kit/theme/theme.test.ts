@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url"
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join } from "node:path"
 
@@ -8,7 +9,7 @@ import { checkGlobalsCss, checkThemeContract, REQUIRED_TOKENS, resolvePreset } f
 import { LIBRARY_PRESETS } from "./library"
 import { NEUTRAL_THEME } from "./neutral"
 
-const root = new URL("../../", import.meta.url).pathname
+const root = fileURLToPath(new URL("../../", import.meta.url))
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
