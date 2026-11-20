@@ -11,8 +11,14 @@ export function observationIdentity(input: ObservationInput) {
   return [input.statement, input.date, input.amount, participantKeys?.sort(), relationKeys?.sort(), ...(input.excerpt ? [input.excerpt] : [])];
 }
 
-function normalizeDate(text: string): DateValue | null {
-  const date = text.normalize("NFKC").replace(/\s+/g, "");
+function normalizeDate(text: string, includesClock: boolean): DateValue | null {
+  const written = text.normalize("NFKC").trim();
+  // A message's day is the day written on its source. Preserve its full time
+  // in date.text for review rather than converting it to a different time zone.
+  const calendar = includesClock
+    ? written.replace(/(?:T|[ \t]+)(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/u, "")
+    : written;
+  const date = calendar.replace(/\s+/g, "");
   const parts = date.split(/至|到|[–—~]/);
   if (parts.length > 2) return null;
   const normalized = parts.map(part => part.match(/^(\d{4})(?:年|-)(\d{1,2})(?:(?:月|-)(\d{1,2})日?|月)?$/));
@@ -93,7 +99,7 @@ export function prepareObservation(raw: unknown, anchorText: string): Observatio
   const date = input.date && (() => {
     const { role, span, suggested } = input.date;
     const text = exactTextRange(anchorText, span.start, span.end);
-    const normalized = normalizeDate(text);
+    const normalized = normalizeDate(text, role === "SENT" || role === "RECEIVED");
     if (normalized && suggested && JSON.stringify(suggested) !== JSON.stringify(normalized)) {
       throw new ActionError("候选日期与选定原文不符");
     }

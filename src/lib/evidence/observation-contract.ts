@@ -15,7 +15,7 @@ export const amountValueSchema = z.strictObject({
 });
 
 export const statementSchema = z.enum(["RECORD", "PARTY_STATEMENT", "COURT_FINDING"]);
-export const dateRoleSchema = z.enum(["OCCURRENCE", "AGREEMENT", "SIGNATURE", "FILING", "SERVICE"]);
+export const dateRoleSchema = z.enum(["OCCURRENCE", "AGREEMENT", "SIGNATURE", "FILING", "SERVICE", "SENT", "RECEIVED"]);
 export const amountNatureSchema = z.enum(["ACTUAL_TRANSFER", "AGREED_PRINCIPAL", "CLAIMED_RELIEF", "BALANCE", "OTHER"]);
 
 export const observationInputSchema = z.strictObject({

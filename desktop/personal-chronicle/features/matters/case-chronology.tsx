@@ -77,6 +77,7 @@ function inferredCategory(records: readonly FactObservation[]): keyof typeof tra
   if (records.some(({ data }) => data.amount?.nature === "ACTUAL_TRANSFER" || data.relations?.some(link => link.kind === "PAYS_TO" || link.kind === "LENDS_TO"))) return "payment"
   if (records.some(({ data }) => data.date?.role === "AGREEMENT" || data.amount?.nature === "AGREED_PRINCIPAL" || data.relations?.some(link => link.kind === "CONTRACTS_WITH"))) return "agreement"
   if (records.some(({ data }) => data.relations?.some(link => link.kind === "DELIVERS_TO"))) return "performance"
+  if (records.some(({ data }) => data.date?.role === "SENT" || data.date?.role === "RECEIVED")) return "communication"
   return "other"
 }
 

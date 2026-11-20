@@ -14,7 +14,7 @@ import { observationProviderUsageSchema, observationRunReceiptSchema } from "./a
 import { requireObservationDestination } from "./analysis-runs";
 import { groupingMembers, groupingPayload, publicGroupingMember, validateGrouping } from "./case-grouping-input";
 
-const methodVersion = "case-event-grouping/5";
+const methodVersion = "case-event-grouping/6";
 const jobType = "evidence.case-grouping";
 export const caseGroupingJobKey = (id: string) => jobType + ":" + id;
 const jobInput = z.strictObject({ groupingId: caseGroupingIdSchema });
@@ -25,6 +25,7 @@ const groupedIndexes = z.strictObject({ groups: z.array(z.strictObject({
 const { $schema: _schema, ...groupingJsonSchema } = z.toJSONSchema(groupedIndexes);
 
 function memberRole(summary: Awaited<ReturnType<typeof groupingMembers>>[number]["summary"]) {
+  if (summary.date?.role === "SENT" || summary.date?.role === "RECEIVED") return summary.date.role;
   if (summary.amount?.nature && summary.amount.nature !== "OTHER") return summary.amount.nature;
   if (summary.date?.role === "AGREEMENT") return "AGREED_PRINCIPAL";
   if (summary.date?.role === "SIGNATURE" || summary.date?.role === "FILING" || summary.date?.role === "SERVICE") return summary.date.role;

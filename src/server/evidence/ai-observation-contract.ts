@@ -43,6 +43,11 @@ function explicitAmountNature(text: string, start: number) {
 
 function explicitDateRole(text: string, start: number) {
   const before = text.slice(0, start).normalize("NFKC");
+  const named = /(?:^|[。；，;,:：\n\t|])[ \t]*((?:约定|实际)(?:交付|验收|履行|付款)?日期|(?:发送|接收)(?:日期|时间))[ \t]*[:=][ \t]*$/u.exec(before)?.[1];
+  if (named?.startsWith("约定")) return "AGREEMENT";
+  if (named?.startsWith("实际")) return "OCCURRENCE";
+  if (named?.startsWith("发送")) return "SENT";
+  if (named?.startsWith("接收")) return "RECEIVED";
   const label = /((?:落款|签署|签订|提交|递交|送达|交易|转账|到账)日期)[ \t]*(?:[:=|][ \t]*)?$/.exec(before)?.[1];
   switch (label) {
     case "落款日期": case "签署日期": case "签订日期": return "SIGNATURE";
@@ -113,6 +118,20 @@ function locateModelQuote(text: string, quote: string, context?: string) {
   return { start: offsets[span.start], end: offsets[span.end - 1] + 1 };
 }
 
+
+function explicitStatement(source: AuthorizedFragment, cite: TextSpan | undefined) {
+  if (source.category === "PLEADING") return "PARTY_STATEMENT";
+  if (!cite) return;
+  const excerpt = source.text.slice(cite.start, cite.end).trim();
+  if (/^.{0,14}(?:诉称|辩称|陈述称|主张称|质证称)[：:,，]/u.test(excerpt)) return "PARTY_STATEMENT";
+  if (source.category !== "JUDGMENT") return;
+  const prefix = source.text.slice(Math.max(0, cite.start - 180), cite.start).split(/[。！？；!?;]|\.(?=\s+)/u).at(-1);
+  const sentence = ((prefix ?? "") + excerpt).trim();
+  const party = /^(?:原告|被告|上诉人|被上诉人|申请人|被申请人|原审原告|原审被告)[^。；！？\n，,：:]{0,22}?(?:诉称|辩称|主张|陈述|质证)/u;
+  const reported = /^(?:(?:First|Next|Finally),\s*)?(?!(?:The |the )?(?:[A-Za-z]+ )?Court\b)(?:[A-Z][\p{L}\d’' -]{0,37}|(?:the\s+)?(?:parties|respondents|petitioners|plaintiffs|defendants))\s+(?:next\s+|also\s+)?(?:argues?|contends?|submits?|counters?|claims?|asserts?|says?)\b/u;
+  if (party.test(sentence) || reported.test(sentence)) return "PARTY_STATEMENT";
+  if (/^(?:经审理查明|本院(?:认为|查明|认定)|We (?:hold|conclude|find) that\b)/u.test(sentence)) return "COURT_FINDING";
+}
 
 function normalizeCandidate(entry: z.infer<typeof aiRecord>, authorized: AuthorizedFragment[], skipField?: () => void) {
   const source = authorized[entry.fragment - 1];
@@ -220,11 +239,15 @@ function normalizeCandidate(entry: z.infer<typeof aiRecord>, authorized: Authori
   if (includesUnsettled && (cited.length > 300 || cited.split("\n").length > 3)) {
     throw new ActionError("候选原文的限定语超出一条引文的范围");
   }
-  const hint = includesUnsettled && entry.hint
-    ? { ...entry.hint, title: "核对材料中的履行记载", kind: "TODO_VERIFY" as const }
-    : entry.hint;
-  const attributed = /^(?:.{0,14})(?:诉称|辩称|陈述称|主张称|质证称)[：:,，]/u.test(cited.trim());
-  const statement = source.category === "PLEADING" || attributed ? "PARTY_STATEMENT" : entry.statement;
+  const statement = explicitStatement(source, reviewSpan) ?? entry.statement;
+  let hint = entry.hint;
+  if (hint && includesUnsettled) {
+    hint = { ...hint, title: "核对材料中的履行记载", kind: "TODO_VERIFY" };
+  } else if (hint && source.category === "JUDGMENT" && statement === "PARTY_STATEMENT" && entry.statement === "COURT_FINDING") {
+    hint = { ...hint, title: "核对裁判文书所载当事人主张", kind: "TODO_VERIFY" };
+  } else if (hint && entry.date?.role !== dateSelection?.role && (dateSelection?.role === "SENT" || dateSelection?.role === "RECEIVED")) {
+    hint = { ...hint, title: dateSelection.role === "SENT" ? "消息发送记载" : "消息接收记载", category: "communication" };
+  }
   const core = { statement, ...(reviewSpan && { excerpt: reviewSpan }), ...(dateSelection && { date: dateSelection }), ...(amountSelection && { amount: amountSelection }) };
   const withParticipants = { ...core, ...(participantsInput.length && { participants: participantsInput }) };
   let input: ObservationInput = { ...withParticipants, ...(relationsInput?.length && { relations: relationsInput }) };

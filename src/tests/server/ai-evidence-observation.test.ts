@@ -408,3 +408,38 @@ it("付款方向与原文列不符时只去掉关系，保留可定位的参与�
   expect(result.candidates[0].data.participants?.map(value => value.text)).toEqual(["张三", "李四"]);
   expect(result.candidates[0].data.relations).toBeUndefined();
 });
+
+it.each([
+  ["约定交付日期：2024年6月2日。", "2024年6月2日", "AGREEMENT", "2024-06-02"],
+  ["实际履行日期：2024年6月3日。", "2024年6月3日", "OCCURRENCE", "2024-06-03"],
+  ["发送时间：2024-06-02 23:59:02", "2024-06-02 23:59:02", "SENT", "2024-06-02"],
+  ["接收时间：2024-06-03 00:00:01", "2024-06-03 00:00:01", "RECEIVED", "2024-06-03"],
+])("以原文标注校正日期角色并保留时间原文：%s", (text, dateText, role, day) => {
+  const result = inspectAiObservationResult({ observations: [{
+    fragment: 1, lines: { first: 1 }, statement: "RECORD", date: { role: "SERVICE", quote: { text: dateText } },
+  }] }, [{ text, start: 0 }]);
+  expect(result.candidates[0].data.date).toMatchObject({ role, text: dateText, value: { precision: "EXACT", day } });
+});
+
+it("坏时刻保留原文，但不生成可定位的日期", () => {
+  const text = "接收时间：2024-06-03 24:01:00";
+  const result = inspectAiObservationResult({ observations: [{
+    fragment: 1, lines: { first: 1 }, statement: "RECORD", date: { role: "SERVICE", quote: { text: "2024-06-03 24:01:00" } },
+  }] }, [{ text, start: 0 }]);
+  expect(result.candidates[0].data.date).toMatchObject({ role: "RECEIVED", text: "2024-06-03 24:01:00", value: { precision: "UNKNOWN" } });
+});
+
+it.each([
+  ["原告诉称合同已经履行。", "合同已经履行", "COURT_FINDING", "PARTY_STATEMENT"],
+  ["经审理查明，被告已接收第一批设备。", "被告已接收第一批设备", "PARTY_STATEMENT", "COURT_FINDING"],
+  ["The supplier argues that the second agreement applies.", "the second agreement applies", "COURT_FINDING", "PARTY_STATEMENT"],
+  ["We conclude that the documents require further review.", "the documents require further review", "PARTY_STATEMENT", "COURT_FINDING"],
+  ["双方已提交相关材料。", "双方已提交相关材料", "RECORD", "RECORD"],
+  ["The Court says the agreement matters.", "the agreement matters", "RECORD", "RECORD"],
+])("以当前原文的陈述主体校正错误标注：%s", (text, excerpt, wrong, expected) => {
+  const result = inspectAiObservationResult({ observations: [{
+    fragment: 1, lines: { first: 1 }, statement: wrong, excerpt: { text: excerpt },
+  }] }, [{ text, start: 10, category: "JUDGMENT" }]);
+  expect(result.candidates[0].data.statement).toBe(expected);
+  expect(result.candidates[0].data.excerpt?.text).toBe(excerpt);
+});

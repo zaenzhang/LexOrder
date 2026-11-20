@@ -2,6 +2,8 @@ import { renderWithRouter } from "@/scripts/render-test"
 // @vitest-environment jsdom
 import { act, createElement } from "react"
 import { createRoot } from "react-dom/client"
+import { renderToStaticMarkup } from "react-dom/server"
+import { ObservationValues } from "./fact-observation"
 import { fireEvent, screen, within } from "@testing-library/react/pure"
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest"
 import { CaseChronology, type EvidenceNote } from "./case-chronology"
@@ -332,5 +334,23 @@ it("100 项事实共用一轨，以聚合点定位独立分页，独立程序允
   } finally {
     await act(async () => root.unmount())
     vi.unstubAllGlobals()
+  }
+})
+
+it("固定出处摘要展示发送时刻和接收时刻，标签不混成送达", () => {
+  const dates = [
+    { role: "SENT", label: "发送时间", text: "2024-06-02 23:59:02", day: "2024-06-02" },
+    { role: "RECEIVED", label: "接收时间", text: "2024-06-03 00:00:01", day: "2024-06-03" },
+  ] as const
+  for (const { role, label, text, day } of dates) {
+    const html = renderToStaticMarkup(createElement(ObservationValues, {
+      sourceActions: {},
+      observation: { id: role, sourceId: "message", revision: 1, data: {
+        statement: "RECORD", date: { role, span: { start: 0, end: text.length }, text, value: { precision: "EXACT", day } },
+      } },
+    }))
+    expect(html).toContain(label)
+    expect(html).toContain(text)
+    expect(html).not.toContain("送达日期")
   }
 })

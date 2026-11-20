@@ -4,7 +4,7 @@ import type { DateValue, EvidenceObservationView } from "../../../../src/lib/evi
 import type { ObservationRelation } from "../../../../src/lib/evidence/observation-participants"
 
 export const statements = { RECORD: "材料记载", PARTY_STATEMENT: "当事人陈述", COURT_FINDING: "法院认定" } satisfies Record<FactObservation["data"]["statement"], string>
-export const dateRoles = { OCCURRENCE: "发生", AGREEMENT: "约定", SIGNATURE: "落款", FILING: "提交", SERVICE: "送达" } satisfies Record<NonNullable<FactObservation["data"]["date"]>["role"], string>
+export const dateRoles = { OCCURRENCE: "发生", AGREEMENT: "约定", SIGNATURE: "落款", FILING: "提交", SERVICE: "送达", SENT: "发送", RECEIVED: "接收" } satisfies Record<NonNullable<FactObservation["data"]["date"]>["role"], string>
 export const amountNatures = {
   ACTUAL_TRANSFER: "实际交付", AGREED_PRINCIPAL: "约定本金", CLAIMED_RELIEF: "诉请金额", BALANCE: "余额", OTHER: "金额",
 } satisfies Record<NonNullable<FactObservation["data"]["amount"]>["nature"], string>
@@ -65,12 +65,14 @@ export function ObservationValues({ observation, detailed = false, sourceActions
   observation: FactObservation; detailed?: boolean; sourceActions?: { date?: ReactNode; amount?: ReactNode }
 }) {
   const { statement, excerpt, date, amount, participants, relations } = observation.data
+  const hasMessageTime = (date?.role === "SENT" || date?.role === "RECEIVED") &&
+    date.value.precision === "EXACT" && date.text.includes(":")
   return <span className="grid min-w-0 gap-1 text-start">
     {!sourceActions && <span className="font-medium">{statements[statement]}</span>}
     {!sourceActions && excerpt && <span className="whitespace-pre-wrap break-words">「{excerpt.text}」</span>}
     {date && <span className="flex flex-wrap items-baseline gap-x-2">
-      <span className="text-muted-foreground">{dateRoles[date.role]}{sourceActions ? "日期" : ""}</span>{" "}
-      <span className="min-w-0 break-words tabular-nums">{observationDateLabel(date.value)}</span>
+      <span className="text-muted-foreground">{dateRoles[date.role]}{sourceActions ? (hasMessageTime ? "时间" : "日期") : ""}</span>{" "}
+      <span className="min-w-0 break-words tabular-nums">{hasMessageTime ? date.text : observationDateLabel(date.value)}</span>
       {sourceActions?.date && <span className="ms-auto">{sourceActions.date}</span>}
       {detailed && <span className="basis-full break-words text-muted-foreground">原文「{date.text}」</span>}
     </span>}

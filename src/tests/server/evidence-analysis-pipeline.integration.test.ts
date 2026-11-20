@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import ExcelJS from "exceljs";
+import { Document as Docx, Packer, Paragraph } from "docx";
 import { prisma } from "@/lib/prisma";
 import { changeMatterFolder } from "@/lib/runtime/matter-folders";
 import { saveAiSettings } from "@/lib/ai/settings";
@@ -660,6 +661,148 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     return { actor, matter, ranges };
   }
 
+
+  it("补充合同、跨工作表金额、收发时间和公开裁判沿同一条固定出处管线核对", async () => {
+    provider.fetch.mockClear();
+    await saveAiSettings({ enabled: true, apiKey: "fixture-key", baseUrl: provider.url, textModel: model });
+    const { actor, matter } = await seedV8Case("MATERIAL-ROLES", []);
+    async function ingest(file: File, category: string) {
+      const form = new FormData();
+      form.set("file", file);
+      form.set("name", file.name);
+      form.set("category", category);
+      form.set("matterId", matter.id);
+      form.set("requestKey", randomUUID());
+      const saved = await uploadDocument(form);
+      if (!saved.ok) throw new Error(saved.message);
+      expect(await processDueJobs(1, "personal-materials")).toMatchObject({ succeeded: 1 });
+      const run = await prisma.documentParseRun.findFirstOrThrow({ where: { documentId: saved.id } });
+      expect(run.state).toBe("READY");
+      return (run.anchors as { anchorId: string; text: string; location: Record<string, unknown> }[])
+        .map(anchor => ({ ...anchor, documentId: saved.id, parseRunId: run.id }));
+    }
+
+    const contracted = "约定验收日期：2024年6月2日。";
+    const fulfilled = "实际履行日期：2024年6月3日。";
+    const docx = await Packer.toBuffer(new Docx({ sections: [{ children: [
+      new Paragraph(contracted), new Paragraph(fulfilled),
+    ] }] }));
+    const agreement = await ingest(new File([new Uint8Array(docx)], "合成补充合同.docx", {
+      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }), "CONTRACT");
+
+    const credited = "到账金额：480,000.00元";
+    const balance = "账户余额：490,000.00元";
+    const workbook = new ExcelJS.Workbook();
+    workbook.addWorksheet("到账记录").getCell("B2").value = credited;
+    workbook.addWorksheet("月末余额").getCell("C3").value = balance;
+    const ledger = await ingest(new File([new Uint8Array(await workbook.xlsx.writeBuffer())], "合成两页账簿.xlsx", {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }), "EVIDENCE");
+    expect(ledger.map(entry => entry.location)).toMatchObject([
+      { kind: "TABLE", sheet: "到账记录", rowStart: 2, columnStart: 2 },
+      { kind: "TABLE", sheet: "月末余额", rowStart: 3, columnStart: 3 },
+    ]);
+
+    const sent = "发送时间：2024-06-02 23:59:02";
+    const received = "接收时间：2024-06-03 00:00:01";
+    const message = (name: string) => ingest(new File([sent + "\n" + received], name, { type: "text/plain" }), "EVIDENCE");
+    const [outbox] = await message("发件端记录.txt");
+    const [inbox] = await message("收件端记录.txt");
+    const records = [
+      [agreement[0], contracted, { dateRole: "OCCURRENCE", dateText: "2024年6月2日" }],
+      [agreement[0], fulfilled, { dateRole: "AGREEMENT", dateText: "2024年6月3日" }],
+      [ledger[0], credited, { amountNature: "BALANCE", amountText: "480,000.00元" }],
+      [ledger[1], balance, { amountNature: "ACTUAL_TRANSFER", amountText: "490,000.00元" }],
+      [outbox, sent, { dateRole: "SERVICE", dateText: sent.split("：")[1] }],
+      [outbox, received, { dateRole: "SENT", dateText: received.split("：")[1] }],
+      [inbox, sent, { dateRole: "RECEIVED", dateText: sent.split("：")[1] }],
+      [inbox, received, { dateRole: "SERVICE", dateText: received.split("：")[1] }],
+    ] as const;
+    const selections: { anchor: typeof agreement[number]; text: string; fields: Record<string, unknown> }[] = records.map(([anchor, text, fields]) => ({ anchor, text, fields: { ...draft, ...fields } }));
+    const opinionPath = process.env.LEXORDER_P1_OPINION;
+    if (opinionPath) {
+      const pdf = await readFile(opinionPath);
+      expect(createHash("sha256").update(pdf).digest("hex")).toBe("591f0fdecf41cb297427288a18fd72230e14d4aefe9af4f2d86d6c64dcc4476f");
+      const pages = await ingest(new File([new Uint8Array(pdf)], "Coinbase v Suski.pdf", { type: "application/pdf" }), "JUDGMENT");
+      for (const [page, cue, wrong] of [
+        [9, "Coinbase argues that", "COURT_FINDING"],
+        [10, "We conclude that", "PARTY_STATEMENT"],
+      ] as const) {
+        const anchor = pages.find(item => item.location.page === page)!;
+        const start = anchor.text.indexOf(cue);
+        expect(start).toBeGreaterThanOrEqual(0);
+        const text = anchor.text.slice(start).split(/\r?\n|\.\s/u)[0];
+        const excerpt = text.slice(cue.length).trim();
+        expect(excerpt.length).toBeGreaterThan(8);
+        selections.push({ anchor, text, fields: { ...draft, statement: wrong, excerpt } });
+      }
+    }
+    const supply = { matterId: matter.id, confirmed: true as const, model, origin: new URL(provider.url).origin };
+    async function analyze(entries: typeof selections) {
+      const ranges = entries.map(({ anchor, text }) => {
+        const start = anchor.text.indexOf(text);
+        expect(start).toBeGreaterThanOrEqual(0);
+        return { documentId: anchor.documentId, parseRunId: anchor.parseRunId, anchorId: anchor.anchorId, start, end: start + text.length };
+      });
+      const run = await queueMatterObservationRun(actor, { ...supply, runId: randomUUID(), ranges });
+      provider.fetch.mockResolvedValueOnce(Response.json({ choices: [{ message: { content: JSON.stringify({
+        observations: entries.map(({ fields }, index) => ({ ...fields, fragment: index + 1 })),
+      }) } }] }));
+      expect(await processDueJobs(1, "personal-ai")).toMatchObject({ succeeded: 1 });
+      const batch = await readObservationRuns(actor, matter.id, null, run.id);
+      if (!("candidates" in batch)) throw new Error("Missing mixed material analysis");
+      expect(batch.state).toBe("READY");
+      expect(batch.receipt?.rejected ?? []).toEqual([]);
+      expect(batch.receipt?.skippedFields ?? 0).toBe(0);
+      expect(batch.candidates).toHaveLength(entries.length);
+      for (const [index, candidate] of batch.candidates.entries()) {
+        const { anchor, text } = entries[index];
+        expect(await readMatterObservationExcerpt(actor, matter.id, run.id, index + 1)).toEqual({ text });
+        for (const field of [candidate.data.date, candidate.data.amount, candidate.data.excerpt]) {
+          if (field) expect(anchor.text.slice(field.span.start, field.span.end)).toBe(field.text);
+        }
+      }
+      return batch;
+    }
+    const batch = await analyze(selections.slice(0, 8));
+    expect(batch.candidates.slice(0, 8).map(({ data }) => data.date?.role ?? data.amount?.nature)).toEqual([
+      "AGREEMENT", "OCCURRENCE", "ACTUAL_TRANSFER", "BALANCE", "SENT", "RECEIVED", "SENT", "RECEIVED",
+    ]);
+    expect(batch.candidates.slice(2, 4).map(({ data }) => data.amount?.value)).toEqual([
+      { currency: "CNY", value: "480000" }, { currency: "CNY", value: "490000" },
+    ]);
+    expect(batch.candidates[4].data.date).toMatchObject({ text: sent.split("：")[1], value: { day: "2024-06-02" } });
+    expect(batch.candidates[5].data.date).toMatchObject({ text: received.split("：")[1], value: { day: "2024-06-03" } });
+    expect(batch.candidates[4].hint).toMatchObject({ title: "消息发送记载", category: "communication" });
+    expect(batch.candidates[5].hint).toMatchObject({ title: "消息接收记载", category: "communication" });
+    if (opinionPath) {
+      const court = await analyze(selections.slice(8));
+      expect(court.candidates.map(({ data }) => data.statement)).toEqual(["PARTY_STATEMENT", "COURT_FINDING"]);
+      expect(court.candidates[0].hint).toMatchObject({ kind: "TODO_VERIFY", title: "核对裁判文书所载当事人主张" });
+    }
+
+    // Even a model proposing one group for all four message dates cannot combine
+    // send and receive. Each role has a record from both independent documents.
+    const selected = [4, 5, 6, 7].map(index => ({ runId: batch.id, index }));
+    const groupingId = randomUUID();
+    provider.fetch.mockResolvedValueOnce(Response.json({ choices: [{ message: { content: JSON.stringify({
+      groups: [{ reason: "RELATED_DESCRIPTION", members: [1, 2, 3, 4] }],
+    }) } }] }));
+    await queueCaseGrouping(actor, { ...supply, groupingId, selected });
+    expect(await processDueJobs(1, "personal-ai")).toMatchObject({ succeeded: 1 });
+    const grouped = await readCaseGrouping(actor, matter.id, groupingId);
+    if (!("result" in grouped)) throw new Error("Missing message grouping result");
+    expect(grouped.result?.groups.map(group => group.members.map(member => member.observation))).toEqual([[1, 3], [2, 4]]);
+    const adopted = await adoptMatterObservations({ matterId: matter.id, requestId: randomUUID(),
+      chosen: [{ runId: batch.id, index: 4 }], target: { type: "new", title: "发送记载", kind: "FACT", content: sent },
+    });
+    const item = await prisma.evidenceItem.findUniqueOrThrow({ where: { id: adopted.id } });
+    const observation = await prisma.evidenceObservationRevision.findUniqueOrThrow({ where: { id: item.observationRevisionIds[0] } });
+    expect(observation.data).toMatchObject({ date: { role: "SENT", text: sent.split("：")[1] } });
+    expect(provider.fetch).toHaveBeenCalledTimes(opinionPath ? 3 : 2);
+  }, 40_000);
+
   it("模型截掉否认时只可采用带限定语的待核记载", async () => {
     provider.fetch.mockClear();
     await saveAiSettings({ enabled: true, apiKey: "fixture-key", baseUrl: provider.url, textModel: model });
@@ -670,7 +813,7 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
       model, origin: new URL(provider.url).origin, ranges };
     const stale = await queueMatterObservationRun(actor, input);
     await prisma.evidenceObservationRun.update({
-      where: { id: stale.id }, data: { methodVersion: "matter-observations/14" },
+      where: { id: stale.id }, data: { methodVersion: "matter-observations/15" },
     });
     expect(await processDueJobs(1, "personal-ai")).toMatchObject({ succeeded: 1 });
     expect(await readObservationRuns(actor, matter.id, null, stale.id)).toMatchObject({ state: "FAILED", receipt: { error: "STALE" } });
