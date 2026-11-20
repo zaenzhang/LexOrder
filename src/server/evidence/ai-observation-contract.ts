@@ -99,10 +99,9 @@ function normalizeCandidate(entry: z.infer<typeof aiRecord>, authorized: Authori
     lineSpan = { start: first.start, end: last.end };
   }
   function locate(ref: z.infer<typeof quote>, scope?: { start: number; end: number }) {
-    const context = ref.context ?? (!scope && entry.excerpt?.text !== ref.text && entry.excerpt?.text.includes(ref.text) ? entry.excerpt.text : undefined);
-    if (!scope) return locateModelQuote(source.text, ref.text, context);
+    if (!scope) return locateModelQuote(source.text, ref.text, ref.context);
     const local = source.text.slice(scope.start, scope.end);
-    const range = locateModelQuote(local, ref.text, context);
+    const range = locateModelQuote(local, ref.text, ref.context);
     return { start: scope.start + range.start, end: scope.start + range.end };
   }
   function absolute(span: { start: number; end: number }) {
@@ -116,16 +115,29 @@ function normalizeCandidate(entry: z.infer<typeof aiRecord>, authorized: Authori
     }
   }
   const excerptSpan = entry.excerpt ? field(() => locate(entry.excerpt!, lineSpan)) ?? lineSpan : lineSpan;
+  function locateNumber(ref: z.infer<typeof quote>) {
+    const span = locate(ref, excerptSpan);
+    const { text } = source;
+    // Compare with the whole authorized text so a quote starting inside a number cannot hide its prefix.
+    const before = text.slice(Math.max(0, span.start - 2), span.start);
+    const after = text.slice(span.end, span.end + 2);
+    const value = text.slice(span.start, span.end);
+    if ((/^\p{Nd}/u.test(value) && /\p{Nd}[,.，．]?$/u.test(before)) ||
+      (/\p{Nd}$/u.test(value) && /^[,.，．]?\p{Nd}/u.test(after))) {
+      throw new ActionError("候选日期或金额截断了原文数字");
+    }
+    return span;
+  }
   const dateSelection = entry.date && field(() => {
     const value = entry.date!;
-    const span = locate(value.quote, lineSpan);
+    const span = locateNumber(value.quote);
     const labeledRole = explicitDateRole(source.text, span.start);
     if (labeledRole && value.role !== labeledRole && !skipField) throw new ActionError("日期性质与原文标注不符");
     return { role: labeledRole ?? value.role, span };
   });
   const amountSelection = entry.amount && field(() => {
     const value = entry.amount!;
-    const span = locate(value.quote, lineSpan);
+    const span = locateNumber(value.quote);
     const labeledNature = explicitAmountNature(source.text, span.start);
     if (labeledNature && value.nature !== "OTHER" && value.nature !== labeledNature && !skipField) throw new ActionError("金额性质与原文标注不符");
     const explicitUnit = value.unit && field(() => locate(value.unit!));
@@ -135,10 +147,10 @@ function normalizeCandidate(entry: z.infer<typeof aiRecord>, authorized: Authori
     const unitSpan = explicitUnit ?? (header && headerUnit ? locate({ text: headerUnit }, header) : undefined);
     return { nature: labeledNature ?? value.nature, span, ...(unitSpan && { unitSpan }) };
   });
-  const participantsInput = entry.participants && field(() => entry.participants!.map(person => ({ span: locate(person.quote, lineSpan) })));
+  const participantsInput = entry.participants && field(() => entry.participants!.map(person => ({ span: locate(person.quote, excerptSpan) })));
   const relationsInput = entry.relations && field(() => {
     if (!participantsInput) throw new ActionError("关系缺少可定位的参与人");
-    return entry.relations!.map(({ quote: reference, ...relation }) => ({ ...relation, span: locate(reference, lineSpan) }));
+    return entry.relations!.map(({ quote: reference, ...relation }) => ({ ...relation, span: locate(reference, excerptSpan) }));
   });
   const cited = excerptSpan ? source.text.slice(excerptSpan.start, excerptSpan.end) : "";
   const attributed = /^(?:.{0,14})(?:诉称|辩称|陈述称|主张称|质证称)[：:,，]/u.test(cited.trim());

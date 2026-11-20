@@ -44,10 +44,16 @@ const authorized = "2023年3月3日，转账金额48万元，转账后账户余�
 const original = "同一页其他信息：未授权的备注。\n" + authorized + "\n其他款项：余额50万元。";
 const filing = "提交日期：2023年3月7日。";
 const service = "送达日期：2023年3月6日。";
-const observation = { fragment: 1, statement: "RECORD",
-  date: { role: "OCCURRENCE", quote: { text: "2023年3月3日" } },
-  amount: { nature: "ACTUAL_TRANSFER", quote: { text: "48万元" } },
-};
+const draft = {
+  fragment: 1, firstLine: 1, lastLine: 1, title: "转账记载", category: "payment", kind: "FACT",
+  statement: "RECORD", excerpt: null, dateRole: null, dateText: null, amountNature: null, amountText: null,
+  participants: null, relations: null,
+} as const;
+const observation = { ...draft, dateRole: "OCCURRENCE", dateText: "2023年3月3日",
+  amountNature: "ACTUAL_TRANSFER", amountText: "48万元" };
+const balance = { ...draft, amountNature: "BALANCE", amountText: "49万元" };
+const filingDraft = { ...draft, fragment: 2, category: "procedure", dateRole: "FILING", dateText: "2023年3月7日" };
+const serviceDraft = { ...draft, fragment: 3, category: "procedure", dateRole: "SERVICE", dateText: "2023年3月6日" };
 
 describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案内事实分析管线", () => {
   let work: string | undefined;
@@ -210,8 +216,8 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     const start = anchor.text.indexOf(authorized);
     expect(start).toBeGreaterThan(format === "xlsx" ? 6000 : 0);
     const ranges = [{ sourceId: linked.sourceId, start, end: start + authorized.length }];
-    const texts = [authorized];
-    const observations: unknown[] = [observation, { fragment: 1, statement: "RECORD", amount: { nature: "BALANCE", quote: { text: "49万元" } } }];
+    const materials = [{ text: authorized, material: name }];
+    const observations: unknown[] = [observation, balance];
     let revision = linked.revision;
     let alternate: string | undefined;
     let casePlan: MatterAnalysisPlan | undefined;
@@ -219,7 +225,7 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
       const secondStart = anchor.text.indexOf(filing);
       expect(secondStart).toBeGreaterThan(ranges[0].end);
       ranges.push({ sourceId: linked.sourceId, start: secondStart, end: secondStart + filing.length });
-      texts.push(filing);
+      materials.push({ text: filing, material: name });
       const notice = await ingest(new File([service], "合成送达记录.txt", { type: "text/plain" }));
       const preview = await readMatterInputCoverage(actor.id, { matterId: matter.id, purpose: "FACT_ANALYSIS",
         documents: [{ documentId }, { documentId: notice.documentId }] });
@@ -234,11 +240,8 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
       const second = await addEvidenceSource({ evidenceItemId: event.id, expectedRevision: revision,
         documentId: notice.documentId, parseRunId: notice.parseRunId, anchorId: notice.anchor.anchorId, relation: "SUPPORTS" });
       ranges.push({ sourceId: second.sourceId, start: 0, end: service.length });
-      texts.push(service);
-      observations.push(
-        { fragment: 2, statement: "RECORD", date: { role: "FILING", quote: { text: "2023年3月7日" } } },
-        { fragment: 3, statement: "RECORD", date: { role: "SERVICE", quote: { text: "2023年3月6日" } } },
-      );
+      materials.push({ text: service, material: "合成送达记录.txt" });
+      observations.push(filingDraft, serviceDraft);
       const alias = await addEvidenceSource({ evidenceItemId: event.id, expectedRevision: second.revision,
         documentId, parseRunId, anchorId: anchor.anchorId, relation: "CONTEXT" });
       alternate = alias.sourceId;
@@ -263,21 +266,27 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     }
     expect(provider.fetch).not.toHaveBeenCalled();
 
-    const invalidRunIds = [];
-    // One value is outside the granted selection. The other is present but expressly a balance.
-    for (const text of ["50万元", "49万元"]) {
-      const invalidRunId = randomUUID();
-      invalidRunIds.push(invalidRunId);
-      await queueObservationRun(actor, { ...input, runId: invalidRunId });
+    const unavailableLine = { ...observation, firstLine: 2, lastLine: 2, amountText: "50万元" };
+    const cases = [
+      { candidate: unavailableLine, state: "FAILED", output: { receipt: { error: "INVALID_RESULT" }, candidates: [] } },
+      { candidate: { ...observation, amountText: "50万元" }, state: "READY",
+        output: { receipt: { skippedFields: 1 }, candidates: [{ data: { date: { text: "2023年3月3日" } } }] } },
+      { candidate: { ...observation, amountText: "49万元" }, state: "READY",
+        output: { candidates: [{ data: { amount: { nature: "BALANCE" } } }] } },
+    ];
+    const invalidRunId = randomUUID();
+    for (const [index, scenario] of cases.entries()) {
+      const runId = index === 0 ? invalidRunId : randomUUID();
+      await queueObservationRun(actor, { ...input, runId });
       provider.fetch.mockResolvedValueOnce(Response.json({ choices: [{ message: { content: JSON.stringify({
-        observations: [{ ...observation, amount: { nature: "ACTUAL_TRANSFER", quote: { text } } }],
+        observations: [scenario.candidate],
       }) } }] }));
-      const invalidJob = await lease(observationJobKey(invalidRunId));
-      await processObservationRun({ runId: invalidRunId }, invalidJob);
-      expect(await completeJob(invalidJob)).toBe(true);
-      expect(await readObservationRuns(actor, matter.id, event.id, invalidRunId)).toMatchObject({
-        state: "FAILED", receipt: { error: "INVALID_RESULT" }, candidates: [],
-      });
+      const checkedJob = await lease(observationJobKey(runId));
+      await processObservationRun({ runId }, checkedJob);
+      expect(await completeJob(checkedJob)).toBe(true);
+      const result = await readObservationRuns(actor, matter.id, event.id, runId);
+      expect(result).toMatchObject({ state: scenario.state, ...scenario.output });
+      if (index === 1 && "candidates" in result) expect(result.candidates[0].data).not.toHaveProperty("amount");
     }
 
     const runId = randomUUID();
@@ -291,16 +300,20 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     await processObservationRun({ runId }, job);
     await processObservationRun({ runId }, job);
     expect(await completeJob(job)).toBe(true);
-    expect(provider.fetch).toHaveBeenCalledTimes(3);
+    expect(provider.fetch).toHaveBeenCalledTimes(4);
     for (const [url, options] of provider.fetch.mock.calls) {
       expect(url).toBe(provider.url + "/chat/completions");
       const body = JSON.parse(String(options?.body));
-      expect(JSON.parse(body.messages[1].content)).toEqual({ title: "核对转账记载", fragments: texts.map((text, index) => ({ index: index + 1, text })) });
+      const userMessage = body.messages.find((message: { role: string }) => message.role === "user");
+      const payload = JSON.parse(userMessage.content);
+      expect(payload).toEqual({ title: "核对转账记载", fragments: materials.map(({ text, material }, index) => ({
+        index: index + 1, material, category: expect.any(String), lines: [{ line: 1, text }],
+      })) });
     }
     const ready = await readObservationRuns(actor, matter.id, event.id, runId);
     if (!("candidates" in ready)) throw new Error("Expected analysis batch detail");
     expect(ready).toMatchObject({
-      state: "READY", receipt: { sentCharacters: texts.join("").length, usage: { inputTokens: 240, outputTokens: 80 } },
+      state: "READY", receipt: { sentCharacters: materials.reduce((total, row) => total + row.text.length, 0), usage: { inputTokens: 240, outputTokens: 80 } },
       sources: ranges.map(({ sourceId, start, end }) => ({ sourceId, start, end })),
     });
     expect(ready.candidates).toHaveLength(observations.length);
@@ -316,9 +329,8 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     expect((await prisma.evidenceItem.findUniqueOrThrow({ where: { id: event.id } })).observationRevisionIds).toEqual([]);
     const chosen = [format === "xlsx" ? 3 : 0];
     const adoption = { matterId: matter.id, evidenceItemId: event.id, expectedRevision: revision, runId, chosen };
-    for (const invalidRunId of invalidRunIds) {
-      await expect(adoptEvidenceObservationRun({ ...adoption, runId: invalidRunId })).rejects.toThrow("仅可采用当前要点版本中已生成的待核稿");
-    }
+    await expect(adoptEvidenceObservationRun({ ...adoption, runId: invalidRunId }))
+      .rejects.toThrow("仅可采用当前要点版本中已生成的待核稿");
     const adopted = await adoptEvidenceObservationRun(adoption);
     expect(await adoptEvidenceObservationRun(adoption)).toEqual(adopted);
     expect(adopted.observationIds).toHaveLength(1);
@@ -327,7 +339,7 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     await expect(adoptEvidenceObservationRun({ ...adoption, chosen: [1] })).rejects.toThrow("该批次已按其他选择采用");
     expect((await prisma.evidenceItem.findUniqueOrThrow({ where: { id: event.id } })).observationRevisionIds).toEqual(adopted.observationIds);
     expect(await readObservationRuns(actor, matter.id, event.id, runId)).toMatchObject({ state: "ADOPTED", adoption: { chosen } });
-    expect(provider.fetch).toHaveBeenCalledTimes(3);
+    expect(provider.fetch).toHaveBeenCalledTimes(4);
     if (casePlan) {
       const batch = casePlan.batches[0];
       const fixed = batch.ranges.map(({ documentId, parseRunId, anchorId, start, end }) =>
@@ -342,9 +354,10 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
       const job = await lease(observationJobKey(queued.id));
       const source = fixed.findIndex(range => range.documentId === documentId && range.anchorId === anchor.anchorId && range.start <= start && range.end >= start + authorized.length);
       expect(source).toBeGreaterThanOrEqual(0);
+      const sourceOffset = fixed[source].start;
+      const line = anchor.text.slice(sourceOffset, start).split("\n").length;
       provider.fetch.mockResolvedValueOnce(Response.json({ choices: [{ message: { content: JSON.stringify({
-        observations: [{ ...observation, fragment: source + 1 },
-          { fragment: source + 1, statement: "RECORD", amount: { nature: "BALANCE", quote: { text: "49万元" } } }],
+        observations: [observation, balance].map(row => ({ ...row, fragment: source + 1, firstLine: line, lastLine: line })),
       }) } }],
         usage: { prompt_tokens: 300, completion_tokens: 70 } }));
       await processObservationRun({ runId: queued.id }, job);
@@ -364,8 +377,7 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
       });
       const laterJob = await lease(observationJobKey(later.id));
       provider.fetch.mockResolvedValueOnce(Response.json({ choices: [{ message: { content: JSON.stringify({
-        observations: [{ fragment: casePlan.batches[1].ranges.length, statement: "RECORD",
-          date: { role: "SERVICE", quote: { text: "2023年3月6日" } } }],
+        observations: [{ ...serviceDraft, fragment: casePlan.batches[1].ranges.length }],
       }) } }] }));
       await processObservationRun({ runId: later.id }, laterJob);
       expect(await completeJob(laterJob)).toBe(true);
@@ -450,7 +462,7 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
       expect(older.nextCursor).toBeNull();
       expect(new Set([...page.runs, ...older.runs].map(batch => batch.id)).size).toBe(24);
       await expect(readObservationRuns(actor, matter.id, null, undefined, runId)).rejects.toThrow("分页位置不属于");
-      expect(provider.fetch).toHaveBeenCalledTimes(5);
+      expect(provider.fetch).toHaveBeenCalledTimes(6);
     }
   }, 60_000);
 
@@ -472,6 +484,7 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
       const form = new FormData();
       form.set("file", new File([contents], name, { type: "text/plain" }));
       form.set("name", name);
+      form.set("category", name === "2-complaint.txt" || name === "3-defence.txt" ? "PLEADING" : "EVIDENCE");
       form.set("matterId", matter.id);
       form.set("requestKey", randomUUID());
       const saved = await uploadDocument(form);
@@ -488,33 +501,26 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
       return Response.json({ choices: [{ message: { content: JSON.stringify(data) } }],
         usage: { prompt_tokens: 875, completion_tokens: 190 } });
     }
-    function transfer(fragment: number, date: string, amount: string, bank = false, context?: string) {
-      return { fragment, statement: bank ? "RECORD" : "PARTY_STATEMENT",
-        date: { role: "OCCURRENCE", quote: { text: date } },
-        amount: { nature: "ACTUAL_TRANSFER", quote: { text: amount, ...(context && { context }) },
-          ...(bank && { unit: { text: "金额（元）" } }) } };
-    }
     const a = await queueMatterObservationRun(actor, { ...supply, runId: randomUUID(), ranges: ranges.slice(0, 2) });
     const receiptLine = "2023-03-03 ｜ 张三 ｜ 李四 ｜ 480,000.00 ｜ 借款";
-    const loanClause = "被告李四向原告借款 50 万元，原告当日交付";
-    provider.fetch.mockResolvedValueOnce(reply({ observations: [
-      { ...transfer(1, "2023-03-03", "480,000.00", true), participants: [
-        { quote: { text: "张三" } }, { quote: { text: "李四" } },
-      ], relations: [{ kind: "PAYS_TO", from: 1, to: 2, quote: { text: receiptLine } }] },
-      { ...transfer(2, "2023 年 3 月 1 日", "50 万元", false, "向原告借款 50 万元，原告当日交付"), participants: [
-        { quote: { text: "原告", context: "向原告借款" } }, { quote: { text: "李四", context: "被告李四向原告借款" } },
-      ], relations: [{ kind: "LENDS_TO", from: 1, to: 2, quote: { text: loanClause } }] },
-    ] }));
+    provider.fetch.mockResolvedValueOnce(reply({ observations: [] }));
     expect(await processDueJobs(1, "personal-ai")).toMatchObject({ succeeded: 1 });
     const b = await queueMatterObservationRun(actor, { ...supply, runId: randomUUID(), ranges: ranges.slice(2) });
     provider.fetch.mockResolvedValueOnce(reply({ observations: [
-      { ...transfer(1, "2023年3月3日", "48万元", false, "收到借款48万元"), participants: [
-        { quote: { text: "李四", context: "答辩人：李四。" } },
-      ] },
-      { fragment: 2, statement: "RECORD", amount: { nature: "AGREED_PRINCIPAL", quote: { text: "人民币伍拾万元整" } } },
+      { ...draft, fragment: 2, firstLine: 2, lastLine: 2, title: "借条约定本金", category: "agreement",
+        amountNature: "AGREED_PRINCIPAL", amountText: "人民币伍拾万元整" },
     ] }));
     expect(await processDueJobs(1, "personal-ai")).toMatchObject({ succeeded: 1 });
-    const selected = [a.id, b.id].flatMap(runId => [0, 1].map(index => ({ runId, index })));
+    const reads = await Promise.all([a, b].map(run => readObservationRuns(actor, matter.id, null, run.id)));
+    const selected = reads.flatMap((batch, index) => {
+      if (!("candidates" in batch)) throw new Error("Expected V8 analysis batch detail");
+      expect(batch.state).toBe("READY");
+      return batch.candidates.flatMap((candidate, candidateIndex) =>
+        candidate.data.amount ? [{ runId: [a, b][index].id, index: candidateIndex }] : []);
+    });
+    expect(selected).toHaveLength(4);
+    const firstCall = JSON.parse(String(provider.fetch.mock.calls[0][1]?.body)).messages.find((message: { role: string }) => message.role === "user");
+    expect(JSON.parse(firstCall.content).fragments.map((fragment: { index: number }) => fragment.index)).toEqual([2]);
     const origin = process.env.LEXORDER_PERSONAL_ORIGIN!;
     const endpoint = origin + "/api/personal/matter-workspace";
     const headers = { Host: new URL(origin).host, Origin: origin, Cookie: "lexorder_local_channel=" + process.env.LEXORDER_PERSONAL_CHANNEL_TOKEN };
@@ -526,6 +532,8 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     expect(previewResponse.status, await previewResponse.clone().text()).toBe(200);
     const preview: Awaited<ReturnType<typeof previewCaseGrouping>> = await previewResponse.json();
     expect(provider.fetch).toHaveBeenCalledTimes(2);
+    expect(preview.members.every(member => member.contexts.every(context =>
+      !context.includes("保证人：王五（承担连带保证责任）")))).toBe(true);
     const byName = new Map(preview.members.map(member => [member.source.name, member]));
     const transferKeys = ["4-bank-receipt.txt", "2-complaint.txt", "3-defence.txt"];
     expect(transferKeys.map(name => [byName.get(name)?.date?.value, byName.get(name)?.amount?.value?.value])).toEqual([
@@ -536,24 +544,24 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     expect(byName.get("1-iou.txt")?.amount?.nature).toBe("AGREED_PRINCIPAL");
     expect(byName.get("4-bank-receipt.txt")).toMatchObject({ participants: ["张三", "李四"],
       relations: [{ kind: "PAYS_TO", from: 1, to: 2, quote: receiptLine }] });
-    expect(byName.get("2-complaint.txt")).toMatchObject({ participants: ["原告", "李四"],
-      relations: [{ kind: "LENDS_TO", from: 1, to: 2, quote: loanClause }] });
-    expect(byName.get("3-defence.txt")?.participants).toEqual(["李四"]);
-    const proof = transferKeys.map((name, index) => ({
-      observation: byName.get(name)!.observation, quote: ["张三 ｜ 李四", "原告当日交付", "实际于2023年3月3日收到借款"][index],
-    }));
-    const result = { groups: [{ reason: "DISPUTED_EVENT", members: proof }] };
+    expect(byName.get("2-complaint.txt")).toMatchObject({ statement: "PARTY_STATEMENT", excerpt: expect.stringContaining("原告当日交付") });
+    expect(byName.get("3-defence.txt")).toMatchObject({ statement: "PARTY_STATEMENT", excerpt: expect.stringContaining("2023年3月3日收到借款") });
+    const proof = transferKeys.map(name => byName.get(name)!.observation);
+    const response = { groups: [{ reason: "DISPUTED_EVENT", members: proof }] };
+    const result = { groups: [{ reason: "DISPUTED_EVENT", members: proof.map(observation => ({
+      observation, quote: preview.members.find(member => member.observation === observation)!.excerpt,
+    })) }] };
     const input = { ...supply, groupingId: randomUUID(), selected };
     const rejected = await queueCaseGrouping(actor, input);
     provider.fetch.mockResolvedValueOnce(reply({ groups: [{ reason: "DISPUTED_EVENT", members: [proof[0], proof[0]] }] }));
     expect(await processDueJobs(1, "personal-ai")).toMatchObject({ succeeded: 1 });
     expect(await readCaseGrouping(actor, matter.id, rejected.id)).toMatchObject({ state: "FAILED", receipt: { error: "INVALID_RESULT" }, result: null });
-    const badQuote = await queueCaseGrouping(actor, { ...input, groupingId: randomUUID() });
-    provider.fetch.mockResolvedValueOnce(reply({ groups: [{ reason: "RELATED_DESCRIPTION", members: [
-      proof[0], { ...proof[1], quote: "引文不在候选摘要内" },
-    ] }] }));
+    const mixedRoles = await queueCaseGrouping(actor, { ...input, groupingId: randomUUID() });
+    provider.fetch.mockResolvedValueOnce(reply({ groups: [{ reason: "RELATED_DESCRIPTION",
+      members: [proof[0], byName.get("1-iou.txt")!.observation],
+    }] }));
     expect(await processDueJobs(1, "personal-ai")).toMatchObject({ succeeded: 1 });
-    expect(await readCaseGrouping(actor, matter.id, badQuote.id)).toMatchObject({ state: "FAILED", receipt: { error: "INVALID_RESULT" }, result: null });
+    expect(await readCaseGrouping(actor, matter.id, mixedRoles.id)).toMatchObject({ state: "FAILED", receipt: { error: "INVALID_RESULT" }, result: null });
     const retry = { ...input, groupingId: randomUUID() };
     const [queued, sameScope] = await Promise.all([
       queueCaseGrouping(actor, retry),
@@ -562,7 +570,7 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     expect(sameScope.id).toBe(queued.id);
     expect(await queueCaseGrouping(actor, { ...retry, selected: [...selected].reverse() })).toMatchObject({ id: queued.id });
     await expect(queueCaseGrouping(actor, { ...retry, selected: selected.slice(0, 2) })).rejects.toThrow("其他范围");
-    provider.fetch.mockResolvedValueOnce(reply(result));
+    provider.fetch.mockResolvedValueOnce(reply(response));
     expect(await processDueJobs(1, "personal-ai")).toMatchObject({ succeeded: 1 });
     const browserQuery = new URLSearchParams({ matter: matter.id, section: "evidence-items", analysis: "grouping", groupingRun: queued.id });
     const readback = await route.GET(new Request(endpoint + "?" + browserQuery, { headers }));
@@ -596,7 +604,7 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     });
     await prisma.document.update({ where: { id: revokedId }, data: { deletedAt: null } });
     expect(await prisma.evidenceItem.count({ where: { matterId: matter.id } })).toBe(0);
-    const grouped = proof.map(({ observation }) => preview.members[observation - 1]);
+    const grouped = proof.map(observation => preview.members[observation - 1]);
     const adopted = await adoptMatterObservations({ matterId: matter.id, requestId: randomUUID(),
       chosen: grouped.map(({ runId, index }) => ({ runId, index })),
       target: { type: "new", kind: "TODO_VERIFY", title: "借款交付待核", content: "核对日期及扣除利息前后的交付金额。" },

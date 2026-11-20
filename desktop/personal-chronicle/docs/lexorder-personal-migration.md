@@ -104,3 +104,11 @@ W06/W09.1、SK02/SK04、AC04/07。本批在现有 `codex/local-chronicle-main` �
 主参考为 [MiaoQichuan V8 固定实现](https://github.com/MiaoQichuan/new-litigation-visualization/tree/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master)，具体审查了 `web/src/app.js` 的比例时间线、逐材料矩阵及抽屉，`web/src/features.js` 的事实经过，和 `references/schema.md` 的独立记载。Chronicle 复用现有 Card、Badge、Sheet 与原文预览。研究成果的字段顺序参考 [中文 claim-chart](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/litigation-legal/skills/claim-chart/SKILL.md)，双栏原文与编辑交互对照 [assistant-ui 成果工作台](https://github.com/assistant-ui/assistant-ui/tree/1663da7d94cfeb80b54745ebd4f1527c398f281d/examples/with-artifacts)。原 V8 页面由固定仓库 `ingest.py` 和 `make.py` 重新生成，4 份合成材料、7 条事实、9 条引语核对通过，1 条算式差异进入待审。
 
 工程验证覆盖看板三视图、固定原文、失权清理、研究编辑过程的原文回查和失败保稿。隔离 PostgreSQL 的 3 项集成通过，包括个人通道拒绝、固定 DOCX 段落、原请求重放、旧基线拒绝、跨案拒绝和另存后回读。测试环境曾出现两个问题：共享依赖的 Prisma 客户端落后于当前 schema，已用本工作树的依赖重新生成；首次个人接口集成夹具缺少本机工作区有效身份，被拒绝后已改用合成个人清单和操作者复验。沿用的 pg 驱动并行查询弃用警告仍出现，本次业务检查通过。真实浏览器、Windows WebView 和律师专业验收待执行。
+
+### AI 记载分句定位与归并范围 · 2026-11-20
+
+提取方法 /11 在相同候选契约下明确区分否认、条件、陈述归属和实际履行。服务端先在已许可的编号行验证分句，再在该分句里定位日期、金额、参与人和关系。命中原文数字的一部分时略过该字段并保留可核对的引文。明确金额标签仍由原文校正。候选保存原始字符范围，前端打开固定出处时可逐字回查。
+
+归并方法 /5 只将选中记载的固定引文和已校验字段带入候选上下文，预检和派发使用同一份数据。用 V8 借贷原件验证回单由本机读取，起诉状与答辩状保留当事人陈述，三条交付的日期和金额分开回查。约定本金留在组外，借条末尾保证人条款没有进入发送内容。重复成员、混合字段性质、撤回原件和跨案请求须通过原有守卫。采用和重开复用历史结果。
+
+**冒烟问题 · 已修复。** 原字段定位在整行检索，误把 12 万元中的尾部和另笔 2 万元视作两个命中，唯一命中时也可能把数字尾部当完整金额。相邻分句的日期和人名可被错误关联。归并曾从固定选区向两侧扩展上下文，导致带入无关保证条款。PGlite 集成夹具仍按旧模型结构和消息序号读取，现改为发送实际契约，区分非法行拒绝、越界字段略过和明确标签校正。复验 27 项通过，包括四份 V8 原件和真实案卷队列。供应商回包为模拟，本轮新增真实模型调用为零。运行仍出现已有 pg 并行查询和 Vitest 配置加载提示。

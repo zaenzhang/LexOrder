@@ -3,6 +3,7 @@ import { ActionError } from "@/lib/action-error";
 import { caseCandidateKey, type CaseCandidateRef } from "@/lib/evidence/case-adoption";
 import { caseGroupingLimits, caseGroupingResultSchema } from "@/lib/evidence/case-grouping";
 import type { FragmentSelection } from "@/lib/workbench/fixed-fragments";
+import { exactTextRange } from "@/lib/workbench/fixed-text-range";
 import { loadFixedFragments, type FixedFragment } from "@/server/ai/fixed-fragments";
 import type { ContextAccess } from "@/server/matters/context-service";
 import { observationIdentity } from "./observation-contract";
@@ -12,26 +13,17 @@ function rangeKey(range: FragmentSelection) {
   return JSON.stringify([range.documentId, range.parseRunId, range.anchorId, range.start, range.end]);
 }
 
-function contextWindow(fragment: FixedFragment, span: { start: number; end: number }) {
-  const start = span.start - fragment.start;
-  const end = span.end - fragment.start;
-  if (start < 0 || end > fragment.text.length || end <= start) throw new ActionError("候选引文超出固定选区");
-  let from = Math.max(0, start - 72);
-  let to = Math.min(fragment.text.length, end + 72);
-  if (/[\uDC00-\uDFFF]/.test(fragment.text.charAt(from))) from--;
-  if (/[\uDC00-\uDFFF]/.test(fragment.text.charAt(to))) to++;
-  return { from, to };
-}
-
 function contextSnippets(fragment: FixedFragment, spans: { start: number; end: number }[]) {
-  const windows = spans.map(span => contextWindow(fragment, span)).sort((a, b) => a.from - b.from);
+  const windows = spans.map(({ start, end }) => ({
+    from: start - fragment.start, to: end - fragment.start,
+  })).sort((a, b) => a.from - b.from);
   const merged: typeof windows = [];
   for (const window of windows) {
     const last = merged.at(-1);
     if (last && window.from <= last.to) last.to = Math.max(last.to, window.to);
     else merged.push(window);
   }
-  return merged.map(({ from, to }) => fragment.text.slice(from, to));
+  return merged.map(({ from, to }) => exactTextRange(fragment.text, from, to));
 }
 
 export async function groupingMembers(tx: Prisma.TransactionClient, access: ContextAccess, refs: CaseCandidateRef[], forModel: boolean) {

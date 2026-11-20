@@ -14,7 +14,7 @@ import { observationProviderUsageSchema, observationRunReceiptSchema } from "./a
 import { requireObservationDestination } from "./analysis-runs";
 import { groupingMembers, groupingPayload, publicGroupingMember, validateGrouping } from "./case-grouping-input";
 
-const methodVersion = "case-event-grouping/4";
+const methodVersion = "case-event-grouping/5";
 const jobType = "evidence.case-grouping";
 export const caseGroupingJobKey = (id: string) => jobType + ":" + id;
 const jobInput = z.strictObject({ groupingId: caseGroupingIdSchema });

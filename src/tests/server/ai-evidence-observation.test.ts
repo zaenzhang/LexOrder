@@ -223,6 +223,61 @@ it("模型传来的关系用同一份正式契约落位，错误记录逐条拒�
   expect(unsupported.candidates[0].data.relations).toBeUndefined();
 });
 
+it.each([
+  { dateText: "2024年3月", amountText: "人民币４８万元", dateValue: { precision: "MONTH", month: "2024-03" },
+    amountValue: { currency: "CNY", value: "480000" } },
+  { dateText: "约2024年3月", amountText: "约48万元", dateValue: { precision: "UNKNOWN" }, amountValue: null },
+])("抽取结果保留原文及日期金额精度：$dateText，$amountText", ({ dateText, amountText, dateValue, amountValue }) => {
+  const text = `${dateText}，乙方转账${amountText}。`;
+  const draft = unpackObservationDraft({ observations: [{
+    fragment: 1, firstLine: 1, lastLine: 1, title: "转账记载", category: "payment", kind: "FACT", statement: "RECORD",
+    excerpt: text, dateRole: "OCCURRENCE", dateText, amountNature: "ACTUAL_TRANSFER", amountText, participants: null, relations: null,
+  }] });
+  const result = inspectAiObservationResult(draft, [{ text, start: 0 }]);
+  expect(result.rejected).toEqual([]);
+  expect(result.skippedFields).toBe(0);
+  expect(result.candidates).toHaveLength(1);
+  expect(result.candidates[0].data).toMatchObject({
+    excerpt: { text },
+    date: { text: dateText, value: dateValue },
+    amount: { text: amountText, value: amountValue },
+  });
+});
+
+it("以可回读的分句定位另笔收款，拒绝同一行其他分句的日期和参与人", () => {
+  const text = "被告否认于2024年3月1日收到吴乙的12万元，但认可收到另笔2万元。";
+  const excerpt = "认可收到另笔2万元。";
+  const draft = unpackObservationDraft({ observations: [{
+    fragment: 1, firstLine: 1, lastLine: 1, title: "认可另笔收款", category: "payment", kind: "TODO_VERIFY",
+    statement: "PARTY_STATEMENT", excerpt, dateRole: "OCCURRENCE", dateText: "2024年3月1日",
+    amountNature: "ACTUAL_TRANSFER", amountText: "2万元", participants: ["吴乙"], relations: null,
+  }] });
+  const offset = 250;
+  const result = inspectAiObservationResult(draft, [{ text, start: offset }]);
+  expect(result.rejected).toEqual([]);
+  expect(result.skippedFields).toBe(2);
+  const [candidate] = result.candidates;
+  expect(candidate.data.excerpt?.text).toBe(excerpt);
+  expect(candidate.data.amount).toMatchObject({
+    text: "2万元", value: { currency: "CNY", value: "20000" },
+    span: { start: offset + text.lastIndexOf("2万元"), end: offset + text.lastIndexOf("2万元") + 3 },
+  });
+  expect(candidate.data.date).toBeUndefined();
+  expect(candidate.data.participants).toBeUndefined();
+});
+
+it("唯一命中的数字后缀不能作为完整金额或年份", () => {
+  const text = "2024年，转账12万元。";
+  const observation = {
+    fragment: 1, statement: "RECORD", lines: { first: 1 }, excerpt: { text },
+    date: { role: "OCCURRENCE", quote: { text: "024年" } },
+    amount: { nature: "ACTUAL_TRANSFER", quote: { text: "2万元" } },
+  };
+  const result = inspectAiObservationResult({ observations: [observation] }, [{ text, start: 0 }]);
+  expect(result.skippedFields).toBe(2);
+  expect(result.candidates[0].data).toEqual({ statement: "RECORD", excerpt: { text, span: { start: 0, end: text.length } } });
+});
+
 it("付款方向与原文列不符时只去掉关系，保留可定位的参与人", () => {
   const text = "交易日期 ｜ 付款人 ｜ 收款人 ｜ 金额（元）\n2023-03-03 ｜ 张三 ｜ 李四 ｜ 480,000.00";
   const candidate = {
