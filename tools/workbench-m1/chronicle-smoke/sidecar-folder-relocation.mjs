@@ -31,18 +31,21 @@ export async function verifyFolderRelocation({ roots, matterId, request, downloa
   await cp(binding.path, moved, { recursive: true, force: false, errorOnExist: true });
   assert.match((await change({ action: "relocate", path: moved }, 409)).error, /原目录仍然存在/);
   await rename(binding.path, offline);
+  const pendingName = "磁盘不可用时提交的材料.txt";
+  const pendingText = "合成受阻材料，重新定位后重送。";
+  const pendingKey = randomUUID();
+  const closedName = "失联后决定关闭的上传.txt";
+  const closedKey = randomUUID();
   let relocated = false;
   try {
     assert.deepEqual(await state(), { ...binding, available: false });
     const missing = await download(original.id);
-    assert.equal(missing.ok, false);
-    await missing.arrayBuffer();
-    const pendingName = "磁盘不可用时提交的材料.txt";
-    const pendingText = "合成受阻材料，重新定位后重送。";
-    const pendingKey = randomUUID();
+    assert.equal(missing.status, 409);
+    assert.match((await missing.json()).error, /重新定位/);
     const pending = await upload(pendingName, pendingText, 403, pendingKey);
     assert.match(pending.error, /原件保存未完成/);
     assert(!(await materials()).some(doc => doc.name === pendingName));
+    await upload(closedName, "合成放弃上传", 403, closedKey);
 
     const stamp = path.join(moved, ".lexorder-matter.json");
     const identity = await readFile(stamp);
@@ -71,16 +74,8 @@ export async function verifyFolderRelocation({ roots, matterId, request, downloa
     const after = await download(original.id);
     assert.equal(after.status, 200);
     assert.deepEqual(Buffer.from(await after.arrayBuffer()), expected);
-    for (let attempt = 0; attempt < 2; attempt++) {
-      assert.equal((await upload(pendingName, pendingText, 200, pendingKey)).ok, true);
-    }
-    const recovered = (await materials()).filter(doc => doc.name === pendingName);
-    assert.equal(recovered.length, 1);
-    const recovery = await download(recovered[0].id);
-    assert.equal(recovery.status, 200);
-    assert.equal(await recovery.text(), pendingText);
   } finally {
     if (!relocated) await rename(offline, binding.path);
   }
-  return { originalId: original.id, expected, moved };
+  return { originalId: original.id, expected, moved, pendingName, pendingText, pendingKey, closedKey };
 }

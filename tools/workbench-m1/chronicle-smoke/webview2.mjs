@@ -8,6 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "playwright-core";
 import { verifyWebView2AnalysisPreview } from "./webview2-analysis-preview.mjs";
 import { verifyWebView2Editor } from "./webview2-editor.mjs";
+import { verifyWebView2MaterialUploads } from "./webview2-material-uploads.mjs";
 import { verifyWebView2Materials } from "./webview2-materials.mjs";
 import { verifyWebView2Observations } from "./webview2-observations.mjs";
 import { verifyWebView2Scale } from "./webview2-scale.mjs";
@@ -19,7 +20,7 @@ assert(executable && path.isAbsolute(executable), "Pass the absolute path to the
 assert(workspace && path.isAbsolute(workspace), "Set M1_WORKSPACE to a local Windows synthetic workspace.");
 const manifest = JSON.parse(await readFile(path.join(workspace, "workspace.json"), "utf8"));
 assert.equal(manifest.mode, "PERSONAL");
-const modes = ["--scale", "--editor", "--materials", "--observations", "--analysis-preview"].filter(flag => process.argv.includes(flag));
+const modes = ["--scale", "--editor", "--materials", "--material-uploads", "--observations", "--analysis-preview"].filter(flag => process.argv.includes(flag));
 assert(modes.length <= 1, "Choose one targeted WebView2 smoke mode.");
 const [mode] = modes;
 const casebookRoot = process.env.M1_CHRONOLOGY_CASEBOOK_ROOT;
@@ -79,6 +80,7 @@ try {
   if (mode === "--scale") await verifyWebView2Scale(page, desktopOrigin, casebookRoot);
   else if (mode === "--editor") await verifyWebView2Editor(page, desktopOrigin, { workspace, manifest, casebookRoot });
   else if (mode === "--materials") await verifyWebView2Materials(page, desktopOrigin, casebookRoot);
+  else if (mode === "--material-uploads") await verifyWebView2MaterialUploads(page, desktopOrigin, casebookRoot);
   else if (mode === "--observations") await verifyWebView2Observations(page, desktopOrigin, casebookRoot);
   else if (mode === "--analysis-preview") await verifyWebView2AnalysisPreview(page, desktopOrigin, casebookRoot);
   else await verifyStandardWebView(page, desktopOrigin, errors);

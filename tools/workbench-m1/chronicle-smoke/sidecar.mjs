@@ -162,7 +162,33 @@ try {
     const found = await downloadFixture(reopened, relocated.originalId);
     assert.equal(found.status, 200);
     assert.deepEqual(Buffer.from(await found.arrayBuffer()), relocated.expected);
-    console.log('PASS unavailable directory blocks reads and keeps upload recoverable, rejects wrong marker and corrupt copy, rebinds across volumes, retries once and preserves original on reopen');
+    const { pendingName, pendingText, pendingKey, closedKey } = relocated;
+    const uploads = 'material-uploads';
+    const pendingList = () => request(reopened, uploads + '?matter=' + matterId);
+    await request(reopened, uploads + '?matter=' + matterId, { token: '', status: 403 });
+    const listed = await pendingList();
+    assert(listed.items.some(item => item.id === pendingKey && item.name === pendingName && !item.waiting));
+    assert(listed.items.some(item => item.id === closedKey));
+    const action = { matterId, action: 'continue', uploadId: pendingKey };
+    assert.match((await request(reopened, uploads, { body: action, status: 409 })).error, /重新选择文件/);
+    await request(reopened, uploads, { body: { ...action, matterId: 'c' + 'a'.repeat(24) }, status: 409 });
+    function reselect(text, uploadId = pendingKey) {
+      const body = new FormData();
+      for (const [key, value] of Object.entries({ ...action, uploadId })) body.set(key, value);
+      body.set('file', new File([text], '重新选择.txt', { type: 'text/plain' }));
+      return body;
+    }
+    assert.match((await request(reopened, uploads, { body: reselect('x'.repeat(Buffer.byteLength(pendingText))), status: 409 })).error, /不一致/);
+    const saved = await request(reopened, uploads, { body: reselect(pendingText) });
+    assert.deepEqual(await request(reopened, uploads, { body: reselect(pendingText) }), saved);
+    assert.deepEqual((await request(reopened, materials)).documents.filter(row => row.name === pendingName).map(row => row.id), [saved.id]);
+    const recovered = await downloadFixture(reopened, saved.id);
+    assert.equal(recovered.status, 200);
+    assert.equal(await recovered.text(), pendingText);
+    await request(reopened, uploads, { body: { ...action, action: 'close', uploadId: closedKey } });
+    await request(reopened, uploads, { body: reselect('合成放弃上传', closedKey), status: 409 });
+    assert.deepEqual((await pendingList()).items, []);
+    console.log('PASS cross-volume relocation, original readback, rejected cross-case and wrong bytes, pending upload after restart, idempotent reselect and closed upload refusal');
   }
   const url = await reopened.url() + '/api/documents/' + document.id + '/download?inline=1';
   assert.equal((await fetch(url, { signal: AbortSignal.timeout(8000) })).status, 403);

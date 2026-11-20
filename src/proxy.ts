@@ -44,7 +44,7 @@ export default function proxy(request: NextRequest, event: NextFetchEvent) {
   if (desktop && request.method === "POST"
     && request.headers.get("content-type")?.startsWith("multipart/form-data;")) {
     const limit = path === "/api/personal/practice-resources" ? 51
-      : ["/api/personal/matter-workspace", "/api/personal/court-inbox", "/api/personal/archive", "/api/personal/document-review"].includes(path) ? 21 : 0;
+      : ["/api/personal/matter-workspace", "/api/personal/court-inbox", "/api/personal/archive", "/api/personal/document-review", "/api/personal/material-uploads"].includes(path) ? 21 : 0;
     if (limit && Number(request.headers.get("content-length")) > limit * 1024 * 1024) {
       return NextResponse.json({ error: `文件大小不能超过 ${limit - 1} MB。` }, { status: 413, headers: { "Cache-Control": "no-store" } });
     }

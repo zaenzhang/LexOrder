@@ -5,6 +5,11 @@ export type UploadDocumentResult = { ok: true; id: string } | {
   message: string;
 };
 
+export type PendingMaterialUploads = {
+  items: { id: string; name: string; waiting: boolean; description: string }[];
+  hasMore: boolean;
+};
+
 export type MaterialUploadReceipt =
   | { status: "NOT_RESERVED" }
   | { status: "CLOSED" }

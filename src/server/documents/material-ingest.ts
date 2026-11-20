@@ -129,7 +129,7 @@ export async function ingestMaterial(input: { userId: string; document: Material
   if (existing) {
     const previous = metadataSchema.parse(existing.metadata);
     if (existing.requestedById !== input.userId || !sameUpload(previous, metadata)) throw new ActionError("上传请求标识已用于其他内容，请重新选择文件");
-    return resumeMaterialIngest(id, input.userId, undefined, { bytes: input.bytes, document: data });
+    return resumeMaterialIngest(id, input.userId, { replay: { bytes: input.bytes, document: data } });
   }
   const storagePath = `${data.matterId ? `m_${data.matterId}` : `i_${data.intakeId}`}/${new Date().toISOString().slice(0, 7).replace("-", "")}/${id}.bin`;
   try { await approvalTransaction(async tx => {
@@ -150,7 +150,7 @@ export async function ingestMaterial(input: { userId: string; document: Material
   }, Prisma.TransactionIsolationLevel.ReadCommitted); } catch (error) {
     const raced = await prisma.materialIngestIntent.findUnique({ where: { id } });
     if (raced) {
-      if (raced.requestedById === input.userId && sameUpload(metadataSchema.parse(raced.metadata), metadata)) return resumeMaterialIngest(id, input.userId, undefined, { bytes: input.bytes, document: data });
+      if (raced.requestedById === input.userId && sameUpload(metadataSchema.parse(raced.metadata), metadata)) return resumeMaterialIngest(id, input.userId, { replay: { bytes: input.bytes, document: data } });
       throw new ActionError("上传请求标识已用于其他内容，请核对原上传");
     }
     throw error;
@@ -239,10 +239,11 @@ async function commitStoredIngest(intentId: string, userId: string, lease?: JobL
   }, Prisma.TransactionIsolationLevel.ReadCommitted);
 }
 
-type Replay = { bytes: Buffer; document: z.output<typeof documentInput> };
+type Replay = { bytes: Buffer; document?: z.output<typeof documentInput> };
+type ResumeOptions = { lease?: JobLease; replay?: Replay; caseUpload?: { matterId: string; file?: Buffer } };
 
 function reservedBytes(replay: Replay, reserved: z.output<typeof documentInput>) {
-  const plain = replay.document.encrypted
+  const plain = replay.document?.encrypted
     ? decryptBuffer(replay.bytes, replay.document.iv!, replay.document.authTag!) : replay.bytes;
   if (reserved.encrypted) {
     if (!reserved.iv || !reserved.authTag) throw new ActionError("原上传的加密登记不完整");
@@ -252,48 +253,51 @@ function reservedBytes(replay: Replay, reserved: z.output<typeof documentInput>)
   return plain;
 }
 
-async function readReservedOriginal(storagePath: string, document: z.output<typeof documentInput>, replay?: Replay) {
+async function readReservedOriginal(storagePath: string, retry: () => Buffer | undefined) {
   try { return await storage.readFile(storagePath); }
   catch (error) {
     const missing = (error as NodeJS.ErrnoException)?.code === "ENOENT" || ["NoSuchKey", "NotFound"].includes((error as Error)?.name);
-    if (!missing || !replay) throw error;
-  }
-  const replacement = reservedBytes(replay, document);
-  try {
-    await storage.writeFileAt(storagePath, replacement);
-    return replacement;
-  } catch {
-    // Another retry may have won exclusive publication or its reply was lost.
-    return storage.readFile(storagePath);
+    if (!missing) throw error;
+    const replacement = retry();
+    if (!replacement) throw error;
+    try {
+      await storage.writeFileAt(storagePath, replacement);
+      return replacement;
+    } catch {
+      // Another retry may have won exclusive publication or its reply was lost.
+      return storage.readFile(storagePath);
+    }
   }
 }
 
 /** Recovery examines this intent's object only, never scans or re-hashes the material store. */
-export async function resumeMaterialIngest(intentId: string, userId: string, lease?: JobLease, replay?: Replay) {
-  const intent = await prisma.materialIngestIntent.findUnique({ where: { id: intentId } });
+export async function resumeMaterialIngest(intentId: string, userId: string, { lease, replay, caseUpload }: ResumeOptions = {}) {
+  const intent = await prisma.materialIngestIntent.findUnique({ where: { id: intentId, ...(caseUpload && { matterId: caseUpload.matterId, priorDocumentId: null }) } });
   if (!intent || intent.requestedById !== userId) throw new ActionError("上传记录不存在或无权处理");
   if (intent.errorCode === "UPLOAD_ABANDONED") throw new ActionError("此上传已关闭，请重新选择文件开始新上传");
-  if (intent.state === "COMMITTED") return commitStoredIngest(intentId, userId, lease);
+  if (intent.state === "COMMITTED" && !caseUpload?.file) return commitStoredIngest(intentId, userId, lease);
   if (intent.state === "PENDING" && Date.now() - intent.createdAt.getTime() < 120_000) throw new ActionError("原件仍在保存，请稍后在材料区继续此上传");
   const { document: data } = metadataSchema.parse(intent.metadata);
   await approvalTransaction(async tx => {
     if (lease) await assertCurrentJobLease(tx, lease);
     await assertUploadAuthority(tx, userId, data, intent.priorDocumentId);
   }, Prisma.TransactionIsolationLevel.ReadCommitted);
+  const replacement = caseUpload?.file && reservedBytes({ bytes: caseUpload.file }, data);
+  if (intent.state === "COMMITTED") return commitStoredIngest(intentId, userId, lease);
   const recoverState = async (state: "FAILED" | "STORED", errorCode: string | null) => approvalTransaction(async tx => {
     if (lease) await assertCurrentJobLease(tx, lease);
     await tx.materialIngestIntent.updateMany({ where: { id: intentId, state: state === "FAILED" ? intent.state : { not: "COMMITTED" }, documentId: null,
       OR: [{ errorCode: null }, { errorCode: { not: "UPLOAD_ABANDONED" } }] }, data: { state, errorCode } });
   }, Prisma.TransactionIsolationLevel.ReadCommitted);
-  let bytes: Buffer;
+  let bytes: Buffer | undefined;
   try {
-    const stored = await readReservedOriginal(intent.storagePath, data, replay);
-    bytes = data.encrypted ? decryptBuffer(stored, data.iv!, data.authTag!) : stored;
+    const stored = await readReservedOriginal(intent.storagePath, () => replacement ?? (replay && reservedBytes(replay, data)));
+    if (stored !== replacement) bytes = data.encrypted ? decryptBuffer(stored, data.iv!, data.authTag!) : stored;
   } catch {
     await recoverState("FAILED", "ORIGINAL_UNAVAILABLE");
     throw new ActionError("未找到完整原件，请重新选择文件上传");
   }
-  if (bytes.length !== intent.size || sha256(bytes) !== intent.sourceSha256) throw new ActionError("原件与上传记录不一致，不能继续提交");
+  if (bytes && (bytes.length !== intent.size || sha256(bytes) !== intent.sourceSha256)) throw new ActionError("原件与上传记录不一致，不能继续提交");
   await recoverState("STORED", null);
   return commitStoredIngest(intentId, userId, lease);
 }
@@ -301,7 +305,7 @@ export async function resumeMaterialIngest(intentId: string, userId: string, lea
 export async function reconcileMaterialIngest(payload: Record<string, unknown>, lease: JobLease) {
   const intent = await prisma.materialIngestIntent.findUnique({ where: { id: z.string().min(1).parse(payload.intentId) } });
   if (!intent || intent.state === "COMMITTED" || intent.errorCode === "UPLOAD_ABANDONED") return;
-  await resumeMaterialIngest(intent.id, intent.requestedById, lease);
+  await resumeMaterialIngest(intent.id, intent.requestedById, { lease });
 }
 
 export async function withdrawMaterial(userId: string, documentId: string, purge: boolean) {
@@ -384,10 +388,10 @@ async function assertNotIntakeSnapshot(tx: Prisma.TransactionClient, intakeId: s
   if (Number(used.count)) throw new ActionError("材料已固定于收案送审历史，须保留原件，请另传补充材料");
 }
 
-export async function abandonMaterialIngest(intentId: string, userId: string) {
+export async function abandonMaterialIngest(intentId: string, userId: string, caseMatterId?: string) {
   return approvalTransaction(async tx => {
     await tx.$queryRaw`SELECT id FROM "MaterialIngestIntent" WHERE id=${intentId} FOR UPDATE`;
-    const intent = await tx.materialIngestIntent.findUnique({ where: { id: intentId } });
+    const intent = await tx.materialIngestIntent.findUnique({ where: { id: intentId, ...(caseMatterId && { matterId: caseMatterId, priorDocumentId: null }) } });
     if (!intent || intent.requestedById !== userId) throw new ActionError("上传记录不存在或无权处理");
     const { document: data } = metadataSchema.parse(intent.metadata);
     await assertUploadAuthority(tx, userId, data, intent.priorDocumentId);

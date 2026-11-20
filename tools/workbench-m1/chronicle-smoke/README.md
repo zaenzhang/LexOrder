@@ -105,6 +105,12 @@ Copy-Item -LiteralPath (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/wind
 node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-Path $qaTarget 'debug/lexorder-chronicle-preview.exe') --materials
 ```
 
+材料恢复使用 `--material-uploads`。脚本在隔离案卷制造一次目录不可用的上传，恢复目录后，从新页面进入 390 像素宽的批量导入抽屉。检查读取保留记录、处理错误、重新选原文件、材料目录刷新和键盘回焦。也可用跨卷 Sidecar 命令验证整个运行时重启后的回执。
+
+```powershell
+node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-Path $qaTarget 'debug/lexorder-chronicle-preview.exe') --material-uploads
+```
+
 人工记载验收同样使用隔离工作区，传入 --observations。脚本入卷合成回单并等待本机解析，从图谱实际选取日期、金额和参与人。检查反向付款被拒绝、修订后的规范数据、历史原文定位与过时提交的草稿保留。此流程无需模型。
 
 ```powershell
