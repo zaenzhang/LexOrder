@@ -201,6 +201,25 @@ it("字面收款与预扣陈述独立提取，否认收款不产生正向记录"
   expect(readExplicitPleadingCandidates([{ start: 0, category: "PLEADING", text: "2023年3月3日未收到借款48万元。" }])).toHaveLength(0);
 });
 
+it.each([
+  "被告否认其于2023年3月3日收到借款48万元。",
+  "没有证据证明：\n2023年3月3日收到借款48万元。",
+  "原告于2023年3月3日向被告出借款48万元，约定当日交付。",
+  "答辩人称，若2023年3月3日收到借款48万元，才承担付款义务。",
+  "辩称2023年3月3日收到借款48万元不属实。",
+  "被告不认可利息已从本金中预先扣除。",
+])("本机规则保留待核范围，跳过否认、条件或无明确交付的记载：%s", text => {
+  expect(readExplicitPleadingCandidates([{ start: 0, category: "PLEADING", text }])).toEqual([]);
+});
+
+it("未肯定的前一笔和后续承认的另笔分别核对", () => {
+  const text = "被告否认于2023年3月1日收到借款12万元，但承认于2023年3月3日收到借款2万元。";
+  const records = readExplicitPleadingCandidates([{ start: 90, category: "PLEADING", text }]);
+  expect(records).toHaveLength(1);
+  expect(records[0].data).toMatchObject({ statement: "PARTY_STATEMENT", amount: { value: { value: "20000" } },
+    excerpt: { text: "2023年3月3日收到借款2万元" } });
+});
+
 it("模型传来的关系用同一份正式契约落位，错误记录逐条拒绝", () => {
   const text = "青禾公司向远桥公司交付设备。";
   const source = { text, start: 100, category: "EVIDENCE" };

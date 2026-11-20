@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { execFile } from "node:child_process";
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
@@ -27,13 +27,18 @@ const provider = vi.hoisted(() => ({
   url: "https://observation-fixture.invalid/v1",
   fetch: vi.fn<typeof fetch>(),
 }));
-vi.mock("@/lib/net/safe-url", async importOriginal => ({
-  ...await importOriginal<typeof import("@/lib/net/safe-url")>(),
-  assertSafeHttpUrl: async (url: string) => {
-    if (url !== provider.url) throw new Error("Unexpected fixture provider");
-  },
-  safeFetch: provider.fetch,
-}));
+vi.mock("@/lib/net/safe-url", async importOriginal => {
+  const real = await importOriginal<typeof import("@/lib/net/safe-url")>();
+  return {
+    ...real,
+    assertSafeHttpUrl: async (url: string) => {
+      if (url === provider.url) return;
+      if (url === "https://api.openai.com/v1" && process.env.LEXORDER_V8_LIVE_OPENAI === "1") return real.assertSafeHttpUrl(url);
+      throw new Error("Unexpected fixture provider");
+    },
+    safeFetch: provider.fetch,
+  };
+});
 vi.mock("@/lib/auth/session", () => ({
   requireSession: async () => ({ user: await resolvePersonalActor(prisma) }),
 }));
@@ -54,6 +59,25 @@ const observation = { ...draft, dateRole: "OCCURRENCE", dateText: "2023年3月3�
 const balance = { ...draft, amountNature: "BALANCE", amountText: "49万元" };
 const filingDraft = { ...draft, fragment: 2, category: "procedure", dateRole: "FILING", dateText: "2023年3月7日" };
 const serviceDraft = { ...draft, fragment: 3, category: "procedure", dateRole: "SERVICE", dateText: "2023年3月6日" };
+
+const v8Samples = {
+  "4-bank-receipt.txt": "449d16882b658829b55af12962b3e2ff32bbe45fc99c88cd2061353adedacb4c",
+  "2-complaint.txt": "d9abcfd1f97131e2673ed2e2edebb85e3ed8a9d2c0da649a93d30119c82615d4",
+  "3-defence.txt": "c89d2938a657f4f713fcae47ca6bd815b0e3aaaa0c753773308cee7acfc251b0",
+  "1-iou.txt": "846c99bcb7b0cbf1fcd913e24813c0bf84a5c9180b4b2f353ac107a3015a396b",
+};
+
+async function loadV8Samples(verify: boolean): Promise<[string, string][]> {
+  const source = process.env.LEXORDER_V8_GROUPING_SAMPLE;
+  if (!source) throw new Error("Set LEXORDER_V8_GROUPING_SAMPLE to the synthetic V8 sample directory");
+  return Promise.all(Object.entries(v8Samples).map(async ([name, expected]) => {
+    const contents = await readFile(path.join(source, name));
+    if (verify && createHash("sha256").update(contents).digest("hex") !== expected) {
+      throw new Error("OpenAI smoke only accepts the fixed synthetic V8 files: " + name);
+    }
+    return [name, contents.toString("utf8")];
+  }));
+}
 
 describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案内事实分析管线", () => {
   let work: string | undefined;
@@ -502,21 +526,18 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     }
   }, 60_000);
 
-  it.skipIf(!process.env.LEXORDER_V8_GROUPING_SAMPLE)("V8 借贷示例跨批归并保留三方原文与金额冲突", async () => {
-    provider.fetch.mockClear();
+  async function seedV8Case(tag: string, samples: [string, string][]) {
     const actor = await resolvePersonalActor(prisma);
     if (!actor || !workspace || !work) throw new Error("Missing fixture");
-    await saveAiSettings({ enabled: true, apiKey: "fixture-key", baseUrl: provider.url, textModel: model });
     const matter = await prisma.matter.create({ data: {
-      title: "V8 借贷归并示例", internalCode: "SYNTHETIC-V8-GROUP", ownerId: actor.id, registeredById: actor.id,
+      title: "V8 借贷归并示例", internalCode: "SYNTHETIC-V8-" + tag, ownerId: actor.id, registeredById: actor.id,
     } });
-    const root = path.join(work, "v8-group-casebook");
+    const root = path.join(work, "v8-casebook-" + tag);
     await mkdir(root, { recursive: true });
     await changeMatterFolder(matter, { action: "bind", root }, path.join(workspace, "storage"));
 
     const ranges = [];
-    for (const name of ["4-bank-receipt.txt", "2-complaint.txt", "3-defence.txt", "1-iou.txt"]) {
-      const contents = await readFile(path.join(process.env.LEXORDER_V8_GROUPING_SAMPLE!, name), "utf8");
+    for (const [name, contents] of samples) {
       const form = new FormData();
       form.set("file", new File([contents], name, { type: "text/plain" }));
       form.set("name", name);
@@ -532,6 +553,13 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
       const [anchor] = parsed.anchors as { anchorId: string; text: string }[];
       ranges.push({ documentId: saved.id, parseRunId: run.id, anchorId: anchor.anchorId, start: 0, end: anchor.text.length });
     }
+    return { actor, matter, ranges };
+  }
+
+  it.skipIf(!process.env.LEXORDER_V8_GROUPING_SAMPLE)("V8 借贷示例跨批归并保留三方原文与金额冲突", async () => {
+    provider.fetch.mockClear();
+    await saveAiSettings({ enabled: true, apiKey: "fixture-key", baseUrl: provider.url, textModel: model });
+    const { actor, matter, ranges } = await seedV8Case("GROUP", await loadV8Samples(false));
     const supply = { matterId: matter.id, confirmed: true as const, model, origin: new URL(provider.url).origin };
     function reply(data: object) {
       return Response.json({ choices: [{ message: { content: JSON.stringify(data) } }],
@@ -661,4 +689,98 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     await expect(readCaseGrouping(actor, matter.id, queued.id)).rejects.toThrow("已撤回");
     expect(provider.fetch).toHaveBeenCalledTimes(6);
   }, 60_000);
+
+  it.skipIf(process.env.LEXORDER_V8_LIVE_OPENAI !== "1")("V8 同案三轮真实 OpenAI 提取和归并", async () => {
+    const samples = await loadV8Samples(true);
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new Error("Missing OPENAI_API_KEY");
+    const origin = "https://api.openai.com";
+    const liveModel = "gpt-4.1-mini-2025-04-14";
+    const { safeFetch } = await vi.importActual<typeof import("@/lib/net/safe-url")>("@/lib/net/safe-url");
+    provider.fetch.mockReset();
+    provider.fetch.mockImplementation(async (input, options) => {
+      if (input !== origin + "/v1/chat/completions") throw new Error("Unexpected OpenAI destination");
+      const response = await safeFetch(input, options as Record<string, unknown> | undefined);
+      if (!response.ok) {
+        const problem = await response.clone().json().catch(() => null) as
+          { error?: { type?: string; code?: string; param?: string } } | null;
+        console.log("V8_OPENAI_STATUS " + JSON.stringify({
+          status: response.status, type: problem?.error?.type, code: problem?.error?.code, param: problem?.error?.param,
+        }));
+      }
+      return response;
+    });
+    const checks = [
+      { name: "4-bank-receipt.txt", date: "2023-03-03", amount: "480000", statement: "RECORD" },
+      { name: "2-complaint.txt", date: "2023-03-01", amount: "500000", statement: "PARTY_STATEMENT" },
+      { name: "3-defence.txt", date: "2023-03-03", amount: "480000", statement: "PARTY_STATEMENT" },
+    ];
+    await saveAiSettings({ enabled: true, apiKey, baseUrl: origin + "/v1", textModel: liveModel });
+    try {
+      const outcomes: boolean[] = [];
+      for (let trial = 1; trial <= 3; trial++) {
+        const { actor, matter, ranges } = await seedV8Case("LIVE-" + trial, samples);
+        const supply = { matterId: matter.id, confirmed: true as const, model: liveModel, origin };
+        const began = performance.now();
+        const queued = await queueMatterObservationRun(actor, { ...supply, runId: randomUUID(), ranges });
+        expect(await processDueJobs(1, "personal-ai")).toMatchObject({ succeeded: 1 });
+        const batch = await readObservationRuns(actor, matter.id, null, queued.id);
+        if (!("candidates" in batch)) throw new Error("Expected live batch detail");
+        const extractionMs = Math.round(performance.now() - began);
+        const selected = checks.flatMap(check => {
+          const index = batch.candidates.findIndex(candidate => {
+            const { date, amount, statement, excerpt } = candidate.data;
+            return batch.sources[candidate.fragment - 1]?.name === check.name &&
+              statement === check.statement && date?.value.precision === "EXACT" && date.value.day === check.date &&
+              amount?.nature === "ACTUAL_TRANSFER" && amount.value?.value === check.amount && Boolean(excerpt);
+          });
+          return index < 0 ? [] : [{ runId: batch.id, index }];
+        });
+        for (const candidate of batch.candidates) {
+          const source = ranges[candidate.fragment - 1];
+          const file = samples[candidate.fragment - 1][1];
+          const excerpt = await readMatterObservationExcerpt(actor, matter.id, batch.id, candidate.fragment);
+          expect(excerpt.text).toBe(file.slice(source.start, source.end));
+          for (const field of [candidate.data.excerpt, candidate.data.date, candidate.data.amount,
+            ...candidate.data.participants ?? [], ...candidate.data.relations ?? []]) {
+            if (field) expect(file.slice(field.span.start, field.span.end)).toBe(field.text);
+          }
+        }
+        const result = { trial, state: batch.state, candidates: batch.candidates.length, matchedTransfers: selected.length,
+          extractionMs, extraction: batch.receipt };
+        if (selected.length < checks.length || batch.state !== "READY" || !batch.receipt?.usage) {
+          console.log("V8_LIVE " + JSON.stringify(result));
+          if (batch.state !== "READY" || !batch.receipt?.usage) throw new Error("OpenAI extraction did not finish: " + batch.receipt?.error);
+          outcomes.push(false);
+          continue;
+        }
+        const iou = batch.candidates.findIndex(candidate => batch.sources[candidate.fragment - 1]?.name === "1-iou.txt" &&
+          candidate.data.amount?.nature === "AGREED_PRINCIPAL");
+        const review = iou < 0 ? selected : [...selected, { runId: batch.id, index: iou }];
+        const groupStarted = performance.now();
+        const plan = await previewCaseGrouping(actor, { matterId: matter.id, selected: review });
+        const groupRun = await queueCaseGrouping(actor, { ...supply, groupingId: randomUUID(), selected: review });
+        expect(await processDueJobs(1, "personal-ai")).toMatchObject({ succeeded: 1 });
+        const grouping = await readCaseGrouping(actor, matter.id, groupRun.id);
+        if (!("result" in grouping)) throw new Error("Expected live grouping detail");
+        const groups = grouping.result?.groups.map(group => ({
+          reason: group.reason, sources: group.members.map(member => grouping.members[member.observation - 1].source.name),
+        })) ?? [];
+        const complete = groups.some(group => group.sources.length === checks.length &&
+          checks.every(check => group.sources.includes(check.name))) && Boolean(grouping.receipt?.usage) &&
+          grouping.receipt?.sentCharacters === plan.characters;
+        console.log("V8_LIVE " + JSON.stringify({ ...result, groups, agreedPrincipal: iou >= 0,
+          groupingMs: Math.round(performance.now() - groupStarted), grouping: grouping.receipt }));
+        if (grouping.state === "FAILED" && !grouping.receipt?.usage) {
+          throw new Error("OpenAI grouping did not finish: " + grouping.receipt?.error);
+        }
+        outcomes.push(complete);
+      }
+      expect(outcomes).toEqual([true, true, true]);
+      expect(provider.fetch).toHaveBeenCalledTimes(6);
+    } finally {
+      await saveAiSettings({ enabled: false });
+      provider.fetch.mockReset();
+    }
+  }, 250_000);
 });

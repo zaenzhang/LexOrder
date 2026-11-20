@@ -291,35 +291,42 @@ export function readExplicitPleadingCandidates(authorized: AuthorizedFragment[])
     new RegExp("(?<day>" + date + ")\\s*(?:实际|已)?收到借款\\s*(?<amount>" + amount + ")", "gu"),
     new RegExp("(?<day>" + date + ")[^。\\n]{0,28}向[^。\\n]{1,18}借款\\s*(?<amount>" + amount + ")[^。\\n]{0,15}当日交付", "gu"),
   ];
+  const withheld = /否认|不认可|不予采信|不属实|不成立|未能证明|不能证明|无法证明|没有证据|无证据|并未|从未|尚未|未收到|未交付|未到账|如果|假如|假设|倘若|若(?=[于在]?\s*\d{4})|约定(?:于|在)?\s*(?:当日交付|\d{4})|(?:拟|将|应当)\s*(?:于|在)?\s*(?:当日交付|\d{4})/u;
+  const prepaidInterest = /利息\s*(?:已)?从(?:借款)?本金(?:中)?(?:预先)?扣除/gu;
   const candidates: ReturnType<typeof normalizeCandidate>[] = [];
   for (const [index, source] of authorized.entries()) {
     if (source.category !== "PLEADING") continue;
-    for (const rule of delivered) {
-      for (const match of source.text.matchAll(rule)) {
+    // A new affirmative clause after a denial can stand alone. Unclear clauses stay for model or human review.
+    const clauses = source.text.split(/[。！？；!?;]|[，,]\s*(?:但是|但|然而)\s*(?=认可|承认|确认|确实)/u);
+    for (const clause of clauses) {
+      if (withheld.test(clause)) continue;
+      for (const rule of delivered) {
+        for (const match of clause.matchAll(rule)) {
+          try {
+            const { day, amount: value } = match.groups!;
+            const candidate = normalizeCandidate({
+              fragment: index + 1, statement: "PARTY_STATEMENT",
+              hint: { title: "当事人陈述借款交付", category: "payment", kind: "TODO_VERIFY" },
+              excerpt: { text: match[0] },
+              date: { role: "OCCURRENCE", quote: { text: day } },
+              amount: { nature: "ACTUAL_TRANSFER", quote: { text: value } },
+            }, authorized);
+            if (candidate.data.date?.value.precision === "EXACT" && candidate.data.amount?.value) candidates.push(candidate);
+          } catch (error) {
+            if (!(error instanceof ActionError || error instanceof z.ZodError)) throw error;
+          }
+        }
+      }
+      for (const match of clause.matchAll(prepaidInterest)) {
         try {
-          const { day, amount: value } = match.groups!;
-          const candidate = normalizeCandidate({
+          candidates.push(normalizeCandidate({
             fragment: index + 1, statement: "PARTY_STATEMENT",
-            hint: { title: "当事人陈述借款交付", category: "payment", kind: "TODO_VERIFY" },
+            hint: { title: "当事人陈述预扣利息", category: "agreement", kind: "TODO_VERIFY" },
             excerpt: { text: match[0] },
-            date: { role: "OCCURRENCE", quote: { text: day } },
-            amount: { nature: "ACTUAL_TRANSFER", quote: { text: value } },
-          }, authorized);
-          if (candidate.data.date?.value.precision === "EXACT" && candidate.data.amount?.value) candidates.push(candidate);
+          }, authorized));
         } catch (error) {
           if (!(error instanceof ActionError || error instanceof z.ZodError)) throw error;
         }
-      }
-    }
-    for (const match of source.text.matchAll(/利息\s*(?:已)?从(?:借款)?本金(?:中)?(?:预先)?扣除/gu)) {
-      try {
-        candidates.push(normalizeCandidate({
-          fragment: index + 1, statement: "PARTY_STATEMENT",
-          hint: { title: "当事人陈述预扣利息", category: "agreement", kind: "TODO_VERIFY" },
-          excerpt: { text: match[0] },
-        }, authorized));
-      } catch (error) {
-        if (!(error instanceof ActionError || error instanceof z.ZodError)) throw error;
       }
     }
   }
