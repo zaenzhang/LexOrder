@@ -7,7 +7,7 @@ import { exactTextRange } from "@/lib/workbench/fixed-text-range";
 import { loadFixedFragments, type FixedFragment } from "@/server/ai/fixed-fragments";
 import type { ContextAccess } from "@/server/matters/context-service";
 import { observationIdentity } from "./observation-contract";
-import { matterObservationRangesSchema, observationCandidatesSchema } from "./analysis-run-contract";
+import { matterObservationRangesSchema, observationCandidatesSchema, readObservationInput } from "./analysis-run-contract";
 
 function rangeKey(range: FragmentSelection) {
   return JSON.stringify([range.documentId, range.parseRunId, range.anchorId, range.start, range.end]);
@@ -35,7 +35,7 @@ export async function groupingMembers(tx: Prisma.TransactionClient, access: Cont
   });
   if (rows.length !== runIds.length) throw new ActionError("部分候选批次不可用或不属于本案");
   const batches = new Map(rows.map(row => [row.id, {
-    ranges: matterObservationRangesSchema.parse(row.ranges), candidates: observationCandidatesSchema.parse(row.candidates),
+    ranges: matterObservationRangesSchema.parse(readObservationInput(row.ranges).ranges), candidates: observationCandidatesSchema.parse(row.candidates),
   }]));
   const ranges = new Map<string, FragmentSelection>();
   const picks = refs.map(ref => {

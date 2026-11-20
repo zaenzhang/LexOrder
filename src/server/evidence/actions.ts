@@ -28,7 +28,7 @@ import { prepareSource, readSourceSnapshot, readableDocumentOptions, resolveRefe
 
 import { observationDataSchema, observationInputSchema, type EvidenceObservationView } from "@/lib/evidence/observation-contract";
 import { prepareObservation } from "./observation-contract";
-import { adoptObservationRunSchema, matterObservationRangesSchema, observationAdoptionSchema, observationCandidatesSchema, observationRangesSchema } from "./analysis-run-contract";
+import { adoptObservationRunSchema, matterObservationRangesSchema, observationAdoptionSchema, observationCandidatesSchema, observationRangesSchema, readObservationInput } from "./analysis-run-contract";
 
 export type { EvidenceItemView } from "./contracts";
 type Session = Awaited<ReturnType<typeof requireSession>>;
@@ -423,7 +423,7 @@ export async function adoptEvidenceObservationRun(raw: z.input<typeof adoptObser
     const candidates = observationCandidatesSchema.parse(run.candidates);
     if (chosen.some(index => !candidates[index])) throw new ActionError("所选候选不在此批次");
     if (item.observationRevisionIds.length + chosen.length > 200) throw new ActionError("采用后将超过该要点的 200 条记载上限");
-    const ranges = observationRangesSchema.parse(run.ranges);
+    const ranges = observationRangesSchema.parse(readObservationInput(run.ranges).ranges);
     await assertSourcesReadable(tx, item, session.user.id);
     const bySource = new Map(item.sources.map(source => [source.id, source]));
     if (ranges.some(range => {
@@ -486,7 +486,7 @@ export async function adoptMatterObservations(raw: z.input<typeof adoptMatterObs
     });
     if (runs.length !== runIds.length) throw new ActionError("部分待核批次不可用或不属于本案");
     const batches = new Map(runs.map(run => [run.id, {
-      ranges: matterObservationRangesSchema.parse(run.ranges), candidates: observationCandidatesSchema.parse(run.candidates),
+      ranges: matterObservationRangesSchema.parse(readObservationInput(run.ranges).ranges), candidates: observationCandidatesSchema.parse(run.candidates),
     }]));
     const picks = chosen.map(({ runId, index }) => {
       const { ranges, candidates } = batches.get(runId)!;

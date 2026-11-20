@@ -3,12 +3,12 @@ import { z } from "zod";
 import { ActionError } from "@/lib/action-error";
 import { aiChat, AiNotConfiguredError, extractJson } from "@/lib/ai/client";
 import { getAiSettings } from "@/lib/ai/settings";
-import { fragmentsSchema } from "@/lib/workbench/fixed-fragments";
+import { fragmentsSchema, type FragmentSelection } from "@/lib/workbench/fixed-fragments";
 import { prisma } from "@/lib/prisma";
 import { loadFixedFragments } from "@/server/ai/fixed-fragments";
 import { auditTx } from "@/server/audit";
 import { assertCurrentJobLease, type JobLease } from "@/server/cron/queue";
-import { contextAccess, type ContextActor } from "@/server/matters/context-service";
+import { contextAccess, type ContextAccess, type ContextActor } from "@/server/matters/context-service";
 import { researchTransaction } from "@/server/research/service";
 import { resolvePersonalActor } from "@/server/runtime/personal";
 import { combineObservationCandidates, fragmentLines, inspectAiObservationResult, readBankReceiptCandidates, readExplicitPleadingCandidates } from "./ai-observation-contract";
@@ -16,7 +16,7 @@ import { observationExtractionSchema, observationSystemPrompt, unpackObservation
 import {
   observationAdoptionSchema, observationCandidatesSchema, observationJobKey, observationMethodVersion, observationRangesSchema,
   observationRunIdSchema, observationRunJob, observationRunReceiptSchema, observationProviderUsageSchema, startObservationRunSchema,
-  matterObservationMethodVersion, matterObservationRangesSchema, startMatterObservationRunSchema,
+  matterObservationMethodVersion, matterObservationRangesSchema, readObservationInput, startMatterObservationRunSchema,
 } from "./analysis-run-contract";
 
 const jobInput = z.strictObject({ runId: observationRunIdSchema });
@@ -49,15 +49,24 @@ function freezeRanges(item: AnalysisItem, ranges: z.infer<typeof startObservatio
 
 type RunScope = Pick<EvidenceObservationRun, "evidenceItemId" | "ranges">;
 
-function runRanges(run: RunScope) {
-  return run.evidenceItemId ? observationRangesSchema.parse(run.ranges) : matterObservationRangesSchema.parse(run.ranges);
+function runInput(run: RunScope) {
+  const { ranges, categoryByDocument } = readObservationInput(run.ranges);
+  return {
+    ranges: run.evidenceItemId ? observationRangesSchema.parse(ranges) : matterObservationRangesSchema.parse(ranges),
+    categoryByDocument,
+  };
+}
+
+async function freezeObservationInput(tx: Prisma.TransactionClient, access: ContextAccess, ranges: FragmentSelection[]) {
+  const fragments = await loadFixedFragments(tx, access, ranges, true);
+  return { ranges, categoryByDocument: Object.fromEntries(fragments.map(({ documentId, category }) => [documentId, category])) };
 }
 
 type RunMetadata = RunScope & Pick<EvidenceObservationRun,
   "id" | "receipt" | "state" | "baseRevision" | "model" | "createdAt" | "methodVersion">;
 
 function runSummary(run: RunMetadata, itemRevision: number | null, dead = false) {
-  const ranges = runRanges(run);
+  const { ranges } = runInput(run);
   const receipt = run.receipt == null ? null : observationRunReceiptSchema.parse(run.receipt);
   const interrupted = dead && run.state === "DISPATCHED";
   return {
@@ -97,7 +106,7 @@ export async function readObservationRuns(actor: ContextActor, matterId: string,
       const run = await tx.evidenceObservationRun.findFirst({ where: { id: runId, authorId: actor.id, ...scope } });
       if (!run) throw new ActionError("该待核批次不属于当前事项");
       const status = await currentRunSummary(tx, run, item?.revision ?? null);
-      const ranges = runRanges(run);
+      const { ranges } = runInput(run);
       const excerpts = run.candidates == null ? [] : await loadFixedFragments(tx, access, ranges);
       const caseAdoptions = item ? undefined : await tx.caseObservationCandidateAdoption.findMany({
         where: { runId: run.id }, orderBy: { candidateIndex: "asc" },
@@ -152,7 +161,7 @@ export async function readMatterObservationExcerpt(actor: ContextActor, matterId
       select: { ranges: true },
     });
     if (!run) throw new ActionError("该待核批次不属于当前事项");
-    const ranges = matterObservationRangesSchema.parse(run.ranges);
+    const ranges = matterObservationRangesSchema.parse(readObservationInput(run.ranges).ranges);
     const range = ranges[fragment - 1];
     if (!range) throw new ActionError("片段不属于本批次");
     const [excerpt] = await loadFixedFragments(tx, access, [range]);
@@ -167,22 +176,21 @@ export async function queueObservationRun(actor: ContextActor, raw: z.input<type
     const item = await analysisItem(tx, input.matterId, input.evidenceItemId);
     const existing = await tx.evidenceObservationRun.findUnique({ where: { id: input.runId } });
     if (existing) {
-      const ranges = observationRangesSchema.parse(existing.ranges).map(({ sourceId, start, end }) => ({ sourceId, start, end }));
       if (existing.evidenceItemId !== item.id || existing.authorId !== actor.id || existing.baseRevision !== input.expectedRevision ||
-        existing.model !== input.model || new URL(existing.baseUrl).origin !== input.origin ||
-        JSON.stringify(ranges) !== JSON.stringify(input.ranges)) throw new ActionError("此委托标识已绑定其他范围");
+        existing.model !== input.model || new URL(existing.baseUrl).origin !== input.origin) throw new ActionError("此委托标识已绑定其他范围");
+      const ranges = observationRangesSchema.parse(readObservationInput(existing.ranges).ranges).map(({ sourceId, start, end }) => ({ sourceId, start, end }));
+      if (JSON.stringify(ranges) !== JSON.stringify(input.ranges)) throw new ActionError("此委托标识已绑定其他范围");
       return currentRunSummary(tx, existing, item.revision);
     }
     if (item.revision !== input.expectedRevision) throw new ActionError("要点已更新，请重新确认材料范围");
     const settings = await requireObservationDestination(tx, input);
-    const ranges = freezeRanges(item, input.ranges);
-    await loadFixedFragments(tx, access, ranges, true);
+    const frozen = await freezeObservationInput(tx, access, freezeRanges(item, input.ranges));
     const scope = { evidenceItemId: item.id, authorId: actor.id, methodVersion: observationMethodVersion,
       model: settings.textModel, baseUrl: settings.baseUrl };
-    const matching = await reusableObservationRun(tx, { ...scope, ranges: { equals: ranges } }, item.revision);
+    const matching = await reusableObservationRun(tx, { ...scope, ranges: { equals: frozen } }, item.revision);
     if (matching) return matching;
     const run = await enqueueObservation(tx, {
-      ...scope, id: input.runId, baseRevision: item.revision, ranges, state: "QUEUED",
+      ...scope, id: input.runId, baseRevision: item.revision, ranges: frozen, state: "QUEUED",
     }, input.matterId);
     return runSummary(run, item.revision);
   });
@@ -204,9 +212,10 @@ async function enqueueObservation(tx: Prisma.TransactionClient, data: Prisma.Evi
   await tx.jobQueue.create({ data: {
     type: observationRunJob, payload: { runId: run.id }, dedupeKey: observationJobKey(run.id), maxAttempts: 1,
   } });
+  const { ranges, categoryByDocument } = runInput(run);
   await auditTx(tx, { userId: run.authorId, action: "EVIDENCE_AI_QUEUE", ...auditTarget(run, matterId),
-    detail: { matterId, runId: run.id, model: run.model,
-      ranges: runRanges(run).map(({ documentId, parseRunId, anchorId, start, end }) => ({ documentId, parseRunId, anchorId, start, end })) } });
+    detail: { matterId, runId: run.id, model: run.model, categoryByDocument,
+      ranges: ranges.map(({ documentId, parseRunId, anchorId, start, end }) => ({ documentId, parseRunId, anchorId, start, end })) } });
   return run;
 }
 
@@ -215,21 +224,21 @@ export async function queueMatterObservationRun(actor: ContextActor, raw: z.inpu
   return researchTransaction(prisma, async tx => {
     // contextAccess locks the matter so identical confirmations serialize.
     const access = await contextAccess(tx, actor, input.matterId, true);
-    await loadFixedFragments(tx, access, input.ranges, true);
+    const frozen = await freezeObservationInput(tx, access, input.ranges);
     const existing = await tx.evidenceObservationRun.findUnique({ where: { id: input.runId } });
     if (existing) {
       if (existing.caseMatterId !== input.matterId || existing.authorId !== actor.id || existing.model !== input.model ||
         new URL(existing.baseUrl).origin !== input.origin ||
-        JSON.stringify(runRanges(existing)) !== JSON.stringify(input.ranges)) throw new ActionError("此委托标识已绑定其他范围");
+        JSON.stringify(runInput(existing).ranges) !== JSON.stringify(input.ranges)) throw new ActionError("此委托标识已绑定其他范围");
       return currentRunSummary(tx, existing, null);
     }
     const settings = await requireObservationDestination(tx, input);
     const scope = { caseMatterId: input.matterId, authorId: actor.id, methodVersion: matterObservationMethodVersion,
       model: settings.textModel, baseUrl: settings.baseUrl };
-    const matching = await reusableObservationRun(tx, { ...scope, ranges: { equals: input.ranges } }, null);
+    const matching = await reusableObservationRun(tx, { ...scope, ranges: { equals: frozen } }, null);
     if (matching) return matching;
     const run = await enqueueObservation(tx, {
-      ...scope, id: input.runId, ranges: input.ranges, state: "QUEUED",
+      ...scope, id: input.runId, ranges: frozen, state: "QUEUED",
     }, input.matterId);
     return runSummary(run, null);
   });
@@ -255,14 +264,16 @@ export async function processObservationRun(payload: Record<string, unknown>, le
       const access = await contextAccess(tx, actor, matterId, true);
       const item = run.evidenceItemId ? await analysisItem(tx, matterId, run.evidenceItemId) : null;
       const method = item ? observationMethodVersion : matterObservationMethodVersion;
-      if ((item?.revision ?? null) !== run.baseRevision || run.methodVersion !== method) {
+      const { ranges, categoryByDocument } = runInput(run);
+      if ((item?.revision ?? null) !== run.baseRevision || run.methodVersion !== method ||
+        !categoryByDocument || ranges.some(range => !categoryByDocument[range.documentId])) {
         await tx.evidenceObservationRun.update({ where: { id: run.id }, data: {
           state: "FAILED", receipt: { error: "STALE", finishedAt: new Date().toISOString() },
         } });
         return null;
       }
-      const ranges = runRanges(run);
-      const fragments = await loadFixedFragments(tx, access, ranges, true);
+      const fragments = (await loadFixedFragments(tx, access, ranges, true))
+        .map(fragment => ({ ...fragment, category: categoryByDocument[fragment.documentId] }));
       const receipt: Receipt = { dispatchedAt: new Date().toISOString() };
       await tx.evidenceObservationRun.update({ where: { id: run.id }, data: { state: "DISPATCHED", receipt } });
       return { run, ranges, fragments, title: item?.title ?? "案卷事实", matterId, receipt };

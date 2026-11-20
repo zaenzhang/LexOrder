@@ -14,6 +14,8 @@ import { saveAiSettings } from "@/lib/ai/settings";
 import { readMatterInputCoverage } from "@/server/ai/input-coverage-service";
 import type { MatterAnalysisPlan } from "@/lib/ai/input-coverage";
 import { resolvePersonalActor } from "@/server/runtime/personal";
+import { createFolder, moveDocumentToFolder, renameFolder } from "@/server/document-folders/actions";
+import { changeMaterialCategory } from "@/server/documents/catalog-actions";
 import { uploadDocument } from "@/server/documents/actions";
 import { processMaterialJob } from "@/server/documents/material-processing";
 import { addEvidenceSource, adoptEvidenceObservationRun, adoptMatterObservations, createEvidenceItem } from "@/server/evidence/actions";
@@ -181,6 +183,105 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     expect(observation.data).toMatchObject({
       relations: [{ kind: "DELIVERS_TO", from: 1, to: 2, span: { start: 0, end: text.length }, text }],
     });
+  }, 30_000);
+
+  it.each(["matter", "fact"])("%s 固定排队时的材料分类，类别变动后只复用匹配批次", async scope => {
+    provider.fetch.mockClear();
+    const actor = await resolvePersonalActor(prisma);
+    if (!actor || !workspace || !work) throw new Error("Missing fixture");
+    const matter = await prisma.matter.create({ data: {
+      title: "材料类别与分析复用", internalCode: "SYNTHETIC-OBSERVATION-CATEGORY-" + scope,
+      ownerId: actor.id, registeredById: actor.id,
+    } });
+    const root = path.join(work, "observation-category-" + scope);
+    await mkdir(root, { recursive: true });
+    await changeMatterFolder(matter, { action: "bind", root }, path.join(workspace, "storage"));
+    const text = "答辩人称2023年3月3日实际收到借款48万元。";
+    const form = new FormData();
+    form.set("file", new File([text], "合成陈述.txt", { type: "text/plain" }));
+    form.set("name", "合成陈述.txt");
+    form.set("category", "OTHER");
+    form.set("matterId", matter.id);
+    form.set("requestKey", randomUUID());
+    const saved = await uploadDocument(form);
+    if (!saved.ok) throw new Error(saved.message);
+    expect(await processDueJobs(1, "personal-materials")).toMatchObject({ succeeded: 1 });
+    const parsed = await prisma.documentParseRun.findFirstOrThrow({ where: { documentId: saved.id, state: "READY" } });
+    const [anchor] = parsed.anchors as { anchorId: string; text: string }[];
+    expect(anchor.text).toBe(text);
+    const range = { documentId: saved.id, parseRunId: parsed.id, anchorId: anchor.anchorId, start: 0, end: text.length };
+    const common = { matterId: matter.id, confirmed: true as const, model, origin: new URL(provider.url).origin };
+    const event = scope === "fact" ? await createEvidenceItem({
+      matterId: matter.id, requestKey: randomUUID(), title: "核对收到的借款", kind: "FACT", content: "合成要点",
+    }) : undefined;
+    const linked = event && await addEvidenceSource({
+      evidenceItemId: event.id, expectedRevision: 1, documentId: saved.id, parseRunId: parsed.id, anchorId: anchor.anchorId, relation: "SUPPORTS",
+    });
+    const queue = (runId: string = randomUUID()) => event && linked
+      ? queueObservationRun(actor, { ...common, runId, evidenceItemId: event.id, expectedRevision: linked.revision,
+        ranges: [{ sourceId: linked.sourceId, start: 0, end: text.length }] })
+      : queueMatterObservationRun(actor, { ...common, runId, ranges: [range] });
+    const setCategory = (category: "OTHER" | "PLEADING" | "CONTRACT") => changeMaterialCategory({
+      action: "change-material-category", matterId: matter.id, category, documentIds: [saved.id],
+    });
+    const read = (id: string) => readObservationRuns(actor, matter.id, event?.id ?? null, id);
+    const runNext = async () => {
+      provider.fetch.mockResolvedValueOnce(Response.json({ choices: [{ message: { content: '{"observations":[]}' } }] }));
+      expect(await processDueJobs(1, "personal-ai")).toMatchObject({ succeeded: 1 });
+      const body = JSON.parse(String(provider.fetch.mock.calls.at(-1)?.[1]?.body));
+      return JSON.parse(body.messages.find((message: { role: string }) => message.role === "user").content);
+    };
+
+    const original = await queue();
+    const folder = await createFolder({ matterId: matter.id, name: "收件" });
+    await moveDocumentToFolder({ documentId: saved.id, folderId: folder.id });
+    await renameFolder({ id: folder.id, name: "诉辩材料待核对" });
+    expect(await queue()).toMatchObject({ id: original.id });
+    expect(await setCategory("PLEADING")).toEqual({ changed: 1 });
+    expect(await queue(original.id)).toMatchObject({ id: original.id });
+    const originalPayload = await runNext();
+    expect(originalPayload.fragments).toMatchObject([{ category: "OTHER" }]);
+    expect(await read(original.id)).toMatchObject({ state: "READY", candidates: [] });
+
+    const reclassified = await queue();
+    expect(reclassified.id).not.toBe(original.id);
+    expect(await queue()).toMatchObject({ id: reclassified.id });
+    const reclassifiedPayload = await runNext();
+    expect(reclassifiedPayload.fragments).toMatchObject([{ category: "PLEADING" }]);
+    expect(await read(reclassified.id)).toMatchObject({ state: "READY", receipt: { localRecords: 1 },
+      candidates: [{ data: { statement: "PARTY_STATEMENT", amount: { text: "48万元" } } }] });
+
+    await setCategory("OTHER");
+    expect(await queue()).toMatchObject({ id: original.id, state: "READY" });
+
+    const legacyInput = {
+      ranges: [linked ? { ...range, sourceId: linked.sourceId } : range],
+      methodVersion: scope === "fact" ? "evidence-observations/12" : "matter-observations/12",
+    };
+    await setCategory("CONTRACT");
+    const oldQueued = await queue();
+    await prisma.evidenceObservationRun.update({ where: { id: oldQueued.id }, data: legacyInput });
+    expect(await processDueJobs(1, "personal-ai")).toMatchObject({ succeeded: 1 });
+    expect(await read(oldQueued.id)).toMatchObject({ state: "FAILED", receipt: { error: "STALE" } });
+
+    await prisma.evidenceObservationRun.update({ where: { id: reclassified.id }, data: legacyInput });
+    expect(await queue(reclassified.id)).toMatchObject({ id: reclassified.id, state: "READY" });
+    expect(await read(reclassified.id)).toMatchObject({ sources: [{ start: 0, end: text.length }],
+      candidates: [{ data: { statement: "PARTY_STATEMENT" } }] });
+    if (event && linked) {
+      await adoptEvidenceObservationRun({
+        matterId: matter.id, evidenceItemId: event.id, expectedRevision: linked.revision, runId: reclassified.id, chosen: [0],
+      });
+      expect(await read(reclassified.id)).toMatchObject({ state: "ADOPTED" });
+    } else {
+      expect(await readMatterObservationExcerpt(actor, matter.id, reclassified.id, 1)).toEqual({ text });
+      await adoptMatterObservations({
+        matterId: matter.id, requestId: randomUUID(), chosen: [{ runId: reclassified.id, index: 0 }],
+        target: { type: "new", kind: "FACT", title: "材料陈述", content: text },
+      });
+      expect(await read(reclassified.id)).toMatchObject({ caseAdoptions: [{ index: 0 }] });
+    }
+    expect(provider.fetch).toHaveBeenCalledTimes(2);
   }, 30_000);
 
   it.each(["txt", "xlsx"])("%s 原件入卷、解析、派发与逐条采用均绑定获准选区", async format => {

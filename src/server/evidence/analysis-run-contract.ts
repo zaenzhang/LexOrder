@@ -1,11 +1,24 @@
+import { DocumentCategory } from "@prisma/client";
 import { z } from "zod";
 import { fragmentsSchema } from "@/lib/workbench/fixed-fragments";
 import { normalizedObservationCandidateSchema } from "./ai-observation-contract";
 
-export const observationMethodVersion = "evidence-observations/12";
-export const matterObservationMethodVersion = "matter-observations/12";
+export const observationMethodVersion = "evidence-observations/13";
+export const matterObservationMethodVersion = "matter-observations/13";
 export const observationRunJob = "evidence.observations";
 export const observationJobKey = (id: string) => observationRunJob + ":" + id;
+
+const storedObservationInputSchema = z.strictObject({
+  ranges: z.unknown(),
+  categoryByDocument: z.record(z.cuid(), z.enum(DocumentCategory)),
+});
+
+/** Earlier persisted results keep their original fixed ranges for review and adoption. */
+export function readObservationInput(value: unknown) {
+  return Array.isArray(value)
+    ? { ranges: value, categoryByDocument: null }
+    : storedObservationInputSchema.parse(value);
+}
 
 export const observationRangeSchema = z.strictObject({
   sourceId: z.cuid(), start: z.number().int().min(0).max(2_000_000), end: z.number().int().positive().max(2_000_000),

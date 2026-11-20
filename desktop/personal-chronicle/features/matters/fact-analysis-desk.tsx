@@ -126,7 +126,7 @@ function SourceRangeEditor({ excerpt, disabled, capacity, onRanges }: {
 const pendingStates = new Set<Run["state"]>(["QUEUED", "DISPATCHED"])
 const errors: Record<string, string> = {
   PERMISSION: "已选材料的授权有变，请重新核对。",
-  STALE: "启动前要点已更新，本批次未发送。",
+  STALE: "要点或分析方法已更新。本批次未发送，请重新确认材料范围。",
   PROVIDER: "应用 AI 请求失败，请检查「设置 → 应用 AI」中的配置和调用记录。",
   UNAVAILABLE: "应用 AI 当前不可用。",
   INVALID_RESULT: "模型返回的结构或原文引用未通过校验。",
