@@ -1,4 +1,4 @@
-import { platform } from "node:os";
+import { type as osType } from "node:os";
 import { spawn } from "node:child_process";
 import { ActionError } from "@/lib/action-error";
 
@@ -18,8 +18,8 @@ const desktopVariables = new Set([
 
 /** The caller supplies a verified, app-issued working file, never a client path. */
 export async function openDefaultEditor(file: string) {
-  const windows = platform() === "win32";
-  const command = windows ? "powershell.exe" : platform() === "darwin" ? "open" : "xdg-open";
+  const windows = osType() === "Windows_NT";
+  const command = windows ? "powershell.exe" : osType() === "Darwin" ? "open" : "xdg-open";
   const args = windows ? ["-NoProfile", "-NonInteractive", "-Command",
     "Start-Process -FilePath $env:LEXORDER_OPEN_WORKING_COPY -ErrorAction Stop"] : [file];
   // Next augments ProcessEnv with NODE_ENV for its own server. The child does

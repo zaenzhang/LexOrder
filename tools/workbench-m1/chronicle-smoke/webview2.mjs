@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "playwright-core";
+import { verifyWebView2Scale } from "./webview2-scale.mjs";
 
 const executable = process.argv[2];
 const workspace = process.env.M1_WORKSPACE;
@@ -13,10 +14,15 @@ assert(process.platform === "win32", "Run the WebView2 smoke with Windows Node.j
 assert(executable && path.isAbsolute(executable), "Pass the absolute path to the Tauri debug executable.");
 assert(workspace && path.isAbsolute(workspace), "Set M1_WORKSPACE to a local Windows synthetic workspace.");
 const manifest = JSON.parse(await readFile(path.join(workspace, "workspace.json"), "utf8"));
-const cases = JSON.parse(await readFile(path.join(workspace, "chronicle-smoke-cases.json"), "utf8"));
-assert(manifest.mode === "PERSONAL" && cases.length === 2 && cases.every(row => row.internalCode.startsWith("CHRONICLE-TEST-")));
+assert.equal(manifest.mode, "PERSONAL");
+const scale = process.argv.includes("--scale");
+const scaleCasebookRoot = process.env.M1_CHRONOLOGY_CASEBOOK_ROOT;
+if (scale) assert(scaleCasebookRoot && path.isAbsolute(scaleCasebookRoot), "Set M1_CHRONOLOGY_CASEBOOK_ROOT to the isolated test casebook directory.");
+const cases = scale ? [] : JSON.parse(await readFile(path.join(workspace, "chronicle-smoke-cases.json"), "utf8"));
+if (!scale) assert(cases.length === 2 && cases.every(row => row.internalCode.startsWith("CHRONICLE-TEST-")));
 const [otherMatter, matter] = cases;
-const sourceRoot = path.resolve(import.meta.dirname, "../../..");
+const sourceRoot = process.env.LEXORDER_DESKTOP_ROOT ?? path.resolve(import.meta.dirname, "../../..");
+assert(path.isAbsolute(sourceRoot));
 const tempRoot = path.resolve(tmpdir());
 const profile = await mkdtemp(path.join(tempRoot, "lexorder-webview2-"));
 assert.equal(path.dirname(profile), tempRoot);
@@ -64,12 +70,36 @@ try {
   const desktopOrigin = new URL(page.url()).origin;
   const errors = [];
   page.on("pageerror", error => errors.push(error.stack ?? error.message));
+  if (scale) {
+    await verifyWebView2Scale(page, desktopOrigin, scaleCasebookRoot);
+    assert.deepEqual(errors, []);
+  } else {
+    await verifyStandardWebView(page, desktopOrigin, errors);
+  }
+} finally {
+  try {
+    await browser?.close();
+  } finally {
+    child.kill();
+    await exited;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      if (!await lstat(path.join(workspace, ".owner")).catch(error => {
+        if (error.code !== "ENOENT") throw error;
+      })) break;
+      await delay(250);
+    }
+    await assert.rejects(lstat(path.join(workspace, ".owner")), { code: "ENOENT" });
+    await rm(profile, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+  }
+}
+
+async function verifyStandardWebView(page, desktopOrigin, errors) {
   const wideHeight = 680;
   await page.setViewportSize({ width: 1440, height: wideHeight });
   const graphPath = "/matters/" + matter.id + "/evidence/graph";
   const navigation = page.getByRole("navigation", { name: "主导航", exact: true });
   async function openCase(target) {
-    await navigation.getByRole("link", { name: "案件列表", exact: true }).click();
+    await navigation.getByRole("link", { name: "案件", exact: true }).click();
     const search = page.getByRole("textbox", { name: "搜索案件", exact: true });
     await search.fill(target.title);
     await search.press("Enter");
@@ -77,7 +107,7 @@ try {
       .getByRole("link", { name: target.title, exact: true }).click();
   }
   await openCase(matter);
-  const group = navigation.getByRole("button", { name: "事实与争点", exact: true });
+  const group = navigation.getByRole("button", { name: "争点", exact: true });
   await group.click();
   const graphLink = navigation.getByRole("link", { name: "案情图谱", exact: true });
   await graphLink.click();
@@ -435,19 +465,4 @@ try {
 
   assert.deepEqual(errors, []);
   console.log("PASS WebView2: graph navigation, select and scroll, container-driven layout, narrow fact focus, source differences, date/amount citations and party dispute");
-} finally {
-  try {
-    await browser?.close();
-  } finally {
-    child.kill();
-    await exited;
-    for (let attempt = 0; attempt < 100; attempt++) {
-      if (!await lstat(path.join(workspace, ".owner")).catch(error => {
-        if (error.code !== "ENOENT") throw error;
-      })) break;
-      await delay(250);
-    }
-    await assert.rejects(lstat(path.join(workspace, ".owner")), { code: "ENOENT" });
-    await rm(profile, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
-  }
 }

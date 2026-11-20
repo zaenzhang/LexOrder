@@ -1,4 +1,4 @@
-import { platform } from "node:os";
+import { type as osType } from "node:os";
 import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { constants, createReadStream } from "node:fs";
@@ -129,8 +129,9 @@ async function checkParents(location: string) {
   }
 }
 
+// Check the running OS: a standalone bundle can be compiled on another host.
 async function flush(file: string, directory = false) {
-  if (directory && platform() === "win32") return;
+  if (directory && osType() === "Windows_NT") return;
   const handle = await fs.open(file, directory ? "r" : "r+");
   try { await handle.sync(); } finally { await handle.close(); }
 }
@@ -246,7 +247,7 @@ async function finishBinding(matter: Matter, pending: Binding, storageRoot: stri
     // directory to its parent with no-clobber semantics. Windows refuses to
     // replace an existing directory through MoveFileEx.
     try {
-      if (platform() === "win32") await fs.rename(prepared, directory);
+      if (osType() === "Windows_NT") await fs.rename(prepared, directory);
       else await promisify(execFile)("/bin/mv", ["-n", prepared, root]);
     } catch (error) {
       if (!await exists(directory)) throw error;

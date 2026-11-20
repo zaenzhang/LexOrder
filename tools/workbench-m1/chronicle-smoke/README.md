@@ -78,6 +78,14 @@ node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-P
 
 脚本启动隐藏的 Tauri 测试窗口和它自己的 Sidecar。Playwright 通过 WebView2 的本机调试端口检查双案和图谱。退出后等待合成工作区解锁。
 
+规模验收使用同一隐藏原生窗口和标准合成案生成器。将 `M1_WORKSPACE` 指向可写的隔离合成工作区，将 `M1_CHRONOLOGY_CASEBOOK_ROOT` 指向该工作区外可写的合成案卷目录。传入 `--scale` 后新建一套 12 份 TXT 和 120 条事件的合成案卷，并检查聚合、拖动、分轨、回放、原文回读和窄窗。此模式不依赖预置双案。若从已有 Windows 隔离包运行，`LEXORDER_DESKTOP_ROOT` 可指向包含同步过的 Sidecar 业务产物的绝对目录。
+
+```powershell
+$env:M1_CHRONOLOGY_CASEBOOK_ROOT = $casebookRoot
+node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-Path $qaTarget 'debug/lexorder-chronicle-preview.exe') --scale
+```
+
+
 需要跨案出处复验时，在脚本命令末尾加 `--cross-case`。该路径使用已装载 V8 案情定位和借贷样本的合成验收甲，检查按事实换读材料、同一 PDF 的不同页锚点、分别定位三份文本及未关联出处的状态。核对表单的触发器与下拉选项字号，以及固定原文面板的宽窄布局，属于常规验收。
 
 **本轮冒烟记录**

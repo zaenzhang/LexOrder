@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { platform } from "node:os";
+import { type as osType } from "node:os";
 import { EventEmitter } from "node:events";
 import { afterEach, expect, it, vi } from "vitest";
 import { spawn } from "node:child_process";
@@ -7,7 +7,7 @@ import { openDefaultEditor } from "@/server/desktop/default-editor";
 
 vi.mock("node:os", async importOriginal => {
   const os = await importOriginal<typeof import("node:os")>();
-  return { ...os, platform: vi.fn(os.platform) };
+  return { ...os, type: vi.fn(os.type) };
 });
 vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); });
@@ -32,7 +32,7 @@ it.each([0, 7])("Windows 等待默认程序关联结果，即使启动助手延�
   const file = "C:\\测试案 [A]\\工作稿\\合同.txt";
   vi.mocked(spawn).mockReturnValue(child as unknown as ReturnType<typeof spawn>);
   vi.useFakeTimers();
-  vi.mocked(platform).mockReturnValueOnce("win32");
+  vi.mocked(osType).mockReturnValueOnce("Windows_NT");
   try {
     const settled = vi.fn();
     const opened = openDefaultEditor(file).then(() => settled("ok"), error => settled(error.message));
