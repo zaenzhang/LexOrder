@@ -31,7 +31,8 @@ for (const [source, target] of [
   ['prisma/seed.ts', 'prisma/seed.ts'],
 ]) {
   const result = await Bun.build({ entrypoints: [path.join(root, source)], target: 'bun',
-    packages: 'external', outdir: path.dirname(path.join(output, target)), naming: path.basename(target) });
+    external: ['@electric-sql/pglite', '@prisma/client', '@prisma/adapter-pg'],
+    outdir: path.dirname(path.join(output, target)), naming: path.basename(target) });
   if (!result.success) throw new AggregateError(result.logs, 'Desktop runtime build failed');
 }
 
@@ -67,7 +68,7 @@ async function copyDependency(name, from, optional = false) {
     await copyDependency(dependency, directory, isOptional);
   }
 }
-for (const packageName of ['prisma', 'tsx', '@prisma/client', '@prisma/adapter-pg', 'bcryptjs', 'dotenv']) {
+for (const packageName of ['prisma', 'tsx', '@prisma/client', '@prisma/adapter-pg', 'dotenv']) {
   await copyDependency(packageName, root);
 }
 await copyDependency('@electric-sql/pglite', import.meta.dirname);

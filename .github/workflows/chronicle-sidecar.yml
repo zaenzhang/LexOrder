@@ -67,11 +67,19 @@ jobs:
       - name: Build the native package
         run: bun run desktop --package
         working-directory: tools/workbench-m1
-      - name: Smoke the distributable runtime
-        env:
-          LEXORDER_SMOKE_RUNTIME_ROOT: ${{ github.workspace }}/desktop/personal-chronicle/desktop-preview/runtime-payload
-        run: bun --no-env-file --no-install tools/workbench-m1/chronicle-smoke/sidecar.mjs "${{ runner.temp }}/lexorder-staged-case"
-      - name: Verify the Apple Silicon DMG
+      - name: Install and smoke the Windows NSIS package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bundles = @(Get-ChildItem desktop/personal-chronicle/desktop-preview/target/release/bundle/nsis/*.exe)
+          if ($bundles.Count -ne 1) { throw "Expected one NSIS installer" }
+          $install = Join-Path $env:RUNNER_TEMP 'lexorder-installed'
+          $setup = Start-Process -FilePath $bundles[0].FullName -ArgumentList @('/S', ("/D=" + $install)) -WindowStyle Hidden -Wait -PassThru
+          if ($setup.ExitCode -ne 0) { throw "NSIS exited with code $($setup.ExitCode)" }
+          $env:LEXORDER_SMOKE_RUNTIME_ROOT = Join-Path $install 'lexorder-runtime'
+          $env:LEXORDER_SMOKE_BUN = Join-Path $install 'lexorder-bun.exe'
+          bun --no-env-file --no-install tools/workbench-m1/chronicle-smoke/sidecar.mjs (Join-Path $env:RUNNER_TEMP 'lexorder-installed-case')
+      - name: Verify and smoke the Apple Silicon DMG
         if: runner.os == 'macOS'
         shell: bash
         run: |
@@ -79,6 +87,29 @@ jobs:
           bundles=(desktop/personal-chronicle/desktop-preview/target/release/bundle/dmg/*.dmg)
           test "${#bundles[@]}" -eq 1
           hdiutil verify "${bundles[0]}"
+          mount="$RUNNER_TEMP/lexorder-dmg"
+          mkdir "$mount"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount" "${bundles[0]}"
+          trap 'hdiutil detach "$mount"' EXIT
+          apps=("$mount"/*.app)
+          test "${#apps[@]}" -eq 1
+          export LEXORDER_SMOKE_RUNTIME_ROOT="${apps[0]}/Contents/Resources/lexorder-runtime"
+          export LEXORDER_SMOKE_BUN="${apps[0]}/Contents/MacOS/lexorder-bun"
+          bun --no-env-file --no-install tools/workbench-m1/chronicle-smoke/sidecar.mjs "$RUNNER_TEMP/lexorder-installed-case"
+      - name: Extract and smoke the Linux DEB
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          shopt -s nullglob
+          bundles=(desktop/personal-chronicle/desktop-preview/target/release/bundle/deb/*.deb)
+          test "${#bundles[@]}" -eq 1
+          install="$RUNNER_TEMP/lexorder-deb"
+          dpkg-deb -x "${bundles[0]}" "$install"
+          runtime=$(find "$install/usr/lib" -type d -name lexorder-runtime -print -quit)
+          test -n "$runtime"
+          export LEXORDER_SMOKE_RUNTIME_ROOT="$runtime"
+          export LEXORDER_SMOKE_BUN="$install/usr/bin/lexorder-bun"
+          bun --no-env-file --no-install tools/workbench-m1/chronicle-smoke/sidecar.mjs "$RUNNER_TEMP/lexorder-installed-case"
       - name: Upload Windows NSIS installer
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v7

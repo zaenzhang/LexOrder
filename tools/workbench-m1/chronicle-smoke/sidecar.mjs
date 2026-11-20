@@ -16,7 +16,7 @@ const script = process.env.LEXORDER_SMOKE_RUNTIME_ROOT
 
 function start() {
   const token = randomBytes(32).toString('hex');
-  const child = spawn(process.execPath, ['--no-env-file', '--no-install', script, '--desktop'], {
+  const child = spawn(process.env.LEXORDER_SMOKE_BUN ?? process.execPath, ['--no-env-file', '--no-install', script, '--desktop'], {
     env: { ...process.env, M1_WORKSPACE: workspace, LEXORDER_DESKTOP_TOKEN: token },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
