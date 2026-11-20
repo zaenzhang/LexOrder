@@ -51,7 +51,7 @@ export function MatterOverview({ matterId, data, reload }: { matterId: string; d
   const evidenceHref = (id: string, graph = false) => `${path}/evidence/${graph ? "graph" : "arguments"}?item=${id}`
   const titleLine = [data.categoryLabel, data.cause, data.client && `委托人 ${data.client}`].filter(Boolean).join(" · ")
   return <div className="grid min-w-0 gap-4">
-    <PageHeader title="案件概览" className="sm:items-center" description={titleLine || undefined} actions={<>
+    <PageHeader title="案件概览" description={titleLine || undefined} actions={<>
       {data.canUpload && <Button variant="outline" nativeButton={false} render={<Link href={path + "/materials?upload=1"} />}>
         <PlusIcon data-icon="inline-start" />补充材料
       </Button>}
@@ -172,7 +172,7 @@ export function MatterOverview({ matterId, data, reload }: { matterId: string; d
           <CardHeader><CardTitle className="text-lg">本案技能</CardTitle></CardHeader>
           <CardContent className="grid gap-3">
             <Link className="text-sm font-medium hover:underline" href={path + "/research"}>从研究修订发起材料核对</Link>
-            <Link className="text-sm text-primary hover:underline" href="/practice/skills">技能与模板</Link>
+            <Link className="text-sm text-primary hover:underline" href="/practice/skills">工具</Link>
           </CardContent>
         </Card>}
       </aside>

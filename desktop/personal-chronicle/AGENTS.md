@@ -17,7 +17,7 @@
 ## 样式和导航
 
 - Chronicle 是个人版视觉基线。沿用 `components.json` 的 `base-nova`、`config/theme.ts` 与 `app/globals.css` 的主题、字体、色值、圆角、阴影和间距。使用模板的 PageHeader、Card、DataTable、Sheet、Badge 和表单控件，使浅色、深色和密度设置一起生效。切换视觉基线、全局配色或默认布局须先确认。
-- 保留 Chronicle 原有组件、示范菜单和示范页，从设计参考进入。个人办案界面按确认的 LexOrder 预览组织「当前案件」「工作区」和固定入口。案件概览和程序入口保持一级，稳定业务分区至多两级，页内状态和概览图表切换用小页签。切换案件更新当前上下文、目标链接和选中态。主操作放在页首右侧。窗口顶栏保留 Chronicle 的搜索、通知、浅深切换、外观与设计参考入口。顶部切案保留焦点和键盘操作，长侧栏可独立滚动，固定入口持续可达，正文沿用模板的页面滚动。
+- 保留 Chronicle 原有组件、示范菜单和示范页，从设计参考进入。个人办案界面按确认的 LexOrder 预览组织「本案」「工作区」和固定入口。分组标题沿用 Chronicle 的次要文字样式，用组间留白区分。概览和程序入口保持一级，稳定业务分区至多两级，页内状态和概览图表切换用小页签。切换案件更新当前上下文、目标链接和选中态。主操作放在页首右侧。窗口顶栏保留 Chronicle 的搜索、通知、浅深切换、外观与设计参考入口。顶部切案保留焦点和键盘操作，长侧栏可独立滚动，固定入口持续可达，正文沿用模板的页面滚动。
 - 复用 Base UI 的原生语义、焦点和键盘管理。通过 `render` 渲染为链接的 Base UI Button 或菜单项按组件文档设置 `nativeButton={false}`。弹层使用模板现有 Portal、层级和滚动设置。
 
 ## 已确认的样式参考
@@ -26,7 +26,8 @@
 
 | 界面 | 参考与约束 |
 | --- | --- |
-| 侧栏菜单树 | 对照 Chronicle 示例的「Auth pages」，复用 [NavMain](kit/shell/nav-main.tsx) 和 [Sidebar](components/ui/sidebar.tsx)。沿用模板字号、行高、图标、二级缩进线和焦点框。分组整行展开，一级分组和当前子页同时高亮，当前页的 `aria-current` 只标在对应入口。 |
+| 侧栏菜单树 | 对照 Chronicle 示例的「Auth pages」，复用 [NavMain](kit/shell/nav-main.tsx) 和 [Sidebar](components/ui/sidebar.tsx)。沿用模板字号、行高、图标、二级缩进线和焦点框。分组整行展开，一级分组和当前子页同时高亮，当前页的 `aria-current` 只标在对应入口。主侧栏与设置分区共用 [ActiveNavIndicator](kit/ui-patterns/active-nav-indicator.tsx) 的选中滑动动画。同组同级只沿纵向移动，跨级和分组展开收起时直接对齐。 |
+| 工作区设置与通知 | 复用 Chronicle [SettingsLayout](kit/settings/settings-layout.tsx)、[设置卡片](kit/settings/section.tsx) 和 [NotificationsInbox](kit/notifications/notifications-inbox.tsx)。设置菜单链接执业资料、外观、应用 AI 和操作记录。通知页和顶栏铃铛共享本机通知查询及已读状态。 |
 | 图谱下拉框 | 统一复用 [图谱 Select](features/matters/chronology-select.tsx) 和 [Chronicle Select](components/ui/select.tsx)。触发器与展开面板都使用主题样式。核对选中勾、选项回显、键盘选择、Esc 收起与焦点回到触发器。 |
 | 图谱时间轴和事实表 | 复用 [Card](components/ui/card.tsx) 与 [Table](components/ui/table.tsx)。保留 V8 的日期刻度、区间、按类别区分的标记和图例。图例与时间轴共用点、区间、冲突角标和斜纹的绘制样式。轴上的事件保留类别颜色，图例使用中性色示意形状。明确起止用圆点加细线，约定区间用虚线，仅知月份用浅底条。图例按核对与分歧、日期表达、事项性质、事件等级分组。重要加外圈，关键另加小星，聚合圆点提示组内最高等级。事实表对照 [Emporium Orders](https://demo.shadcnstore.com/emporium/orders) 的表头、行距、主次文字和状态点，沿用 Chronicle 主题。事项和来源用正文色，鼠标悬停时显示下划线。 |
 | 图谱右侧详情 | 对照已确认的 StackTrace 折叠样式，沿用 [ChronologyTrace](features/matters/chronology-trace.tsx) 的标题、状态和材料记录。事实详情固定标题和简明状态。正文按事实内容、材料记录、核对与标注、材料指向、变更记录排列。材料列表默认展开。字号按事实标题、分组标题、材料名、辅助信息递减。收起的材料行显示名称，多条记载时显示数量。材料展开态以结构化记载和查看原文为主。来源版本和定位随固定原文展示，关联用途和出现时点收进材料设置。记载的日期和金额分别采用。材料展开后显示逐字引文，同段字段在段内高亮，原件按固定版本定位，从事实表出处进入时展开对应记载。分组操作与折叠触发器分开，核对字段使用 Chronicle Field 和小号 Select。记载分歧收在材料记录顶部，只在有字段分歧时显示。材料行收起时用简短状态标明采用字段。分歧来源用正文色和悬停下划线，点击后打开固定原文并高亮对应字段。核对表单、材料指向和历史默认收起并可独立展开。普通保存保留同一事实的展开状态。程序记录默认收起。 |

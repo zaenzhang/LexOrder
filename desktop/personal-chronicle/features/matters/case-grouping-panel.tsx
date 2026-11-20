@@ -127,7 +127,7 @@ export function CaseGroupingPanel({ matterId, picks, destination, selectionLocke
           <p className="break-words text-xs text-muted-foreground">{destination.model} · {destination.origin}</p>
           <Button size="sm" className="justify-self-end" disabled={selectionLocked || queue.isPending}
             onClick={() => queue.mutate({ reviewed, destination })}>{queue.isPending ? "正在提交…" : "确认发送摘要"}</Button>
-        </> : <p className="text-xs text-muted-foreground">在「技能与模板 → 应用 AI」配置模型后可确认发送。</p>}
+        </> : <p className="text-xs text-muted-foreground">在「设置 → 应用 AI」配置模型后可确认发送。</p>}
         {queue.error && <p role="alert" className="text-xs text-destructive">{queue.error.message}</p>}
       </div>}
 

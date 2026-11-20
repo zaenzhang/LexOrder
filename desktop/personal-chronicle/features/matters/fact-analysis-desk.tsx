@@ -127,7 +127,7 @@ const pendingStates = new Set<Run["state"]>(["QUEUED", "DISPATCHED"])
 const errors: Record<string, string> = {
   PERMISSION: "已选材料的授权有变，请重新核对。",
   STALE: "启动前要点已更新，本批次未发送。",
-  PROVIDER: "应用 AI 请求失败，请检查「技能与模板」内的配置和调用记录。",
+  PROVIDER: "应用 AI 请求失败，请检查「设置 → 应用 AI」中的配置和调用记录。",
   UNAVAILABLE: "应用 AI 当前不可用。",
   INVALID_RESULT: "模型返回的结构或原文引用未通过校验。",
   INTERRUPTED: "调用已中断，可能产生费用。重开此批次无需再次提交。",
@@ -325,7 +325,7 @@ function AnalysisBody({ matterId, item, onSaved }: { matterId: string; item: Evi
           <Button disabled={sending || !!loadingSource || !canSubmit} onClick={() => void start()}>确认送出并分析</Button>
         </div>
       </section>}
-      {list && !list.destination && <p className="rounded-md border bg-muted/40 p-3 text-sm">请在「技能与模板 → 应用 AI」设置模型。已保存的批次仍可读取。</p>}
+      {list && !list.destination && <p className="rounded-md border bg-muted/40 p-3 text-sm">请在「设置 → 应用 AI」设置模型。已保存的批次仍可读取。</p>}
       {list?.runs.length ? <section aria-label="分析批次" className="grid gap-2">
         <h3 className="text-sm font-medium">分析批次</h3>
         {list.runs.map(entry => <Button key={entry.id} variant="outline" className="h-auto justify-between py-2 text-left" onClick={() => openRun(entry.id)}>

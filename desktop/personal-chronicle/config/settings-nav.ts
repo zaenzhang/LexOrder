@@ -1,4 +1,4 @@
-import { BellIcon, CreditCardIcon, KeyRoundIcon, PaletteIcon, PlugIcon, ShieldCheckIcon, UserIcon, UsersIcon } from "lucide-react"
+import { BellIcon, CreditCardIcon, HistoryIcon, KeyRoundIcon, PaletteIcon, PlugIcon, ShieldCheckIcon, UserIcon, UsersIcon } from "lucide-react"
 
 import type { SettingsGroup } from "@/kit/settings/settings-layout"
 
@@ -31,7 +31,7 @@ export const SETTINGS_NAV: SettingsGroup[] = [
     items: [{ title: "Connections", href: "/settings/connections", icon: PlugIcon }],
   },
   // The public demo only: previews of screens the paid templates ship (features/demo). Your build never lists them.
-  ...(process.env.NEXT_PUBLIC_DEMO === "1"
+  ...(import.meta.env.MODE === "demo"
     ? [
         {
           label: "In the paid templates",
@@ -43,4 +43,22 @@ export const SETTINGS_NAV: SettingsGroup[] = [
         },
       ]
     : []),
+]
+
+export const WORKBENCH_SETTINGS_NAV: SettingsGroup[] = [
+  {
+    label: "个人",
+    items: [{ title: "执业资料", href: "/practice/profile", icon: UserIcon }],
+  },
+  {
+    label: "偏好",
+    items: [{ title: "外观", href: "/practice/profile/appearance", icon: PaletteIcon }],
+  },
+  {
+    label: "工作区",
+    items: [
+      { title: "应用 AI", href: "/practice/profile/ai", icon: PlugIcon },
+      { title: "操作记录", href: "/practice/profile/audit", icon: HistoryIcon },
+    ],
+  },
 ]

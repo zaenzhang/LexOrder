@@ -5,7 +5,6 @@ import { usePageLoading } from "@/kit/ui-patterns/page-loading"
 import { InlineLoading } from "@/kit/ui-patterns/workspace-loading"
 import Link from "@/features/shell/workspace-link"
 import { useState } from "react"
-import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TaskResponsibilities, type TaskBoardView } from "./task-responsibilities"
@@ -14,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { PageHeader } from "@/kit/ui-patterns/page-header"
 import { longCalendarDate, type PersonalScheduleItem } from "./personal-calendar"
-import { chinaDate, usePractice, writePractice } from "./data"
+import { chinaDate, usePractice } from "./data"
 
 const sections = {
   today: "今日办理",
@@ -22,7 +21,7 @@ const sections = {
   "follow-ups": "客户跟进",
   notifications: "业务通知",
 } as const
-type View = Exclude<keyof typeof sections, "schedule">
+type View = "today" | "follow-ups"
 type TodayData = {
   day: string
   courtDates: PersonalScheduleItem[]
@@ -51,7 +50,7 @@ function Today({ initialTab }: { initialTab: TaskBoardView }) {
   const { data, error, refetch } = usePractice<TodayData>("today")
   usePageLoading(!data && !error)
   return <section className="grid gap-4">
-    <PageHeader className="sm:items-center [&_h1]:text-[1.75rem]" title="今日办理" description={data ? longCalendarDate(data.day) + " · 本机承办工作" : "本机承办工作"}
+    <PageHeader title="今日办理" description={data ? longCalendarDate(data.day) + " · 本机承办工作" : "本机承办工作"}
       actions={<><Button size="sm" variant="outline" nativeButton={false} render={<Link href="/practice/operations" />}>跨案事务</Button>
         <Button size="sm" variant="outline" nativeButton={false} render={<Link href="/practice/schedule" />}>查看日程</Button></>} />
     {error && <div role="alert" className="flex items-center gap-2 text-sm">{error.message}<Button size="sm" variant="outline" onClick={() => void refetch()}>重试</Button></div>}
@@ -155,71 +154,7 @@ function FollowUps() {
     </>
   )
 }
-function Notifications({ focused }: { focused?: string }) {
-  const cache = useQueryClient()
-  const [unread, setUnread] = useState(false)
-  const [failure, setFailure] = useState("")
-  const { data, error, refetch } = usePractice<{
-    items: {
-      id: string
-      title: string
-      content: string | null
-      createdAt: string
-      read: boolean
-    }[]
-  }>("notifications", { unread: unread ? "1" : "0" })
-  async function mark(id: string) {
-    try {
-      setFailure("")
-      await writePractice({ action: "read-notification", id })
-      await Promise.all([refetch(), cache.invalidateQueries({ queryKey: ["practice", "view=notifications&summary=1"] })])
-    } catch (e) {
-      setFailure((e as Error).message)
-    }
-  }
-  return (
-    <>
-      <label className="flex gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={unread}
-          onChange={(e) => setUnread(e.target.checked)}
-        />
-        仅看未读
-      </label>
-      {(error || failure) && <p role="alert">{error?.message || failure}</p>}
-      {data &&
-        (data.items.length ? (
-          <ul className="divide-y">
-            {data.items.map((row) => (
-              <li
-                key={row.id}
-                className={"flex items-center justify-between gap-4 rounded-md px-2 py-3 " + (row.id === focused ? "bg-accent" : "")}
-              >
-                <div>
-                  <h2 className="font-medium">{row.title}</h2>
-                  <p>{row.content}</p>
-                  <small>{chinaDate(row.createdAt)}</small>
-                </div>
-                {!row.read && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => mark(row.id)}
-                  >
-                    标为已读
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p>没有业务通知。</p>
-        ))}
-    </>
-  )
-}
-export function DailyWork({ view, todayTab = "open", notification }: { view: View; todayTab?: TaskBoardView; notification?: string }) {
+export function DailyWork({ view, todayTab = "open" }: { view: View; todayTab?: TaskBoardView }) {
   if (view === "today") return <Today initialTab={todayTab} />
   return (
     <section className="flex flex-col gap-5">
@@ -242,7 +177,7 @@ export function DailyWork({ view, todayTab = "open", notification }: { view: Vie
           </Button>
         ))}
       </nav>
-      {view === "follow-ups" ? <FollowUps /> : <Notifications focused={notification} />}
+      <FollowUps />
     </section>
   )
 }

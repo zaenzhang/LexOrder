@@ -14,8 +14,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar"
 
-import { Link } from "../framework"
-import type { ShellUser } from "./types"
+import { Link, type KitLink } from "../framework"
+import type { NavLink, ShellUser } from "./types"
 
 export function initials(name: string): string {
   return name
@@ -26,7 +26,9 @@ export function initials(name: string): string {
     .toUpperCase()
 }
 
-export function UserMenuContent({ user }: { user: ShellUser }) {
+type AccountMenuProps = { user: ShellUser; links?: NavLink[]; navigationLink?: KitLink; onNavigate?: () => void }
+
+export function UserMenuContent({ user, links, navigationLink: NavigationLink = Link, onNavigate }: AccountMenuProps) {
   return (
     <>
       <DropdownMenuGroup>
@@ -38,39 +40,47 @@ export function UserMenuContent({ user }: { user: ShellUser }) {
             </Avatar>
             <div className="grid flex-1 text-start text-sm leading-tight">
               <span className="truncate font-medium">{user.name}</span>
-              <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+              {user.email && <span className="truncate text-xs text-muted-foreground">{user.email}</span>}
             </div>
           </div>
         </DropdownMenuLabel>
       </DropdownMenuGroup>
       <DropdownMenuSeparator />
-      <DropdownMenuGroup>
-        <DropdownMenuItem render={<Link href="/settings/account" />}>
-          <BadgeCheckIcon />
-          Account
-        </DropdownMenuItem>
-        <DropdownMenuItem render={<Link href="/notifications" />}>
-          <BellIcon />
-          Notifications
-        </DropdownMenuItem>
-        <DropdownMenuItem render={<Link href="/settings" />}>
-          <SettingsIcon />
-          Settings
-        </DropdownMenuItem>
-      </DropdownMenuGroup>
-      <DropdownMenuSeparator />
-      <DropdownMenuGroup>
-        <DropdownMenuItem render={<Link href="/sign-in" />}>
-          <LogOutIcon />
-          Log out
-        </DropdownMenuItem>
-      </DropdownMenuGroup>
+      {links ? <DropdownMenuGroup>
+        {links.map(({ href, title, icon: Icon }) => <DropdownMenuItem key={href} nativeButton={false}
+          render={<NavigationLink href={href} onClick={onNavigate} />}>
+          {Icon && <Icon />}
+          {title}
+        </DropdownMenuItem>)}
+      </DropdownMenuGroup> : <>
+        <DropdownMenuGroup>
+          <DropdownMenuItem render={<Link href="/settings/account" />}>
+            <BadgeCheckIcon />
+            Account
+          </DropdownMenuItem>
+          <DropdownMenuItem render={<Link href="/notifications" />}>
+            <BellIcon />
+            Notifications
+          </DropdownMenuItem>
+          <DropdownMenuItem render={<Link href="/settings" />}>
+            <SettingsIcon />
+            Settings
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem render={<Link href="/sign-in" />}>
+            <LogOutIcon />
+            Log out
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </>}
     </>
   )
 }
 
-export function NavUser({ user }: { user: ShellUser }) {
-  const { isMobile } = useSidebar()
+export function NavUser({ user, links, navigationLink }: Omit<AccountMenuProps, "onNavigate">) {
+  const { isMobile, setOpenMobile } = useSidebar()
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -86,12 +96,12 @@ export function NavUser({ user }: { user: ShellUser }) {
             </Avatar>
             <div className="grid flex-1 text-start text-sm leading-tight">
               <span className="truncate font-medium">{user.name}</span>
-              <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+              {user.email && <span className="truncate text-xs text-muted-foreground">{user.email}</span>}
             </div>
             <ChevronsUpDownIcon className="ms-auto" />
           </DropdownMenuTrigger>
           <DropdownMenuContent className="min-w-56" side={isMobile ? "bottom" : "right"} align="end" sideOffset={4}>
-            <UserMenuContent user={user} />
+            <UserMenuContent user={user} links={links} navigationLink={navigationLink} onNavigate={() => setOpenMobile(false)} />
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>

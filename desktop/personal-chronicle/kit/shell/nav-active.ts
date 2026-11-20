@@ -14,10 +14,14 @@ export function isActive(pathname: string, href: string): boolean {
  */
 export function activeHref(pathname: string, links: NavLink[]): string | null {
   let best: string | null = null
+  let longest = 0
   const visit = (items: NavLink[]) => {
     for (const link of items) {
-      if (isActive(pathname, link.href) && (!best || link.href.length > best.length)) {
-        best = link.href
+      for (const path of [link.href, ...(link.activePaths ?? [])]) {
+        if (path.length > longest && isActive(pathname, path)) {
+          best = link.href
+          longest = path.length
+        }
       }
       if (link.items) {
         visit(link.items)

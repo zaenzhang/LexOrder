@@ -98,7 +98,7 @@ export function MatterAnalysisRuns({ matterId, coverage, targets, onAdopted, onO
       <p role="status" className="text-sm">{plan.batches.length} 个建议批次 · {number(plan.plannedCharacters)} 字符</p>
       {plan.unplannedCharacters > 0 && <p className="text-xs text-muted-foreground">另有 {number(plan.unplannedCharacters)} 字符超过本次预检的分段上限。</p>}
       {destination && <p className="text-sm">应用 AI · {destination.model} · {destination.origin}</p>}
-      {list.data && !destination && plan.batches.length > 0 && <p className="text-sm text-muted-foreground">在「技能与模板 → 应用 AI」配置模型后可确认发送。</p>}
+      {list.data && !destination && plan.batches.length > 0 && <p className="text-sm text-muted-foreground">在「设置 → 应用 AI」配置模型后可确认发送。</p>}
       {plan.batches.map((batch, index) => <Collapsible key={index} className="rounded-md border">
         <CollapsibleTrigger render={<Button variant="ghost" className="group h-auto w-full justify-between whitespace-normal text-start" />}>
           第 {index + 1} 批 · {batch.ranges.length} 段 · {number(batch.characters)} 字符

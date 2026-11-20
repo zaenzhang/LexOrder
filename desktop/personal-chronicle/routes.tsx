@@ -4,7 +4,7 @@ import { createBrowserRouter, Outlet, type RouteObject } from "react-router"
 import RootLayout from "@/app/layout"
 import NotFound from "@/app/not-found"
 import { ChronicleShell } from "@/features/shell/chronicle-shell"
-import { SettingsFrame } from "@/features/settings/settings-frame"
+import { SettingsFrame, WorkbenchSettingsFrame } from "@/features/settings/settings-frame"
 import { Spinner } from "@/components/ui/spinner"
 
 type Page = { default: ComponentType; metadata?: { title: string } }
@@ -17,6 +17,7 @@ const views = import.meta.glob<Page>([
 const pages: RouteObject[] = []
 const shell: RouteObject[] = []
 const settings: RouteObject[] = []
+const workbenchSettings: RouteObject[] = []
 const demo = import.meta.env.MODE === "demo"
 
 for (const [file, load] of Object.entries(views)) {
@@ -32,10 +33,12 @@ for (const [file, load] of Object.entries(views)) {
     }
   }
   const target = file.startsWith("/app/(shell)/settings/") ? settings
+    : file.startsWith("/app/(shell)/practice/profile/") ? workbenchSettings
     : file.startsWith("/app/(shell)/") ? shell : pages
   target.push(path ? { path, lazy } : { index: true, lazy })
 }
 shell.push({ Component: () => <SettingsFrame><Outlet /></SettingsFrame>, children: settings })
+shell.push({ Component: () => <WorkbenchSettingsFrame><Outlet /></WorkbenchSettingsFrame>, children: workbenchSettings })
 pages.push({ Component: () => <ChronicleShell><Outlet /></ChronicleShell>, children: shell })
 pages.push({ path: "*", Component: NotFound })
 

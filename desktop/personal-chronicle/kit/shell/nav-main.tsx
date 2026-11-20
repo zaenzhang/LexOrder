@@ -34,6 +34,7 @@ function Entry({ link, current, badges, navigationLink: NavigationLink }: { link
   const pathname = usePathname()
   const { setOpenMobile, state, isMobile } = useSidebar()
   const Icon = link.icon
+  const showSubPages = isMobile || state === "expanded"
   // A section is open on its own page and on any of its sub-pages, wherever they live.
   const inSection = isActive(pathname, link.href) || (link.items ?? []).some((item) => isActive(pathname, item.href))
   const close = () => setOpenMobile(false)
@@ -81,7 +82,7 @@ function Entry({ link, current, badges, navigationLink: NavigationLink }: { link
       <SidebarMenuSub>
         {link.items.map((item) => (
           <SidebarMenuSubItem key={item.href}>
-            <SidebarMenuSubButton isActive={current === item.href} aria-current={current === item.href ? "page" : undefined} render={<NavigationLink href={item.href} onClick={close} />}>
+            <SidebarMenuSubButton isActive={current === item.href} aria-current={showSubPages && current === item.href ? "page" : undefined} render={<NavigationLink href={item.href} onClick={close} />}>
               <span>{item.title}</span>
             </SidebarMenuSubButton>
           </SidebarMenuSubItem>
@@ -91,7 +92,7 @@ function Entry({ link, current, badges, navigationLink: NavigationLink }: { link
   )
 
   // The icon-only sidebar hides sub-pages, so there the row stays a link to `href`.
-  if (link.expandOnly && (isMobile || state === "expanded")) {
+  if (link.expandOnly && showSubPages) {
     return (
       <Collapsible open={open} onOpenChange={setOpen} render={<SidebarMenuItem />}>
         <SidebarMenuButton
@@ -113,6 +114,7 @@ function Entry({ link, current, badges, navigationLink: NavigationLink }: { link
     <Collapsible open={open} onOpenChange={setOpen} render={<SidebarMenuItem />}>
       <SidebarMenuButton
         isActive={link.expandOnly ? inSection : current === link.href}
+        aria-current={!showSubPages && inSection ? "page" : undefined}
         tooltip={link.title}
         render={
           <NavigationLink
@@ -139,7 +141,17 @@ function Entry({ link, current, badges, navigationLink: NavigationLink }: { link
   )
 }
 
-export function NavMain({ groups, badges, navigationLink = Link }: { groups: NavGroup[]; badges: Record<string, number>; navigationLink?: KitLink }) {
+export function NavMain({
+  groups,
+  badges,
+  navigationLink = Link,
+  compactGroups = false,
+}: {
+  groups: NavGroup[]
+  badges: Record<string, number>
+  navigationLink?: KitLink
+  compactGroups?: boolean
+}) {
   const pathname = usePathname()
   const current = activeHref(
     pathname,
@@ -149,7 +161,14 @@ export function NavMain({ groups, badges, navigationLink = Link }: { groups: Nav
     <>
       {groups.map((group, index) => (
         <SidebarGroup key={group.label ?? index}>
-          {group.label && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
+          {group.label && (
+            <SidebarGroupLabel className={compactGroups
+              ? "h-6 group-data-[collapsible=icon]:hidden"
+              : undefined}
+            >
+              {group.label}
+            </SidebarGroupLabel>
+          )}
           <SidebarMenu className="gap-0.5">
             {group.items.map((link) => (
               <Entry key={link.title} link={link} current={current} badges={badges} navigationLink={navigationLink} />

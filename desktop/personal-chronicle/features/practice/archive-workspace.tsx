@@ -288,7 +288,7 @@ export function ArchiveWorkspace({ matterId }: { matterId: string }) {
               onSave={(f) => post({ action: "policy", matterId, ...Object.fromEntries(f) })}
             >
               <p>本设置适用于整个个人工作区。批准记录保留当时采用的制度版本。</p>
-              <Link href="/practice/resources" className="underline">
+              <Link href="/practice/skills/resources" className="underline">
                 在工作资源导入制度原文
               </Link>
               <label>

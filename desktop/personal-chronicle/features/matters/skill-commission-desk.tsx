@@ -329,7 +329,7 @@ function CommissionDetail({ matterId, id, onAdopted, onOpenRecord }: {
               <span>确认把冻结范围内的 {data.fragments.length} 个片段交给此模型处理。</span>
             </label>
             <Button size="sm" className="justify-self-start" disabled={busy || !aiApproved} onClick={() => void runAi()}>生成待核稿</Button>
-          </> : <p>应用 AI 尚未配置。<Link href="/practice/ai" className="underline">打开应用 AI 配置</Link></p>}
+          </> : <p>应用 AI 尚未配置。<Link href="/practice/profile/ai" className="underline">打开应用 AI 配置</Link></p>}
         </CardContent>
       </Card>}
       {data.canWrite && !data.result && !data.aiExecution && <Card>

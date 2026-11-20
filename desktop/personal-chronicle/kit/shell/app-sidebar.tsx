@@ -1,5 +1,6 @@
 "use client"
 
+import { cn } from "@/lib/utils"
 import {
   Sidebar,
   SidebarContent,
@@ -17,6 +18,7 @@ import {
 
 import { Link, usePathname, type KitLink } from "../framework"
 import { useCustomizer, useKitTheme } from "../customizer/customizer-provider"
+import { ActiveNavIndicator } from "../ui-patterns/active-nav-indicator"
 import { isActive } from "./nav-active"
 import { NavMain } from "./nav-main"
 import { NavUser } from "./nav-user"
@@ -29,7 +31,7 @@ export function AppSidebar({ config, badges, workspaceSwitcher, workbench, navig
   const collapsible = useCustomizer((state) => state.sidebarCollapsible)
   const direction = useCustomizer((state) => state.direction)
   const pathname = usePathname()
-  const { setOpenMobile } = useSidebar()
+  const { isMobile, state, setOpenMobile } = useSidebar()
 
   return (
     <Sidebar variant={workbench ? defaultVariant : variant} collapsible={collapsible} side={direction === "rtl" ? "right" : "left"}>
@@ -39,8 +41,22 @@ export function AppSidebar({ config, badges, workspaceSwitcher, workbench, navig
       {workbench && <SidebarSeparator />}
       <SidebarContent>
         {/* A real box, not display: contents (some screen readers drop those): the nav is the links' landmark. */}
-        <nav aria-label={workbench ? "主导航" : "Main"} className="flex flex-col">
-          <NavMain groups={config.nav} badges={badges} navigationLink={NavigationLink} />
+        <nav
+          aria-label={workbench ? "主导航" : "Main"}
+          className={cn(
+            "relative flex flex-col",
+            workbench && "isolate [&>[data-sidebar=group]]:z-10 [&_[aria-current=page]]:bg-transparent!",
+            workbench && "[&_[data-sidebar=menu-button][data-active][aria-expanded=true]]:bg-sidebar-accent/55 [&_[data-sidebar=menu-button]>svg]:[stroke-width:1.75] [&_[data-sidebar=menu-button][data-active]>svg:first-child]:text-primary",
+          )}
+        >
+          {workbench && (
+            <ActiveNavIndicator
+              activeKey={pathname + (isMobile ? ":mobile" : ":" + state)}
+              className="rounded-md bg-sidebar-accent"
+              subMenuSelector='[data-sidebar="menu-sub"]'
+            />
+          )}
+          <NavMain groups={config.nav} badges={badges} navigationLink={NavigationLink} compactGroups={workbench} />
           {workspaceSwitcher && !workbench && (
             <SidebarGroup>
               <WorkspaceSwitcher workspaces={config.workspaces} labels={config.workspaceLabels} />
@@ -68,10 +84,7 @@ export function AppSidebar({ config, badges, workspaceSwitcher, workbench, navig
             </SidebarGroupContent>
           </SidebarGroup>
         </nav>
-        {workbench ? <div className="flex items-center gap-2 px-2 py-1 text-xs text-muted-foreground">
-          <span className="grid size-6 shrink-0 place-items-center rounded-md border border-sidebar-border">律</span>
-          <span className="truncate group-data-[collapsible=icon]:hidden">本机用户</span>
-        </div> : <NavUser user={config.user} />}
+        <NavUser user={config.user} links={workbench ? config.secondary : undefined} navigationLink={NavigationLink} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

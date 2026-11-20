@@ -81,7 +81,7 @@ export function CourtInbox({ matterId, initialRecord, fromToday }: { matterId?: 
   usePageLoading(catalog.isPending)
   const status = <>{error && <p role="alert" className="text-sm text-destructive">{error}</p>}{notice && <p role="status" className="text-sm">{notice}</p>}</>
   return <section className="grid min-w-0 gap-4">
-    <PageHeader className="sm:items-center [&_h1]:text-[1.75rem]" title="法院来件" description={matterId ? item?.matter?.title ?? "本案法院材料" : "待归案及已登记来件"} actions={<>
+    <PageHeader title="法院来件" description={matterId ? item?.matter?.title ?? "本案法院材料" : "待归案及已登记来件"} actions={<>
       {fromToday && <Button size="sm" variant="outline" nativeButton={false} render={<Link href="/practice/today" />}>返回今日办理</Button>}
       {matterId && <Button size="sm" variant="outline" nativeButton={false} render={<Link href={"/matters/" + matterId + "/materials"} />}>返回案卷材料</Button>}
       {matterId

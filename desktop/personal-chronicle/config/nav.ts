@@ -1,12 +1,13 @@
 import {
   BarChart3Icon,
   BellIcon,
+  BriefcaseBusinessIcon,
   CalendarDaysIcon,
-  FolderOpenIcon,
   CheckSquareIcon,
   CircleHelpIcon,
   GlobeIcon,
   LayoutDashboardIcon,
+  ListTodoIcon,
   LockKeyholeIcon,
   MailIcon,
   MessagesSquareIcon,
@@ -15,10 +16,14 @@ import {
   TagIcon,
   TriangleAlertIcon,
   UsersIcon,
+  UsersRoundIcon,
+  WalletCardsIcon,
+  WrenchIcon,
 } from "lucide-react"
 
 import { ShadcnStoreMark } from "@/components/chronicle/shadcnstore-mark"
 import { BRAND } from "@/config/brand"
+import { CLIENT_TABS } from "@/config/client-tabs"
 import { authPath, type AuthScreen, type AuthVariant } from "@/features/auth/auth-paths"
 import { showGoFurther } from "@/features/demo/config"
 import type { NavGroup, NavLink } from "@/kit/shell/types"
@@ -67,15 +72,17 @@ export const NAV: NavGroup[] = [
   {
     label: "工作区",
     items: [
-      { title: "案件列表", href: "/matters/list", icon: FolderOpenIcon },
-      { title: "今日办理", href: "/practice/today", icon: LayoutDashboardIcon },
-      { title: "客户与委托", href: "/practice/clients", icon: UsersIcon, expandOnly: true, items: [
-        { title: "客户", href: "/practice/clients" }, { title: "收案", href: "/practice/intakes" },
-        { title: "外部联系人", href: "/practice/contacts" }, { title: "利益冲突预检", href: "/practice/conflicts" },
-      ] },
-      { title: "工作日程", href: "/practice/schedule", icon: CalendarDaysIcon },
-      { title: "收款台账", href: "/practice/finance", icon: BarChart3Icon },
-      { title: "技能与模板", href: "/practice/skills", icon: SparklesIcon },
+      { title: "案件", href: "/matters/list", icon: BriefcaseBusinessIcon },
+      { title: "今日", href: "/practice/today", icon: ListTodoIcon },
+      {
+        title: "客户",
+        href: CLIENT_TABS[0].href,
+        icon: UsersRoundIcon,
+        activePaths: CLIENT_TABS.slice(1).map(tab => tab.href),
+      },
+      { title: "日程", href: "/practice/schedule", icon: CalendarDaysIcon },
+      { title: "财务", href: "/practice/finance", icon: WalletCardsIcon },
+      { title: "工具", href: "/practice/skills", icon: WrenchIcon },
     ],
   },
   {
@@ -98,15 +105,20 @@ export const NAV: NavGroup[] = [
   },
 ]
 
+const FIXED_NAV = {
+  notifications: { icon: BellIcon, shortcut: "n" },
+  settings: { icon: SettingsIcon, shortcut: "s" },
+}
+
 export const WORKBENCH_NAV = NAV.find(group => group.label === "工作区")!
 export const WORKBENCH_SECONDARY: NavLink[] = [
-  { title: "通知", href: "/practice/notifications", icon: BellIcon, shortcut: "n" },
-  { title: "设置", href: "/practice/profile", icon: SettingsIcon, shortcut: "s" },
+  { ...FIXED_NAV.notifications, title: "通知", href: "/practice/notifications" },
+  { ...FIXED_NAV.settings, title: "设置", href: "/practice/profile" },
 ]
 
 export const SECONDARY_NAV: NavLink[] = [
-  { title: "Notifications", href: "/notifications", icon: BellIcon, shortcut: "n" },
-  { title: "Settings", href: "/settings", icon: SettingsIcon, shortcut: "s" },
+  { ...FIXED_NAV.notifications, title: "Notifications", href: "/notifications" },
+  { ...FIXED_NAV.settings, title: "Settings", href: "/settings" },
   // The public demo and `pnpm dev` only: what the paid templates add (features/demo). `pnpm build` never shows it.
   ...(showGoFurther ? [{ title: "Go further", href: "/go-further", icon: SparklesIcon }] : []),
   // The template credit (config/brand.ts, credits.show). A plain link, so it never gets a G shortcut.

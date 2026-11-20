@@ -1,13 +1,32 @@
 "use client"
 
-import { ArchiveIcon, BookOpenIcon, ClipboardListIcon, FileCheckIcon, FileStackIcon, GavelIcon, InboxIcon, KeyboardIcon, LayoutDashboardIcon, ListChecksIcon, StampIcon, WalletIcon, MoonIcon, UserPlusIcon, UsersIcon, type LucideIcon } from "lucide-react"
+import {
+  ArchiveIcon,
+  BookOpenIcon,
+  FileTextIcon,
+  FilesIcon,
+  FolderCogIcon,
+  InboxIcon,
+  KeyboardIcon,
+  MoonIcon,
+  PanelsTopLeftIcon,
+  ScaleIcon,
+  SquareChartGanttIcon,
+  StampIcon,
+  UserPlusIcon,
+  UsersIcon,
+  WalletIcon,
+  type LucideIcon,
+} from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { useTheme } from "next-themes"
 import { useNavigation } from "react-router"
 import { usePathname, useRouter } from "@/kit/framework"
 import { lazy, Suspense, useCallback, useMemo, useState } from "react"
 
+import { CLIENT_TABS } from "@/config/client-tabs"
 import { NAV, SECONDARY_NAV, WORKBENCH_NAV, WORKBENCH_SECONDARY } from "@/config/nav"
+import { WORKBENCH_SETTINGS_NAV } from "@/config/settings-nav"
 import { SITE } from "@/config/site"
 import type { User } from "@/data/schema"
 import { useDemoCommands } from "@/features/demo/demo-commands"
@@ -21,6 +40,7 @@ import { useMail } from "@/features/mail/store"
 import { useNotifications } from "@/features/notifications/store"
 import { CommandMenuProvider, type CommandAction, type CommandSearchResult } from "@/kit/command/command-menu"
 import { NotificationBell } from "@/kit/notifications/notification-bell"
+import { activeHref } from "@/kit/shell/nav-active"
 import type { NavGroup, NavLink } from "@/kit/shell/types"
 import { AppShell } from "@/kit/shell/app-shell"
 import { PageLoadingProvider, PagePending } from "@/kit/ui-patterns/page-loading"
@@ -49,10 +69,14 @@ const DebugPanel = import.meta.env.DEV
 
 const DEMO_LINKS = [...NAV.flatMap((group) => group.items), ...SECONDARY_NAV]
 const WORKBENCH_LINKS = [...WORKBENCH_NAV.items, ...WORKBENCH_SECONDARY]
+const WORKBENCH_COMMAND_LINKS = [
+  ...WORKBENCH_LINKS,
+  ...CLIENT_TABS.slice(1).map(tab => ({ title: tab.label, href: tab.href })),
+]
 
 const SECTION_ICONS: Record<MatterSection, LucideIcon> = {
-  overview: LayoutDashboardIcon, materials: FileStackIcon, court: InboxIcon, evidence: GavelIcon, research: BookOpenIcon,
-  tasks: ListChecksIcon, delivery: FileCheckIcon, records: ClipboardListIcon, finance: WalletIcon, seal: StampIcon, archive: ArchiveIcon,
+  overview: PanelsTopLeftIcon, materials: FilesIcon, court: InboxIcon, evidence: ScaleIcon, research: BookOpenIcon,
+  tasks: SquareChartGanttIcon, delivery: FileTextIcon, records: FolderCogIcon, finance: WalletIcon, seal: StampIcon, archive: ArchiveIcon,
 }
 
 function caseRoute(pathname: string) {
@@ -75,11 +99,11 @@ function Frame({ children, workbench }: { children: React.ReactNode; workbench: 
   const mail = useMail((state) => workbench ? 0 : state.mails.filter(item => !item.read && item.folder === "inbox").length)
   const route = caseRoute(usePathname())
   useRecentMatter(route?.id, route?.section)
-  const [session, setSession] = useState<{ current?: string; sections: Record<string, MatterSection> }>({ sections: {} })
-  if (route && (session.current !== route.id || session.sections[route.id] !== route.section)) {
-    setSession({ current: route.id, sections: { ...session.sections, [route.id]: route.section } })
+  const [lastSections, setLastSections] = useState<Record<string, MatterSection>>({})
+  if (route && lastSections[route.id] !== route.section) {
+    setLastSections({ ...lastSections, [route.id]: route.section })
   }
-  const matterId = route?.id ?? session.current
+  const matterId = route?.id
   const identity = useQuery({
     enabled: workbench && Boolean(matterId),
     queryKey: ["chronicle", "matter-identity", matterId],
@@ -91,39 +115,53 @@ function Frame({ children, workbench }: { children: React.ReactNode; workbench: 
     if (!workbench) return
     const matter = caseRoute(pathname)
     if (!matter) {
-      const current = WORKBENCH_LINKS.flatMap(link => [link, ...(link.items ?? [])]).find(link => link.href === pathname)
+      const setting = WORKBENCH_SETTINGS_NAV.flatMap(group => group.items).find(link => link.href === pathname)
+      if (setting) return [
+        { href: "/practice/today", title: "工作区", isLast: false },
+        ...(pathname === "/practice/profile" ? [] : [{ href: "/practice/profile", title: "设置", isLast: false }]),
+        { href: pathname, title: pathname === "/practice/profile" ? "设置" : setting.title, isLast: true },
+      ]
+      const currentHref = activeHref(pathname, WORKBENCH_LINKS)
+      const current = WORKBENCH_LINKS.flatMap(link => [link, ...(link.items ?? [])]).find(link => link.href === currentHref)
+      const customerTab = CLIENT_TABS.slice(1).find(tab => tab.href === pathname)
+      if (customerTab) return [
+        { href: "/practice/today", title: "工作区", isLast: false },
+        { href: CLIENT_TABS[0].href, title: "客户", isLast: false },
+        { href: pathname, title: customerTab.label, isLast: true },
+      ]
       const page = { href: pathname, title: current?.title ?? "个人工作区", isLast: true }
       return pathname === "/practice/today" ? [page] : [{ href: "/practice/today", title: "工作区", isLast: false }, page]
     }
     return [{ href: "/matters/list", title: "案件", isLast: false },
-      ...(identity.data?.id === matter.id && matter.section !== "overview" ? [{ href: `/matters/${matter.id}/overview`, title: identity.data.internalCode, isLast: false }] : []),
+      ...(identity.data?.id === matter.id && matter.section !== "overview" ? [{ href: `/matters/${matter.id}/overview`, title: identity.data.title, isLast: false }] : []),
       { href: pathname, title: matter.title, isLast: true }]
   }
   function sectionLink(key: MatterSection, title: string): NavLink {
     return { title, href: matterId ? "/matters/" + matterId + "/" + key : "/matters/list#" + key,
-      icon: SECTION_ICONS[key], disabled: !matterId }
+      icon: SECTION_ICONS[key], disabled: !route }
   }
   const sections = Object.fromEntries(matterSections.map(([key, title]) => [key, sectionLink(key, title)])) as Record<MatterSection, NavLink>
   const caseLinks = [
-      sections.overview,
-      sections.tasks,
-      { ...sections.materials, expandOnly: true, items: [{ ...sections.materials, title: "材料目录" }, sections.court] },
-      { ...sections.evidence, expandOnly: true, items: [
+      { ...sections.overview, title: "概览" },
+      { ...sections.tasks, title: "程序" },
+      { ...sections.materials, title: "材料", expandOnly: true, items: [{ ...sections.materials, title: "材料目录" }, sections.court] },
+      { ...sections.evidence, title: "争点", expandOnly: true, items: [
         ...evidenceViews.map(([key, title]) => ({ title, href: key === "claims" ? sections.evidence.href : sections.evidence.href + "/" + key })),
         sections.research,
       ] },
-      { ...sections.delivery, expandOnly: true, items: [{ ...sections.delivery, title: "文书列表" }, sections.seal] },
-      { ...sections.records, title: "案务管理", expandOnly: true, items: [sections.records, sections.finance, sections.archive] },
+      { ...sections.delivery, title: "文书", expandOnly: true, items: [{ ...sections.delivery, title: "文书列表" }, sections.seal] },
+      { ...sections.records, title: "案务", expandOnly: true, items: [sections.records, sections.finance, sections.archive] },
     ]
   const nav: NavGroup[] = workbench
-    ? [...(matterId ? [{ label: "当前案件", items: caseLinks }] : []), WORKBENCH_NAV]
+    ? [{ label: "本案", items: caseLinks }, WORKBENCH_NAV]
     : NAV.filter(group => group !== WORKBENCH_NAV)
   return (
     <AppShell
       navigationLink={workbench ? WorkspaceLink : undefined}
-      config={{ ...SITE, nav, secondary: workbench ? WORKBENCH_SECONDARY : SECONDARY_NAV }}
+      config={{ ...SITE, nav, secondary: workbench ? WORKBENCH_SECONDARY : SECONDARY_NAV,
+        user: workbench ? { name: "本机用户", email: "" } : SITE.user }}
       workbench={workbench}
-      workspaceSwitcher={workbench ? <MatterWorkspaceSwitcher matterId={matterId} identity={identity.data} identityFailed={identity.isError} lastSections={session.sections} /> : undefined}
+      workspaceSwitcher={workbench ? <MatterWorkspaceSwitcher matterId={matterId} identity={identity.data} identityFailed={identity.isError} lastSections={lastSections} /> : undefined}
       resolveBreadcrumbs={resolveBreadcrumbs}
       badges={workbench ? {} : { tasks, mail }}
       actions={workbench ? <WorkbenchNotifications /> : <DemoNotifications />}
@@ -177,7 +215,7 @@ function Commands({ children, workbench }: { children: React.ReactNode; workbenc
   ]
 
   return (
-    <CommandMenuProvider workbench={workbench} links={workbench ? WORKBENCH_LINKS : DEMO_LINKS} actions={workbench ? pluginActions : actions} search={workbench ? undefined : search}
+    <CommandMenuProvider workbench={workbench} links={workbench ? WORKBENCH_COMMAND_LINKS : DEMO_LINKS} actions={workbench ? pluginActions : actions} search={workbench ? undefined : search}
       description={workbench ? "前往工作区页面" : "Search users by name, email or account, jump to a page, or run an action."}>
       {children}
     </CommandMenuProvider>
