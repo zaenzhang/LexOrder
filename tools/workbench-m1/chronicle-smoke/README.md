@@ -51,6 +51,12 @@ V8 借贷同案校验覆盖真实入卷、解析、结构化记载落库、旧�
 node --import tsx tools/workbench-m1/chronicle-smoke/fact-chronology.mjs "/path/to/mqc-fact-chronology-master" "/path/to/原版.base.json"
 ```
 
+代表性图谱规模检查在同一隔离运行时新建一个合成案卷。通过正常转案、入卷和解析入口生成 120 条事项及 12 份原件。回读 5 次案级投影，检查固定原文和两个无庭期程序，记录响应字节和耗时。重复运行会在隔离工作区生成一套新样本。
+
+```sh
+node tools/workbench-m1/chronicle-smoke/chronology-scale.mjs
+```
+
 ## Windows 后台 Chrome 定向验收 · 2026-11-20
 
 - 法院来件日期确认沿用 Chronicle 邮件的列表与阅读区思路，三处日期选择复用仓库内 Base UI Select 和 Field。开工前对照 [Chronicle 邮件示例](../../../desktop/personal-chronicle/features/mail/mail-app.tsx)、[Base UI Select](https://base-ui.com/react/components/select) 和 [shadcn Field](https://ui.shadcn.com/docs/components/base/field)。
