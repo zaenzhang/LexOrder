@@ -34,14 +34,12 @@ export function traceTicks([left, right]: TraceRange, plotWidth: number): number
   return Array.from({ length: Math.max(0, Math.floor((right - first) / step) + 1) }, (_, index) => first + index * step)
 }
 
-export function moveTraceWindow(full: TraceRange, current: TraceRange, mode: "select" | "move" | "start" | "end", shift: number, anchor = 0): TraceRange | undefined {
+export function moveTraceWindow(full: TraceRange, current: TraceRange, mode: "select" | "move", shift: number, anchor = 0): TraceRange | undefined {
   const minimum = Math.min(1, full[1] - full[0])
   const clip = (day: number) => Math.min(full[1], Math.max(full[0], day))
   const [left, right] = current
   let range: TraceRange
   if (mode === "move") range = slideRange(full, left + shift, right - left)
-  else if (mode === "start") range = [Math.min(clip(left + shift), right - minimum), right]
-  else if (mode === "end") range = [left, Math.max(clip(right + shift), left + minimum)]
   else {
     const start = Math.min(clip(anchor), clip(anchor + shift))
     const end = Math.max(clip(anchor), clip(anchor + shift))

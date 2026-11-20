@@ -34,10 +34,9 @@ it("连续竖线按等天数布置，放大后逐日标记且窄屏刻度疏一�
   expect(traceTicks([Infinity, Infinity], 500)).toEqual([])
 })
 
-it("双手柄缩选、平移和反向框选保持日期窗有效", () => {
+it("反向框选、整段平移和最短选区保持日期窗有效", () => {
   expect(moveTraceWindow([0, 100], [0, 100], "select", -20, 49)).toEqual([29, 49])
-  expect(moveTraceWindow([0, 100], [29, 49], "start", 50)).toEqual([48, 49])
-  expect(moveTraceWindow([0, 100], [29, 49], "end", 5)).toEqual([29, 54])
+  expect(moveTraceWindow([0, 100], [29, 49], "select", 0.2, 48)).toEqual([48, 49])
   expect(moveTraceWindow([0, 100], [29, 49], "move", 100)).toEqual([80, 100])
-  expect(moveTraceWindow([0, 100], [0, 49], "end", 100)).toBeUndefined()
+  expect(moveTraceWindow([0, 100], [0, 49], "select", 140, -20)).toBeUndefined()
 })

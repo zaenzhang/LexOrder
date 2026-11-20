@@ -92,6 +92,11 @@ try {
   assert(rangeLayout.insideLane && Math.abs(rangeLayout.laneHeight - 40) < 0.5, JSON.stringify(rangeLayout));
   assert.equal(await interval.locator('[data-slot="timeline-range-start"]').count(), 1);
   const legend = page.locator('[aria-label="时间轴图例"]');
+  const legendToggle = legend.getByRole("button", { name: "完整图例", exact: true });
+  assert.equal(await legendToggle.getAttribute("aria-expanded"), "false");
+  await legendToggle.click();
+  const legendDetails = legend.locator("dl");
+  await legendDetails.waitFor();
   assert.deepEqual(await legend.locator("dt").allTextContents(), ["核对与分歧", "日期表达", "事项性质", "事件等级"]);
   assert.equal(await legend.getByText("关键", { exact: true }).locator('[data-slot="timeline-key-grade"]').count(), 1);
   const rangeLine = '[data-slot="timeline-range-line"]';
@@ -112,7 +117,7 @@ try {
     return [css.width, css.height, css.backgroundColor, css.borderRadius];
   });
   assert.deepEqual(await dotStyle(point.locator(conflictDot)),
-    await dotStyle(legend.getByText("材料记载不一", { exact: true }).locator(conflictDot)));
+    await dotStyle(legendDetails.getByText("材料记载不一", { exact: true }).locator(conflictDot)));
   const gapStyle = (gap) => gap.evaluate((element) => getComputedStyle(element).backgroundImage);
   const gap = '[data-slot="timeline-gap-pattern"]';
   assert.equal(await gapStyle(page.locator('[data-slot="timeline-grid"]').locator(gap).first()),

@@ -1,9 +1,10 @@
 "use client"
 
 import { useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react"
-import { ChevronLeft, ChevronRight, Minus, Play, Plus, Star } from "lucide-react"
+import { ChevronDown, ChevronLeft, ChevronRight, Minus, Play, Plus, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import type { TimelineLevel, TimelineEventReference } from "../../../../src/lib/matters/timeline-levels"
@@ -35,7 +36,7 @@ function markerLabel(event: TimelineMarker) {
     (event.attention ? " · 材料日期记载不一" : "") + (event.amountConflict ? " · 材料金额记载不一" : "")
 }
 
-const gapPattern = "bg-[repeating-linear-gradient(135deg,transparent_0px,transparent_7px,var(--border)_8px,transparent_9px)] opacity-65"
+const gapPattern = "bg-[repeating-linear-gradient(135deg,transparent_0px,transparent_9px,var(--border)_10px,transparent_11px)] opacity-40"
 const approximateShape = "rotate-45 rounded-[1px] border-dashed"
 
 const elevatedPoint = "ring-1 ring-current ring-offset-1 ring-offset-card"
@@ -112,6 +113,15 @@ const legendGroups: { title: string; symbols: { label: string; icon: ReactNode }
     { label: "关键", icon: <TimelinePoint level="KEY" /> },
   ] },
 ]
+
+const commonLegend = legendGroups[0].symbols.filter(({ label }) => label === "待核对" || label === "材料记载不一")
+
+function LegendSymbol({ label, icon }: { label: string; icon: ReactNode }) {
+  return <span className="inline-flex items-center gap-1 whitespace-nowrap">
+    <span aria-hidden className="grid h-4 min-w-4 shrink-0 place-items-center">{icon}</span>
+    {label}
+  </span>
+}
 
 const trackHeight = 40
 const pointY = trackHeight / 2
@@ -285,20 +295,27 @@ export function FactTrace({ tracks, selectedId, onSelect, onScope, options, cuto
         <Button size="xs" disabled={replay.index + 1 === replay.count} onClick={() => replay.step(1)}>下一步<ChevronRight data-icon="inline-end" /></Button>
         <Button size="xs" variant="outline" onClick={replay.stop}>退出回放</Button>
       </div>
-    </header> : <header className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2.5 sm:px-4">
-      <div className="flex flex-wrap items-center gap-3"><h2 className="font-heading text-sm font-semibold">案件时间轴</h2>{cutoff}</div>
-      {!!datedById.size && <div className="flex flex-wrap items-center gap-1.5">
+    </header> : <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-3 py-2.5 sm:px-4">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <h2 className="font-heading text-sm font-semibold">案件时间轴</h2>
+        {cutoff}
+      </div>
+      {!!datedById.size && <div role="group" aria-label="时间范围" className="flex flex-wrap items-center gap-1.5">
         <span className="me-1 text-xs tabular-nums text-muted-foreground">{dayKey(Math.floor(start))} 至 {dayKey(Math.ceil(end))}</span>
         <Button variant="outline" size="icon-xs" aria-label="缩小时间轴" disabled={!zoomed} onClick={() => zoom(1.6)}><Minus /></Button>
         <Button variant="outline" size="icon-xs" aria-label="放大时间轴" disabled={end - start <= 1} onClick={() => zoom(1 / 1.6)}><Plus /></Button>
-        <Button variant="outline" size="xs" disabled={!zoomed} onClick={() => { setZoomWindow(undefined); setExpanded(undefined) }}>全时段</Button>
-        {display}
-        {startReplay && <Button variant="outline" size="xs" onClick={startReplay}><Play data-icon="inline-start" />回放</Button>}
+        <Button variant="ghost" size="xs" disabled={!zoomed} onClick={() => { setZoomWindow(undefined); setExpanded(undefined) }}>全时段</Button>
       </div>}
-      {review}
+      {(!!datedById.size || review) && <div className="ms-auto flex flex-wrap items-center justify-end gap-1.5">
+        {!!datedById.size && <>
+          {display}
+          {startReplay && <Button variant="outline" size="xs" onClick={startReplay}><Play data-icon="inline-start" />回放</Button>}
+        </>}
+        {review}
+      </div>}
     </header>}
     <div dir="ltr" className="text-xs [--track-label:6rem] [--track-inset:1.5rem] sm:[--track-label:8rem] sm:[--track-inset:1.75rem]">
-      <div className="grid grid-cols-[var(--track-label)_minmax(0,1fr)] items-start pt-2">
+      <div className="grid grid-cols-[var(--track-label)_minmax(0,1fr)] items-start bg-muted/15 py-2">
         <div className="px-2">{options}</div>
         {!!datedById.size && <div className="px-(--track-inset)">
           <FactTraceRange domain={domain} range={range} days={density} onChange={value => { setZoomWindow(value); setExpanded(undefined) }} />
@@ -335,7 +352,7 @@ export function FactTrace({ tracks, selectedId, onSelect, onScope, options, cuto
             data-slot="timeline-gap-pattern" className={cn("absolute inset-y-0", gapPattern)}
             style={{ left: ratio(left) * 100 + "%", width: (ratio(right) - ratio(left)) * 100 + "%" }} />)}
           {boundaryLabels && <span data-slot="timeline-boundary" className="absolute inset-y-0 left-0 border-s border-border" />}
-          {ticks.map(tick => <span key={tick.day} className="absolute inset-y-0 border-s border-border/65" style={{ left: ratio(tick.day) * 100 + "%" }} />)}
+          {ticks.map(tick => <span key={tick.day} className="absolute inset-y-0 border-s border-border/50" style={{ left: ratio(tick.day) * 100 + "%" }} />)}
           {boundaryLabels && <span data-slot="timeline-boundary" className="absolute inset-y-0 left-full border-s border-border" />}
         </div>
         {trackCharts.map(({ track, rows: rangeRows, baselineRanges, height }) => {
@@ -357,7 +374,7 @@ export function FactTrace({ tracks, selectedId, onSelect, onScope, options, cuto
               previous.events.push(marker.event)
             } else clusters.push({ point: marker.point, tail: marker.point, simple, events: [marker.event] })
           }
-          return <div key={track.id} data-slot="timeline-track" className="grid grid-cols-[var(--track-label)_minmax(0,1fr)]">
+          return <div key={track.id} data-slot="timeline-track" className="relative grid grid-cols-[var(--track-label)_minmax(0,1fr)] after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:border-b after:border-border/60 last:after:hidden">
             <div className="flex h-10 min-w-0 items-center px-3 py-2">
               <button type="button" className="min-w-0 truncate rounded text-start font-medium hover:underline focus-visible:outline-2 focus-visible:outline-ring"
                 title={track.title} onClick={() => onScope({ label: track.title, ids: track.events.map(event => event.id) })}>
@@ -469,30 +486,30 @@ export function FactTrace({ tracks, selectedId, onSelect, onScope, options, cuto
         </div>}
       </div>
     </div>
-    <div className="grid gap-2 border-t px-3 py-2.5 text-xs text-muted-foreground sm:px-4" aria-label="时间轴图例">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+    <Collapsible role="group" aria-label="时间轴图例" className="border-t px-3 py-1.5 text-xs text-muted-foreground sm:px-4">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <strong className="font-semibold text-foreground">图例</strong>
-        {gaps.length > 0 && <p className="flex items-center gap-1.5">
-          <span aria-hidden data-slot="timeline-gap-pattern" className={cn("h-3 w-4 shrink-0 rounded-xs border border-border", gapPattern)} />
-          该段未见事件记载
-        </p>}
+        {commonLegend.map(symbol => <LegendSymbol key={symbol.label} {...symbol} />)}
+        {gaps.length > 0 && <LegendSymbol label="该段未见事件记载"
+          icon={<span aria-hidden data-slot="timeline-gap-pattern" className={cn("h-3 w-4 rounded-xs border border-border", gapPattern)} />} />}
+        <CollapsibleTrigger render={<Button size="xs" variant="ghost" className="group ms-auto" />}>
+          完整图例
+          <ChevronDown data-icon="inline-end" aria-hidden className="group-data-panel-open:rotate-180" />
+        </CollapsibleTrigger>
       </div>
-      <dl className="grid min-w-0 gap-x-6 gap-y-1.5 @min-[42rem]/trace:grid-cols-[minmax(0,max-content)_minmax(0,1fr)]">
-        {legendGroups.map(({ title, symbols }) => (
-          <div className="grid min-w-0 grid-cols-[5em_minmax(0,1fr)] items-start gap-x-2.5" key={title}>
-            <dt className="font-medium leading-4 whitespace-nowrap text-foreground">{title}</dt>
-            <dd className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
-              {symbols.map(({ label, icon }) => (
-                <span key={label} className="inline-flex items-center gap-1 whitespace-nowrap">
-                  <span aria-hidden className="grid h-4 min-w-4 shrink-0 place-items-center">{icon}</span>
-                  {label}
-                </span>
-              ))}
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </div>
+      <CollapsibleContent>
+        <dl className="grid min-w-0 gap-x-6 gap-y-1.5 border-t py-2 @min-[42rem]/trace:grid-cols-[minmax(0,max-content)_minmax(0,1fr)]">
+          {legendGroups.map(({ title, symbols }) => (
+            <div className="grid min-w-0 grid-cols-[5em_minmax(0,1fr)] items-start gap-x-2.5" key={title}>
+              <dt className="font-medium leading-4 whitespace-nowrap text-foreground">{title}</dt>
+              <dd className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
+                {symbols.map(symbol => <LegendSymbol key={symbol.label} {...symbol} />)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </CollapsibleContent>
+    </Collapsible>
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-dashed px-3 py-2 text-xs sm:px-4">
       <strong aria-label={"无日期 " + undatedFacts.length}>无日期 {undatedFacts.length}</strong>
       {!!undatedFacts.length && onNarrative && <Button size="xs" variant="link" onClick={onNarrative}>在事实经过里看</Button>}
