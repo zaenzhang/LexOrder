@@ -285,6 +285,68 @@ it("以可回读的分句定位另笔收款，拒绝同一行其他分句的日�
   expect(candidate.data.participants).toBeUndefined();
 });
 
+it.each([
+  ["被告否认：\n", "。", "否认"],
+  ["假如", "，才承担逾期责任。", "假如"],
+  ["双方约定于", "。", "约定于"],
+  ["", "，以设备验收通过为条件。", "为条件"],
+  ["", "并不属实。", "不属实"],
+])("固定引文补回被模型截掉的履行限定语：%s", (prefix, suffix, boundary) => {
+  const claim = "2024年3月1日吴乙向周甲付款12万元";
+  const text = prefix + claim + suffix;
+  const draft = unpackObservationDraft({ observations: [{
+    fragment: 1, firstLine: prefix.endsWith("\n") ? 2 : 1, lastLine: prefix.endsWith("\n") ? 2 : 1,
+    title: "吴乙已付款", category: "payment", kind: "FACT", statement: "RECORD",
+    excerpt: claim, dateRole: "OCCURRENCE", dateText: "2024年3月1日",
+    amountNature: "ACTUAL_TRANSFER", amountText: "12万元", participants: ["吴乙", "周甲"],
+    relations: [{ kind: "PAYS_TO", from: 1, to: 2, quote: "吴乙向周甲付款12万元" }],
+  }] });
+  const result = inspectAiObservationResult(draft, [{ text, start: 75, category: "PLEADING" }]);
+  expect(result.rejected).toEqual([]);
+  const [candidate] = result.candidates;
+  expect(candidate.hint).toMatchObject({ kind: "TODO_VERIFY" });
+  expect(candidate.hint?.title).not.toBe("吴乙已付款");
+  expect(candidate.data.excerpt?.text).toContain(boundary);
+  expect(candidate.data.excerpt?.span?.start).toBe(75);
+  expect(candidate.data.amount).toBeUndefined();
+  expect(candidate.data.date).toBeUndefined();
+  expect(candidate.data.relations).toBeUndefined();
+  expect(candidate.data.participants?.map(person => person.text)).toEqual(["吴乙", "周甲"]);
+  expect(result.skippedFields).toBe(3);
+});
+
+it("整行出现否认与明确承认时，独立承认的金额可以保留", () => {
+  const text = "被告否认于2024年3月1日收到12万元，但认可收到另笔2万元。";
+  const result = inspectAiObservationResult({ observations: [{
+    fragment: 1, lines: { first: 1 }, statement: "PARTY_STATEMENT",
+    hint: { title: "2024年3月1日到账", category: "payment", kind: "FACT" },
+    date: { role: "OCCURRENCE", quote: { text: "2024年3月1日" } },
+    amount: { nature: "ACTUAL_TRANSFER", quote: { text: "2万元", context: "认可收到另笔2万元" } },
+  }] }, [{ text, start: 0, category: "PLEADING" }]);
+  expect(result.rejected).toEqual([]);
+  const [candidate] = result.candidates;
+  expect(candidate.hint?.kind).toBe("TODO_VERIFY");
+  expect(candidate.data.date).toBeUndefined();
+  expect(candidate.data.amount?.value).toEqual({ currency: "CNY", value: "20000" });
+  expect(candidate.data.excerpt?.text).toBe(text);
+});
+
+it("独立一句的落款日期，以及后续明确承认的事实日期，不被前一句的否认改变", () => {
+  const text = "被告否认收款。落款日期：2024年3月1日。被告另确认于2024年3月2日收到2万元。";
+  const result = inspectAiObservationResult({ observations: [
+    { fragment: 1, lines: { first: 1 }, statement: "RECORD", excerpt: { text: "落款日期：2024年3月1日" },
+      date: { role: "OCCURRENCE", quote: { text: "2024年3月1日" } } },
+    { fragment: 1, lines: { first: 1 }, statement: "PARTY_STATEMENT", excerpt: { text: "被告另确认于2024年3月2日收到2万元" },
+      date: { role: "OCCURRENCE", quote: { text: "2024年3月2日" } },
+      amount: { nature: "ACTUAL_TRANSFER", quote: { text: "2万元" } } },
+  ] }, [{ text, start: 0, category: "PLEADING" }]);
+  expect(result.rejected).toEqual([]);
+  expect(result.skippedFields).toBe(0);
+  expect(result.candidates[0].data.date?.role).toBe("SIGNATURE");
+  expect(result.candidates[1].data.date?.value).toEqual({ precision: "EXACT", day: "2024-03-02" });
+  expect(result.candidates[1].data.amount?.value).toEqual({ currency: "CNY", value: "20000" });
+});
+
 it("唯一命中的数字后缀不能作为完整金额或年份", () => {
   const text = "2024年，转账12万元。";
   const observation = {

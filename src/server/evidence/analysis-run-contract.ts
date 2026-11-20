@@ -3,8 +3,8 @@ import { z } from "zod";
 import { fragmentsSchema } from "@/lib/workbench/fixed-fragments";
 import { normalizedObservationCandidateSchema } from "./ai-observation-contract";
 
-export const observationMethodVersion = "evidence-observations/13";
-export const matterObservationMethodVersion = "matter-observations/13";
+export const observationMethodVersion = "evidence-observations/14";
+export const matterObservationMethodVersion = "matter-observations/14";
 export const observationRunJob = "evidence.observations";
 export const observationJobKey = (id: string) => observationRunJob + ":" + id;
 

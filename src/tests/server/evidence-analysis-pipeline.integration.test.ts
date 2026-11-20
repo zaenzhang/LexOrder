@@ -657,6 +657,60 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     return { actor, matter, ranges };
   }
 
+  it("模型截掉否认时只可采用带限定语的待核记载", async () => {
+    provider.fetch.mockClear();
+    await saveAiSettings({ enabled: true, apiKey: "fixture-key", baseUrl: provider.url, textModel: model });
+    const phrase = "2024年3月1日吴乙向周甲付款12万元";
+    const text = "被告否认：" + phrase + "。";
+    const { actor, matter, ranges } = await seedV8Case("DENIED", [["2-complaint.txt", text]]);
+    const input = { matterId: matter.id, runId: randomUUID(), confirmed: true as const,
+      model, origin: new URL(provider.url).origin, ranges };
+    const stale = await queueMatterObservationRun(actor, input);
+    await prisma.evidenceObservationRun.update({
+      where: { id: stale.id }, data: { methodVersion: "matter-observations/13" },
+    });
+    expect(await processDueJobs(1, "personal-ai")).toMatchObject({ succeeded: 1 });
+    expect(await readObservationRuns(actor, matter.id, null, stale.id)).toMatchObject({ state: "FAILED", receipt: { error: "STALE" } });
+    expect(provider.fetch).not.toHaveBeenCalled();
+
+    const run = await queueMatterObservationRun(actor, { ...input, runId: randomUUID() });
+    provider.fetch.mockResolvedValueOnce(Response.json({ choices: [{ message: { content: JSON.stringify({
+      observations: [{ ...draft, title: "吴乙已付款", excerpt: phrase, dateRole: "OCCURRENCE", dateText: "2024年3月1日",
+        amountNature: "ACTUAL_TRANSFER", amountText: "12万元", participants: ["吴乙", "周甲"],
+        relations: [{ kind: "PAYS_TO", from: 1, to: 2, quote: "吴乙向周甲付款12万元" }] }],
+    }) } }] }));
+    expect(await processDueJobs(1, "personal-ai")).toMatchObject({ succeeded: 1 });
+    const detail = await readObservationRuns(actor, matter.id, null, run.id);
+    if (!("candidates" in detail)) throw new Error("Expected the candidate details");
+    expect(detail).toMatchObject({ state: "READY", receipt: { skippedFields: 3 } });
+    expect(detail.candidates[0]).toMatchObject({
+      hint: { kind: "TODO_VERIFY", title: "核对材料中的履行记载" },
+      data: { statement: "PARTY_STATEMENT", excerpt: { text: text.slice(0, -1) } },
+    });
+    expect(detail.candidates[0].data.date).toBeUndefined();
+    expect(detail.candidates[0].data.amount).toBeUndefined();
+    expect(detail.candidates[0].data.relations).toBeUndefined();
+    const adopted = await adoptMatterObservations({ matterId: matter.id, requestId: randomUUID(), chosen: [{ runId: run.id, index: 0 }],
+      target: { type: "new", title: "核对履行记载", kind: "TODO_VERIFY", content: "由律师核对付款事实和备注。" },
+    });
+    const origin = process.env.LEXORDER_PERSONAL_ORIGIN!;
+    const endpoint = origin + "/api/personal/matter-workspace";
+    const headers = { Host: new URL(origin).host, Origin: origin, Cookie: "lexorder_local_channel=" + process.env.LEXORDER_PERSONAL_CHANNEL_TOKEN };
+    const query = new URLSearchParams({ matter: matter.id, section: "evidence-items", timeline: "1" });
+    const route = await import("@/app/api/personal/matter-workspace/route");
+    const response = await route.GET(new Request(endpoint + "?" + query, { headers }));
+    expect(response.status).toBe(200);
+    const { items } = await response.json();
+    const target = items.find((entry: { id: string }) => entry.id === adopted.id);
+    expect(target).toMatchObject({ kind: "TODO_VERIFY", observations: [{ data: {
+      statement: "PARTY_STATEMENT", excerpt: { text: text.slice(0, -1) },
+    } }] });
+    expect(target.observations[0].data).not.toHaveProperty("date");
+    expect(target.observations[0].data).not.toHaveProperty("amount");
+    expect(target.observations[0].data).not.toHaveProperty("relations");
+    expect(provider.fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("连接丢失和网关中断保留同一批次，明确拒绝允许重新确认", async () => {
     provider.fetch.mockClear();
     await saveAiSettings({ enabled: true, apiKey: "fixture-key", baseUrl: provider.url, textModel: model });

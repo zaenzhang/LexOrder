@@ -52,7 +52,36 @@ function explicitDateRole(text: string, start: number) {
   }
 }
 
-type AuthorizedFragment = { start: number; text: string; category?: string; permitted?: boolean; lineSpans?: ReturnType<typeof fragmentLines> };
+type TextSpan = { start: number; end: number };
+type AuthorizedFragment = { start: number; text: string; category?: string; permitted?: boolean;
+  lineSpans?: ReturnType<typeof fragmentLines>; unsettledScopes?: TextSpan[] };
+
+const observationBoundary = /[。！？；!?;]|[，,]\s*(?:但是|但|然而)\s*(?=认可|承认|确认|确实)/gu;
+const performanceVerb = /收到|收款|收讫|交付|到账|付款|支付|转账|履行|转款|汇款/u;
+const denial = /(?<!不|未|未曾|从未|并未)否认|不认可|不属实|未能证明|不能证明|无法证明|没有证据|无证据/u;
+const unfinishedPerformance = /(?:并未|从未|尚未|暂未|没有|未)\s*(?=收到|收款|交付|到账|付款|支付|转账|履行|转款|汇款)/u;
+const conditionalPerformance = /如果|假如|假设|倘若|若(?=[于在]?\s*\d{4})|以[^，,\n]{1,36}为条件/u;
+const plannedPerformance = /(?:约定|拟|应当?|计划)(?:于|在)\s*\d{4}/u;
+
+function hasPerformanceQualification(text: string) {
+  return denial.test(text) || unfinishedPerformance.test(text) || conditionalPerformance.test(text) || plannedPerformance.test(text);
+}
+
+function unsettledPerformanceScopes(text: string): TextSpan[] {
+  if (!hasPerformanceQualification(text)) return [];
+  const ranges: TextSpan[] = [];
+  let start = 0;
+  function read(end: number) {
+    const clause = text.slice(start, end);
+    if (hasPerformanceQualification(clause) && performanceVerb.test(clause)) ranges.push({ start, end });
+  }
+  for (const boundary of text.matchAll(observationBoundary)) {
+    read(boundary.index);
+    start = boundary.index + boundary[0].length;
+  }
+  read(text.length);
+  return ranges;
+}
 
 export function fragmentLines(text: string) {
   const lines: { line: number; start: number; end: number; text: string }[] = [];
@@ -115,6 +144,23 @@ function normalizeCandidate(entry: z.infer<typeof aiRecord>, authorized: Authori
     }
   }
   const excerptSpan = entry.excerpt ? field(() => locate(entry.excerpt!, lineSpan)) ?? lineSpan : lineSpan;
+  const unsettled = source.unsettledScopes ?? unsettledPerformanceScopes(source.text);
+  let reviewSpan = excerptSpan;
+  let includesUnsettled = false;
+  function retainQualification(span: TextSpan) {
+    const scoped = unsettled.filter(range => span.start < range.end && range.start < span.end);
+    for (const range of scoped) {
+      reviewSpan = { start: Math.min(reviewSpan?.start ?? span.start, range.start),
+        end: Math.max(reviewSpan?.end ?? span.end, range.end) };
+    }
+    if (scoped.length) includesUnsettled = true;
+    return scoped.length > 0;
+  }
+  if (excerptSpan) retainQualification(excerptSpan);
+
+  function checkAffirmative(span: TextSpan) {
+    if (retainQualification(span)) throw new ActionError("原文中的否认或条件不能作为履行已发生的依据");
+  }
   function locateNumber(ref: z.infer<typeof quote>) {
     const span = locate(ref, excerptSpan);
     const { text } = source;
@@ -133,37 +179,54 @@ function normalizeCandidate(entry: z.infer<typeof aiRecord>, authorized: Authori
     const span = locateNumber(value.quote);
     const labeledRole = explicitDateRole(source.text, span.start);
     if (labeledRole && value.role !== labeledRole && !skipField) throw new ActionError("日期性质与原文标注不符");
-    return { role: labeledRole ?? value.role, span };
+    const role = labeledRole ?? value.role;
+    if (role === "OCCURRENCE") checkAffirmative(span);
+    return { role, span };
   });
   const amountSelection = entry.amount && field(() => {
     const value = entry.amount!;
     const span = locateNumber(value.quote);
     const labeledNature = explicitAmountNature(source.text, span.start);
     if (labeledNature && value.nature !== "OTHER" && value.nature !== labeledNature && !skipField) throw new ActionError("金额性质与原文标注不符");
+    const nature = labeledNature ?? value.nature;
+    if (nature === "ACTUAL_TRANSFER") checkAffirmative(span);
     const explicitUnit = value.unit && field(() => locate(value.unit!));
     const header = source.category === "EVIDENCE" && lineSpan && !explicitUnit && sourceLines.slice(0, entry.lines!.first - 1).reverse()
       .find(line => /交易日期|转账日期|付款人/u.test(line.text) && /金额（元）|金额\(元\)/u.test(line.text));
     const headerUnit = header && (header.text.includes("金额（元）") ? "金额（元）" : "金额(元)");
     const unitSpan = explicitUnit ?? (header && headerUnit ? locate({ text: headerUnit }, header) : undefined);
-    return { nature: labeledNature ?? value.nature, span, ...(unitSpan && { unitSpan }) };
+    return { nature, span, ...(unitSpan && { unitSpan }) };
   });
   const participantsInput = entry.participants && field(() => entry.participants!.map(person => ({ span: locate(person.quote, excerptSpan) })));
   const relationsInput = entry.relations && field(() => {
     if (!participantsInput) throw new ActionError("关系缺少可定位的参与人");
-    return entry.relations!.map(({ quote: reference, ...relation }) => ({ ...relation, span: locate(reference, excerptSpan) }));
+    return entry.relations!.flatMap(({ quote: reference, ...relation }) => {
+      const fixed = field(() => {
+        const span = locate(reference, excerptSpan);
+        checkAffirmative(span);
+        return { ...relation, span };
+      });
+      return fixed ? [fixed] : [];
+    });
   });
-  const cited = excerptSpan ? source.text.slice(excerptSpan.start, excerptSpan.end) : "";
+  const cited = reviewSpan ? source.text.slice(reviewSpan.start, reviewSpan.end) : "";
+  if (includesUnsettled && (cited.length > 300 || cited.split("\n").length > 3)) {
+    throw new ActionError("候选原文的限定语超出一条引文的范围");
+  }
+  const hint = includesUnsettled && entry.hint
+    ? { ...entry.hint, title: "核对材料中的履行记载", kind: "TODO_VERIFY" as const }
+    : entry.hint;
   const attributed = /^(?:.{0,14})(?:诉称|辩称|陈述称|主张称|质证称)[：:,，]/u.test(cited.trim());
   const statement = source.category === "PLEADING" || attributed ? "PARTY_STATEMENT" : entry.statement;
-  const core = { statement, ...(excerptSpan && { excerpt: excerptSpan }), ...(dateSelection && { date: dateSelection }), ...(amountSelection && { amount: amountSelection }) };
+  const core = { statement, ...(reviewSpan && { excerpt: reviewSpan }), ...(dateSelection && { date: dateSelection }), ...(amountSelection && { amount: amountSelection }) };
   const withParticipants = { ...core, ...(participantsInput && { participants: participantsInput }) };
-  let input: ObservationInput = { ...withParticipants, ...(relationsInput && { relations: relationsInput }) };
+  let input: ObservationInput = { ...withParticipants, ...(relationsInput?.length && { relations: relationsInput }) };
   let local: ReturnType<typeof prepareObservation>;
   try { local = prepareObservation(input, source.text); }
   catch (error) {
     if (!skipField || !lineSpan || !participantsInput || !(error instanceof ActionError || error instanceof z.ZodError)) throw error;
     skipField();
-    const withoutRelations = relationsInput && field(() => prepareObservation(withParticipants, source.text));
+    const withoutRelations = relationsInput?.length ? field(() => prepareObservation(withParticipants, source.text)) : undefined;
     input = withoutRelations ? withParticipants : core;
     local = withoutRelations ?? prepareObservation(input, source.text);
   }
@@ -175,7 +238,7 @@ function normalizeCandidate(entry: z.infer<typeof aiRecord>, authorized: Authori
   const relations = local.relations?.map(relation => ({ ...relation, span: absolute(relation.span) }));
   const candidate = {
     fragment: entry.fragment,
-    ...(entry.hint && { hint: entry.hint }),
+    ...(hint && { hint }),
     input: { statement: input.statement, ...(excerpt && { excerpt: excerpt.span }), ...(date && { date }), ...(amount && { amount }),
       ...(participants && { participants: participants.map(({ span }) => ({ span })) }),
       ...(relations && { relations: relations.map(({ text, ...relation }) => relation) }),
@@ -207,7 +270,8 @@ export function prepareAiObservationResult(raw: unknown, authorized: AuthorizedF
 export function inspectAiObservationResult(raw: unknown, authorized: AuthorizedFragment[]) {
   const { observations } = observationEnvelope.parse(raw);
   const seen = new Set<string>();
-  const fragments = authorized.map(source => ({ ...source, lineSpans: fragmentLines(source.text) }));
+  const fragments = authorized.map(source => ({ ...source, lineSpans: fragmentLines(source.text),
+    unsettledScopes: unsettledPerformanceScopes(source.text) }));
   const candidates: ReturnType<typeof normalizeCandidate>[] = [];
   let skippedFields = 0;
   const rejected: { index: number; fragment?: number; reason: "SCHEMA" | "RANGE" | "SOURCE" | "DUPLICATE" }[] = [];
@@ -297,7 +361,7 @@ export function readExplicitPleadingCandidates(authorized: AuthorizedFragment[])
   for (const [index, source] of authorized.entries()) {
     if (source.category !== "PLEADING") continue;
     // A new affirmative clause after a denial can stand alone. Unclear clauses stay for model or human review.
-    const clauses = source.text.split(/[。！？；!?;]|[，,]\s*(?:但是|但|然而)\s*(?=认可|承认|确认|确实)/u);
+    const clauses = source.text.split(observationBoundary);
     for (const clause of clauses) {
       if (withheld.test(clause)) continue;
       for (const rule of delivered) {
