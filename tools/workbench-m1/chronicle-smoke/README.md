@@ -99,6 +99,12 @@ $env:M1_WINDOWS_EDITOR_SCRIPT = Join-Path $casebookRoot 'save-notepad.ps1'
 Copy-Item -LiteralPath (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/windows-editor/save-notepad.ps1') -Destination $env:M1_WINDOWS_EDITOR_SCRIPT
 ```
 
+案卷整理验收使用相同的合成工作区和案卷根目录，传入 --materials。脚本检查历史版本离开当页后的归类约束、跨两页批选、取消和保存后的焦点、固定原件字节，以及窄窗卷宗排序、过时基线拒绝和刷新后顺序回读。
+
+```powershell
+node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-Path $qaTarget 'debug/lexorder-chronicle-preview.exe') --materials
+```
+
 需要跨案出处复验时，在脚本命令末尾加 `--cross-case`。该路径使用已装载 V8 案情定位和借贷样本的合成验收甲，检查按事实换读材料、同一 PDF 的不同页锚点、分别定位三份文本及未关联出处的状态。核对表单的触发器与下拉选项字号，以及固定原文面板的宽窄布局，属于常规验收。
 
 **本轮冒烟记录**

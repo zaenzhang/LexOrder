@@ -36,6 +36,20 @@ type Index = OverviewData & RecordsData & {
   nextCursor?: string | null
 }
 
+type MaterialSelection = { ids: string[]; readOnlyIds: string[] }
+
+function updateMaterialSelection(ids: string[], readOnlyIds: string[], documents: Material[]): MaterialSelection {
+  if (!ids.length) return { ids, readOnlyIds: [] }
+  const selected = new Set(ids)
+  const blocked = new Set(readOnlyIds.filter(id => selected.has(id)))
+  for (const { id, isLatest, status } of documents) {
+    if (!selected.has(id)) continue
+    if (isLatest && status === "DRAFT") blocked.delete(id)
+    else blocked.add(id)
+  }
+  return { ids, readOnlyIds: [...blocked] }
+}
+
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return <Card><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent className="grid gap-3">{children}</CardContent></Card>
 }
@@ -51,7 +65,9 @@ export function MatterSectionPage({ matterId, section, title, stage, taskId, rev
   matterId: string; section: Exclude<MatterSection, "evidence" | "archive" | "court">; title: string
   stage?: string; taskId?: string; reviewId?: string; fromRecords?: boolean; todayTab?: "open" | "waiting" | "done"; scheduleDay?: string; taskFilters?: Record<string, string>; commissionResearchId?: string; commissionIssue?: CommissionIssue; commissionFollowUp?: CommissionFollowUp; suggestedDocument?: string; prepareDocument?: string; factAnalysis?: boolean; openMaterialUpload?: boolean
 }) {
-  const [materialSelection, setMaterialSelection] = useState<string[]>(() => suggestedDocument ? [suggestedDocument] : [])
+  const [materialSelection, setMaterialSelection] = useState<MaterialSelection>(() => ({
+    ids: suggestedDocument ? [suggestedDocument] : [], readOnlyIds: [],
+  }))
   const [result, setResult] = useState<{ scope: string; data: Index }>()
   const [refresh, setRefresh] = useState(0)
   const [filters, setFilters] = useState<MaterialFilters>({q:"", folder:"*", version:"all"})
@@ -77,7 +93,14 @@ export function MatterSectionPage({ matterId, section, title, stage, taskId, rev
       if (taskProgram) query.set("program", taskProgram)
     }
     const timer = window.setTimeout(() => { void readPersonal<Index>(`${workspaceEndpoint}?${query}`, { signal: controller.signal })
-      .then(value => { if (!controller.signal.aborted) { setResult({ scope, data: value }); setFailure(undefined) } })
+      .then(value => {
+        if (controller.signal.aborted) return
+        setResult({ scope, data: value })
+        setFailure(undefined)
+        if (section === "materials") setMaterialSelection(selection => selection.ids.length
+          ? updateMaterialSelection(selection.ids, selection.readOnlyIds, value.documents ?? [])
+          : selection)
+      })
       .catch(error => { if (!controller.signal.aborted) {
         setFailure({ scope, message: error.message })
         if (section === "materials") setResult(undefined)
@@ -115,7 +138,10 @@ export function MatterSectionPage({ matterId, section, title, stage, taskId, rev
     </div>}
     {section === "materials" && data ? <MaterialsWorkspace matterId={matterId} task={data.materialTask ?? undefined} reviewId={reviewId} commissionResearchId={commissionResearchId} commissionIssue={commissionIssue} commissionFollowUp={commissionFollowUp} openUpload={openMaterialUpload} factAnalysis={factAnalysis} stage={data.materialStage ?? undefined} documents={data.documents ?? []} folders={data.folders ?? []}
       filters={filters} onFilter={value => { setPage(undefined); setFilters(value) }} onUploaded={() => setRefresh(value => value + 1)}
-      canOrganize={Boolean(data.canOrganizeMaterials)} selection={materialSelection} onSelectionChange={setMaterialSelection} pageNavigation={pages} /> : null}
+      canOrganize={Boolean(data.canOrganizeMaterials)}
+      selection={materialSelection.ids} hasReadOnlySelection={materialSelection.readOnlyIds.length > 0}
+      onSelectionChange={ids => setMaterialSelection(prior => updateMaterialSelection(ids, prior.readOnlyIds, data.documents ?? []))}
+      pageNavigation={pages} /> : null}
     {section === "research" && data ? <Panel title="研究修订">{data.canWrite && <NewResearch matterId={matterId} onCreated={id => { setResearchId(id); setRefresh(value => value + 1) }} />}<Rows empty="暂无研究记录。" items={(data.records ?? []).map(row => ({
       key: row.id, title: row.readable ? row.question ?? "研究记录" : "研究内容不可用", meta: `V${row.version} · ${row.checkedAt ? "已核对" : "待核对"}`,
       action: row.readable || row.version > 1 ? <Button variant="outline" size="sm" onClick={() => setResearchId(row.id)}>查看修订</Button> : null,

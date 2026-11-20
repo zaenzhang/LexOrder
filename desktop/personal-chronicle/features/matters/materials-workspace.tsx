@@ -49,8 +49,8 @@ function previewPath(material: Material) {
   }
 }
 
-export function MaterialsWorkspace({ matterId, stage, task, canOrganize, reviewId, commissionResearchId, commissionIssue, commissionFollowUp, documents, folders, filters, onFilter, onUploaded, selection, onSelectionChange, openUpload, factAnalysis, pageNavigation }: {
-  selection: string[]; onSelectionChange: (ids: string[]) => void; filters: MaterialFilters; onFilter: (filters: MaterialFilters) => void;
+export function MaterialsWorkspace({ matterId, stage, task, canOrganize, reviewId, commissionResearchId, commissionIssue, commissionFollowUp, documents, folders, filters, onFilter, onUploaded, selection, hasReadOnlySelection, onSelectionChange, openUpload, factAnalysis, pageNavigation }: {
+  selection: string[]; hasReadOnlySelection: boolean; onSelectionChange: (ids: string[]) => void; filters: MaterialFilters; onFilter: (filters: MaterialFilters) => void;
   canOrganize: boolean; matterId: string; stage?: MaterialStage; task?: TaskMaterialReviewContext; reviewId?: string; commissionResearchId?: string; commissionIssue?: CommissionIssue; commissionFollowUp?: CommissionFollowUp;
   documents: Material[]; folders: { id: string; name: string }[]; onUploaded: () => void; openUpload?: boolean; factAnalysis?: boolean; pageNavigation?: React.ReactNode
 }) {
@@ -92,7 +92,6 @@ export function MaterialsWorkspace({ matterId, stage, task, canOrganize, reviewI
   const reading = documents.find(item => item.id === readingId) ?? documents[0]
   const readingPath = reading ? previewPath(reading) : undefined
   const showCategoryAction = canOrganize && !task && !commissionIssue && !commissionResearchId && !commissionFollowUp && !factAnalysis
-  const hasReadOnlySelection = documents.some(item => selection.includes(item.id) && (!item.isLatest || item.status !== "DRAFT"))
   const [file, setFile] = useState<File>()
   const [name, setName] = useState("")
   const [category, setCategory] = useState("OTHER")
