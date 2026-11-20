@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 import { whenIdle } from "../ui-patterns/when-idle"
+import { InlineLoading } from "../ui-patterns/workspace-loading"
 
 export interface BellNotification {
   id: string
@@ -29,6 +30,14 @@ export function NotificationBell({
   viewAllHref,
   settingsHref,
   emptyDescription = "New alerts and mentions appear here.",
+  unreadItems,
+  unreadCount,
+  onOpen,
+  loading,
+  error,
+  onRetry,
+  readPending,
+  workbench,
 }: {
   items: BellNotification[]
   onMarkRead: (ids: string[] | "all") => void
@@ -37,10 +46,19 @@ export function NotificationBell({
   settingsHref?: string
   /** Under "You are all caught up": what kinds of things land here. */
   emptyDescription?: string
+  unreadItems?: BellNotification[]
+  unreadCount?: number
+  onOpen?: () => void
+  loading?: boolean
+  error?: string
+  onRetry?: () => void
+  readPending?: boolean
+  workbench?: boolean
 }) {
   const [open, setOpen] = useState(false)
   useEffect(() => whenIdle(() => void loadBody()), [])
-  const unread = items.filter((item) => !item.read)
+  const unread = unreadItems ?? items.filter((item) => !item.read)
+  const count = unreadCount ?? unread.length
   const recent = items.slice(0, 12)
 
   const openItem = (item: BellNotification) => {
@@ -51,19 +69,28 @@ export function NotificationBell({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger render={<Button variant="ghost" size="icon" className="relative" aria-label={`Notifications, ${unread.length} unread`} />}>
+    <Popover open={open} onOpenChange={(value) => {
+      setOpen(value)
+      if (value) onOpen?.()
+    }}>
+      <PopoverTrigger render={<Button variant="ghost" size="icon" className="relative" aria-label={workbench ? "通知，" + count + " 条未读" : "Notifications, " + count + " unread"} />}>
         <BellIcon />
-        {unread.length > 0 && (
+        {count > 0 && (
           // Keyed by the count, so each new notification pops the dot again.
-          <span key={unread.length} className="absolute end-1.5 top-1.5 size-2 animate-pop rounded-full bg-primary ring-2 ring-background" aria-hidden />
+          <span key={count} className="absolute end-1.5 top-1.5 size-2 animate-pop rounded-full bg-primary ring-2 ring-background" aria-hidden />
         )}
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[min(24rem,calc(100vw-2rem))] gap-0 overflow-hidden p-0">
-        <Suspense fallback={<div className="h-[33rem]" />}>
+        <Suspense fallback={<div className="p-4"><InlineLoading label={workbench ? "正在打开通知…" : "Opening notifications…"} /></div>}>
           <NotificationBellBody
             recent={recent}
             unread={unread}
+            count={count}
+            loading={loading}
+            error={error}
+            onRetry={onRetry}
+            readPending={readPending}
+            workbench={workbench}
             onMarkRead={onMarkRead}
             openItem={openItem}
             close={() => setOpen(false)}

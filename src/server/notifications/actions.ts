@@ -25,6 +25,20 @@ export async function getUnreadCount() {
   });
 }
 
+export async function getNotificationSummary() {
+  const session = await requireSession("personal");
+  const where = { userId: session.user.id };
+  const unread = { ...where, read: false };
+  const list = { orderBy: { createdAt: "desc" as const }, take: 12 };
+  const [recent, unreadItems, unreadCount] = await Promise.all([
+    prisma.notification.findMany({ where, ...list }),
+    prisma.notification.findMany({ where: unread, ...list }),
+    prisma.notification.count({ where: unread }),
+  ]);
+  const select = ({ id, title, content, createdAt, read }: typeof recent[number]) => ({ id, title, content, createdAt, read });
+  return { recent: recent.map(select), unread: unreadItems.map(select), unreadCount };
+}
+
 export async function markNotificationRead(id: string) {
   const session = await requireSession("personal");
   const notif = await prisma.notification.findFirst({

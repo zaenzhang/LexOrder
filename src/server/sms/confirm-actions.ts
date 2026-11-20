@@ -3,6 +3,7 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { ActionError } from "@/lib/action-error";
 import { prisma } from "@/lib/prisma";
+import { canReadDocument } from "@/lib/approvals/documents";
 import { requireSession } from "@/lib/auth/session";
 import { assertCanAssociateMatter } from "@/lib/permissions";
 import { smsDecisionInput, type SmsDecisionInput } from "@/lib/sms/suggestions";
@@ -40,11 +41,16 @@ export async function analyzeSmsInboundFiles(input: { smsId: string; fileIds?: s
   const { analyzeInboundFile } = await import("./analysis");
   // 2026-09-20 P3 修复：含 ANALYZING——分析中途崩溃卡死的文件可经本入口手动重跑
   const files = await prisma.smsInboundFile.findMany({
-    where: { smsId: input.smsId, ...(input.fileIds?.length ? { id: { in: input.fileIds } } : {}), state: { in: ["PENDING_REVIEW", "FILED"] }, documentId: null, analysisState: { in: ["PENDING", "ANALYZING", "FAILED", "NEEDS_OCR"] } },
-    select: { id: true }
+    where: { smsId: input.smsId, ...(input.fileIds?.length ? { id: { in: input.fileIds } } : {}), state: { in: ["PENDING_REVIEW", "FILED"] }, analysisState: { in: ["PENDING", "ANALYZING", "FAILED", "NEEDS_OCR"] } },
+    include: { document: true }
   });
   const results: { fileId: string; state: string; suggestionCount: number }[] = [];
-  for (const f of files) results.push({ fileId: f.id, ...(await analyzeInboundFile(f.id, session.user.id)) });
+  for (const file of files) {
+    if (file.document && (file.document.deletedAt || !await canReadDocument(session.user.id, file.document))) {
+      throw new ActionError("无法读取已入卷原件，请核对材料的读取权限");
+    }
+    results.push({ fileId: file.id, ...(await analyzeInboundFile(file.id, session.user.id)) });
+  }
   revalidatePath("/inbox");
   return { ok: true, results };
 }

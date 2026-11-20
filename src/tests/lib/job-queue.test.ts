@@ -114,6 +114,14 @@ describe("队列租约围栏", () => {
     expect(query.values).toEqual([expect.stringMatching(/^[a-f0-9-]{36}$/), 50]);
   });
 
+  it("个人材料领取只选本地解析与入卷对账", async () => {
+    db.$queryRaw.mockResolvedValue([]);
+    await claimDueJobs(1, "personal-materials");
+    const query = db.$queryRaw.mock.calls[0][0] as Prisma.Sql;
+    expect(query.text).toMatch(/AND "type" IN/);
+    expect(query.values.slice(1)).toEqual(["document.parse", "document.ingest-reconcile", 1]);
+  });
+
   it("续租、完成、失败及发布守卫都必须匹配 token 与尚未到期的时间", async () => {
     db.$executeRaw.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
     expect(await renewJobLease(lease)).toBe(true);

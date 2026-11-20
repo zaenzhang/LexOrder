@@ -200,12 +200,13 @@ export async function findDeliveryEventByRequestForActor(userId: string, input: 
   return { id: event.id, deliveryId: event.deliveryId };
 }
 
-export async function listDeliveryRecordsForActor(userId: string, matterId: string, beforeId?: string) {
+export async function listDeliveryRecordsForActor(userId: string, matterId: string, beforeId?: string, sentOnly = false) {
   await assertDeliveryAuthority(prisma, userId, deliveryIdSchema.parse(matterId), false);
-  if (beforeId && !await prisma.deliveryRecord.count({ where: { id: deliveryIdSchema.parse(beforeId), matterId } })) {
+  const scope: Prisma.DeliveryRecordWhereInput = { matterId, ...(sentOnly ? { events: { some: { kind: "SENT" } } } : {}) };
+  if (beforeId && !await prisma.deliveryRecord.count({ where: { ...scope, id: deliveryIdSchema.parse(beforeId) } })) {
     throw new ActionError("列表位置已失效，请返回第一页");
   }
-  const rows = await prisma.deliveryRecord.findMany({ where: { matterId }, include: deliveryInclude,
+  const rows = await prisma.deliveryRecord.findMany({ where: scope, include: deliveryInclude,
     orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 21,
     ...(beforeId ? { cursor: { id: beforeId }, skip: 1 } : {}) });
   const items: DeliverySummary[] = [];
@@ -214,7 +215,9 @@ export async function listDeliveryRecordsForActor(userId: string, matterId: stri
     try { await assertDeliveryDocuments(prisma, userId, row, false); }
     catch (error) { if (error instanceof ActionError) available = false; else throw error; }
     items.push({ id: row.id, purpose: available ? row.purpose : null, recipientName: available ? row.recipientName : null,
-      createdAt: row.createdAt.toISOString(), itemCount: row.items.length, state: available ? deliveryState(row.events) : "UNAVAILABLE" });
+      createdAt: row.createdAt.toISOString(),
+      sentAt: available ? row.events.find(event => event.kind === "SENT")?.occurredAt.toISOString() ?? null : null,
+      itemCount: row.items.length, state: available ? deliveryState(row.events) : "UNAVAILABLE" });
   }
   return { items, nextCursor: rows.length > 20 ? rows[19].id : null };
 }

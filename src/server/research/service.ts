@@ -6,12 +6,12 @@ import { auditTx } from "@/server/audit";
 import { contextAccess, type ContextAccess, type ContextActor } from "@/server/matters/context-service";
 import { prepareSource, readSourceSnapshot, readableDocumentOptions, resolveReference, sourceReader, sourceReferences } from "@/server/evidence/source-links";
 import { evidenceEventDateFromRecord } from "@/lib/evidence/event-date";
-import { readResearchIssueSnapshot, researchIssueSnapshotSchema, type ResearchIssueSnapshot } from "./issue-snapshot";
+import { issueSourceAdditions, readResearchIssueSnapshot, researchIssueSnapshotSchema, type ResearchIssueSnapshot } from "./issue-snapshot";
 import { savedCaseDocumentIds } from "./saved-case-source";
 import type { SourceReference } from "@/server/evidence/contracts";
 import {
-  lawMetadataSchema, researchCheckSchema, researchQuerySchema, researchSaveSchema,
-  type ResearchCheckInput, type ResearchContent, type ResearchList, type ResearchOptions,
+  acceptIssueSupplementsSchema, lawMetadataSchema, researchCheckSchema, researchQuerySchema, researchSaveSchema,
+  type AcceptIssueSupplementsInput, type ResearchCheckInput, type ResearchContent, type ResearchList, type ResearchOptions,
   type ResearchRevisionView, type ResearchSaveInput,
   type ResearchSourceInput, type ResearchIssueSelection,
 } from "./contracts";
@@ -23,22 +23,34 @@ export const researchInclude = {
 } satisfies Prisma.ResearchRevisionInclude;
 export type ResearchRow = Prisma.ResearchRevisionGetPayload<{ include: typeof researchInclude }>;
 
-function references(row: ResearchRow): SourceReference[] {
+export const researchReferenceSelect = {
+  matterId: true, issueId: true, issueRevisionId: true, issueSnapshot: true,
+  sources: { select: { id: true, documentId: true, documentSha256: true, relation: true, location: true, parseRunId: true, anchorId: true } },
+  issue: { select: { matterId: true, revision: true, confirmedAt: true } },
+} satisfies Prisma.ResearchRevisionSelect;
+type ResearchReferences = Prisma.ResearchRevisionGetPayload<{ select: typeof researchReferenceSelect }>;
+
+function references(row: ResearchReferences): SourceReference[] {
   return row.sources.map(source => ({ id: source.id, documentId: source.documentId, documentSha256: source.documentSha256,
     relation: source.relation, location: source.location as SourceReference["location"], parseRunId: source.parseRunId,
     anchorId: source.anchorId, legacy: false }));
 }
 
 /** Only the input saved with this research contributes evidence, never today's issue. */
-export function researchIssueReferences(row: ResearchRow): SourceReference[] | null {
+export function researchIssueReferences(row: ResearchReferences): SourceReference[] | null {
   if (!row.issueId && !row.issueRevisionId && row.issueSnapshot === null) return [];
   return readResearchIssueSnapshot(row)?.sourceSnapshot ?? null;
 }
 
-export async function researchReadAccess(tx: Prisma.TransactionClient, access: ContextAccess, row: ResearchRow) {
+export function researchReferencesForRead(row: ResearchReferences) {
   const issueReferences = researchIssueReferences(row);
-  if (issueReferences === null) return { readable: false, sourceViews: [], issueSourceViews: [] };
-  const ownReferences = references(row);
+  return issueReferences && { issueReferences, ownReferences: references(row) };
+}
+
+export async function researchReadAccess(tx: Prisma.TransactionClient, access: ContextAccess, row: ResearchRow) {
+  const sources = researchReferencesForRead(row);
+  if (!sources) return { readable: false, sourceViews: [], issueSourceViews: [] };
+  const { issueReferences, ownReferences } = sources;
   const reader = await sourceReader(access.user.id, access.matter.id, [...ownReferences, ...issueReferences], tx);
   const readable = [...ownReferences, ...issueReferences].every(source => Boolean(reader.documentFor(source)));
   return { readable, sourceViews: readable ? ownReferences.map(source => ({ reference: source, view: reader.view(source) })) : [],
@@ -55,6 +67,19 @@ export async function loadResearch(tx: Prisma.TransactionClient, matterId: strin
   const row = await tx.researchRevision.findFirst({ where: { id, matterId }, include: researchInclude });
   if (!row) throw new ActionError("研究不存在或不属于当前事项");
   return row;
+}
+
+export async function readCitationConclusion(
+  tx: Prisma.TransactionClient, actor: ContextActor, matterId: string, researchId: string,
+) {
+  const access = await contextAccess(tx, actor, matterId);
+  if (!access.canWrite || !hasCustomPermission(access.user, "documents.write")) {
+    throw new ActionError("当前案件不可写入工作稿");
+  }
+  const row = await loadResearch(tx, matterId, researchId);
+  await assertResearchReadable(tx, access, row);
+  if (!row.conclusion.trim()) throw new ActionError("这份研究修订还没有可引用的结论");
+  return { version: row.version, conclusion: row.conclusion, checked: row.checkedAt !== null };
 }
 
 function contentOf(row: ResearchRow): ResearchContent {
@@ -104,7 +129,7 @@ export async function researchTransaction<T>(db: PrismaClient, run: (tx: Prisma.
   }
 }
 
-async function captureIssueInput(tx: Prisma.TransactionClient, access: ContextAccess, selection: ResearchIssueSelection | null): Promise<ResearchIssueSnapshot | null> {
+export async function captureIssueInput(tx: Prisma.TransactionClient, access: ContextAccess, selection: ResearchIssueSelection | null): Promise<ResearchIssueSnapshot | null> {
   if (!selection) return null;
   if (selection.kind === "SAVED") {
     const previous = await loadResearch(tx, access.matter.id, selection.researchRevisionId);
@@ -142,49 +167,71 @@ async function captureIssueInput(tx: Prisma.TransactionClient, access: ContextAc
 
 export async function saveResearch(db: PrismaClient, actor: ContextActor, input: ResearchSaveInput) {
   const parsed = researchSaveSchema.parse(input);
+  return researchTransaction(db, async tx => storeResearchRevision(tx, await contextAccess(tx, actor, parsed.matterId, true), parsed));
+}
+
+/** The caller must hold the case authorization and write lock from contextAccess. */
+export async function storeResearchRevision(tx: Prisma.TransactionClient, access: ContextAccess, parsed: ResearchSaveInput,
+  options?: { issueSupplementFrom: ResearchIssueSnapshot }) {
+  const actor = access.user;
+  if (!access.canWrite || access.matter.id !== parsed.matterId) throw new ActionError("无权更新此研究");
   if (new Date(parsed.researchedAt).getTime() > Date.now() + 300000) throw new ActionError("研究时间不能晚于当前时间");
   const requestHash = createHash("sha256").update(JSON.stringify(parsed)).digest("hex");
+  const prior = await tx.researchRevision.findUnique({ where: { authorId_requestKey: { authorId: actor.id, requestKey: parsed.requestKey } }, include: researchInclude });
+  if (prior) {
+    if (prior.matterId !== parsed.matterId || prior.requestHash !== requestHash) throw new ActionError("本次提交已保存为不同内容，请重新打开研究后修改");
+    await assertResearchReadable(tx, access, prior);
+    return { id: prior.id, version: prior.version, replayed: true };
+  }
+  let seriesId: string = randomUUID();
+  let version = 1;
+  if (parsed.supersedesId) {
+    const previous = await loadResearch(tx, parsed.matterId, parsed.supersedesId);
+    await assertResearchReadable(tx, access, previous);
+    if (previous.successor || previous.version !== parsed.expectedVersion) throw new ActionError("研究已产生新修订，请保留输入并打开最新记录");
+    seriesId = previous.seriesId;
+    version = previous.version + 1;
+  }
+  const issueSnapshot = await captureIssueInput(tx, access, parsed.issueSelection);
+  if (options && (!issueSnapshot || !issueSourceAdditions(options.issueSupplementFrom, issueSnapshot)?.length)) {
+    throw new ActionError("当前争点正文、日期或既有出处已变化，或尚无新增出处，请重新核对研究");
+  }
+  const sources = [];
+  const keys = new Set<string>();
+  for (const source of parsed.sources) {
+    const prepared = await prepareSource(actor.id, parsed.matterId, source, tx);
+    const key = `${prepared.documentId}:${prepared.relation}:${prepared.locationKey}`;
+    if (keys.has(key)) throw new ActionError("同一位置和用途的来源请只选择一次");
+    keys.add(key);
+    sources.push({ ...prepared, lawMetadata: source.lawMetadata as Prisma.InputJsonValue });
+  }
+  const row = await tx.researchRevision.create({ data: { matterId: parsed.matterId, question: parsed.question, purpose: parsed.purpose,
+    jurisdiction: parsed.jurisdiction, scope: parsed.scope, rule: parsed.rule, exceptions: parsed.exceptions,
+    supportingAnalysis: parsed.supportingAnalysis, opposingAnalysis: parsed.opposingAnalysis, conclusion: parsed.conclusion,
+    unresolved: parsed.unresolved, nextSteps: parsed.nextSteps,
+    issueId: issueSnapshot?.evidenceItemId ?? null, issueRevisionId: issueSnapshot?.revisionId ?? null,
+    issueSnapshot: issueSnapshot ? issueSnapshot as Prisma.InputJsonValue : Prisma.DbNull,
+    requestKey: parsed.requestKey, supersedesId: parsed.supersedesId, seriesId, version,
+    researchedAt: new Date(parsed.researchedAt), relevantDate: parsed.relevantDate || null,
+    queryLog: parsed.queryLog as Prisma.InputJsonValue, authorId: actor.id, requestHash, sources: { create: sources } }, select: { id: true } });
+  await auditTx(tx, { userId: actor.id, action: parsed.supersedesId ? "RESEARCH_REVISE" : "RESEARCH_CREATE", targetType: "ResearchRevision", targetId: row.id,
+    detail: { matterId: parsed.matterId, seriesId, version, supersedesId: parsed.supersedesId, sourceCount: sources.length,
+      issueId: issueSnapshot?.evidenceItemId ?? null, issueRevision: issueSnapshot?.revision ?? null,
+      issueSelection: parsed.issueSelection?.kind ?? null } });
+  return { id: row.id, version, replayed: false };
+}
+
+export async function acceptResearchIssueSupplements(db: PrismaClient, actor: ContextActor, input: AcceptIssueSupplementsInput) {
+  const action = acceptIssueSupplementsSchema.parse(input);
   return researchTransaction(db, async tx => {
-    const access = await contextAccess(tx, actor, parsed.matterId, true);
-    const prior = await tx.researchRevision.findUnique({ where: { authorId_requestKey: { authorId: actor.id, requestKey: parsed.requestKey } }, include: researchInclude });
-    if (prior) {
-      if (prior.matterId !== parsed.matterId || prior.requestHash !== requestHash) throw new ActionError("本次提交已保存为不同内容，请重新打开研究后修改");
-      await assertResearchReadable(tx, access, prior);
-      return { id: prior.id, version: prior.version, replayed: true };
-    }
-    let seriesId: string = randomUUID();
-    let version = 1;
-    if (parsed.supersedesId) {
-      const previous = await loadResearch(tx, parsed.matterId, parsed.supersedesId);
-      await assertResearchReadable(tx, access, previous);
-      if (previous.successor || previous.version !== parsed.expectedVersion) throw new ActionError("研究已产生新修订，请保留输入并打开最新记录");
-      seriesId = previous.seriesId;
-      version = previous.version + 1;
-    }
-    const issueSnapshot = await captureIssueInput(tx, access, parsed.issueSelection);
-    const sources = [];
-    const keys = new Set<string>();
-    for (const source of parsed.sources) {
-      const prepared = await prepareSource(actor.id, parsed.matterId, source, tx);
-      const key = `${prepared.documentId}:${prepared.relation}:${prepared.locationKey}`;
-      if (keys.has(key)) throw new ActionError("同一位置和用途的来源请只选择一次");
-      keys.add(key);
-      sources.push({ ...prepared, lawMetadata: source.lawMetadata as Prisma.InputJsonValue });
-    }
-    const row = await tx.researchRevision.create({ data: { matterId: parsed.matterId, question: parsed.question, purpose: parsed.purpose,
-      jurisdiction: parsed.jurisdiction, scope: parsed.scope, rule: parsed.rule, exceptions: parsed.exceptions,
-      supportingAnalysis: parsed.supportingAnalysis, opposingAnalysis: parsed.opposingAnalysis, conclusion: parsed.conclusion,
-      unresolved: parsed.unresolved, nextSteps: parsed.nextSteps,
-      issueId: issueSnapshot?.evidenceItemId ?? null, issueRevisionId: issueSnapshot?.revisionId ?? null,
-      issueSnapshot: issueSnapshot ? issueSnapshot as Prisma.InputJsonValue : Prisma.DbNull,
-      requestKey: parsed.requestKey, supersedesId: parsed.supersedesId, seriesId, version,
-      researchedAt: new Date(parsed.researchedAt), relevantDate: parsed.relevantDate || null,
-      queryLog: parsed.queryLog as Prisma.InputJsonValue, authorId: actor.id, requestHash, sources: { create: sources } }, select: { id: true } });
-    await auditTx(tx, { userId: actor.id, action: parsed.supersedesId ? "RESEARCH_REVISE" : "RESEARCH_CREATE", targetType: "ResearchRevision", targetId: row.id,
-      detail: { matterId: parsed.matterId, seriesId, version, supersedesId: parsed.supersedesId, sourceCount: sources.length,
-        issueId: issueSnapshot?.evidenceItemId ?? null, issueRevision: issueSnapshot?.revision ?? null,
-        issueSelection: parsed.issueSelection?.kind ?? null } });
-    return { id: row.id, version, replayed: false };
+    const access = await contextAccess(tx, actor, action.matterId, true);
+    const previous = await loadResearch(tx, action.matterId, action.researchId);
+    const previousIssue = readResearchIssueSnapshot(previous);
+    if (!previousIssue || previousIssue.evidenceItemId !== action.issue.issueId) throw new ActionError("补件必须属于原研究的争点");
+    return storeResearchRevision(tx, access, researchSaveSchema.parse({
+      ...contentOf(previous), matterId: action.matterId, supersedesId: previous.id, expectedVersion: action.expectedVersion,
+      requestKey: action.requestKey, issueSelection: action.issue,
+    }), { issueSupplementFrom: previousIssue });
   });
 }
 

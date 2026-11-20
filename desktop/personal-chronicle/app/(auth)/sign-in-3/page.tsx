@@ -1,9 +1,7 @@
-import type { Metadata } from "next"
-
 import { AuthFrame } from "@/features/auth/auth-shell"
 import { SignInForm } from "@/features/auth/sign-in-form"
 
-export const metadata: Metadata = { title: "Sign in" }
+export const metadata = { title: "Sign in" }
 
 export default function Page() {
   return (

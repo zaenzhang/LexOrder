@@ -1,7 +1,7 @@
 "use client"
 
 import { BanIcon, CalendarIcon, ClockIcon, MailIcon, RotateCcwIcon } from "lucide-react"
-import Link from "next/link"
+import Link from "@/features/shell/workspace-link"
 
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"

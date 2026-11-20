@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { readPersonal } from "@/features/matters/personal-client"
 
-const endpoint = "/api/personal-runtime/practice"
+const endpoint = "/api/personal/practice"
 
 export function usePractice<T>(
   view: string,

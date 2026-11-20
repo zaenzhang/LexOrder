@@ -1,11 +1,12 @@
 "use client"
 
-import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from "lucide-react"
+import { PlusIcon } from "lucide-react"
 import { useMemo, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { PageHeader } from "@/kit/ui-patterns/page-header"
 
+import { CalendarLayout } from "./calendar-layout"
 import { Agenda } from "./agenda"
 import { formatMonth, inMonth, TODAY } from "./dates"
 import { EventDialog } from "./event-dialog"
@@ -45,30 +46,10 @@ export function CalendarApp() {
           </Button>
         }
       />
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <section aria-label={formatMonth(cursor)} className="overflow-hidden rounded-2xl bg-card shadow-(--surface-shadow)">
-          <div className="flex items-center gap-2 border-b px-3 py-2.5 md:px-4">
-            <h2 className="font-heading text-base font-semibold tracking-tight md:text-lg" aria-live="polite">
-              {formatMonth(cursor)}
-            </h2>
-            <div className="ms-auto flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={goToToday}>
-                Today
-              </Button>
-              <div className="flex items-center">
-                <Button variant="outline" size="icon-sm" className="rounded-e-none" onClick={() => goToMonth(-1)} aria-label="Previous month">
-                  <ChevronLeftIcon className="rtl:rotate-180" />
-                </Button>
-                <Button variant="outline" size="icon-sm" className="-ms-px rounded-s-none" onClick={() => goToMonth(1)} aria-label="Next month">
-                  <ChevronRightIcon className="rtl:rotate-180" />
-                </Button>
-              </div>
-            </div>
-          </div>
-          <MonthGrid events={events} onCreate={create} />
-        </section>
-        <Agenda events={events} allEvents={allEvents} onCreate={create} />
-      </div>
+      <CalendarLayout month={formatMonth(cursor)} onToday={goToToday} onChangeMonth={goToMonth}
+        agenda={<Agenda events={events} allEvents={allEvents} onCreate={create} />}>
+        <MonthGrid events={events} onCreate={create} />
+      </CalendarLayout>
       <EventDialog open={dialog.open} date={dialog.date} session={dialog.session} onOpenChange={(open) => setDialog((current) => ({ ...current, open }))} />
     </>
   )

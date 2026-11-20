@@ -1,10 +1,11 @@
 "use client"
 import { useEffect, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { materialUrl, readPersonal, workspaceEndpoint } from "./personal-client"
+import { readPersonal, workspaceEndpoint } from "./personal-client"
 
 type Target = "clientId" | "opposingPartyId" | "thirdPartyId" | "procedureId"
 type Selection = Record<Target, string | null>
@@ -14,13 +15,14 @@ type Prepared = { templateId: string; templateUpdatedAt: string; selection: Sele
 const targets = [["clientId","clients","委托人"],["opposingPartyId","opposing","对方当事人"],["thirdPartyId","thirds","第三人"],["procedureId","procedures","程序"]] as const
 type Mode = "render" | "upload"
 export function TemplateDrafts({ matterId, onGenerated }: { matterId: string; onGenerated: () => void }) {
+  const cache = useQueryClient()
   const [mode, setMode] = useState<Mode>()
   const [receipt, setReceipt] = useState<{ documentId: string; fileName: string }>()
   return <div className="flex flex-wrap items-center gap-2">
     <Button size="sm" variant="outline" onClick={() => setMode("render")}>从模板起草</Button>
     <Button size="sm" variant="ghost" onClick={() => setMode("upload")}>导入文书模板</Button>
-    {receipt && <a className="text-sm underline" href={materialUrl("/api/documents/"+receipt.documentId+"/download")} download>下载 {receipt.fileName}</a>}
-    {mode && <TemplateForm mode={mode} matterId={matterId} close={() => setMode(undefined)} generated={result => { setReceipt(result); setMode(undefined); onGenerated() }} />}
+    {receipt && <a className="text-sm underline" href={"/api/documents/"+receipt.documentId+"/download"} download>下载 {receipt.fileName}</a>}
+    {mode && <TemplateForm mode={mode} matterId={matterId} close={() => setMode(undefined)} generated={result => { setReceipt(result); setMode(undefined); void cache.invalidateQueries({ queryKey: ["doc-review-index", matterId] }); onGenerated() }} />}
   </div>
 }
 function TemplateForm({ mode, matterId, close, generated }: { mode: Mode; matterId: string; close: () => void; generated: (result: { documentId: string; fileName: string }) => void }) {

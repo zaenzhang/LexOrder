@@ -1,3 +1,4 @@
+import { platform } from "node:os";
 import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { constants, createReadStream } from "node:fs";
@@ -62,7 +63,7 @@ async function verifyFolder(directory: string, matterId: string, expectedKey?: s
     const identity = JSON.parse(await fs.readFile(stamp, "utf8"));
     if (identity.workspaceId !== personalRuntime().workspaceId || identity.matterId !== matterId) throw new Error();
     for (const name of ["已入卷", "工作稿"]) {
-      if (!(await fs.lstat(path.join(directory, name))).isDirectory()) throw new Error();
+      if (!(await fs.lstat(path.join(/* turbopackIgnore: true */ directory, name))).isDirectory()) throw new Error();
     }
   } catch {
     throw new ActionError("案件目录不可用或归属不符，请检查磁盘连接，或重新定位原案目录");
@@ -129,7 +130,7 @@ async function checkParents(location: string) {
 }
 
 async function flush(file: string, directory = false) {
-  if (directory && process.platform === "win32") return;
+  if (directory && platform() === "win32") return;
   const handle = await fs.open(file, directory ? "r" : "r+");
   try { await handle.sync(); } finally { await handle.close(); }
 }
@@ -245,7 +246,7 @@ async function finishBinding(matter: Matter, pending: Binding, storageRoot: stri
     // directory to its parent with no-clobber semantics. Windows refuses to
     // replace an existing directory through MoveFileEx.
     try {
-      if (process.platform === "win32") await fs.rename(prepared, directory);
+      if (platform() === "win32") await fs.rename(prepared, directory);
       else await promisify(execFile)("/bin/mv", ["-n", prepared, root]);
     } catch (error) {
       if (!await exists(directory)) throw error;

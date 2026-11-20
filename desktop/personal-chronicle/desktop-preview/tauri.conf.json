@@ -1,34 +1,25 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "LexOrder Chronicle Preview",
+  "productName": "LexOrder Chronicle",
   "version": "0.1.0",
   "identifier": "cn.lexorder.chroniclepreview",
-  "build": {
-    "devUrl": "http://127.0.0.1:55313/"
-  },
   "app": {
     "windows": [
       {
         "label": "main",
-        "title": "LexOrder · Chronicle 本地预览",
+        "title": "LexOrder · Chronicle",
         "width": 1440,
         "height": 900,
         "center": true,
+        "dragDropEnabled": false,
         "create": false
       }
-    ],
-    "security": {
-      "capabilities": [{
-        "identifier": "case-folder-picker",
-        "windows": ["main"],
-        "permissions": ["allow-choose-case-directory"]
-      }]
-    }
+    ]
   },
   "bundle": {
     "active": false,
     "icon": [
-      "icons/icon.ico"
+      "icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"
     ]
   }
 }

@@ -11,7 +11,7 @@ import { isEmailConfigured, sendReminderEmail } from "@/lib/notifications/email"
 import { saveWebhookLastResult, type ReminderWebhookLastResult } from "@/server/settings/webhook-last-result";
 import { saveEmailLastResult } from "@/server/settings/email-last-result";
 import { recordDeliveryOutcome } from "@/server/reminders/ledger";
-import { claimDueJobs, completeJob, failJob, renewJobLease, type JobLease } from "./queue";
+import { claimDueJobs, completeJob, failJob, renewJobLease, type JobLease, type JobScope } from "./queue";
 import { shDayKey } from "@/lib/ui/sh-time";
 import { ActionError } from "@/lib/action-error";
 
@@ -206,6 +206,18 @@ const handlers: Record<string, JobHandler> = {
     const { reconcileMaterialIngest } = await import("@/server/documents/material-ingest");
     await reconcileMaterialIngest(payload, lease);
   },
+  "evidence.observations": async (payload, lease) => {
+    const { processObservationRun } = await import("@/server/evidence/analysis-runs");
+    await processObservationRun(payload, lease);
+  },
+  "evidence.case-grouping": async (payload, lease) => {
+    const { processCaseGrouping } = await import("@/server/evidence/case-grouping-runs");
+    await processCaseGrouping(payload, lease);
+  },
+  "skill.signoff": async (payload, lease) => {
+    const { processSignoffAi } = await import("@/server/skills/signoff-ai");
+    await processSignoffAi(payload, lease);
+  },
   "document.parse": async (payload, lease) => {
     const { processMaterialJob } = await import("@/server/documents/material-processing");
     await processMaterialJob(payload, lease);
@@ -220,8 +232,8 @@ const handlers: Record<string, JobHandler> = {
   "sms.file_analysis": smsFileAnalysisHandler
 };
 
-export async function processDueJobs(limit = 10): Promise<{ processed: number; succeeded: number; failed: number }> {
-  const jobs = await claimDueJobs(limit);
+export async function processDueJobs(limit = 10, scope: JobScope = "all"): Promise<{ processed: number; succeeded: number; failed: number }> {
+  const jobs = await claimDueJobs(limit, scope);
   let succeeded = 0;
   let failed = 0;
   for (const job of jobs) {

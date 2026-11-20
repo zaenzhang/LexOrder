@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
-import { materialUrl, readPersonal, workspaceEndpoint } from "./personal-client"
+import { readPersonal, workspaceEndpoint } from "./personal-client"
 
 type Seal = { id: string; code: string; documentTitle: string; status: string; sealType: string; purpose: string; requestedBy: string
   approveNote: string | null; draftDoc: { id: string; name: string } | null; stampedDoc: { id: string; name: string } | null; canApprove: boolean; canStamp: boolean; canCancel: boolean }
@@ -28,7 +28,7 @@ export function SealWorkspace({ matterId, data, reload }: { matterId: string; da
       <h3 className="font-medium">{row.documentTitle}</h3>
       <p>{row.code} · {data.types.find(t => t.type === row.sealType)?.label ?? row.sealType} · {statuses[row.status] ?? row.status}</p>
       <p>{row.requestedBy} · {row.purpose}</p>{row.approveNote && <p>{row.approveNote}</p>}
-      {[row.draftDoc, row.stampedDoc].map((doc,i) => doc ? <a className="underline" key={doc.id} href={materialUrl("/api/documents/"+doc.id+"/download")} download>
+      {[row.draftDoc, row.stampedDoc].map((doc,i) => doc ? <a className="underline" key={doc.id} href={"/api/documents/"+doc.id+"/download"} download>
         {i ? "盖章扫描件" : "待盖章版本"} · {doc.name}</a> : null)}
       <div className="flex flex-wrap gap-2">{(["approve","reject","cancel","stamp"] as const).filter(a => a === "cancel" ? row.canCancel : a === "stamp" ? row.canStamp : row.canApprove).map(action =>
         <Button key={action} size="sm" variant="outline" onClick={() => setEdit({ action, row })}>{labels[action]}</Button>)}</div>

@@ -1,10 +1,12 @@
 "use client"
 
-import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { usePageLoading } from "@/kit/ui-patterns/page-loading"
+
+import Link from "@/features/shell/workspace-link"
+import { useRouter } from "@/kit/framework"
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Textarea } from "@/components/ui/textarea"
@@ -77,15 +79,23 @@ function field(form: FormData, key: string) {
 }
 const fieldClass = "grid gap-1.5 text-sm"
 
-export function CatalogPage({ view }: { view: Catalog }) {
+export function CatalogPage({
+  view,
+  creatingIntake = false,
+}: {
+  view: Catalog
+  creatingIntake?: boolean
+}) {
   const [search, setSearch] = useState("")
   const [query, setQuery] = useState({ q: "", page: "1" })
-  const [adding, setAdding] = useState(false)
+  const [addingClient, setAddingClient] = useState(false)
+  const adding = view === "intakes" ? creatingIntake : addingClient
   const [category, setCategory] = useState("CIVIL_COMMERCIAL")
   const [useExisting, setUseExisting] = useState(false)
   const [clientSearch, setClientSearch] = useState("")
   const [clientQuery, setClientQuery] = useState("")
   const { data, error } = usePractice<List>(view, query)
+  usePageLoading(!data && !error && !query.q && query.page === "1")
   const options = usePractice<List>(
     "clients",
     { q: clientQuery },
@@ -162,11 +172,24 @@ export function CatalogPage({ view }: { view: Catalog }) {
   return (
     <section className="flex flex-col gap-5">
       <PageHeader
-        title={names[view]}
+        title={creatingIntake ? "新建收案" : names[view]}
         actions={
-          <Button onClick={() => setAdding(!adding)} disabled={mutation.busy}>
-            {adding ? "返回列表" : "新建" + names[view]}
-          </Button>
+          isClient ? (
+            <Button onClick={() => setAddingClient(!addingClient)} disabled={mutation.busy}>
+              {adding ? "返回列表" : "新建客户"}
+            </Button>
+          ) : (
+            <Link
+              className={buttonVariants({ variant: creatingIntake ? "outline" : "default" })}
+              href={creatingIntake ? "/practice/intakes" : "/practice/intakes?create=1"}
+              aria-disabled={mutation.busy}
+              onClick={(event) => {
+                if (mutation.busy) event.preventDefault()
+              }}
+            >
+              {creatingIntake ? "返回列表" : "新建收案"}
+            </Link>
+          )
         }
       />
       {adding ? (
@@ -306,7 +329,7 @@ export function CatalogPage({ view }: { view: Catalog }) {
               </label>
             </>
           )}
-          <Button className="justify-self-start" disabled={mutation.busy}>
+          <Button type="submit" className="justify-self-start" disabled={mutation.busy}>
             保存{names[view]}
           </Button>
         </form>
@@ -376,6 +399,7 @@ export function CatalogPage({ view }: { view: Catalog }) {
 
 export function ClientPage({ id }: { id: string }) {
   const { data, error } = usePractice<Client>("client", { id })
+  usePageLoading(!data && !error)
   const mutation = useAction()
   const [requestKey, setKey] = useState(() => crypto.randomUUID())
   if (!data)
@@ -624,6 +648,7 @@ function IntakeRevision({ id }: { id: string }) {
 export function IntakePage({ id }: { id: string }) {
   const [revise, setRevise] = useState(false)
   const { data, error } = usePractice<Intake>("intake", { id })
+  usePageLoading(!data && !error)
   const mutation = useAction()
   const router = useRouter()
   if (!data)
@@ -749,6 +774,7 @@ export function IntakePage({ id }: { id: string }) {
             <Textarea name="note" required maxLength={500} />
           </label>
           <Button
+            type="submit"
             variant="outline"
             className="justify-self-start"
             disabled={mutation.busy}

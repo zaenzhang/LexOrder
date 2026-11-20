@@ -1,4 +1,4 @@
-import Link from "next/link"
+import Link from "@/features/shell/workspace-link"
 import { ArchiveWorkspace } from "@/features/practice/archive-workspace"
 
 export default async function ArchivePage({ searchParams }: { searchParams: Promise<{ matter?: string }> }) {

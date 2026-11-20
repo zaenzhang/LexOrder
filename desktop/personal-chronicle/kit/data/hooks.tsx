@@ -39,9 +39,9 @@ export const dataKeys = {
 }
 
 /** One page of a resource. Keeps the previous page on screen while the next loads. */
-export function useList<R extends ResourceMap, K extends keyof R & string>(resource: K, query: ListQuery) {
+export function useList<R extends ResourceMap, K extends keyof R & string>(resource: K, query: ListQuery, enabled = true) {
   const adapter = useAdapter<R>()
-  return useQuery({ queryKey: dataKeys.list(resource, query), queryFn: () => adapter.list(resource, query), placeholderData: keepPreviousData })
+  return useQuery({ queryKey: dataKeys.list(resource, query), queryFn: () => adapter.list(resource, query), enabled, placeholderData: keepPreviousData })
 }
 
 /** One record; idle while `id` is null (a detail route before its id is known). */

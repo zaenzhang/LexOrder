@@ -1,6 +1,7 @@
-"use client"
+import { lazy, Suspense } from "react"
 
-import dynamic from "next/dynamic"
+const DemoChrome = lazy(async () => ({ default: (await import("./demo-chrome")).DemoChrome }))
 
-/** The demo bar and analytics load after the page is interactive: they render nothing on the server anyway, and no page needs them to paint. */
-export const DemoChromeLazy = dynamic(() => import("./demo-chrome").then((module) => module.DemoChrome), { ssr: false })
+export function DemoChromeLazy(props: React.ComponentProps<typeof DemoChrome>) {
+  return <Suspense fallback={null}><DemoChrome {...props} /></Suspense>
+}

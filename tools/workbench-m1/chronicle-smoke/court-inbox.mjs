@@ -26,11 +26,14 @@ await action({ action: "finish", id, note: "" }, 409);
 const match = await action({ action: "match", smsId: id, matterId: a.id });
 assert.equal(match.filedFiles, 1, (await read("unprocessed"))?.note ?? "附件未入卷");
 await action({ action: "match", smsId: id, matterId: b.id }, 409);
+const scoped = async (matterId) => (await (await api(base + "?state=unprocessed&matter=" + matterId)).json()).items;
+assert((await scoped(a.id)).some((row) => row.id === id));
+assert(!(await scoped(b.id)).some((row) => row.id === id));
 const entry = await read("unprocessed"),
   docId = entry.files[0].documentId;
 assert.equal(await (await api("/api/documents/" + docId + "/download")).text(), "合成补交附件原文");
 await action({ action: "finish", id, note: "已核对归入本案的固定原件" });
 assert.equal((await read("processed")).files[0].documentId, docId);
 console.log(
-  "PASS inbox: duplicate paste + original, pending attachment guard, match + immutable bytes, stale cross-case reassignment rejected, processed readback",
+  "PASS inbox: duplicate paste + original, pending attachment guard, match + immutable bytes, case-filtered readback, stale cross-case reassignment rejected, processed readback",
 );

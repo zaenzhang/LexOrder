@@ -21,6 +21,8 @@ import { enqueueMaterialProcessing, cancelMaterialProcessing } from "./material-
 import { assertDocumentDerivationAccess } from "./derivation-access";
 import { contextInputSelectionsSchema, type ContextInputSelection } from "@/lib/matters/context-inputs";
 import { assertContextInputSelections } from "@/server/matters/context-inputs";
+import { paragraphCitationSchema, type ParagraphCitation } from "@/server/research/contracts";
+import { readCitationConclusion } from "@/server/research/service";
 
 const nullableId = z.string().min(1).nullable().default(null);
 const documentInput = z.object({
@@ -38,6 +40,7 @@ const documentInput = z.object({
 export type MaterialDocumentInput = z.input<typeof documentInput>;
 const metadataSchema = z.object({ document: documentInput, priorDocumentId: nullableId,
   contextInputs: contextInputSelectionsSchema.optional().default([]),
+  paragraphCitation: paragraphCitationSchema.optional(),
   checkout: z.object({ jti: z.string(), baselineVersion: z.number().int(), draftOnly: z.boolean().optional() }).nullable().default(null) });
 
 /** Only explicit validation before this invocation creates an intent may carry this marker. */
@@ -111,13 +114,16 @@ async function assertUploadAuthority(tx: Prisma.TransactionClient, userId: strin
 
 /** The intent is durable before file I/O; originals use a reserved non-overwriting key. */
 export async function ingestMaterial(input: { userId: string; document: MaterialDocumentInput; bytes: Buffer;
-  priorDocumentId?: string; requestKey?: string; checkout?: { jti: string; baselineVersion: number; draftOnly?: boolean } | null; contextInputs?: ContextInputSelection[] }) {
+  priorDocumentId?: string; requestKey?: string; checkout?: { jti: string; baselineVersion: number; draftOnly?: boolean } | null;
+  contextInputs?: ContextInputSelection[]; paragraphCitation?: ParagraphCitation }) {
   const priorDocumentId = input.priorDocumentId ?? null;
   let data: z.output<typeof documentInput>, id: string, metadata: z.output<typeof metadataSchema>;
   try {
     data = documentInput.parse(input.document);
     id = input.requestKey ? z.uuid().parse(input.requestKey) : randomUUID();
-    metadata = metadataSchema.parse({ document: data, priorDocumentId, checkout: input.checkout ?? null, contextInputs: input.contextInputs });
+    metadata = metadataSchema.parse({ document: data, priorDocumentId, checkout: input.checkout ?? null,
+      contextInputs: input.contextInputs, paragraphCitation: input.paragraphCitation });
+    if (metadata.paragraphCitation && (!data.matterId || !priorDocumentId)) throw new ActionError("引用必须写入案内工作稿的新版本");
   } catch (error) { rejectBeforeReservation(error); }
   const existing = await prisma.materialIngestIntent.findUnique({ where: { id } });
   if (existing) {
@@ -149,11 +155,16 @@ export async function ingestMaterial(input: { userId: string; document: Material
     }
     throw error;
   }
+  let publishPhase = "storage";
   try {
     await storage.writeFileAt(storagePath, input.bytes);
+    publishPhase = "intent";
     await prisma.materialIngestIntent.updateMany({ where: { id, state: { not: "COMMITTED" }, documentId: null,
       OR: [{ errorCode: null }, { errorCode: { not: "UPLOAD_ABANDONED" } }] }, data: { state: "STORED", errorCode: null } });
-  } catch {
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException)?.code;
+    console.warn("[material-ingest] write failed", publishPhase,
+      typeof code === "string" && /^[A-Z0-9_]{1,36}$/.test(code) ? code : error instanceof Error ? error.name : "UnknownError");
     await prisma.materialIngestIntent.updateMany({ where: { id, state: { not: "COMMITTED" }, documentId: null,
       OR: [{ errorCode: null }, { errorCode: { not: "UPLOAD_ABANDONED" } }] }, data: { state: "FAILED", errorCode: "STORAGE_WRITE_FAILED" } });
     throw new ActionError("原件保存未完成，可在材料区查看未完成上传并重试");
@@ -168,9 +179,13 @@ async function commitStoredIngest(intentId: string, userId: string, lease?: JobL
     const intent = await tx.materialIngestIntent.findUniqueOrThrow({ where: { id: intentId } });
     if (intent.requestedById !== userId) throw new ActionError("无权处理此上传");
     if (intent.errorCode === "UPLOAD_ABANDONED") throw new ActionError("此上传已关闭，请重新选择文件开始新上传");
-    const { document: data, priorDocumentId, checkout, contextInputs } = metadataSchema.parse(intent.metadata);
+    const { document: data, priorDocumentId, checkout, contextInputs, paragraphCitation } = metadataSchema.parse(intent.metadata);
     await assertUploadAuthority(tx, userId, data, priorDocumentId);
     const adopted = await assertContextInputSelections(tx, userId, data.matterId, contextInputs, !intent.documentId);
+    if (paragraphCitation) {
+      const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { id: true, role: true } });
+      await readCitationConclusion(tx, user, data.matterId!, paragraphCitation.researchRevisionId);
+    }
     if (intent.documentId) return tx.document.findUniqueOrThrow({ where: { id: intent.documentId }, select: { id: true, version: true } });
     if (intent.state !== "STORED") throw new ActionError("原件尚未确认保存，请重新上传");
     let familyId: string | null = null;
@@ -182,6 +197,9 @@ async function commitStoredIngest(intentId: string, userId: string, lease?: JobL
       await tx.$queryRaw`SELECT id FROM "Document" WHERE id=${priorDocumentId} FOR UPDATE`;
       const prior = await tx.document.findUnique({ where: { id: priorDocumentId } });
       if (!prior || prior.deletedAt || !prior.isLatest || prior.matterId !== data.matterId || prior.intakeId !== data.intakeId) throw new ActionError("原材料版本已变化，请刷新后重传");
+      if (paragraphCitation && (prior.version !== paragraphCitation.expectedVersion || draftExtension(prior) !== ".docx")) {
+        throw new ActionError("目标文书已变化，请重新预览当前 DOCX 工作稿");
+      }
       if (checkout?.draftOnly && !draftExtension(prior)) throw new ActionError("当前材料状态只能查看，本机工作稿已保留");
       if (prior.tags.includes("AI审查") || await tx.reviewRecord.count({ where: { reportDocumentId: prior.id } })) {
         throw new ActionError("审查报告为固定记录，请重新审查原材料或独立上传修订文件");
@@ -200,6 +218,9 @@ async function commitStoredIngest(intentId: string, userId: string, lease?: JobL
       await tx.document.updateMany({ where: { familyId, isLatest: true }, data: { isLatest: false } });
       if (!prior.familyId) await tx.document.update({ where: { id: prior.id }, data: { isLatest: false, familyId } });
     }
+    if (paragraphCitation && !researchInputs.some(source => source.researchRevisionId === paragraphCitation.researchRevisionId)) {
+      researchInputs.push({ researchRevisionId: paragraphCitation.researchRevisionId });
+    }
     const created = await tx.document.create({ data: { ...data, path: intent.storagePath, familyId, version, isLatest: true,
       templateId, templateContextSnapshot } });
     if (adopted.length) await tx.documentContextInput.createMany({ data: adopted.map(input => ({ documentId: created.id, ...input })) });
@@ -210,7 +231,8 @@ async function commitStoredIngest(intentId: string, userId: string, lease?: JobL
     await auditTx(tx, { userId, action: priorDocumentId ? "DOCUMENT_NEW_VERSION" : "DOCUMENT_UPLOAD",
       targetType: "Document", targetId: created.id,
       detail: { matterId: data.matterId, intakeId: data.intakeId, intentId, version, priorId: priorDocumentId,
-        ...(checkout ? { controlledReturn: true, checkoutJti: checkout.jti, baselineVersion: checkout.baselineVersion } : {}) } });
+        ...(checkout ? { controlledReturn: true, checkoutJti: checkout.jti, baselineVersion: checkout.baselineVersion } : {}),
+        ...(paragraphCitation ? { paragraphCitation } : {}) } });
     if (data.matterId) await recordTimelineEvent(tx, { matterId: data.matterId, eventType: "DOCUMENT_UPLOADED",
       title: `上传材料：${data.name}`, occurredAt: new Date(), refType: "Document", refId: created.id });
     return { id: created.id, version: created.version };

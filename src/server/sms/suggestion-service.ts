@@ -77,42 +77,51 @@ export function eventDate(dateText: string, timeText: string) {
 async function lockProcedure(tx: Tx, matterId: string, procedureId: string) {
   await tx.$queryRaw`SELECT id FROM "MatterProcedure" WHERE id=${procedureId} FOR UPDATE`;
   const procedure = await tx.matterProcedure.findUnique({ where: { id: procedureId } });
-  if (!procedure || procedure.matterId !== matterId || procedure.engagement !== "ENGAGED") throw new ActionError("请选择本案当前实际代理的程序");
+  if (!procedure || procedure.matterId !== matterId || procedure.engagement !== "ENGAGED" || procedure.status === "CONCLUDED") throw new ActionError("请选择本案当前实际代理的程序");
   return procedure;
 }
 
 /** Date/time comparison is against real structured source data, never against a guessed default. */
-function assertLinkedEvent(row: SmsSuggestion, at: Date, precision: DeadlineDuePrecision | null) {
+function assertLinkedEvent(row: SmsSuggestion, at: Date, precision: DeadlineDuePrecision | null, verifiedTime?: string) {
   const payload = suggestionPayload(row.payload);
   const sourceDay = typeof payload.dateText === "string" ? payload.dateText.trim() : "";
   if (!sourceDay || shDayKey(at) !== sourceDay) throw new ActionError("所选事项日期与建议原文不一致，请核对后再关联");
   const sourceTime = typeof payload.timeText === "string" ? payload.timeText.trim() : "";
-  if (sourceTime && (precision !== "DATETIME" || shTime(at) !== sourceTime)) throw new ActionError("所选事项时刻与建议原文不一致，请核对后再关联");
+  if (row.kind === "HEARING" && !sourceTime && !verifiedTime) throw new ActionError("请按原件补核开庭时刻后再关联");
+  const exactTime = sourceTime || verifiedTime;
+  if (exactTime && (precision !== "DATETIME" || shTime(at) !== exactTime)) throw new ActionError("所选事项时刻与建议原文不一致，请核对后再关联");
 }
 
 async function applyEvent(tx: Tx, row: SmsSuggestion, matterId: string, choice: Choice): Promise<Omit<SmsDecisionResult, "replayed">> {
-  await lockProcedure(tx, matterId, choice.procedureId);
+  const procedure = await lockProcedure(tx, matterId, choice.procedureId);
+  checkSourceProcedure(row, procedure);
   const type = row.kind === "HEARING" ? "Hearing" : "Deadline";
   if (choice.mode === "LINK") {
     if (type === "Hearing") await tx.$queryRaw`SELECT id FROM "Hearing" WHERE id=${choice.targetId} FOR UPDATE`;
     else await tx.$queryRaw`SELECT id FROM "Deadline" WHERE id=${choice.targetId} FOR UPDATE`;
     const target = type === "Hearing"
-      ? await tx.hearing.findUnique({ where: { id: choice.targetId }, select: { id: true, procedureId: true, updatedAt: true, startsAt: true } })
-      : await tx.deadline.findUnique({ where: { id: choice.targetId }, select: { id: true, procedureId: true, updatedAt: true, dueAt: true, duePrecision: true } });
+      ? await tx.hearing.findUnique({ where: { id: choice.targetId }, select: { id: true, procedureId: true, updatedAt: true, startsAt: true, responsibility: { select: { state: true } } } })
+      : await tx.deadline.findUnique({ where: { id: choice.targetId }, select: { id: true, procedureId: true, updatedAt: true, dueAt: true, duePrecision: true, confirmStatus: true } });
     if (!target || target.procedureId !== choice.procedureId) throw new ActionError("所选事项不属于当前程序或已经不存在");
     if (target.updatedAt.getTime() !== choice.expectedTargetUpdatedAt.getTime()) throw new ActionError("所选事项已被修改，请重新读取后核对");
-    assertLinkedEvent(row, "startsAt" in target ? target.startsAt : target.dueAt, "startsAt" in target ? "DATETIME" : target.duePrecision);
+    if ("startsAt" in target) {
+      if (target.responsibility && target.responsibility.state !== "OPEN") throw new ActionError("庭期已取消或结束，请选择目前有效的庭期");
+    } else if (target.confirmStatus === "PENDING") throw new ActionError("所选期限尚待确认");
+    assertLinkedEvent(row, "startsAt" in target ? target.startsAt : target.dueAt, "startsAt" in target ? "DATETIME" : target.duePrecision, choice.verifiedTime);
     return { suggestionId: row.id, outcome: "LINKED", targetType: type, targetId: target.id, matterId };
   }
-  const at = eventDate(choice.dateText, choice.timeText);
+  if (type === "Hearing" && choice.timeText === null) throw new ActionError("请按原件补核开庭时刻");
+  const at = eventDate(choice.dateText, choice.timeText ?? "00:00");
+  const precision = choice.timeText === null ? "DATE" : "DATETIME";
   const duplicate = type === "Hearing"
     ? await tx.hearing.findFirst({ where: { procedureId: choice.procedureId, title: choice.title, startsAt: at }, select: { id: true } })
-    : await tx.deadline.findFirst({ where: { procedureId: choice.procedureId, title: choice.title, dueAt: at, duePrecision: "DATETIME" }, select: { id: true } });
+    : await tx.deadline.findFirst({ where: { procedureId: choice.procedureId, title: choice.title, dueAt: at, duePrecision: precision }, select: { id: true } });
   if (duplicate) throw new ActionError("本程序已有同标题、同时间的事项，请核对后明确关联已有事项");
   // This is an explicit human input; preserve the original proposal in payload.
+  const source = row.fileId ? await tx.smsInboundFile.findUnique({ where: { id: row.fileId }, select: { documentId: true } }) : null;
   const target = type === "Hearing"
     ? await tx.hearing.create({ data: { procedureId: choice.procedureId, title: choice.title, startsAt: at, notes: row.sourceExcerpt }, select: { id: true } })
-    : await tx.deadline.create({ data: { procedureId: choice.procedureId, title: choice.title, category: "CUSTOM", dueAt: at, duePrecision: "DATETIME", basis: `法院来件确认：${row.sourceExcerpt ?? "原文"}` }, select: { id: true } });
+    : await tx.deadline.create({ data: { procedureId: choice.procedureId, title: choice.title, category: "CUSTOM", dueAt: at, duePrecision: precision, sourceDocumentId: source?.documentId, basis: `法院来件确认：${row.sourceExcerpt ?? "原文"}` }, select: { id: true } });
   // The standard database trigger creates responsibility and its notification exactly once.
   await recordTimelineEvent(tx, { matterId, eventType: type === "Hearing" ? "HEARING_ADDED" : "DEADLINE_ADDED", title: `来件确认：${choice.title}`, occurredAt: new Date(), refType: type, refId: target.id });
   return { suggestionId: row.id, outcome: "CREATED", targetType: type, targetId: target.id, matterId };
@@ -130,7 +139,7 @@ function sameRequest(stored: unknown, requested: ReturnType<typeof requestFor>) 
   return previous.decision === requested.decision && previous.expectedUpdatedAt === requested.expectedUpdatedAt
     && previous.expectedMatchedMatterId === requested.expectedMatchedMatterId && previous.note === requested.note
     && (previous.event === null) === (requested.event === null)
-    && ["mode", "procedureId", "targetId", "expectedTargetUpdatedAt", "title", "dateText", "timeText"].every(key => event[key] === next[key]);
+    && ["mode", "procedureId", "targetId", "expectedTargetUpdatedAt", "title", "dateText", "timeText", "verifiedTime"].every(key => event[key] === next[key]);
 }
 
 export async function decideSmsSuggestionsTx(tx: Tx, actor: SmsActor, input: SmsDecisionInput) {
@@ -231,6 +240,13 @@ export async function finishSmsSuggestionsTx(tx: Tx, actor: SmsActor, smsId: str
   return { remainingSuggestions, remainingFiles, needsManualFetch: manualFetch, processingNote: sms.processingNote, organized: !unresolved && (mayOrganize || sms.processingState === "ORGANIZED") };
 }
 
+function checkSourceProcedure(row: SmsSuggestion, procedure: { id: string; caseNumber: string | null }) {
+  const { caseNumbers } = suggestionPayload(row.payload);
+  if (procedure.caseNumber && Array.isArray(caseNumbers) && caseNumbers.length === 1 && !caseNumbers.includes(procedure.caseNumber)) {
+    throw new ActionError("所选程序案号与来件候选案号不一致，请核对原件");
+  }
+}
+
 export async function listSmsEventTargetsTx(tx: Tx, actor: SmsActor, input: { smsId: string; suggestionId: string; procedureId: string; query: string }) {
   const sms = await lockSms(tx, actor, input.smsId);
   await checkRoleMutation(tx, actor, "schedule.read");
@@ -238,12 +254,12 @@ export async function listSmsEventTargetsTx(tx: Tx, actor: SmsActor, input: { sm
   const row = await tx.smsSuggestion.findFirst({ where: { id: input.suggestionId, smsId: sms.id, status: "PENDING", kind: { in: ["HEARING", "DEADLINE"] } } });
   if (!row) throw new ActionError("建议已处理或不存在，请刷新");
   await assertSource(tx, actor, row, sms.matchedMatterId);
-  await lockProcedure(tx, sms.matchedMatterId, input.procedureId);
+  checkSourceProcedure(row, await lockProcedure(tx, sms.matchedMatterId, input.procedureId));
   const day = String(suggestionPayload(row.payload).dateText ?? "");
   const from = eventDate(day, "00:00"), to = new Date(from.getTime() + 86_400_000);
   const common = { procedureId: input.procedureId, ...(input.query ? { title: { contains: input.query, mode: "insensitive" as const } } : {}) };
   const targets = row.kind === "HEARING"
-    ? (await tx.hearing.findMany({ where: { ...common, startsAt: { gte: from, lt: to } }, orderBy: [{ startsAt: "asc" }, { id: "asc" }], take: 101 })).map(target => ({ id: target.id, title: target.title, at: target.startsAt, duePrecision: "DATETIME" as const, updatedAt: target.updatedAt }))
-    : (await tx.deadline.findMany({ where: { ...common, dueAt: { gte: from, lt: to } }, orderBy: [{ dueAt: "asc" }, { id: "asc" }], take: 101 })).map(target => ({ id: target.id, title: target.title, at: target.dueAt, duePrecision: target.duePrecision, updatedAt: target.updatedAt }));
+    ? (await tx.hearing.findMany({ where: { ...common, NOT: { responsibility: { is: { state: { not: "OPEN" } } } }, startsAt: { gte: from, lt: to } }, orderBy: [{ startsAt: "asc" }, { id: "asc" }], take: 101 })).map(target => ({ id: target.id, title: target.title, at: target.startsAt, duePrecision: "DATETIME" as const, updatedAt: target.updatedAt }))
+    : (await tx.deadline.findMany({ where: { ...common, confirmStatus: { not: "PENDING" }, dueAt: { gte: from, lt: to } }, orderBy: [{ dueAt: "asc" }, { id: "asc" }], take: 101 })).map(target => ({ id: target.id, title: target.title, at: target.dueAt, duePrecision: target.duePrecision, updatedAt: target.updatedAt }));
   return { targets: targets.slice(0, 100), truncated: targets.length > 100 };
 }

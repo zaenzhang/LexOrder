@@ -1,15 +1,17 @@
 "use client"
 
-import Link from "next/link"
-import { useRouter } from "next/navigation"
+import Link from "@/features/shell/workspace-link"
+import { useRouter } from "@/kit/framework"
 import { useEffect, useId, useRef, useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
 import { ResearchArtifact, researchAnalysis, type ResearchAnalysis } from "./research-artifact"
+import { DraftCitation } from "./draft-citation"
+import { SkillCommissionDesk } from "./skill-commission-desk"
 import { FixedSourcePreview, type FixedSource } from "./fixed-source-preview"
-import { evidenceEndpoint, materialUrl, readPersonal, workspaceEndpoint } from "./personal-client"
+import { evidenceEndpoint, readPersonal, workspaceEndpoint } from "./personal-client"
 
 const queryStatuses: Record<string, string> = { FULLTEXT: "全文", SUMMARY: "摘要", LINK: "链接", NONE: "无资料", READ: "已阅读", NOT_OBTAINED: "未取得", UNREAD: "未读",
   NO_MATCH: "未命中", NO_ACCESS: "无权访问", FAILED: "查询失败", SUPPORTS: "支持", REBUTS: "反向", CONTEXT: "背景" }
@@ -38,6 +40,7 @@ export function ResearchRevision({ matterId, recordId, onClose, onUpdated, onRev
   const [revision, setRevision] = useState<Research>()
   const [refresh, setRefresh] = useState(0)
   const [openedSource, setOpenedSource] = useState("")
+  const [commissionsOpen, setCommissionsOpen] = useState(false)
   const sourceButtonPrefix = useId()
   const [edit, setEdit] = useState<{ analysis: ResearchAnalysis; requestKey: string }>()
   const editDirty = Boolean(edit && revision?.content && Object.entries(edit.analysis).some(
@@ -139,9 +142,18 @@ export function ResearchRevision({ matterId, recordId, onClose, onUpdated, onRev
         <SheetTitle className="break-words">{revision?.content?.question || "研究修订"}</SheetTitle>
         {revision && <p className="text-xs text-muted-foreground">第 {revision.version} 版 · {revision.checkedAt ? "已核对" : "待核对"}{!revision.current ? " · 历史修订" : ""}</p>}
       </SheetHeader>
+      {commissionsOpen && <SkillCommissionDesk matterId={matterId} scope={{ kind: "research", id: recordId }}
+        close={() => setCommissionsOpen(false)} onAdopted={id => { setCommissionsOpen(false); onRevised(id) }} />}
       <div className="grid gap-4 p-4 text-sm sm:p-5">
         {error && <p role="alert" className="text-destructive">{error}</p>}
         {revision && <div className="flex flex-wrap items-center gap-2">
+          {revision.issue && !edit && !note && <>
+            {revision.canRevise && !revision.issue.changed && !revision.issue.confirmationChanged &&
+              <Button size="sm" variant="outline" nativeButton={false} render={<Link href={{
+                pathname: `/matters/${matterId}/materials`, query: { research: recordId },
+              }} />}>选材发起委托</Button>}
+            <Button size="sm" variant="outline" onClick={() => setCommissionsOpen(true)}>委托记录</Button>
+          </>}
           {revision.readable && revision.content && revision.canRevise && !edit && <Button size="sm" disabled={busy || Boolean(note)} onClick={() => {
             if (!revision.content) return
             setError("")
@@ -205,8 +217,11 @@ export function ResearchRevision({ matterId, recordId, onClose, onUpdated, onRev
                   onChange={event => { setNote(event.target.value); setDiscard(null) }} /></label>
                 <Button type="submit" disabled={busy || !note.trim()}>确认已核对范围和来源</Button>
               </form>}
-              {!edit && revision.canDraft && !draft && <Button variant="outline" disabled={busy} onClick={() => void mutate("draft-research")}>据此版本生成分析工作稿</Button>}
-              {draft && <a className="block underline" href={materialUrl("/api/documents/"+draft.documentId+"/download")} download>下载 {draft.fileName}</a>}
+              {!edit && revision.canDraft && <div className="flex flex-wrap gap-2">
+                {revision.content.conclusion.trim() && <DraftCitation matterId={matterId} researchId={revision.id} disabled={busy} />}
+                {!draft && <Button variant="outline" disabled={busy} onClick={() => void mutate("draft-research")}>据此版本生成分析工作稿</Button>}
+              </div>}
+              {draft && <a className="block underline" href={"/api/documents/"+draft.documentId+"/download"} download>下载 {draft.fileName}</a>}
             </div>
             <aside aria-label="证据与原文" className="grid min-w-0 gap-4 rounded-xl border bg-muted/30 p-4">
               <h3 className="font-semibold">证据与原文</h3>
@@ -237,7 +252,7 @@ export function ResearchRevision({ matterId, recordId, onClose, onUpdated, onRev
     </SheetContent>
   </Sheet>
 }
-function ResearchSourcePanel({ matterId, researchId, sourceId, onClose }: {
+export function ResearchSourcePanel({ matterId, researchId, sourceId, onClose }: {
   matterId: string; researchId: string; sourceId: string; onClose: () => void
 }) {
   const panel = useRef<HTMLElement>(null)

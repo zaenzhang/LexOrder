@@ -5,7 +5,7 @@ import {
   Settings2Icon,
   ShieldAlertIcon,
 } from "lucide-react"
-import Link from "next/link"
+import Link from "@/features/shell/workspace-link"
 
 import { Button } from "@/components/ui/button"
 import { PLANS, workspace } from "@/data/generate"

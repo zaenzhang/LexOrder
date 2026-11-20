@@ -2,7 +2,29 @@
 import { describe, expect, it } from "vitest";
 import { emptyLawMetadata, emptyResearchContent, lawMetadataSchema, researchContentSchema, researchQuerySchema } from "@/server/research/contracts";
 
+import { issueSourceAdditions, type ResearchIssueSnapshot } from "@/server/research/issue-snapshot";
+import { emptyEvidenceEventDate } from "@/lib/evidence/event-date";
+
 describe("研究范围与来源真实性", () => {
+  it("只有既有来源未变且正文、日期保持一致时允许接续补件", () => {
+    const stamp = "2026-11-20T08:00:00Z";
+    const source = { id: "stable-source", documentId: "document-v1", documentSha256: null, relation: "SUPPORTS" as const,
+      location: { kind: "PAGE" as const, page: 2 }, parseRunId: null, anchorId: null, legacy: false };
+    const previous: ResearchIssueSnapshot = { evidenceItemId: "issue", matterId: "matter", revision: 1, revisionId: null,
+      title: "验收争点", content: "依合同第六条验收", kind: "ISSUE", sourceSnapshot: [source], capturedAt: stamp, capturedById: "actor",
+      confirmedById: "actor", confirmedAt: stamp, eventDate: emptyEvidenceEventDate() };
+    const added = { ...source, id: "supplement-source", documentId: "independent-supplement" };
+    const next = { ...previous, revision: 2, sourceSnapshot: [added, source], confirmedById: null, confirmedAt: null };
+    expect(issueSourceAdditions(previous, next)).toEqual([added]);
+    expect(issueSourceAdditions(previous, { ...next, sourceSnapshot: [source] })).toEqual([]);
+    for (const patch of [
+      { sourceSnapshot: [added] },
+      { sourceSnapshot: [added, { ...source, relation: "REBUTS" as const }] },
+      { sourceSnapshot: [added, { ...source, documentId: "document-v2" }] },
+      { content: "增加质保争点" },
+      { eventDate: { precision: "EXACT" as const, start: "2026-11-21", end: null, text: null } },
+    ]) expect(issueSourceAdditions(previous, { ...next, ...patch })).toBeNull();
+  });
   it("未知法域和日期可存草稿，不默认适用最新法", () => {
     expect(researchContentSchema.parse({ ...emptyResearchContent(), question: "合成研究问题" })).toMatchObject({ jurisdiction: "", relevantDate: "" });
   });

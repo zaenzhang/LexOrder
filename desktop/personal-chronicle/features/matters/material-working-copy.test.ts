@@ -1,3 +1,4 @@
+import { renderWithRouter } from "@/scripts/render-test"
 // @vitest-environment jsdom
 import { act, createElement } from "react"
 import { createRoot } from "react-dom/client"
@@ -20,9 +21,9 @@ it("材料撤回后仍可结束本案工作稿，仅暴露会话操作", async (
   const container = document.body.appendChild(document.createElement("div"))
   const root = createRoot(container)
   try {
-    await act(async () => root.render(createElement(MaterialsWorkspace, {
+    await act(async () => renderWithRouter(root, createElement(MaterialsWorkspace, {
       matterId: "current", documents: [], folders: [], filters: { q: "", folder: "*", version: "all" },
-      onFilter: vi.fn(), onUploaded: vi.fn(),
+      onFilter: vi.fn(), onUploaded: vi.fn(), selection: [], onSelectionChange: vi.fn(),
     })))
     expect(screen.queryByText(/87654321/)).toBeNull()
     expect(screen.queryByRole("button", { name: "打开本机稿" })).toBeNull()

@@ -17,6 +17,17 @@ type ResearchIssueInput = {
   matterId: string; issueId: string | null; issueRevisionId: string | null; issueSnapshot: Prisma.JsonValue;
   issue: { matterId: string } | null;
 };
+/** Null means the issue changed beyond an append-only addition of sources. */
+export function issueSourceAdditions(previous: ResearchIssueSnapshot, current: ResearchIssueSnapshot) {
+  if (previous.evidenceItemId !== current.evidenceItemId || previous.matterId !== current.matterId ||
+      previous.title !== current.title || previous.content !== current.content ||
+      JSON.stringify(previous.eventDate) !== JSON.stringify(current.eventDate)) return null;
+  const known = new Map(previous.sourceSnapshot.map(source => [source.id, JSON.stringify(source)]));
+  const currentById = new Map(current.sourceSnapshot.map(source => [source.id, JSON.stringify(source)]));
+  for (const [id, source] of known) if (currentById.get(id) !== source) return null;
+  return current.sourceSnapshot.filter(source => !known.has(source.id));
+}
+
 /** Null means invalid/missing history. An unlinked research has no issue snapshot. */
 export function readResearchIssueSnapshot(row: ResearchIssueInput): ResearchIssueSnapshot | null {
   const parsed = researchIssueSnapshotSchema.safeParse(row.issueSnapshot);

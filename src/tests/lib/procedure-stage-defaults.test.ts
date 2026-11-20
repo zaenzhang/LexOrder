@@ -6,6 +6,12 @@ import {
 } from "@/lib/procedure-stage-defaults";
 
 describe("defaultStageNamesForProcedure", () => {
+  it("keeps a custom procedure free of trial presets", () => {
+    expect(defaultStageNamesForProcedure("CUSTOM")).toEqual([]);
+    expect(optionalStagePresetsForProcedure("CUSTOM")).toEqual([]);
+    expect(stagePresetForName("CUSTOM", "开庭审理")).toBeUndefined();
+  });
+
   it("uses litigation workflow for first instance procedures", () => {
     expect(defaultStageNamesForProcedure("FIRST_INSTANCE")).toContain("起诉立案");
     expect(defaultStageNamesForProcedure("FIRST_INSTANCE")).toContain("裁判签收");

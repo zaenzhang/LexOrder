@@ -1,3 +1,4 @@
+import { platform } from "node:os";
 import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, mkdir, open, readFile, readdir, realpath, rename, rm } from "node:fs/promises";
@@ -30,7 +31,7 @@ async function directoryIdentity(folder: string) {
 }
 
 async function syncDirectory(directory: string) {
-  if (process.platform === "win32") return;
+  if (platform() === "win32") return;
   const handle = await open(directory, "r");
   try { await handle.sync(); } finally { await handle.close(); }
 }
@@ -64,7 +65,7 @@ export class WorkingCopies {
     const created = await mkdir(this.registry, { recursive: true, mode: 0o700 });
     // Windows skips directory fsync. Its first-created path may also carry
     // a namespace prefix that the ordinary registry path's parents never have.
-    if (created && process.platform !== "win32") {
+    if (created && platform() !== "win32") {
       for (let dir = this.registry; dir !== path.dirname(created); dir = path.dirname(dir)) {
         await syncDirectory(path.dirname(dir));
       }
@@ -229,7 +230,7 @@ export class WorkingCopies {
       catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
         // FlushFileBuffers on Windows requires write access, including on a retry.
-        const access = process.platform === "win32" ? constants.O_RDWR : constants.O_RDONLY;
+        const access = platform() === "win32" ? constants.O_RDWR : constants.O_RDONLY;
         const saved = await open(sibling, access | (constants.O_NOFOLLOW || 0));
         try {
           const stored = await saved.stat();

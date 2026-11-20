@@ -72,7 +72,7 @@ try {
     assigneeId: manifest.actorId, dueAt: new Date("2030-05-01T00:00:00+08:00"), kind: "DEADLINE" } });
   const month = await monthly();
   assert.equal(month.find(row => row.id === "u-" + urgent.id)?.href, "/practice/intakes/" + intake.id);
-  assert.equal(month.find(row => row.id === "d-" + da.id)?.href, "/matters/" + a.id + "/tasks");
+  assert.equal(month.find(row => row.id === "d-" + da.id)?.href, "/matters/" + a.id + "/tasks?program=" + pa.id);
   for (const [id, matter, when] of [
     ["d-" + da.id, a, deadlineA.dueLabel], ["d-" + db.id, b, deadlineB.dueLabel],
     ["t-" + ta.id, a, "2030-05-01 00:15"], ["t-" + tb.id, b, "2030-05-01 00:15"],

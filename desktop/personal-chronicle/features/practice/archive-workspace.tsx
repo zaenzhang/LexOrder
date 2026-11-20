@@ -1,6 +1,7 @@
 "use client"
 
-import Link from "next/link"
+import { WorkspaceLoading } from "@/kit/ui-patterns/workspace-loading"
+import Link from "@/features/shell/workspace-link"
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
@@ -13,7 +14,7 @@ import { PageHeader } from "@/kit/ui-patterns/page-header"
 import { CaseForm } from "@/features/matters/case-management"
 import { readPersonal } from "@/features/matters/personal-client"
 
-const api = "/api/personal-runtime/archive"
+const api = "/api/personal/archive"
 const url = (matter: string, extra: Record<string, string> = {}) =>
   api + "?" + new URLSearchParams({ matter, ...extra })
 const post = (data: object) =>
@@ -91,7 +92,7 @@ type Detail = {
   status: string
   canReview: boolean
 }
-const policySource = (id: string) => "/api/personal-runtime/firm-files/" + id + "/download"
+const policySource = (id: string) => "/api/firm-files/" + id + "/download"
 
 export function ArchiveWorkspace({ matterId }: { matterId: string }) {
   const board = useQuery({
@@ -123,7 +124,7 @@ export function ArchiveWorkspace({ matterId }: { matterId: string }) {
           </Link>
         }
       />
-      {board.isPending && <p role="status">正在读取归档资料…</p>}
+      {board.isPending && <WorkspaceLoading label="正在读取归档资料…" />}
       {board.error && (
         <p role="alert">
           {board.error.message}{" "}
@@ -615,7 +616,7 @@ function ReviewArchive({
           <div key={d.id} className="flex gap-2">
             {check("document:" + d.id)}
             <div>
-              <a className="underline" href={"/api/personal-runtime/documents/" + d.id + "/download"} download>
+              <a className="underline" href={"/api/documents/" + d.id + "/download"} download>
                 {d.name} · V{d.version}
               </a>
               <small className="block break-all">SHA-256 · {d.sha256}</small>

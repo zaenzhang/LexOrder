@@ -40,5 +40,9 @@ describe("审计动作标签", () => {
     expect(auditActionLabel("ARCHIVE_BORROW_RETURN")).toBe("归档 · 借阅 · 归还");
     expect(auditActionLabel("USER_TOTP_REBIND_RESET")).toBe("用户 · 二次验证 · 重新绑定 · 重置");
     expect(auditTargetLabel("ArchiveBorrowRequest")).toBe("案卷借阅申请");
+    expect(auditTargetLabel("SkillCommission")).toBe("技能核对委托");
+    expect(auditActionLabel("SKILL_AI_SUBMIT")).toBe("应用 AI 生成待核稿");
+    expect(auditActionLabel("SKILL_AI_FAIL")).toBe("应用 AI 核对失败");
+    expect(auditActionLabel("COMMISSION_PLAN_SET")).toBe("分成 · 方案 · 设置");
   });
 });

@@ -1,3 +1,4 @@
+import { renderWithRouter } from "@/scripts/render-test"
 // @vitest-environment jsdom
 import { act, createElement, useState } from "react"
 import { createRoot } from "react-dom/client"
@@ -44,7 +45,7 @@ it("编辑时回查固定原文，失权和保存失败均保留输入，重试�
     return createElement(ResearchRevision, { key: id, matterId: "case", recordId: id, onClose: vi.fn(), onRevised: setId })
   }
   try {
-    await act(async () => root.render(createElement(Harness)))
+    await act(async () => renderWithRouter(root, createElement(Harness)))
     await act(async () => { fireEvent.click(await screen.findByRole("button", { name: "编辑成果" })) })
     const input = screen.getByRole("textbox", { name: "结论与成立条件" }) as HTMLTextAreaElement
     await act(async () => { fireEvent.change(input, { target: { value: "核对后的结论" } }) })

@@ -2,15 +2,16 @@ import { z } from "zod";
 
 const id = z.string().cuid();
 const version = z.coerce.date();
+const time = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, "请填写核实的时刻");
 
 export const smsEventChoice = z.discriminatedUnion("mode", [
   z.object({
     mode: z.literal("CREATE"), procedureId: id,
     title: z.string().trim().min(1, "请核对事项标题").max(200),
     dateText: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "请核对日期"),
-    timeText: z.string().regex(/^\d{2}:\d{2}$/, "请填写已核实的时刻；未确定时可先保留建议"),
+    timeText: time.nullable(),
   }),
-  z.object({ mode: z.literal("LINK"), procedureId: id, targetId: id, expectedTargetUpdatedAt: version }),
+  z.object({ mode: z.literal("LINK"), procedureId: id, targetId: id, expectedTargetUpdatedAt: version, verifiedTime: time.optional() }),
 ]);
 
 export const smsDecisionInput = z.object({

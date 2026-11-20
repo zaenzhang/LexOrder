@@ -1,4 +1,5 @@
-import { createElement } from "react"
+import { createElement, type ReactNode } from "react"
+import { MemoryRouter } from "react-router"
 import { renderToStaticMarkup } from "react-dom/server"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -6,16 +7,21 @@ import { TaskWorkspace, type TaskData } from "@/features/matters/task-workspace"
 import { TaskResponsibilities } from "./task-responsibilities"
 
 const { navigation } = vi.hoisted(() => ({ navigation: { query: "" } }))
-vi.mock("next/navigation", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("next/navigation")>()),
+vi.mock("@/kit/framework", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/kit/framework")>()),
   useSearchParams: () => new URLSearchParams(navigation.query),
 }))
+
+function renderRoute(element: ReactNode) {
+  return renderToStaticMarkup(createElement(MemoryRouter, null, element))
+}
 
 const boardRow = {
   id: "task-a",
   title: "核对证据",
   matterId: "case-a",
   matterTitle: "甲案",
+  stageId: "stage-a",
   dueAt: null,
   revision: 2,
   state: "OPEN",
@@ -40,7 +46,7 @@ describe("跨案任务责任板", () => {
         },
       ],
     })
-    const html = renderToStaticMarkup(
+    const html = renderRoute(
       createElement(
         QueryClientProvider,
         { client },
@@ -49,8 +55,17 @@ describe("跨案任务责任板", () => {
     )
     expect(html).toContain("/matters/case-a/tasks?task=task-a")
     expect(html).toContain("/matters/case-b/tasks?task=task-b")
-    expect(html.match(/>取消任务</g)).toHaveLength(1)
-    expect(html.match(/>办结</g)).toHaveLength(1)
+    const desktop = html.match(/<table[^>]*>[\s\S]*?<\/table>/)?.[0]
+    expect(desktop?.match(/>取消任务</g)).toHaveLength(1)
+    expect(desktop?.match(/>办结</g)).toHaveLength(1)
+    client.clear()
+  })
+
+  it("今日办理将等待反馈页签和当前环节带入核对工作台", () => {
+    const client = new QueryClient()
+    client.setQueryData(["practice", "view=responsibilities&taskView=waiting"], { items: [boardRow] })
+    const html = renderRoute(createElement(QueryClientProvider, { client }, createElement(TaskResponsibilities, { view: "waiting" })))
+    expect(html).toContain("/matters/case-a/materials?task=task-a&amp;stage=stage-a&amp;from=today&amp;taskView=waiting")
     client.clear()
   })
 
@@ -80,12 +95,19 @@ describe("跨案任务责任板", () => {
       canWrite: true,
       procedureTypes: {},
     }
-    const html = renderToStaticMarkup(
+    const html = renderRoute(
       createElement(TaskWorkspace, { matterId: "case-a", data, reload() {} })
     )
     expect(html).toContain("待核对的材料")
     expect(html).toContain("已取消")
     expect(html).not.toContain("另一份材料")
     expect(html).toContain("查看本案全部任务")
+
+    navigation.query = "task=task-a&program=other-program"
+    const wrongProgram = renderRoute(
+      createElement(TaskWorkspace, { matterId: "case-a", data, reload() {} })
+    )
+    expect(wrongProgram).not.toContain("待核对的材料")
+    expect(wrongProgram).toContain("程序不可查看")
   })
 })

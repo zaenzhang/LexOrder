@@ -3,10 +3,10 @@
  * `pnpm dev` show it; a production build (`pnpm build`) never renders these
  * links, so nothing here reaches the people who use your app.
  */
-export const isDemo = process.env.NEXT_PUBLIC_DEMO === "1"
+export const isDemo = import.meta.env.MODE === "demo"
 
 /** The "Go further" page and its sidebar link: the public demo, and your own `pnpm dev`. */
-export const showGoFurther = isDemo || process.env.NODE_ENV === "development"
+export const showGoFurther = isDemo || import.meta.env.DEV
 
 export const STORE = "https://shadcnstore.com"
 export const REPO = "https://github.com/shadcnstore/shadcn-dashboard-landing-template"
@@ -47,7 +47,7 @@ export interface PaidTemplate {
   image: string
 }
 
-const IMAGES = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/demo/products`
+const IMAGES = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/demo/products`
 
 /**
  * Every paid template the demo shows, in one place. Launch day is one edit:

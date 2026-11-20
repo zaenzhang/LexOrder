@@ -1,7 +1,7 @@
 "use client"
 
 import { MenuIcon, SearchIcon } from "lucide-react"
-import { useState } from "react"
+import { useLayoutEffect, useRef, useState } from "react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -12,7 +12,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
 
-import { Link } from "../framework"
+import { Link, usePathname, type KitLink } from "../framework"
 import { useCommandMenu } from "../command/command-menu"
 import { useCustomizer } from "../customizer/customizer-provider"
 import { CustomizerPanel } from "../customizer/customizer-panel"
@@ -23,22 +23,22 @@ import { initials, UserMenuContent } from "./nav-user"
 import { TopNav } from "./top-nav"
 import type { ShellConfig } from "./types"
 
-function SearchButton() {
+function SearchButton({ workbench }: { workbench?: boolean }) {
   const { setOpen } = useCommandMenu()
   return (
     <Button
       variant="outline"
-      className="w-9 justify-center px-0 text-muted-foreground sm:w-56 sm:justify-between sm:px-2.5"
+      className={cn("w-9 justify-center px-0 text-muted-foreground sm:justify-between sm:px-2.5", workbench ? "transition-colors sm:w-36 xl:w-56" : "sm:w-56")}
       onClick={() => setOpen(true)}
       aria-keyshortcuts="Meta+K Control+K"
+      aria-label={workbench ? "搜索工作区页面" : "Search"}
     >
-      {/* The visible word is the name (no aria-label), so the name always matches what is on screen. */}
       <span className="flex items-center gap-2">
         <SearchIcon />
-        <span className="sr-only sm:not-sr-only">Search…</span>
+        <span className="sr-only whitespace-nowrap sm:not-sr-only">{workbench ? "搜索…" : "Search…"}</span>
       </span>
       <KbdGroup aria-hidden className="hidden sm:inline-flex">
-        <Kbd>⌘</Kbd>
+        <Kbd>{workbench ? "Ctrl" : "⌘"}</Kbd>
         <Kbd>K</Kbd>
       </KbdGroup>
     </Button>
@@ -56,6 +56,8 @@ export interface AppShellProps {
   home?: string
   resolveBreadcrumbs?: BreadcrumbResolver
   workspaceSwitcher?: React.ReactNode
+  workbench?: boolean
+  navigationLink?: KitLink
   children: React.ReactNode
 }
 
@@ -63,8 +65,9 @@ export interface AppShellProps {
  * The frame every dashboard page sits in. Layout, sidebar style and content
  * width come from the customizer; navigation comes from `config`.
  */
-export function AppShell({ config, badges, actions, aside, home: homeTitle, resolveBreadcrumbs, workspaceSwitcher, children }: AppShellProps) {
-  const layout = useCustomizer((state) => state.layout)
+export function AppShell({ config, badges, actions, aside, home: homeTitle, resolveBreadcrumbs, workspaceSwitcher, workbench, navigationLink: NavigationLink = Link, children }: AppShellProps) {
+  const layoutPreference = useCustomizer((state) => state.layout)
+  const layout = workbench ? "sidebar" : layoutPreference
   const contentWidth = useCustomizer((state) => state.contentWidth)
   const Brand = config.brand.logo
   const links = [...config.nav.flatMap((group) => group.items), ...config.secondary]
@@ -74,18 +77,35 @@ export function AppShell({ config, badges, actions, aside, home: homeTitle, reso
 
   // The sidebar layout's SidebarInset is already the page's <main>, so the content there is a <div>.
   const Content = layout === "top" ? "main" : "div"
+  const pathname = usePathname()
+  const previousPath = useRef(pathname)
+  const contentElement = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const changed = previousPath.current !== pathname
+    previousPath.current = pathname
+    if (!workbench || !changed || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+    const body = contentElement.current
+    if (!body) return
+    const easing = getComputedStyle(body).getPropertyValue("--ease-smooth-out").trim() || "ease-out"
+    const transition = body.animate([{ opacity: 0.92 }, { opacity: 1 }], { duration: 100, easing })
+    return () => transition?.cancel()
+  }, [pathname, workbench])
   const main = (
-    <Content className={cn("flex w-full min-w-0 flex-1 flex-col gap-6 bg-page p-4 md:p-6", contentWidth === "contained" && "mx-auto max-w-7xl")}>
+    <Content ref={contentElement} className={cn("flex w-full min-w-0 flex-1 flex-col gap-6 bg-page p-4", workbench ? "md:px-7 md:pb-7 md:pt-8" : "md:p-6", contentWidth === "contained" && "mx-auto max-w-7xl")}>
       {children}
     </Content>
   )
 
   const toolbar = (
-    <div className="ms-auto flex items-center gap-1">
-      <SearchButton />
+    <div className="ms-auto flex shrink-0 items-center gap-1">
+      {workbench && <>
+        <span className="me-2 hidden items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground xl:inline-flex"><span aria-hidden className="size-1.5 rounded-full bg-emerald-600" />个人工作区</span>
+        <NavigationLink className="me-1 whitespace-nowrap text-xs text-primary hover:underline sm:me-2" href="/analytics">设计参考</NavigationLink>
+      </>}
+      <SearchButton workbench={workbench} />
       {actions}
-      <ModeToggle />
-      <CustomizerPanel />
+      <ModeToggle workbench={workbench} />
+      <CustomizerPanel workbench={workbench} />
     </div>
   )
 
@@ -147,13 +167,15 @@ export function AppShell({ config, badges, actions, aside, home: homeTitle, reso
   return (
     <BreadcrumbLabelProvider>
       <SidebarProvider>
-        <AppSidebar config={config} badges={badges} workspaceSwitcher={workspaceSwitcher} />
+        <AppSidebar config={config} badges={badges} workspaceSwitcher={workspaceSwitcher} workbench={workbench} navigationLink={NavigationLink} />
         {/* min-w-0 lets wide tables scroll inside their card instead of widening the page. */}
         <SidebarInset className="min-w-0">
-          <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:rounded-t-xl">
+          <header className={cn("sticky top-0 z-30 flex h-14 min-w-0 shrink-0 items-center gap-2 border-b px-4 md:rounded-t-xl", workbench ? "bg-background md:px-7" : "bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80")}>
             <SidebarTrigger className="-ms-1" />
             <Separator orientation="vertical" className="me-1 data-vertical:h-4 data-vertical:self-center" />
-            <Breadcrumbs links={links} home={home} resolve={resolveBreadcrumbs} />
+            <div className="min-w-0 [&_[data-slot=breadcrumb-item]]:min-w-0 [&_[data-slot=breadcrumb-page]]:truncate">
+              <Breadcrumbs links={links} home={home} resolve={resolveBreadcrumbs} />
+            </div>
             {toolbar}
           </header>
           {main}

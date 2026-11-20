@@ -27,6 +27,11 @@ export type ScheduleItem = {
   /** Intake to open for an urgent item that has not yet been converted to a matter. */
   intakeId?: string;
   procedureLabel?: string;
+  procedureId?: string;
+  stageId?: string | null;
+  location?: string | null;
+  endsAt?: Date | null;
+  sourceDocumentId?: string | null;
   completed?: boolean;
   remindDays?: number;
   category?: string;
@@ -44,6 +49,8 @@ export async function queryScheduleItems(
     includeCompleted?: boolean;
     onlyMine?: boolean;
     includeTeam?: boolean;
+    onlyCourtDates?: boolean;
+    excludePendingDeadlines?: boolean;
   } = {}
 ): Promise<ScheduleItem[]> {
   // 2026-09-20 第五轮审计时区修复：默认起点按上海今日零点（此前服务器本地午夜，
@@ -97,6 +104,7 @@ export async function queryScheduleItems(
       where: {
         dueAt: { gte: from, lte: to },
         ...(params.includeCompleted ? {} : { completed: false }),
+        ...(params.excludePendingDeadlines ? { confirmStatus: { not: "PENDING" } } : {}),
         procedure: {
           engagement: "ENGAGED",
           matter: { deletedAt: null, ...matterFilter }
@@ -126,7 +134,7 @@ export async function queryScheduleItems(
         }
       }
     }),
-    prisma.task.findMany({
+    params.onlyCourtDates ? [] : prisma.task.findMany({
       where: {
         dueAt: { gte: from, lte: to },
         ...(params.includeCompleted ? {} : { completed: false }),
@@ -150,7 +158,7 @@ export async function queryScheduleItems(
         }
       }
     }),
-    prisma.preservationProperty.findMany({
+    params.onlyCourtDates ? [] : prisma.preservationProperty.findMany({
       where: {
         expiryDate: { gte: from, lte: to },
         ...(params.includeCompleted ? {} : { status: { in: ["ACTIVE", "RENEWED"] } }),
@@ -212,7 +220,8 @@ export async function queryScheduleItems(
       occurredAt: h.startsAt,
       matter: matterBrief(matter),
       clientName: clientNameOf(matter),
-      procedureLabel: h.procedure.customLabel ?? h.procedure.type
+      procedureLabel: h.procedure.customLabel ?? h.procedure.type,
+      procedureId: h.procedureId, location: [h.address, h.room].filter(Boolean).join(" · ") || null, endsAt: h.endsAt
     });
   }
   for (const d of deadlines) {
@@ -227,6 +236,7 @@ export async function queryScheduleItems(
       matter: matterBrief(matter),
       clientName: clientNameOf(matter),
       procedureLabel: d.procedure.customLabel ?? d.procedure.type,
+      procedureId: d.procedureId, sourceDocumentId: d.sourceDocumentId,
       completed: d.completed,
       remindDays: d.remindDays,
       category: d.category
@@ -243,6 +253,7 @@ export async function queryScheduleItems(
       clientName: clientNameOf(t.matter),
       completed: t.completed,
       description: t.description,
+      stageId: t.stageId,
       priority: t.priority
     });
   }
@@ -262,7 +273,7 @@ export async function queryScheduleItems(
       category: "PRESERVATION"
     });
   }
-  if(await responsibilityReady(prisma)&&(role!=='CUSTOM'||scopeFor(access,'schedule.read'))){
+  if(!params.onlyCourtDates && await responsibilityReady(prisma)&&(role!=='CUSTOM'||scopeFor(access,'schedule.read'))){
     const allowed=await prisma.matter.findMany({where:{deletedAt:null,...matterFilter},select:{id:true}});
     const ids=allowed.map(m=>m.id);
     const urgent=await prisma.$queryRaw<{id:string;title:string;dueAt:Date;kind:string;state:string;matterId:string|null;intakeId:string;caseTitle:string;code:string|null}[]>(Prisma.sql`SELECT w.id,w.title,w."dueAt",w.kind,w.state::text,w."matterId",w."intakeId",COALESCE(m.title,i.title) AS "caseTitle",m."internalCode" AS code FROM "IntakeUrgentItem" w JOIN "Intake" i ON i.id=w."intakeId" LEFT JOIN "Matter" m ON m.id=w."matterId" WHERE w."dueAt">=${from} AND w."dueAt"<=${to} AND w.state<>'CANCELLED' ${params.includeCompleted?Prisma.empty:Prisma.sql`AND w.state='OPEN'`} AND ((w."matterId" IS NULL AND (i."createdById"=${userId} OR i."ownerUserId"=${userId} OR ${userId}=ANY(i."coUserIds"))) ${ids.length?Prisma.sql`OR w."matterId" IN (${Prisma.join(ids)})`:Prisma.empty})`);

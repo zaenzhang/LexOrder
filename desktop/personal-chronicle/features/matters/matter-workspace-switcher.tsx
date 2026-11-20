@@ -1,7 +1,7 @@
 "use client"
 
-import { BriefcaseBusinessIcon, ChevronsUpDownIcon, FolderOpenIcon } from "lucide-react"
-import Link from "next/link"
+import { BriefcaseBusinessIcon, ChevronsUpDownIcon, FolderOpenIcon, PlusIcon } from "lucide-react"
+import Link from "@/features/shell/workspace-link"
 import { useEffect, useState } from "react"
 
 import {
@@ -12,32 +12,20 @@ import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/c
 import { usePractice } from "@/features/practice/data"
 import { readRecentMatters } from "./recent-matter"
 import type { MatterSection } from "./sections"
-import { evidenceEndpoint, readPersonal, workspaceEndpoint, type Matter } from "./personal-client"
+import { evidenceEndpoint, readPersonal, type Matter } from "./personal-client"
 
 type MatterChoices = { matters: Matter[]; hasMore: boolean }
 
-export function MatterWorkspaceSwitcher({ matterId, lastSections }: { matterId?: string; lastSections: Record<string, MatterSection> }) {
+export function MatterWorkspaceSwitcher({ matterId, identity, identityFailed, lastSections }: {
+  matterId?: string; identity?: Matter; identityFailed?: boolean; lastSections: Record<string, MatterSection>
+}) {
   const { isMobile, setOpenMobile } = useSidebar()
   const [open, setOpen] = useState(false)
   const workspace = usePractice<{id:string}>("workspace", {}, open)
   const saved = workspace.data && open ? readRecentMatters(workspace.data.id) : []
   const [choices, setChoices] = useState<MatterChoices>()
   const [choiceError, setChoiceError] = useState("")
-  const [identity, setIdentity] = useState<{ id: string; title: string; internalCode?: string }>()
-  const [identityError, setIdentityError] = useState<string>()
-  const current = choices?.matters.find(matter => matter.id === matterId)
-    ?? (identity?.id === matterId ? identity : undefined)
-  const hasCurrent = !!current
-
-  useEffect(() => {
-    if (!matterId || hasCurrent) return
-    const controller = new AbortController()
-    const query = new URLSearchParams({ matter: matterId, section: "overview" })
-    readPersonal<{ title: string; internalCode?: string }>(workspaceEndpoint + "?" + query, { signal: controller.signal })
-      .then(result => { if (!controller.signal.aborted) setIdentity({ ...result, id: matterId }) })
-      .catch(() => { if (!controller.signal.aborted) setIdentityError(matterId) })
-    return () => controller.abort()
-  }, [matterId, hasCurrent])
+  const current = identity ?? choices?.matters.find(matter => matter.id === matterId)
 
   useEffect(() => {
     if (!open) return
@@ -48,7 +36,7 @@ export function MatterWorkspaceSwitcher({ matterId, lastSections }: { matterId?:
     return () => controller.abort()
   }, [open])
 
-  const title = current?.title ?? (matterId ? identityError === matterId ? "当前案件不可用" : "案件工作空间" : "选择案件")
+  const title = current?.title ?? (matterId ? identityFailed ? "当前案件不可用" : "案件工作空间" : "选择案件")
   const detail = current?.internalCode
   const closeMobile = () => setOpenMobile(false)
 
@@ -86,9 +74,13 @@ export function MatterWorkspaceSwitcher({ matterId, lastSections }: { matterId?:
               </div>}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
+            <DropdownMenuItem nativeButton={false} render={<Link href="/practice/intakes?create=1" onClick={closeMobile} />} className="gap-2 p-2">
+              <PlusIcon />
+              添加工作区
+            </DropdownMenuItem>
             <DropdownMenuItem nativeButton={false} render={<Link href="/matters/list" onClick={closeMobile} />} className="gap-2 p-2">
               <FolderOpenIcon />
-              {choices?.hasMore ? "查看全部案件" : "案件总览"}
+              {choices?.hasMore ? "查看全部案件" : "案件列表"}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

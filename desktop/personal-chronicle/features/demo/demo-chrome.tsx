@@ -1,7 +1,7 @@
 "use client"
 
 import { StarIcon, XIcon } from "lucide-react"
-import { usePathname } from "next/navigation"
+import { usePathname } from "@/kit/framework"
 import { useEffect, useState, useSyncExternalStore } from "react"
 
 import { Button, buttonVariants } from "@/components/ui/button"

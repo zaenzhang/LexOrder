@@ -116,7 +116,8 @@ function EventChoiceEditor({ sms, row, disabled, onChange }: { sms: SmsRow; row:
   const [mode, setMode] = useState<"CREATE" | "LINK" | "">("");
   const [title, setTitle] = useState(String(payload.title ?? ""));
   const [dateText, setDateText] = useState(String(payload.dateText ?? ""));
-  const [timeText, setTimeText] = useState(String(payload.timeText ?? ""));
+  const proposedTime = typeof payload.timeText === "string" ? payload.timeText : "";
+  const [timeText, setTimeText] = useState(proposedTime);
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
   const [reload, setReload] = useState(0);
@@ -136,11 +137,13 @@ function EventChoiceEditor({ sms, row, disabled, onChange }: { sms: SmsRow; row:
   }, [mode, procedureId, row.id, sms.id, search, reload]);
   useEffect(() => {
     const target = targets?.targets.find(target => target.id === targetId);
-    const choice = mode === "CREATE" ? { mode, procedureId, title, dateText, timeText }
-      : mode === "LINK" && target ? { mode, procedureId, targetId, expectedTargetUpdatedAt: target.updatedAt } : undefined;
+    const choice = mode === "CREATE" ? { mode, procedureId, title, dateText, timeText: row.kind === "DEADLINE" && !timeText ? null : timeText }
+      : mode === "LINK" && target ? row.kind === "HEARING" && !proposedTime && !timeText ? undefined
+        : { mode, procedureId, targetId, expectedTargetUpdatedAt: target.updatedAt, ...(row.kind === "HEARING" && !proposedTime ? { verifiedTime: timeText } : {}) }
+      : undefined;
     const parsed = smsEventChoice.safeParse(choice);
     onChange(row.id, parsed.success ? parsed.data : undefined);
-  }, [mode, procedureId, title, dateText, timeText, targetId, targets, row.id, onChange]);
+  }, [mode, procedureId, title, dateText, timeText, targetId, targets, row.id, row.kind, proposedTime, onChange]);
   if (!sms.matchedMatter) return <p className="text-sm text-muted-foreground">先确认上方案件归属，再核对本事件的程序与采用方式。</p>;
   const prefix = `suggestion-${row.id}`;
   return <div className="space-y-3">
@@ -176,9 +179,10 @@ function EventChoiceEditor({ sms, row, disabled, onChange }: { sms: SmsRow; row:
         <div className="space-y-1"><label htmlFor={`${prefix}-date`}>实际日期</label><Input type="date" id={`${prefix}-date`} value={dateText} disabled={disabled} onChange={setDateText} /></div>
         <div className="space-y-1"><label htmlFor={`${prefix}-time`}>实际时刻（北京时间）</label><Input type="time" id={`${prefix}-time`} value={timeText} disabled={disabled} onChange={setTimeText} /></div>
       </div>
-      {!timeText ? <p className="text-xs text-muted-foreground">时刻未确定时先保留本建议。只有日期的期限，可到 <Link className="underline" href={matterHref(sms.matchedMatter, `?view=work&workPane=tasks&procedure=${procedureId}`)} target="_blank">本程序的期限与庭期</Link> 手工登记，再返回此处关联已有事项。</p> : null}
+      {!timeText ? <p className="text-xs text-muted-foreground">{row.kind === "HEARING" ? "时刻未确定时保留该候选，核对原件后再继续。" : "原件只载日期时，按日登记期限。"}</p> : null}
     </div> : null}
     {mode === "LINK" ? <div className="space-y-2">
+      {row.kind === "HEARING" && !proposedTime ? <div><label htmlFor={prefix + "-link-time"}>从原件补核开庭时刻（北京时间）</label><Input type="time" id={prefix + "-link-time"} value={timeText} disabled={disabled} onChange={setTimeText} /></div> : null}
       <div className="flex gap-2"><Input aria-label="查找同日已有事项" placeholder="在来源日期内按标题查找" value={query} disabled={disabled} onChange={setQuery} /><Button theme="outline" type="tertiary" size="small" disabled={disabled || loading} onClick={() => { setSearch(query); setReload(value => value + 1); }}>查找</Button></div>
       {loading ? <p className="text-sm text-muted-foreground">正在读取实际事项…</p> : error ? <p role="alert" className="text-sm text-destructive">{error}</p> : targets ? <>
         {targets.targets.length ? <><label id={`${prefix}-target-label`} className="sr-only">已有事项</label><Select

@@ -1,8 +1,6 @@
-import type { Metadata } from "next"
-
 import { ErrorScreen } from "../error-screen"
 
-export const metadata: Metadata = { title: "No access" }
+export const metadata = { title: "No access" }
 
 export default function Page() {
   return (

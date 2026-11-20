@@ -1,6 +1,5 @@
 import { CheckIcon } from "lucide-react"
-import Image from "next/image"
-import Link from "next/link"
+import Link from "@/features/shell/workspace-link"
 
 import { BrandCredit, BrandLogo } from "@/components/chronicle/brand-logo"
 
@@ -8,7 +7,7 @@ import type { AuthVariant } from "./auth-paths"
 import { AuthVariantProvider } from "./auth-variant"
 
 const POINTS = ["MRR, churn and retention on one reconciled model", "Users, tasks, mail and calendar in one workspace", "Light, dark and right to left, out of the box"]
-const PANEL = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/auth/panel.webp`
+const PANEL = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/auth/panel.webp`
 const DEMO_NOTE = "Demo mode: any email and a password of 8 or more characters will do."
 
 /**
@@ -19,7 +18,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="grid min-h-svh bg-background lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
       <aside className="relative isolate hidden flex-col justify-between overflow-hidden bg-(--auth-panel) p-10 text-(--auth-panel-foreground) lg:flex">
-        <Image src={PANEL} alt="" fill sizes="42vw" className="-z-10 object-cover" />
+        <img src={PANEL} alt="" className="absolute inset-0 -z-10 size-full object-cover" />
         <Link href="/landing" className="w-fit">
           <BrandLogo />
         </Link>
@@ -96,7 +95,7 @@ export function AuthCardShell({ children }: { children: React.ReactNode }) {
 export function AuthFullBleedShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative isolate flex min-h-svh flex-col bg-(--auth-panel) text-(--auth-panel-foreground)">
-      <Image src={PANEL} alt="" fill sizes="100vw" className="-z-10 object-cover object-top-right" />
+      <img src={PANEL} alt="" className="absolute inset-0 -z-10 size-full object-cover object-top-right" />
       <div aria-hidden className="absolute inset-0 -z-10 bg-linear-to-t from-(--auth-panel) via-transparent to-transparent" />
       <header className="px-4 py-5 sm:px-10">
         <Link href="/landing" className="w-fit">

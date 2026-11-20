@@ -1,4 +1,4 @@
-import Link from "next/link"
+import Link from "@/features/shell/workspace-link"
 
 import { Separator } from "@/components/ui/separator"
 import { REPO } from "@/features/demo/config"

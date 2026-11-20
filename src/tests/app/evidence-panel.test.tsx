@@ -29,7 +29,8 @@ beforeEach(() => {
     sourceDocumentId: null, sourceDocumentName: null, sourcePage: null, revision: 1, updatedAt: date,
     confirmedAt: date, confirmedByName: "合成确认人", createdById: "clawyer0000000000000000001", createdByName: "合成记录人", createdAt: date,
     restricted: false, canEdit: true,
-    eventDate: emptyEvidenceEventDate(),
+    chronologyAssessment: null,
+    eventDate: emptyEvidenceEventDate(), observations: [],
     sources: [{ id: "csource00000000000000000001", relation: "SUPPORTS", legacy: false, status: "AVAILABLE", documentId: "cdocume000000000000000000001", documentName: "合成合同.pdf", documentVersion: 1, locationLabel: "第 2 页", hasAnchor: false },
       { id: "csource00000000000000000002", relation: "REBUTS", legacy: false, status: "AVAILABLE", documentId: "cdocume000000000000000000002", documentName: "合成反向材料.pdf", documentVersion: 1, locationLabel: "第 1 页", hasAnchor: true }],
   };

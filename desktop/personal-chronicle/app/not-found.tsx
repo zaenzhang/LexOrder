@@ -1,8 +1,6 @@
-import type { Metadata } from "next"
-
 import { ErrorScreen } from "./errors/error-screen"
 
-export const metadata: Metadata = { title: "Page not found" }
+export const metadata = { title: "Page not found" }
 
 export default function NotFound() {
   return (

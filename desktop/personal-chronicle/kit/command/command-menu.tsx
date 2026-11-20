@@ -63,6 +63,7 @@ export function CommandMenuProvider({
   actions,
   search,
   description = "Search records, jump to a page, or run an action.",
+  workbench,
   children,
 }: {
   links: NavLink[]
@@ -71,6 +72,7 @@ export function CommandMenuProvider({
   /** Read by screen readers when the palette opens: what can be searched. */
   description?: string
   children: React.ReactNode
+  workbench?: boolean
 }) {
   const [open, setOpen] = useState(false)
   // Latched on first open (a render-time update, the React way to derive state), so the palette is fetched only when asked for.
@@ -149,6 +151,7 @@ export function CommandMenuProvider({
               }
             }}
             description={description}
+            workbench={workbench}
             text={text}
             onTextChange={setText}
             searching={searching}

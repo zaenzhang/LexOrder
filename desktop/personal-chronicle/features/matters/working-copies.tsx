@@ -10,7 +10,7 @@ type Action = { action: "sync" } | { action: "open"; matterId: string; documentI
   | { action: "finish"; matterId: string; sessionId: string; keepLocal: boolean }
 
 function request<T>(input: Action) {
-  return readPersonal<T>("/api/personal-runtime/working-copies", { method: "POST",
+  return readPersonal<T>("/api/personal/working-copies", { method: "POST",
     headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) })
 }
 

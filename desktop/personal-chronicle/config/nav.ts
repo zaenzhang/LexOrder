@@ -65,16 +65,17 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    label: "律师工作台",
+    label: "工作区",
     items: [
-      { title: "我的工作台", href: "/practice/today", icon: LayoutDashboardIcon },
-      { title: "客户与收案", href: "/practice/clients", icon: UsersIcon, expandOnly: true, items: [
+      { title: "案件列表", href: "/matters/list", icon: FolderOpenIcon },
+      { title: "今日办理", href: "/practice/today", icon: LayoutDashboardIcon },
+      { title: "客户与委托", href: "/practice/clients", icon: UsersIcon, expandOnly: true, items: [
         { title: "客户", href: "/practice/clients" }, { title: "收案", href: "/practice/intakes" },
         { title: "外部联系人", href: "/practice/contacts" }, { title: "利益冲突预检", href: "/practice/conflicts" },
       ] },
-      { title: "办案事务", href: "/practice/operations", icon: FolderOpenIcon },
-      { title: "资料与设置", href: "/practice/resources", icon: SettingsIcon },
-      { title: "财务", href: "/practice/finance", icon: BarChart3Icon },
+      { title: "工作日程", href: "/practice/schedule", icon: CalendarDaysIcon },
+      { title: "收款台账", href: "/practice/finance", icon: BarChart3Icon },
+      { title: "技能与模板", href: "/practice/skills", icon: SparklesIcon },
     ],
   },
   {
@@ -97,8 +98,13 @@ export const NAV: NavGroup[] = [
   },
 ]
 
+export const WORKBENCH_NAV = NAV.find(group => group.label === "工作区")!
+export const WORKBENCH_SECONDARY: NavLink[] = [
+  { title: "通知", href: "/practice/notifications", icon: BellIcon, shortcut: "n" },
+  { title: "设置", href: "/practice/profile", icon: SettingsIcon, shortcut: "s" },
+]
+
 export const SECONDARY_NAV: NavLink[] = [
-  { title: "案件总览", href: "/matters/list", icon: FolderOpenIcon },
   { title: "Notifications", href: "/notifications", icon: BellIcon, shortcut: "n" },
   { title: "Settings", href: "/settings", icon: SettingsIcon, shortcut: "s" },
   // The public demo and `pnpm dev` only: what the paid templates add (features/demo). `pnpm build` never shows it.

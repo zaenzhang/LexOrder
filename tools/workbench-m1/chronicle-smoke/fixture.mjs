@@ -46,16 +46,13 @@ export async function fixture() {
   async function request(url, body, expected = 200) {
     assert(url.startsWith("/api/") && !url.startsWith("//"));
     const target = desktopOrigin ?? origin;
-    const endpoint = desktopOrigin
-      ? url.replace(/^\/api\/(?:personal\/)?/, "/api/personal-runtime/")
-      : url;
     const headers = {
       Cookie: "lexorder_local_channel=" + token,
       Origin: target,
     };
     if (body && !(body instanceof FormData))
       headers["Content-Type"] = "application/json";
-    const response = await fetch(target + endpoint, {
+    const response = await fetch(target + url, {
       method: body ? "POST" : "GET",
       headers,
       body: body instanceof FormData ? body : body && JSON.stringify(body),

@@ -1,3 +1,4 @@
+import { renderWithRouter } from "@/scripts/render-test"
 // @vitest-environment jsdom
 import { act, createElement } from "react"
 import { createRoot } from "react-dom/client"
@@ -5,7 +6,7 @@ import { fireEvent, screen, within } from "@testing-library/react/pure"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { afterEach, expect, it, vi } from "vitest"
 import { TaskResponsibilities } from "./task-responsibilities"
-import { DailyWork } from "./daily-work"
+import { PersonalCalendar } from "./personal-calendar"
 import { ProcedureActions } from "../matters/case-management"
 
 const container = document.body.appendChild(document.createElement("div"))
@@ -13,7 +14,7 @@ const client = new QueryClient()
 let root: ReturnType<typeof createRoot>
 async function show(child: React.ReactElement) {
   root = createRoot(container)
-  await act(async () => root.render(createElement(QueryClientProvider, { client }, child)))
+  await act(async () => renderWithRouter(root, createElement(QueryClientProvider, { client }, child)))
 }
 afterEach(async () => {
   await act(async () => root.unmount())
@@ -33,7 +34,7 @@ it.each([true, false])("处理冲突后保留原因，按最新记录决定能�
     return Response.json({ items: [submissions.length ? { ...row, title: "更新后的任务", revision: 3, canWrite } : row] })
   })
   await show(createElement(TaskResponsibilities))
-  await act(async () => { fireEvent.click(await screen.findByRole("button", { name: "办结" })) })
+  await act(async () => { fireEvent.click(within(await screen.findByRole("table", { name: "跨案任务清单" })).getByRole("button", { name: /^办结$/ })) })
   const dialog = within(await screen.findByRole("dialog"))
   const reason = await dialog.findByRole("textbox", { name: "处理原因" })
   await act(async () => { fireEvent.change(reason, { target: { value: "材料已核对" } }) })
@@ -49,15 +50,19 @@ it.each([true, false])("处理冲突后保留原因，按最新记录决定能�
   }
 })
 
-it("月历跳转到实际收案或案件入口", async () => {
+it("月历跳转到实际收案和案件任务工作台，并可筛掉内部任务", async () => {
   const id = "c" + "a".repeat(24), intake = "c" + "i".repeat(24)
-  vi.stubGlobal("fetch", async () => Response.json({ items: [
-    { id: "a", type: "task", title: "准备材料", matter: { id: intake, title: "待转收案" }, when: "2030-05-01", href: "/practice/intakes/" + intake },
-    { id: "b", type: "task", title: "保存材料", matter: { id, title: "已立案件" }, when: "2030-05-01", href: "/matters/" + id + "/tasks" },
+  const today = "2030-05-01"
+  vi.stubGlobal("fetch", async () => Response.json({ today, items: [
+    { id: "a", type: "task", title: "准备材料", day: today, clock: "09:00", matter: { id: intake, title: "待转收案" }, href: "/practice/intakes/" + intake },
+    { id: "b", type: "task", title: "保存材料", day: today, clock: "10:00", matter: { id, title: "已立案件" }, href: "/matters/" + id + "/materials?task=b&from=schedule&day=" + today },
   ] }))
-  await show(createElement(DailyWork, { view: "schedule" }))
-  expect((await screen.findByRole("link", { name: "待转收案" })).getAttribute("href")).toBe("/practice/intakes/" + intake)
-  expect(screen.getByRole("link", { name: "已立案件" }).getAttribute("href")).toBe("/matters/" + id + "/tasks")
+  await show(createElement(PersonalCalendar, { today }))
+  expect((await screen.findByRole("link", { name: /待转收案/ })).getAttribute("href")).toBe("/practice/intakes/" + intake)
+  expect(screen.getByRole("link", { name: /已立案件/ }).getAttribute("href")).toBe("/matters/" + id + "/materials?task=b&from=schedule&day=" + today)
+  await act(async () => { fireEvent.click(screen.getByRole("checkbox", { name: /内部任务/ })) })
+  expect(screen.queryByRole("link", { name: /已立案件/ })).toBeNull()
+  expect(screen.getByText("当天没有可见安排。")).toBeDefined()
 })
 
 it("桌面新登记分配新键，失败后原表单重试沿用原键", async () => {

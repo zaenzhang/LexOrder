@@ -1,3 +1,4 @@
+import { renderWithRouter } from "@/scripts/render-test"
 // @vitest-environment jsdom
 import { act, createElement } from "react"
 import { createRoot } from "react-dom/client"
@@ -16,7 +17,7 @@ it("复制写满后重新读取暂存位置，可停止复制，再选择另一�
   const container = document.body.appendChild(document.createElement("div"))
   const root = createRoot(container)
   try {
-    await act(async () => root.render(createElement(MatterFolder, { matterId: state.matterId })))
+    await act(async () => renderWithRouter(root, createElement(MatterFolder, { matterId: state.matterId })))
     const choose = (value: string) => fireEvent.change(screen.getByRole("textbox"), { target: { value } })
     const bind = () => fireEvent.click(screen.getByRole("button", { name: "绑定案件文件夹" }))
     await act(async () => { choose("/原盘") })

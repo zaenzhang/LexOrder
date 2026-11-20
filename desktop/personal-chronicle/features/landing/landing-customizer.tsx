@@ -1,7 +1,7 @@
 "use client"
 
 import { PaletteIcon } from "lucide-react"
-import dynamic from "next/dynamic"
+import { lazy, Suspense } from "react"
 
 import { Button } from "@/components/ui/button"
 
@@ -10,15 +10,10 @@ import { Button } from "@/components/ui/button"
  * interactive so the first paint carries none of it. Until then the same
  * button holds its place.
  */
-const CustomizerPanel = dynamic(() => import("@/kit/customizer/customizer-panel").then((module) => module.CustomizerPanel), {
-  ssr: false,
-  loading: () => (
-    <Button variant="ghost" size="icon" aria-label="Customize theme" disabled>
-      <PaletteIcon />
-    </Button>
-  ),
-})
+const CustomizerPanel = lazy(async () => ({ default: (await import("@/kit/customizer/customizer-panel")).CustomizerPanel }))
 
 export function LandingCustomizer() {
-  return <CustomizerPanel />
+  return <Suspense fallback={<Button variant="ghost" size="icon" aria-label="Customize theme" disabled><PaletteIcon /></Button>}>
+    <CustomizerPanel />
+  </Suspense>
 }

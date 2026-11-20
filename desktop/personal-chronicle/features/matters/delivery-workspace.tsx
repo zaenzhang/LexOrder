@@ -7,12 +7,12 @@ import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
-import { materialUrl, readPersonal, workspaceEndpoint } from "./personal-client"
+import { personalFetch, readPersonal, workspaceEndpoint } from "./personal-client"
 
 const statusNames = { PREPARED: "已准备", EXPORTED: "已导出，未登记发送", SENT: "已登记发送", UNAVAILABLE: "记录暂不可查看" }
 const eventNames = { EXPORTED: "导出", SENT: "实际送出", RECEIVED: "收悉", REPLIED: "客户回复", CONTENT_CONFIRMED: "客户确认内容", SEND_CORRECTION: "发送更正" }
 type Kind = keyof typeof eventNames
-export type DeliverySummary = { id: string; purpose: string | null; recipientName: string | null; state: keyof typeof statusNames; itemCount: number }
+export type DeliverySummary = { id: string; purpose: string | null; recipientName: string | null; sentAt?: string | null; state: keyof typeof statusNames; itemCount: number }
 type Options = {
   canPrepare: boolean
   documents: { id: string; name: string; version: number; canDeliver: boolean; blockedReason: string | null; needsSourceDeclaration?: boolean }[]
@@ -28,16 +28,19 @@ type Detail = {
 const time = new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", dateStyle: "medium", timeStyle: "short" })
 const localInputTime = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit",
   hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date()).replace(" ", "T")
-const download = (id: string) => materialUrl("/api/documents/" + id + "/download")
+const download = (id: string) => "/api/documents/" + id + "/download"
 function post<T>(payload: unknown) {
   return readPersonal<T>(workspaceEndpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
 }
 
-export function DeliveryWorkspace({ matterId, rows, reload }: { matterId: string; rows: DeliverySummary[]; reload: () => void }) {
+export function DeliveryWorkspace({ matterId, rows, reload, prepareDocument }: {
+  matterId: string; rows: DeliverySummary[]; reload: () => void; prepareDocument?: string
+}) {
   const [options, setOptions] = useState<Options>()
   const [optionsError, setOptionsError] = useState("")
   const [attempt, setAttempt] = useState(0)
-  const [active, setActive] = useState("")
+  const [active, setActive] = useState(prepareDocument ? "new" : "")
+  const [preferredDocument, setPreferredDocument] = useState(prepareDocument)
   const [priorId, setPriorId] = useState<string | null>(null)
   useEffect(() => {
     const controller = new AbortController()
@@ -47,13 +50,14 @@ export function DeliveryWorkspace({ matterId, rows, reload }: { matterId: string
     return () => controller.abort()
   }, [matterId, attempt])
   function prepare(previous: string | null) {
+    setPreferredDocument(undefined)
     setPriorId(previous)
     setOptions(undefined)
     setOptionsError("")
     setActive("new")
     setAttempt(n => n + 1)
   }
-  return <Card><CardHeader><CardTitle>交付记录</CardTitle></CardHeader><CardContent className="grid gap-3">
+  return <Card><CardHeader><CardTitle className="text-lg">交付清单</CardTitle></CardHeader><CardContent className="grid gap-3">
     {options?.canPrepare && <Button className="justify-self-start" size="sm" onClick={() => prepare(null)}>准备交付</Button>}
     {optionsError && <div role="alert" className="flex items-center gap-2 text-sm">{optionsError}<Button size="sm" variant="outline" onClick={() => { setOptionsError(""); setAttempt(n => n + 1) }}>重新读取材料选项</Button></div>}
     {!rows.length && <p className="text-sm text-muted-foreground">暂无交付记录。</p>}
@@ -64,7 +68,7 @@ export function DeliveryWorkspace({ matterId, rows, reload }: { matterId: string
     </li>)}</ul>
     {active === "new" && !options && !optionsError && <p role="status">正在读取可交付的材料…</p>}
     {active === "new" && options && !options.canPrepare && <p role="status">当前案件不可准备交付。</p>}
-    {active === "new" && options?.canPrepare && <PrepareDelivery matterId={matterId} options={options} priorId={priorId} onClose={() => setActive("")} onSaved={id => { setActive(id); reload() }} />}
+    {active === "new" && options?.canPrepare && <PrepareDelivery matterId={matterId} options={options} priorId={priorId} preferredDocument={preferredDocument} onClose={() => setActive("")} onSaved={id => { setActive(id); reload() }} />}
     {active && active !== "new" && <DeliveryDetail key={active} matterId={matterId} id={active} options={options} reload={reload} onClose={() => setActive("")}
       onPrepare={() => prepare(active)} />}
   </CardContent></Card>
@@ -75,10 +79,11 @@ function Discard({ keep, leave }: { keep: () => void; leave: () => void }) {
     <div className="flex gap-2"><Button type="button" size="sm" onClick={keep}>继续填写</Button><Button type="button" size="sm" variant="outline" onClick={leave}>放弃修改</Button></div>
   </div>
 }
-function PrepareDelivery({ matterId, options, priorId, onClose, onSaved }: {
-  matterId: string; options: Options; priorId: string | null; onClose: () => void; onSaved: (id: string) => void
+function PrepareDelivery({ matterId, options, priorId, preferredDocument, onClose, onSaved }: {
+  matterId: string; options: Options; priorId: string | null; preferredDocument?: string; onClose: () => void; onSaved: (id: string) => void
 }) {
-  const [ids, setIds] = useState<string[]>([])
+  const [ids, setIds] = useState<string[]>(() => preferredDocument &&
+    options.documents.some(doc => doc.id === preferredDocument && doc.canDeliver) ? [preferredDocument] : [])
   const [clientId, setClientId] = useState("")
   const [name, setName] = useState("")
   const [contact, setContact] = useState("")
@@ -137,8 +142,8 @@ function PrepareDelivery({ matterId, options, priorId, onClose, onSaved }: {
     </SheetContent></Sheet>
 }
 
-function DeliveryDetail({ matterId, id, options, onClose, onPrepare, reload }: {
-  matterId: string; id: string; options?: Options; onClose: () => void; onPrepare: () => void; reload: () => void
+export function DeliveryDetail({ matterId, id, options, onClose, onPrepare, reload }: {
+  matterId: string; id: string; options?: Options; onClose: () => void; onPrepare?: () => void; reload?: () => void
 }) {
   const [detail, setDetail] = useState<Detail>()
   const [refresh, setRefresh] = useState(0)
@@ -156,13 +161,13 @@ function DeliveryDetail({ matterId, id, options, onClose, onPrepare, reload }: {
     return () => controller.abort()
   }, [matterId, id, refresh])
 
-  function refreshAfterSave() { setDetail(undefined); setRefresh(n => n + 1); reload() }
+  function refreshAfterSave() { setDetail(undefined); setRefresh(n => n + 1); reload?.() }
   async function exportZip() {
     if (busy) return
     setBusy(true)
     setError("")
     try {
-      const response = await fetch(workspaceEndpoint, { method: "POST", headers: { "Content-Type": "application/json" },
+      const response = await personalFetch(workspaceEndpoint, { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "export-delivery", matterId, deliveryId: id, requestKey: exportKey }) })
       if (!response.ok) throw Error((await response.json().catch(() => null))?.error ?? "导出失败。")
       const objectUrl = URL.createObjectURL(await response.blob())
@@ -224,7 +229,7 @@ function DeliveryDetail({ matterId, id, options, onClose, onPrepare, reload }: {
             {event.proofUnavailable && <p>凭据当前不可查看。</p>}
             {event.kind !== "EXPORTED" && !event.proofUnavailable && !event.proofDocumentId && <p className="text-muted-foreground">仅人工登记，未附凭据</p>}
           </div>)}
-          {detail.canWrite && options?.canPrepare && !kind && <div className="flex flex-wrap gap-2">
+          {detail.canWrite && options?.canPrepare && onPrepare && !kind && <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" disabled={busy} onClick={() => void exportZip()}>导出固定材料</Button>
             <Button size="sm" variant="outline" disabled={busy} onClick={onPrepare}>另建补发清单</Button>
             {(sent ? ["RECEIVED", "REPLIED", "CONTENT_CONFIRMED", "SEND_CORRECTION"] as const : ["SENT"] as const).map(next =>

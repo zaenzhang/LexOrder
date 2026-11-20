@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "next/link"
+import Link from "@/features/shell/workspace-link"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { usePractice } from "@/features/practice/data"

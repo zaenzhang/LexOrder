@@ -1,9 +1,17 @@
 "use client"
 
-import Link from "next/link"
+import { usePageLoading } from "@/kit/ui-patterns/page-loading"
+
+import { InlineLoading } from "@/kit/ui-patterns/workspace-loading"
+import Link from "@/features/shell/workspace-link"
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
+import { CalendarDays, ChevronRight, Ellipsis, SearchIcon } from "lucide-react"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
+import { LegalTaskTable } from "@/features/tasks/legal-task-table"
 import { Textarea } from "@/components/ui/textarea"
 import { CaseForm } from "@/features/matters/case-management"
 import { chinaDate, usePractice, writePractice } from "./data"
@@ -11,20 +19,24 @@ import { chinaDate, usePractice, writePractice } from "./data"
 const statuses = { OPEN: "待办", DONE: "已办结", CANCELLED: "已取消" }
 const actions = { COMPLETE: "办结", CANCEL: "取消任务", REOPEN: "重开" }
 type Outcome = keyof typeof actions
+export type TaskBoardView = "open" | "waiting" | "done"
 type Task = {
   id: string
   matterId: string
   matterTitle: string
   title: string
+  stageId: string | null
   dueAt: string | null
   state: keyof typeof statuses
   revision: number
   canWrite: boolean
+  waiting?: { waitingFor: string; nextCheckAt: string }
 }
 
-export function TaskResponsibilities() {
+export function TaskResponsibilities({ view, hasOtherItems = false, pageEntry = false }: { view?: TaskBoardView; hasOtherItems?: boolean; pageEntry?: boolean }) {
   const client = useQueryClient()
   const [closed, setClosed] = useState(false)
+  const [search, setSearch] = useState("")
   const [editing, setEditing] = useState<{
     task: Task
     outcome: Outcome
@@ -33,64 +45,60 @@ export function TaskResponsibilities() {
   const [message, setMessage] = useState("")
   const { data, error, refetch } = usePractice<{ items: Task[] }>(
     "responsibilities",
-    { closed: closed ? "1" : "0" }
+    view ? { taskView: view } : { closed: closed ? "1" : "0" }
   )
+  const optionsFor = (task: Task): Outcome[] => task.state === "OPEN" ? ["COMPLETE", "CANCEL"] : ["REOPEN"]
+  const selectOutcome = (task: Task, outcome: Outcome) => { setMessage(""); setEditing({ task, outcome }) }
+  const needle = search.trim().toLowerCase()
+  const filtered = data?.items.filter(task => !needle || (task.title + " " + task.matterTitle).toLowerCase().includes(needle))
+  usePageLoading(pageEntry && !data && !error)
   return (
-    <section className="grid gap-3" aria-label="跨案任务责任板">
-      <label className="flex gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={closed}
-          onChange={(e) => setClosed(e.target.checked)}
-        />
-        含已结束任务
-      </label>
+    <section className="grid gap-3" aria-label={view ? "当前状态的任务" : "跨案任务责任板"}>
+      {!view && <div className="flex flex-wrap items-center gap-3">
+        <InputGroup className="w-full sm:max-w-64">
+          <InputGroupAddon><SearchIcon aria-hidden /></InputGroupAddon>
+          <InputGroupInput aria-label="搜索跨案任务" placeholder="搜索任务或案件名称" value={search}
+            onChange={event => setSearch(event.target.value)} />
+        </InputGroup>
+        <label className="flex items-center gap-2 text-xs"><Checkbox checked={closed} onCheckedChange={setClosed} />含已结束任务</label>
+      </div>}
       {message && <p role="status">{message}</p>}
       {error ? (
         <p role="alert">{error.message}</p>
-      ) : !data ? (
-        <p>正在读取任务…</p>
+      ) : !view ? <LegalTaskTable rows={filtered} loading={!data} label="跨案任务清单"
+        href={task => "/matters/" + task.matterId + "/tasks?task=" + task.id}
+        context={task => task.matterTitle}
+        waiting={task => task.waiting && ("等待 " + task.waiting.waitingFor + " · 检查日 " + chinaDate(task.waiting.nextCheckAt))}
+        actions={task => task.canWrite && <div className="flex flex-wrap justify-end gap-1">
+          {optionsFor(task).map(outcome => <Button key={outcome} size="xs" variant="ghost"
+            onClick={() => selectOutcome(task, outcome)}>{actions[outcome]}</Button>)}
+        </div>}
+      /> : !data ? (
+        <InlineLoading label="正在读取任务…" />
       ) : data.items.length === 0 ? (
-        <p>没有符合条件的责任任务。</p>
+        hasOtherItems ? null : <p className="text-sm text-muted-foreground">没有符合条件的责任任务。</p>
       ) : (
         <ul className="divide-y">
-          {data.items.map((task) => (
-            <li
-              key={task.id}
-              className="flex flex-wrap items-center gap-3 py-3"
-            >
-              <div className="me-auto">
-                <Link
-                  className="font-medium underline"
-                  href={`/matters/${task.matterId}/tasks?task=${task.id}`}
-                >
-                  {task.title}
-                </Link>
-                <p className="text-sm text-muted-foreground">
-                  {task.matterTitle} ·{" "}
-                  {task.dueAt ? chinaDate(task.dueAt) : "未安排时间"}
-                </p>
-              </div>
-              <span>{statuses[task.state]}</span>
-              {task.canWrite &&
-                (task.state === "OPEN"
-                  ? (["COMPLETE", "CANCEL"] as const)
-                  : (["REOPEN"] as const)
-                ).map((outcome) => (
-                  <Button
-                    key={outcome}
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setMessage("")
-                      setEditing({ task, outcome })
-                    }}
-                  >
-                    {actions[outcome]}
-                  </Button>
-                ))}
+          {data.items.map(task => {
+            const date = task.dueAt ? chinaDate(task.dueAt) : "未安排时间"
+            return <li key={task.id} className="flex items-center gap-1">
+              <Link className="flex min-w-0 flex-1 items-center gap-3 rounded-md px-1 py-3 hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-ring"
+                href={{ pathname: "/matters/" + task.matterId + "/materials",
+                  query: { task: task.id, ...(task.stageId ? { stage: task.stageId } : {}), from: "today", taskView: view } }}>
+                <span className="grid size-8 shrink-0 place-items-center rounded-md border bg-muted text-primary"><CalendarDays aria-hidden className="size-4" /></span>
+                <span className="grid min-w-0 flex-1 gap-0.5">
+                  <span className="break-words text-sm font-medium">{task.title}</span>
+                  <span className="text-xs text-muted-foreground">{task.matterTitle} · {task.waiting ? "等待 " + task.waiting.waitingFor + " · 检查日 " + chinaDate(task.waiting.nextCheckAt) : date}</span>
+                </span>
+                <ChevronRight aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+              </Link>
+              {task.canWrite && <DropdownMenu>
+                <DropdownMenuTrigger render={<Button size="icon-sm" variant="ghost" aria-label={task.title + "的任务操作"} />}><Ellipsis /></DropdownMenuTrigger>
+                <DropdownMenuContent align="end">{optionsFor(task).map(outcome => <DropdownMenuItem key={outcome} onClick={() => selectOutcome(task, outcome)}>{actions[outcome]}</DropdownMenuItem>)}</DropdownMenuContent>
+              </DropdownMenu>}
             </li>
-          ))}
+
+          })}
         </ul>
       )}
       {editing && (

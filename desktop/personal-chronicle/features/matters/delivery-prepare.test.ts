@@ -1,3 +1,4 @@
+import { renderWithRouter } from "@/scripts/render-test"
 // @vitest-environment jsdom
 import { act, createElement } from "react"
 import { createRoot } from "react-dom/client"
@@ -28,7 +29,7 @@ it.each(["准备交付", "另建补发清单"])("%s 采用打开时的审批状�
   const container = document.body.appendChild(document.createElement("div"))
   const root = createRoot(container)
   try {
-    await act(async () => root.render(createElement(DeliveryWorkspace, {
+    await act(async () => renderWithRouter(root, createElement(DeliveryWorkspace, {
       matterId: "matter", rows: [{ id: "withdrawn", itemCount: 2, purpose: null, recipientName: null, state: "UNAVAILABLE" }], reload: vi.fn(),
     })))
     expect(screen.queryByRole("button", { name: "查看清单" })).toBeNull()

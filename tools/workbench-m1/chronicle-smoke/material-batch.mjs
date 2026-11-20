@@ -20,7 +20,7 @@ const originalFetch = globalThis.fetch;
 const gate = Promise.withResolvers();
 let loseReceipt = true;
 globalThis.fetch = async (url, options) => {
-  if (url !== "/api/personal-runtime/matter-workspace") return originalFetch(url, options);
+  if (url !== "/api/personal/matter-workspace") return originalFetch(url, options);
   const form = options.body;
   const entry = { matterId: form.get("matterId"), key: form.get("requestKey"), name: form.get("name") };
   posted.push(entry);

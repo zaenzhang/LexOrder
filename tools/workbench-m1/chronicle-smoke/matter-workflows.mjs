@@ -154,6 +154,7 @@ assert.equal((await put(prepare)).id, delivery.id);
 let frozen = await get(a.id, "delivery", { record: delivery.id });
 assert.equal(frozen.items[0].documentId, evidence.id);
 assert.equal(frozen.events.length, 0);
+assert(!(await get(a.id, "delivery", { sent: "1" })).items.some((item) => item.id === delivery.id));
 await request(
   path + "?" + new URLSearchParams({ matter: b.id, section: "delivery", record: delivery.id }),
   null,
@@ -189,6 +190,7 @@ const zipFiles = Object.values(new PizZip(zip).files);
 assert(
   zipFiles.some((file) => !file.dir && file.asText().includes("SYNTHETIC RECEIPT: exact fixture bytes")),
 );
+assert(!(await get(a.id, "delivery", { sent: "1" })).items.some((item) => item.id === delivery.id));
 const sent = await put(send);
 assert.equal((await put(send)).id, sent.id);
 await put({
@@ -211,6 +213,10 @@ assert.equal(frozen.events.length, 4);
 assert(frozen.events.some((e) => e.kind === "SEND_CORRECTION" && e.correctsEventId === sent.id));
 assert.equal(frozen.items[0].documentVersion, 1);
 assert(!(await get(b.id, "delivery")).items.some((item) => item.id === delivery.id));
+const sentSummary = (await get(a.id, "delivery", { sent: "1" })).items.find((item) => item.id === delivery.id);
+assert.equal(sentSummary?.state, "SENT");
+assert.equal(sentSummary.sentAt, new Date(send.data.occurredAt).toISOString());
+assert(!(await get(b.id, "delivery", { sent: "1" })).items.some((item) => item.id === delivery.id));
 const fact = {
   action: "create-evidence",
   data: {

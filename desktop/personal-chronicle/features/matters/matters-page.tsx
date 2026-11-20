@@ -1,6 +1,8 @@
 "use client"
 
-import Link from "next/link"
+import { usePageLoading } from "@/kit/ui-patterns/page-loading"
+
+import Link from "@/features/shell/workspace-link"
 import { useEffect, useState } from "react"
 import { ArrowUpRightIcon, SearchIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -32,6 +34,8 @@ export function MattersPage() {
     return () => controller.abort()
   }, [query])
 
+  usePageLoading(!result && !error && query.search === "" && query.page === 1)
+
   function load(search: string, page: number) {
     setError("")
     setResult(undefined)
@@ -39,7 +43,7 @@ export function MattersPage() {
   }
 
   return <section className="flex flex-col gap-5">
-    <PageHeader title="案件总览" actions={<ResumeMatter />} description="搜索已有案件，打开独立的案件工作空间。" />
+    <PageHeader title="案件列表" actions={<ResumeMatter />} description="搜索已有案件，打开独立的案件工作空间。" />
     <form className="flex flex-wrap gap-2" onSubmit={event => { event.preventDefault(); load(draft.trim(), 1) }}>
       <Input className="w-full max-w-xs" aria-label="搜索案件" placeholder="案件名称或案号" value={draft} onChange={event => setDraft(event.target.value)} />
       <Button variant="outline" type="submit"><SearchIcon data-icon="inline-start" />搜索</Button>

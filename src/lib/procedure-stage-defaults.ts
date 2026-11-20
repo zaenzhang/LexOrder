@@ -109,6 +109,7 @@ const ADMIN_RECONSIDERATION_PRESETS: ProcedureStagePreset[] = [
 ];
 
 export function procedureStagePresetsForProcedure(type: ProcedureType): ProcedureStagePreset[] {
+  if (type === "CUSTOM") return [];
   if (type === "SECOND_INSTANCE" || type === "REMAND_SECOND") return SECOND_INSTANCE_PRESETS;
   if (type === "ENFORCEMENT" || type === "ENFORCEMENT_OBJECTION") return ENFORCEMENT_PRESETS;
   if (type === "COMMERCIAL_ARBITRATION" || type === "LABOR_ARBITRATION") return ARBITRATION_PRESETS;

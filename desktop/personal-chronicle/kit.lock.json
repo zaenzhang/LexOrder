@@ -101,5 +101,26 @@
     "ui-patterns/tag-input.tsx": "e40c1ece241d51bcc4e874027f86b9b378e2391ef6c9fbbd726427ba83d435e1",
     "ui-patterns/when-idle.ts": "7f92374d3c140e7355bf792149a9ea84816a2746191b91774c4c19d23020c1fb",
     "widgets/widget.tsx": "0230538e96732100907a9a4e4ae55e07f0c41e945d45a12b809b489bee44e0b2"
+  },
+  "framework": "vite",
+  "local": {
+    "command/command-menu.tsx": "28f06c37c4912dc007332833a5a5dc6a6bcf9fbd91d23e465dcbfc77b91b2c09",
+    "command/command-palette.tsx": "b5ea9c87c07c8a3c7747d17c6d38304521683ef34b4d9bed2eeef65f85ed28e2",
+    "customizer/customizer-panel-body.tsx": "658a87de153de61f671e15cc6bc4c25de969cc96162d0aad4982555417716474",
+    "customizer/customizer-panel.tsx": "ad3efbefe2a392de74ad2b4b837b286c6dd59cfd8a531b9817439e295b6dadae",
+    "data/hooks.tsx": "384be1c726d466645d810f314aef4305868773c0a81bd9aa6f2b8e84df7c98e6",
+    "framework/index.tsx": "efd23e918a981e9cc4ee36a13bf907a9ce8736090c2ba8b56c7e40b191eaa0d5",
+    "kit.json": "426f92124b81ca2fdfd87608199efcca98a24a426a6811c949b26a385891a343",
+    "notifications/notification-bell-body.tsx": "0ea93768037f39d891a1a9d69dface88431e5bd715c38e2700931c3ae58f2968",
+    "notifications/notification-bell.tsx": "7cde3accd1b9fee08da6b8d0bcafd6bc4b85db33adf3eccc1266426b91b8f54d",
+    "shell/app-shell.tsx": "f01bc43455233e1c8cdc5d7be22e19b2b7109449fc3ecd61f88725931df115de",
+    "shell/app-sidebar.tsx": "1c249bfb3271e20bd55153167b60a19aba837d33dc44589093ff3c18dc29659c",
+    "shell/breadcrumbs.tsx": "90c25a3d9ba7268241077f720f7cb96d16b0a1969f108110668cfd774a613c70",
+    "shell/mode-toggle.tsx": "558d3789127e3e6880d30b4cd340f72dbe5930201559034f64cab08b887518af",
+    "shell/nav-main.tsx": "af3d4eaa690ac73f15694100684ed0d941f4b94e3e869433277d4be48e5e7ef1",
+    "shell/top-nav.tsx": "82f683f234523e6fb5d5ab84fd5228f44d3c915f000507471f1bffa8904c947c",
+    "shell/types.ts": "dac3c0209953932fcdddf3ccfd02dcd7a39b9a168b710135fd9311c1db6bc355",
+    "ui-patterns/page-loading.tsx": "fadbea9a6a8735c6a49dd5b43e1677fb7843ada91c16f7b1bb4194d5550ed2de",
+    "ui-patterns/workspace-loading.tsx": "e52f2bd811acbe18501cfd1b9d7b6733477ef42f2a2160ab79c491a5b73ec1d3"
   }
 }

@@ -63,9 +63,11 @@ describe("具体文书复核面板", () => {
     await waitFor(() => expect(onIssueChange).toHaveBeenCalledWith("issue-one"));
     await waitFor(() => expect(screen.queryByLabelText("复核结论")).not.toBeInTheDocument());
     expect(onDirtyChange).toHaveBeenCalledWith(true);
-    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
     expect(onPendingChange).toHaveBeenCalledWith(true);
-    expect(onPendingChange).toHaveBeenLastCalledWith(false);
+    await waitFor(() => {
+      expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+      expect(onPendingChange).toHaveBeenLastCalledWith(false);
+    });
   });
 
   it("依据或修订无权读取时显式限制完成动作，仍可保留未解决", async () => {

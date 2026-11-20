@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import PizZip from "pizzip";
+import { Document, HeadingLevel, Packer, Paragraph, TextRun } from "docx";
 import { fixture } from "./fixture.mjs";
 
 const {
@@ -96,6 +97,7 @@ const returned = await read(doc.id);
 assert.equal(returned.status, "DRAFT");
 await post("submit", { expected: returned.expected });
 const fresh = await read(doc.id);
+await post("approve", { expected: checked.expected, note: "上轮审批快照不再有效", acknowledged: true }, 409);
 await post("approve", { expected: fresh.expected, note: "逐项核对，批准本版", acknowledged: false }, 400);
 await post("approve", { expected: fresh.expected, note: "逐项核对，批准本版", acknowledged: true });
 assert.equal((await read(doc.id)).status, "APPROVED");
@@ -231,3 +233,84 @@ await exportV1();
 console.log(
   "PASS V1 review and approval, frozen ZIP before sending, independent sent and received facts with same-case proof, unchanged pending decision, cross-case refusals, V2 review and reopened V1 original and ZIP.",
 );
+
+const docxType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const draftName = "合成定点引用-" + tag + ".docx";
+const makeWord = text => Packer.toBuffer(new Document({ sections: [{ children: [
+  new Paragraph({ text: "首段不动 " + tag, heading: HeadingLevel.HEADING_1 }),
+  new Paragraph({ children: [new TextRun({ text, bold: true })] }),
+  new Paragraph("末段不动 " + tag),
+] }] }));
+const originalWord = await makeWord("原观点第一版");
+const wordUpload = new FormData();
+for (const [key, value] of Object.entries({
+  matterId: a.id, name: draftName, category: "PLEADING", requestKey: randomUUID(), sourceOrigin: "TEAM_PRODUCED",
+})) wordUpload.set(key, value);
+wordUpload.set("file", new File([originalWord], draftName, { type: docxType }));
+await api(workspace, wordUpload);
+const wordV1 = (await list(a.id)).items.find(row => row.name === draftName);
+await post("submit", { expected: (await read(wordV1.id)).expected }, 200, wordV1.id);
+await post("approve", { expected: (await read(wordV1.id)).expected, note: "批准旧版供验收", acknowledged: true }, 200, wordV1.id);
+const fixedWord = await freeze(wordV1.id);
+const workingBytes = await makeWord("需替换的第二版原文");
+const wordUpdate = new FormData();
+for (const [key, value] of Object.entries({ matterId: a.id, documentId: wordV1.id, requestKey: randomUUID(), contextInputs: "[]" })) wordUpdate.set(key, value);
+wordUpdate.set("file", new File([workingBytes], draftName, { type: docxType }));
+const wordV2 = await api(ep, wordUpdate);
+assert.equal(wordV2.version, 2);
+
+const conclusion = "研究结论 " + tag + "：<文本> & 条件";
+const research = await api(workspace, {
+  action: "create-research", matterId: a.id, requestKey: randomUUID(), researchedAt: new Date().toISOString(),
+  question: "定点引用 " + tag, scope: "合成工作稿", conclusion, unresolved: "此处仍需律师复核",
+});
+const citationDrafts = await api(ep + "?" + new URLSearchParams({ matter: a.id, citationDrafts: "1" }));
+assert(citationDrafts.items.some(row => row.id === wordV2.id));
+assert(!citationDrafts.items.some(row => row.id === wordV1.id || row.id === doc.id));
+const citationPreview = (matter, version) => workspace + "?" + new URLSearchParams({
+  matter, section: "draft-citation", document: version, research: research.id,
+});
+await request(citationPreview(b.id, wordV2.id), null, 403);
+await request(citationPreview(a.id, wordV1.id), null, 403);
+const preview = await api(citationPreview(a.id, wordV2.id));
+assert.equal(preview.document.version, 2);
+assert.equal(preview.research.conclusion, conclusion);
+assert.deepEqual(preview.paragraphs.map(row => row.text), ["首段不动 " + tag, "需替换的第二版原文", "末段不动 " + tag]);
+
+const save = { action: "save-draft-citation", data: {
+  matterId: a.id, documentId: wordV2.id, researchRevisionId: research.id, expectedVersion: 2,
+  position: 2, mode: "REPLACE", requestKey: randomUUID(),
+} };
+for (const rejected of [{ expectedVersion: 1 }, { position: 400 }, { matterId: b.id }]) {
+  await api(workspace, { ...save, data: { ...save.data, ...rejected } }, 403);
+}
+const citation = await api(workspace, save);
+assert.equal(citation.version, 3);
+assert.deepEqual(await api(workspace, save), citation);
+await api(workspace, { ...save, data: { ...save.data, position: 1 } }, 403);
+await api(workspace, { ...save, data: { ...save.data, requestKey: randomUUID() } }, 403);
+await request(citationPreview(a.id, wordV2.id), null, 403);
+
+const resultRead = await read(citation.id);
+assert.equal(resultRead.status, "DRAFT");
+assert.deepEqual(resultRead.researchInputs, [{ id: research.id, version: 1 }]);
+assert.equal((await read(wordV2.id)).isLatest, false);
+const wordV3 = await api(citationPreview(a.id, citation.id));
+assert.deepEqual(wordV3.paragraphs.map(row => row.text), [preview.paragraphs[0].text, conclusion, preview.paragraphs[2].text]);
+
+const downloadBytes = async id => Buffer.from(await (await request("/api/documents/" + id + "/download")).arrayBuffer());
+assert.deepEqual(await downloadBytes(wordV2.id), workingBytes);
+assert.deepEqual(await downloadBytes(wordV1.id), originalWord);
+const acceptedZip = new PizZip(await downloadBytes(citation.id));
+const priorZip = new PizZip(workingBytes);
+for (const name of Object.keys(priorZip.files).filter(name => !priorZip.files[name].dir && name !== "word/document.xml")) {
+  assert.deepEqual(acceptedZip.file(name)?.asNodeBuffer(), priorZip.file(name)?.asNodeBuffer(), name);
+}
+const fixedAgain = await api(delivery(a.id, fixedWord.id));
+assert.equal(fixedAgain.items[0].documentId, wordV1.id);
+const oldWordZip = new PizZip(await (await request(workspace, {
+  action: "export-delivery", matterId: a.id, deliveryId: fixedWord.id, requestKey: randomUUID(),
+})).arrayBuffer());
+assert.deepEqual(oldWordZip.file("材料/01_" + draftName)?.asNodeBuffer(), originalWord);
+console.log("PASS DOCX citation preview, exact paragraph revision, input trace, replay, cross-case and stale rejections, untouched XML parts and immutable prior delivery.");
+console.log("Citation preview fixture research: " + research.id + "; current draft: " + citation.id);

@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { aiSettingsSaveSchema } from "@/lib/ai/settings-contract";
 import { requireWorkspaceConfiguration } from "@/lib/auth/session";
 import { audit } from "@/server/audit";
 import {
@@ -9,17 +10,6 @@ import {
 } from "@/lib/ai/settings";
 import { aiChat, AiNotConfiguredError } from "@/lib/ai/client";
 
-const saveSchema = z.object({
-  enabled: z.boolean().optional(),
-  apiKey: z.string().trim().max(4096).optional(), // 留空 = 保留原值
-  baseUrl: z.string().max(600).url().refine(value => {
-    try { const url = new URL(value); return url.protocol === "https:" && !url.username && !url.password && !url.search && !url.hash; }
-    catch { return false; }
-  }, "请使用不带凭据或查询参数的 HTTPS 接口地址").optional().or(z.literal("")),
-  textModel: z.string().max(80).optional().or(z.literal("")),
-  visionModel: z.string().max(80).optional().or(z.literal(""))
-});
-
 const clearSchema = z.object({ confirm: z.literal(true) });
 
 export async function getAiSettingsPublic() {
@@ -27,9 +17,9 @@ export async function getAiSettingsPublic() {
   return readPublicAiSettings();
 }
 
-export async function saveAiSettingsAction(input: z.infer<typeof saveSchema>) {
+export async function saveAiSettingsAction(input: z.infer<typeof aiSettingsSaveSchema>) {
   const session = await requireWorkspaceConfiguration();
-  const data = saveSchema.parse(input);
+  const data = aiSettingsSaveSchema.parse(input);
 
   await saveSettings({
     enabled: data.enabled,

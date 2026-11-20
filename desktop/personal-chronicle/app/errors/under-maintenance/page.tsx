@@ -1,9 +1,8 @@
-import type { Metadata } from "next"
 import { WrenchIcon } from "lucide-react"
 
 import { ErrorScreen } from "../error-screen"
 
-export const metadata: Metadata = { title: "Down for maintenance" }
+export const metadata = { title: "Down for maintenance" }
 
 export default function Page() {
   return (

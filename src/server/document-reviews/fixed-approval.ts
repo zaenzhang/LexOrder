@@ -1,11 +1,12 @@
 import { z } from "zod";
-import type { Prisma } from "@prisma/client";
+import { DocumentStatus, type Prisma } from "@prisma/client";
 import { ActionError } from "@/lib/action-error";
 
 export const fixedReviewSchema = z.object({
   matterId: z.cuid(),
   version: z.number().int().positive(),
-  updatedAt: z.iso.datetime({ offset: true }),
+  status: z.enum(DocumentStatus),
+  reviewedAt: z.iso.datetime({ offset: true }).nullable(),
   sha256: z.string().nullable(),
   issues: z.array(z.object({ id: z.cuid(), version: z.number().int().positive() })),
 });
@@ -14,6 +15,8 @@ export type FixedReview = z.infer<typeof fixedReviewSchema>;
 /** Inside the same approval transaction as issue and draft-version mutations. */
 export async function assertFixedReview(db: Prisma.TransactionClient, id: string, expected: FixedReview, latestRequired = true) {
   const seen = fixedReviewSchema.parse(expected);
+  // Parse jobs touch the document row but do not change its review cycle.
+  await db.$queryRaw`SELECT id FROM "Document" WHERE id=${id} FOR UPDATE`;
   const current = await db.document.findFirst({
     where: {
       id,
@@ -22,7 +25,8 @@ export async function assertFixedReview(db: Prisma.TransactionClient, id: string
       ...(latestRequired ? { isLatest: true } : {}),
       deletedAt: null,
       sha256: seen.sha256,
-      updatedAt: new Date(seen.updatedAt),
+      status: seen.status,
+      reviewedAt: seen.reviewedAt ? new Date(seen.reviewedAt) : null,
       matter: { deletedAt: null, status: { not: "ARCHIVED" } },
     },
     select: { manualReviewIssues: { select: { id: true, version: true } } },

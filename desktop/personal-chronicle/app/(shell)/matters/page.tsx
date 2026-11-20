@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation"
+import { Navigate } from "react-router"
 
 export default function Page() {
-  redirect("/matters/list")
+  return <Navigate to="/matters/list" replace />
 }

@@ -1,9 +1,11 @@
 import { readPersonal, workspaceEndpoint } from "./personal-client"
+import type { MaterialStage } from "./materials-workspace"
 
 export type BatchRow = {
   key: string
   name: string
   category: string
+  stage?: MaterialStage
   file?: File
   status: "waiting" | "sending" | "done" | "failed"
   error?: string
@@ -29,9 +31,9 @@ function update(matterId: string, rows: BatchRow[]) {
   for (const listener of listeners) listener()
 }
 
-export function addBatchFiles(matterId: string, files: File[], category: string) {
+export function addBatchFiles(matterId: string, files: File[], category: string, stage?: MaterialStage) {
   const added = files.map(file => ({
-    key: crypto.randomUUID(), name: file.name, category, file, status: "waiting" as const,
+    key: crypto.randomUUID(), name: file.name, category, stage, file, status: "waiting" as const,
   }))
   update(matterId, [...batchRows(matterId), ...added])
 }
@@ -62,6 +64,10 @@ export async function submitBatch(matterId: string, status: "waiting" | "failed"
       form.set("matterId", matterId)
       form.set("file", row.file)
       form.set("name", row.name)
+      if (row.stage) {
+        form.set("stageId", row.stage.id)
+        form.set("procedureId", row.stage.procedureId)
+      }
       form.set("category", row.category)
       form.set("requestKey", row.key)
       try {

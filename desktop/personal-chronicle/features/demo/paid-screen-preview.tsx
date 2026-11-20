@@ -1,7 +1,7 @@
 "use client"
 
 import { ArrowUpRightIcon, LockKeyholeIcon } from "lucide-react"
-import Link from "next/link"
+import Link from "@/features/shell/workspace-link"
 
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
@@ -27,7 +27,6 @@ export function PaidScreenPreview({ screen }: { screen: PaidScreen }) {
           <p className="max-w-prose text-sm">{info.body}</p>
           {info.image ? (
             // A remote screenshot on the demo only; the template you download never loads it.
-            // eslint-disable-next-line @next/next/no-img-element
             <img src={info.image} alt={info.alt} width={1280} height={800} loading="lazy" className="w-full rounded-xl border" />
           ) : (
             <EmptyState icon={LockKeyholeIcon} className="border border-dashed" title="Not in the free template" description="Open Emporium's live demo to try this screen." />

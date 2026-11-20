@@ -21,24 +21,34 @@ export const personalTaskAction = z.object({
   reason: z.string().trim().min(1, "请填写处理原因").max(1000),
 }).strict();
 
-export async function readPersonalTaskBoard(includeClosed: boolean) {
+export const taskBoardViews = ["open", "waiting", "done"] as const;
+
+export async function readPersonalTaskBoard(includeClosed: boolean, view?: typeof taskBoardViews[number]) {
   const { user } = await requireSession("schedule.read");
+  const activeWaiting = { endedAt: null };
+  const state = view === "done" ? "DONE" : view || !includeClosed ? "OPEN" : undefined;
   const rows = await prisma.task.findMany({
     where: {
       matter: { deletedAt: null, ...matterAssociationFilter(user.id) },
-      responsibility: { is: { assigneeId: user.id, ...(includeClosed ? {} : { state: "OPEN" }) } },
+      responsibility: { is: { assigneeId: user.id, state } },
+      ...(view === "open" ? { waitings: { none: activeWaiting } }
+        : view === "waiting" ? { waitings: { some: activeWaiting } } : {}),
     },
     select: {
-      id: true, title: true, dueAt: true,
+      id: true, title: true, dueAt: true, stageId: true,
+      ...(view === "waiting" ? {
+        waitings: { where: activeWaiting, take: 1, select: { waitingFor: true, nextCheckAt: true } },
+      } : {}),
       matter: { select: { id: true, title: true, status: true } },
       responsibility: { select: { state: true, revision: true } },
     },
     orderBy: [{ dueAt: { sort: "asc", nulls: "last" } }, { id: "asc" }],
   });
   const canWrite = hasCustomPermission(user, "schedule.write");
-  return { items: rows.flatMap(({ id, title, dueAt, matter, responsibility }) => responsibility ? [{
-    id, title, dueAt, matterId: matter.id, matterTitle: matter.title,
-    ...responsibility, canWrite: canWrite && matter.status !== "ARCHIVED",
+  return { items: rows.flatMap(({ id, title, dueAt, stageId, matter, responsibility, waitings }) => responsibility ? [{
+    id, title, dueAt, stageId, matterId: matter.id, matterTitle: matter.title,
+    ...responsibility, ...(waitings?.[0] ? { waiting: waitings[0] } : {}),
+    canWrite: canWrite && matter.status !== "ARCHIVED",
   }] : []) };
 }
 

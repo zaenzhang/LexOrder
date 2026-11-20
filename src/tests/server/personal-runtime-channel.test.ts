@@ -10,6 +10,7 @@ import { GET as openWorkspace } from "@/app/api/personal/open/route";
 import { isPersonalMode, runtimeMode } from "@/lib/runtime/mode";
 import {
   PERSONAL_CHANNEL_COOKIE,
+  PERSONAL_SKILL_MCP_PATH,
   personalChannelAllowed,
   personalRuntime,
   validPersonalToken,
@@ -78,6 +79,14 @@ describe("运行模式只由启动配置确定", () => {
     expect(runProxy(req, event)?.status).toBe(401);
     expect(serverAuth).toHaveBeenCalledWith(req, event);
     expect(runtimeMode()).toBe("SERVER");
+  });
+
+  it("宿主 MCP 独立校验凭据的路径仍遵守回环主机和 Origin 边界", () => {
+    expect(runProxy(request(PERSONAL_SKILL_MCP_PATH, {}, "POST", false), event).headers.get("x-middleware-next")).toBe("1");
+    expect(runProxy(request(PERSONAL_SKILL_MCP_PATH, { origin: "https://other.test" }, "POST", false), event).status).toBe(403);
+    expect(runProxy(request(PERSONAL_SKILL_MCP_PATH, { host: "other.test" }, "POST", false), event).status).toBe(403);
+    expect(runProxy(request(PERSONAL_SKILL_MCP_PATH + "/other", {}, "POST", false), event).status).toBe(403);
+    expect(runProxy(request("/api/personal/matter-workspace", { authorization: "Bearer " + TOKEN }, "POST", false), event).status).toBe(403);
   });
 
   it("Personal 请求不能声明 Server 来逃避本地通道", () => {

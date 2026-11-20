@@ -43,9 +43,9 @@ export async function getDocumentDetail(matterId: string, documentId: string) {
     const pendingArchives = mayWithdraw ? await db.archiveRecord.findMany({ where: { matterId: expectedMatterId, status: "PENDING_REVIEW" }, select: { checklistJson: true } }) : [];
     const inPendingArchive = pendingArchives.some(archive => archiveSnapshotDocumentIds(archive.checklistJson).includes(document.id));
     const family = document.familyId ? await db.document.findMany({ where: { deletedAt: null, matterId: document.matterId, familyId: document.familyId }, orderBy: { version: "desc" },
-      select: { id: true, name: true, version: true, isLatest: true, status: true, uploadedById: true, matterId: true, intakeId: true } }) : [document];
-    const versions: { id: string; name: string; version: number; isLatest: boolean; status: string }[] = [];
-    for (const row of family) if (await canReadDocument(session.user.id, row, db)) versions.push({ id: row.id, name: row.name, version: row.version, isLatest: row.isLatest, status: row.status });
+      select: { id: true, name: true, version: true, isLatest: true, status: true, mimeType: true, uploadedById: true, matterId: true, intakeId: true } }) : [document];
+    const versions: { id: string; name: string; version: number; isLatest: boolean; status: string; mimeType: string | null }[] = [];
+    for (const row of family) if (await canReadDocument(session.user.id, row, db)) versions.push({ id: row.id, name: row.name, version: row.version, isLatest: row.isLatest, status: row.status, mimeType: row.mimeType });
     return { id: document.id, name: document.name, version: document.version, isLatest: document.isLatest, status: document.status,
       contextInputs: await readDocumentContextInputs(db, session.user.id, document.id, document.matterId),
       mimeType: document.mimeType, createdAt: document.createdAt.toISOString(), updatedAt: document.updatedAt, uploadedByName: document.uploadedBy.name,

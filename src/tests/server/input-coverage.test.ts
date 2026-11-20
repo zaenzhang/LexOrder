@@ -105,6 +105,41 @@ describe("离线指定材料输入检查", () => {
     expect(JSON.stringify(result)).not.toContain("另一附件的反证");
   });
 
+  it("案级预检遍历多个批次，切分时保留完整字符且不会返回正文", async () => {
+    documents = [document("a"), document("b"), document("restricted"), document("unprocessed")];
+    const body = "a".repeat(5999) + "😀" + "b".repeat(36_015) + "尾文字";
+    runs = [run(documents[0], [body]), run(documents[1], ["第二份"]), run(documents[2], ["无处理权限的文字"])];
+    canReview.mockImplementation(async (_user, row: TestDocument) => row.id !== "restricted");
+    const result = await readMatterInputCoverage("current-user", { ...input(["a", "b", "restricted", "unprocessed", "missing"]), purpose: "FACT_ANALYSIS" });
+    expect(result.modelSupply).toEqual({ status: "NOT_SENT", sentChars: 0 });
+    const plan = result.analysisPlan;
+    if (!plan) throw new Error("Expected partitioned analysis plan");
+    expect(plan.batches).toHaveLength(2);
+    expect(plan.plannedCharacters).toBe(body.length + "第二份".length);
+    expect(plan.unplannedCharacters).toBe(0);
+    const ranges = plan.batches.flatMap(batch => {
+      expect(batch.characters).toBeLessThanOrEqual(36_000);
+      expect(batch.ranges.length).toBeLessThanOrEqual(8);
+      return batch.ranges;
+    });
+    expect(ranges[0]).toMatchObject({ documentId: "a", parseRunId: runs[0].id, start: 0, end: 5999 });
+    expect(ranges.filter(range => range.documentId === "a").map(range => body.slice(range.start, range.end)).join("")).toEqual(body);
+    expect(ranges.at(-1)).toMatchObject({ documentId: "b", parseRunId: runs[1].id });
+    expect(result.items[3]).toMatchObject({ processing: { state: "NOT_PROCESSED" } });
+    expect(result.items[4]).toEqual({ documentId: "missing", status: "UNAVAILABLE" });
+    expect(JSON.stringify(result)).not.toContain("尾文字");
+  });
+
+  it("计划超过展示分段上限时逐字符披露余量", async () => {
+    runs = [run(documents[0], Array.from({ length: 204 }, (_, index) => index + "字"))];
+    const result = await getMatterInputCoverage({ ...input(), purpose: "FACT_ANALYSIS" });
+    const plan = result.analysisPlan;
+    if (!plan) throw new Error("Expected partitioned analysis plan");
+    expect(plan.batches.flatMap(batch => batch.ranges)).toHaveLength(200);
+    expect(plan.unplannedCharacters).toBe(16);
+    expect(plan.plannedCharacters + plan.unplannedCharacters).toBe(result.summary.availableChars);
+  });
+
   it.each(["source", "write"])("有阅读权但缺 %s 处理资格仍可查看本地范围", async (denied) => {
     if (denied === "source") canReview.mockResolvedValue(false);
     else resolveRole.mockResolvedValue({ enabled: true, role: "CUSTOM", rolePermissions: [{ permissionKey: "documents.read", scope: "OWN" }] });

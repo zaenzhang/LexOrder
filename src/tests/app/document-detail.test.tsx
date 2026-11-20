@@ -50,7 +50,7 @@ function detail(changes: Partial<Awaited<ReturnType<typeof getDocumentDetail>>> 
   return { id: oldId, name: "合成旧版意见.docx", version: 1, isLatest: false, status: "APPROVED", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     contextInputs: { inputs: [], unavailable: false },
     createdAt: "2026-11-16T08:00:00.000Z", updatedAt: new Date("2026-11-16T08:00:00.000Z"), uploadedByName: "合成作者", folderName: null, reviewSourceId: null, canWithdraw: false, withdrawBlockedReason: null, hasVersionFamily: true, canUploadVersion: false, canSubmit: false, canFile: true, canPrepareDelivery: true,
-    versions: [{ id: oldId, version: 1, name: "合成旧版意见.docx", isLatest: false, status: "APPROVED" }, { id: latestId, version: 2, name: "合成新稿.docx", isLatest: true, status: "DRAFT" }], ...changes };
+    versions: [{ id: oldId, version: 1, name: "合成旧版意见.docx", isLatest: false, status: "APPROVED", mimeType: null }, { id: latestId, version: 2, name: "合成新稿.docx", isLatest: true, status: "DRAFT", mimeType: null }], ...changes };
 }
 function approval(changes: Partial<Awaited<ReturnType<typeof getApprovalDetail>>> = {}): Awaited<ReturnType<typeof getApprovalDetail>> {
   return { title: "合成旧版审批", requester: "合成作者", submittedAt: new Date("2026-11-16T08:00:00Z"), status: "DRAFT", task: null,

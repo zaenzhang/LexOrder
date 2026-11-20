@@ -1,7 +1,7 @@
 "use client"
 
 import { TerminalSquareIcon, XIcon } from "lucide-react"
-import { usePathname } from "next/navigation"
+import { usePathname } from "@/kit/framework"
 import { useEffect, useState } from "react"
 
 import { Button } from "@/components/ui/button"

@@ -137,7 +137,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 }
 
 /** The panel's controls, loaded by `CustomizerPanel` the first time it opens. */
-export default function CustomizerPanelBody({ onImport }: { onImport: () => void }) {
+export default function CustomizerPanelBody({ onImport, workbench }: { onImport: () => void; workbench?: boolean }) {
   const settings = useCustomizer((state) => state)
   const { presets, fonts } = useKitTheme()
   const fontLabel = (id: string) => fonts.find((font) => font.id === id)?.label ?? id
@@ -156,8 +156,8 @@ export default function CustomizerPanelBody({ onImport }: { onImport: () => void
     <>
     <div className="flex items-start justify-between gap-2 p-4 pb-3">
       <PopoverHeader className="gap-0.5">
-        <PopoverTitle>Theme customizer</PopoverTitle>
-        <PopoverDescription>Saved in this browser.</PopoverDescription>
+        <PopoverTitle>{workbench ? "外观设置" : "Theme customizer"}</PopoverTitle>
+        <PopoverDescription>{workbench ? "外观偏好保存在本机。" : "Saved in this browser."}</PopoverDescription>
       </PopoverHeader>
       <div className="-me-1.5 -mt-1 flex items-center">
         <IconAction label="Import theme CSS" onClick={onImport}>
@@ -273,7 +273,7 @@ export default function CustomizerPanelBody({ onImport }: { onImport: () => void
           />
         </Section>
 
-        <Section label="Layout">
+        {!workbench && <Section label="Layout">
           <Segmented
             aria-label="Layout"
             value={settings.layout}
@@ -283,11 +283,11 @@ export default function CustomizerPanelBody({ onImport }: { onImport: () => void
               { value: "top", label: "Top bar" },
             ]}
           />
-        </Section>
+        </Section>}
 
-        {settings.layout === "sidebar" && (
+        {(workbench || settings.layout === "sidebar") && (
           <>
-            <Section label="Sidebar variant">
+            {!workbench && <Section label="Sidebar variant">
               <Segmented
                 aria-label="Sidebar variant"
                 value={settings.sidebarVariant}
@@ -298,7 +298,7 @@ export default function CustomizerPanelBody({ onImport }: { onImport: () => void
                   { value: "floating", label: "Floating" },
                 ]}
               />
-            </Section>
+            </Section>}
             <Section label="Sidebar collapse">
               <Segmented
                 aria-label="Sidebar collapse"

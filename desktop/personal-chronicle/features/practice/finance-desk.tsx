@@ -1,6 +1,7 @@
 "use client"
 
-import Link from "next/link"
+import { WorkspaceLoading } from "@/kit/ui-patterns/workspace-loading"
+import Link from "@/features/shell/workspace-link"
 import { useEffect, useState, type FormEvent } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -14,7 +15,7 @@ import { readPersonal } from "@/features/matters/personal-client"
 
 import { ContractWorkspace, type ContractLedger } from "./finance-contracts"
 
-const endpoint = "/api/personal-runtime/finance-desk"
+const endpoint = "/api/personal/finance-desk"
 const kinds = { LAWYER_FEE: "律师费", CLIENT_FUNDS: "代收款", EXPENSE_RECOVERY: "代垫回收", OTHER: "其他款项" }
 const labels: Record<string, string> = { RECEIVED: "实收", COST: "支出", RECEIVABLE: "应收", COMMISSION: "分成", REFUND: "退款", PENDING: "待确认", CONFIRMED: "已确认" }
 const money = (v: string | number) => Number(v).toLocaleString("zh-CN", { style: "currency", currency: "CNY" })
@@ -123,7 +124,7 @@ export function FinanceDesk({ matterId }: { matterId?: string }) {
     {!matterId && <PageHeader title="财务台账" />}
     {error && <p role="alert">{error} <Button size="sm" variant="outline" onClick={() => setRevision(r => r + 1)}>重试</Button></p>}
     {notice && <p role="status" className="text-sm">{notice}</p>}
-    {!data && !error && <p role="status">正在读取财务台账…</p>}
+    {!data && !error && <WorkspaceLoading label="正在读取财务台账…" />}
     {data && <>
       <div className="grid gap-3 sm:grid-cols-3">{data.metrics.map(([label, value]) => <Card key={label}><CardContent><p className="text-sm text-muted-foreground">{label}</p><p className="num text-xl font-semibold">{money(value)}</p></CardContent></Card>)}</div>
       {data.ready === false && <p role="status" className="text-sm">当前工作区尚未启用收支台账。</p>}

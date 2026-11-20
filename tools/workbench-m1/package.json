@@ -4,14 +4,16 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.19.0"
   },
   "scripts": {
     "dev": "node preview-personal.mjs",
     "typecheck": "tsc --noEmit --incremental false -p tsconfig.json",
     "verify": "node --import tsx verify.ts",
     "verify:services": "node --import tsx verify-services.ts",
-    "build:personal": "node build-personal.mjs",
+    "desktop": "bun --no-env-file --no-install desktop-launch.mjs",
+    "build:desktop": "bun --no-env-file --no-install build-personal.mjs --desktop",
+    "build:personal": "bun --no-env-file --no-install build-personal.mjs",
     "start:personal": "node personal-runtime.mjs",
     "verify:personal": "node verify-personal.mjs",
     "verify:channel": "node verify-channel.mjs"
@@ -21,5 +23,8 @@
     "@lancedb/lancedb": "0.41.0",
     "pdfjs-dist": "5.6.205",
     "yaml": "2.8.2"
+  },
+  "devDependencies": {
+    "playwright-core": "1.65.1"
   }
 }

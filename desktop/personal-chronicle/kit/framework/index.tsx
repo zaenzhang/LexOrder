@@ -1,33 +1,41 @@
-import NextLink from "next/link"
-import { useParams as useNextParams, usePathname as useNextPathname, useRouter as useNextRouter, useSearchParams as useNextSearchParams } from "next/navigation"
-import NextScript from "next/script"
+import { useEffect, useMemo } from "react"
+import { Link as RouterLink, useLocation, useNavigate, useParams, useSearchParams as useRouterSearchParams } from "react-router"
 
-import type { InlineScriptProps, KitLink, KitParams, KitRouter, KitSearchParams } from "./types"
+import type { InlineScriptProps, KitLink, KitRouter } from "./types"
 
 export type { InlineScriptProps, KitLink, KitLinkProps, KitParams, KitRouter, KitSearchParams } from "./types"
+export { useParams }
 
-/*
- * The Next.js (App Router) adapter. Every export is Next's own, typed down to
- * the Kit's contract in ./types, so a Next.js template behaves exactly as if
- * it imported next/link and next/navigation itself.
- */
+export const Link: KitLink = ({ href, ...props }) => <RouterLink to={href} {...props} />
 
-export const Link: KitLink = NextLink
-export const usePathname: () => string = useNextPathname
-export const useParams: () => KitParams = useNextParams
-export const useSearchParams: () => KitSearchParams = useNextSearchParams
-export const useRouter: () => KitRouter = useNextRouter
-
-/** The app's base path (`basePath` in next.config), e.g. "/chronicle" on the demo host, or "". */
-export function useBasePath(): string {
-  return process.env.NEXT_PUBLIC_BASE_PATH ?? ""
+export function usePathname() {
+  return useLocation().pathname
 }
 
-/** An inline script that runs once after hydration (next/script, afterInteractive). */
+export function useSearchParams() {
+  return useRouterSearchParams()[0]
+}
+
+export function useRouter(): KitRouter {
+  const navigate = useNavigate()
+  return useMemo(() => ({
+    push: href => { void navigate(href) },
+    replace: href => { void navigate(href, { replace: true }) },
+    back: () => { void navigate(-1) },
+  }), [navigate])
+}
+
+export function useBasePath() {
+  return import.meta.env.MODE === "demo" ? import.meta.env.BASE_URL.replace(/\/$/, "") : ""
+}
+
 export function InlineScript({ id, children }: InlineScriptProps) {
-  return (
-    <NextScript id={id} strategy="afterInteractive">
-      {children}
-    </NextScript>
-  )
+  useEffect(() => {
+    if (document.getElementById(id)) return
+    const script = document.createElement("script")
+    script.id = id
+    script.text = children
+    document.head.append(script)
+  }, [id, children])
+  return null
 }

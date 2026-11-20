@@ -14,9 +14,10 @@ import { getDocumentDetail } from "@/server/documents/detail-actions";
 
 const matterId = "cm00000000000000000000001", otherMatterId = "cm00000000000000000000002";
 const oldId = "cm00000000000000000000003", latestId = "cm00000000000000000000004";
+const docxMime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 function document(changes: Record<string, unknown> = {}) {
   return { id: oldId, name: "合成旧版意见.docx", version: 1, familyId: oldId, isLatest: false,
-    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", status: "APPROVED",
+    mimeType: docxMime, status: "APPROVED",
     createdAt: new Date("2026-11-16T08:00:00Z"), updatedAt: new Date("2026-11-16T08:00:00Z"), tags: [], reviewReportFor: null, uploadedById: "author", matterId, intakeId: null, deletedAt: null,
     matter: { status: "ACTIVE", deletedAt: null }, uploadedBy: { name: "合成作者" }, ...changes };
 }
@@ -38,8 +39,8 @@ describe("指定文书版本详情", () => {
     const result = await getDocumentDetail(matterId, oldId);
     expect(result).toMatchObject({ id: oldId, name: "合成旧版意见.docx", version: 1, status: "APPROVED", isLatest: false, canUploadVersion: false });
     expect(result.versions).toEqual([
-      { id: latestId, name: "合成未审新稿.docx", version: 2, status: "DRAFT", isLatest: true },
-      { id: oldId, name: "合成旧版意见.docx", version: 1, status: "APPROVED", isLatest: false },
+      { id: latestId, name: "合成未审新稿.docx", version: 2, status: "DRAFT", isLatest: true, mimeType: docxMime },
+      { id: oldId, name: "合成旧版意见.docx", version: 1, status: "APPROVED", isLatest: false, mimeType: docxMime },
     ]);
     expect(mock.read).toHaveBeenCalledWith("author", expect.objectContaining({ id: oldId }), mock.db);
     expect(mock.read).toHaveBeenCalledWith("author", expect.objectContaining({ id: latestId }), mock.db);

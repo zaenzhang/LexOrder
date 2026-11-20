@@ -79,7 +79,7 @@ export type DeliveryEventView = {
   correctsEventId: string | null;
 };
 export type DeliverySummary = {
-  id: string; purpose: string | null; recipientName: string | null; createdAt: string;
+  id: string; purpose: string | null; recipientName: string | null; createdAt: string; sentAt: string | null;
   state: "PREPARED" | "EXPORTED" | "SENT" | "UNAVAILABLE"; itemCount: number;
 };
 export type DeliveryDetail = {

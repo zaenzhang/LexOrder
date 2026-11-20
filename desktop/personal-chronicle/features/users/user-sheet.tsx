@@ -1,7 +1,7 @@
 "use client"
 
 import { ArrowUpRightIcon } from "lucide-react"
-import Link from "next/link"
+import Link from "@/features/shell/workspace-link"
 
 import { buttonVariants } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"

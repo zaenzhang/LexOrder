@@ -1,7 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod plugins;
+mod sidecar;
+
+use tauri::ipc::CapabilityBuilder;
 use tauri::webview::{Cookie, NewWindowResponse};
-use tauri::{Manager, Url, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
@@ -47,12 +51,7 @@ async fn choose_case_directory(
     window: WebviewWindow,
     matter_id: String,
 ) -> Result<Option<String>, String> {
-    let configured = window
-        .config()
-        .build
-        .dev_url
-        .clone()
-        .ok_or("未配置桌面地址")?;
+    let configured = trusted_origin(window.app_handle()).ok_or("未配置桌面地址")?;
     let verify = || {
         let url = window.url().map_err(|_| "无法识别当前窗口")?;
         if permits_folder_picker(window.label(), &url, &configured, &matter_id) {
@@ -86,49 +85,113 @@ async fn choose_case_directory(
         .transpose()
 }
 
+#[tauri::command]
+async fn renew_personal_channel(window: WebviewWindow) -> Result<(), String> {
+    let configured = trusted_origin(window.app_handle()).ok_or("未配置桌面地址")?;
+    let page = window.url().map_err(|_| "无法识别当前窗口")?;
+    if window.label() != "main"
+        || configured.scheme() != "http"
+        || configured.host_str() != Some("127.0.0.1")
+        || page.origin() != configured.origin()
+    {
+        return Err("只能在本机 Chronicle 主窗口连接个人工作区。".into());
+    }
+    let session = window.state::<sidecar::Session>();
+    set_channel(&window, &session.token)
+}
+
+fn trusted_origin(app: &AppHandle) -> Option<Url> {
+    app.try_state::<sidecar::Session>()?.origin.get().cloned()
+}
+
+fn set_channel(window: &WebviewWindow, token: &str) -> Result<(), String> {
+    let cookie = Cookie::parse(format!(
+        "lexorder_local_channel={token}; Domain=127.0.0.1; Path=/api; HttpOnly; SameSite=Strict"
+    ))
+    .map_err(|_| "无法建立本机个人工作区会话。")?;
+    window
+        .set_cookie(cookie)
+        .map_err(|_| "无法建立本机个人工作区会话。".into())
+}
+
+fn open_main(app: &AppHandle, url: Url) -> tauri::Result<()> {
+    let origin = url.origin();
+    let navigation_app = app.clone();
+    let popup_app = app.clone();
+    let popup_origin = origin.clone();
+    app.add_capability(
+        CapabilityBuilder::new("chronicle-main")
+            .local(false)
+            .remote(format!("{}/*", origin.ascii_serialization()))
+            .webview("main")
+            .permission("allow-choose-case-directory")
+            .permission("allow-renew-personal-channel")
+            .permission("allow-read-desktop-plugins"),
+    )?;
+    let mut config = app.config().app.windows[0].clone();
+    config.url = WebviewUrl::External(url);
+    let preview = WebviewWindowBuilder::from_config(app, &config)?;
+    #[cfg(all(windows, debug_assertions))]
+    let preview = if std::env::var_os("LEXORDER_WEBVIEW2_SMOKE").is_some() {
+        preview.visible(false).focused(false)
+    } else {
+        preview
+    };
+    preview
+        .zoom_hotkeys_enabled(cfg!(debug_assertions))
+        .on_navigation(move |url| {
+            if url.origin() == origin {
+                return true;
+            }
+            open_external(&navigation_app, url);
+            false
+        })
+        .on_new_window(move |url, _| {
+            if url.origin() == popup_origin {
+                return NewWindowResponse::Allow;
+            }
+            open_external(&popup_app, &url);
+            NewWindowResponse::Deny
+        })
+        .build()?;
+    Ok(())
+}
+
 fn main() {
-    tauri::Builder::default()
+    let desktop = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![choose_case_directory])
+        .plugin(tauri_plugin_shell::init())
+        .invoke_handler(tauri::generate_handler![
+            choose_case_directory,
+            renew_personal_channel,
+            plugins::read_desktop_plugins
+        ])
         .setup(|app| {
-            let origin = app.config().build.dev_url.as_ref().ok_or("missing preview URL")?.origin();
-            let navigation_app = app.handle().clone();
-            let popup_app = navigation_app.clone();
-            let popup_origin = origin.clone();
-            let window = WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
-                .zoom_hotkeys_enabled(cfg!(debug_assertions))
-                .on_navigation(move |url| {
-                    if url.origin() == origin {
-                        return true;
-                    }
-                    open_external(&navigation_app, url);
-                    false
-                })
-                .on_new_window(move |url, _| {
-                    if url.origin() == popup_origin {
-                        return NewWindowResponse::Allow;
-                    }
-                    open_external(&popup_app, &url);
-                    NewWindowResponse::Deny
-                })
-                .build()?;
-
-            if let Ok(token) = std::env::var("LEXORDER_PERSONAL_CHANNEL_TOKEN") {
-                if token.len() != 64
-                    || !token.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
-                {
-                    return Err("invalid personal workspace channel".into());
-                }
-                let cookie = Cookie::parse(format!(
-                    "lexorder_local_channel={token}; Domain=127.0.0.1; Path=/api/personal-runtime; HttpOnly; SameSite=Strict"
-                ))?;
-                window.set_cookie(cookie)?;
-            }
+            let root = match std::env::var_os("LEXORDER_DESKTOP_ROOT") {
+                Some(root) => root.into(),
+                None => app.path().resource_dir()?.join("lexorder-runtime"),
+            };
+            sidecar::start(app.handle(), root)?;
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("open the Chronicle local desktop preview");
+        .on_window_event(|window, event| {
+            if window.label() == "main"
+                && let tauri::WindowEvent::CloseRequested { api, .. } = event
+                && sidecar::stop(window.app_handle())
+            {
+                api.prevent_close();
+            }
+        })
+        .build(tauri::generate_context!())
+        .expect("open the Chronicle desktop host");
+    desktop.run(|app, event| {
+        if let tauri::RunEvent::ExitRequested { api, .. } = event
+            && sidecar::stop(app)
+        {
+            api.prevent_exit();
+        }
+    });
 }
 
 #[cfg(test)]

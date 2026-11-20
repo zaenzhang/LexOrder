@@ -71,12 +71,11 @@ export function Screenshot({
   priority?: boolean
   className?: string
 }) {
-  const base = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/landing/${name}`
+  const base = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/landing/${name}`
   const set = (theme: string) => widths.map((size) => `${base}-${theme}-${size}.webp ${size}w`).join(", ")
   const largest = widths[widths.length - 1]
   return (
     <>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={`${base}-light-${largest}.webp`}
         srcSet={set("light")}
@@ -89,7 +88,6 @@ export function Screenshot({
         decoding="async"
         className={cn("block h-auto w-full dark:hidden", className)}
       />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={`${base}-dark-${largest}.webp`}
         srcSet={set("dark")}

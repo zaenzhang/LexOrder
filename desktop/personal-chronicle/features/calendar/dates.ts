@@ -8,7 +8,7 @@ import { DATA_NOW } from "@/lib/clock"
 const DAY = 24 * 3600 * 1000
 
 export function toKey(date: Date): string {
-  return date.toISOString().slice(0, 10)
+  return date.toISOString().split("T")[0]
 }
 
 export function fromKey(key: string): Date {
@@ -17,6 +17,16 @@ export function fromKey(key: string): Date {
 
 export function addDays(key: string, days: number): string {
   return toKey(new Date(fromKey(key).getTime() + days * DAY))
+}
+
+export function isCivilDay(key: unknown): key is string {
+  if (typeof key !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(key) || key < "0001-01-01") return false
+  const date = fromKey(key)
+  return Number.isFinite(date.getTime()) && toKey(date) === key
+}
+
+export function beijingDay(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())
 }
 
 /** The demo's today: Tuesday 20 October 2026. */
@@ -43,9 +53,25 @@ export function inMonth(key: string, cursor: MonthCursor): boolean {
   return year === cursor.year && month === cursor.month
 }
 
+function firstOfMonth(cursor: MonthCursor): Date {
+  const date = new Date(0)
+  date.setUTCFullYear(cursor.year, cursor.month, 1)
+  return date
+}
+
+/** The same day in another month, clamped to that month's last day. */
+export function offsetMonthDay(key: string, offset: number): string {
+  const target = shiftMonth(monthOf(key), offset)
+  const first = firstOfMonth(target)
+  const next = new Date(first)
+  next.setUTCMonth(first.getUTCMonth() + 1)
+  const lastDay = fromKey(addDays(toKey(next), -1)).getUTCDate()
+  return addDays(toKey(first), Math.min(dayOfMonth(key), lastDay) - 1)
+}
+
 /** Six weeks of keys, Monday first, covering the month. */
 export function monthGrid(cursor: MonthCursor): string[] {
-  const first = new Date(Date.UTC(cursor.year, cursor.month, 1))
+  const first = firstOfMonth(cursor)
   const offset = (first.getUTCDay() + 6) % 7
   const start = addDays(toKey(first), -offset)
   return Array.from({ length: 42 }, (_, index) => addDays(start, index))
@@ -58,7 +84,7 @@ const dayTitle = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "lon
 const dayShort = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })
 
 export function formatMonth(cursor: MonthCursor): string {
-  return monthTitle.format(new Date(Date.UTC(cursor.year, cursor.month, 1)))
+  return monthTitle.format(firstOfMonth(cursor))
 }
 
 export function formatDay(key: string): string {

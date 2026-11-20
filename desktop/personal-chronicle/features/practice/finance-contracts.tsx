@@ -8,7 +8,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Textarea } from "@/components/ui/textarea"
 import { readPersonal } from "@/features/matters/personal-client"
 
-const endpoint = "/api/personal-runtime/finance-desk"
+const endpoint = "/api/personal/finance-desk"
 const kinds: Record<string,string> = { LAWYER_FEE: "律师费", CLIENT_FUNDS: "代收款", EXPENSE_RECOVERY: "代垫回收", OTHER: "其他款项" }
 const status: Record<string,string> = { DRAFT: "草稿", ACTIVE: "已生效", TERMINATED: "已终止", CANCELLED: "已取消" }
 const money = (v: string) => Number(v).toLocaleString("zh-CN",{style:"currency",currency:"CNY"})

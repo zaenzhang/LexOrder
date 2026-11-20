@@ -1,5 +1,5 @@
 import { ArrowRightIcon } from "lucide-react"
-import Link from "next/link"
+import Link from "@/features/shell/workspace-link"
 
 import { buttonVariants } from "@/components/ui/button"
 import { TRIAL_DAYS } from "@/data/generate"
