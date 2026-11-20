@@ -22,7 +22,7 @@ it("材料撤回后仍可结束本案工作稿，仅暴露会话操作", async (
   const root = createRoot(container)
   try {
     await act(async () => renderWithRouter(root, createElement(MaterialsWorkspace, {
-      matterId: "current", documents: [], folders: [], filters: { q: "", folder: "*", version: "all" },
+      matterId: "current", canOrganize: false, documents: [], folders: [], filters: { q: "", folder: "*", version: "all" },
       onFilter: vi.fn(), onUploaded: vi.fn(), selection: [], onSelectionChange: vi.fn(),
     })))
     expect(screen.queryByText(/87654321/)).toBeNull()

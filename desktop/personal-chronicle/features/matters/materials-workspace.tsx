@@ -19,12 +19,13 @@ import type { TaskMaterialReviewContext } from "../../../../src/server/tasks/mat
 import { SkillInputPreview } from "./skill-input-preview"
 import { MaterialBatch } from "./material-batch"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
-import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DataTable, type DataColumn } from "@/kit/data-table/data-table"
 import { commissionItemLabels, readPersonal, workspaceEndpoint, type CommissionFollowUp, type CommissionIssue } from "./personal-client"
 
 import { useWorkingCopies } from "./working-copies"
-import type { MaterialCatalogEntry } from "../../../../src/lib/documents/catalog"
+import { materialCategoryBatchLimit, type MaterialCatalogEntry } from "../../../../src/lib/documents/catalog"
 
 export type MaterialFilters = { q: string; folder: string; version: string; category?: string; origin?: string }
 export type MaterialStage = { id: string; name: string; procedureId: string }
@@ -48,9 +49,9 @@ function previewPath(material: Material) {
   }
 }
 
-export function MaterialsWorkspace({ matterId, stage, task, reviewId, commissionResearchId, commissionIssue, commissionFollowUp, documents, folders, filters, onFilter, onUploaded, selection, onSelectionChange, openUpload, factAnalysis, pageNavigation }: {
+export function MaterialsWorkspace({ matterId, stage, task, canOrganize, reviewId, commissionResearchId, commissionIssue, commissionFollowUp, documents, folders, filters, onFilter, onUploaded, selection, onSelectionChange, openUpload, factAnalysis, pageNavigation }: {
   selection: string[]; onSelectionChange: (ids: string[]) => void; filters: MaterialFilters; onFilter: (filters: MaterialFilters) => void;
-  matterId: string; stage?: MaterialStage; task?: TaskMaterialReviewContext; reviewId?: string; commissionResearchId?: string; commissionIssue?: CommissionIssue; commissionFollowUp?: CommissionFollowUp;
+  canOrganize: boolean; matterId: string; stage?: MaterialStage; task?: TaskMaterialReviewContext; reviewId?: string; commissionResearchId?: string; commissionIssue?: CommissionIssue; commissionFollowUp?: CommissionFollowUp;
   documents: Material[]; folders: { id: string; name: string }[]; onUploaded: () => void; openUpload?: boolean; factAnalysis?: boolean; pageNavigation?: React.ReactNode
 }) {
   const { copies, offline, act } = useWorkingCopies()
@@ -85,10 +86,13 @@ export function MaterialsWorkspace({ matterId, stage, task, reviewId, commission
     },
   }
   const closePreview = useRef<HTMLButtonElement>(null)
+  const materialSearch = useRef<HTMLInputElement>(null)
   const [uploadOpen, setUploadOpen] = useState(Boolean(openUpload))
   const [readingId, setReadingId] = useState("")
   const reading = documents.find(item => item.id === readingId) ?? documents[0]
   const readingPath = reading ? previewPath(reading) : undefined
+  const showCategoryAction = canOrganize && !task && !commissionIssue && !commissionResearchId && !commissionFollowUp && !factAnalysis
+  const hasReadOnlySelection = documents.some(item => selection.includes(item.id) && (!item.isLatest || item.status !== "DRAFT"))
   const [file, setFile] = useState<File>()
   const [name, setName] = useState("")
   const [category, setCategory] = useState("OTHER")
@@ -100,7 +104,7 @@ export function MaterialsWorkspace({ matterId, stage, task, reviewId, commission
     { id: "name", header: "材料名称", cell: item => <Button variant="ghost" size="sm"
       aria-pressed={reading?.id === item.id} className="h-auto justify-start whitespace-normal px-2 py-1 text-start" onClick={() => setReadingId(item.id)}>
       <span className="grid min-w-0 gap-0.5"><span className="break-words font-medium">{item.name}</span>
-        <span className="text-xs font-normal text-muted-foreground">V{item.version}{item.isLatest ? "" : " · 历史版本"}</span></span></Button> },
+        <span className="text-xs font-normal text-muted-foreground">V{item.version}{item.isLatest ? "" : " · 历史版本"} · {categories.find(([value]) => value === item.category)?.[1]}</span></span></Button> },
     { id: "origin", header: "来源", cell: item => <span className="whitespace-nowrap text-xs text-muted-foreground">{originLabels[item.sourceOrigin ?? ""] ?? "未登记"}</span> },
   ]
 
@@ -195,7 +199,7 @@ export function MaterialsWorkspace({ matterId, stage, task, reviewId, commission
             <TabsList aria-label="材料目录范围"><TabsTrigger value="all">{stage ? "全部版本" : "全卷材料"}</TabsTrigger><TabsTrigger value="latest">当前版本</TabsTrigger><TabsTrigger value="historical">历史版本</TabsTrigger></TabsList>
           </Tabs>
           <div className="grid gap-2 sm:grid-cols-[minmax(7rem,1.5fr)_minmax(5.5rem,1fr)_minmax(5.5rem,1fr)]">
-            <Input aria-label="搜索案内材料" placeholder="材料名称或标签" maxLength={200} value={filters.q} onChange={event => onFilter({ ...filters, q: event.target.value })} />
+            <Input ref={materialSearch} aria-label="搜索案内材料" placeholder="材料名称或标签" maxLength={200} value={filters.q} onChange={event => onFilter({ ...filters, q: event.target.value })} />
             <NativeSelect className="w-full" aria-label="筛选材料类别" value={filters.category ?? ""} onChange={event => onFilter({ ...filters, category: event.target.value })}>
               <NativeSelectOption value="">全部类别</NativeSelectOption>
               {categories.map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}
@@ -216,7 +220,7 @@ export function MaterialsWorkspace({ matterId, stage, task, reviewId, commission
               <NativeSelectOption value="*">全部卷宗</NativeSelectOption><NativeSelectOption value="">未分卷</NativeSelectOption>
               {folders.map(v => <NativeSelectOption key={v.id} value={v.id}>{v.name}</NativeSelectOption>)}
             </NativeSelect>
-            <VolumeTools matterId={matterId} folders={folders} documents={documents} refresh={onUploaded} />
+            {canOrganize && <VolumeTools matterId={matterId} folders={folders} documents={documents} refresh={onUploaded} />}
             <MaterialBatch key={matterId} matterId={matterId} stage={stage} categories={categories} onUploaded={onUploaded} />
           </div>
         </CardContent>
@@ -242,6 +246,13 @@ export function MaterialsWorkspace({ matterId, stage, task, reviewId, commission
       <p role="status" className="me-auto text-sm">已选 {selection.length} 份材料
         {(selection.length < 2 || (!task && selection.length > 2)) && " · 选择两份以并排核对"}
       </p>
+      {showCategoryAction &&
+        <MaterialCategorySheet matterId={matterId} selection={selection} search={materialSearch} hasReadOnlySelection={hasReadOnlySelection} onSaved={changed => {
+          onSelectionChange([])
+          setNotice(changed ? `已更新 ${changed} 份材料的类别。` : "所选材料已是该类别。")
+          onFilter(filters)
+          onUploaded()
+        }} />}
       <Button size="sm" variant="outline" disabled={selection.length < 2 || (!task && selection.length > 2)}
         onClick={() => setVersionsOf([selection[0], selection[1]])}>并排核对</Button>
       {canRecord ? <Button size="sm" disabled={!selection.length || selection.length > task.reviewSourceLimit}
@@ -249,6 +260,8 @@ export function MaterialsWorkspace({ matterId, stage, task, reviewId, commission
         : !task && <Button size="sm" variant="outline" disabled={!selection.length || selection.length > 50} onClick={() => setSkillInput(selection)}>{factAnalysis ? "分段预检" : "委托材料预检"}</Button>}
       {selection.length > 0 && <Button size="sm" variant="ghost" onClick={() => onSelectionChange([])}>清空选材</Button>}
       {canRecord && selection.length > task.reviewSourceLimit && <p className="text-sm text-muted-foreground">每条意见最多引用 {task.reviewSourceLimit} 份材料。</p>}
+      {showCategoryAction && hasReadOnlySelection &&
+        <p className="text-sm text-muted-foreground">选材含历史或审核版本，移除后可更改类别。</p>}
       {!task && selection.length > 50 && <p className="text-sm text-muted-foreground">单次预检最多 50 份材料。</p>}
     </div>
     <details className="text-sm"><summary className="cursor-pointer text-muted-foreground">案件文件夹</summary>
@@ -272,4 +285,81 @@ export function MaterialsWorkspace({ matterId, stage, task, reviewId, commission
       </SheetContent>
     </Sheet>
   </div>
+}
+
+function MaterialCategorySheet({ matterId, selection, search, hasReadOnlySelection, onSaved }: {
+  matterId: string
+  selection: string[]
+  search: React.RefObject<HTMLInputElement | null>
+  hasReadOnlySelection: boolean
+  onSaved: (changed: number) => void
+}) {
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [category, setCategory] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const limit = materialCategoryBatchLimit
+  const saved = useRef(false)
+
+  async function save(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!category || busy) return
+    setBusy(true)
+    setError("")
+    try {
+      const { changed } = await readPersonal<{ changed: number }>(workspaceEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "change-material-category", matterId, documentIds: selectedIds, category }),
+      })
+      saved.current = true
+      setSelectedIds([])
+      onSaved(changed)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "材料归类失败。")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return selection.length > limit
+    ? <p className="text-sm text-muted-foreground">每次最多归类 {limit} 份材料。</p>
+    : <Sheet open={selectedIds.length > 0} onOpenChange={open => {
+      if (busy) return
+      setError("")
+      setCategory("")
+      if (open) saved.current = false
+      setSelectedIds(open ? [...selection] : [])
+    }}>
+      <SheetTrigger render={<Button size="sm" variant="outline" disabled={!selection.length || hasReadOnlySelection} />}>更改类别</SheetTrigger>
+      <SheetContent finalFocus={() => saved.current ? search.current : true}>
+        <SheetHeader>
+          <SheetTitle>更改材料类别</SheetTitle>
+          <SheetDescription>将更新已勾选的 {selectedIds.length} 份材料（含其他页）。仅可更改本案当前草稿版本的目录类别。</SheetDescription>
+        </SheetHeader>
+        <form className="grid gap-4" onSubmit={save}>
+          <div className="grid gap-2 px-4 text-sm">
+            <label id="material-category-label">目标类别</label>
+            <Select
+              items={categories.map(([value, label]) => ({ value, label }))}
+              value={category || null}
+              onValueChange={value => setCategory(value ?? "")}
+              disabled={busy}
+            >
+              <SelectTrigger aria-labelledby="material-category-label" className="w-full">
+                <SelectValue placeholder="选择类别" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+          </div>
+          <SheetFooter>
+            <SheetClose render={<Button type="button" variant="outline" disabled={busy} />}>取消</SheetClose>
+            <Button type="submit" disabled={busy || !category}>{busy ? "正在保存…" : "保存类别"}</Button>
+          </SheetFooter>
+        </form>
+      </SheetContent>
+    </Sheet>
 }

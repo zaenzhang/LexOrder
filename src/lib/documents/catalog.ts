@@ -13,6 +13,8 @@ export const materialTagSchema = z.string().trim().min(1).max(100)
 export const materialTagsSchema = z.array(materialTagSchema).max(50)
   .transform(values => [...new Set(values)].sort());
 
+export const materialCategoryBatchLimit = 50;
+
 export const materialCatalogSelect = {
   id: true, familyId: true, name: true, version: true, isLatest: true, mimeType: true, status: true, folderId: true,
   category: true, sourceOrigin: true, sourceParty: true, procedureId: true, stageId: true, tags: true,

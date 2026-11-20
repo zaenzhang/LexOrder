@@ -129,6 +129,15 @@ await post({ action: "approve", matterId: other.id, data: review }, 404);
 await post({ action: "approve", data: review });
 assert.equal((await get()).matter.status, "ARCHIVED");
 await post({ action: "reopen" }, 409);
+const catalogEndpoint = "/api/personal/matter-workspace";
+const archivedCatalog = await call(catalogEndpoint + "?" + new URLSearchParams({ matter: matterId, section: "materials" }));
+assert.equal(archivedCatalog.canOrganizeMaterials, false);
+assert(archivedCatalog.documents.some(document => document.id === file.id));
+const archivedOrder = archivedCatalog.folders.map(folder => folder.id);
+assert(archivedOrder.length);
+await call(catalogEndpoint, { action: "reorder-volumes", matterId, expectedOrder: archivedOrder, orderedIds: archivedOrder }, 403);
+await call(catalogEndpoint, { action: "change-material-category", matterId, documentIds: [file.id], category: "CONTRACT" }, 403);
+
 const raw = await request(
   ep + "?" + new URLSearchParams({ matter: matterId, archiveId: record.id, download: "1" }),
 );

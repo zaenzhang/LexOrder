@@ -17,7 +17,9 @@ import { prepareDeliverySchema, registerDeliveryEventSchema } from "@/server/del
 import { exportDeliveryForActor } from "@/server/deliveries/export";
 import { getDeliveryDetail, getDeliveryOptions, prepareDelivery, registerDeliveryEvent, listDeliveryRecords } from "@/server/deliveries/actions";
 import { canReadDocument } from "@/lib/approvals/documents";
-import { listFoldersByMatter, createFolder, renameFolder, moveDocumentToFolder } from "@/server/document-folders/actions";
+import { listFoldersByMatter, createFolder, renameFolder, moveDocumentToFolder, reorderFolders } from "@/server/document-folders/actions";
+import { folderReorderSchema } from "@/server/document-folders/schemas";
+import { changeMaterialCategory, changeMaterialCategorySchema } from "@/server/documents/catalog-actions";
 import { getDocumentDetail } from "@/server/documents/detail-actions";
 import { officePreviewKind } from "@/lib/storage/mime-ext";
 import { listDocumentPage, uploadDocument } from "@/server/documents/actions";
@@ -80,6 +82,8 @@ const mutation = z.discriminatedUnion("action", [
   z.object({ action: z.literal("create-volume"), matterId: idSchema, name: z.string().trim().min(1).max(40) }),
   z.object({ action: z.literal("rename-volume"), matterId: idSchema, folderId: idSchema, name: z.string().trim().min(1).max(40) }),
   z.object({ action: z.literal("file-in-volume"), matterId: idSchema, documentId: idSchema, folderId: idSchema.nullable() }),
+  folderReorderSchema.safeExtend({ action: z.literal("reorder-volumes") }),
+  changeMaterialCategorySchema,
   createSchema,
   ...signoffActions,
   z.object({ action: z.literal("preview-skill-input"), data: matterInputCoverageSchema }),
@@ -228,15 +232,20 @@ export async function GET(request: Request) {
       if (stageId && !materialStage) throw new ActionError("办理环节不存在或不属于当前范围");
       if (taskId && !materialTask) throw new ActionError("任务不存在或不属于当前范围");
       if (!validProgram) throw new ActionError("程序不存在或不属于本案");
-      const [documents, folders] = await Promise.all([listDocumentPage({
+      const { user } = await requireSession("documents.read");
+      const [documents, folders, editableMatter] = await Promise.all([listDocumentPage({
         matterId: id, stageId, procedureId: stageId ? undefined : programId, tag: query.get("tag") ?? undefined,
         limit: z.coerce.number().int().min(1).max(100).parse(query.get("limit") ?? 100),
         category: z.enum(DocumentCategory).optional().parse(query.get("category") || undefined),
         sourceOrigin: z.enum(DocumentSourceOrigin).optional().parse(query.get("origin") || undefined), search: z.string().trim().max(200).parse(query.get("q") ?? ""),
         folderId: folder === "*" ? undefined : folder === "" ? null : idSchema.parse(folder),
         isLatest: version === "all" ? undefined : version === "latest",
-      }, cursor), listFoldersByMatter(id)]);
-      return json({ materialStage, materialTask: materialTask ? {
+      }, cursor), listFoldersByMatter(id), hasCustomPermission(user, "documents.write") ? prisma.matter.findFirst({
+        where: { id, deletedAt: null, status: { not: "ARCHIVED" },
+          OR: [{ ownerId: user.id }, { members: { some: { userId: user.id, role: { in: ["LEAD", "CO_LEAD"] } } } }] },
+        select: { id: true },
+      }) : null]);
+      return json({ canOrganizeMaterials: Boolean(editableMatter), materialStage, materialTask: materialTask ? {
         id: materialTask.id, title: materialTask.title, description: materialTask.description, stageId: materialTask.stageId,
         state: materialTask.responsibility?.state ?? null, reviewSourceLimit: taskReviewSourceLimit,
         reviewRevision: canWriteTask && materialTask.responsibility?.state === "OPEN" ? materialTask.responsibility.revision : null,
@@ -489,6 +498,8 @@ export async function POST(request: Request) {
     }
     if (input.action === "set-timeline-grade") return json(await setTimelineGrade(input));
     if (input.action === "preview-skill-input") return json(await getMatterInputCoverage(input.data));
+    if (input.action === "change-material-category") return json(await changeMaterialCategory(input));
+    if (input.action === "reorder-volumes") return json(await reorderFolders(input));
     if (input.action === "create-volume") return json(await createFolder(input));
     if (input.action === "rename-volume") {
       const owned = await prisma.documentFolder.findFirst({ where: { id: input.folderId, matterId: input.matterId }, select: { id: true } });

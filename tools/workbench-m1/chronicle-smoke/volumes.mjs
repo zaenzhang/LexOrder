@@ -31,3 +31,82 @@ assert.equal(await(await request("/api/documents/"+doc.id+"/download")).text(),n
 await post({...filing,folderId:null});
 assert.equal((await view(a)).documents.find(d=>d.id===doc.id).folderId,null);
 console.log("PASS case-specific volume creation, filing, rename, unfiling, immutable bytes and cross-case guards");
+
+for (const suffix of ["乙", "丙"]) await post({ action: "create-volume", matterId: a.id, name: name + suffix });
+const { folders } = await view(a);
+const expectedOrder = folders.map(row => row.id);
+assert(expectedOrder.length >= 3);
+const orderedIds = [...expectedOrder.slice(1), expectedOrder[0]];
+const reorder = { action: "reorder-volumes", matterId: a.id, expectedOrder, orderedIds };
+await post(reorder);
+await post(reorder); // A lost response can repeat the intended order.
+assert.deepEqual((await view(a)).folders.map(row => row.id), orderedIds);
+await post({ ...reorder, orderedIds: [...expectedOrder].reverse() }, 403);
+await post({ ...reorder, matterId: b.id }, 403);
+await post({ ...reorder, expectedOrder: [orderedIds[0]], orderedIds: [orderedIds[0]] }, 403);
+await post({ ...reorder, expectedOrder: [orderedIds[0], orderedIds[0]], orderedIds: [orderedIds[0], orderedIds[0]] }, 400);
+assert.deepEqual((await view(a)).folders.map(row => row.id), orderedIds);
+
+const batchPrefix = "归类验收-" + randomUUID().slice(0, 8);
+const upload = async (matterId, filename, sourceOrigin) => {
+  const data = new FormData();
+  data.set("file", new File([filename], filename + ".txt", { type: "text/plain" }));
+  for (const [key, value] of Object.entries({ name: filename, matterId, category: "OTHER", requestKey: randomUUID() })) data.set(key, value);
+  if (sourceOrigin) data.set("sourceOrigin", sourceOrigin);
+  await post(data);
+};
+const page = async (matterId, params) => (await request(ep + "?" + new URLSearchParams({ matter: matterId, section: "materials", ...params }))).json();
+for (let batch = 0; batch < 10; batch++) {
+  await Promise.all(Array.from({ length: 5 }, (_, index) => upload(a.id, batchPrefix + "-" + (batch * 5 + index))));
+}
+await upload(b.id, batchPrefix + "-乙");
+const foreign = (await page(b.id, { q: batchPrefix })).documents[0];
+const selected = [];
+let cursor;
+do {
+  const data = await page(a.id, { q: batchPrefix, limit: 20, ...(cursor && { cursor }) });
+  assert.equal(data.canOrganizeMaterials, true);
+  selected.push(...data.documents);
+  cursor = data.nextCursor;
+} while (cursor);
+assert.equal(new Set(selected.map(row => row.id)).size, 50);
+const category = { action: "change-material-category", matterId: a.id, category: "CONTRACT", documentIds: selected.map(row => row.id) };
+await post({ ...category, documentIds: [...category.documentIds, foreign.id] }, 400);
+await post({ ...category, documentIds: [category.documentIds[0], category.documentIds[0]] }, 400);
+await post({ ...category, documentIds: [] }, 400);
+await post({ ...category, documentIds: [category.documentIds[0], foreign.id] }, 403);
+assert.equal((await page(a.id, { q: batchPrefix, category: "OTHER" })).documents.length, 50);
+assert.equal((await page(b.id, { q: batchPrefix })).documents[0].category, "OTHER");
+
+const auditIds = async action => (await (await request("/api/personal/practice-resources?" + new URLSearchParams({ view: "audit", q: action }))).json()).map(row => row.id);
+const beforeAudit = new Set(await auditIds("DOCUMENT_BATCH_CATEGORY"));
+const start = performance.now();
+assert.deepEqual(await post(category), { changed: 50 });
+const ms = Math.round(performance.now() - start);
+assert.deepEqual(await post(category), { changed: 0 });
+assert.equal((await auditIds("DOCUMENT_BATCH_CATEGORY")).filter(id => !beforeAudit.has(id)).length, 1);
+const after = (await page(a.id, { q: batchPrefix, category: "CONTRACT" })).documents;
+assert.deepEqual(after.map(row => row.id), category.documentIds);
+assert(after.every((row, index) => row.version === selected[index].version && row.familyId === selected[index].familyId));
+const first = after[0];
+assert.equal(await (await request("/api/documents/" + first.id + "/download")).text(), first.name);
+
+const oldName = batchPrefix + "-换版";
+await upload(a.id, oldName, "TEAM_PRODUCED");
+const old = (await page(a.id, { q: oldName })).documents[0];
+const replacement = new FormData();
+replacement.set("file", new File(["换版后的原文"], oldName + ".txt", { type: "text/plain" }));
+for (const [key, value] of Object.entries({ matterId: a.id, documentId: old.id, contextInputs: "[]", requestKey: randomUUID() })) replacement.set(key, value);
+const reviewEndpoint = "/api/personal/document-review";
+const { id: latest } = await (await request(reviewEndpoint, replacement)).json();
+const categoryOther = { ...category, category: "EVIDENCE", documentIds: [old.id, first.id] };
+await post(categoryOther, 403);
+const versions = await page(a.id, { q: oldName });
+assert(versions.documents.some(row => row.id === old.id && !row.isLatest && row.category === "OTHER"));
+assert(versions.documents.some(row => row.id === latest && row.isLatest && row.category === "OTHER"));
+const draft = await (await request(reviewEndpoint + "?" + new URLSearchParams({ matter: a.id, document: latest }))).json();
+await request(reviewEndpoint, { action: "submit", matterId: a.id, documentId: latest, expected: draft.expected });
+await post({ ...categoryOther, documentIds: [latest, first.id] }, 403);
+assert((await page(a.id, { q: first.name })).documents.some(row => row.id === first.id && row.category === "CONTRACT"));
+assert.equal(await (await request("/api/documents/" + old.id + "/download")).text(), oldName);
+console.log("PASS persisted volume order, stale order and case guards, 50 exact versions across pages, atomic rejection, replay, fixed original and immutable history in " + ms + " ms for one 50-document write");

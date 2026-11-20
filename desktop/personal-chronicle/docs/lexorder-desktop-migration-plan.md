@@ -122,4 +122,4 @@
 
 ### 后续验收边界
 
-应优先补验卷宗排序与批量分类、完整事实冲突与时间精度、批量复核和外部审查配置、复杂任务依赖及跨版本影响。连接器、向量检索、OCR 和外部通知需各自的授权和配置。台账与界面已接的操作以[隔离验收脚本](../../../tools/workbench-m1/chronicle-smoke/README.md)和[迁移记录](lexorder-personal-migration.md)为准。
+卷宗排序与材料批量归类已完成隔离验收，见[目录组织验收](lexorder-personal-migration.md#catalog-organization)。完整事实冲突与时间精度、批量复核和外部审查配置、复杂任务依赖及跨版本影响按各自工作项继续验收。连接器、向量检索、OCR 和外部通知需各自的授权和配置。台账与界面已接的操作以[隔离验收脚本](../../../tools/workbench-m1/chronicle-smoke/README.md)和[迁移记录](lexorder-personal-migration.md)为准。

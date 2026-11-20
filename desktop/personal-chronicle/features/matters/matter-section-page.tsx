@@ -23,6 +23,7 @@ import type { TaskMaterialReviewContext } from "../../../../src/server/tasks/mat
 type Index = OverviewData & RecordsData & {
   folders?: { id: string; name: string }[]
   documents?: Material[]
+  canOrganizeMaterials?: boolean
   materialStage?: MaterialStage | null
   materialTask?: TaskMaterialReviewContext | null
   records?: { id: string; question: string | null; version: number; checkedAt: string | null; readable: boolean }[]
@@ -114,7 +115,7 @@ export function MatterSectionPage({ matterId, section, title, stage, taskId, rev
     </div>}
     {section === "materials" && data ? <MaterialsWorkspace matterId={matterId} task={data.materialTask ?? undefined} reviewId={reviewId} commissionResearchId={commissionResearchId} commissionIssue={commissionIssue} commissionFollowUp={commissionFollowUp} openUpload={openMaterialUpload} factAnalysis={factAnalysis} stage={data.materialStage ?? undefined} documents={data.documents ?? []} folders={data.folders ?? []}
       filters={filters} onFilter={value => { setPage(undefined); setFilters(value) }} onUploaded={() => setRefresh(value => value + 1)}
-      selection={materialSelection} onSelectionChange={setMaterialSelection} pageNavigation={pages} /> : null}
+      canOrganize={Boolean(data.canOrganizeMaterials)} selection={materialSelection} onSelectionChange={setMaterialSelection} pageNavigation={pages} /> : null}
     {section === "research" && data ? <Panel title="研究修订">{data.canWrite && <NewResearch matterId={matterId} onCreated={id => { setResearchId(id); setRefresh(value => value + 1) }} />}<Rows empty="暂无研究记录。" items={(data.records ?? []).map(row => ({
       key: row.id, title: row.readable ? row.question ?? "研究记录" : "研究内容不可用", meta: `V${row.version} · ${row.checkedAt ? "已核对" : "待核对"}`,
       action: row.readable || row.version > 1 ? <Button variant="outline" size="sm" onClick={() => setResearchId(row.id)}>查看修订</Button> : null,

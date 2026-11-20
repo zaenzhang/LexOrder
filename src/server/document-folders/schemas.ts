@@ -14,9 +14,15 @@ export const folderDeleteSchema = z.object({
   id: z.string().cuid()
 });
 
+const folderOrder = z.array(z.cuid()).min(1).refine(ids => new Set(ids).size === ids.length);
+
 export const folderReorderSchema = z.object({
-  matterId: z.string().cuid(),
-  orderedIds: z.array(z.string().cuid()).min(1)
+  matterId: z.cuid(),
+  orderedIds: folderOrder,
+  expectedOrder: folderOrder,
+}).refine(({ orderedIds, expectedOrder }) => {
+  const original = new Set(expectedOrder);
+  return orderedIds.length === original.size && orderedIds.every(id => original.has(id));
 });
 
 export const moveDocumentToFolderSchema = z.object({
