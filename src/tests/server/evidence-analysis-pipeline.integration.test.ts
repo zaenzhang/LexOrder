@@ -267,17 +267,20 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     expect(provider.fetch).not.toHaveBeenCalled();
 
     const unavailableLine = { ...observation, firstLine: 2, lastLine: 2, amountText: "50万元" };
+    const withoutPeriod = { ...ranges[0], end: ranges[0].end - 1 };
+    const balanceOnly = { ...ranges[0], start: start + authorized.indexOf("转账后账户余额") };
     const cases = [
-      { candidate: unavailableLine, state: "FAILED", output: { receipt: { error: "INVALID_RESULT" }, candidates: [] } },
-      { candidate: { ...observation, amountText: "50万元" }, state: "READY",
+      { candidate: unavailableLine, range: ranges[0], state: "FAILED",
+        output: { receipt: { error: "INVALID_RESULT" }, candidates: [] } },
+      { candidate: { ...observation, amountText: "50万元" }, range: withoutPeriod, state: "READY",
         output: { receipt: { skippedFields: 1 }, candidates: [{ data: { date: { text: "2023年3月3日" } } }] } },
-      { candidate: { ...observation, amountText: "49万元" }, state: "READY",
+      { candidate: { ...draft, amountNature: "ACTUAL_TRANSFER", amountText: "49万元" }, range: balanceOnly, state: "READY",
         output: { candidates: [{ data: { amount: { nature: "BALANCE" } } }] } },
     ];
     const invalidRunId = randomUUID();
     for (const [index, scenario] of cases.entries()) {
       const runId = index === 0 ? invalidRunId : randomUUID();
-      await queueObservationRun(actor, { ...input, runId });
+      await queueObservationRun(actor, { ...input, runId, ranges: [scenario.range, ...ranges.slice(1)] });
       provider.fetch.mockResolvedValueOnce(Response.json({ choices: [{ message: { content: JSON.stringify({
         observations: [scenario.candidate],
       }) } }] }));
@@ -292,6 +295,18 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     const runId = randomUUID();
     const queued = await queueObservationRun(actor, { ...input, runId });
     expect(await queueObservationRun(actor, { ...input, runId })).toEqual(queued);
+    const route = await import("@/app/api/personal/matter-workspace/route");
+    const origin = process.env.LEXORDER_PERSONAL_ORIGIN!;
+    const endpoint = origin + "/api/personal/matter-workspace";
+    const headers = { Host: new URL(origin).host, Origin: origin, Cookie: "lexorder_local_channel=" + process.env.LEXORDER_PERSONAL_CHANNEL_TOKEN };
+    const reopened = await Promise.all(Array.from({ length: 2 }, () => route.POST(new Request(endpoint, {
+      method: "POST", headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "start-evidence-observation-run", data: { ...input, runId: randomUUID() } }),
+    }))));
+    for (const response of reopened) {
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ id: runId, state: "QUEUED" });
+    }
     await expect(queueObservationRun(actor, { ...input, runId, ranges: [{ ...input.ranges[0], start: start + 1 }] }))
       .rejects.toThrow("此委托标识已绑定其他范围");
     provider.fetch.mockResolvedValueOnce(Response.json({ choices: [{ message: { content: JSON.stringify({ observations }) } }],
@@ -301,13 +316,15 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     await processObservationRun({ runId }, job);
     expect(await completeJob(job)).toBe(true);
     expect(provider.fetch).toHaveBeenCalledTimes(4);
-    for (const [url, options] of provider.fetch.mock.calls) {
+    for (const [index, [url, options]] of provider.fetch.mock.calls.entries()) {
       expect(url).toBe(provider.url + "/chat/completions");
       const body = JSON.parse(String(options?.body));
       const userMessage = body.messages.find((message: { role: string }) => message.role === "user");
       const payload = JSON.parse(userMessage.content);
+      const firstRange = cases[index]?.range ?? ranges[0];
       expect(payload).toEqual({ title: "核对转账记载", fragments: materials.map(({ text, material }, index) => ({
-        index: index + 1, material, category: expect.any(String), lines: [{ line: 1, text }],
+        index: index + 1, material, category: expect.any(String),
+        lines: [{ line: 1, text: index === 0 ? anchor.text.slice(firstRange.start, firstRange.end) : text }],
       })) });
     }
     const ready = await readObservationRuns(actor, matter.id, event.id, runId);
@@ -326,6 +343,11 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
         date: { role: "FILING", span: { start: anchor.text.indexOf("2023年3月7日") } },
       } });
     }
+    expect(await queueObservationRun(actor, { ...input, runId: randomUUID() })).toMatchObject({ id: runId, state: "READY" });
+    await prisma.document.update({ where: { id: documentId }, data: { deletedAt: new Date() } });
+    await expect(queueObservationRun(actor, { ...input, runId: randomUUID() })).rejects.toThrow("已撤回");
+    await prisma.document.update({ where: { id: documentId }, data: { deletedAt: null } });
+    expect(provider.fetch).toHaveBeenCalledTimes(4);
     expect((await prisma.evidenceItem.findUniqueOrThrow({ where: { id: event.id } })).observationRevisionIds).toEqual([]);
     const chosen = [format === "xlsx" ? 3 : 0];
     const adoption = { matterId: matter.id, evidenceItemId: event.id, expectedRevision: revision, runId, chosen };
@@ -402,10 +424,6 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
       expect(await prisma.caseObservationAdoption.count({ where: { id: save.requestId } })).toBe(0);
       await prisma.document.update({ where: { id: noticeId }, data: { deletedAt: null } });
 
-      const route = await import("@/app/api/personal/matter-workspace/route");
-      const origin = process.env.LEXORDER_PERSONAL_ORIGIN!;
-      const endpoint = origin + "/api/personal/matter-workspace";
-      const headers = { Host: new URL(origin).host, Origin: origin, Cookie: "lexorder_local_channel=" + process.env.LEXORDER_PERSONAL_CHANNEL_TOKEN };
       const savedResponse = await route.POST(new Request(endpoint, {
         method: "POST", headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({ action: "adopt-matter-observations", data: save }),
@@ -462,6 +480,24 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
       expect(older.nextCursor).toBeNull();
       expect(new Set([...page.runs, ...older.runs].map(batch => batch.id)).size).toBe(24);
       await expect(readObservationRuns(actor, matter.id, null, undefined, runId)).rejects.toThrow("分页位置不属于");
+      await saveAiSettings({ enabled: true, apiKey: "fixture-key", baseUrl: provider.url, textModel: model });
+      const failedRange = { ...request, ranges: fixed.slice(0, 1) };
+      const retry = await queueMatterObservationRun(actor, { ...failedRange, runId: randomUUID() });
+      expect(retry.state).toBe("QUEUED");
+      expect(retry.id).not.toBe(unavailable.id);
+      const candidateJob = await prisma.jobQueue.findUniqueOrThrow({ where: { dedupeKey: observationJobKey(retry.id) } });
+      await prisma.jobQueue.update({ where: { id: candidateJob.id }, data: { status: "DEAD" } });
+      expect(await queueMatterObservationRun(actor, { ...failedRange, runId: retry.id })).toMatchObject({ state: "FAILED" });
+      const restarted = await queueMatterObservationRun(actor, { ...failedRange, runId: randomUUID() });
+      expect(restarted.state).toBe("QUEUED");
+      expect(restarted.id).not.toBe(retry.id);
+      await prisma.evidenceObservationRun.update({ where: { id: restarted.id }, data: { state: "DISPATCHED", receipt: {
+        dispatchedAt: new Date().toISOString(),
+      } } });
+      await prisma.jobQueue.update({ where: { dedupeKey: observationJobKey(restarted.id) }, data: { status: "DEAD" } });
+      expect(await queueMatterObservationRun(actor, { ...failedRange, runId: randomUUID() })).toMatchObject({
+        id: restarted.id, state: "UNCERTAIN", receipt: { error: "INTERRUPTED" },
+      });
       expect(provider.fetch).toHaveBeenCalledTimes(6);
     }
   }, 60_000);
