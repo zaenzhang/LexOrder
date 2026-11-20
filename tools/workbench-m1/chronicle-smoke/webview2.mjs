@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "playwright-core";
+import { verifyWebView2Editor } from "./webview2-editor.mjs";
 import { verifyWebView2Scale } from "./webview2-scale.mjs";
 
 const executable = process.argv[2];
@@ -16,10 +17,12 @@ assert(workspace && path.isAbsolute(workspace), "Set M1_WORKSPACE to a local Win
 const manifest = JSON.parse(await readFile(path.join(workspace, "workspace.json"), "utf8"));
 assert.equal(manifest.mode, "PERSONAL");
 const scale = process.argv.includes("--scale");
-const scaleCasebookRoot = process.env.M1_CHRONOLOGY_CASEBOOK_ROOT;
-if (scale) assert(scaleCasebookRoot && path.isAbsolute(scaleCasebookRoot), "Set M1_CHRONOLOGY_CASEBOOK_ROOT to the isolated test casebook directory.");
-const cases = scale ? [] : JSON.parse(await readFile(path.join(workspace, "chronicle-smoke-cases.json"), "utf8"));
-if (!scale) assert(cases.length === 2 && cases.every(row => row.internalCode.startsWith("CHRONICLE-TEST-")));
+const editor = process.argv.includes("--editor");
+assert(!(scale && editor), "Choose one targeted WebView2 smoke mode.");
+const casebookRoot = process.env.M1_CHRONOLOGY_CASEBOOK_ROOT;
+if (scale || editor) assert(casebookRoot && path.isAbsolute(casebookRoot), "Set M1_CHRONOLOGY_CASEBOOK_ROOT to the isolated test casebook directory.");
+const cases = scale || editor ? [] : JSON.parse(await readFile(path.join(workspace, "chronicle-smoke-cases.json"), "utf8"));
+if (!scale && !editor) assert(cases.length === 2 && cases.every(row => row.internalCode.startsWith("CHRONICLE-TEST-")));
 const [otherMatter, matter] = cases;
 const sourceRoot = process.env.LEXORDER_DESKTOP_ROOT ?? path.resolve(import.meta.dirname, "../../..");
 assert(path.isAbsolute(sourceRoot));
@@ -71,7 +74,10 @@ try {
   const errors = [];
   page.on("pageerror", error => errors.push(error.stack ?? error.message));
   if (scale) {
-    await verifyWebView2Scale(page, desktopOrigin, scaleCasebookRoot);
+    await verifyWebView2Scale(page, desktopOrigin, casebookRoot);
+    assert.deepEqual(errors, []);
+  } else if (editor) {
+    await verifyWebView2Editor(page, desktopOrigin, { workspace, manifest, casebookRoot });
     assert.deepEqual(errors, []);
   } else {
     await verifyStandardWebView(page, desktopOrigin, errors);

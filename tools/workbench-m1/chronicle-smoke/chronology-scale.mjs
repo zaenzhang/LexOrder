@@ -3,27 +3,20 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
+import { createSyntheticCase } from "./create-synthetic-case.mjs";
 import { fixture } from "./fixture.mjs";
 
 export async function seedChronologyScale(request, casebookRoot) {
   assert(path.isAbsolute(casebookRoot), "Pass an absolute casebook root inside the disposable fixture.");
   const workspaceEndpoint = "/api/personal/matter-workspace";
-  const practiceEndpoint = "/api/personal/practice";
-  const practice = async body => (await request(practiceEndpoint, body)).json();
   const post = async (action, data, matterId) => (await request(workspaceEndpoint, { action, data, ...(matterId && { matterId }) })).json();
   const tag = randomUUID().slice(0, 8);
   const title = "图谱规模验收 " + tag;
-  const client = await practice({ action: "create-client", input: { name: "合成规模验收委托方 " + tag, type: "COMPANY" } });
-  const intake = await practice({ action: "create-intake", input: {
-    title, category: "NON_LITIGATION", clientId: client.id, description: "隔离合成案卷，核对时间轴、材料定位和分页。",
-  } });
-  await practice({ action: "check-intake", id: intake.id });
-  const { check } = await (await request(practiceEndpoint + "?" + new URLSearchParams({ view: "intake", id: intake.id }))).json();
-  await practice({ action: "decide-conflict", id: check.id, conclusion: "DIFFERENT", note: "本机合成样本" });
-  await practice({ action: "submit-intake", id: intake.id });
-  const { matterId } = await practice({ action: "convert-intake", id: intake.id });
+  const matterId = await createSyntheticCase(request, {
+    title, clientName: "合成规模验收委托方 " + tag,
+    description: "隔离合成案卷，核对时间轴、材料定位和分页。", casebookRoot,
+  });
   const get = async (section, params) => request(workspaceEndpoint + "?" + new URLSearchParams({ section, matter: matterId, ...params }));
-  await request("/api/personal/matter-folder", { matterId, action: "bind", root: casebookRoot });
 
   const procedureIds = [];
   for (const [label, day] of [["规模验收一审", "2024-06-15"], ["规模验收财产保全", "2024-07-05"]]) {

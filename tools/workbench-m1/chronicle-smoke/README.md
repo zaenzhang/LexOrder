@@ -86,6 +86,19 @@ node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-P
 ```
 
 
+外部编辑验收复用同一隔离运行时和案卷目录，改用 `--editor`。Windows 应已将 TXT 关联到 Microsoft Store 版记事本。脚本从真实材料页打开合成工作稿，使用 Windows UI Automation 定向保存测试标签页，退出案内页面后等待宿主自行回传。无需占用物理鼠标、发送全局按键或改文件关联。
+
+```powershell
+node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-Path $qaTarget 'debug/lexorder-chronicle-preview.exe') --editor
+```
+
+从 WSL 检出通过 UNC 路径运行时，`RemoteSigned` 可能拒绝直接执行 PowerShell 帮助脚本。将仓库内已核验的 `windows-editor/save-notepad.ps1` 发布到现有 Windows 合成验收目录，再将 `M1_WINDOWS_EDITOR_SCRIPT` 指向该本地绝对路径。无需修改执行策略。
+
+```powershell
+$env:M1_WINDOWS_EDITOR_SCRIPT = Join-Path $casebookRoot 'save-notepad.ps1'
+Copy-Item -LiteralPath (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/windows-editor/save-notepad.ps1') -Destination $env:M1_WINDOWS_EDITOR_SCRIPT
+```
+
 需要跨案出处复验时，在脚本命令末尾加 `--cross-case`。该路径使用已装载 V8 案情定位和借贷样本的合成验收甲，检查按事实换读材料、同一 PDF 的不同页锚点、分别定位三份文本及未关联出处的状态。核对表单的触发器与下拉选项字号，以及固定原文面板的宽窄布局，属于常规验收。
 
 **本轮冒烟记录**

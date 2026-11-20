@@ -1,22 +1,9 @@
 import assert from "node:assert/strict";
+import { webViewRequest } from "./webview2-request.mjs";
 import { seedChronologyScale } from "./chronology-scale.mjs";
 
 export async function verifyWebView2Scale(page, desktopOrigin, casebookRoot) {
-  // The request client shares the test WebView's real local workspace session.
-  const api = page.context().request;
-  const request = async (route, body) => {
-    assert(route.startsWith("/api/") && !route.startsWith("//"));
-    const response = await api.fetch(desktopOrigin + route, {
-      method: body ? "POST" : "GET", headers: { Origin: desktopOrigin },
-      ...(body instanceof FormData ? { multipart: body } : body && { data: body }),
-      maxRedirects: 0, timeout: 45_000,
-    });
-    if (!response.ok()) {
-      const { error } = await response.json().catch(() => ({}));
-      throw new Error(route.split("?")[0] + " returned " + response.status() + (error ? " · " + error : ""));
-    }
-    return response;
-  };
+  const request = webViewRequest(page, desktopOrigin);
   const sample = await seedChronologyScale(request, casebookRoot);
   console.log("PASS synthetic native workbench fixture: " + JSON.stringify({
     matterId: sample.matterId, timeline: sample.timeline, sourceMs: sample.sourceMs,
