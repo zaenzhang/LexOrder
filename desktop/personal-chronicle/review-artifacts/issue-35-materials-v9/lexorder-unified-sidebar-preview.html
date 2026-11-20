@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LexOrder · Chronicle 侧栏预览</title>
+<style>
+:root{font:14px/1.45 "Segoe UI","Microsoft YaHei",sans-serif;color:#192432;background:#f2f5f9;--side:#f8fafc;--shell:#fff;--line:#dfe5ee;--muted:#606e80;--hover:#e9edf3;--active:#e6edfa;--primary:#2458cb}
+*{box-sizing:border-box}body{margin:0}a{color:inherit;text-decoration:none}button{font:inherit;color:inherit;cursor:pointer;background:none;border:0;text-align:left}a:focus-visible,button:focus-visible{outline:2px solid var(--primary);outline-offset:2px}.layout{display:grid;grid-template-columns:256px minmax(0,1fr);min-height:100vh}.layout[data-rail=true]{grid-template-columns:52px minmax(0,1fr)}.layout>aside{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;background:var(--side);border-right:1px solid var(--line);z-index:2}.structure-top,.foot{padding:8px}.structure-top,.foot{flex:none}.groups{min-height:0;overflow:auto;flex:1;padding:4px 8px}.foot{border-top:1px solid var(--line)}.row,.switch{width:100%;min-height:32px;border-radius:7px;display:flex;align-items:center;gap:8px;padding:5px 8px;white-space:nowrap}.row:hover,.switch:hover,.row[aria-expanded=true]{background:var(--hover)}.row[aria-current=page]{background:var(--active);font-weight:650;color:#214b9c}.switch{padding:5px;min-height:48px}.symbol{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;background:var(--primary);color:white;flex:none}.avatar{background:#e6ebf3;color:#42516a}.text{min-width:0;overflow:hidden;text-overflow:ellipsis}.switch-label{min-width:0;flex:1;display:grid;line-height:1.3}.muted,small{color:var(--muted)}.chevron{margin-left:auto;flex:none}.group-label{font-size:12px;padding:8px 8px 3px;color:var(--muted)}.group+.group{margin-top:8px}.sub{margin:4px 0 5px 16px;border-left:1px solid #d3dae4;padding-left:6px}.sub .row{min-height:29px;font-size:13px}.sub .row:before{content:none}.icon{width:16px;height:16px;flex:none;stroke-width:1.65;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}.popover{position:fixed;z-index:4;left:252px;width:270px;top:10px;padding:4px;background:white;border:1px solid var(--line);border-radius:9px;box-shadow:0 8px 24px #20304c20}.popover.account{top:auto;bottom:8px}.popover[hidden]{display:none}.popover .row{gap:9px}.popover .row small{margin-left:auto}.pop-separator{border-top:1px solid var(--line);margin:4px 0}.layout[data-rail=true] .popover{left:49px}.layout[data-rail=true] .row,.layout[data-rail=true] .switch{justify-content:center;padding-inline:0}.layout[data-rail=true] .switch-label,.layout[data-rail=true] .chevron,.layout[data-rail=true] .group-label,.layout[data-rail=true] .groups .text,.layout[data-rail=true] .foot .text,.layout[data-rail=true] .sub{display:none}.layout[data-rail=true] .popover .row{justify-content:flex-start;padding-inline:8px}header{height:56px;display:flex;align-items:center;gap:12px;padding:0 20px;background:var(--shell);border-bottom:1px solid var(--line)}.icon-button{padding:7px;border-radius:7px;display:grid;place-items:center}.icon-button:hover{background:var(--hover)}main{padding:22px 25px;max-width:1110px}h1{font-size:27px;line-height:1.2;margin:0 0 8px}.card{border:1px solid var(--line);border-radius:12px;background:white;padding:15px 18px;margin-top:16px}.case-line{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}.case-line:last-child{border-bottom:0}.case-line a{color:#234b99}.inline{display:flex;gap:10px;flex-wrap:wrap}.pill{background:#edf2f8;border-radius:6px;padding:4px 8px}.mode{margin-left:auto;font-size:12px;color:var(--muted)}
+.body-content{display:grid;grid-template-columns:minmax(0,1fr);align-items:start}.body-content:has(.assistant:not([hidden])){grid-template-columns:minmax(0,1fr) minmax(286px,340px)}.assistant{min-height:calc(100vh - 56px);border-left:1px solid var(--line);background:var(--shell);padding:16px}.assistant[hidden]{display:none}.assistant-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.assistant h2{font-size:17px;margin:0}.assistant p{margin:8px 0}.assistant .card{padding:12px;margin-top:12px}.assistant label{display:flex;align-items:center;gap:7px;margin:10px 0}.assistant .row[aria-disabled=true]{color:var(--muted)}.assist-action{border:1px solid var(--line);border-radius:7px;padding:6px 10px;background:white}.assist-action:hover{background:var(--hover)}.assist-action:disabled{opacity:.55;cursor:default}.assist-action.primary{background:var(--primary);color:white;border-color:var(--primary)}.mode{display:flex;align-items:center;gap:9px}.candidate-tag{font-size:12px;color:#8b5408;background:#fff4dd;border-radius:5px;padding:2px 6px}
+.row:disabled{color:#778398;cursor:not-allowed;background:transparent}
+</style>
+<div class="layout" id="layout" data-rail="false">
+<aside aria-label="导航">
+  <div id="switchArea" class="structure-top"></div>
+  <nav id="groups" class="groups" aria-label="业务菜单"></nav>
+  <div id="footer" class="foot"></div>
+</aside>
+<div><header><button type="button" id="toggle" class="icon-button" aria-label="折叠侧栏" aria-expanded="true"></button><div id="crumb"></div><div class="mode" id="mode"></div></header><div class="body-content"><main id="main"></main><aside class="assistant" id="assistant" aria-label="案件 AI" hidden></aside></div></div>
+</div>
+<script>
+const paths={box:"M3 6h18v14H3z M8 6V4h8v2 M3 11h18",date:"M3 6h18v15H3z M7 3v5 M17 3v5 M3 11h18",file:"M5 3h9l5 5v13H5z M14 3v5h5 M8 12h8 M8 16h6",home:"M3 10l9-7 9 7v10H3z M9 20v-6h6v6",people:"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M22 21v-2a4 4 0 0 0-3-4",folder:"M3 6h7l2 2h9v12H3z",money:"M3 6h18v13H3z M3 10h18 M7 15h4",fact:"M3 5h7l2 2 2-2h7v14h-7l-2 2-2-2H3z M12 7v14",archive:"M3 4h18v5H3z M5 9v11h14V9 M9 13h6",settings:"M5 7h14 M5 12h14 M5 17h14 M8 5v4 M15 10v4 M10 15v4",bell:"M6 10a6 6 0 0 1 12 0v6l2 2H4l2-2z M10 21h4",side:"M3 4h18v16H3z M9 4v16",switch:"m8 9 4-4 4 4 M8 15l4 4 4-4"};
+const icon=k=>'<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="'+paths[k]+'"/></svg>';
+const globalNav=[
+ ["today","今日","home"],["customers","客户","people",[["clients","名册"],["intakes","收案"],["contacts","联系人"],["conflicts","冲突预检"]]],
+ ["schedule","日程","date"],["affairs","事务","box",[["operations","按案办理"],["court-inbox","法院来件"]]],
+ ["finance","财务","money"],["resources","资料","folder",[["library","资料库"],["templates","模板"],["reports","报表"],["profile","执业资料"],["audit","操作记录"]]]
+];
+const caseNav=[
+ ["overview","概览","home"],["tasks","程序","date"],["materials","材料","folder"],
+ ["fact","事实","fact",[["evidence","争点"],["research","研究"]]],
+ ["documents","文书","file",[["delivery","文书台"],["seal","用印"]]],
+ ["records","记录","box"],["finance","财务","money"],["archive","归档","archive"]
+];
+const fixedNav=[["matters","案件","folder"],["notifications","通知","bell"],["settings","设置","settings"]];
+const cases={chenghe:{name:"澄禾设备采购争议",no:"LXO-2026-001",version:"V1"},qinglan:{name:"青岚仓储交付争议",no:"LXO-2026-002",version:"V2"}};
+const lastSections=new Map(), overrides=new Map(), candidates=new Set();
+const aiActions={materials:"提取候选事实",evidence:"对照证据",research:"整理研究线索",delivery:"生成复核建议"};
+let demoAI=true;
+const $=id=>document.getElementById(id);
+const layout=$("layout");
+const route=()=>{const [mode,key,section]=location.hash.slice(1).split("/");return mode==="matter"&&Object.hasOwn(cases,key)?{matter:key,page:section||"overview"}:{matter:null,page:mode==="global"&&key?key:"today"};};
+const expandRoute=(matter,key)=>"#"+(matter?"matter/"+matter+"/":"global/")+key;
+const scope=(matter,group)=> (matter||"global")+"/"+group;
+function row(href,name,shape,current=false){
+ return '<a class="row" href="'+href+'" aria-label="'+name+'"'+(current?' aria-current="page"':'')+'>'+(shape?icon(shape):'')+'<span class="text">'+name+'</span></a>';
+}
+function group(items,matter,page,disabled=false){
+ return items.map(([key,name,shape,children])=>{
+  if(disabled)return '<button class="row" type="button" disabled aria-label="'+name+'" title="请先选择案件">'+icon(shape)+'<span class="text">'+name+'</span>'+(children?'<span class="chevron" aria-hidden="true">›</span>':'')+'</button>';
+  if(!children)return row(expandRoute(matter,key),name,shape,page===key);
+  const groupKey=scope(matter,key);
+  const active=children.some(([child])=>child===page);
+  const expanded=overrides.get(groupKey)??active;
+  const subId="sub-"+groupKey.replace("/","-");
+  return '<button class="row" type="button" data-group="'+groupKey+'" aria-label="'+name+'" aria-expanded="'+expanded+'" aria-controls="'+subId+'">'+icon(shape)+'<span class="text">'+name+'</span><span class="chevron">'+(expanded?"⌄":"›")+'</span></button><div class="sub" id="'+subId+'"'+(expanded?"":" hidden")+'>'+children.map(([child,label])=>row(expandRoute(matter,child),label,null,child===page)).join("")+'</div>';
+ }).join("");
+}
+function titleFor(items,page){
+ for(const [key,title,,children] of items){if(key===page)return title;const item=children?.find(([key])=>key===page);if(item)return item[1];}
+ return "";
+}
+function menuOpen(which,open,restore=false){
+ const button=$(which+"Trigger"), popup=$(which+"Menu");
+ if(!button||!popup)return;
+ button.setAttribute("aria-expanded",String(open));popup.hidden=!open;
+ if(open)popup.querySelector("a")?.focus();
+ if(restore)button.focus();
+}
+function closeAssistant(restore=false){
+ $("assistant").hidden=true;
+ $("assistant").innerHTML="";
+ $("assistantTrigger")?.setAttribute("aria-expanded","false");
+ if(restore)$("assistantTrigger")?.focus();
+}
+function showAssistant(matter,page){
+ const current=cases[matter], action=aiActions[page];
+ if(!current||!action||!demoAI)return;
+ const key=matter+"/"+page+"/"+current.version;
+ const panel=$("assistant");
+ panel.innerHTML='<div class="assistant-head"><h2>案件 AI</h2><button id="closeAssistant" class="icon-button" aria-label="关闭案件 AI">×</button></div><p><strong>'+action+'</strong></p><p class="muted">'+current.name+' · '+current.no+'</p><div class="card"><strong>本次材料</strong><label><input id="aiSource" type="checkbox"> 收款记录.pdf · '+current.version+'</label><button type="button" class="assist-action primary" id="previewCandidate" disabled>查看候选示例</button></div><div id="candidate" role="status"></div>';
+ panel.hidden=false;
+ $("assistantTrigger")?.setAttribute("aria-expanded","true");
+ const renderCandidate=()=>{
+  $("candidate").innerHTML=candidates.has(key)?'<div class="card"><span class="candidate-tag">待复核</span><p>示例：核对付款日期与凭证记载。</p><p class="muted">出处：收款记录.pdf · '+current.version+' · 第 2 页</p><a class="row" href="'+expandRoute(matter,page==="delivery"?"delivery":page==="research"?"research":"evidence")+'">回原工作区核对</a></div>':"";
+ };
+ renderCandidate();
+ $("closeAssistant").onclick=()=>closeAssistant(true);
+ $("aiSource").onchange=event=>{$("previewCandidate").disabled=!event.target.checked;};
+ $("previewCandidate").onclick=()=>{if($("aiSource").checked){candidates.add(key);renderCandidate();}};
+ $("candidate").onclick=event=>{if(event.target.closest("a"))closeAssistant(true);};
+ $("closeAssistant").focus();
+}
+function renderGroups(matter,page){
+ const workspace='<div class="group"><div class="group-label">工作区</div>'+group(globalNav,null,matter?"":page)+'</div>';
+ const caseGroup='<div class="group"><div class="group-label">当前案件</div>'+group(caseNav,matter,matter?page:"",!matter)+'</div>';
+ $("groups").innerHTML=caseGroup+workspace;
+}
+function draw(focus=""){
+ const {matter,page}=route(), current=cases[matter];
+ closeAssistant();
+ if(matter){lastSections.delete(matter);lastSections.set(matter,page);}
+ const recent=[...lastSections.keys()].reverse();
+ const ordered=[...new Set([...recent,...Object.keys(cases)])];
+ const choices=ordered.map(id=>{const c=cases[id];return row(expandRoute(id,lastSections.get(id)||"overview"),c.name,"box",matter===id);}).join("");
+ $("switchArea").innerHTML='<button class="switch" id="workspaceTrigger" aria-label="切换工作区" aria-expanded="false" aria-controls="workspaceMenu"><span class="symbol">'+icon("box")+'</span><span class="switch-label"><strong class="text">'+(current?current.name:"选择案件")+'</strong>'+(current?'<small class="text">'+current.no+'</small>':'')+'</span><span class="chevron">'+icon("switch")+'</span></button><div class="popover" id="workspaceMenu" aria-label="切换案件" hidden><div class="group-label">切换案件</div>'+choices+'<div class="pop-separator"></div>'+row("#global/matters","案件总览","folder")+'</div>';
+ renderGroups(matter,page);
+ $("footer").innerHTML='<nav aria-label="固定入口">'+fixedNav.map(([key,name,shape])=>row(expandRoute(null,key),name,shape,!matter&&key===page)).join("")+'</nav><button class="switch" id="accountTrigger" aria-label="账号菜单" aria-controls="accountMenu" aria-expanded="false"><span class="symbol avatar">L</span><span class="switch-label"><strong class="text">本机用户</strong></span><span class="chevron">'+icon("switch")+'</span></button><div class="popover account" id="accountMenu" hidden>'+row("#global/profile","执业资料","people")+row("#global/settings","设置","settings")+'</div>';
+ const title=titleFor(matter?caseNav:[...globalNav,...fixedNav],page)||"案件总览";
+ $("crumb").innerHTML=current?'<a href="#global/matters">案件</a> / '+current.no+' / '+title:title;
+ const list=Object.entries(cases).map(([id,c])=>'<div class="case-line"><a href="'+expandRoute(id,lastSections.get(id)||"overview")+'">'+c.name+'</a><span class="muted">'+c.no+'</span></div>').join("");
+ const inline={tasks:["任务","程序、期限与庭期"],schedule:["月度日程","跨案任务责任板"],records:["沟通记录","案件进展"],delivery:["模板出稿","文书复核","交付清单"],operations:["快递收寄","财产保全","归档检查"],today:["待办","日程","跟进","通知"]};
+ const canShowAI=!!(matter&&aiActions[page]&&demoAI);
+ $("mode").innerHTML='<span>导航预览</span>'+(canShowAI?'<button class="assist-action" id="assistantTrigger" aria-expanded="false" aria-controls="assistant">案件 AI</button>':'');
+ if(canShowAI)$("assistantTrigger").onclick=()=>{$("assistant").hidden?showAssistant(matter,page):closeAssistant(true);};
+ const aiPreference=!matter&&page==="settings"?'<div class="card"><label><input type="checkbox" id="demoAI" '+(demoAI?"checked":"")+'> AI 入口演示</label><p class="muted">使用合成样例，不连接模型。</p></div>':'';
+ $("main").innerHTML='<h1 tabindex="-1">'+(page==="tasks"?"程序与任务":title)+'</h1>'+(current?'<div class="muted">'+current.name+' · '+current.no+'</div>':'')+(inline[page]?'<div class="card inline">'+inline[page].map(t=>'<span class="pill">'+t+'</span>').join("")+'</div>':'')+(!matter&&["matters","today"].includes(page)?'<div class="card">'+list+'</div>':'')+aiPreference;
+ if(aiPreference)$("demoAI").onchange=event=>{demoAI=event.target.checked;};
+ for(const which of ["workspace","account"]){
+  $(which+"Trigger").onclick=()=>{const open=$(which+"Menu").hidden;menuOpen(which==="workspace"?"account":"workspace",false);menuOpen(which,open,!open);};
+  $(which+"Menu").addEventListener("click",event=>{if(event.target.closest("a"))menuOpen(which,false,true);});
+ }
+ if(focus==="content")$("main").querySelector("h1").focus();
+}
+$("groups").addEventListener("click",event=>{
+ const target=event.target.closest("[data-group]");
+ if(!target)return;
+ const key=target.dataset.group;
+ const wasOpen=target.getAttribute("aria-expanded")==="true";
+ const isRail=layout.dataset.rail==="true";
+ if(isRail)setRail(false);
+ const opening=isRail||!wasOpen;
+ if(opening){
+  const [owner]=key.split("/");
+  for(const [sibling,,,children] of (owner==="global"?globalNav:caseNav)){
+   const siblingKey=owner+"/"+sibling;
+   if(children&&siblingKey!==key)overrides.set(siblingKey,false);
+  }
+ }
+ overrides.set(key,opening);
+ const {matter,page}=route();
+ renderGroups(matter,page);
+ $("groups").querySelector('[data-group="'+key+'"]')?.focus();
+});
+function setRail(value){
+ layout.dataset.rail=String(value);$("toggle").setAttribute("aria-expanded",String(!value));$("toggle").setAttribute("aria-label",value?"展开侧栏":"折叠侧栏");
+}
+$("toggle").innerHTML=icon("side");$("toggle").onclick=()=>setRail(layout.dataset.rail!=="true");
+document.addEventListener("keydown",event=>{
+ if(event.key!=="Escape")return;
+ const menu=["workspace","account"].find(key=>!$(key+"Menu").hidden);
+ if(menu)menuOpen(menu,false,true);
+ else if(!$("assistant").hidden)closeAssistant(true);
+});
+document.addEventListener("click",event=>{for(const key of ["workspace","account"]){if(!$(key+"Menu").hidden&&!$(key+"Menu").contains(event.target)&&!$(key+"Trigger").contains(event.target))menuOpen(key,false);}});
+window.addEventListener("hashchange",()=>{const {matter,page}=route();for(const [key,,,children] of (matter?caseNav:globalNav)){if(children?.some(([child])=>child===page))overrides.delete(scope(matter,key));}draw("content");});
+draw();
+</script>
+</html>
+
