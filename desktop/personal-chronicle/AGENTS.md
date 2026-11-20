@@ -2,15 +2,16 @@
 
 ## 改动前先看
 
-改界面、导航、样式或动画时，按以下顺序选用组件与设计参考。
+改界面、导航、样式或动画前，先用已确认的用户路径和验收稿核对问题，再查同类组件或完整区块的源码与可交互示例。按以下顺序选型，记录复用组件、应用范围和需要补齐的行为。
 
 1. **优先 Chronicle。** 先看本地最相近的示例源码与 [Chronicle 在线示范](https://demo.shadcnstore.com/chronicle/)。同类界面直接使用现有的组件组合、交互和样式，优先复用 `components/ui` 与 `kit`。字体、字号、间距、圆角、选中态和动效沿用模板及主题变量。业务数据和写入规则继续接入 LexOrder 服务。
 2. **Chronicle 缺少所需交互时用 Base UI。** 查看 [Base UI Quick start](https://base-ui.com/react/overview/quick-start) 和对应组件文档。涉及组合、样式、过渡时按需查 [Composition](https://base-ui.com/react/handbook/composition)、[Styling](https://base-ui.com/react/handbook/styling) 和 [Animation](https://base-ui.com/react/handbook/animation)。用 Chronicle 的控件与主题变量呈现。
-3. **需要额外的设计参考时查 21st.dev。** 在 [21st.dev 社区组件](https://21st.dev/community/components) 查类似页面或交互。采用的结构、状态和动效统一套用 Chronicle 样式，有现成组件时直接组合复用。复用依据放到 [个人版迁移计划](docs/lexorder-personal-migration.md)。
+3. **需要额外的设计参考时查 21st.dev。** 在 [21st.dev 社区组件](https://21st.dev/community/components) 或 [ShadcnStore Blocks](https://shadcnstore.com/blocks/application/datatables) 查类似页面或交互。采用的结构、状态和动效统一套用 Chronicle 样式，有现成组件时直接组合复用。复用依据放到 [个人版迁移计划](docs/lexorder-personal-migration.md)。
 
 ## 本地预览与验收
 
-- 个人版使用 `bun run build:desktop` 和 `bun run desktop`。WSL 合成工作区可用 `tools/workbench-m1/chronicle-harness.sh` 的 `build/start/status/stop`。界面与 API 由同一个本地服务提供。
+- 个人版使用 `bun run build:desktop` 和 `bun run desktop`。WSL 合成工作区可用 `tools/workbench-m1/chronicle-harness.sh` 的 `build/start/dev/status/stop`。界面与 API 由同一个本地服务提供。
+- 日常界面联调使用 [Vite 热更新](README.md#开发与热更新) 和现有合成业务运行时。原生能力验收使用 Tauri WebView。
 - 原生 QA 使用该构建的 Tauri 窗口。记录窗口实际状态、案卷回读和失败行为。业务端改动重新构建后，在隔离案卷验证。
 
 ## 样式和导航

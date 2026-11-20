@@ -1,13 +1,14 @@
 "use client"
 
 import Link from "@/features/shell/workspace-link"
-import { useState, type FormEvent } from "react"
+import { useId, useState, type FormEvent } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { readPersonal } from "@/features/matters/personal-client"
 import { chinaDate } from "./data"
 
@@ -25,6 +26,11 @@ export type CourtCandidate = {
 }
 type Target = { id: string; title: string; at: string; duePrecision: string | null; updatedAt: string }
 type Decision = (row: CourtCandidate, decision: "ACCEPTED" | "REJECTED", event?: EventChoice) => void
+
+const dateDecisionModes = [
+  { value: "LINK", label: "关联已有事项" },
+  { value: "CREATE", label: "新建正式事项" },
+] as const
 
 const validDay = /^\d{4}-\d{2}-\d{2}$/
 const validTime = /^(?:[01]\d|2[0-3]):[0-5]\d$/
@@ -66,11 +72,12 @@ function DecisionLinks({ candidate, matter }: { candidate: CourtCandidate; matte
 function DateDecision({ candidate, record, procedures, busy, onDecide }: {
   candidate: CourtCandidate; record: string; procedures: CourtProcedure[]; busy: boolean; onDecide: Decision
 }) {
+  const fieldId = useId()
   const { proposal } = candidate
   const existingProgram = procedures.find(p => p.id === proposal.procedure)
-  const [procedureId, setProcedureId] = useState(existingProgram?.id ?? "")
-  const [mode, setMode] = useState<"" | "CREATE" | "LINK">("")
-  const [targetId, setTargetId] = useState("")
+  const [procedureId, setProcedureId] = useState<string | null>(existingProgram?.id ?? null)
+  const [mode, setMode] = useState<EventChoice["mode"] | null>(null)
+  const [targetId, setTargetId] = useState<string | null>(null)
   const [filter, setFilter] = useState("")
   const [search, setSearch] = useState("")
   const [verified, setVerified] = useState(false)
@@ -81,11 +88,19 @@ function DateDecision({ candidate, record, procedures, busy, onDecide }: {
   const query = useQuery({
     queryKey: ["court-targets", record, candidate.id, candidate.updatedAt, procedureId, search],
     queryFn: ({ signal }) => readPersonal<{ targets: Target[]; truncated: boolean }>(courtInboxEndpoint + "?" + new URLSearchParams({
-      view: "targets", record, suggestion: candidate.id, procedure: procedureId, q: search,
+      view: "targets", record, suggestion: candidate.id, procedure: procedureId!, q: search,
     }), { signal }),
     enabled: mode === "LINK" && !!procedureId,
     retry: false,
   })
+  const procedureOptions = procedures.map(row => ({
+    value: row.id,
+    label: row.caseNumber ? row.label + " · " + row.caseNumber : row.label,
+  }))
+  const targetOptions = query.data?.targets.map(row => ({
+    value: row.id,
+    label: row.title + " · " + (row.duePrecision === "DATE" ? chinaDate(row.at).split(" ")[0] : chinaDate(row.at)),
+  })) ?? []
   const target = query.data?.targets.find(row => row.id === targetId)
   const needsLinkTime = hearing && !proposedTime
   const timed = hearing || timedDeadline
@@ -96,9 +111,9 @@ function DateDecision({ candidate, record, procedures, busy, onDecide }: {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!canSubmit) return
+    if (!canSubmit || !procedureId) return
     if (mode === "LINK" && target) {
-      onDecide(candidate, "ACCEPTED", { mode, procedureId, targetId, expectedTargetUpdatedAt: target.updatedAt,
+      onDecide(candidate, "ACCEPTED", { mode, procedureId, targetId: target.id, expectedTargetUpdatedAt: target.updatedAt,
         ...(needsLinkTime ? { verifiedTime: time } : {}) })
     } else if (mode === "CREATE") {
       const fields = new FormData(event.currentTarget)
@@ -109,24 +124,29 @@ function DateDecision({ candidate, record, procedures, busy, onDecide }: {
   }
 
   return <form onSubmit={submit} className="grid gap-3 text-sm">
-    <label className="grid gap-1.5">所属程序
-      <NativeSelect className="w-full" value={procedureId} disabled={busy} onChange={event => {
-        setProcedureId(event.target.value); setMode(""); setTargetId(""); setVerified(false)
+    <Field className="gap-1.5">
+      <FieldLabel htmlFor={fieldId + "-program"}>所属程序</FieldLabel>
+      <Select modal={false} items={procedureOptions} value={procedureId} disabled={busy || !procedures.length} onValueChange={value => {
+        setProcedureId(value); setMode(null); setTargetId(null); setVerified(false)
       }}>
-        <NativeSelectOption value="">请选择本案程序</NativeSelectOption>
-        {procedures.map(p => <NativeSelectOption key={p.id} value={p.id}>{p.label}{p.caseNumber && " · " + p.caseNumber}</NativeSelectOption>)}
-      </NativeSelect>
-    </label>
+        <SelectTrigger id={fieldId + "-program"} className="w-full min-w-0"><SelectValue placeholder="请选择本案程序" /></SelectTrigger>
+        <SelectContent align="start" alignItemWithTrigger={false}>
+          <SelectGroup>{procedureOptions.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectGroup>
+        </SelectContent>
+      </Select>
+    </Field>
     {!procedures.length && <p className="text-xs text-muted-foreground">请先在本案程序中登记实际代理的程序。</p>}
-    <label className="grid gap-1.5">处理方式
-      <NativeSelect className="w-full" value={mode} disabled={busy || !procedureId} onChange={event => {
-        setMode(event.target.value as typeof mode); setTargetId(""); setVerified(false)
+    <Field className="gap-1.5">
+      <FieldLabel htmlFor={fieldId + "-mode"}>处理方式</FieldLabel>
+      <Select modal={false} items={dateDecisionModes} value={mode} disabled={busy || !procedureId} onValueChange={value => {
+        setMode(value); setTargetId(null); setVerified(false)
       }}>
-        <NativeSelectOption value="">请选择</NativeSelectOption>
-        <NativeSelectOption value="LINK">关联已有事项</NativeSelectOption>
-        <NativeSelectOption value="CREATE">新建正式事项</NativeSelectOption>
-      </NativeSelect>
-    </label>
+        <SelectTrigger id={fieldId + "-mode"} className="w-full min-w-0"><SelectValue placeholder="请选择处理方式" /></SelectTrigger>
+        <SelectContent align="start" alignItemWithTrigger={false}>
+          <SelectGroup>{dateDecisionModes.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectGroup>
+        </SelectContent>
+      </Select>
+    </Field>
     {mode === "CREATE" && <>
       <label className="grid gap-1.5">事项标题<Input name="title" required maxLength={200} defaultValue={proposal.title ?? ""} disabled={busy} onChange={() => setVerified(false)} /></label>
       <label className="grid gap-1.5">实际日期<Input name="day" type="date" required defaultValue={proposal.day ?? ""} disabled={busy} onChange={() => setVerified(false)} /></label>
@@ -140,7 +160,7 @@ function DateDecision({ candidate, record, procedures, busy, onDecide }: {
       <div className="flex gap-2"><Input aria-label="查找同日已有事项" placeholder="按标题找同日事项" disabled={busy}
         value={filter} onChange={event => setFilter(event.target.value)} />
         <Button type="button" variant="outline" size="sm" disabled={busy || query.isFetching} onClick={() => {
-          setTargetId("")
+          setTargetId(null)
           setVerified(false)
           const value = filter.trim()
           if (search === value) void query.refetch()
@@ -148,12 +168,17 @@ function DateDecision({ candidate, record, procedures, busy, onDecide }: {
         }}>查找</Button></div>
       {query.isPending && <p role="status" className="text-xs text-muted-foreground">正在读取已有事项…</p>}
       {query.error && <p role="alert" className="text-xs text-destructive">{query.error.message}</p>}
-      {query.data && (query.data.targets.length ? <label className="grid gap-1.5">同日已有事项
-        <NativeSelect className="w-full" value={targetId} disabled={busy} onChange={event => { setTargetId(event.target.value); setVerified(false) }}>
-          <NativeSelectOption value="">请选择核过的事项</NativeSelectOption>
-          {query.data.targets.map(row => <NativeSelectOption key={row.id} value={row.id}>{row.title} · {row.duePrecision === "DATE" ? chinaDate(row.at).split(" ")[0] : chinaDate(row.at)}</NativeSelectOption>)}
-        </NativeSelect>
-      </label> : <p className="text-xs text-muted-foreground">所选程序在来源日期没有符合条件的事项。</p>)}
+      {query.data && (targetOptions.length ? <Field className="gap-1.5">
+        <FieldLabel htmlFor={fieldId + "-target"}>同日已有事项</FieldLabel>
+        <Select modal={false} items={targetOptions} value={targetId} disabled={busy} onValueChange={value => {
+          setTargetId(value); setVerified(false)
+        }}>
+          <SelectTrigger id={fieldId + "-target"} className="w-full min-w-0"><SelectValue placeholder="请选择核过的事项" /></SelectTrigger>
+          <SelectContent align="start" alignItemWithTrigger={false}>
+            <SelectGroup>{targetOptions.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectGroup>
+          </SelectContent>
+        </Select>
+      </Field> : <p className="text-xs text-muted-foreground">所选程序在来源日期没有符合条件的事项。</p>)}
       {query.data?.truncated && <p className="text-xs text-muted-foreground">只显示前 100 项，请按标题缩小范围。</p>}
     </div>}
     {mode && <>

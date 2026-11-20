@@ -51,6 +51,13 @@ V8 借贷同案校验覆盖真实入卷、解析、结构化记载落库、旧�
 node --import tsx tools/workbench-m1/chronicle-smoke/fact-chronology.mjs "/path/to/mqc-fact-chronology-master" "/path/to/原版.base.json"
 ```
 
+## Windows 后台 Chrome 定向验收 · 2026-11-20
+
+- 法院来件日期确认沿用 Chronicle 邮件的列表与阅读区思路，三处日期选择复用仓库内 Base UI Select 和 Field。开工前对照 [Chronicle 邮件示例](../../../desktop/personal-chronicle/features/mail/mail-app.tsx)、[Base UI Select](https://base-ui.com/react/components/select) 和 [shadcn Field](https://ui.shadcn.com/docs/components/base/field)。
+- 在热更新页面使用浏览器合成候选验证 1440 px 与 390 px、键盘打开、Esc 归焦、无匹配事项、切换程序清空旧选择，以及核对原件前禁用提交。检查送达登记请求的程序、日期和时刻。隔离运行时另跑 `court-inbox.mjs`，验证附件去重、归案后原文回读与跨案限制。
+- **冒烟问题 · 已复验。** 首次浏览器脚本读取了下拉列表节点的样式属性，实际样式标签在外层弹窗。Esc 回焦发生在收起过渡之后。改为确认外层节点并等待真实焦点，复验通过。
+- **冒烟问题 · 已复验。** Node Fetch 会调整部分请求头，无法用来确认错误 Host 和跨站请求。用 Node HTTP 发送原始请求头后，错误 Host、外部 Origin 和跨站请求均获拒绝，同源已登录请求正常回读。
+
 ## WebView2 后台验收
 
 在 Windows 本机完成下文的统一桌面构建。在同一工作树用锁文件安装 `tools/workbench-m1` 的依赖。 `$repo` 设为本机工作树绝对路径， `$qaTarget` 设为独立 Cargo 构建目录， `$fixture` 指向已生成双案和事实样本的本机合成工作区。
