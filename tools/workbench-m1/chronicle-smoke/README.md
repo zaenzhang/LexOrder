@@ -152,4 +152,10 @@ node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-P
 4. 使用 `bun run desktop --package` 生成目标系统安装包。按相同步骤从安装的应用启动，不指定工作副本根目录。
 5. 在桌面本地数据目录安装一个[清单示例](../../../desktop/personal-chronicle/docs/lexorder-personal-migration.md#插件清单-v1)，确认案卷命令面板可进入当前案卷的指定分区。未知分区或非法清单应显示为无效。
 
+验证跨盘重新定位时，在 `sidecar.mjs` 的新合成工作区路径之后提供两个已存在的合成案卷父目录，且两个目录必须在不同卷上。脚本只改名并复制其新建的合成案件目录。Windows 使用相同平台的 Bun 和已暂存的桌面业务运行时，必要时设置 `LEXORDER_SMOKE_BUN` 与 `LEXORDER_SMOKE_RUNTIME_ROOT`。示例中的变量由本机验收目录填写。
+
+```powershell
+node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/sidecar.mjs') $newWorkspace $sourceCasebookRoot $targetCasebookRoot
+```
+
 `NEXT_DIST_DIR` 可显式指定工作区根目录下以 `.next-personal` 开头的构建目录。三端自动化见 [Actions](../../../.github/workflows/chronicle-sidecar.yml)。

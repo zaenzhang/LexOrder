@@ -5,8 +5,10 @@ import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { PDFDocument } from 'pdf-lib';
+import { verifyFolderRelocation } from './sidecar-folder-relocation.mjs';
 
-const workspace = process.argv[2];
+const [workspace, ...casebookRoots] = process.argv.slice(2);
+assert(casebookRoots.length === 0 || casebookRoots.length === 2, 'Pass both casebook roots to verify cross-volume relocation.');
 assert(path.isAbsolute(workspace ?? ''), 'Supply a new absolute synthetic workspace path');
 const manifest = path.join(workspace, 'workspace.json');
 await assert.rejects(readFile(manifest), { code: 'ENOENT' });
@@ -70,8 +72,8 @@ async function request(session, route, { body, token = session.token, status = 2
   if (response.status !== status) {
     throw new Error(route + ' returned ' + response.status + ': ' + (await response.text()).slice(0, 350));
   }
-  if (status === 403) assert.equal(response.headers.get("X-Lexorder-Channel"), "required");
-  return status === 200 ? response.json() : response.body?.cancel();
+  if (status === 403 && !body) assert.equal(response.headers.get("X-Lexorder-Channel"), "required");
+  return status === 200 || body ? response.json() : response.body?.cancel();
 }
 
 async function finish(session, command) {
@@ -125,6 +127,25 @@ try {
   const { documents } = await request(first, materials);
   assert.equal(documents.length, 1);
   const document = documents[0];
+  const uploadFixture = (session, { matterId, name, text, status, requestKey = randomUUID() }) => {
+    const body = new FormData();
+    body.set('file', new File([text], name, { type: 'text/plain' }));
+    body.set('matterId', matterId);
+    body.set('name', name);
+    body.set('category', 'EVIDENCE');
+    body.set('requestKey', requestKey);
+    return request(session, 'matter-workspace', { body, status });
+  };
+  const downloadFixture = async (session, id) => fetch(await session.url() + '/api/documents/' + id + '/download', {
+    headers: { Cookie: 'lexorder_local_channel=' + session.token }, signal: AbortSignal.timeout(8000),
+  });
+  const relocated = casebookRoots.length ? await verifyFolderRelocation({
+    roots: casebookRoots, matterId,
+    request: (route, options) => request(first, route, options),
+    materials: async () => (await request(first, materials)).documents,
+    upload: (name, text, status, requestKey) => uploadFixture(first, { matterId, name, text, status, requestKey }),
+    download: id => downloadFixture(first, id),
+  }) : null;
   const firstWorkspace = await readFile(manifest, 'utf8');
   await finish(first, 'quit\n');
   await assert.rejects(fetch(await first.url(), { signal: AbortSignal.timeout(3000) }));
@@ -133,7 +154,16 @@ try {
   await request(reopened, identity, { token: first.token, status: 403 });
   assert.equal((await request(reopened, identity)).title, title);
   assert.equal(await readFile(manifest, 'utf8'), firstWorkspace);
-  assert.equal((await request(reopened, materials)).documents[0].id, document.id);
+  assert((await request(reopened, materials)).documents.some(row => row.id === document.id));
+  if (relocated) {
+    const state = await request(reopened, 'matter-folder?matter=' + matterId);
+    assert.equal(state.available, true);
+    assert.equal(path.relative(relocated.moved, state.path), '');
+    const found = await downloadFixture(reopened, relocated.originalId);
+    assert.equal(found.status, 200);
+    assert.deepEqual(Buffer.from(await found.arrayBuffer()), relocated.expected);
+    console.log('PASS unavailable directory blocks reads and keeps upload recoverable, rejects wrong marker and corrupt copy, rebinds across volumes, retries once and preserves original on reopen');
+  }
   const url = await reopened.url() + '/api/documents/' + document.id + '/download?inline=1';
   assert.equal((await fetch(url, { signal: AbortSignal.timeout(8000) })).status, 403);
   const inline = await fetch(url, { headers: { Cookie: 'lexorder_local_channel=' + reopened.token }, signal: AbortSignal.timeout(8000) });
