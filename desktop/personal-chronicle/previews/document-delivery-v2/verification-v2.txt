@@ -1,0 +1,5 @@
+PASS file preview opens in the content pane; V1/V2 with identical filenames can be switched; current review route and object remain unchanged
+PASS materials page opens the selected file preview and explicit close does not auto-reopen
+PASS short operation uses a centered modal dialog rather than a right-side drawer
+PASS template wizard remains a full page; inspector is factual and concise; form input typography is readable
+PASS page remains stable after repeated preview and dialog interactions
