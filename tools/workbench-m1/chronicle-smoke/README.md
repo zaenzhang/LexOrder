@@ -105,6 +105,12 @@ Copy-Item -LiteralPath (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/wind
 node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-Path $qaTarget 'debug/lexorder-chronicle-preview.exe') --materials
 ```
 
+人工记载验收同样使用隔离工作区，传入 --observations。脚本入卷合成回单并等待本机解析，从图谱实际选取日期、金额和参与人。检查反向付款被拒绝、修订后的规范数据、历史原文定位与过时提交的草稿保留。此流程无需模型。
+
+```powershell
+node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-Path $qaTarget 'debug/lexorder-chronicle-preview.exe') --observations
+```
+
 需要跨案出处复验时，在脚本命令末尾加 `--cross-case`。该路径使用已装载 V8 案情定位和借贷样本的合成验收甲，检查按事实换读材料、同一 PDF 的不同页锚点、分别定位三份文本及未关联出处的状态。核对表单的触发器与下拉选项字号，以及固定原文面板的宽窄布局，属于常规验收。
 
 **本轮冒烟记录**

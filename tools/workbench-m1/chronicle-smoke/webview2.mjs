@@ -8,6 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "playwright-core";
 import { verifyWebView2Editor } from "./webview2-editor.mjs";
 import { verifyWebView2Materials } from "./webview2-materials.mjs";
+import { verifyWebView2Observations } from "./webview2-observations.mjs";
 import { verifyWebView2Scale } from "./webview2-scale.mjs";
 
 const executable = process.argv[2];
@@ -17,7 +18,7 @@ assert(executable && path.isAbsolute(executable), "Pass the absolute path to the
 assert(workspace && path.isAbsolute(workspace), "Set M1_WORKSPACE to a local Windows synthetic workspace.");
 const manifest = JSON.parse(await readFile(path.join(workspace, "workspace.json"), "utf8"));
 assert.equal(manifest.mode, "PERSONAL");
-const modes = ["--scale", "--editor", "--materials"].filter(flag => process.argv.includes(flag));
+const modes = ["--scale", "--editor", "--materials", "--observations"].filter(flag => process.argv.includes(flag));
 assert(modes.length <= 1, "Choose one targeted WebView2 smoke mode.");
 const [mode] = modes;
 const casebookRoot = process.env.M1_CHRONOLOGY_CASEBOOK_ROOT;
@@ -61,7 +62,7 @@ try {
         break;
       }
     } catch (error) {
-      if (error.code !== "ENOENT") throw error;
+      if (error.code !== "ENOENT" && error.code !== "EBUSY") throw error;
     }
     await delay(100);
   }
@@ -77,6 +78,7 @@ try {
   if (mode === "--scale") await verifyWebView2Scale(page, desktopOrigin, casebookRoot);
   else if (mode === "--editor") await verifyWebView2Editor(page, desktopOrigin, { workspace, manifest, casebookRoot });
   else if (mode === "--materials") await verifyWebView2Materials(page, desktopOrigin, casebookRoot);
+  else if (mode === "--observations") await verifyWebView2Observations(page, desktopOrigin, casebookRoot);
   else await verifyStandardWebView(page, desktopOrigin, errors);
   if (mode) assert.deepEqual(errors, []);
 } finally {

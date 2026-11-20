@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { InlineLoading } from "@/kit/ui-patterns/workspace-loading"
 import type { EvidenceNote } from "./case-chronology"
-import { ObservationValues, type FactObservation } from "./fact-observation"
+import { observationMarks, ObservationValues, type FactObservation } from "./fact-observation"
 import { FixedSourcePreview, type FixedSource } from "./fixed-source-preview"
 import { evidenceEndpoint, readPersonal, workspaceEndpoint } from "./personal-client"
 
@@ -77,7 +77,7 @@ function HistoryPages({ matterId, evidenceItemId, itemRevision }: {
                     {showing ? "收起当时出处" : "查看当时出处"}
                   </Button>
                   {showing && (preview.error ? <p role="alert">{preview.error.message}</p>
-                    : preview.data?.status === "AVAILABLE" ? <FixedSourcePreview source={preview.data} inlineExcerpt />
+                    : preview.data?.status === "AVAILABLE" ? <FixedSourcePreview source={preview.data} marks={observationMarks(observation)} inlineExcerpt />
                       : preview.data ? <p role="alert">此历史出处当前不可读。</p> : <InlineLoading label="正在读取当时出处…" />)}
                 </div>
               })}

@@ -11,6 +11,16 @@ export const amountNatures = {
 
 export type FactObservation = EvidenceObservationView
 
+export function observationMarks(record?: FactObservation, field?: "date" | "amount") {
+  if (!record) return undefined
+  if (field) {
+    const span = record.data[field]?.span
+    return span ? [span] : undefined
+  }
+  return [record.data.excerpt?.span, record.data.date?.span, record.data.amount?.span, ...record.data.participants?.map(person => person.span) ?? []]
+    .filter((span): span is NonNullable<typeof span> => Boolean(span))
+}
+
 function numberLabel(value: string) {
   const [whole, fraction] = value.split(".")
   return whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (fraction === undefined ? "" : "." + fraction)

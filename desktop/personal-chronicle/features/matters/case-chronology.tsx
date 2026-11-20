@@ -33,7 +33,7 @@ import { FactTrace, type ProgramTrack, type TimelineMarker, type TimelineScope, 
 import { ObservationHistory } from "./observation-history"
 import { ObservationEditor, type ObservationSaved } from "./observation-editor"
 import { FactAnalysisDesk } from "./fact-analysis-desk"
-import { dateInterval, firstObservedDay, observationDifferences, ObservationExcerpt, ObservationValues, statements, type FactObservation } from "./fact-observation"
+import { dateInterval, firstObservedDay, observationDifferences, observationMarks, ObservationExcerpt, ObservationValues, statements, type FactObservation } from "./fact-observation"
 import { evidenceEndpoint, workspaceEndpoint, readPersonal } from "./personal-client"
 
 export const kinds = { FACT: "事实", CLAIM: "当事人陈述", ANALYSIS: "分析", ISSUE: "争点", TODO_VERIFY: "待核实" }
@@ -902,16 +902,6 @@ function FactTable({ rows, selectedId, onSelect, filters, official, onOfficial, 
       </TableBody>
     </Table>
   </Card>
-}
-
-function observationMarks(record?: FactObservation, field?: ComparisonField) {
-  if (!record) return undefined
-  if (field) {
-    const span = record.data[field]?.span
-    return span ? [span] : undefined
-  }
-  return [record.data.excerpt?.span, record.data.date?.span, record.data.amount?.span, ...record.data.participants?.map(person => person.span) ?? []]
-    .filter((span): span is NonNullable<typeof span> => Boolean(span))
 }
 
 function ChronologySourceMenu({ source, pending, onStageChange }: {
