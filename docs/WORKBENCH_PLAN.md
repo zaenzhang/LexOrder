@@ -2866,7 +2866,7 @@ flowchart LR
 | --- | --- | --- |
 | P0 固定来源 | V8 四份材料从实际上传、解析到原文回读。三个日期、金额组合与独立底稿逐一核对，覆盖错误值、过期修订、重复提交和错误案卷。 | 专业采用理由和对外措辞由律师另行核对。 |
 | P1 AI 候选与人工采用 | 隔离 PGlite 验证范围、去重、重试与采用。曾用抽取 /8 和归并 /4 完成一次真实供应方试跑。/9 和 /11 的对照结果另记。 | 抽取 /16、归并 /6 的同案三轮真实模型验收待跑。此前 /12 请求供应方接口时返回 HTTP 401（`invalid_api_key`）。本机提取已核对三条借款交付记载，未取得本轮真实模型结果、归并和费用。 |
-| P2 界面与规模 | 正常大小案卷在 Windows WebView2 核对过固定来源。另用 12 份材料、120 条事项通过实际 API、Chrome 和 Windows 原生 WebView2 验证聚合、分轨、矩阵、窄窗及固定原文。 | 三端冷启动、峰值内存和律师验收。 |
+| P2 界面与规模 | 正常大小案卷在 Windows WebView2 核对过固定来源。另用 12 份材料、120 条事项通过实际 API、Chrome 和 Windows 原生 WebView2 验证聚合、分轨、矩阵、窄窗及固定原文。 另完成 Windows 原生同案卷三轮性能采样，覆盖冷启、切案、逐件入卷工作集与 PDF 首屏。[Windows 基线](../desktop/personal-chronicle/docs/lexorder-personal-migration.md#windows-原生性能基线--2026-11-21) | Linux 与 macOS 性能基线、Windows 后台解析峰值及律师验收。 |
 
 详细环境和计数见[个人桌面验收记录](../desktop/personal-chronicle/docs/lexorder-personal-migration.md#desktop-host-and-bun)。
 

@@ -123,6 +123,13 @@ node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-P
 node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-Path $qaTarget 'debug/lexorder-chronicle-preview.exe') --analysis-preview
 ```
 
+
+原生 Windows 性能基线使用 `--performance`。在同一个专用合成工作区串行重复。首次自动建两案并保存固定 PDF，其后按登记 ID 复用。每次在乙案新增 8 个 512 KiB 的合成 TXT，输出 `CHRONICLE_PERFORMANCE` 一行 JSON。包括冷启、切案、PDF HTTP 响应与截图识别的首屏、批量入卷回执及运行期间采样的进程树工作集。Windows 采样使用系统 PowerShell，工作集求和含共享页重复计数。脚本启动新的 WebView2 配置目录，不清 OS 文件缓存。
+
+```powershell
+node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-Path $qaTarget 'debug/lexorder-chronicle-preview.exe') --performance
+```
+
 需要跨案出处复验时，在脚本命令末尾加 `--cross-case`。该路径使用已装载 V8 案情定位和借贷样本的合成验收甲，检查按事实换读材料、同一 PDF 的不同页锚点、分别定位三份文本及未关联出处的状态。核对表单的触发器与下拉选项字号，以及固定原文面板的宽窄布局，属于常规验收。
 
 **本轮冒烟记录**
