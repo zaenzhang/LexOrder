@@ -23,6 +23,7 @@ import { changeMaterialCategory, changeMaterialCategorySchema } from "@/server/d
 import { getDocumentDetail } from "@/server/documents/detail-actions";
 import { officePreviewKind } from "@/lib/storage/mime-ext";
 import { listDocumentPage, uploadDocument } from "@/server/documents/actions";
+import { fragmentSelection } from "@/lib/workbench/fixed-fragments";
 import { matterInputCoverageSchema } from "@/lib/ai/input-coverage";
 import { getMatterInputCoverage } from "@/server/ai/input-coverage-actions";
 import { changeSignoff, readSignoff, readSignoffExcerpt, readSignoffList, signoffActions } from "@/server/skills/signoff-service";
@@ -34,7 +35,7 @@ import { evidenceTextSchema, revisionInputSchema } from "@/lib/evidence/item-inp
 import { recordObservationSchema, sourceInputSchema } from "@/server/evidence/contracts";
 import { createEvidenceItem, updateEvidenceItem, changeChronologyAssessment, listChronologyChanges, exportChronology, addEvidenceSource, removeEvidenceSource, getEvidenceWorkspace, listEvidenceItems, listEvidenceRevisions, getEvidenceFormOptions, confirmEvidenceItem, recordEvidenceObservation, adoptEvidenceObservationRun, adoptMatterObservations } from "@/server/evidence/actions";
 import { adoptObservationRunSchema, observationRunIdSchema, startObservationRunSchema, startMatterObservationRunSchema } from "@/server/evidence/analysis-run-contract";
-import { queueObservationRun, queueMatterObservationRun, readMatterObservationExcerpt, readObservationRuns } from "@/server/evidence/analysis-runs";
+import { queueObservationRun, queueMatterObservationRun, previewMatterObservationFragment, readMatterObservationExcerpt, readObservationRuns } from "@/server/evidence/analysis-runs";
 import { getMatterFinance } from "@/server/finance/actions";
 import { getMatterById, updateMatterBasicInfo } from "@/server/matters/actions";
 import { createNote, listNotes, updateNote } from "@/server/notes/actions";
@@ -87,6 +88,7 @@ const mutation = z.discriminatedUnion("action", [
   createSchema,
   ...signoffActions,
   z.object({ action: z.literal("preview-skill-input"), data: matterInputCoverageSchema }),
+  z.strictObject({ action: z.literal("preview-matter-observation-fragment"), matterId: idSchema, range: fragmentSelection }),
   z.object({ action: z.literal("edit-matter"), data: matterUpdateBasicSchema.omit({ teamAccessRestricted: true }).required({ causeId: true, causeFreeText: true, claimAmount: true, ourStanding: true }).extend({ expectedUpdatedAt: z.coerce.date() }) }),
   z.object({ action: z.literal("add-procedure"), data: procedureCreateSchema.pick({ matterId: true, type: true, engagement: true, customLabel: true, caseNumber: true, handlingAgency: true }).extend({ isExternalLead: z.literal(false).default(false) }) }),
   z.object({ action: z.literal("edit-procedure"), matterId: idSchema, data: procedureUpdateSchema.pick({ id: true, expectedUpdatedAt: true, type: true, customLabel: true, caseNumber: true, handlingAgency: true, changeReason: true }) }),
@@ -498,6 +500,10 @@ export async function POST(request: Request) {
     }
     if (input.action === "set-timeline-grade") return json(await setTimelineGrade(input));
     if (input.action === "preview-skill-input") return json(await getMatterInputCoverage(input.data));
+    if (input.action === "preview-matter-observation-fragment") {
+      const { user } = await requireSession("matters.write");
+      return json(await previewMatterObservationFragment(user, input.matterId, input.range));
+    }
     if (input.action === "change-material-category") return json(await changeMaterialCategory(input));
     if (input.action === "reorder-volumes") return json(await reorderFolders(input));
     if (input.action === "create-volume") return json(await createFolder(input));

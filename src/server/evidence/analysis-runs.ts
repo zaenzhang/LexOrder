@@ -153,6 +153,15 @@ export async function readObservationRuns(actor: ContextActor, matterId: string,
   }, { timeout: 20000 });
 }
 
+export async function previewMatterObservationFragment(actor: ContextActor, matterId: string, range: FragmentSelection) {
+  return prisma.$transaction(async tx => {
+    const access = await contextAccess(tx, actor, matterId);
+    if (!access.canWrite) throw new ActionError("当前无权准备案情分析");
+    const [fragment] = await loadFixedFragments(tx, access, [range], true);
+    return { text: fragment.text };
+  });
+}
+
 export async function readMatterObservationExcerpt(actor: ContextActor, matterId: string, runId: string, fragment: number) {
   return prisma.$transaction(async tx => {
     const access = await contextAccess(tx, actor, matterId);

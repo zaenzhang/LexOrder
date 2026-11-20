@@ -8,11 +8,13 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { InlineLoading } from "@/kit/ui-patterns/workspace-loading"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { ObservationValues, type FactObservation } from "./fact-observation"
 import { CaseGroupingPanel } from "./case-grouping-panel"
 import { MatterCandidateAdoption, type AdoptionTarget, type CandidatePick, type SavedAdoption } from "./matter-candidate-adoption"
 import { readPersonal, workspaceEndpoint } from "./personal-client"
+import type { FragmentSelection } from "../../../../src/lib/workbench/fixed-fragments"
 import type { ObservationEventHint } from "../../../../src/lib/evidence/chronology-assessment"
 import type { MatterInputCoverageView, MatterAnalysisPlan } from "../../../../src/lib/ai/input-coverage"
 
@@ -35,7 +37,40 @@ const number = (value: number) => value.toLocaleString("zh-CN")
 const runDate = new Intl.DateTimeFormat("zh-CN", {
   timeZone: "Asia/Shanghai", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit",
 })
+const fixedRange = ({ documentId, parseRunId, anchorId, start, end }: FragmentSelection): FragmentSelection => ({ documentId, parseRunId, anchorId, start, end })
 const active = (run: Run | undefined) => run?.state === "QUEUED" || run?.state === "DISPATCHED"
+
+function PlannedFragment({ matterId, range, label }: {
+  matterId: string; range: FragmentSelection; label: string
+}) {
+  const [open, setOpen] = useState(false)
+  const excerpt = useQuery({
+    queryKey: ["chronicle", "planned-observation-fragment", matterId, range],
+    enabled: open, staleTime: 0, gcTime: 0, retry: false,
+    queryFn: ({ signal }) => readPersonal<{ text: string }>(workspaceEndpoint, {
+      method: "POST", headers: { "Content-Type": "application/json" }, signal,
+      body: JSON.stringify({ action: "preview-matter-observation-fragment", matterId, range }),
+    }),
+  })
+  return <li>
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div className="flex flex-wrap items-center justify-between gap-x-2">
+        <span className="min-w-0 break-words">{label}</span>
+        <CollapsibleTrigger render={<Button size="xs" variant="ghost" aria-label={(open ? "收起片段 · " : "查看片段 · ") + label} />}>
+          {open ? "收起片段" : "查看片段"}
+        </CollapsibleTrigger>
+      </div>
+      <CollapsibleContent>
+        {open && (excerpt.isFetching ? <InlineLoading label="正在读取固定片段…" />
+          : excerpt.error ? <div role="alert" className="flex flex-wrap items-center gap-2">
+            {excerpt.error.message}<Button size="xs" variant="outline" onClick={() => void excerpt.refetch()}>重读片段</Button>
+          </div> : excerpt.data && <blockquote aria-label="本次拟发送的固定片段"
+            className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-muted/40 px-3 py-2 text-foreground [overflow-wrap:anywhere]"
+            tabIndex={0}>{excerpt.data.text}</blockquote>)}
+      </CollapsibleContent>
+    </Collapsible>
+  </li>
+}
 
 export function MatterAnalysisRuns({ matterId, coverage, targets, onAdopted, onOpenItem }: {
   matterId: string; coverage?: MatterInputCoverageView; targets?: AdoptionTarget[]; onAdopted?(): void; onOpenItem?(): void
@@ -70,7 +105,7 @@ export function MatterAnalysisRuns({ matterId, coverage, targets, onAdopted, onO
     mutationFn: ({ destination, batch }: { destination: Destination; batch: MatterAnalysisPlan["batches"][number] }) => readPersonal<Run>(workspaceEndpoint, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "start-matter-observation-run", data: { matterId, runId: crypto.randomUUID(), confirmed: true, ...destination,
-        ranges: batch.ranges.map(({ documentId, parseRunId, anchorId, start, end }) => ({ documentId, parseRunId, anchorId, start, end })),
+        ranges: batch.ranges.map(fixedRange),
       } }),
     }),
     onSuccess: run => {
@@ -108,9 +143,9 @@ export function MatterAnalysisRuns({ matterId, coverage, targets, onAdopted, onO
           <ul className="grid gap-2 text-xs text-muted-foreground">
             {batch.ranges.map(range => {
               const material = materials.get(range.documentId)!
-              return <li key={range.documentId + "/" + range.anchorId + "/" + range.start}>
-                {material.documentName} · V{material.documentVersion} · {range.locationLabel} · 第 {range.start + 1}–{range.end} 个字符
-              </li>
+              return <PlannedFragment key={range.documentId + "/" + range.anchorId + "/" + range.start}
+                matterId={matterId} range={fixedRange(range)}
+                label={material.documentName + " · V" + material.documentVersion + " · " + range.locationLabel + " · 第 " + (range.start + 1) + "–" + range.end + " 个字符"} />
             })}
           </ul>
           {destination && <Button size="sm" className="justify-self-start" disabled={submit.isPending}
