@@ -140,7 +140,8 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     const root = path.join(work, "relation-casebook");
     await mkdir(root, { recursive: true });
     await changeMatterFolder(matter, { action: "bind", root }, path.join(workspace, "storage"));
-    const text = "青禾公司于2024年4月8日向远桥公司交付两台机床。";
+    const delivery = "青禾公司于2024年4月8日向远桥公司交付两台机床。";
+    const text = "远桥公司先前通知仓库。" + delivery;
     const form = new FormData();
     form.set("file", new File([text], "设备交付.txt", { type: "text/plain" }));
     form.set("name", "设备交付.txt");
@@ -160,8 +161,9 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     const record = {
       fragment: 1, firstLine: 1, lastLine: 1, title: "设备交付", category: "performance", kind: "FACT",
       statement: "RECORD", excerpt: null, dateRole: "OCCURRENCE", dateText: "2024年4月8日",
-      amountNature: null, amountText: null, participants: ["青禾公司", "远桥公司"],
-      relations: [{ kind: "DELIVERS_TO", from: 1, to: 2, quote: text }],
+      amountNature: null, amountText: null,
+      participants: [{ text: "青禾公司", context: null }, { text: "远桥公司", context: "向远桥公司交付" }],
+      relations: [{ kind: "DELIVERS_TO", from: 1, to: 2, quote: delivery }],
     };
     provider.fetch.mockResolvedValueOnce(Response.json({ choices: [{ message: {
       content: JSON.stringify({ observations: [{ ...record, firstLine: "1" }, record] }),
@@ -170,7 +172,7 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     expect(await readObservationRuns(actor, matter.id, null, run.id)).toMatchObject({
       state: "READY", receipt: { rejected: [{ index: 0, reason: "SCHEMA" }] },
       candidates: [{ data: { participants: [{ text: "青禾公司" }, { text: "远桥公司" }],
-        relations: [{ kind: "DELIVERS_TO", from: 1, to: 2, text }] } }],
+        relations: [{ kind: "DELIVERS_TO", from: 1, to: 2, text: delivery }] } }],
     });
     const adopted = await adoptMatterObservations({ matterId: matter.id, requestId: randomUUID(),
       chosen: [{ runId: run.id, index: 0 }], target: { type: "new", kind: "FACT", title: "设备交付", content: text },
@@ -181,7 +183,8 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     });
     expect(observation.sourceLink).toMatchObject({ documentId: saved.id, parseRunId: parse.id, anchorId: anchor.anchorId });
     expect(observation.data).toMatchObject({
-      relations: [{ kind: "DELIVERS_TO", from: 1, to: 2, span: { start: 0, end: text.length }, text }],
+      participants: [{ text: "青禾公司" }, { text: "远桥公司", span: { start: text.lastIndexOf("远桥公司"), end: text.lastIndexOf("远桥公司") + 4 } }],
+      relations: [{ kind: "DELIVERS_TO", from: 1, to: 2, span: { start: text.indexOf(delivery), end: text.length }, text: delivery }],
     });
   }, 30_000);
 
@@ -667,7 +670,7 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
       model, origin: new URL(provider.url).origin, ranges };
     const stale = await queueMatterObservationRun(actor, input);
     await prisma.evidenceObservationRun.update({
-      where: { id: stale.id }, data: { methodVersion: "matter-observations/13" },
+      where: { id: stale.id }, data: { methodVersion: "matter-observations/14" },
     });
     expect(await processDueJobs(1, "personal-ai")).toMatchObject({ succeeded: 1 });
     expect(await readObservationRuns(actor, matter.id, null, stale.id)).toMatchObject({ state: "FAILED", receipt: { error: "STALE" } });
@@ -676,7 +679,7 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     const run = await queueMatterObservationRun(actor, { ...input, runId: randomUUID() });
     provider.fetch.mockResolvedValueOnce(Response.json({ choices: [{ message: { content: JSON.stringify({
       observations: [{ ...draft, title: "吴乙已付款", excerpt: phrase, dateRole: "OCCURRENCE", dateText: "2024年3月1日",
-        amountNature: "ACTUAL_TRANSFER", amountText: "12万元", participants: ["吴乙", "周甲"],
+        amountNature: "ACTUAL_TRANSFER", amountText: "12万元", participants: ["吴乙", "周甲"].map(text => ({ text, context: null })),
         relations: [{ kind: "PAYS_TO", from: 1, to: 2, quote: "吴乙向周甲付款12万元" }] }],
     }) } }] }));
     expect(await processDueJobs(1, "personal-ai")).toMatchObject({ succeeded: 1 });

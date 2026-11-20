@@ -225,7 +225,7 @@ it("模型传来的关系用同一份正式契约落位，错误记录逐条拒�
   const source = { text, start: 100, category: "EVIDENCE" };
   const wire = { fragment: 1, firstLine: 1, lastLine: 1, title: "交付设备", category: "performance", kind: "FACT",
     statement: "RECORD", excerpt: null, dateRole: null, dateText: null, amountNature: null, amountText: null,
-    participants: ["青禾公司", "远桥公司"], relations: [{ kind: "DELIVERS_TO", from: 1, to: 2, quote: text }],
+    participants: ["青禾公司", "远桥公司"].map(text => ({ text, context: null })), relations: [{ kind: "DELIVERS_TO", from: 1, to: 2, quote: text }],
   };
   const result = inspectAiObservationResult(unpackObservationDraft({ observations: [wire, { ...wire, firstLine: "1" }] }), [source]);
   expect(result.rejected).toEqual([{ index: 1, reason: "SCHEMA" }]);
@@ -240,6 +240,43 @@ it("模型传来的关系用同一份正式契约落位，错误记录逐条拒�
   expect(unsupported.skippedFields).toBe(1);
   expect(unsupported.candidates[0].data.participants).toHaveLength(2);
   expect(unsupported.candidates[0].data.relations).toBeUndefined();
+});
+
+
+it.each([null, "见证方林青", "虚构的签收人林青"])("同名上下文 %s 不影响其他参与人和有出处的关系", context => {
+  const text = "见证方林青到场，另一份清单亦称见证方林青到场。签收方林青接收。青禾公司向远桥公司交付设备。";
+  const source = { text, start: 75 };
+  const relation = "青禾公司向远桥公司交付设备。";
+  const wire = {
+    fragment: 1, firstLine: 1, lastLine: 1, title: "交付设备", category: "performance", kind: "FACT",
+    statement: "RECORD", excerpt: null, dateRole: null, dateText: null, amountNature: null, amountText: null,
+    participants: [{ text: "林青", context }, { text: "青禾公司", context: null }, { text: "远桥公司", context: null }],
+    relations: [
+      { kind: "DELIVERS_TO", from: 2, to: 1, quote: text },
+      { kind: "DELIVERS_TO", from: 2, to: 3, quote: relation },
+    ],
+  };
+  const result = inspectAiObservationResult(unpackObservationDraft({ observations: [wire] }), [source]);
+  expect(result.rejected).toEqual([]);
+  expect(result.skippedFields).toBe(2);
+  const [candidate] = result.candidates;
+  expect(candidate.data.participants?.map(person => person.text)).toEqual(["青禾公司", "远桥公司"]);
+  expect(candidate.data.relations).toMatchObject([{ kind: "DELIVERS_TO", from: 1, to: 2, text: relation }]);
+});
+
+it("同一行内两个同名参与人按原文上下文定位各自的固定偏移", () => {
+  const text = "签字人林青已验收，见证人林青在场。";
+  const start = 190;
+  const result = inspectAiObservationResult(unpackObservationDraft({ observations: [{
+    fragment: 1, firstLine: 1, lastLine: 1, title: "验收记载", category: "performance", kind: "FACT",
+    statement: "RECORD", excerpt: null, dateRole: null, dateText: null, amountNature: null, amountText: null,
+    participants: [{ text: "林青", context: "签字人林青" }, { text: "林青", context: "见证人林青" }], relations: null,
+  }] }), [{ text, start }]);
+  expect(result.rejected).toEqual([]);
+  expect(result.skippedFields).toBe(0);
+  expect(result.candidates[0].data.participants).toEqual([text.indexOf("林青"), text.lastIndexOf("林青")].map(offset => ({
+    text: "林青", span: { start: start + offset, end: start + offset + 2 },
+  })));
 });
 
 it.each([
@@ -269,7 +306,7 @@ it("以可回读的分句定位另笔收款，拒绝同一行其他分句的日�
   const draft = unpackObservationDraft({ observations: [{
     fragment: 1, firstLine: 1, lastLine: 1, title: "认可另笔收款", category: "payment", kind: "TODO_VERIFY",
     statement: "PARTY_STATEMENT", excerpt, dateRole: "OCCURRENCE", dateText: "2024年3月1日",
-    amountNature: "ACTUAL_TRANSFER", amountText: "2万元", participants: ["吴乙"], relations: null,
+    amountNature: "ACTUAL_TRANSFER", amountText: "2万元", participants: ["吴乙"].map(text => ({ text, context: null })), relations: null,
   }] });
   const offset = 250;
   const result = inspectAiObservationResult(draft, [{ text, start: offset }]);
@@ -298,7 +335,7 @@ it.each([
     fragment: 1, firstLine: prefix.endsWith("\n") ? 2 : 1, lastLine: prefix.endsWith("\n") ? 2 : 1,
     title: "吴乙已付款", category: "payment", kind: "FACT", statement: "RECORD",
     excerpt: claim, dateRole: "OCCURRENCE", dateText: "2024年3月1日",
-    amountNature: "ACTUAL_TRANSFER", amountText: "12万元", participants: ["吴乙", "周甲"],
+    amountNature: "ACTUAL_TRANSFER", amountText: "12万元", participants: ["吴乙", "周甲"].map(text => ({ text, context: null })),
     relations: [{ kind: "PAYS_TO", from: 1, to: 2, quote: "吴乙向周甲付款12万元" }],
   }] });
   const result = inspectAiObservationResult(draft, [{ text, start: 75, category: "PLEADING" }]);
@@ -363,7 +400,7 @@ it("付款方向与原文列不符时只去掉关系，保留可定位的参与�
   const text = "交易日期 ｜ 付款人 ｜ 收款人 ｜ 金额（元）\n2023-03-03 ｜ 张三 ｜ 李四 ｜ 480,000.00";
   const candidate = {
     fragment: 1, firstLine: 2, lastLine: 2, title: "付款", category: "payment", kind: "FACT", statement: "RECORD",
-    excerpt: null, dateRole: null, dateText: null, amountNature: null, amountText: null, participants: ["张三", "李四"],
+    excerpt: null, dateRole: null, dateText: null, amountNature: null, amountText: null, participants: ["张三", "李四"].map(text => ({ text, context: null })),
     relations: [{ kind: "PAYS_TO", from: 2, to: 1, quote: "张三 ｜ 李四" }],
   };
   const result = inspectAiObservationResult(unpackObservationDraft({ observations: [candidate] }), [{ text, start: 0 }]);

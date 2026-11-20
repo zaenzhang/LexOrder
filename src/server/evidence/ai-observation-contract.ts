@@ -197,17 +197,24 @@ function normalizeCandidate(entry: z.infer<typeof aiRecord>, authorized: Authori
     const unitSpan = explicitUnit ?? (header && headerUnit ? locate({ text: headerUnit }, header) : undefined);
     return { nature, span, ...(unitSpan && { unitSpan }) };
   });
-  const participantsInput = entry.participants && field(() => entry.participants!.map(person => ({ span: locate(person.quote, excerptSpan) })));
-  const relationsInput = entry.relations && field(() => {
-    if (!participantsInput) throw new ActionError("关系缺少可定位的参与人");
-    return entry.relations!.flatMap(({ quote: reference, ...relation }) => {
-      const fixed = field(() => {
-        const span = locate(reference, excerptSpan);
-        checkAffirmative(span);
-        return { ...relation, span };
-      });
-      return fixed ? [fixed] : [];
+  const participantsInput: { span: TextSpan }[] = [];
+  const participantIndexes = new Map<number, number>();
+  for (const [index, person] of (entry.participants ?? []).entries()) {
+    const span = field(() => locate(person.quote, excerptSpan));
+    if (!span) continue;
+    participantsInput.push({ span });
+    participantIndexes.set(index + 1, participantsInput.length);
+  }
+  const relationsInput = entry.relations?.flatMap(({ quote: reference, from, to, kind }) => {
+    const fixed = field(() => {
+      const fromIndex = participantIndexes.get(from);
+      const toIndex = participantIndexes.get(to);
+      if (fromIndex === undefined || toIndex === undefined) throw new ActionError("关系出处须包含两个不同的参与人");
+      const span = locate(reference, excerptSpan);
+      checkAffirmative(span);
+      return { kind, from: fromIndex, to: toIndex, span };
     });
+    return fixed ? [fixed] : [];
   });
   const cited = reviewSpan ? source.text.slice(reviewSpan.start, reviewSpan.end) : "";
   if (includesUnsettled && (cited.length > 300 || cited.split("\n").length > 3)) {
@@ -219,12 +226,12 @@ function normalizeCandidate(entry: z.infer<typeof aiRecord>, authorized: Authori
   const attributed = /^(?:.{0,14})(?:诉称|辩称|陈述称|主张称|质证称)[：:,，]/u.test(cited.trim());
   const statement = source.category === "PLEADING" || attributed ? "PARTY_STATEMENT" : entry.statement;
   const core = { statement, ...(reviewSpan && { excerpt: reviewSpan }), ...(dateSelection && { date: dateSelection }), ...(amountSelection && { amount: amountSelection }) };
-  const withParticipants = { ...core, ...(participantsInput && { participants: participantsInput }) };
+  const withParticipants = { ...core, ...(participantsInput.length && { participants: participantsInput }) };
   let input: ObservationInput = { ...withParticipants, ...(relationsInput?.length && { relations: relationsInput }) };
   let local: ReturnType<typeof prepareObservation>;
   try { local = prepareObservation(input, source.text); }
   catch (error) {
-    if (!skipField || !lineSpan || !participantsInput || !(error instanceof ActionError || error instanceof z.ZodError)) throw error;
+    if (!skipField || !lineSpan || !participantsInput.length || !(error instanceof ActionError || error instanceof z.ZodError)) throw error;
     skipField();
     const withoutRelations = relationsInput?.length ? field(() => prepareObservation(withParticipants, source.text)) : undefined;
     input = withoutRelations ? withParticipants : core;
