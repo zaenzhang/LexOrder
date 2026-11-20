@@ -124,7 +124,7 @@ node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-P
 ```
 
 
-原生 Windows 性能基线使用 `--performance`。在同一个专用合成工作区串行重复。首次自动建两案并保存固定 PDF，其后按登记 ID 复用。每次在乙案新增 8 个 512 KiB 的合成 TXT，输出 `CHRONICLE_PERFORMANCE` 一行 JSON。包括冷启、切案、PDF HTTP 响应与截图识别的首屏、批量入卷回执及运行期间采样的进程树工作集。Windows 采样使用系统 PowerShell，工作集求和含共享页重复计数。脚本启动新的 WebView2 配置目录，不清 OS 文件缓存。
+原生 Windows 性能基线使用 `--performance`。在同一个专用合成工作区串行重复。首次自动建两案并保存固定 PDF，其后按登记 ID 复用。每次在乙案新增 8 个 512 KiB 的合成 TXT，输出 `CHRONICLE_PERFORMANCE` 一行 JSON。包括冷启、切案、PDF HTTP 响应与截图识别的首屏、批量入卷回执、后台解析完成及两个窗口中的进程树工作集。批次原件通过本地预检回读当前解析代的已发布文本，模型发送为零。Windows 采样使用系统 PowerShell，工作集求和含共享页重复计数。脚本启动新的 WebView2 配置目录，不清 OS 文件缓存。
 
 ```powershell
 node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-Path $qaTarget 'debug/lexorder-chronicle-preview.exe') --performance
@@ -141,6 +141,19 @@ node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-P
 - **已修复 · 脚本。** 侧栏链接与面包屑同名，测试限定到主导航。窄窗自动定位详情后有时已经滚到页底，滚轮改为从详情向上验证页面滚动。
 - **已修复 · 折叠验收。** 详情压缩后原 900 px 高窗口的正文无需滚动，旧脚本的溢出断言失败。现用 680 px 高的宽窗验收展开后的独立滚动，同时保留 950 px、390 px 宽的窄窗检查。
 - **已记录 · Next.js 开发模式。** Windows WebView2 接入 WSL 热更新时，Turbopack 和 Webpack 均观察到 React Server Components 首屏性能计时警告 `cannot have a negative time stamp`。验收脚本只将匹配该消息和对应 React 开发计时堆栈的异常记录为警告。其他页面异常会使验收失败。独立冷启动另外记录过一次服务端流写入异常，随后的案件列表、概览和图谱请求返回 200。
+
+## Linux WebKitGTK 性能基线
+
+沿用 Windows 性能验收的双案、固定 PDF 与 4 MiB TXT 批次。准备根仓库锁文件依赖、Prisma 客户端、统一本地业务构建和 Linux Tauri 调试宿主。使用与系统 WebKitGTK 匹配的 WebKitWebDriver。Ubuntu 24.04 对应软件包为 `webkit2gtk-driver`。下面的 Xvfb 命令保持 1440 × 900，并让 WebDriver 操作自己的虚拟显示。 [Tauri WebDriver 的 Linux 运行说明](https://v2.tauri.app/develop/tests/webdriver/ci/) · [Ubuntu 驱动包](https://packages.ubuntu.com/noble/webkit2gtk-driver)
+
+```sh
+xvfb-run -a -s '-screen 0 1440x900x24' \
+  node tools/workbench-m1/chronicle-smoke/webkitgtk-performance.mjs \
+  desktop/personal-chronicle/desktop-preview/target/debug/lexorder-chronicle-preview \
+  "$(command -v WebKitWebDriver)" 3
+```
+
+每轮启动实际 Tauri 调试程序和 Sidecar。脚本只在本机开启 WebKit 自动化，创建新的 WebKit 配置目录。合成工作区及运行日志位于 `tools/workbench-m1/.runtime/webkitgtk-performance/`。脚本通过真实菜单切案、检测嵌入 PDF 首屏色块，并用文件选择器将 8 份合成 TXT 入卷。输出 `CHRONICLE_GTK_PERFORMANCE`，含冷启、切案、PDF 内嵌响应和首屏、入卷回执与解析完成耗时，以及整棵应用进程树的 RSS 采样。解析完成以全部新入卷版本的已发布提取内容为准。采样和状态轮询开销计入观测。各轮保留入卷记录和驱动日志。
 
 ## 检查内容
 
