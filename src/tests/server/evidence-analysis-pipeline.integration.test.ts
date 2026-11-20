@@ -657,6 +657,56 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     return { actor, matter, ranges };
   }
 
+  it("连接丢失和网关中断保留同一批次，明确拒绝允许重新确认", async () => {
+    provider.fetch.mockClear();
+    await saveAiSettings({ enabled: true, apiKey: "fixture-key", baseUrl: provider.url, textModel: model });
+    const firstText = "设备序列号甲，接收登记待核。";
+    const secondText = "设备序列号乙，验收材料待核。";
+    const { actor, matter, ranges } = await seedV8Case("UNCERTAIN", [["甲.txt", firstText], ["乙.txt", secondText]]);
+    const destination = { matterId: matter.id, confirmed: true as const, model, origin: new URL(provider.url).origin };
+    const extraction = { ...destination, ranges: ranges.slice(0, 1) };
+
+    const first = await queueMatterObservationRun(actor, { ...extraction, runId: randomUUID() });
+    provider.fetch.mockRejectedValueOnce(new TypeError("fetch failed", { cause: new Error("socket closed after upload") }));
+    expect(await processDueJobs(1, "personal-ai")).toMatchObject({ succeeded: 1 });
+    expect(await readObservationRuns(actor, matter.id, null, first.id)).toMatchObject({
+      state: "UNCERTAIN", receipt: { error: "INTERRUPTED" },
+    });
+    expect(await queueMatterObservationRun(actor, { ...extraction, runId: randomUUID() })).toMatchObject({
+      id: first.id, state: "UNCERTAIN",
+    });
+    expect(await processDueJobs(1, "personal-ai")).toMatchObject({ processed: 0 });
+    expect(provider.fetch).toHaveBeenCalledTimes(1);
+
+    const both = { ...destination, ranges };
+    const rejected = await queueMatterObservationRun(actor, { ...both, runId: randomUUID() });
+    provider.fetch.mockResolvedValueOnce(new Response(null, { status: 401 }));
+    expect(await processDueJobs(1, "personal-ai")).toMatchObject({ succeeded: 1 });
+    expect(await readObservationRuns(actor, matter.id, null, rejected.id)).toMatchObject({
+      state: "FAILED", receipt: { error: "PROVIDER" },
+    });
+    expect(await queueMatterObservationRun(actor, { ...both, runId: rejected.id })).toMatchObject({ id: rejected.id, state: "FAILED" });
+    expect(provider.fetch).toHaveBeenCalledTimes(2);
+    const retry = await queueMatterObservationRun(actor, { ...both, runId: randomUUID() });
+    expect(retry.id).not.toBe(rejected.id);
+    provider.fetch.mockResolvedValueOnce(Response.json({ choices: [{ message: { content: JSON.stringify({
+      observations: [{ ...draft, excerpt: firstText }, { ...draft, fragment: 2, excerpt: secondText }],
+    }) } }] }));
+    expect(await processDueJobs(1, "personal-ai")).toMatchObject({ succeeded: 1 });
+    const ready = await readObservationRuns(actor, matter.id, null, retry.id);
+    expect(ready).toMatchObject({ state: "READY", candidates: { length: 2 } });
+    const group = { ...destination, selected: [0, 1].map(index => ({ runId: retry.id, index })) };
+    const grouped = await queueCaseGrouping(actor, { ...group, groupingId: randomUUID() });
+    provider.fetch.mockResolvedValueOnce(new Response(null, { status: 502 }));
+    expect(await processDueJobs(1, "personal-ai")).toMatchObject({ succeeded: 1 });
+    expect(await readCaseGrouping(actor, matter.id, grouped.id)).toMatchObject({
+      state: "UNCERTAIN", receipt: { error: "INTERRUPTED" },
+    });
+    expect(await queueCaseGrouping(actor, { ...group, groupingId: randomUUID() })).toMatchObject({ id: grouped.id, state: "UNCERTAIN" });
+    expect(await processDueJobs(1, "personal-ai")).toMatchObject({ processed: 0 });
+    expect(provider.fetch).toHaveBeenCalledTimes(4);
+  });
+
   it.skipIf(!process.env.LEXORDER_V8_GROUPING_SAMPLE)("V8 借贷示例跨批归并保留三方原文与金额冲突", async () => {
     provider.fetch.mockClear();
     await saveAiSettings({ enabled: true, apiKey: "fixture-key", baseUrl: provider.url, textModel: model });

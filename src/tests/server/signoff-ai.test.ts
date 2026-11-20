@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ActionError } from "@/lib/action-error";
+import { AiDeliveryUncertainError } from "@/lib/ai/client";
 import type { FollowUp, SignoffAiExecution, SignoffKind, SkillResult } from "@/server/skills/signoff-contract";
 import { signoffMethod } from "@/server/skills/signoff-contract";
 
@@ -79,6 +80,16 @@ describe("应用内签收核对作业", () => {
     expect(row.aiExecution).toMatchObject({ state, sentCharacters: supplement.length });
     expect(row.result?.candidates.map(item => item.kind) ?? null).toEqual(state === "SUCCEEDED" ? ["PERFORMANCE"] : null);
     expect(readFollowUp).toHaveBeenCalledTimes(state === "SUCCEEDED" ? 2 : 1);
+  });
+
+  it("供方是否执行无法确认时保留结果未确认，重复执行不调用第二次", async () => {
+    aiChat.mockRejectedValueOnce(new AiDeliveryUncertainError(502));
+    await processSignoffAi(payload, lease);
+    await processSignoffAi(payload, lease);
+    expect(aiChat).toHaveBeenCalledTimes(1);
+    expect(row.aiExecution).toMatchObject({ state: "UNCERTAIN", error: "INTERRUPTED" });
+    expect(row.aiExecution.sentCharacters).toBeUndefined();
+    expect(row.aiExecution.usage).toBeUndefined();
   });
 
   it("原取舍的权限在派发前撤回时零模型调用", async () => {

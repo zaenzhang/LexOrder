@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import Link from "@/features/shell/workspace-link"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ChevronDownIcon } from "lucide-react"
@@ -75,6 +75,7 @@ function PlannedFragment({ matterId, range, label }: {
 export function MatterAnalysisRuns({ matterId, coverage, targets, onAdopted, onOpenItem }: {
   matterId: string; coverage?: MatterInputCoverageView; targets?: AdoptionTarget[]; onAdopted?(): void; onOpenItem?(): void
 }) {
+  const pendingIds = useRef(new Map<string, string>())
   const [selected, setSelected] = useState<string>()
   const [excerptPick, setExcerptPick] = useState<{ runId: string; index: number; fragment: number }>()
   const [picks, setPicks] = useState<CandidatePick[]>([])
@@ -102,13 +103,14 @@ export function MatterAnalysisRuns({ matterId, coverage, targets, onAdopted, onO
     queryFn: ({ signal }) => readPersonal<{ text: string }>(endpoint + "&run=" + excerptPick!.runId + "&fragment=" + excerptPick!.fragment, { signal }),
   })
   const submit = useMutation({
-    mutationFn: ({ destination, batch }: { destination: Destination; batch: MatterAnalysisPlan["batches"][number] }) => readPersonal<Run>(workspaceEndpoint, {
+    mutationFn: ({ submission, runId }: {
+      submission: { matterId: string; confirmed: true; model: string; origin: string; ranges: FragmentSelection[] }; runId: string
+    }) => readPersonal<Run>(workspaceEndpoint, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "start-matter-observation-run", data: { matterId, runId: crypto.randomUUID(), confirmed: true, ...destination,
-        ranges: batch.ranges.map(fixedRange),
-      } }),
+      body: JSON.stringify({ action: "start-matter-observation-run", data: { ...submission, runId } }),
     }),
-    onSuccess: run => {
+    onSuccess: (run, { submission }) => {
+      pendingIds.current.delete(JSON.stringify(submission))
       setPages([])
       setSelected(run.id)
       void client.invalidateQueries({ queryKey: [...key, "list"] })
@@ -119,6 +121,14 @@ export function MatterAnalysisRuns({ matterId, coverage, targets, onAdopted, onO
   const run = detail.data
   const destination = list.data?.destination
   const adopted = new Map(run?.caseAdoptions.map(entry => [entry.index, entry]))
+
+  function confirmBatch(destination: Destination, batch: MatterAnalysisPlan["batches"][number]) {
+    const submission = { matterId, confirmed: true as const, ...destination, ranges: batch.ranges.map(fixedRange) }
+    const intent = JSON.stringify(submission)
+    const runId = pendingIds.current.get(intent) ?? crypto.randomUUID()
+    pendingIds.current.set(intent, runId)
+    submit.mutate({ submission, runId })
+  }
 
   function remove({ runId, index }: CandidatePick) {
     setPicks(current => current.filter(pick => pick.runId !== runId || pick.index !== index))
@@ -149,11 +159,13 @@ export function MatterAnalysisRuns({ matterId, coverage, targets, onAdopted, onO
             })}
           </ul>
           {destination && <Button size="sm" className="justify-self-start" disabled={submit.isPending}
-            onClick={() => submit.mutate({ destination, batch })}>确认发送第 {index + 1} 批</Button>}
+            onClick={() => confirmBatch(destination, batch)}>确认发送第 {index + 1} 批</Button>}
         </CollapsibleContent>
       </Collapsible>)}
     </section>}
-    {submit.error && <p className="text-sm text-destructive" role="alert">{submit.error.message}</p>}
+    {submit.error && <p className="text-sm text-destructive" role="alert">
+      {submit.error instanceof TypeError ? "未收到提交回执。再次确认将沿用本次提交。" : submit.error.message}
+    </p>}
     {list.error ? <div role="alert" className="flex flex-wrap items-center gap-2 text-sm">
       <span>{list.error.message}</span><Button variant="outline" size="sm" onClick={() => void list.refetch()}>重试</Button>
     </div> : list.isPending ? <p role="status" className="text-sm">正在读取分析记录…</p>
@@ -189,7 +201,7 @@ export function MatterAnalysisRuns({ matterId, coverage, targets, onAdopted, onO
             第 {entry.index + 1} 条{entry.fragment && " · 片段 " + entry.fragment} · {rejectionLabels[entry.reason]}
           </li>)}</ul>
         </details>}
-        {run.state === "UNCERTAIN" && <p>此次调用结果未确认，请查看应用 AI 的调用记录。</p>}
+        {run.receipt?.error === "INTERRUPTED" && <p>模型调用结果未确认。再次确认相同范围会打开原批次，可在应用 AI 的调用记录核对。</p>}
         {run.state === "FAILED" && <p>未生成待核稿，请检查材料读取权限或应用 AI 的调用记录。</p>}
       </div>
       {run.state === "READY" && !run.candidates.length && <p className="text-sm">这批原文未提取到事实记载。</p>}

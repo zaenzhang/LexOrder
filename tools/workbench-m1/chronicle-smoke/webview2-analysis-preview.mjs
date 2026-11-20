@@ -96,4 +96,52 @@ export async function verifyWebView2AnalysisPreview(page, origin, casebookRoot) 
   assert.equal(list.destination, null);
   assert.deepEqual(list.runs, []);
   console.log("PASS native case analysis: on-demand exact frozen excerpt, adjacent fragment excluded, invalid and cross-case ranges refused, unconfigured dispatch blocked");
+  await verifyLostConfirmation(page, sheet, origin, endpoint);
+}
+
+async function verifyLostConfirmation(page, sheet, origin, endpoint) {
+  // Control the model destination and dispatch receipts after the real preflight. No external call.
+  const confirmations = [];
+  const destination = { model: "synthetic-ui-model", origin: "https://model-fixture.invalid" };
+  const readReceipt = runId => ({
+    id: runId, model: destination.model, createdAt: "2026-11-20T18:00:00.000Z",
+    state: "FAILED", rangeCount: 2, authorizedCharacters: 42, receipt: { error: "PROVIDER" },
+    sources: [], candidates: [], caseAdoptions: [], canAdopt: false,
+  });
+  await page.route(url => url.origin === origin && url.pathname === endpoint, async route => {
+    const req = route.request();
+    const url = new URL(req.url());
+    if (req.method() === "GET" && url.searchParams.get("analysis") === "case") {
+      const runId = url.searchParams.get("run");
+      const last = confirmations.at(-1);
+      return route.fulfill({ json: runId ? readReceipt(runId) :
+        { destination, runs: last ? [readReceipt(last.runId)] : [], nextCursor: null } });
+    }
+    if (req.method() === "POST" && req.postDataJSON()?.action === "start-matter-observation-run") {
+      const { data } = req.postDataJSON();
+      confirmations.push(data);
+      if (confirmations.length === 1) return route.abort("failed");
+      return route.fulfill({ json: readReceipt(data.runId) });
+    }
+    return route.continue();
+  });
+  await page.reload();
+  await page.getByRole("table", { name: "案内材料", exact: true }).getByRole("checkbox", { name: "Select all on this page", exact: true }).check();
+  await page.getByRole("button", { name: "分段预检", exact: true }).click();
+  await sheet.getByText("应用 AI · synthetic-ui-model · https://model-fixture.invalid").waitFor();
+  await sheet.getByRole("button", { name: /^第 1 批 · 2 段/ }).click();
+  const send = sheet.getByRole("button", { name: "确认发送第 1 批", exact: true });
+  await send.click();
+  await sheet.getByRole("alert").filter({ hasText: "未收到提交回执。再次确认将沿用本次提交。" }).waitFor();
+  await send.click();
+  await sheet.getByText("未生成待核稿，请检查材料读取权限或应用 AI 的调用记录。").waitFor();
+  assert.equal(confirmations.length, 2);
+  assert.deepEqual(confirmations[1], confirmations[0], "Replaying a lost request must use the original run ID.");
+  const newConfirmation = page.waitForResponse(response =>
+    response.request().method() === "POST" && response.request().postDataJSON()?.action === "start-matter-observation-run");
+  await send.click();
+  assert((await newConfirmation).ok());
+  assert.equal(confirmations.length, 3);
+  assert.notEqual(confirmations[2].runId, confirmations[0].runId, "An explicit retry after reading FAILED needs a new ID.");
+  console.log("PASS WebView2 lost browser receipt: same confirmation reused, explicit retry after FAILED creates a new intent");
 }

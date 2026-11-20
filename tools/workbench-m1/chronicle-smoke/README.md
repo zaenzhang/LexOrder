@@ -111,7 +111,7 @@ node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-P
 node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-Path $qaTarget 'debug/lexorder-chronicle-preview.exe') --observations
 ```
 
-案级分析的派发前预览验收使用 --analysis-preview 和未配置应用 AI 的合成工作区。脚本从图谱进入材料工作台，展开建议批次中的固定片段，并检查按需读取、版本与范围守卫、模型未配置时的派发拒绝和空批次列表。
+案级分析的派发前预览验收使用 --analysis-preview 和未配置应用 AI 的合成工作区。脚本从图谱进入材料工作台，展开建议批次中的固定片段，并检查按需读取、版本与范围守卫、模型未配置时的派发拒绝和空批次列表。最后以受控响应模拟浏览器回执丢失，核对重放沿用原提交编号，以及读到明确失败后主动再试使用新编号。此模式无外部供方调用。
 
 ```powershell
 node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-Path $qaTarget 'debug/lexorder-chronicle-preview.exe') --analysis-preview

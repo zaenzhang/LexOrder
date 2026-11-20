@@ -1,7 +1,7 @@
 import type { EvidenceObservationRun, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { ActionError } from "@/lib/action-error";
-import { aiChat, AiNotConfiguredError, extractJson } from "@/lib/ai/client";
+import { aiChat, AiDeliveryUncertainError, AiNotConfiguredError, extractJson } from "@/lib/ai/client";
 import { getAiSettings } from "@/lib/ai/settings";
 import { fragmentsSchema, type FragmentSelection } from "@/lib/workbench/fixed-fragments";
 import { prisma } from "@/lib/prisma";
@@ -331,7 +331,7 @@ export async function processObservationRun(payload: Record<string, unknown>, le
       } else receipt.error = "INVALID_RESULT";
     } catch { receipt.error = "INVALID_RESULT"; }
   } catch (error) {
-    receipt.error = error instanceof AiNotConfiguredError ? "UNAVAILABLE" : error instanceof Error && error.name === "AbortError" ? "INTERRUPTED" : "PROVIDER";
+    receipt.error = error instanceof AiNotConfiguredError ? "UNAVAILABLE" : error instanceof AiDeliveryUncertainError ? "INTERRUPTED" : "PROVIDER";
   }
 
   await researchTransaction(prisma, async tx => {

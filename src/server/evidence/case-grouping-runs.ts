@@ -1,7 +1,7 @@
 import type { CaseGroupingRun, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { ActionError } from "@/lib/action-error";
-import { aiChat, AiNotConfiguredError, extractJson } from "@/lib/ai/client";
+import { aiChat, AiDeliveryUncertainError, AiNotConfiguredError, extractJson } from "@/lib/ai/client";
 import { caseCandidateKey, type CaseCandidateRef } from "@/lib/evidence/case-adoption";
 import { caseGroupingIdSchema, caseGroupingLimits, caseGroupingPreviewSchema, caseGroupingResultSchema, startCaseGroupingSchema } from "@/lib/evidence/case-grouping";
 import { prisma } from "@/lib/prisma";
@@ -242,7 +242,7 @@ export async function processCaseGrouping(payload: Record<string, unknown>, leas
       if (grounded.skippedFields) receipt.skippedFields = grounded.skippedFields;
     } catch { receipt.error = "INVALID_RESULT"; }
   } catch (error) {
-    receipt.error = error instanceof AiNotConfiguredError ? "UNAVAILABLE" : error instanceof Error && error.name === "AbortError" ? "INTERRUPTED" : "PROVIDER";
+    receipt.error = error instanceof AiNotConfiguredError ? "UNAVAILABLE" : error instanceof AiDeliveryUncertainError ? "INTERRUPTED" : "PROVIDER";
   }
 
   await researchTransaction(prisma, async tx => {

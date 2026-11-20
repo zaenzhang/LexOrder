@@ -52,6 +52,13 @@ export class AiNotConfiguredError extends Error {
   }
 }
 
+export class AiDeliveryUncertainError extends ActionError {
+  constructor(status?: number) {
+    super("AI 调用结果未确认" + (status === undefined ? "" : "（HTTP " + status + "）"));
+    this.name = "AiDeliveryUncertainError";
+  }
+}
+
 async function callOpenAiCompatible(opts: {
   apiKey: string;
   baseUrl: string;
@@ -63,20 +70,33 @@ async function callOpenAiCompatible(opts: {
   try {
     // 私网校验（2026-09-19 审计）：管理端可配的 baseUrl 不得指向本机/内网
     await assertSafeHttpUrl(opts.baseUrl.replace(/\/$/, ""));
-    const res = await safeFetch(`${opts.baseUrl.replace(/\/$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${opts.apiKey}`
-      },
-      body: JSON.stringify(opts.body),
-      signal: ctrl.signal
-    });
+    let res: Response;
+    try {
+      res = await safeFetch(`${opts.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${opts.apiKey}`
+        },
+        body: JSON.stringify(opts.body),
+        signal: ctrl.signal
+      });
+    } catch (error) {
+      if (error instanceof ActionError) throw error;
+      throw new AiDeliveryUncertainError();
+    }
     if (!res.ok) {
       await res.body?.cancel();
+      // A timeout or gateway failure may have happened after the provider began work.
+      if (res.status === 408 || res.status >= 500) throw new AiDeliveryUncertainError(res.status);
       throw new ActionError(`AI 请求失败 (${res.status})`);
     }
-    return res.json();
+    try {
+      return await res.json();
+    } catch (error) {
+      if (error instanceof SyntaxError) throw new ActionError("AI 响应不是有效的 JSON");
+      throw new AiDeliveryUncertainError();
+    }
   } finally {
     clearTimeout(timer);
   }

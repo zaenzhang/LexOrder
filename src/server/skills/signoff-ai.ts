@@ -1,6 +1,6 @@
 import { fragmentsSchema } from "@/lib/workbench/fixed-fragments";
 import { z } from "zod";
-import { aiChat, AiNotConfiguredError, extractJson } from "@/lib/ai/client";
+import { aiChat, AiDeliveryUncertainError, AiNotConfiguredError, extractJson } from "@/lib/ai/client";
 import { loadFixedFragments } from "@/server/ai/fixed-fragments";
 import { ActionError } from "@/lib/action-error";
 import { prisma } from "@/lib/prisma";
@@ -89,7 +89,7 @@ export async function processSignoffAi(payload: Record<string, unknown>, lease: 
     catch { error = "RESULT"; }
   } catch (failure) {
     error = failure instanceof AiNotConfiguredError ? "UNAVAILABLE"
-      : failure instanceof Error && failure.name === "AbortError" ? "INTERRUPTED" : "PROVIDER";
+      : failure instanceof AiDeliveryUncertainError ? "INTERRUPTED" : "PROVIDER";
   }
 
   await researchTransaction(prisma, async tx => {

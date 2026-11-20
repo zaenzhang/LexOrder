@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { aiChat } from "@/lib/ai/client";
+import { aiChat, AiDeliveryUncertainError } from "@/lib/ai/client";
 
 const mock = vi.hoisted(() => ({ settings: vi.fn(), fetch: vi.fn() }));
 vi.mock("@/lib/ai/settings", () => ({ getAiSettings: mock.settings }));
@@ -31,5 +31,39 @@ describe("结构化请求只发送一次输出约束", () => {
     const body = JSON.parse(mock.fetch.mock.calls[0][1].body);
     expect(body.response_format).toBeUndefined();
     expect(body.messages).toEqual([{ role: "system", content: "输出结构：" + JSON.stringify(schema) }, ...request.messages]);
+  });
+
+  it.each([408, 502])("HTTP %s 无法确认供方是否已执行", async status => {
+    mock.settings.mockResolvedValue({ configured: true, apiKey: "fixture", baseUrl: "https://fixture.invalid/v1", textModel: "fixture" });
+    mock.fetch.mockResolvedValueOnce(new Response(null, { status }));
+    await expect(aiChat(request)).rejects.toBeInstanceOf(AiDeliveryUncertainError);
+  });
+
+  it("明确的凭据拒绝可以和调用未确认区分", async () => {
+    mock.settings.mockResolvedValue({ configured: true, apiKey: "fixture", baseUrl: "https://fixture.invalid/v1", textModel: "fixture" });
+    mock.fetch.mockResolvedValueOnce(new Response(null, { status: 401 }));
+    await expect(aiChat(request)).rejects.toMatchObject({ name: "ActionError", message: "AI 请求失败 (401)" });
+  });
+
+  it("拿到响应头后仍限制读取响应体的时间", async () => {
+    mock.settings.mockResolvedValue({ configured: true, apiKey: "fixture", baseUrl: "https://fixture.invalid/v1", textModel: "fixture" });
+    vi.useFakeTimers();
+    const waiting = Promise.withResolvers<void>();
+    try {
+      mock.fetch.mockImplementationOnce(async (_url: string, { signal }: { signal: AbortSignal }) => ({
+        ok: true,
+        json: () => new Promise((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+          waiting.resolve();
+        }),
+      }));
+      const result = aiChat({ ...request, timeoutMs: 100 }).catch(error => error);
+      await waiting.promise;
+      await vi.advanceTimersByTimeAsync(100);
+      // Race against a microtask so a broken timer cleanup fails without hanging the test.
+      expect(await Promise.race([result, Promise.resolve("response body is still waiting")])).toBeInstanceOf(AiDeliveryUncertainError);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
