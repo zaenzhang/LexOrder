@@ -12,7 +12,7 @@ import { bytesPerFile, fileCount, hasPerformancePdfMarker, syntheticImportFiles 
 import { processTable, processTree } from './webkit-process-memory.mjs';
 import { readPublishedBatch } from './release-parse-proof.mjs';
 
-const [bundle, workspace, mode] = process.argv.slice(2);
+const [bundle, workspace, mode, fixtureRound] = process.argv.slice(2);
 assert(process.platform === 'darwin' && path.isAbsolute(bundle ?? '') && bundle.endsWith('.app')
   && path.isAbsolute(workspace ?? ''), 'Supply a mounted macOS .app and an absolute seeded smoke workspace');
 assert.notEqual(workspace, process.env.LEXORDER_DESKTOP_WORKSPACE, 'Use a separate smoke workspace');
@@ -210,4 +210,9 @@ async function measure(round) {
   }
 }
 
-for (let round = 1; round <= 3; round++) await measure(round);
+if (fixture) {
+  assert.match(fixtureRound ?? '', /^[1-3]$/, 'Provide the round number for this seeded batch workspace');
+  await measure(Number(fixtureRound));
+} else {
+  for (let round = 1; round <= 3; round++) await measure(round);
+}

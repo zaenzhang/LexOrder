@@ -184,6 +184,18 @@ jobs:
           path: ${{ runner.temp }}/lexorder-dmg-artifact
           github-token: ${{ github.token }}
           run-id: ${{ inputs.macos_dmg_run_id }}
+      - name: Record available screen sizes
+        if: inputs.macos_dmg_scope == 'full'
+        run: |
+          xcrun swift - <<'SWIFT'
+          import AppKit
+          import CoreGraphics
+          let display = CGMainDisplayID()
+          let modes = CGDisplayCopyAllDisplayModes(display, nil) as? [CGDisplayMode] ?? []
+          let sizes = Set(modes.map { "\($0.width)x\($0.height)" }).sorted()
+          print("CHRONICLE_MAC_DISPLAY_MODES \(sizes)")
+          print("CHRONICLE_MAC_VISIBLE_FRAMES \(NSScreen.screens.map { $0.visibleFrame })")
+          SWIFT
       - name: Verify and smoke the Apple Silicon DMG
         env:
           LEXORDER_MACOS_DIAGNOSTICS_DIR: ${{ runner.temp }}/lexorder-macos-diagnostics
