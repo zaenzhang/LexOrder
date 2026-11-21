@@ -31,7 +31,20 @@ on run argv
 					keystroke targetLabel
 					delay 0.5
 					key code 36
-					delay 0.5
+					set mediaVisible to false
+					repeat 8 times
+						delay 0.3
+						repeat with fileNode in (entire contents of candidate)
+							set fileName to my getText(fileNode, "AXValue")
+							if fileName is missing value then set fileName to my getText(fileNode, "AXTitle")
+							if fileName is not missing value and (fileName as text) contains inputValue then
+								set mediaVisible to true
+								exit repeat
+							end if
+						end repeat
+						if mediaVisible then exit repeat
+					end repeat
+					if not mediaVisible then return "synthetic folder was not reached"
 					keystroke "a" using command down
 					perform action "AXPress" of (first button of candidate whose name is "Open")
 					return "submitted"
@@ -46,6 +59,8 @@ on run argv
 		end if
 		set samples to {}
 		set textCount to 0
+		set consecutiveText to ""
+		set selectedFiles to {}
 		set tree to entire contents of desktopWindow
 		repeat with uiNode in tree
 			set nodeRole to my getText(uiNode, "AXRole")
@@ -66,9 +81,24 @@ on run argv
 					return "typed"
 				end if
 			end if
-			if operation is "text" and nodeRole is "AXStaticText" then
-				set pageText to my getText(uiNode, "AXValue")
-				if pageText is targetLabel then set textCount to textCount + 1
+			if operation is "text" then
+				if nodeRole is "AXStaticText" then
+					set pageText to my getText(uiNode, "AXValue")
+					if pageText is not missing value then
+						if targetLabel starts with "已入卷 " then
+							set consecutiveText to consecutiveText & pageText
+							if consecutiveText ends with targetLabel then return "1"
+						else if pageText is targetLabel then
+							set textCount to textCount + 1
+						end if
+					end if
+				else
+					set consecutiveText to ""
+				end if
+			end if
+			if operation is "queued-files" and nodeRole is "AXButton" then
+				set buttonLabel to my getText(uiNode, "AXTitle")
+				if buttonLabel is not missing value and buttonLabel starts with "移除 " then set end of selectedFiles to text 4 thru -1 of buttonLabel
 			end if
 			if operation is "material-scope" and nodeRole is "AXButton" then
 				set buttonLabel to my getText(uiNode, "AXTitle")
@@ -95,6 +125,7 @@ on run argv
 		end repeat
 		if operation is "inspect" then return {size of desktopWindow, count of tree, samples}
 		if operation is "text" or operation is "material-scope" then return textCount as text
+		if operation is "queued-files" then return selectedFiles
 	end tell
 	return "control or content unavailable"
 end run

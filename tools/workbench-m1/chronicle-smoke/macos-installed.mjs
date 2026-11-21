@@ -87,9 +87,10 @@ async function measureImport(pid, existingPids) {
   await press('批量导入');
 
   const tag = randomUUID().slice(0, 8);
-  const folder = path.join(workspace, 'desktop-uploads-' + tag);
+  const folder = path.join(path.dirname(workspace), 'desktop-uploads-' + tag);
+  const files = syntheticImportFiles(tag);
   await mkdir(folder, { mode: 0o700 });
-  await Promise.all(syntheticImportFiles(tag).map(file => writeFile(path.join(folder, file.name), file.buffer)));
+  await Promise.all(files.map(file => writeFile(path.join(folder, file.name), file.buffer)));
   await press('no files selected');
   await waitFor(pid, 'open-panel', '', 'open');
 
@@ -101,8 +102,10 @@ async function measureImport(pid, existingPids) {
   const started = performance.now();
   let receiptAt;
   try {
-    assert.equal(await probe(pid, 'choose-folder', folder), 'submitted');
+    assert.equal(await probe(pid, 'choose-folder', folder + '/', tag + '-1'), 'submitted');
     await textVisible('已入卷 0 件，待处理 ' + fileCount + ' 件，失败 0 件');
+    const queuedFiles = (await probe(pid, 'queued-files')).split(', ').sort();
+    assert.deepEqual(queuedFiles, files.map(file => file.name).sort(), 'Only this round’s synthetic files may be imported');
     await press('导入待处理文件');
     await textVisible('已入卷 ' + fileCount + ' 件，待处理 0 件，失败 0 件', 90_000);
     receiptAt = performance.now();
