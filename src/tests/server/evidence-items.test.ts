@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ChronologyAssessment } from "@/lib/evidence/chronology-assessment";
 import { emptyEvidenceEventDate, evidenceEventDateToRecord, type EvidenceEventDate } from "@/lib/evidence/event-date";
 
 const mocks = vi.hoisted(() => ({
@@ -49,6 +50,7 @@ function fixture() {
     item: { id: ITEM, matterId: MATTER, title: "合成合同款", content: "合成记录：已支付价款。", kind: "FACT",
       requestKey: null as string | null, requestHash: null as string | null,
       sourceDocumentId: null as string | null, sourcePage: null as number | null, revision: 1, updatedAt: now,
+      chronologyAssessment: {} as ChronologyAssessment, observationRevisionIds: [] as string[],
       ...evidenceEventDateToRecord(emptyEvidenceEventDate()),
       confirmedById: null as string | null, confirmedAt: null as Date | null, createdById: mocks.session.user.id, createdAt: now },
     documents: [
