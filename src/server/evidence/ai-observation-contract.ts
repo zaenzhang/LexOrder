@@ -64,7 +64,10 @@ type AuthorizedFragment = { start: number; text: string; category?: string; perm
 const observationBoundary = /[。！？；!?;]|[，,]\s*(?:但是|但|然而)\s*(?=认可|承认|确认|确实)/gu;
 const performanceVerb = /收到|收款|收讫|交付|到账|付款|支付|转账|履行|转款|汇款/u;
 const denial = /(?<!不|未|未曾|从未|并未)否认|不认可|不属实|未能证明|不能证明|无法证明|没有证据|无证据/u;
-const unfinishedPerformance = /(?:并未|从未|尚未|暂未|没有|未)\s*(?=收到|收款|交付|到账|付款|支付|转账|履行|转款|汇款)/u;
+const performanceDay = /(?:\p{Nd}{4}(?:\s*年\s*\p{Nd}{1,2}\s*月\s*\p{Nd}{1,2}\s*日|[-/]\p{Nd}{1,2}[-/]\p{Nd}{1,2})|该日|当日|同日|当天)/u;
+const unfinishedPerformance = new RegExp(
+  String.raw`(?:没有|未曾?)\s*(?:(?:在|于)\s*${performanceDay.source}\s*)?(?:实际\s*)?(?=${performanceVerb.source})`, "u",
+);
 const conditionalPerformance = /如果|假如|假设|倘若|若(?=[于在]?\s*\d{4})|以[^，,\n]{1,36}为条件/u;
 const plannedPerformance = /(?:约定|拟|应当?|计划)(?:于|在)\s*\d{4}/u;
 
@@ -393,7 +396,7 @@ export function readExplicitPleadingCandidates(authorized: AuthorizedFragment[])
     // A new affirmative clause after a denial can stand alone. Unclear clauses stay for model or human review.
     const clauses = source.text.split(observationBoundary);
     for (const clause of clauses) {
-      if (withheld.test(clause)) continue;
+      if (withheld.test(clause) || unfinishedPerformance.test(clause)) continue;
       for (const rule of delivered) {
         for (const match of clause.matchAll(rule)) {
           try {
@@ -425,6 +428,69 @@ export function readExplicitPleadingCandidates(authorized: AuthorizedFragment[])
     }
   }
   return candidates;
+}
+
+/** Read explicitly labelled message dates without inferring delivery or receipt of a court document. */
+export function readExplicitMessageCandidates(authorized: AuthorizedFragment[]) {
+  const candidates: ReturnType<typeof normalizeCandidate>[] = [];
+  for (const [index, source] of authorized.entries()) {
+    if (source.category !== "EVIDENCE") continue;
+    for (const line of fragmentLines(source.text)) {
+      const fields = /^[ \t]*(发送|接收)(?:时间|日期)[ \t]*[:：][ \t]*([^。！？；]{1,40}?)[ \t]*。?$/u.exec(line.text);
+      if (!fields) continue;
+      const role = fields[1] === "发送" ? "SENT" : "RECEIVED";
+      try {
+        const candidate = normalizeCandidate({
+          fragment: index + 1, statement: "RECORD", lines: { first: line.line },
+          date: { role, quote: { text: fields[2] } },
+          hint: { title: role === "SENT" ? "消息发送记载" : "消息接收记载", category: "communication", kind: "FACT" },
+        }, authorized);
+        if (candidate.data.date?.value.precision === "EXACT") candidates.push(candidate);
+      } catch (error) {
+        if (!(error instanceof ActionError || error instanceof z.ZodError)) throw error;
+      }
+    }
+  }
+  return candidates;
+}
+
+/** Read the named principal from a loan note that states its loan terms. */
+export function readLoanNotePrincipalCandidates(authorized: AuthorizedFragment[]) {
+  const candidates: ReturnType<typeof normalizeCandidate>[] = [];
+  for (const [index, source] of authorized.entries()) {
+    if (source.category !== "EVIDENCE") continue;
+    const [heading, line] = fragmentLines(source.text).filter(entry => entry.text.trim());
+    if (heading?.text.trim() !== "借条" || !line) continue;
+    const terms = /^\s*今借到[^。；]{1,120}?(?=[，,]\s*(?:借期|借款期限|[年月]?利率))/u.exec(line.text)?.[0];
+    if (!terms || hasPerformanceQualification(terms)) continue;
+    const values = terms.match(/(?:人民币|CNY|[¥￥])[ \t]*\d[\d,，]*(?:[.．]\d{1,6})?[ \t]*(?:万|亿)?元?|\d[\d,，]*(?:[.．]\d{1,6})?[ \t]*(?:万|亿)?元/gu);
+    if (values?.length !== 1) continue;
+    try {
+      const candidate = normalizeCandidate({
+        fragment: index + 1, statement: "RECORD", lines: { first: line.line },
+        amount: { nature: "AGREED_PRINCIPAL", quote: { text: values[0].trim() } },
+        hint: { title: "借条记载本金", category: "agreement", kind: "TODO_VERIFY" },
+      }, authorized);
+      if (candidate.data.amount?.value) candidates.push(candidate);
+    } catch (error) {
+      if (!(error instanceof ActionError || error instanceof z.ZodError)) throw error;
+    }
+  }
+  return candidates;
+}
+
+export function mergeExplicitFields(
+  candidates: ReturnType<typeof normalizeCandidate>[],
+  additions: ReturnType<typeof normalizeCandidate>[],
+) {
+  function fieldKeys({ fragment, data: { amount, date } }: ReturnType<typeof normalizeCandidate>) {
+    return [
+      ...(date ? [[fragment, date.role, date.span.start, date.span.end].join(":")] : []),
+      ...(amount ? [[fragment, amount.nature, amount.span.start, amount.span.end].join(":")] : []),
+    ];
+  }
+  const covered = new Set(candidates.flatMap(fieldKeys));
+  return [...candidates, ...additions.filter(candidate => fieldKeys(candidate).some(key => !covered.has(key)))];
 }
 
 export function combineObservationCandidates(candidates: ReturnType<typeof normalizeCandidate>[], additions: ReturnType<typeof normalizeCandidate>[]) {

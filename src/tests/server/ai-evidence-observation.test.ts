@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { inspectAiObservationResult, prepareAiObservationResult, readBankReceiptCandidates, readExplicitPleadingCandidates } from "@/server/evidence/ai-observation-contract";
+import { inspectAiObservationResult, mergeExplicitFields, prepareAiObservationResult, readBankReceiptCandidates, readExplicitMessageCandidates, readExplicitPleadingCandidates, readLoanNotePrincipalCandidates } from "@/server/evidence/ai-observation-contract";
 
 import { readObservationRuns } from "@/server/evidence/analysis-runs";
 import { observationJobKey } from "@/server/evidence/analysis-run-contract";
@@ -352,6 +352,29 @@ it.each([
   expect(result.skippedFields).toBe(3);
 });
 
+it.each(["2024年4月9日", "2024-04-09"])("否定词与动作隔着日期时保留限定语，也保留后一句承认：%s", day => {
+  const stripped = day + "收到借款，也未在该日支付人民币80000元";
+  const denied = "李四陈述：我没有在" + stripped;
+  const affirmed = "李四随后确认于2024年4月10日实际支付2000元";
+  const result = inspectAiObservationResult({ observations: [
+    { fragment: 1, lines: { first: 1 }, statement: "PARTY_STATEMENT", excerpt: { text: stripped },
+      hint: { title: "李四已支付", category: "payment", kind: "FACT" },
+      date: { role: "OCCURRENCE", quote: { text: day } },
+      amount: { nature: "ACTUAL_TRANSFER", quote: { text: "80000元" } } },
+    { fragment: 1, lines: { first: 1 }, statement: "PARTY_STATEMENT", excerpt: { text: affirmed },
+      date: { role: "OCCURRENCE", quote: { text: "2024年4月10日" } },
+      amount: { nature: "ACTUAL_TRANSFER", quote: { text: "2000元" } } },
+  ] }, [{ text: denied + "。" + affirmed + "。", start: 0, category: "EVIDENCE" }]);
+  expect(result.rejected).toEqual([]);
+  const [qualified, recorded] = result.candidates;
+  expect(qualified.data.excerpt?.text).toBe(denied);
+  expect(qualified.data.date).toBeUndefined();
+  expect(qualified.data.amount).toBeUndefined();
+  expect(qualified.hint?.kind).toBe("TODO_VERIFY");
+  expect(recorded.data.date?.value).toEqual({ precision: "EXACT", day: "2024-04-10" });
+  expect(recorded.data.amount?.value).toEqual({ currency: "CNY", value: "2000" });
+});
+
 it("整行出现否认与明确承认时，独立承认的金额可以保留", () => {
   const text = "被告否认于2024年3月1日收到12万元，但认可收到另笔2万元。";
   const result = inspectAiObservationResult({ observations: [{
@@ -419,6 +442,35 @@ it.each([
     fragment: 1, lines: { first: 1 }, statement: "RECORD", date: { role: "SERVICE", quote: { text: dateText } },
   }] }, [{ text, start: 0 }]);
   expect(result.candidates[0].data.date).toMatchObject({ role, text: dateText, value: { precision: "EXACT", day } });
+});
+
+it("从有明确借款条款的借条读取名义本金，维持固定引文", () => {
+  const text = "借条\n今借到陈某人民币壹拾万元整（¥100,000），借期一年。";
+  const [candidate] = readLoanNotePrincipalCandidates([{ text, start: 0, category: "EVIDENCE" }]);
+  expect(candidate.data.amount).toMatchObject({
+    nature: "AGREED_PRINCIPAL", text: "¥100,000", value: { currency: "CNY", value: "100000" },
+  });
+  expect(candidate.hint?.kind).toBe("TODO_VERIFY");
+  expect(readLoanNotePrincipalCandidates([
+    { text: text.replace("，借期一年", ""), start: 0, category: "EVIDENCE" },
+    { text: text.replace("借条", "其他材料"), start: 0, category: "EVIDENCE" },
+    { text: text.replace("¥100,000", "100,000"), start: 0, category: "EVIDENCE" },
+  ])).toEqual([]);
+});
+
+it("直接从消息记录读取明确标注的日期，并保留同一出处的丰富候选", () => {
+  const text = "发送时间：2024-06-02 23:59:02\n接收时间：2024-06-03 00:00:01。\n接收时间：2024-06-03 24:01:00";
+  const authorized = [{ text, start: 90, category: "EVIDENCE" }];
+  const local = readExplicitMessageCandidates(authorized);
+  expect(local.map(candidate => candidate.data.date)).toMatchObject([
+    { role: "SENT", text: "2024-06-02 23:59:02", value: { precision: "EXACT", day: "2024-06-02" } },
+    { role: "RECEIVED", text: "2024-06-03 00:00:01", value: { precision: "EXACT", day: "2024-06-03" } },
+  ]);
+  const live = inspectAiObservationResult({ observations: [{
+    fragment: 1, lines: { first: 1, last: 2 }, statement: "RECORD",
+    date: { role: "SENT", quote: { text: "2024-06-02 23:59:02" } },
+  }] }, authorized).candidates;
+  expect(mergeExplicitFields(live, local)).toEqual([live[0], local[1]]);
 });
 
 it("坏时刻保留原文，但不生成可定位的日期", () => {

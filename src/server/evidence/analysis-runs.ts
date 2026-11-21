@@ -11,7 +11,7 @@ import { assertCurrentJobLease, type JobLease } from "@/server/cron/queue";
 import { contextAccess, type ContextAccess, type ContextActor } from "@/server/matters/context-service";
 import { researchTransaction } from "@/server/research/service";
 import { resolvePersonalActor } from "@/server/runtime/personal";
-import { combineObservationCandidates, fragmentLines, inspectAiObservationResult, readBankReceiptCandidates, readExplicitPleadingCandidates } from "./ai-observation-contract";
+import { combineObservationCandidates, fragmentLines, inspectAiObservationResult, mergeExplicitFields, readBankReceiptCandidates, readExplicitMessageCandidates, readExplicitPleadingCandidates, readLoanNotePrincipalCandidates } from "./ai-observation-contract";
 import { observationExtractionSchema, observationSystemPrompt, unpackObservationDraft } from "./observation-extraction-skill";
 import {
   observationAdoptionSchema, observationCandidatesSchema, observationJobKey, observationMethodVersion, observationRangesSchema,
@@ -299,7 +299,9 @@ export async function processObservationRun(payload: Record<string, unknown>, le
   const { run, ranges, fragments, title, matterId, receipt } = dispatch;
   const local = readBankReceiptCandidates(fragments);
   const remaining = fragments.filter(fragment => !local.covered.has(fragment.index));
-  const localCandidates = combineObservationCandidates(local.candidates, readExplicitPleadingCandidates(fragments));
+  const recordCandidates = combineObservationCandidates(local.candidates, readExplicitPleadingCandidates(fragments));
+  const explicitFields = [...readExplicitMessageCandidates(fragments), ...readLoanNotePrincipalCandidates(fragments)];
+  const localCandidates = mergeExplicitFields(recordCandidates, explicitFields);
   let candidates: ReturnType<typeof inspectAiObservationResult>["candidates"] | undefined =
     localCandidates.length <= 80 && localCandidates.length ? localCandidates : undefined;
   if (candidates) receipt.localRecords = candidates.length;
@@ -325,7 +327,7 @@ export async function processObservationRun(payload: Record<string, unknown>, le
       if (result.rejected.length) receipt.rejected = result.rejected;
       if (result.skippedFields) receipt.skippedFields = result.skippedFields;
       if (result.candidates.length || !result.rejected.length) {
-        const combined = combineObservationCandidates(localCandidates, result.candidates);
+        const combined = mergeExplicitFields(combineObservationCandidates(recordCandidates, result.candidates), explicitFields);
         if (combined.length > 80) throw new ActionError("候选记载超出批次上限");
         candidates = combined;
       } else receipt.error = "INVALID_RESULT";

@@ -13,13 +13,14 @@ import { prisma } from "@/lib/prisma";
 import { changeMatterFolder } from "@/lib/runtime/matter-folders";
 import { saveAiSettings } from "@/lib/ai/settings";
 import { readMatterInputCoverage } from "@/server/ai/input-coverage-service";
+import type { ObservationData } from "@/lib/evidence/observation-contract";
 import type { MatterAnalysisPlan } from "@/lib/ai/input-coverage";
 import { resolvePersonalActor } from "@/server/runtime/personal";
 import { createFolder, moveDocumentToFolder, renameFolder } from "@/server/document-folders/actions";
 import { changeMaterialCategory } from "@/server/documents/catalog-actions";
 import { uploadDocument } from "@/server/documents/actions";
 import { processMaterialJob } from "@/server/documents/material-processing";
-import { addEvidenceSource, adoptEvidenceObservationRun, adoptMatterObservations, createEvidenceItem } from "@/server/evidence/actions";
+import { addEvidenceSource, adoptEvidenceObservationRun, adoptMatterObservations, createEvidenceItem, getEvidenceItem } from "@/server/evidence/actions";
 import { processObservationRun, queueMatterObservationRun, queueObservationRun, readMatterObservationExcerpt, readObservationRuns } from "@/server/evidence/analysis-runs";
 import { observationJobKey } from "@/server/evidence/analysis-run-contract";
 import { completeJob } from "@/server/cron/queue";
@@ -642,6 +643,7 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     await changeMatterFolder(matter, { action: "bind", root }, path.join(workspace, "storage"));
 
     const ranges = [];
+    let parseMs = 0;
     for (const [name, contents] of samples) {
       const form = new FormData();
       form.set("file", new File([contents], name, { type: "text/plain" }));
@@ -652,13 +654,15 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
       const saved = await uploadDocument(form);
       if (!saved.ok) throw new Error(saved.message);
       const run = await prisma.documentParseRun.findFirstOrThrow({ where: { documentId: saved.id } });
+      const parseStarted = performance.now();
       expect(await processDueJobs(1, "personal-materials")).toMatchObject({ succeeded: 1 });
+      parseMs += performance.now() - parseStarted;
       const parsed = await prisma.documentParseRun.findUniqueOrThrow({ where: { id: run.id } });
       expect(parsed.state).toBe("READY");
       const [anchor] = parsed.anchors as { anchorId: string; text: string }[];
       ranges.push({ documentId: saved.id, parseRunId: run.id, anchorId: anchor.anchorId, start: 0, end: anchor.text.length });
     }
-    return { actor, matter, ranges };
+    return { actor, matter, ranges, parseMs: Math.round(parseMs) };
   }
 
 
@@ -931,7 +935,7 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
       if (!("candidates" in batch)) throw new Error("Expected V8 analysis batch detail");
       expect(batch.state).toBe("READY");
       return batch.candidates.flatMap((candidate, candidateIndex) =>
-        candidate.data.amount ? [{ runId: [a, b][index].id, index: candidateIndex }] : []);
+        candidate.data.amount?.value ? [{ runId: [a, b][index].id, index: candidateIndex }] : []);
     });
     expect(selected).toHaveLength(4);
     const firstCall = JSON.parse(String(provider.fetch.mock.calls[0][1]?.body)).messages.find((message: { role: string }) => message.role === "user");
@@ -956,7 +960,7 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
       [{ precision: "EXACT", day: "2023-03-01" }, "500000"],
       [{ precision: "EXACT", day: "2023-03-03" }, "480000"],
     ]);
-    expect(byName.get("1-iou.txt")?.amount?.nature).toBe("AGREED_PRINCIPAL");
+    expect(byName.get("1-iou.txt")?.amount).toMatchObject({ nature: "AGREED_PRINCIPAL", value: { currency: "CNY", value: "500000" } });
     expect(byName.get("4-bank-receipt.txt")).toMatchObject({ participants: ["张三", "李四"],
       relations: [{ kind: "PAYS_TO", from: 1, to: 2, quote: receiptLine }] });
     expect(byName.get("2-complaint.txt")).toMatchObject({ statement: "PARTY_STATEMENT", excerpt: expect.stringContaining("原告当日交付") });
@@ -1041,8 +1045,13 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
     expect(provider.fetch).toHaveBeenCalledTimes(6);
   }, 60_000);
 
-  it.skipIf(process.env.LEXORDER_V8_LIVE_OPENAI !== "1")("V8 同案三轮真实 OpenAI 提取和归并", async () => {
-    const samples = await loadV8Samples(true);
+  const v8TransferChecks = [
+    { name: "4-bank-receipt.txt", date: "2023-03-03", amount: "480000", statement: "RECORD" },
+    { name: "2-complaint.txt", date: "2023-03-01", amount: "500000", statement: "PARTY_STATEMENT" },
+    { name: "3-defence.txt", date: "2023-03-03", amount: "480000", statement: "PARTY_STATEMENT" },
+  ];
+
+  async function configureV8OpenAi() {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error("Missing OPENAI_API_KEY");
     const origin = "https://api.openai.com";
@@ -1061,12 +1070,14 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
       }
       return response;
     });
-    const checks = [
-      { name: "4-bank-receipt.txt", date: "2023-03-03", amount: "480000", statement: "RECORD" },
-      { name: "2-complaint.txt", date: "2023-03-01", amount: "500000", statement: "PARTY_STATEMENT" },
-      { name: "3-defence.txt", date: "2023-03-03", amount: "480000", statement: "PARTY_STATEMENT" },
-    ];
     await saveAiSettings({ enabled: true, apiKey, baseUrl: origin + "/v1", textModel: liveModel });
+    return { liveModel, origin };
+  }
+
+  it.skipIf(process.env.LEXORDER_V8_LIVE_OPENAI !== "1")("V8 同案三轮真实 OpenAI 提取和归并", async () => {
+    const samples = await loadV8Samples(true);
+    const { liveModel, origin } = await configureV8OpenAi();
+    const checks = v8TransferChecks;
     try {
       const outcomes: boolean[] = [];
       for (let trial = 1; trial <= 3; trial++) {
@@ -1106,7 +1117,7 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
           continue;
         }
         const iou = batch.candidates.findIndex(candidate => batch.sources[candidate.fragment - 1]?.name === "1-iou.txt" &&
-          candidate.data.amount?.nature === "AGREED_PRINCIPAL");
+          candidate.data.amount?.nature === "AGREED_PRINCIPAL" && candidate.data.amount.value?.value === "500000");
         const review = iou < 0 ? selected : [...selected, { runId: batch.id, index: iou }];
         const groupStarted = performance.now();
         const plan = await previewCaseGrouping(actor, { matterId: matter.id, selected: review });
@@ -1134,4 +1145,120 @@ describe.skipIf(process.env.LEXORDER_EVIDENCE_PGLITE_TEST !== "1")("个人版案
       provider.fetch.mockReset();
     }
   }, 250_000);
+
+  it.skipIf(process.env.LEXORDER_V8_LIVE_OPENAI !== "1")("V8 十二份合成材料的真实分批分析与固定来源采用", async () => {
+    const samples = await loadV8Samples(true);
+    samples.push(
+      ["05-repayment-bank.txt", "中国某银行 转账回单\n交易日期 ｜ 付款人 ｜ 收款人 ｜ 金额（元） ｜ 摘要\n2024-04-08 ｜ 李四 ｜ 张三 ｜ 30,000.00 ｜ 还款"],
+      ["06-repayment-receipt.txt", "收款人张三确认，2024年4月8日收到李四归还借款人民币30000元。该笔以银行记录为准，其他交易另有记载。"],
+      ["07-reminder-outbox.txt", "补交发件记录，催还对象为李四。\n发送时间：2024-04-10 23:59:02\n消息正文：请核对剩余款项。"],
+      ["08-reminder-inbox.txt", "补交收件端平台记录，发件人为张三。\n接收时间：2024-04-11 00:00:01\n平台回执只记载收到消息的时间。"],
+      ["09-balance-statement.txt", "银行账户对账单摘要，期末日期：2024年4月30日。\n账户余额：人民币490000元。该金额为余额。"],
+      ["10-settlement-note.txt", "补充约定。双方签署日期：2024年5月1日。\n约定履行日期：2024年6月30日。实际履行情况待核。"],
+      ["11-courier-delivery.txt", "寄件项目：催款函。\n签收日期：2024年4月15日。签收人：李四。\n本回单记录快递签收，不记载实际还款。"],
+      ["12-denial-note.txt", "李四陈述：我没有在2024年4月9日收到借款，也未在该日支付人民币80000元。此处只记录其陈述。"],
+    );
+
+    const { liveModel, origin } = await configureV8OpenAi();
+    try {
+      const importStarted = performance.now();
+      const { actor, matter, ranges, parseMs } = await seedV8Case("LIVE-SCALE", samples);
+      const importAndParseMs = Math.round(performance.now() - importStarted);
+      const supply = { matterId: matter.id, confirmed: true as const, model: liveModel, origin };
+      const sourceRows = ranges.map((range, index) => ({ range, name: samples[index][0], text: samples[index][1] }));
+      const batches = [sourceRows.filter((_, index) => index % 2 === 0), sourceRows.filter((_, index) => index % 2 === 1)];
+      const published: { name: string; data: ObservationData; ref: { runId: string; index: number } }[] = [];
+      const extractions = [];
+      let sourceReadCount = 0;
+
+      for (const sources of batches) {
+        const began = performance.now();
+        const requested = await queueMatterObservationRun(actor, {
+          ...supply, runId: randomUUID(), ranges: sources.map(({ range }) => range),
+        });
+        expect(await processDueJobs(1, "personal-ai")).toMatchObject({ succeeded: 1 });
+        const batch = await readObservationRuns(actor, matter.id, null, requested.id);
+        if (!("candidates" in batch)) throw new Error("Expected scale batch detail");
+        const extractMs = Math.round(performance.now() - began);
+        expect(batch.state).toBe("READY");
+        expect(batch.receipt?.usage).toBeDefined();
+        extractions.push({ extractMs, totalCandidates: batch.candidates.length, receipt: batch.receipt });
+        expect(batch.sources.map(source => source.name)).toEqual(sources.map(source => source.name));
+        for (const [index, { range, text }] of sources.entries()) {
+          const excerpt = await readMatterObservationExcerpt(actor, matter.id, batch.id, index + 1);
+          sourceReadCount++;
+          expect(excerpt.text).toBe(text.slice(range.start, range.end));
+        }
+        for (const [index, { fragment, data }] of batch.candidates.entries()) {
+          const { range, name, text } = sources[fragment - 1];
+          for (const field of [data.excerpt, data.date, data.amount, ...data.participants ?? [], ...data.relations ?? []]) {
+            if (!field) continue;
+            expect(field.span.start).toBeGreaterThanOrEqual(range.start);
+            expect(field.span.end).toBeLessThanOrEqual(range.end);
+            expect(text.slice(field.span.start, field.span.end)).toBe(field.text);
+          }
+          published.push({ name, data, ref: { runId: batch.id, index } });
+        }
+      }
+
+      const transfers = v8TransferChecks.map(check => published.find(({ name, data }) => name === check.name &&
+        data.statement === check.statement && data.date?.value.precision === "EXACT" && data.date.value.day === check.date &&
+        data.amount?.nature === "ACTUAL_TRANSFER" && data.amount.value?.value === check.amount && Boolean(data.excerpt)));
+      const principal = published.find(({ name, data }) => name === "1-iou.txt" && data.amount?.nature === "AGREED_PRINCIPAL" && data.amount.value?.value === "500000");
+      const repayment = published.find(({ name, data }) => name === "05-repayment-bank.txt" && data.amount?.nature === "ACTUAL_TRANSFER" &&
+        data.amount.value?.value === "30000" && data.date?.value.precision === "EXACT" && data.date.value.day === "2024-04-08");
+      const balanceControl = published.find(({ name, data }) => name === "09-balance-statement.txt" && data.amount?.nature === "BALANCE" &&
+        data.amount.value?.value === "490000");
+      const sender = published.find(({ name, data }) => name === "07-reminder-outbox.txt" && data.date?.role === "SENT" &&
+        data.date.value.precision === "EXACT" && data.date.value.day === "2024-04-10");
+      const receiver = published.find(({ name, data }) => name === "08-reminder-inbox.txt" && data.date?.role === "RECEIVED" &&
+        data.date.value.precision === "EXACT" && data.date.value.day === "2024-04-11");
+      expect(published.some(({ name, data }) => name === "12-denial-note.txt" &&
+        data.amount?.nature === "ACTUAL_TRANSFER")).toBe(false);
+      if (transfers.some(value => !value) || !principal || !repayment || !balanceControl || !sender || !receiver) {
+        throw new Error("Scale case control missing: " + JSON.stringify({
+          transfers: transfers.map(Boolean), principal: Boolean(principal), repayment: Boolean(repayment),
+          balance: Boolean(balanceControl), sender: Boolean(sender), receiver: Boolean(receiver),
+        }));
+      }
+      const selected = [...transfers, principal, repayment, balanceControl, sender, receiver].flatMap(value => value ? [value.ref] : []);
+      const groupStarted = performance.now();
+      const preview = await previewCaseGrouping(actor, { matterId: matter.id, selected });
+      const queued = await queueCaseGrouping(actor, { ...supply, groupingId: randomUUID(), selected });
+      expect(await processDueJobs(1, "personal-ai")).toMatchObject({ succeeded: 1 });
+      const grouped = await readCaseGrouping(actor, matter.id, queued.id);
+      if (!("result" in grouped)) throw new Error("Expected scale grouping detail");
+      const groupingMs = Math.round(performance.now() - groupStarted);
+      expect(grouped.state).toBe("READY");
+      expect(grouped.receipt?.usage).toBeDefined();
+      expect(grouped.receipt?.sentCharacters).toBe(preview.characters);
+      const matched = grouped.result?.groups.find(group => group.members.length === v8TransferChecks.length &&
+        v8TransferChecks.every(check => group.members.some(member => grouped.members[member.observation - 1].source.name === check.name)));
+      const proposed = grouped.result?.groups.map(group => ({
+        reason: group.reason, names: group.members.map(member => grouped.members[member.observation - 1].source.name),
+      }));
+      expect(matched?.reason, "Scale case grouping: " + JSON.stringify(proposed)).toBe("DISPUTED_EVENT");
+      const chosen = matched!.members.map(member => {
+        const { runId, index } = grouped.members[member.observation - 1];
+        return { runId, index };
+      });
+      const adopted = await adoptMatterObservations({
+        matterId: matter.id, requestId: randomUUID(), chosen,
+        target: { type: "new", kind: "TODO_VERIFY", title: "借款交付待核", content: "保留三份来源的日期和金额分歧。" },
+      });
+      const { item } = await getEvidenceItem(adopted.id);
+      expect(item.kind).toBe("TODO_VERIFY");
+      expect(item.confirmedAt).toBeNull();
+      expect(item.observations.map(record => record.data.amount?.value?.value).sort()).toEqual(["480000", "480000", "500000"]);
+      expect(item.sources.map(source => source.documentName).sort()).toEqual(v8TransferChecks.map(check => check.name).sort());
+      expect(provider.fetch).toHaveBeenCalledTimes(3);
+      console.log("V8_LIVE_SCALE " + JSON.stringify({
+        documents: ranges.length, sourceReadCount, importAndParseMs, parseMs, extractions, groupingMs,
+        grouping: grouped.receipt, adopted: item.observations.length, providerCalls: provider.fetch.mock.calls.length,
+      }));
+    } finally {
+      await saveAiSettings({ enabled: false });
+      provider.fetch.mockReset();
+    }
+  }, 180_000);
 });
