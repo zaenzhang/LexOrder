@@ -177,7 +177,7 @@ macOS DMG 验收在挂载包内分别检查业务运行时和原生 Tauri 窗口
 node tools/workbench-m1/chronicle-smoke/macos-installed.mjs "$app_bundle" "$smoke_workspace"
 ```
 
-已有发行包可以通过同一个工作流的 `macos_dmg_run_id` 复跑。输入包含 `lexorder-macos-dmg` 的构建运行 ID，工作流只启动一个 Mac runner、下载指定包，并执行与新构建相同的校验。复测时记录所用包的来源提交。
+已有发行包可以通过同一个工作流的 `macos_dmg_run_id` 复跑。输入包含 `lexorder-macos-dmg` 的构建运行 ID，工作流只启动一个 Mac runner、下载指定包，并执行与新构建相同的校验。复测时记录所用包的来源提交。该单平台复测还用相同合成案卷测试四次切案和固定 PDF 首屏。测试通过系统辅助功能操作真实菜单，从窗口截图检测合成 PDF 的专用色块。两项耗时包含系统查询或截图的开销。
 
 ## 检查内容
 

@@ -182,4 +182,4 @@ jobs:
       - name: Verify and smoke the Apple Silicon DMG
         run: |
           bash tools/workbench-m1/chronicle-smoke/macos-dmg.sh \
-            "$RUNNER_TEMP/lexorder-dmg-artifact" "$RUNNER_TEMP/lexorder-installed-case"
+            "$RUNNER_TEMP/lexorder-dmg-artifact" "$RUNNER_TEMP/lexorder-installed-case" --case-flow

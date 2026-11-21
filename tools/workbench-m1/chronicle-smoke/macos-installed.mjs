@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
-import { access, lstat } from 'node:fs/promises';
+import { access, lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
-const [bundle, workspace] = process.argv.slice(2);
+import sharp from 'sharp';
+import { hasPerformancePdfMarker } from './desktop-performance-fixture.mjs';
+
+const [bundle, workspace, mode] = process.argv.slice(2);
 assert(process.platform === 'darwin' && path.isAbsolute(bundle ?? '') && bundle.endsWith('.app')
   && path.isAbsolute(workspace ?? ''), 'Supply a mounted macOS .app and an absolute seeded smoke workspace');
 assert.notEqual(workspace, process.env.LEXORDER_DESKTOP_WORKSPACE, 'Use a separate smoke workspace');
@@ -18,10 +21,53 @@ await access(path.join(workspace, 'workspace.json'));
 await assert.rejects(lstat(owner), { code: 'ENOENT' });
 const script = fileURLToPath(new URL('./macos-installed.applescript', import.meta.url));
 const run = promisify(execFile);
+const fixture = mode === '--case-flow'
+  ? JSON.parse(await readFile(path.join(workspace, 'chronicle-performance-fixture.json'), 'utf8')) : null;
 
-async function probe(pid, action) {
-  const { stdout } = await run('/usr/bin/osascript', [script, String(pid), action], { timeout: 6000 });
+async function probe(pid, action, label = '') {
+  const { stdout } = await run('/usr/bin/osascript', [script, String(pid), action, label], { timeout: 6000 });
   return stdout.trim();
+}
+
+async function waitFor(pid, action, label, expected) {
+  const deadline = performance.now() + 18_000;
+  do {
+    if (await probe(pid, action, label) === expected) return;
+    await delay(250);
+  } while (performance.now() < deadline);
+  const state = await probe(pid, 'inspect').catch(error => error.message);
+  throw new Error(action + ' ' + label + ' unavailable in the installed window\n' + state);
+}
+
+async function measureCases(pid, round) {
+  const press = label => waitFor(pid, 'press', label, 'pressed');
+  const heading = label => waitFor(pid, 'heading', label, 'found');
+  const [a, b] = fixture.cases;
+  await press('切换案件：个人工作区');
+  await press(a.title);
+  await heading(a.title);
+
+  const switchCaseMs = [];
+  for (const [from, to] of [[a, b], [b, a], [a, b], [b, a]]) {
+    await press('切换案件：' + from.title);
+    const started = performance.now();
+    await press(to.title);
+    await heading(to.title);
+    switchCaseMs.push(Math.round(performance.now() - started));
+  }
+
+  const bounds = await probe(pid, 'bounds');
+  assert.match(bounds, /^-?\d+,-?\d+,\d+,\d+$/);
+  const screenshot = path.join(workspace, 'chronicle-installed-pdf-' + round + '.png');
+  const started = performance.now();
+  await press('案卷材料');
+  for (const deadline = started + 12_000; performance.now() < deadline;) {
+    await run('/usr/sbin/screencapture', ['-x', '-R' + bounds, screenshot], { timeout: 5000 });
+    const pixels = await sharp(screenshot).ensureAlpha().raw().toBuffer();
+    if (hasPerformancePdfMarker(pixels)) return { switchCaseMs, pdfFirstVisibleMs: Math.round(performance.now() - started) };
+    await delay(180);
+  }
+  throw new Error('The installed macOS window did not paint the fixed PDF marker');
 }
 
 async function measure(round) {
@@ -57,13 +103,15 @@ async function measure(round) {
     const startMs = Math.round(performance.now() - started);
     assert((await lstat(owner)).isSymbolicLink(), 'Expected the running macOS workspace owner marker');
 
+    const caseMetrics = fixture ? await measureCases(child.pid, round) : {};
+
     const closeAt = performance.now();
     assert.equal(await probe(child.pid, 'close'), 'pressed', 'Could not close the installed window');
     const exit = await Promise.race([closed, delay(45_000, null, { ref: false })]);
     assert.deepEqual(exit, { code: 0, signal: null }, 'The installed window did not shut down cleanly');
     await assert.rejects(lstat(owner), { code: 'ENOENT' });
     console.log('CHRONICLE_MACOS_INSTALLED ' + JSON.stringify({
-      round, startMs, closeMs: Math.round(performance.now() - closeAt), window: size.split(' ').map(Number),
+      round, ...caseMetrics, startMs, closeMs: Math.round(performance.now() - closeAt), window: size.split(' ').map(Number),
     }));
   } catch (error) {
     if (hostOutput) console.error(hostOutput);

@@ -5,12 +5,14 @@ import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { PDFDocument } from 'pdf-lib';
+import { prepareCases } from './desktop-performance-fixture.mjs';
 import { verifyFolderRelocation } from './sidecar-folder-relocation.mjs';
 
 const [workspace, ...casebookRoots] = process.argv.slice(2);
 assert(casebookRoots.length === 0 || casebookRoots.length === 2, 'Pass both casebook roots to verify cross-volume relocation.');
 assert(path.isAbsolute(workspace ?? ''), 'Supply a new absolute synthetic workspace path');
 const manifest = path.join(workspace, 'workspace.json');
+const performanceCasebook = process.env.LEXORDER_SMOKE_PERFORMANCE_CASEBOOK;
 await assert.rejects(readFile(manifest), { code: 'ENOENT' });
 const script = process.env.LEXORDER_SMOKE_RUNTIME_ROOT
   ? path.join(process.env.LEXORDER_SMOKE_RUNTIME_ROOT, 'tools/workbench-m1/personal-runtime.mjs')
@@ -60,7 +62,7 @@ function start() {
   return launch;
 }
 
-async function request(session, route, { body, token = session.token, status = 200 } = {}) {
+async function request(session, route, { body, token = session.token, status = 200, raw = false } = {}) {
   const origin = await session.url();
   const headers = { Origin: origin };
   if (token) headers.Cookie = 'lexorder_local_channel=' + token;
@@ -73,6 +75,7 @@ async function request(session, route, { body, token = session.token, status = 2
     throw new Error(route + ' returned ' + response.status + ': ' + (await response.text()).slice(0, 350));
   }
   if (status === 403 && !body) assert.equal(response.headers.get("X-Lexorder-Channel"), "required");
+  if (raw) return response;
   return status === 200 || body ? response.json() : response.body?.cancel();
 }
 
@@ -146,6 +149,10 @@ try {
     upload: (name, text, status, requestKey) => uploadFixture(first, { matterId, name, text, status, requestKey }),
     download: id => downloadFixture(first, id),
   }) : null;
+  if (performanceCasebook) {
+    await prepareCases((route, body) => request(first, route.replace('/api/personal/', ''), { body, raw: true }),
+      workspace, performanceCasebook);
+  }
   const firstWorkspace = await readFile(manifest, 'utf8');
   await finish(first, 'quit\n');
   await assert.rejects(fetch(await first.url(), { signal: AbortSignal.timeout(3000) }));
