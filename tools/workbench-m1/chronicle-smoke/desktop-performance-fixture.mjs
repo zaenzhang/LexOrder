@@ -52,11 +52,17 @@ export async function prepareCases(request, workspace, casebookRoot) {
   return fixture;
 }
 
-export function syntheticImportFiles(tag) {
+export function syntheticImportFileSpecs(tag) {
   return Array.from({ length: fileCount }, (_, index) => ({
     name: "性能验收导入-" + tag + "-" + (index + 1) + ".txt",
     mimeType: "text/plain",
-    buffer: Buffer.alloc(bytesPerFile, String(index + 1) + " LexOrder synthetic intake\n"),
+    pattern: String(index + 1) + " LexOrder synthetic intake\n",
+  }));
+}
+
+export function syntheticImportFiles(tag) {
+  return syntheticImportFileSpecs(tag).map(({ name, mimeType, pattern }) => ({
+    name, mimeType, buffer: Buffer.alloc(bytesPerFile, pattern),
   }));
 }
 

@@ -148,12 +148,24 @@ node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-P
 
 ```sh
 xvfb-run -a -s '-screen 0 1440x900x24' \
-  node tools/workbench-m1/chronicle-smoke/webkitgtk-performance.mjs \
+  node tools/workbench-m1/chronicle-smoke/webkit-performance.mjs \
   desktop/personal-chronicle/desktop-preview/target/debug/lexorder-chronicle-preview \
   "$(command -v WebKitWebDriver)" 3
 ```
 
 每轮启动实际 Tauri 调试程序和 Sidecar。脚本只在本机开启 WebKit 自动化，创建新的 WebKit 配置目录。合成工作区及运行日志位于 `tools/workbench-m1/.runtime/webkitgtk-performance/`。脚本通过真实菜单切案、检测嵌入 PDF 首屏色块，并用文件选择器将 8 份合成 TXT 入卷。输出 `CHRONICLE_GTK_PERFORMANCE`，含冷启、切案、PDF 内嵌响应和首屏、入卷回执与解析完成耗时，以及整棵应用进程树的 RSS 采样。解析完成以全部新入卷版本的已发布提取内容为准。采样和状态轮询开销计入观测。各轮保留入卷记录和驱动日志。
+
+## macOS WKWebView 性能验收
+
+在独立合成环境运行。复用上述双案、固定 PDF 和 4 MiB TXT 批次。构建阶段只为 macOS 调试宿主安装 WebdriverIO 的原生 WebView 测试插件，以本机临时端口启动。正式安装包和日常热更新仍用默认构建。 [Tauri 原生 WebDriver](https://v2.tauri.app/develop/tests/webdriver/)
+
+```sh
+(cd tools/workbench-m1 && bun run desktop --build-only --macos-webdriver)
+node tools/workbench-m1/chronicle-smoke/webkit-performance.mjs \
+  desktop/personal-chronicle/desktop-preview/target/debug/lexorder-chronicle-preview 3
+```
+
+已有 Chronicle Sidecar 工作流支持手动选择 `macos_native_performance`，只运行 macOS 矩阵。验收从原生启动计时，使用 WKWebView 原生截图查找实际 PDF 首屏色块。批量入口在测试窗口接收合成 FileList，之后通过实际确认按钮和案卷 API 入卷，系统文件选择器另验。输出 `CHRONICLE_WK_PERFORMANCE`。进程内存统计包含 Tauri 子进程，并记录隔离环境中新出现的 WebKit XPC 进程数和累加 RSS。并行浏览任务会影响 XPC 归属，故只在专用环境采集。每轮使用临时 WebView 数据存储，关窗后检查案卷解锁。
 
 ## 检查内容
 

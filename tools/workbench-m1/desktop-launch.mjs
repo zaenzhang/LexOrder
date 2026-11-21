@@ -7,9 +7,10 @@ const host = path.join(root, 'desktop/personal-chronicle/desktop-preview');
 const argument = process.argv[2];
 const packageApp = argument === "--package";
 const buildOnly = argument === '--build-only';
+const macosWebDriver = buildOnly && process.platform === 'darwin' && process.argv[3] === '--macos-webdriver';
 const workspace = buildOnly || packageApp ? undefined : argument;
-if (process.argv.length > 3 || (workspace && !path.isAbsolute(workspace))) {
-  throw new Error('Usage: bun run desktop [absolute workspace path | --build-only | --package]');
+if (process.argv.length > (macosWebDriver ? 4 : 3) || (workspace && !path.isAbsolute(workspace))) {
+  throw new Error('Usage: bun run desktop [absolute workspace path | --build-only [--macos-webdriver] | --package]');
 }
 if (Bun.version !== '1.4.5') throw new Error('The desktop sidecar requires Bun 1.4.5');
 const platform = spawnSync('rustc', ['-vV'], { encoding: 'utf8' });
@@ -50,7 +51,7 @@ if (packageApp) {
   process.exit(packaged.status ?? 1);
 }
 const build = spawnSync('cargo', ['build', '--locked', '--manifest-path', path.join(host, 'Cargo.toml'),
-  '--target-dir', target], {
+  '--target-dir', target, ...(macosWebDriver ? ['--features', 'macos-webdriver-smoke'] : [])], {
   cwd: host, stdio: 'inherit', env: { ...process.env, TAURI_CONFIG: config },
 });
 if (build.error) throw build.error;

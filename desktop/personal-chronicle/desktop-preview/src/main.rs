@@ -114,6 +114,18 @@ fn set_channel(window: &WebviewWindow, token: &str) -> Result<(), String> {
         .map_err(|_| "无法建立本机个人工作区会话。".into())
 }
 
+#[cfg(all(
+    target_os = "macos",
+    debug_assertions,
+    feature = "macos-webdriver-smoke"
+))]
+fn macos_smoke_port() -> Option<std::num::NonZeroU16> {
+    std::env::var("LEXORDER_MACOS_SMOKE_PORT")
+        .ok()?
+        .parse()
+        .ok()
+}
+
 fn open_main(app: &AppHandle, url: Url) -> tauri::Result<()> {
     let origin = url.origin();
     let navigation_app = app.clone();
@@ -130,6 +142,14 @@ fn open_main(app: &AppHandle, url: Url) -> tauri::Result<()> {
     )?;
     let mut config = app.config().app.windows[0].clone();
     config.url = WebviewUrl::External(url);
+    #[cfg(all(
+        target_os = "macos",
+        debug_assertions,
+        feature = "macos-webdriver-smoke"
+    ))]
+    if macos_smoke_port().is_some() {
+        config.incognito = true;
+    }
     let preview = WebviewWindowBuilder::from_config(app, &config)?;
     #[cfg(all(windows, debug_assertions))]
     let preview = if std::env::var_os("LEXORDER_WEBVIEW2_SMOKE").is_some() {
@@ -158,7 +178,18 @@ fn open_main(app: &AppHandle, url: Url) -> tauri::Result<()> {
 }
 
 fn main() {
-    let desktop = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(all(
+        target_os = "macos",
+        debug_assertions,
+        feature = "macos-webdriver-smoke"
+    ))]
+    let builder = if let Some(port) = macos_smoke_port() {
+        builder.plugin(tauri_plugin_wdio_webdriver::init_with_port(port.get()))
+    } else {
+        builder
+    };
+    let desktop = builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())

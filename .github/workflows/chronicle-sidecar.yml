@@ -2,6 +2,11 @@ name: Chronicle Sidecar acceptance
 
 on:
   workflow_dispatch:
+    inputs:
+      macos_native_performance:
+        description: Measure the native WKWebView with two synthetic cases
+        type: boolean
+        default: false
   push:
     paths:
       - .github/workflows/chronicle-sidecar.yml
@@ -27,7 +32,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-2022, macos-15, ubuntu-24.04]
+        os: ${{ fromJSON(inputs.macos_native_performance && '["macos-15"]' || '["windows-2022","macos-15","ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     steps:
@@ -60,8 +65,19 @@ jobs:
       - name: Test host capability and readiness rules
         run: cargo test --locked --manifest-path desktop/personal-chronicle/desktop-preview/Cargo.toml
       - name: Build Tauri with the native Bun external binary
+        if: inputs.macos_native_performance != true
         run: bun run desktop --build-only
         working-directory: tools/workbench-m1
+      - name: Build the isolated WKWebView test host
+        if: inputs.macos_native_performance == true
+        run: bun run desktop --build-only --macos-webdriver
+        working-directory: tools/workbench-m1
+      - name: Measure cold start, PDF paint and background parsing in WKWebView
+        if: inputs.macos_native_performance == true
+        run: |
+          sw_vers
+          node tools/workbench-m1/chronicle-smoke/webkit-performance.mjs \
+            desktop/personal-chronicle/desktop-preview/target/debug/lexorder-chronicle-preview 3
       - name: Create a case, stop, reopen and verify permissions
         run: bun --no-env-file --no-install tools/workbench-m1/chronicle-smoke/sidecar.mjs "${{ runner.temp }}/lexorder-sidecar-case"
       - name: Build the native package

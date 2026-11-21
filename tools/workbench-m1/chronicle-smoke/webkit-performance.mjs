@@ -2,20 +2,25 @@ import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { mkdir, mkdtemp, open, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, open, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import path from "node:path";
+import { tmpdir } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
 import sharp from "sharp";
-import { bytesPerFile, fileCount, hasPerformancePdfMarker, prepareCases, syntheticImportFiles, waitForImportParsing } from "./desktop-performance-fixture.mjs";
+import { bytesPerFile, fileCount, hasPerformancePdfMarker, prepareCases, syntheticImportFiles, syntheticImportFileSpecs, waitForImportParsing } from "./desktop-performance-fixture.mjs";
 
-const [binaryArgument, driverArgument, roundsArgument = "3"] = process.argv.slice(2);
-assert(process.platform === "linux" && binaryArgument && driverArgument && /^[1-9]$/.test(roundsArgument),
-  "Usage (under Xvfb or the development desktop): webkitgtk-performance.mjs <debug binary> <WebKitWebDriver> [rounds]");
+const isMac = process.platform === "darwin";
+const binaryArgument = process.argv[2];
+const driverArgument = isMac ? undefined : process.argv[3];
+const roundsArgument = process.argv[isMac ? 3 : 4] ?? "3";
+assert((isMac || process.platform === "linux") && binaryArgument && (isMac || driverArgument) && /^[1-9]$/.test(roundsArgument),
+  "Usage: webkit-performance.mjs <debug binary> [Linux WebKitWebDriver] [rounds]");
 const repo = path.resolve(import.meta.dirname, "../../..");
 const binary = path.resolve(binaryArgument);
-const driver = path.resolve(driverArgument);
-const root = path.join(repo, "tools/workbench-m1/.runtime/webkitgtk-performance");
+const driver = driverArgument ? path.resolve(driverArgument) : binary;
+const root = isMac ? await mkdtemp(path.join(tmpdir(), "lexorder-wk-performance-"))
+  : path.join(repo, "tools/workbench-m1/.runtime/webkitgtk-performance");
 const workspace = path.join(root, "workspace");
 const casebookRoot = path.join(root, "casebook");
 await mkdir(casebookRoot, { recursive: true });
@@ -42,30 +47,45 @@ async function freePort() {
   return port;
 }
 
-function processTree(rootPid) {
-  const processes = execFileSync("ps", ["-eo", "pid=,ppid=,rss="], {
-    encoding: "utf8", env: { ...process.env, COLUMNS: "120", LINES: "24" },
-  })
-    .trim().split("\n").map(line => line.trim().split(/\s+/).map(Number));
+function processTable() {
+  return execFileSync("ps", ["-eo", "pid=,ppid=,rss=,comm="], {
+    encoding: "utf8", env: { ...process.env, COLUMNS: "250", LINES: "24" },
+  }).trim().split("\n").map(line => {
+    const [, pid, parent, rss, command] = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.+)$/.exec(line);
+    return { pid: Number(pid), parent: Number(parent), bytes: Number(rss) * 1024, command };
+  });
+}
+
+function processTree(rootPid, existingPids) {
+  const processes = processTable();
   const children = new Map();
   for (const process of processes) {
-    const siblings = children.get(process[1]) ?? [];
+    const siblings = children.get(process.parent) ?? [];
     siblings.push(process);
-    children.set(process[1], siblings);
+    children.set(process.parent, siblings);
   }
-  const descendants = [...(children.get(rootPid) ?? [])];
-  for (const [pid] of descendants) descendants.push(...(children.get(pid) ?? []));
-  return { children: children.get(rootPid) ?? [], processes: descendants.length,
-    bytes: descendants.reduce((total, row) => total + row[2] * 1024, 0) };
+  const roots = isMac ? processes.filter(process => process.pid === rootPid) : (children.get(rootPid) ?? []);
+  const descendants = [...roots];
+  for (const { pid } of descendants) descendants.push(...(children.get(pid) ?? []));
+  // WKWebView launches XPC services via launchd. In an isolated runner, include new
+  // WebKit services that were absent before this test host started.
+  const observed = new Set(descendants.map(process => process.pid));
+  const xpc = isMac ? processes.filter(({ pid, command }) => !existingPids.has(pid) && !observed.has(pid)
+    && /(?:^|\/)com\.apple\.WebKit\.(?:WebContent|Networking|GPU)(?:$|\s)/.test(command)) : [];
+  const all = [...descendants, ...xpc];
+  return { processes: all.length, xpcProcesses: xpc.length, bytes: all.reduce((total, process) => total + process.bytes, 0) };
 }
 
 async function measure() {
   const profile = await mkdtemp(path.join(root, "profile-"));
   const log = await open(path.join(profile, "driver.log"), "w");
   const port = await freePort();
-  const child = spawn(driver, ["--host=local", "--port=" + port], {
+  const existingPids = isMac ? new Set(processTable().map(process => process.pid)) : null;
+  let started = performance.now();
+  const child = spawn(driver, isMac ? [] : ["--host=local", "--port=" + port], {
     cwd: repo, stdio: ["ignore", log.fd, log.fd],
-    env: { ...process.env, TAURI_WEBVIEW_AUTOMATION: "true", LEXORDER_DESKTOP_ROOT: repo,
+    env: { ...process.env, ...(isMac ? { LEXORDER_MACOS_SMOKE_PORT: String(port) } : { TAURI_WEBVIEW_AUTOMATION: "true" }),
+      LEXORDER_DESKTOP_ROOT: repo,
       NEXT_DIST_DIR: ".next-personal", LEXORDER_DESKTOP_WORKSPACE: workspace,
       XDG_DATA_HOME: profile, XDG_CACHE_HOME: profile },
   });
@@ -82,14 +102,13 @@ async function measure() {
   }
   let session;
   try {
-    await waitFor("WebKitWebDriver", async () => {
-      assert(child.exitCode === null, "WebKitWebDriver exited");
+    await waitFor("WebKit WebDriver", async () => {
+      assert(child.exitCode === null, "WebKit WebDriver process exited");
       return (await command("/status").catch(() => null))?.ready;
     });
-    const started = performance.now();
-    const { sessionId } = await command("/session", "POST", {
-      capabilities: { alwaysMatch: { "webkitgtk:browserOptions": { binary, args: [] } } },
-    });
+    if (!isMac) started = performance.now();
+    const capabilities = isMac ? {} : { "webkitgtk:browserOptions": { binary, args: [] } };
+    const { sessionId } = await command("/session", "POST", { capabilities: { alwaysMatch: capabilities } });
     session = "/session/" + sessionId;
     const execute = (script, ...args) => command(session + "/execute/sync", "POST", { script, args });
     const visible = (selector, expected, includes = false) => execute(`
@@ -101,7 +120,7 @@ async function measure() {
     const startMs = elapsed(started);
     const native = await execute("return {origin: location.origin, userAgent: navigator.userAgent, viewport: [innerWidth,innerHeight]}");
     assert.match(native.origin, /^http:\/\/127\.0\.0\.1:\d+$/);
-    assert.match(native.userAgent, /Linux.*AppleWebKit/);
+    assert.match(native.userAgent, isMac ? /Macintosh.*AppleWebKit/ : /Linux.*AppleWebKit/);
     assert.deepEqual(native.viewport, [1440, 900], "Use a 1440 × 900 test viewport");
     const request = async (route, body, expected = 200) => {
       assert.match(route, /^\/api\//);
@@ -137,14 +156,21 @@ async function measure() {
     const element = async (selector, title, attribute, hitTest = false) => {
       const handle = await waitFor(title ?? selector, () => execute(`
         const [selector, title, attribute, hitTest] = arguments;
-        return [...document.querySelectorAll(selector)].find(el => {
+        const target = [...document.querySelectorAll(selector)].find(el => {
           if (title !== null && (!el.getClientRects().length || (attribute ? el.getAttribute(attribute) : el.textContent.trim()) !== title)) return false;
           if (!hitTest) return true;
           const rect = el.getBoundingClientRect();
           return el.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
-        }) ?? null;
-      `, selector, title ?? null, attribute ?? null, hitTest));
-      return session + "/element/" + handle[elementKey];
+        });
+        if (!target || !arguments[4]) return target ?? null;
+        document.querySelector("[data-lexorder-smoke-target]")?.removeAttribute("data-lexorder-smoke-target");
+        target.setAttribute("data-lexorder-smoke-target", "");
+        return true;
+      `, selector, title ?? null, attribute ?? null, hitTest, isMac));
+      const identified = isMac ? await command(session + "/element", "POST", {
+        using: "css selector", value: "[data-lexorder-smoke-target]",
+      }) : handle;
+      return session + "/element/" + identified[elementKey];
     };
     const click = handle => command(handle + "/click", "POST", {});
     const overview = title => waitFor("overview " + title, () => visible('section[aria-label="案件状态和期限"] h2', title));
@@ -172,7 +198,7 @@ async function measure() {
     while (performance.now() < pdfDeadline) {
       const entry = await execute("const entry = performance.getEntriesByName(new URL(arguments[0], location.href).href).at(-1); return entry ? performance.timeOrigin + entry.responseEnd : null", pdfPath);
       if (entry) pdfResponseMs = Math.round(entry - pdfStartedWall);
-      const screenshot = await command(frame + "/screenshot");
+      const screenshot = await command(isMac ? session + "/screenshot" : frame + "/screenshot");
       const rgba = await sharp(Buffer.from(screenshot, "base64")).ensureAlpha().raw().toBuffer();
       if (hasPerformancePdfMarker(rgba)) { pdfFirstVisibleMs = elapsed(pdfStarted); break; }
       await delay(100);
@@ -188,31 +214,50 @@ async function measure() {
 
     await navigate("/matters/" + b.id + "/materials");
     await click(await element("button", "批量导入"));
-    const picker = await element('[role="dialog"] input[type="file"]');
+    const pickerSelector = '[role="dialog"] input[type="file"]';
+    const picker = await element(pickerSelector);
     const tag = randomUUID().slice(0, 8);
-    const uploads = path.join(profile, "uploads");
-    await mkdir(uploads);
-    const files = await Promise.all(syntheticImportFiles(tag).map(async file => {
-      const fullPath = path.join(uploads, file.name);
-      await writeFile(fullPath, file.buffer);
-      return fullPath;
-    }));
-    const baseline = processTree(child.pid);
-    assert(baseline.children.length && baseline.bytes > 0, "No desktop process tree");
+    const baseline = processTree(child.pid, existingPids);
+    assert(baseline.processes && baseline.bytes > 0, "No desktop process tree");
+    let files;
+    if (!isMac) {
+      const uploads = path.join(profile, "uploads");
+      await mkdir(uploads);
+      files = await Promise.all(syntheticImportFiles(tag).map(async file => {
+        const fullPath = path.join(uploads, file.name);
+        await writeFile(fullPath, file.buffer);
+        return fullPath;
+      }));
+    }
     const samples = [];
-    const sampler = setInterval(() => samples.push({ at: performance.now(), ...processTree(child.pid) }), 75);
+    const sampler = setInterval(() => samples.push({ at: performance.now(), ...processTree(child.pid, existingPids) }), 75);
     const importStarted = performance.now();
     let importMs, importFinished, parseStates;
     try {
-      const text = files.join("\n");
-      await command(picker + "/value", "POST", { text });
+      if (isMac) {
+        // Embedded WebDriver cannot send file paths to an input. Use the same bytes and
+        // the actual upload control with a synthetic FileList in this private webview.
+        await execute(`
+          const [selector, entries, size] = arguments;
+          const transfer = new DataTransfer();
+          for (const { name, mimeType, pattern } of entries) {
+            const bytes = pattern.repeat(Math.ceil(size / pattern.length)).slice(0, size);
+            transfer.items.add(new File([bytes], name, { type: mimeType }));
+          }
+          const input = document.querySelector(selector);
+          input.files = transfer.files;
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+        `, pickerSelector, syntheticImportFileSpecs(tag), bytesPerFile);
+      } else {
+        await command(picker + "/value", "POST", { text: files.join("\n") });
+      }
       await click(await element('[role="dialog"] button', "导入待处理文件"));
       await waitFor("all import receipts", () => visible('[role="dialog"] [role="status"]',
         "已入卷 " + fileCount + " 件，待处理 0 件，失败 0 件", true), 90_000);
       importFinished = performance.now();
       importMs = elapsed(importStarted);
       parseStates = await waitForImportParsing(request, b.id, tag);
-      samples.push({ at: performance.now(), ...processTree(child.pid) });
+      samples.push({ at: performance.now(), ...processTree(child.pid, existingPids) });
     } finally {
       clearInterval(sampler);
     }
@@ -223,18 +268,29 @@ async function measure() {
     const output = { startMs, switchCaseMs, pdfResponseMs, pdfFirstVisibleMs, importMs,
       parsedMs: elapsed(importStarted), parseStates, fileCount, inputBytes: fileCount * bytesPerFile,
       baselineBytes: baseline.bytes, intakePeakBytes: Math.max(...intake.map(sample => sample.bytes)),
-      peakBytes: peak.bytes, observedProcesses: peak.processes, samplingCount: samples.length, viewport: native.viewport };
-    console.log("CHRONICLE_GTK_PERFORMANCE " + JSON.stringify(output));
+      peakBytes: peak.bytes, observedProcesses: peak.processes, xpcProcesses: peak.xpcProcesses,
+      samplingCount: samples.length, viewport: native.viewport };
+    console.log((isMac ? "CHRONICLE_WK_PERFORMANCE " : "CHRONICLE_GTK_PERFORMANCE ") + JSON.stringify(output));
     if (pdfFirstVisibleMs === null) console.error("Native PDF first-page marker absent: " + profile);
     return pdfFirstVisibleMs !== null;
+  } catch (error) {
+    console.error((await readFile(path.join(profile, "driver.log"), "utf8")).split("\n").slice(-20).join("\n"));
+    throw error;
   } finally {
     try {
-      if (session) await command(session, "DELETE");
+      if (session && isMac) {
+        await command(session + "/window", "DELETE");
+        const result = await Promise.race([exited, delay(20_000, null, { ref: false })]);
+        assert.equal(result?.[0], 0, "Expected the macOS host to stop cleanly");
+      } else if (session) await command(session, "DELETE");
     } finally {
-      child.kill();
+      if (child.exitCode === null) child.kill();
       await exited;
       await log.close();
     }
+    await waitFor("test workspace unlock", async () => !await lstat(path.join(workspace, ".owner")).catch(error => {
+      if (error.code !== "ENOENT") throw error;
+    }));
   }
 }
 
@@ -243,4 +299,4 @@ for (let round = 0; round < Number(roundsArgument); round++) {
   const passed = await measure();
   verified &&= passed;
 }
-assert(verified, "Fixed PDF bytes are available, but WebKitGTK did not paint the embedded page");
+assert(verified, "Fixed PDF bytes are available, but native WebKit did not paint the embedded page");
