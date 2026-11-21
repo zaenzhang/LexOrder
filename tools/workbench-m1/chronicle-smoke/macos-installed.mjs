@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
-import { access, lstat, readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { access, lstat, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import sharp from 'sharp';
-import { hasPerformancePdfMarker } from './desktop-performance-fixture.mjs';
+import { bytesPerFile, fileCount, hasPerformancePdfMarker, syntheticImportFiles } from './desktop-performance-fixture.mjs';
+import { processTable, processTree } from './webkit-process-memory.mjs';
 
 const [bundle, workspace, mode] = process.argv.slice(2);
 assert(process.platform === 'darwin' && path.isAbsolute(bundle ?? '') && bundle.endsWith('.app')
@@ -24,13 +26,13 @@ const run = promisify(execFile);
 const fixture = mode === '--case-flow'
   ? JSON.parse(await readFile(path.join(workspace, 'chronicle-performance-fixture.json'), 'utf8')) : null;
 
-async function probe(pid, action, label = '') {
-  const { stdout } = await run('/usr/bin/osascript', [script, String(pid), action, label], { timeout: 6000 });
+async function probe(pid, action, label = '', value = '') {
+  const { stdout } = await run('/usr/bin/osascript', [script, String(pid), action, label, value], { timeout: 8000 });
   return stdout.trim();
 }
 
-async function waitFor(pid, action, label, expected) {
-  const deadline = performance.now() + 18_000;
+async function waitFor(pid, action, label, expected, timeout = 18_000) {
+  const deadline = performance.now() + timeout;
   do {
     if (await probe(pid, action, label) === expected) return;
     await delay(250);
@@ -71,11 +73,77 @@ async function measureCases(pid, round) {
   throw new Error('The installed macOS window did not paint the fixed PDF marker');
 }
 
+async function measureImport(pid, existingPids) {
+  const press = label => waitFor(pid, 'press', label, 'pressed');
+  const textVisible = (label, timeout) => waitFor(pid, 'text', label, '1', timeout);
+  const [a, b] = fixture.cases;
+  await press('切换案件：' + a.title);
+  await press(b.title);
+  await waitFor(pid, 'heading', b.title, 'found');
+  if (await probe(pid, 'press', '材料目录') !== 'pressed') {
+    await press('材料');
+    await press('材料目录');
+  }
+  await press('批量导入');
+
+  const tag = randomUUID().slice(0, 8);
+  const folder = path.join(workspace, 'desktop-uploads-' + tag);
+  await mkdir(folder, { mode: 0o700 });
+  await Promise.all(syntheticImportFiles(tag).map(file => writeFile(path.join(folder, file.name), file.buffer)));
+  await press('选择文件或拖到这里');
+  await waitFor(pid, 'open-panel', '', 'open');
+
+  const baseline = processTree(pid, existingPids);
+  assert(baseline.processes && baseline.bytes > 0, 'No desktop process tree at baseline');
+  const samples = [];
+  const sample = () => samples.push({ at: performance.now(), ...processTree(pid, existingPids) });
+  const sampler = setInterval(sample, 125);
+  const started = performance.now();
+  let receiptAt;
+  try {
+    assert.equal(await probe(pid, 'choose-folder', folder), 'submitted');
+    await textVisible('已入卷 0 件，待处理 ' + fileCount + ' 件，失败 0 件');
+    await press('导入待处理文件');
+    await textVisible('已入卷 ' + fileCount + ' 件，待处理 0 件，失败 0 件', 90_000);
+    receiptAt = performance.now();
+
+    await press('Close');
+    assert.equal(await probe(pid, 'type', '搜索案内材料', tag), 'typed');
+    await waitFor(pid, 'material-scope', tag, String(fileCount));
+    await press('Select all on this page');
+    await press('委托材料预检');
+    const until = performance.now() + 45_000;
+    let parsed = false;
+    do {
+      if (Number(await probe(pid, 'text', '文本提取完成')) === fileCount) {
+        parsed = true;
+        break;
+      }
+      await press('刷新预检');
+    } while (performance.now() < until);
+    assert(parsed, 'Expected an available parsed version for every file in this round');
+    sample();
+  } finally {
+    clearInterval(sampler);
+  }
+
+  const intake = samples.filter(row => row.at <= receiptAt);
+  assert(intake.length && samples.some(row => row.at > receiptAt), 'Missing import or parsing memory samples');
+  const peak = samples.reduce((largest, current) => current.bytes > largest.bytes ? current : largest);
+  return {
+    fileCount, inputBytes: fileCount * bytesPerFile, parseStates: Array(fileCount).fill('READY'),
+    importMs: Math.round(receiptAt - started), verifiedParsingMs: Math.round(performance.now() - started),
+    baselineBytes: baseline.bytes, intakePeakBytes: Math.max(...intake.map(row => row.bytes)),
+    peakBytes: peak.bytes, observedProcesses: peak.processes, xpcProcesses: peak.xpcProcesses, samplingCount: samples.length,
+  };
+}
+
 async function measure(round) {
   const env = { ...process.env, LEXORDER_DESKTOP_WORKSPACE: workspace };
   delete env.LEXORDER_DESKTOP_ROOT;
   delete env.NEXT_DIST_DIR;
   delete env.LEXORDER_MACOS_SMOKE_PORT;
+  const existingPids = fixture ? new Set(processTable().map(row => row.pid)) : null;
   const started = performance.now();
   const child = spawn(binary, { cwd: path.dirname(binary), env, stdio: ['ignore', 'pipe', 'pipe'] });
   let diagnostic = '';
@@ -106,13 +174,15 @@ async function measure(round) {
 
     const caseMetrics = fixture ? await measureCases(child.pid, round) : {};
 
+    const importMetrics = fixture ? await measureImport(child.pid, existingPids) : {};
+
     const closeAt = performance.now();
     assert.equal(await probe(child.pid, 'close'), 'pressed', 'Could not close the installed window');
     const exit = await Promise.race([closed, delay(45_000, null, { ref: false })]);
     assert.deepEqual(exit, { code: 0, signal: null }, 'The installed window did not shut down cleanly');
     await assert.rejects(lstat(owner), { code: 'ENOENT' });
     console.log('CHRONICLE_MACOS_INSTALLED ' + JSON.stringify({
-      round, ...caseMetrics, startMs, closeMs: Math.round(performance.now() - closeAt), window: size.split(' ').map(Number),
+      round, ...caseMetrics, ...importMetrics, startMs, closeMs: Math.round(performance.now() - closeAt), window: size.split(' ').map(Number),
     }));
   } catch (error) {
     if (hostOutput) console.error(hostOutput);

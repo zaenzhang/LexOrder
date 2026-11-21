@@ -10,6 +10,7 @@ on run argv
 	set desktopPID to (item 1 of argv) as integer
 	set operation to item 2 of argv
 	set targetLabel to item 3 of argv
+	set inputValue to item 4 of argv
 	tell application "System Events"
 		set desktopProcesses to application processes whose unix id is desktopPID
 		if (count of desktopProcesses) is 0 then return "no application process"
@@ -20,21 +21,60 @@ on run argv
 			perform action "AXPress" of (first button of desktopWindow whose subrole is "AXCloseButton")
 			return "pressed"
 		end if
+		if operation is "open-panel" or operation is "choose-folder" then
+			repeat with candidate in windows of desktopProcess
+				if my getText(candidate, "AXModal") is true or my getText(candidate, "AXTitle") is "Open" then
+					if operation is "open-panel" then return "open"
+					set frontmost of desktopProcess to true
+					keystroke "g" using {command down, shift down}
+					delay 0.5
+					keystroke targetLabel
+					delay 0.5
+					key code 36
+					delay 0.5
+					keystroke "a" using command down
+					perform action "AXPress" of (first button of candidate whose name is "Open")
+					return "submitted"
+				end if
+			end repeat
+			return "no native Open panel"
+		end if
 		if operation is "bounds" then
 			set {leftEdge, topEdge} to position of desktopWindow
 			set {windowWidth, windowHeight} to size of desktopWindow
 			return (leftEdge as text) & "," & (topEdge as text) & "," & (windowWidth as text) & "," & (windowHeight as text)
 		end if
 		set samples to {}
+		set textCount to 0
 		set tree to entire contents of desktopWindow
 		repeat with uiNode in tree
 			set nodeRole to my getText(uiNode, "AXRole")
-			set isControl to nodeRole is in {"AXButton", "AXPopUpButton", "AXMenuButton", "AXMenuItem", "AXLink"}
+			set isControl to nodeRole is in {"AXButton", "AXPopUpButton", "AXMenuButton", "AXMenuItem", "AXLink", "AXCheckBox", "AXFileUploadButton"}
 			if operation is "page" and nodeRole is "AXStaticText" then
 				set pageText to my getText(uiNode, "AXValue")
 				if pageText is not missing value and pageText ends with " · 本机承办工作" then
 					set {windowWidth, windowHeight} to size of desktopWindow
 					return (windowWidth as text) & " " & (windowHeight as text)
+				end if
+			end if
+			if operation is "type" and nodeRole is "AXTextField" then
+				if my getText(uiNode, "AXTitle") is targetLabel or my getText(uiNode, "AXDescription") is targetLabel then
+					set frontmost of desktopProcess to true
+					set value of attribute "AXFocused" of uiNode to true
+					keystroke "a" using command down
+					keystroke inputValue
+					return "typed"
+				end if
+			end if
+			if operation is "text" and nodeRole is "AXStaticText" then
+				set pageText to my getText(uiNode, "AXValue")
+				if pageText is targetLabel then set textCount to textCount + 1
+			end if
+			if operation is "material-scope" and nodeRole is "AXButton" then
+				set buttonLabel to my getText(uiNode, "AXTitle")
+				if buttonLabel is not missing value and buttonLabel starts with "性能验收导入-" then
+					if buttonLabel does not start with "性能验收导入-" & targetLabel & "-" then return "another batch still visible"
+					set textCount to textCount + 1
 				end if
 			end if
 			if operation is "press" and isControl then
@@ -49,11 +89,12 @@ on run argv
 					if my getText(descendant, "AXValue") is targetLabel then return "found"
 				end repeat
 			end if
-			if operation is "inspect" and (isControl or nodeRole is in {"AXStaticText", "AXHeading", "AXWebArea"}) and (count of samples) is less than 120 then
+			if operation is "inspect" and (isControl or nodeRole is in {"AXStaticText", "AXHeading", "AXWebArea", "AXTextField"}) and (count of samples) is less than 120 then
 				set end of samples to {nodeRole, my getText(uiNode, "AXValue"), my getText(uiNode, "AXTitle"), my getText(uiNode, "AXDescription")}
 			end if
 		end repeat
 		if operation is "inspect" then return {size of desktopWindow, count of tree, samples}
+		if operation is "text" or operation is "material-scope" then return textCount as text
 	end tell
 	return "control or content unavailable"
 end run
