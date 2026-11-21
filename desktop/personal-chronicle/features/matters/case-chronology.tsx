@@ -33,6 +33,7 @@ import { FactTrace, type ProgramTrack, type TimelineMarker, type TimelineScope, 
 import { ObservationHistory } from "./observation-history"
 import { ObservationEditor, type ObservationSaved } from "./observation-editor"
 import { FactAnalysisDesk } from "./fact-analysis-desk"
+import { FactWording } from "./fact-wording"
 import { dateInterval, firstObservedDay, observationDifferences, observationMarks, ObservationExcerpt, ObservationValues, statements, type FactObservation } from "./fact-observation"
 import { evidenceEndpoint, workspaceEndpoint, readPersonal } from "./personal-client"
 
@@ -759,6 +760,7 @@ export function CaseChronology({ matterId, items, programs = [], onEdit, matrixO
                 </div>
               </TraceGroup>}
             {assessmentError?.itemId === selected.id && <p role="alert" className="px-3.5 py-2 text-xs text-destructive">{assessmentError.message}</p>}
+            {!cutoff && <FactWording key={selected.id + ":" + selected.revision} item={selected} />}
             <FactDirections item={selected} items={knownItems} pending={assessmentPending}
               onOpen={(item, source) => { selectMarker(item.id); if (source) open(item, source) }}
               onChange={onObservationsSaved && !cutoff ? change => void assess(selected, change) : undefined} />

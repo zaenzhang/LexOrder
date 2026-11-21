@@ -217,7 +217,18 @@ async function measure() {
       });
       return began;
     };
-    if (chronologyLayout) return await verifyWebKitChronologyLayout({ request, casebookRoot, navigate, execute, click, visible, waitFor });
+    if (chronologyLayout) {
+      const screenshotRoot = process.env.LEXORDER_CHRONICLE_UI_EVIDENCE;
+      if (screenshotRoot) assert(path.isAbsolute(screenshotRoot), "Use an existing absolute screenshot directory");
+      return await verifyWebKitChronologyLayout({
+        request, casebookRoot, navigate, execute, click, visible, waitFor,
+        ...(!isMac && { resize: (width, height) => command(session + "/window/rect", "POST", { width, height }) }),
+        ...(screenshotRoot && { screenshot: async name => {
+          const png = await command(session + "/screenshot");
+          await writeFile(path.join(screenshotRoot, name + ".png"), Buffer.from(png, "base64"));
+        } }),
+      });
+    }
     const { cases: [a, b], documentId } = await prepareCases(request, workspace, casebookRoot);
     const overview = title => waitFor("overview " + title, () => visible('section[aria-label="案件状态和期限"] h2', title));
     await navigate("/matters/" + a.id + "/overview");

@@ -97,7 +97,8 @@ export async function seedChronologyScale(request, casebookRoot) {
   const relevant = programs.filter(program => procedureIds.includes(program.id));
   assert.equal(relevant.length, 2);
   assert(relevant.every(program => program.events.length === 1 && program.events[0].kind === "法律期限"));
-  return { matterId, title, evidenceItemId, sourceName: file.name, sourceQuote: file.quote, timeline: metrics, sourceMs, modelCalls: 0 };
+  return { matterId, title, evidenceItemId, sourceId: link.sourceId, revision: link.revision,
+    sourceName: file.name, sourceQuote: file.quote, timeline: metrics, sourceMs, modelCalls: 0 };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

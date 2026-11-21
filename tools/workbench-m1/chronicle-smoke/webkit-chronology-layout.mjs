@@ -1,8 +1,16 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { seedChronologyScale } from "./chronology-scale.mjs";
 
-export async function verifyWebKitChronologyLayout({ request, casebookRoot, navigate, execute, click, visible, waitFor }) {
+export async function verifyWebKitChronologyLayout({ request, casebookRoot, navigate, execute, click, visible, waitFor, resize, screenshot }) {
   const sample = await seedChronologyScale(request, casebookRoot);
+  const saved = await (await request("/api/personal/matter-workspace", {
+    action: "record-evidence-observation", matterId: sample.matterId, data: {
+      evidenceItemId: sample.evidenceItemId, sourceId: sample.sourceId, expectedRevision: sample.revision,
+      requestKey: randomUUID(), observation: { statement: "RECORD", excerpt: { start: 0, end: sample.sourceQuote.length } },
+    },
+  })).json();
+  assert.equal(saved.ok, true);
   const started = performance.now();
   await navigate("/matters/" + sample.matterId + "/evidence/graph");
   const bucketSelector = '[aria-label="时间轴事件"] button[aria-label]';
@@ -53,8 +61,8 @@ export async function verifyWebKitChronologyLayout({ request, casebookRoot, navi
     await click(sourceSection + " button", sourceButton.label ?? sample.sourceName, sourceButton.label ? "aria-label" : undefined, true);
   }
 
-  const openLabel = "查看固定原文 · " + sample.sourceName;
-  const openButton = facts + " button[aria-label]";
+  const openLabel = "查看原文";
+  const openButton = sourceSection + " button";
   const reveal = async (selector, label) => execute(`
     const target = [...document.querySelectorAll(arguments[0])].find(node =>
       node.getAttribute("aria-label") === arguments[1] || node.textContent.trim() === arguments[1]);
@@ -63,7 +71,7 @@ export async function verifyWebKitChronologyLayout({ request, casebookRoot, navi
     return true;
   `, selector, label);
   await waitFor("open the fixed-version control", () => reveal(openButton, openLabel));
-  await click(openButton, openLabel, "aria-label", true);
+  await click(openButton, openLabel, undefined, true);
 
   const original = '[aria-label="固定版本原文"]';
   await waitFor("long fixed-source heading", () => visible(original + " h2", sample.sourceName, true));
@@ -89,12 +97,41 @@ export async function verifyWebKitChronologyLayout({ request, casebookRoot, navi
     const details = document.querySelector(arguments[0]);
     const active = document.activeElement;
     return details?.querySelector('h2')?.textContent === "合成图谱事项 100" && details.contains(active) &&
-      active.getAttribute("aria-label") === arguments[1];
+      active.textContent.trim() === arguments[1];
   `, facts, openLabel));
+  const wording = "对外措辞预览";
+  await waitFor("audience wording control", () => reveal(facts + " button", wording));
+  await click(facts + " button", wording, undefined, true);
+  const checkWording = async () => execute(`
+    const [panel, source, quote] = arguments;
+    const client = document.querySelector(panel + ' [aria-label="给客户"]');
+    const court = document.querySelector(panel + ' [aria-label="给法官"]');
+    if (!client?.getClientRects().length || !court?.getClientRects().length) return null;
+    const collapse = court.closest('[data-slot="collapsible-content"]');
+    if (collapse.clientHeight < collapse.scrollHeight - 1) return null;
+    const panelRight = document.querySelector(panel).getBoundingClientRect().right;
+    return { client: client.textContent.includes(quote), court: court.textContent.includes("《" + source + "》V1"),
+      distinct: client.textContent !== court.textContent,
+      fits: [client, court].every(element => element.scrollWidth <= element.clientWidth + 1 &&
+        element.getBoundingClientRect().right <= panelRight + 1) };
+  `, facts, sample.sourceName, sample.sourceQuote);
+  const wideWording = await waitFor("two audience drafts", checkWording);
+  assert.deepEqual(wideWording, { client: true, court: true, distinct: true, fits: true });
+  await execute(`document.querySelector(arguments[0] + ' [aria-label="给客户"]').scrollIntoView({ block: "start" });`, facts);
+  await screenshot?.("wording-wide");
+
   console.log("CHRONICLE_WEBKIT_WIDE_LAYOUT " + JSON.stringify({
     viewport: await execute("return [innerWidth, innerHeight]"), firstInteractiveMs, detailWidth: panel.detailWidth,
     aggregatedEvents: 100, sourceVersion: 1, sourceName: sample.sourceName, sourceMs: sample.sourceMs,
     timelineReads: sample.timeline, modelCalls: sample.modelCalls,
   }));
+  if (resize) {
+    await resize(800, 850);
+    const viewport = await waitFor("narrow WebKit", () => execute("return innerWidth <= 850 ? [innerWidth, innerHeight] : null"));
+    await execute(`document.querySelector(arguments[0] + ' [aria-label="给法官"]').scrollIntoView({ block: "center" });`, facts);
+    assert.deepEqual(await waitFor("narrow audience drafts", checkWording), wideWording);
+    await screenshot?.("wording-narrow");
+    console.log("CHRONICLE_WEBKIT_WORDING " + JSON.stringify({ viewport, ...wideWording }));
+  }
   return true;
 }
