@@ -59,8 +59,9 @@ async function measureCases(pid, round) {
   const bounds = await probe(pid, 'bounds');
   assert.match(bounds, /^-?\d+,-?\d+,\d+,\d+$/);
   const screenshot = path.join(workspace, 'chronicle-installed-pdf-' + round + '.png');
+  await press('材料');
   const started = performance.now();
-  await press('案卷材料');
+  await press('材料目录');
   for (const deadline = started + 12_000; performance.now() < deadline;) {
     await run('/usr/sbin/screencapture', ['-x', '-R' + bounds, screenshot], { timeout: 5000 });
     const pixels = await sharp(screenshot).ensureAlpha().raw().toBuffer();
