@@ -771,3 +771,5 @@ Windows Server 2022 CI 使用 `c61c3e9` 构建的 NSIS 隔离安装目录，以�
 **macOS 实际视口复跑 · PDF 计时待验。** 已在托管 WKWebView 的 1024 × 656 视口启动，从今日办理进入并切换两件合成案件。脚本在读取 PDF 嵌入请求的 Resource Timing 时提前中断，未输出完整性能记录。脚本改在截图观察之后读取请求时间，缺失则明确留空。真正绘出的测试色块和同一固定原件的成功回读仍是必验项。 [第四轮原生日志](https://github.com/zaenzhang/LexOrder/actions/runs/44845550401/job/136664234187)
 
 **macOS 复跑 · 批量入口的测试定位。** 固定 PDF 原件已按当前版本成功回读。切入乙案材料页时，WebDriver 定位的「批量导入」按钮在点击前脱离当前 DOM，驱动返回 `stale element reference`。先等目标页面路径生效，仅在驱动明确未点击时重查同一控件，继续要求实际打开弹层、确认入卷和回读解析结果。 [第五轮原生日志](https://github.com/zaenzhang/LexOrder/actions/runs/44846291538/job/136666706805)
+
+**macOS 复跑 · 文件选择数量。** 脚本已打开批量导入弹层。文件选择器的 `change` 处理同步读取并清空输入，以便再次选择同名文件。WKWebView 随输入清空更新同一 FileList，脚本晚读数量得到了 0。现改为在事件分发前读取数量，事件后通过弹层实际待处理数量确认 8 份材料已排队，再提交并核对最终回执。 [第六轮原生日志](https://github.com/zaenzhang/LexOrder/actions/runs/44847391588/job/136670371077)

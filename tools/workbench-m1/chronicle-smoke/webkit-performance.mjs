@@ -319,13 +319,16 @@ async function measure() {
           }
           const input = document.querySelector(selector);
           input.files = transfer.files;
+          const selectedCount = input.files.length;
           input.dispatchEvent(new Event("change", { bubbles: true }));
-          return transfer.files.length;
+          return selectedCount;
         `, pickerSelector, syntheticImportFileSpecs(tag), bytesPerFile);
         assert.equal(selected, fileCount);
       } else {
         await command(picker + "/value", "POST", { text: files.join("\n") });
       }
+      await waitFor("all files queued", () => visible('[role="dialog"] [role="status"]',
+        "已入卷 0 件，待处理 " + fileCount + " 件，失败 0 件", true));
       await click('[role="dialog"] button', "导入待处理文件");
       await waitFor("all import receipts", () => visible('[role="dialog"] [role="status"]',
         "已入卷 " + fileCount + " 件，待处理 0 件，失败 0 件", true), 90_000);
