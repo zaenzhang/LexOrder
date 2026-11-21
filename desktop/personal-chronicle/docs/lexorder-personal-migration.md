@@ -741,3 +741,5 @@ Windows 用相同场景在原生 WebView2 另跑三轮，延长采样至后台�
 退出后工作区锁释放。环境仍为 WSL2，包以解包方式启用。三端矩阵中，同一提交的 Ubuntu DEB 解包业务冒烟和 macOS DMG 挂载业务冒烟通过。 [三端 CI](https://github.com/zaenzhang/LexOrder/actions/runs/44841283837) · [复跑命令](../../../tools/workbench-m1/chronicle-smoke/README.md#linux-webkitgtk-性能基线)
 
 **macOS 冒烟问题，待复验。** Apple Silicon runner 已编译带原生 WebKit WebDriver 的 Tauri 调试宿主。首次从空工作区启动时，12 秒内驱动未确认窗口就绪，也未产生性能样本。专项现在复用业务冒烟准备同一个隔离工作区，再从 Tauri 进程启动计时。等待上限与应用启动分开，记录最后的驱动状态和宿主输出。常规三端矩阵仍保留组件、宿主、安全和安装包业务检查，手动性能专项仅运行该平台所需的构建和业务准备。 [首次专项日志](https://github.com/zaenzhang/LexOrder/actions/runs/44841310175/job/136650097159)
+
+**macOS 复跑 · 窗口已启动。** Apple Silicon macOS 15.8.2 从已初始化的工作区启动。业务冒烟通过固定 PDF 回读、重开、重复启动拒绝及旧会话失效，Tauri 也成功打开 WKWebView 并读到今日办理。runner 初始正文视口为 1024 × 656，严格尺寸守卫将该轮拦在性能采样前。现用原生窗口尺寸命令在后续采样前核对实际 1440 × 900 视口，分别记录启动尺寸与采样尺寸。 [第二轮原生日志](https://github.com/zaenzhang/LexOrder/actions/runs/44843332020/job/136656896433)

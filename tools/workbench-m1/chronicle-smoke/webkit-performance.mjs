@@ -146,6 +146,18 @@ async function measure() {
     const native = await execute("return {origin: location.origin, userAgent: navigator.userAgent, viewport: [innerWidth,innerHeight]}");
     assert.match(native.origin, /^http:\/\/127\.0\.0\.1:\d+$/);
     assert.match(native.userAgent, isMac ? /Macintosh.*AppleWebKit/ : /Linux.*AppleWebKit/);
+    const startupViewport = native.viewport;
+    if (isMac && (startupViewport[0] !== 1440 || startupViewport[1] !== 900)) {
+      const rect = await command(session + "/window/rect");
+      await command(session + "/window/rect", "POST", {
+        width: rect.width + 1440 - startupViewport[0],
+        height: rect.height + 900 - startupViewport[1],
+      });
+      native.viewport = await waitFor("the 1440 × 900 WKWebView viewport", async () => {
+        const actual = await execute("return [innerWidth, innerHeight]");
+        return actual[0] === 1440 && actual[1] === 900 ? actual : null;
+      });
+    }
     assert.deepEqual(native.viewport, [1440, 900], "Use a 1440 × 900 test viewport");
     const request = async (route, body, expected = 200) => {
       assert.match(route, /^\/api\//);
@@ -296,7 +308,7 @@ async function measure() {
       parsedMs: elapsed(importStarted), parseStates, fileCount, inputBytes: fileCount * bytesPerFile,
       baselineBytes: baseline.bytes, intakePeakBytes: Math.max(...intake.map(sample => sample.bytes)),
       peakBytes: peak.bytes, observedProcesses: peak.processes, xpcProcesses: peak.xpcProcesses,
-      samplingCount: samples.length, viewport: native.viewport };
+      samplingCount: samples.length, startupViewport, viewport: native.viewport };
     console.log((isMac ? "CHRONICLE_WK_PERFORMANCE " : "CHRONICLE_GTK_PERFORMANCE ") + JSON.stringify(output));
     if (pdfFirstVisibleMs === null) console.error("Native PDF first-page marker absent: " + profile);
     return pdfFirstVisibleMs !== null;
