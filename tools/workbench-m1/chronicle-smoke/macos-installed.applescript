@@ -21,33 +21,32 @@ on run argv
 			perform action "AXPress" of (first button of desktopWindow whose subrole is "AXCloseButton")
 			return "pressed"
 		end if
-		if operation is "open-panel" or operation is "choose-folder" then
+		if operation is in {"open-panel", "go-to-folder", "select-files"} then
 			repeat with candidate in windows of desktopProcess
 				if my getText(candidate, "AXModal") is true or my getText(candidate, "AXTitle") is "Open" then
 					if operation is "open-panel" then return "open"
-					set frontmost of desktopProcess to true
-					keystroke "g" using {command down, shift down}
-					delay 0.5
-					keystroke targetLabel
-					delay 0.5
-					key code 36
-					set mediaVisible to false
-					repeat 8 times
-						delay 0.3
-						repeat with fileNode in (entire contents of candidate)
-							set fileName to my getText(fileNode, "AXValue")
-							if fileName is missing value then set fileName to my getText(fileNode, "AXTitle")
-							if fileName is not missing value and (fileName as text) contains inputValue then
-								set mediaVisible to true
-								exit repeat
+					if operation is "go-to-folder" then
+						set frontmost of desktopProcess to true
+						keystroke "g" using {command down, shift down}
+						delay 0.5
+						keystroke targetLabel
+						delay 0.5
+						key code 36
+						return "navigated"
+					end if
+					repeat with uiNode in (entire contents of candidate)
+						set nodeRole to my getText(uiNode, "AXRole")
+						if nodeRole is "AXPopUpButton" or nodeRole is "AXMenuButton" then
+							set folderName to my getText(uiNode, "AXValue")
+							if folderName is targetLabel or my getText(uiNode, "AXTitle") is targetLabel then
+								set frontmost of desktopProcess to true
+								keystroke "a" using command down
+								perform action "AXPress" of (first button of candidate whose name is "Open")
+								return "submitted"
 							end if
-						end repeat
-						if mediaVisible then exit repeat
+						end if
 					end repeat
-					if not mediaVisible then return "synthetic folder was not reached"
-					keystroke "a" using command down
-					perform action "AXPress" of (first button of candidate whose name is "Open")
-					return "submitted"
+					return "synthetic directory not visible in the Open panel"
 				end if
 			end repeat
 			return "no native Open panel"
@@ -119,7 +118,7 @@ on run argv
 					if my getText(descendant, "AXValue") is targetLabel then return "found"
 				end repeat
 			end if
-			if operation is "inspect" and (isControl or nodeRole is in {"AXStaticText", "AXHeading", "AXWebArea", "AXTextField"}) and (count of samples) is less than 120 then
+			if operation is "inspect" and (isControl or nodeRole is in {"AXStaticText", "AXHeading", "AXWebArea", "AXTextField", "AXComboBox", "AXRow"}) and (count of samples) is less than 120 then
 				set end of samples to {nodeRole, my getText(uiNode, "AXValue"), my getText(uiNode, "AXTitle"), my getText(uiNode, "AXDescription")}
 			end if
 		end repeat
