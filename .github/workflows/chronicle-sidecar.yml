@@ -3,10 +3,11 @@ name: Chronicle Sidecar acceptance
 on:
   workflow_dispatch:
     inputs:
-      macos_native_performance:
-        description: Measure the native WKWebView with two synthetic cases
-        type: boolean
-        default: false
+      native_performance:
+        description: Run an additional performance benchmark
+        type: choice
+        options: [none, macos, windows]
+        default: none
   push:
     paths:
       - .github/workflows/chronicle-sidecar.yml
@@ -32,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(inputs.macos_native_performance && '["macos-15"]' || '["windows-2022","macos-15","ubuntu-24.04"]') }}
+        os: ${{ fromJSON(inputs.native_performance == 'macos' && '["macos-15"]' || inputs.native_performance == 'windows' && '["windows-2022"]' || '["windows-2022","macos-15","ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     steps:
@@ -65,15 +66,15 @@ jobs:
       - name: Test host capability and readiness rules
         run: cargo test --locked --manifest-path desktop/personal-chronicle/desktop-preview/Cargo.toml
       - name: Build Tauri with the native Bun external binary
-        if: inputs.macos_native_performance != true
+        if: inputs.native_performance != 'macos'
         run: bun run desktop --build-only
         working-directory: tools/workbench-m1
       - name: Build the isolated WKWebView test host
-        if: inputs.macos_native_performance == true
+        if: inputs.native_performance == 'macos'
         run: bun run desktop --build-only --macos-webdriver
         working-directory: tools/workbench-m1
       - name: Measure cold start, PDF paint and background parsing in WKWebView
-        if: inputs.macos_native_performance == true
+        if: inputs.native_performance == 'macos'
         run: |
           sw_vers
           node tools/workbench-m1/chronicle-smoke/webkit-performance.mjs \
@@ -94,7 +95,19 @@ jobs:
           if ($setup.ExitCode -ne 0) { throw "NSIS exited with code $($setup.ExitCode)" }
           $env:LEXORDER_SMOKE_RUNTIME_ROOT = Join-Path $install 'lexorder-runtime'
           $env:LEXORDER_SMOKE_BUN = Join-Path $install 'lexorder-bun.exe'
-          bun --no-env-file --no-install tools/workbench-m1/chronicle-smoke/sidecar.mjs (Join-Path $env:RUNNER_TEMP 'lexorder-installed-case')
+          $installedWorkspace = Join-Path $env:RUNNER_TEMP 'lexorder-installed-case'
+          bun --no-env-file --no-install tools/workbench-m1/chronicle-smoke/sidecar.mjs $installedWorkspace
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ("${{ inputs.native_performance }}" -eq 'windows') {
+            $env:M1_WORKSPACE = $installedWorkspace
+            $env:M1_CHRONOLOGY_CASEBOOK_ROOT = Join-Path $env:RUNNER_TEMP 'lexorder-performance-casebooks'
+            New-Item -ItemType Directory -Path $env:M1_CHRONOLOGY_CASEBOOK_ROOT | Out-Null
+            $hostExe = Join-Path $install 'lexorder-chronicle-preview.exe'
+            for ($round = 1; $round -le 3; $round++) {
+              node tools/workbench-m1/chronicle-smoke/webview2.mjs $hostExe --performance --installed
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+          }
       - name: Verify and smoke the Apple Silicon DMG
         if: runner.os == 'macOS'
         shell: bash

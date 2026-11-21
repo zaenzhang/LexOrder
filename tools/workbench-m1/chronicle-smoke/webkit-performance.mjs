@@ -11,11 +11,15 @@ import sharp from "sharp";
 import { bytesPerFile, fileCount, hasPerformancePdfMarker, prepareCases, syntheticImportFiles, syntheticImportFileSpecs, waitForImportParsing } from "./desktop-performance-fixture.mjs";
 
 const isMac = process.platform === "darwin";
-const binaryArgument = process.argv[2];
-const driverArgument = isMac ? undefined : process.argv[3];
-const roundsArgument = process.argv[isMac ? 3 : 4] ?? "3";
-assert((isMac || process.platform === "linux") && binaryArgument && (isMac || driverArgument) && /^[1-9]$/.test(roundsArgument),
-  "Usage: webkit-performance.mjs <debug binary> [Linux WebKitWebDriver] [rounds]");
+const args = process.argv.slice(2);
+const installed = args.at(-1) === "--installed";
+if (installed) args.pop();
+const binaryArgument = args[0];
+const driverArgument = isMac ? undefined : args[1];
+const roundsArgument = args[isMac ? 1 : 2] ?? "3";
+assert((isMac || process.platform === "linux") && binaryArgument && (isMac ? !installed : driverArgument)
+  && /^[1-9]$/.test(roundsArgument) && args.length <= (isMac ? 2 : 3),
+  "Usage: webkit-performance.mjs <app binary> [Linux WebKitWebDriver] [rounds] [--installed on Linux]");
 const repo = path.resolve(import.meta.dirname, "../../..");
 const binary = path.resolve(binaryArgument);
 const driver = driverArgument ? path.resolve(driverArgument) : binary;
@@ -81,13 +85,19 @@ async function measure() {
   const log = await open(path.join(profile, "driver.log"), "w");
   const port = await freePort();
   const existingPids = isMac ? new Set(processTable().map(process => process.pid)) : null;
+  const env = { ...process.env, ...(isMac ? { LEXORDER_MACOS_SMOKE_PORT: String(port) } : { TAURI_WEBVIEW_AUTOMATION: "true" }),
+    LEXORDER_DESKTOP_WORKSPACE: workspace, XDG_DATA_HOME: profile, XDG_CACHE_HOME: profile };
+  if (installed) {
+    // Match a normal installed launch and let Tauri locate its bundled resources.
+    delete env.LEXORDER_DESKTOP_ROOT;
+    delete env.NEXT_DIST_DIR;
+  } else {
+    env.LEXORDER_DESKTOP_ROOT = repo;
+    env.NEXT_DIST_DIR = ".next-personal";
+  }
   let started = performance.now();
   const child = spawn(driver, isMac ? [] : ["--host=local", "--port=" + port], {
-    cwd: repo, stdio: ["ignore", log.fd, log.fd],
-    env: { ...process.env, ...(isMac ? { LEXORDER_MACOS_SMOKE_PORT: String(port) } : { TAURI_WEBVIEW_AUTOMATION: "true" }),
-      LEXORDER_DESKTOP_ROOT: repo,
-      NEXT_DIST_DIR: ".next-personal", LEXORDER_DESKTOP_WORKSPACE: workspace,
-      XDG_DATA_HOME: profile, XDG_CACHE_HOME: profile },
+    cwd: installed ? path.dirname(binary) : repo, stdio: ["ignore", log.fd, log.fd], env,
   });
   const exited = once(child, "close");
   const webdriver = "http://127.0.0.1:" + port;
@@ -265,7 +275,7 @@ async function measure() {
     assert(intake.length, "No process samples during upload");
     assert(samples.some(sample => sample.at > importFinished), "No process samples during background parsing");
     const peak = samples.reduce((largest, sample) => sample.bytes > largest.bytes ? sample : largest);
-    const output = { startMs, switchCaseMs, pdfResponseMs, pdfFirstVisibleMs, importMs,
+    const output = { installed, startMs, switchCaseMs, pdfResponseMs, pdfFirstVisibleMs, importMs,
       parsedMs: elapsed(importStarted), parseStates, fileCount, inputBytes: fileCount * bytesPerFile,
       baselineBytes: baseline.bytes, intakePeakBytes: Math.max(...intake.map(sample => sample.bytes)),
       peakBytes: peak.bytes, observedProcesses: peak.processes, xpcProcesses: peak.xpcProcesses,

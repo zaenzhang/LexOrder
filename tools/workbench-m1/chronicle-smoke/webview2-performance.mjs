@@ -68,7 +68,7 @@ while (Get-Process -Id $rootPid -ErrorAction SilentlyContinue) {
   }
 }
 
-export async function measureWebView2Performance(page, origin, { workspace, casebookRoot, hostPid, started }) {
+export async function measureWebView2Performance(page, origin, { workspace, casebookRoot, hostPid, started, installed }) {
   await page.getByText(/ · 本机承办工作$/).waitFor();
   const startMs = duration(started);
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -127,7 +127,7 @@ export async function measureWebView2Performance(page, origin, { workspace, case
     const baseline = [...sampler.samples].reverse().find(sample => sample.at <= importStartedWall);
     const peak = during.reduce((largest, sample) => sample.bytes > largest.bytes ? sample : largest);
     console.log("CHRONICLE_PERFORMANCE " + JSON.stringify({
-      startMs, switchCaseMs, pdfResponseMs, pdfFirstVisibleMs, importMs, parsedMs, parseStates, fileCount,
+      installed, startMs, switchCaseMs, pdfResponseMs, pdfFirstVisibleMs, importMs, parsedMs, parseStates, fileCount,
       inputBytes: fileCount * bytesPerFile, baselineBytes: baseline?.bytes,
       intakePeakBytes: intake.length ? Math.max(...intake.map(sample => sample.bytes)) : null, peakBytes: peak.bytes,
       observedProcesses: peak.processes, samplingCount: during.length,

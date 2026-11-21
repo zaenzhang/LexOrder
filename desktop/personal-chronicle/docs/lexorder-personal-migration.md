@@ -725,4 +725,17 @@ Windows 用相同场景在原生 WebView2 另跑三轮，延长采样至后台�
 | 2 | 1,808 / 5,789 ms | 1,489 / 1,632 / 1,772 MiB，10 次采样 |
 | 3 | 1,816 / 5,748 ms | 1,497 / 1,631 / 1,773 MiB，10 次采样 |
 
-**冒烟问题与处置。** Linux 测试初始目录权限过宽，宿主正确拒绝启动，改以 0700 创建隔离工作区。WebKitWebDriver 连接 Tauri 后省略自动化浏览器名称匹配，合成 API 请求从同一 WebView 发起。切案菜单已渲染后需等待动画中的点击区域实际可命中。WSL 终端暴露异常宽高时 `ps` 发出提示；采样子进程使用固定终端尺寸。Xvfb 下出现 EGL/Mesa 驱动警告，原生 PDF 色块仍在三轮均可见。Windows 仍有 pg 并发查询弃用和 PowerShell CLIXML 提示。Linux 数据来自 WSL2 虚拟显示，Ubuntu 实体桌面、macOS WKWebView 和正式安装包的性能数据待测。[复跑命令](../../../tools/workbench-m1/chronicle-smoke/README.md#linux-webkitgtk-性能基线)
+**冒烟问题与处置。** Linux 测试初始目录权限过宽，宿主正确拒绝启动，改以 0700 创建隔离工作区。WebKitWebDriver 连接 Tauri 后省略自动化浏览器名称匹配，合成 API 请求从同一 WebView 发起。切案菜单已渲染后需等待动画中的点击区域实际可命中。WSL 终端暴露异常宽高时 `ps` 发出提示；采样子进程使用固定终端尺寸。Xvfb 下出现 EGL/Mesa 驱动警告，原生 PDF 色块仍在三轮均可见。Windows 仍有 pg 并发查询弃用和 PowerShell CLIXML 提示。Linux 数据来自 WSL2 虚拟显示，Ubuntu 实体桌面和 macOS WKWebView 的性能数据待测。Linux DEB 的发行程序复测见下节。[复跑命令](../../../tools/workbench-m1/chronicle-smoke/README.md#linux-webkitgtk-性能基线)
+
+
+### Linux DEB 发行程序性能 · 2026-11-21
+
+在同一 WSL2/Xvfb 环境对本机生成的 amd64 DEB 解包后直接启动。Tauri 宿主为 `76ad3bb`，包内业务构建为 `c0d810d`，两者之间未改业务源码。测试未设源码根目录或运行时产物目录，由 Tauri 从解包后的资源位置加载。复用相同的合成双案、PDF 标记和 8 × 512 KiB TXT，每轮新建 WebKit 配置。三轮共 24 份 TXT 完成解析，PDF 第一页色块均在嵌入窗绘出。安装包 SHA-256 为 `f3401a7619cb07320ae5373349c6e2a77f6b268877b0db0369223eea8d5efeb9`。
+
+| 轮次 | 冷启 | 四次切案 | PDF 响应 / 首屏 | 入卷 / 解析完成 | RSS 基线 / 入卷峰值 / 全程峰值 |
+| --- | ---: | --- | ---: | ---: | --- |
+| 1 | 2,849 ms | 118 / 121 / 127 / 127 ms | 414 / 964 ms | 1,030 / 9,307 ms | 1,726 / 1,894 / 1,933 MiB，124 次采样 |
+| 2 | 2,782 ms | 120 / 116 / 126 / 136 ms | 432 / 1,031 ms | 1,418 / 5,179 ms | 1,701 / 1,870 / 1,892 MiB，69 次采样 |
+| 3 | 2,625 ms | 124 / 120 / 118 / 142 ms | 429 / 1,076 ms | 1,509 / 5,309 ms | 1,713 / 1,886 / 1,888 MiB，71 次采样 |
+
+退出后工作区锁释放。环境仍为 WSL2，包以解包方式启用。三端矩阵中，同一提交的 Ubuntu DEB 解包业务冒烟和 macOS DMG 挂载业务冒烟通过。 [三端 CI](https://github.com/zaenzhang/LexOrder/actions/runs/44841283837) · [复跑命令](../../../tools/workbench-m1/chronicle-smoke/README.md#linux-webkitgtk-性能基线)

@@ -17,7 +17,7 @@ import { verifyWebView2Scale } from "./webview2-scale.mjs";
 const executable = process.argv[2];
 const workspace = process.env.M1_WORKSPACE;
 assert(process.platform === "win32", "Run the WebView2 smoke with Windows Node.js.");
-assert(executable && path.isAbsolute(executable), "Pass the absolute path to the Tauri debug executable.");
+assert(executable && path.isAbsolute(executable), "Pass the absolute path to the Tauri executable.");
 assert(workspace && path.isAbsolute(workspace), "Set M1_WORKSPACE to a local Windows synthetic workspace.");
 const manifest = JSON.parse(await readFile(path.join(workspace, "workspace.json"), "utf8"));
 assert.equal(manifest.mode, "PERSONAL");
@@ -29,8 +29,16 @@ if (mode) assert(casebookRoot && path.isAbsolute(casebookRoot), "Set M1_CHRONOLO
 const cases = mode ? [] : JSON.parse(await readFile(path.join(workspace, "chronicle-smoke-cases.json"), "utf8"));
 if (!mode) assert(cases.length === 2 && cases.every(row => row.internalCode.startsWith("CHRONICLE-TEST-")));
 const [otherMatter, matter] = cases;
-const sourceRoot = process.env.LEXORDER_DESKTOP_ROOT ?? path.resolve(import.meta.dirname, "../../..");
-assert(path.isAbsolute(sourceRoot));
+const installed = process.argv.includes("--installed");
+const env = { ...process.env };
+if (installed) {
+  assert.equal(mode, "--performance", "Use --installed with --performance");
+  delete env.LEXORDER_DESKTOP_ROOT;
+  delete env.NEXT_DIST_DIR;
+} else {
+  env.LEXORDER_DESKTOP_ROOT ??= path.resolve(import.meta.dirname, "../../..");
+  assert(path.isAbsolute(env.LEXORDER_DESKTOP_ROOT));
+}
 const tempRoot = path.resolve(tmpdir());
 const profile = await mkdtemp(path.join(tempRoot, "lexorder-webview2-"));
 assert.equal(path.dirname(profile), tempRoot);
@@ -39,8 +47,7 @@ const child = spawn(executable, [], {
   windowsHide: true,
   stdio: "inherit",
   env: {
-    ...process.env,
-    LEXORDER_DESKTOP_ROOT: sourceRoot,
+    ...env,
     LEXORDER_DESKTOP_WORKSPACE: workspace,
     LEXORDER_WEBVIEW2_SMOKE: "1",
     WEBVIEW2_USER_DATA_FOLDER: profile,
@@ -58,7 +65,7 @@ try {
   let port;
   while (Date.now() < deadline) {
     if (launchError) throw launchError;
-    assert.equal(child.exitCode, null, "The Tauri debug executable exited during startup.");
+    assert.equal(child.exitCode, null, "The Tauri executable exited during startup.");
     try {
       const [line] = (await readFile(portFile, "utf8")).split(/\r?\n/);
       if (/^\d+$/.test(line)) {
@@ -83,7 +90,7 @@ try {
   else if (mode === "--editor") await verifyWebView2Editor(page, desktopOrigin, { workspace, manifest, casebookRoot });
   else if (mode === "--materials") await verifyWebView2Materials(page, desktopOrigin, casebookRoot);
   else if (mode === "--material-uploads") await verifyWebView2MaterialUploads(page, desktopOrigin, casebookRoot);
-  else if (mode === "--performance") await measureWebView2Performance(page, desktopOrigin, { workspace, casebookRoot, hostPid: child.pid, started });
+  else if (mode === "--performance") await measureWebView2Performance(page, desktopOrigin, { workspace, casebookRoot, hostPid: child.pid, started, installed });
   else if (mode === "--observations") await verifyWebView2Observations(page, desktopOrigin, casebookRoot);
   else if (mode === "--analysis-preview") await verifyWebView2AnalysisPreview(page, desktopOrigin, casebookRoot);
   else await verifyStandardWebView(page, desktopOrigin, errors);

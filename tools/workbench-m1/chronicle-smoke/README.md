@@ -130,6 +130,8 @@ node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-P
 node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-Path $qaTarget 'debug/lexorder-chronicle-preview.exe') --performance
 ```
 
+Windows 安装包基线在已有 Chronicle Sidecar 工作流中选择 `native_performance: windows`。先静默安装 NSIS 和运行包内业务冒烟，再用安装目录的程序跑三轮 `--performance --installed`。此模式由 Tauri 自己加载随包发布的运行时。
+
 需要跨案出处复验时，在脚本命令末尾加 `--cross-case`。该路径使用已装载 V8 案情定位和借贷样本的合成验收甲，检查按事实换读材料、同一 PDF 的不同页锚点、分别定位三份文本及未关联出处的状态。核对表单的触发器与下拉选项字号，以及固定原文面板的宽窄布局，属于常规验收。
 
 **本轮冒烟记录**
@@ -155,6 +157,8 @@ xvfb-run -a -s '-screen 0 1440x900x24' \
 
 每轮启动实际 Tauri 调试程序和 Sidecar。脚本只在本机开启 WebKit 自动化，创建新的 WebKit 配置目录。合成工作区及运行日志位于 `tools/workbench-m1/.runtime/webkitgtk-performance/`。脚本通过真实菜单切案、检测嵌入 PDF 首屏色块，并用文件选择器将 8 份合成 TXT 入卷。输出 `CHRONICLE_GTK_PERFORMANCE`，含冷启、切案、PDF 内嵌响应和首屏、入卷回执与解析完成耗时，以及整棵应用进程树的 RSS 采样。解析完成以全部新入卷版本的已发布提取内容为准。采样和状态轮询开销计入观测。各轮保留入卷记录和驱动日志。
 
+已用 `dpkg-deb -x` 解包时，可把上述程序路径换成解包目录下的 `usr/bin/lexorder-chronicle-preview`，在命令末尾加 `--installed`。程序从解包目录读取随附 Bun 和业务运行时，使用同一隔离合成案卷。无需安装到系统路径。
+
 ## macOS WKWebView 性能验收
 
 在独立合成环境运行。复用上述双案、固定 PDF 和 4 MiB TXT 批次。构建阶段只为 macOS 调试宿主安装 WebdriverIO 的原生 WebView 测试插件，以本机临时端口启动。正式安装包和日常热更新仍用默认构建。 [Tauri 原生 WebDriver](https://v2.tauri.app/develop/tests/webdriver/)
@@ -165,7 +169,7 @@ node tools/workbench-m1/chronicle-smoke/webkit-performance.mjs \
   desktop/personal-chronicle/desktop-preview/target/debug/lexorder-chronicle-preview 3
 ```
 
-已有 Chronicle Sidecar 工作流支持手动选择 `macos_native_performance`，只运行 macOS 矩阵。验收从原生启动计时，使用 WKWebView 原生截图查找实际 PDF 首屏色块。批量入口在测试窗口接收合成 FileList，之后通过实际确认按钮和案卷 API 入卷，系统文件选择器另验。输出 `CHRONICLE_WK_PERFORMANCE`。进程内存统计包含 Tauri 子进程，并记录隔离环境中新出现的 WebKit XPC 进程数和累加 RSS。并行浏览任务会影响 XPC 归属，故只在专用环境采集。每轮使用临时 WebView 数据存储，关窗后检查案卷解锁。
+已有 Chronicle Sidecar 工作流支持手动选择 `native_performance: macos`，只运行 macOS 矩阵。验收从原生启动计时，使用 WKWebView 原生截图查找实际 PDF 首屏色块。批量入口在测试窗口接收合成 FileList，之后通过实际确认按钮和案卷 API 入卷，系统文件选择器另验。输出 `CHRONICLE_WK_PERFORMANCE`。进程内存统计包含 Tauri 子进程，并记录隔离环境中新出现的 WebKit XPC 进程数和累加 RSS。并行浏览任务会影响 XPC 归属，故只在专用环境采集。每轮使用临时 WebView 数据存储，关窗后检查案卷解锁。
 
 ## 检查内容
 

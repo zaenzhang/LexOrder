@@ -2866,7 +2866,7 @@ flowchart LR
 | --- | --- | --- |
 | P0 固定来源 | V8 四份材料从实际上传、解析到原文回读。三个日期、金额组合与独立底稿逐一核对，覆盖错误值、过期修订、重复提交和错误案卷。 | 专业采用理由和对外措辞由律师另行核对。 |
 | P1 AI 候选与人工采用 | 隔离 PGlite 验证范围、去重、重试与采用。曾用抽取 /8 和归并 /4 完成一次真实供应方试跑。/9 和 /11 的对照结果另记。 | 抽取 /16、归并 /6 的同案三轮真实模型验收待跑。此前 /12 请求供应方接口时返回 HTTP 401（`invalid_api_key`）。本机提取已核对三条借款交付记载，未取得本轮真实模型结果、归并和费用。 |
-| P2 界面与规模 | 正常大小案卷在 Windows WebView2 核对过固定来源。另用 12 份材料、120 条事项通过实际 API、Chrome 和 Windows 原生 WebView2 验证聚合、分轨、矩阵、窄窗及固定原文。 另完成 Windows WebView2 和 WSL2 原生 WebKitGTK 同案卷性能采样，覆盖冷启、切案、PDF 首屏、入卷回执及后台解析结束前的进程树内存。各端三轮，新增 48 件合成材料均发布固定版本的解析内容。[两端基线](../desktop/personal-chronicle/docs/lexorder-personal-migration.md#linux-原生窗口与两端后台解析基线--2026-11-21) | Ubuntu 实体桌面与 macOS 原生窗性能、正式安装包性能及律师验收。 |
+| P2 界面与规模 | 正常大小案卷在 Windows WebView2 核对过固定来源。另用 12 份材料、120 条事项通过实际 API、Chrome 和 Windows 原生 WebView2 验证聚合、分轨、矩阵、窄窗及固定原文。 另完成 Windows WebView2 和 WSL2 原生 WebKitGTK 同案卷性能采样，覆盖冷启、切案、PDF 首屏、入卷回执及后台解析结束前的进程树内存。各端三轮，新增 48 件合成材料均发布固定版本的解析内容。[两端基线](../desktop/personal-chronicle/docs/lexorder-personal-migration.md#linux-原生窗口与两端后台解析基线--2026-11-21) · [Linux DEB 发行程序三轮性能](../desktop/personal-chronicle/docs/lexorder-personal-migration.md#linux-deb-发行程序性能--2026-11-21) | Ubuntu 实体桌面、macOS 原生窗、Windows 安装后性能及律师验收。 |
 
 详细环境和计数见[个人桌面验收记录](../desktop/personal-chronicle/docs/lexorder-personal-migration.md#desktop-host-and-bun)。
 
