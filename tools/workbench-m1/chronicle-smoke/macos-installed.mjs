@@ -104,7 +104,8 @@ async function measureImport(pid, existingPids) {
   let receiptAt;
   try {
     assert.equal(await probe(pid, 'go-to-folder', folder + '/'), 'navigated');
-    await waitFor(pid, 'select-files', path.basename(folder), 'submitted', 30_000);
+    await delay(700);
+    assert.equal(await probe(pid, 'select-files'), 'submitted');
     await textVisible('已入卷 0 件，待处理 ' + fileCount + ' 件，失败 0 件');
     const queuedFiles = (await probe(pid, 'queued-files')).split(', ').sort();
     assert.deepEqual(queuedFiles, files.map(file => file.name).sort(), 'Only this round’s synthetic files may be imported');

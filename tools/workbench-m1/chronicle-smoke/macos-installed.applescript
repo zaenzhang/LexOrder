@@ -27,6 +27,7 @@ on run argv
 					if operation is "open-panel" then return "open"
 					if operation is "go-to-folder" then
 						set frontmost of desktopProcess to true
+						keystroke "3" using command down
 						keystroke "g" using {command down, shift down}
 						delay 0.5
 						keystroke targetLabel
@@ -34,19 +35,15 @@ on run argv
 						key code 36
 						return "navigated"
 					end if
-					repeat with uiNode in (entire contents of candidate)
-						set nodeRole to my getText(uiNode, "AXRole")
-						if nodeRole is "AXPopUpButton" or nodeRole is "AXMenuButton" then
-							set folderName to my getText(uiNode, "AXValue")
-							if folderName is targetLabel or my getText(uiNode, "AXTitle") is targetLabel then
-								set frontmost of desktopProcess to true
-								keystroke "a" using command down
-								perform action "AXPress" of (first button of candidate whose name is "Open")
-								return "submitted"
-							end if
-						end if
-					end repeat
-					return "synthetic directory not visible in the Open panel"
+					set frontmost of desktopProcess to true
+					-- Go to Folder selects the folder row in column view. Enter its file column.
+					key code 124
+					delay 0.3
+					keystroke "a" using command down
+					set confirmButton to first button of candidate whose name is "Open"
+					if not (enabled of confirmButton) then return "no files were selected in the Open panel"
+					perform action "AXPress" of confirmButton
+					return "submitted"
 				end if
 			end repeat
 			return "no native Open panel"
