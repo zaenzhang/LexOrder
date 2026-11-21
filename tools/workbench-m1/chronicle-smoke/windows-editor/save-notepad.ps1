@@ -48,7 +48,30 @@ do {
     }
     Start-Sleep -Milliseconds 150
 } while ([DateTime]::UtcNow -lt $deadline)
-if (!$root) { throw 'The synthetic file is not selected in Windows Notepad.' }
+if (!$root) {
+    $choice = Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.txt\UserChoice' -Name ProgId -ErrorAction SilentlyContinue
+    $registered = Get-Item -LiteralPath 'Registry::HKEY_CLASSES_ROOT\.txt' -ErrorAction SilentlyContinue
+    $extensionHandler = if ($registered) { $registered.GetValue('') }
+    $notepad = @(Get-Process Notepad -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $session })
+    $stem = [IO.Path]::GetFileNameWithoutExtension($name)
+    Write-Output "TXT association user=$($choice.ProgId) registered=$extensionHandler; Notepad processes=$($notepad.Count) in session $session"
+    foreach ($process in $notepad) {
+        $handle = $process.MainWindowHandle
+        $title = $process.MainWindowTitle
+        $carriesFixture = $title.IndexOf($stem, [StringComparison]::OrdinalIgnoreCase) -ge 0
+        $carriesExtension = $title.IndexOf($name, [StringComparison]::OrdinalIgnoreCase) -ge 0
+        $tabs = $documents = $editControls = 0
+        if ($handle -ne [IntPtr]::Zero) {
+            $window = [System.Windows.Automation.AutomationElement]::FromHandle($handle)
+            $editType = [System.Windows.Automation.PropertyCondition]::new($controlType, [System.Windows.Automation.ControlType]::Edit)
+            $tabs = $window.FindAll($scope, $tabType).Count
+            $documents = $window.FindAll($scope, $editorType).Count
+            $editControls = $window.FindAll($scope, $editType).Count
+        }
+        Write-Output "Notepad window=$($handle -ne [IntPtr]::Zero) fixtureName=$carriesFixture fixtureExtension=$carriesExtension tabs=$tabs documents=$documents edits=$editControls"
+    }
+    throw 'The synthetic file is not selected in Windows Notepad.'
+}
 
 $editors = @($root.FindAll($scope, $editorType) | Where-Object { !$_.Current.IsOffscreen })
 if ($editors.Count -ne 1) { throw 'The selected Notepad tab has no unique visible editor.' }

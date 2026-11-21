@@ -861,3 +861,9 @@ macOS 15.8.2 托管 runner 用 `c79a56f` 的调试验收宿主，显示会话切
 **宽窗图谱冒烟问题 · 返回焦点已修正。** 同一个 120 项、12 份材料的合成案在 Linux WebKitGTK 1440 × 900 复现。从事实详情打开固定原文再返回，原有 DOM 已卸载，焦点没回到原按钮。返回时先聚焦事实详情，固定出处加载完成且操作者仍在该区域时，按事实修订、来源与记载 ID 回到对应原文按钮。实际 Linux WebKit 复验了独立右栏滚动、370 像素右栏、长文件名、原文和回焦。另通过类型检查、相关文件 ESLint 和 8 项定向测试。
 
 **macOS 宽窗图谱专项 · 通过。** Apple Silicon macOS 15.8.2 托管 runner 用 `3fee962` 的 Tauri 验收宿主，在实际 1440 × 900 WKWebView 复跑同一合成案。100 条同组事件可展开并选择最后一项。365 像素宽右栏定位了长文件名材料的 V1 引语，原文区域独立滚动，返回事实后焦点回到原文按钮。本轮图谱首次可交互为 987 ms，打开固定原文为 107 ms，个案时间轴的五次读取为 271–338 ms、每次 223,390 字节，模型调用 0 次。 [专项日志](https://github.com/zaenzhang/LexOrder/actions/runs/44859580770/job/136709625986)
+
+### 主线 PR 检查 · 2026-11-21
+
+**依赖审计 · 本机已修复。** 主线 PR 的 `npm audit` 发现 Prisma 7.10.1 的配置包在 `main` 与个人版分支均锁定 Effect 3.20.0。对配置包单独固定修复版本 3.22.1。安装后的依赖树、审计、Prisma 验证与生成均通过，PR CI 待复验。[原失败日志](https://github.com/zaenzhang/LexOrder/actions/runs/44860533810/job/136712639051) · [上游公告](https://github.com/advisories/GHSA-7589-6fvf-x4pw)
+
+**默认编辑器冒烟 · 待定位。** Windows Server 2022 runner 首次执行主线 PR 编辑器验收时，脚本未在 Notepad 中定位到合成 TXT 的已选标签。两案目录、重启、冲突及启动回执共 25 项自动测试通过。为原生编辑器步骤补充了文件关联和同会话窗口控件类型的诊断，等待下一次 PR 运行结果。[原失败日志](https://github.com/zaenzhang/LexOrder/actions/runs/44860533795/job/136712638849)
