@@ -28,10 +28,23 @@ on run argv
 						set frontmost of desktopProcess to true
 						keystroke "3" using command down
 						keystroke "g" using {command down, shift down}
-						delay 0.5
-						keystroke targetLabel
-						delay 0.5
-						key code 36
+						repeat 15 times
+							if exists sheet 1 of candidate then exit repeat
+							delay 0.2
+						end repeat
+						if not (exists sheet 1 of candidate) then return "no Go to Folder sheet"
+						set savedClipboard to the clipboard
+						try
+							set the clipboard to targetLabel
+							keystroke "a" using command down
+							keystroke "v" using command down
+							delay 0.5
+							key code 36
+						on error problemText number problemCode
+							set the clipboard to savedClipboard
+							error problemText number problemCode
+						end try
+						set the clipboard to savedClipboard
 						return "navigated"
 					end if
 					set frontmost of desktopProcess to true
