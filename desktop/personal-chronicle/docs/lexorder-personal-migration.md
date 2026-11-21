@@ -789,3 +789,5 @@ GitHub Actions 的 macOS 15.8.2（24H232）使用 e087dee 的 Tauri 调试验收
 **发行包冒烟问题 · 待复验。** `0342e17` 的 DMG 校验和包内业务冒烟均通过。实际启动包内 Tauri 后，窗口检查在 60 秒内未读到「今日办理」的日期。原脚本无宿主就绪信号和辅助功能节点结构，暂无法定位加载或读取失败。复跑保留两层证据，超时记录宿主信号和合成窗口的节点属性。新增以指定运行 ID 重用已构建 DMG 的入口，省去重新构建。 [首轮发行包日志](https://github.com/zaenzhang/LexOrder/actions/runs/44849871408/job/136678414523)
 
 **重用 DMG 冒烟问题 · 已修正依赖入口。** 指定构建的 DMG 已下载并挂载。合成样本脚本需要根项目锁定的 `pdf-lib`，首轮复用任务只安装了工作台子项目的依赖，脚本在初始化隔离工作区时退出。复用任务安装根依赖并跳过安装钩子，仍复用包内 Bun 与运行时。 [首轮复用日志](https://github.com/zaenzhang/LexOrder/actions/runs/44851147563/job/136682541357)
+
+**发行包冒烟问题 · 锁标记断言已修正。** 复用 `e087dee` 的 Apple Silicon DMG 后，包内服务成功建案并重开，实际 Tauri 输出就绪信号，辅助功能读到了「今日办理」的数据。脚本随后用 `access` 检查 `.owner` 时返回 ENOENT。macOS 运行时使用目录 flock 持锁，`.owner` 是指向不存在的 `/proc/<PID>` 的标记链接。改用 `lstat` 直接验证运行时标记，并在关窗成功退出后检查链接移除与下轮重开。 [发行包复用日志](https://github.com/zaenzhang/LexOrder/actions/runs/44851296538/job/136683014867)

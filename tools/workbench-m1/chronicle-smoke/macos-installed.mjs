@@ -55,7 +55,7 @@ async function measure(round) {
     }
     assert.match(hostOutput, /LEXORDER_DESKTOP_READY http:\/\/127\.0\.0\.1:\d+/);
     const startMs = Math.round(performance.now() - started);
-    await access(owner);
+    assert((await lstat(owner)).isSymbolicLink(), 'Expected the running macOS workspace owner marker');
 
     const closeAt = performance.now();
     assert.equal(await probe(child.pid, 'close'), 'pressed', 'Could not close the installed window');
