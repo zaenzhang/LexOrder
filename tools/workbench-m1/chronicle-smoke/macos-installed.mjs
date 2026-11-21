@@ -90,7 +90,7 @@ async function measureImport(pid, existingPids) {
   const folder = path.join(workspace, 'desktop-uploads-' + tag);
   await mkdir(folder, { mode: 0o700 });
   await Promise.all(syntheticImportFiles(tag).map(file => writeFile(path.join(folder, file.name), file.buffer)));
-  await press('选择文件或拖到这里');
+  await press('no files selected');
   await waitFor(pid, 'open-panel', '', 'open');
 
   const baseline = processTree(pid, existingPids);
