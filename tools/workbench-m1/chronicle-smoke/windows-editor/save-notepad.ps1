@@ -9,6 +9,7 @@ Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 
 $file = [IO.Path]::GetFullPath($WorkingFile)
 $name = [IO.Path]::GetFileName($file)
+$stem = [IO.Path]::GetFileNameWithoutExtension($name)
 if ($name -notmatch '^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}_.+\.txt$' -or
     -not [IO.File]::Exists($file)) { throw 'Expected an app-issued synthetic TXT working copy.' }
 function CanonicalText([string]$text) { $text.Replace("`r`n", "`n") }
@@ -36,24 +37,38 @@ function SelectedFixtureTab($root) {
 $session = (Get-Process -Id $PID).SessionId
 $deadline = [DateTime]::UtcNow.AddSeconds(25)
 $root = $null
+$classicWindow = $classicEditor = [IntPtr]::Zero
 do {
     $windows = @(Get-Process Notepad -ErrorAction SilentlyContinue | Where-Object {
         $_.SessionId -eq $session -and $_.MainWindowHandle -ne [IntPtr]::Zero -and
-        $_.MainWindowTitle.TrimStart('*').StartsWith($name + ' - ', [StringComparison]::OrdinalIgnoreCase)
+        ($_.MainWindowTitle.TrimStart('*').StartsWith($name + ' - ', [StringComparison]::OrdinalIgnoreCase) -or
+         $_.MainWindowTitle.TrimStart('*').StartsWith($stem + ' - ', [StringComparison]::OrdinalIgnoreCase))
     })
     if ($windows.Count -gt 1) { throw 'Multiple Notepad windows match the synthetic file.' }
     if ($windows.Count -eq 1) {
         $candidate = [System.Windows.Automation.AutomationElement]::FromHandle($windows[0].MainWindowHandle)
         if (@(SelectedFixtureTab $candidate).Count -eq 1) { $root = $candidate; break }
+        if ($windows[0].MainWindowTitle.StartsWith($stem + ' - ', [StringComparison]::OrdinalIgnoreCase)) {
+            if (!('ClassicNotepad' -as [type])) { Add-Type -Path (Join-Path $PSScriptRoot 'ClassicNotepad.cs') }
+            $handle = $windows[0].MainWindowHandle
+            $control = [ClassicNotepad]::FindEditor($handle, [IntPtr]::Zero)
+            if ($control -ne [IntPtr]::Zero) {
+                if ([ClassicNotepad]::FindEditor($handle, $control) -ne [IntPtr]::Zero) {
+                    throw 'Multiple classic Notepad editors match the synthetic file.'
+                }
+                $classicWindow = $handle
+                $classicEditor = $control
+                break
+            }
+        }
     }
     Start-Sleep -Milliseconds 150
 } while ([DateTime]::UtcNow -lt $deadline)
-if (!$root) {
+if (!$root -and $classicWindow -eq [IntPtr]::Zero) {
     $choice = Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.txt\UserChoice' -Name ProgId -ErrorAction SilentlyContinue
     $registered = Get-Item -LiteralPath 'Registry::HKEY_CLASSES_ROOT\.txt' -ErrorAction SilentlyContinue
     $extensionHandler = if ($registered) { $registered.GetValue('') }
     $notepad = @(Get-Process Notepad -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $session })
-    $stem = [IO.Path]::GetFileNameWithoutExtension($name)
     Write-Output "TXT association user=$($choice.ProgId) registered=$extensionHandler; Notepad processes=$($notepad.Count) in session $session"
     foreach ($process in $notepad) {
         $handle = $process.MainWindowHandle
@@ -73,27 +88,31 @@ if (!$root) {
     throw 'The synthetic file is not selected in Windows Notepad.'
 }
 
-$editors = @($root.FindAll($scope, $editorType) | Where-Object { !$_.Current.IsOffscreen })
-if ($editors.Count -ne 1) { throw 'The selected Notepad tab has no unique visible editor.' }
-$value = $editors[0].GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
-if ((CanonicalText $value.Current.Value) -cne $before) { throw 'The visible editor text does not match the working copy.' }
-$value.SetValue($NewText)
-if ((CanonicalText $value.Current.Value) -cne $after -or @(SelectedFixtureTab $root).Count -ne 1) {
-    throw 'The selected test tab did not accept the edit.'
-}
+if ($classicWindow -ne [IntPtr]::Zero) {
+    [ClassicNotepad]::SaveFixture($classicWindow, $classicEditor, $before, $after)
+} else {
+    $editors = @($root.FindAll($scope, $editorType) | Where-Object { !$_.Current.IsOffscreen })
+    if ($editors.Count -ne 1) { throw 'The selected Notepad tab has no unique visible editor.' }
+    $value = $editors[0].GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+    if ((CanonicalText $value.Current.Value) -cne $before) { throw 'The visible editor text does not match the working copy.' }
+    $value.SetValue($NewText)
+    if ((CanonicalText $value.Current.Value) -cne $after -or @(SelectedFixtureTab $root).Count -ne 1) {
+        throw 'The selected test tab did not accept the edit.'
+    }
 
-$fileMenu = $root.FindFirst($scope, [System.Windows.Automation.PropertyCondition]::new($automationId, 'File'))
-$fileMenu.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
-$accelerator = [System.Windows.Automation.AutomationElement]::AcceleratorKeyProperty
-$saveCondition = [System.Windows.Automation.PropertyCondition]::new($accelerator, 'Ctrl+S')
-$deadline = [DateTime]::UtcNow.AddSeconds(5)
-do {
-    $save = $root.FindFirst($scope, $saveCondition)
-    if ($save) { break }
-    Start-Sleep -Milliseconds 100
-} while ([DateTime]::UtcNow -lt $deadline)
-if (!$save -or @(SelectedFixtureTab $root).Count -ne 1) { throw 'No Save command for the selected test tab.' }
-$save.GetCurrentPattern($invokePattern).Invoke()
+    $fileMenu = $root.FindFirst($scope, [System.Windows.Automation.PropertyCondition]::new($automationId, 'File'))
+    $fileMenu.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+    $accelerator = [System.Windows.Automation.AutomationElement]::AcceleratorKeyProperty
+    $saveCondition = [System.Windows.Automation.PropertyCondition]::new($accelerator, 'Ctrl+S')
+    $deadline = [DateTime]::UtcNow.AddSeconds(5)
+    do {
+        $save = $root.FindFirst($scope, $saveCondition)
+        if ($save) { break }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $deadline)
+    if (!$save -or @(SelectedFixtureTab $root).Count -ne 1) { throw 'No Save command for the selected test tab.' }
+    $save.GetCurrentPattern($invokePattern).Invoke()
+}
 
 $deadline = [DateTime]::UtcNow.AddSeconds(10)
 do {
@@ -104,8 +123,13 @@ do {
 } while ([DateTime]::UtcNow -lt $deadline)
 if ((CanonicalText ([IO.File]::ReadAllText($file))) -cne $after) { throw 'Notepad did not save the expected text.' }
 
-$tabs = @(SelectedFixtureTab $root)
-if ($tabs.Count -ne 1) { throw 'The saved fixture tab is no longer selected.' }
-$close = $tabs[0].FindFirst($scope, [System.Windows.Automation.PropertyCondition]::new($automationId, 'CloseButton'))
-$close.GetCurrentPattern($invokePattern).Invoke()
-Write-Output 'PASS Windows Notepad saved the verified synthetic working copy and closed its tab.'
+if ($classicWindow -ne [IntPtr]::Zero) {
+    [ClassicNotepad]::CloseFixture($classicWindow)
+    Write-Output 'PASS classic Windows Notepad saved and closed the verified synthetic working copy.'
+} else {
+    $tabs = @(SelectedFixtureTab $root)
+    if ($tabs.Count -ne 1) { throw 'The saved fixture tab is no longer selected.' }
+    $close = $tabs[0].FindFirst($scope, [System.Windows.Automation.PropertyCondition]::new($automationId, 'CloseButton'))
+    $close.GetCurrentPattern($invokePattern).Invoke()
+    Write-Output 'PASS Windows Notepad saved the verified synthetic working copy and closed its tab.'
+}

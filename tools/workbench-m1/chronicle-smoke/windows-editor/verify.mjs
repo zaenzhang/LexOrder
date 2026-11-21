@@ -116,7 +116,7 @@ async function worker(fixture, version) {
 }
 
 async function main() {
-  assert.equal(process.platform, "win32", "requires Windows with Microsoft Store Notepad as the default .txt editor");
+  assert.equal(process.platform, "win32", "requires Windows with Notepad as the default .txt editor");
   if (process.argv[2] === "--worker") return worker(process.argv[3], Number(process.argv[4]));
   const fixture = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "lexorder-native-")));
   const env = { ...process.env, LEXORDER_RUNTIME_MODE: "PERSONAL", LEXORDER_PERSONAL_WORKSPACE_ID: randomUUID(),

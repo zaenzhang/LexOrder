@@ -864,6 +864,6 @@ macOS 15.8.2 托管 runner 用 `c79a56f` 的调试验收宿主，显示会话切
 
 ### 主线 PR 检查 · 2026-11-21
 
-**依赖审计 · 本机已修复。** 主线 PR 的 `npm audit` 发现 Prisma 7.10.1 的配置包在 `main` 与个人版分支均锁定 Effect 3.20.0。对配置包单独固定修复版本 3.22.1。安装后的依赖树、审计、Prisma 验证与生成均通过，PR CI 待复验。[原失败日志](https://github.com/zaenzhang/LexOrder/actions/runs/44860533810/job/136712639051) · [上游公告](https://github.com/advisories/GHSA-7589-6fvf-x4pw)
+**依赖审计 · 本机已修复。** 主线 PR 的 `npm audit` 发现 Prisma 7.10.1 的配置包在 `main` 与个人版分支均锁定 Effect 3.20.0。对配置包单独固定修复版本 3.22.1。安装后的依赖树、审计、Prisma 验证与生成均通过，PR 审计步骤也已通过。[复验日志](https://github.com/zaenzhang/LexOrder/actions/runs/44860945462/job/136713946268) · [原失败日志](https://github.com/zaenzhang/LexOrder/actions/runs/44860533810/job/136712639051) · [上游公告](https://github.com/advisories/GHSA-7589-6fvf-x4pw)
 
-**默认编辑器冒烟 · 待定位。** Windows Server 2022 runner 首次执行主线 PR 编辑器验收时，脚本未在 Notepad 中定位到合成 TXT 的已选标签。两案目录、重启、冲突及启动回执共 25 项自动测试通过。为原生编辑器步骤补充了文件关联和同会话窗口控件类型的诊断，等待下一次 PR 运行结果。[原失败日志](https://github.com/zaenzhang/LexOrder/actions/runs/44860533795/job/136712638849)
+**默认编辑器冒烟 · 待定位。** Windows Server 2022 runner 首次执行主线 PR 编辑器验收时，脚本未在 Notepad 中定位到合成 TXT 的已选标签。两案目录、重启、冲突及启动回执共 25 项自动测试通过。复跑确认本机文件关联为 `txtfile`，合成文件已在同会话的经典 Notepad 中打开，窗口标题无扩展名且无新版标签页。测试工具按实际窗口类型定向操作，仍由系统默认编辑器保存，并以原文件字节、监听回传的版本和第二个案卷原件校验结果。复验等待 PR 运行。[诊断日志](https://github.com/zaenzhang/LexOrder/actions/runs/44860945388/job/136713946210)
