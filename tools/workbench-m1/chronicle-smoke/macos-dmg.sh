@@ -4,7 +4,7 @@ set -euo pipefail
 package_dir=${1:?Supply the directory containing the Apple Silicon DMG}
 workspace=${2:?Supply a new absolute synthetic workspace}
 mode=${3:-}
-if [[ "$mode" == "--case-flow" ]]; then
+if [[ "$mode" == "--case-flow" || "$mode" == "--batch" ]]; then
   export LEXORDER_SMOKE_PERFORMANCE_CASEBOOK="$workspace-casebooks"
   mkdir -m 700 "$LEXORDER_SMOKE_PERFORMANCE_CASEBOOK"
 fi

@@ -23,11 +23,12 @@ await access(path.join(workspace, 'workspace.json'));
 await assert.rejects(lstat(owner), { code: 'ENOENT' });
 const script = fileURLToPath(new URL('./macos-installed.applescript', import.meta.url));
 const run = promisify(execFile);
-const fixture = mode === '--case-flow'
+const diagnosticsDir = process.env.LEXORDER_MACOS_DIAGNOSTICS_DIR;
+const fixture = (mode === '--case-flow' || mode === '--batch')
   ? JSON.parse(await readFile(path.join(workspace, 'chronicle-performance-fixture.json'), 'utf8')) : null;
 
 async function probe(pid, action, label = '', value = '') {
-  const { stdout } = await run('/usr/bin/osascript', [script, String(pid), action, label, value], { timeout: 8000 });
+  const { stdout } = await run('/usr/bin/osascript', [script, String(pid), action, label, value], { timeout: action === 'inspect' ? 20_000 : 8000 });
   return stdout.trim();
 }
 
@@ -77,7 +78,7 @@ async function measureImport(pid, existingPids) {
   const press = label => waitFor(pid, 'press', label, 'pressed');
   const textVisible = (label, timeout) => waitFor(pid, 'text', label, '1', timeout);
   const [a, b] = fixture.cases;
-  await press('切换案件：' + a.title);
+  await press('切换案件：' + (mode === '--batch' ? '个人工作区' : a.title));
   await press(b.title);
   await waitFor(pid, 'heading', b.title, 'found');
   if (await probe(pid, 'press', '材料目录') !== 'pressed') {
@@ -176,7 +177,7 @@ async function measure(round) {
     const startMs = Math.round(performance.now() - started);
     assert((await lstat(owner)).isSymbolicLink(), 'Expected the running macOS workspace owner marker');
 
-    const caseMetrics = fixture ? await measureCases(child.pid, round) : {};
+    const caseMetrics = mode === '--case-flow' ? await measureCases(child.pid, round) : {};
 
     const importMetrics = fixture ? await measureImport(child.pid, existingPids) : {};
 
@@ -191,6 +192,12 @@ async function measure(round) {
   } catch (error) {
     if (hostOutput) console.error(hostOutput);
     if (diagnostic) console.error(diagnostic);
+    if (diagnosticsDir) {
+      try {
+        await mkdir(diagnosticsDir, { recursive: true });
+        await run('/usr/sbin/screencapture', ['-x', path.join(diagnosticsDir, 'round-' + round + '.png')], { timeout: 8000 });
+      } catch (captureError) { console.error('Status after screenshot request:', captureError.message); }
+    }
     throw error;
   } finally {
     if (child.exitCode === null && child.signalCode === null) child.kill();

@@ -12,6 +12,11 @@ on:
         description: Re-run macOS window checks against the DMG from this workflow run ID
         type: string
         default: ''
+      macos_dmg_scope:
+        description: Check every window operation or focus on the batch file chooser
+        type: choice
+        options: [full, batch]
+        default: full
   push:
     paths:
       - .github/workflows/chronicle-sidecar.yml
@@ -180,6 +185,18 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ inputs.macos_dmg_run_id }}
       - name: Verify and smoke the Apple Silicon DMG
+        env:
+          LEXORDER_MACOS_DIAGNOSTICS_DIR: ${{ runner.temp }}/lexorder-macos-diagnostics
+          LEXORDER_DMG_SCOPE: ${{ inputs.macos_dmg_scope }}
         run: |
+          mode=--case-flow
+          if [[ "$LEXORDER_DMG_SCOPE" == batch ]]; then mode=--batch; fi
           bash tools/workbench-m1/chronicle-smoke/macos-dmg.sh \
-            "$RUNNER_TEMP/lexorder-dmg-artifact" "$RUNNER_TEMP/lexorder-installed-case" --case-flow
+            "$RUNNER_TEMP/lexorder-dmg-artifact" "$RUNNER_TEMP/lexorder-installed-case" "$mode"
+      - name: Upload failed window screenshot
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: lexorder-macos-window-diagnostic
+          path: ${{ runner.temp }}/lexorder-macos-diagnostics/*.png
+          if-no-files-found: ignore
