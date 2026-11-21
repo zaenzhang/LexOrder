@@ -33,7 +33,7 @@ export async function startPrivatePostgres(db, credential, onFatal = () => undef
     socket.on('error', () => socket.destroy());
     socket.once('close', () => {
       clearTimeout(timer); sockets.delete(socket);
-      if (owner === socket) {
+      if (owner === socket && !closing) {
         serial = serial.then(async () => {
           if (db.isInTransaction()) await db.exec('ROLLBACK');
           if (owner === socket) owner = undefined;

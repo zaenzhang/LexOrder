@@ -1,6 +1,6 @@
 "use client"
 
-import { useRouter } from "next/navigation"
+import { useRouter } from "@/kit/framework"
 import { useState } from "react"
 
 import { Button } from "@/components/ui/button"

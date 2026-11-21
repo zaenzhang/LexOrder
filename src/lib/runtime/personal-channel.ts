@@ -3,6 +3,7 @@ import { isAbsolute } from "node:path";
 import { isPersonalMode } from "./mode";
 
 export const PERSONAL_CHANNEL_COOKIE = "lexorder_local_channel";
+export const PERSONAL_SKILL_MCP_PATH = "/api/personal/skill-mcp";
 export type PersonalRuntime = Readonly<{
   origin: string; token: string; workspaceId: string; actorId: string; manifestPath: string;
 }>;
@@ -31,7 +32,7 @@ export function validPersonalToken(value: string | null | undefined, runtime = p
 }
 
 export function personalChannelAllowed(headers: Pick<Headers, "get">, options: {
-  method?: string; requireCookie?: boolean; bootstrap?: boolean;
+  method?: string; requireCookie?: boolean; bootstrap?: boolean; allowMissingOrigin?: boolean;
 } = {}): boolean {
   const runtime = personalRuntime();
   const host = new URL(runtime.origin).host;
@@ -41,7 +42,7 @@ export function personalChannelAllowed(headers: Pick<Headers, "get">, options: {
   const origin = headers.get("origin");
   if (origin && origin !== runtime.origin) return false;
   const method = (options.method ?? "GET").toUpperCase();
-  if (!["GET", "HEAD", "OPTIONS"].includes(method) && origin !== runtime.origin) return false;
+  if (!["GET", "HEAD", "OPTIONS"].includes(method) && origin !== runtime.origin && !(options.allowMissingOrigin && origin === null)) return false;
   if (!options.bootstrap && headers.get("sec-fetch-site") === "cross-site") return false;
   if (options.requireCookie === false) return true;
   const cookies = (headers.get("cookie") ?? "").split(";")

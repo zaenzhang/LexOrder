@@ -76,5 +76,5 @@ function pooled(name: string): string | null {
 }
 
 function path(number: number): string {
-  return `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/avatars/avatar-${String(number).padStart(2, "0")}.webp`
+  return `${import.meta.env.BASE_URL.replace(/\/$/, "")}/avatars/avatar-${String(number).padStart(2, "0")}.webp`
 }

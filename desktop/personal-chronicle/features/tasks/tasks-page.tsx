@@ -1,10 +1,8 @@
 "use client"
 
 import {
-  KanbanSquareIcon,
   PlusIcon,
   SearchIcon,
-  TableIcon,
   XIcon,
 } from "lucide-react"
 import { parseAsStringLiteral, useQueryState } from "nuqs"
@@ -23,10 +21,10 @@ import { useListState } from "@/kit/data/url-state"
 import { FacetedFilter } from "@/kit/data-table/faceted-filter"
 import { PageHeader } from "@/kit/ui-patterns/page-header"
 import { ErrorState } from "@/kit/ui-patterns/query-state"
-import { Segmented } from "@/kit/ui-patterns/segmented"
 import type { Resources } from "@/lib/data"
 
 import { CreateTaskDialog } from "./create-task-dialog"
+import { TaskViewToggle } from "./task-view-toggle"
 import { TaskBoard } from "./task-board"
 import { dueState } from "./task-card"
 import {
@@ -119,16 +117,7 @@ export function TasksPage() {
         }
         actions={
           <>
-            <Segmented
-              aria-label="View"
-              className="w-auto"
-              value={view}
-              onChange={(next) => setView(next === "board" ? null : next)}
-              options={[
-                { value: "board", label: "Board", icon: KanbanSquareIcon },
-                { value: "table", label: "Table", icon: TableIcon },
-              ]}
-            />
+            <TaskViewToggle value={view} onChange={next => void setView(next === "board" ? null : next)} />
             <Button onClick={() => setCreating("todo")}>
               <PlusIcon data-icon="inline-start" />
               New task

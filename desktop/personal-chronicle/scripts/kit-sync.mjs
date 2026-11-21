@@ -195,7 +195,9 @@ function globalsPath(root) {
   try {
     const css = JSON.parse(readFileSync(join(root, "components.json"), "utf8")).tailwind?.css
     if (css) return join(root, css)
-  } catch {}
+  } catch {
+    // A standalone Kit may not have shadcn configuration.
+  }
   return join(root, "app", "globals.css")
 }
 
@@ -248,25 +250,27 @@ function check(root) {
   const lock = JSON.parse(readFileSync(lockPath, "utf8"))
   const actual = hashes(join(root, "kit"))
   const drift = []
-  for (const [file, digest] of Object.entries(lock.files)) {
+  const local = lock.local ?? {}
+  const expected = { ...lock.files, ...local }
+  for (const [file, digest] of Object.entries(expected)) {
     if (!actual[file]) drift.push(`deleted   kit/${file}`)
     else if (actual[file] !== digest) drift.push(`modified  kit/${file}`)
   }
   for (const file of Object.keys(actual)) {
-    if (!lock.files[file]) drift.push(`added     kit/${file}`)
+    if (!expected[file]) drift.push(`added     kit/${file}`)
   }
   const { errors, warnings } = checkRequirements(root, lock.framework ?? DEFAULT_FRAMEWORK)
   for (const warning of warnings) console.warn(`warning: ${warning}`)
   if (drift.length || errors.length) {
     if (drift.length) {
-      console.error(`kit/ differs from ${lock.ref} (${lock.commit.slice(0, 7)}). Change the Kit repo and sync instead of editing kit/ here:`)
+      console.error(`kit/ differs from ${lock.ref} (${lock.commit.slice(0, 7)}) plus its recorded LexOrder overrides:`)
       for (const line of drift) console.error(`  ${line}`)
     }
     for (const error of errors) console.error(`error: ${error}`)
     return 1
   }
   const edition = lock.framework && lock.framework !== DEFAULT_FRAMEWORK ? `, ${lock.framework} edition` : ""
-  console.log(`kit/ matches ${lock.ref} (${lock.commit.slice(0, 7)}${edition}), ${Object.keys(lock.files).length} files.`)
+  console.log(`kit/ verified against ${lock.ref} (${lock.commit.slice(0, 7)}${edition}) and ${Object.keys(local).length} LexOrder overrides.`)
   return 0
 }
 
@@ -277,6 +281,9 @@ function sync({ ref, source, root, dryRun, allowUntagged, exclude: excludeArg, f
   const previous = existsSync(lockPath) ? JSON.parse(readFileSync(lockPath, "utf8")) : null
   const exclude = excludeArg ?? previous?.exclude ?? []
   const framework = frameworkArg ?? previous?.framework ?? DEFAULT_FRAMEWORK
+  if (Object.keys(previous?.local ?? {}).length) {
+    throw new Error("Review and reapply LexOrder's recorded Kit overrides before upgrading the vendor snapshot.")
+  }
   if (previous && existsSync(kitDir)) {
     const lock = previous
     const actual = hashes(kitDir)

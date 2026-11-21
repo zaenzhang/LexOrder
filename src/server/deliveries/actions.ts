@@ -10,9 +10,9 @@ import {
 } from "./service";
 import type { BriefInput, PrepareDeliveryInput, RegisterDeliveryEventInput } from "./contracts";
 
-export async function listDeliveryRecords(matterId: string, beforeId?: string) {
+export async function listDeliveryRecords(matterId: string, beforeId?: string, sentOnly = false) {
   const { user } = await requireSession("documents.download");
-  return listDeliveryRecordsForActor(user.id, matterId, beforeId);
+  return listDeliveryRecordsForActor(user.id, matterId, beforeId, sentOnly);
 }
 export async function getDeliveryDetail(deliveryId: string) {
   const { user } = await requireSession("documents.download");

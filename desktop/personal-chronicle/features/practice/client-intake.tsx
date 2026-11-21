@@ -1,12 +1,16 @@
 "use client"
 
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { usePageLoading } from "@/kit/ui-patterns/page-loading"
+
+import Link from "@/features/shell/workspace-link"
+import { useRouter } from "@/kit/framework"
+import { useState, type ReactNode } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { CLIENT_TABS, type ClientTab } from "@/config/client-tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { PageHeader } from "@/kit/ui-patterns/page-header"
 import { DataTable, type DataColumn } from "@/kit/data-table/data-table"
@@ -77,15 +81,54 @@ function field(form: FormData, key: string) {
 }
 const fieldClass = "grid gap-1.5 text-sm"
 
-export function CatalogPage({ view }: { view: Catalog }) {
+export function ClientWorkspace({ view, creatingIntake }: { view: ClientTab; creatingIntake: boolean }) {
+  if (view === "clients" || view === "intakes") {
+    return <CatalogPage key={view + (creatingIntake ? "-create" : "")} view={view} creatingIntake={creatingIntake} />
+  }
+  return <ClientLayout view={view}>{view === "contacts" ? <ContactsPage /> : <ConflictPrecheck />}</ClientLayout>
+}
+
+function ClientLayout({ view, title = "客户", actions, children }: {
+  view: ClientTab; title?: string; actions?: ReactNode; children: ReactNode
+}) {
+  const router = useRouter()
+  return (
+    <section className="flex min-w-0 flex-col gap-4">
+      <PageHeader title={title} actions={actions} />
+      <Tabs
+        value={view}
+        className="gap-3"
+        onValueChange={(value) => {
+          const tab = CLIENT_TABS.find(tab => tab.value === value)
+          if (tab && tab.value !== view) router.push(tab.href)
+        }}
+      >
+        <TabsList aria-label="客户工作区" className="max-w-full flex-wrap group-data-horizontal/tabs:h-auto">
+          {CLIENT_TABS.map(tab => <TabsTrigger key={tab.value} value={tab.value}>{tab.label}</TabsTrigger>)}
+        </TabsList>
+        <TabsContent value={view}>{children}</TabsContent>
+      </Tabs>
+    </section>
+  )
+}
+
+function CatalogPage({
+  view,
+  creatingIntake = false,
+}: {
+  view: Catalog
+  creatingIntake?: boolean
+}) {
   const [search, setSearch] = useState("")
   const [query, setQuery] = useState({ q: "", page: "1" })
-  const [adding, setAdding] = useState(false)
+  const [addingClient, setAddingClient] = useState(false)
+  const adding = view === "intakes" ? creatingIntake : addingClient
   const [category, setCategory] = useState("CIVIL_COMMERCIAL")
   const [useExisting, setUseExisting] = useState(false)
   const [clientSearch, setClientSearch] = useState("")
   const [clientQuery, setClientQuery] = useState("")
   const { data, error } = usePractice<List>(view, query)
+  usePageLoading(!data && !error && !query.q && query.page === "1")
   const options = usePractice<List>(
     "clients",
     { q: clientQuery },
@@ -159,223 +202,239 @@ export function CatalogPage({ view }: { view: Catalog }) {
     })
     router.push(`/practice/${view}/${result.id}`)
   }
+  const action = isClient ? (
+    <Button onClick={() => setAddingClient(!addingClient)} disabled={mutation.busy} variant={adding ? "outline" : "default"}>
+      {adding ? "返回列表" : "新建客户"}
+    </Button>
+  ) : (
+    <Link
+      className={buttonVariants({ variant: creatingIntake ? "outline" : "default" })}
+      href={creatingIntake ? "/practice/intakes" : "/practice/intakes?create=1"}
+      aria-disabled={mutation.busy}
+      onClick={(event) => {
+        if (mutation.busy) event.preventDefault()
+      }}
+    >
+      {creatingIntake ? "返回列表" : "新建收案"}
+    </Link>
+  )
+
   return (
-    <section className="flex flex-col gap-5">
-      <PageHeader
-        title={names[view]}
-        actions={
-          <Button onClick={() => setAdding(!adding)} disabled={mutation.busy}>
-            {adding ? "返回列表" : "新建" + names[view]}
-          </Button>
-        }
-      />
-      {adding ? (
-        <form
-          className="grid max-w-xl gap-4"
-          onSubmit={(e) => {
-            e.preventDefault()
-            const form = new FormData(e.currentTarget)
-            void mutation.run(() => create(form))
-          }}
-        >
-          <label className={fieldClass}>
-            {isClient ? "客户名称" : "案件名称"}
-            <Input name="name" required maxLength={isClient ? 120 : 200} />
-          </label>
-          {!isClient && (
-            <>
+    <ClientLayout view={view} title={creatingIntake ? "新建收案" : "客户"} actions={action}>
+      <div className="flex flex-col gap-3">
+        {adding ? (
+          <>
+            <form
+              className="grid max-w-xl gap-4"
+              onSubmit={(e) => {
+                e.preventDefault()
+                const form = new FormData(e.currentTarget)
+                void mutation.run(() => create(form))
+              }}
+            >
               <label className={fieldClass}>
-                案件类别
-                <NativeSelect
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                >
-                  {Object.entries(data?.categories ?? {}).map(([k, v]) => (
-                    <NativeSelectOption key={k} value={k}>
-                      {v}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                {isClient ? "客户名称" : "案件名称"}
+                <Input name="name" required maxLength={isClient ? 120 : 200} />
               </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={useExisting}
-                  onChange={(e) => setUseExisting(e.target.checked)}
-                />
-                关联已有客户
-              </label>
-              {useExisting ? (
+              {!isClient && (
                 <>
-                  <div className="flex gap-2">
-                    <Input
-                      aria-label="检索已有客户"
-                      value={clientSearch}
-                      onChange={(e) => setClientSearch(e.target.value)}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setClientQuery(clientSearch.trim())}
-                    >
-                      查找
-                    </Button>
-                  </div>
                   <label className={fieldClass}>
-                    委托方
-                    <NativeSelect name="clientId" required defaultValue="">
-                      <NativeSelectOption value="">选择客户</NativeSelectOption>
-                      {options.data?.items.map((c) => (
-                        <NativeSelectOption key={c.id} value={c.id}>
-                          {c.name}
+                    案件类别
+                    <NativeSelect
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                    >
+                      {Object.entries(data?.categories ?? {}).map(([k, v]) => (
+                        <NativeSelectOption key={k} value={k}>
+                          {v}
                         </NativeSelectOption>
                       ))}
                     </NativeSelect>
                   </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={useExisting}
+                      onChange={(e) => setUseExisting(e.target.checked)}
+                    />
+                    关联已有客户
+                  </label>
+                  {useExisting ? (
+                    <>
+                      <div className="flex gap-2">
+                        <Input
+                          aria-label="检索已有客户"
+                          value={clientSearch}
+                          onChange={(e) => setClientSearch(e.target.value)}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setClientQuery(clientSearch.trim())}
+                        >
+                          查找
+                        </Button>
+                      </div>
+                      <label className={fieldClass}>
+                        委托方
+                        <NativeSelect name="clientId" required defaultValue="">
+                          <NativeSelectOption value="">选择客户</NativeSelectOption>
+                          {options.data?.items.map((c) => (
+                            <NativeSelectOption key={c.id} value={c.id}>
+                              {c.name}
+                            </NativeSelectOption>
+                          ))}
+                        </NativeSelect>
+                      </label>
+                    </>
+                  ) : (
+                    <label className={fieldClass}>
+                      新委托方名称
+                      <Input name="clientName" required maxLength={120} />
+                    </label>
+                  )}
+                </>
+              )}
+              {(isClient || !useExisting) && (
+                <label className={fieldClass}>
+                  客户类型
+                  <NativeSelect name="clientType">
+                    <NativeSelectOption value="INDIVIDUAL">
+                      自然人
+                    </NativeSelectOption>
+                    <NativeSelectOption value="COMPANY">企业</NativeSelectOption>
+                    <NativeSelectOption value="ORGANIZATION">
+                      其他组织
+                    </NativeSelectOption>
+                  </NativeSelect>
+                </label>
+              )}
+              {isClient ? (
+                <>
+                  <label className={fieldClass}>
+                    电话
+                    <Input name="phone" type="tel" />
+                  </label>
+                  <label className={fieldClass}>
+                    邮箱
+                    <Input name="email" type="email" />
+                  </label>
                 </>
               ) : (
-                <label className={fieldClass}>
-                  新委托方名称
-                  <Input name="clientName" required maxLength={120} />
-                </label>
+                <>
+                  {litigation && (
+                    <label className={fieldClass}>
+                      委托方诉讼地位
+                      <NativeSelect name="standing" required defaultValue="">
+                        <NativeSelectOption value="">请选择</NativeSelectOption>
+                        {Object.entries(data?.standings ?? {}).map(([k, v]) => (
+                          <NativeSelectOption key={k} value={k}>
+                            {v}
+                          </NativeSelectOption>
+                        ))}
+                      </NativeSelect>
+                    </label>
+                  )}
+                  <label className={fieldClass}>
+                    对方当事人
+                    <Input name="opponent" maxLength={120} />
+                  </label>
+                  {litigation && (
+                    <label className={fieldClass}>
+                      对方诉讼地位
+                      <NativeSelect
+                        name="opposingStanding"
+                        defaultValue="DEFENDANT"
+                      >
+                        {Object.entries(data?.standings ?? {}).map(([k, v]) => (
+                          <NativeSelectOption key={k} value={k}>
+                            {v}
+                          </NativeSelectOption>
+                        ))}
+                      </NativeSelect>
+                    </label>
+                  )}
+                  <label className={fieldClass}>
+                    案情简述
+                    <Textarea name="description" maxLength={2000} />
+                  </label>
+                </>
               )}
-            </>
-          )}
-          {(isClient || !useExisting) && (
-            <label className={fieldClass}>
-              客户类型
-              <NativeSelect name="clientType">
-                <NativeSelectOption value="INDIVIDUAL">
-                  自然人
-                </NativeSelectOption>
-                <NativeSelectOption value="COMPANY">企业</NativeSelectOption>
-                <NativeSelectOption value="ORGANIZATION">
-                  其他组织
-                </NativeSelectOption>
-              </NativeSelect>
-            </label>
-          )}
-          {isClient ? (
-            <>
-              <label className={fieldClass}>
-                电话
-                <Input name="phone" type="tel" />
-              </label>
-              <label className={fieldClass}>
-                邮箱
-                <Input name="email" type="email" />
-              </label>
-            </>
-          ) : (
-            <>
-              {litigation && (
-                <label className={fieldClass}>
-                  委托方诉讼地位
-                  <NativeSelect name="standing" required defaultValue="">
-                    <NativeSelectOption value="">请选择</NativeSelectOption>
-                    {Object.entries(data?.standings ?? {}).map(([k, v]) => (
-                      <NativeSelectOption key={k} value={k}>
-                        {v}
-                      </NativeSelectOption>
-                    ))}
-                  </NativeSelect>
-                </label>
-              )}
-              <label className={fieldClass}>
-                对方当事人
-                <Input name="opponent" maxLength={120} />
-              </label>
-              {litigation && (
-                <label className={fieldClass}>
-                  对方诉讼地位
-                  <NativeSelect
-                    name="opposingStanding"
-                    defaultValue="DEFENDANT"
-                  >
-                    {Object.entries(data?.standings ?? {}).map(([k, v]) => (
-                      <NativeSelectOption key={k} value={k}>
-                        {v}
-                      </NativeSelectOption>
-                    ))}
-                  </NativeSelect>
-                </label>
-              )}
-              <label className={fieldClass}>
-                案情简述
-                <Textarea name="description" maxLength={2000} />
-              </label>
-            </>
-          )}
-          <Button className="justify-self-start" disabled={mutation.busy}>
-            保存{names[view]}
-          </Button>
-        </form>
-      ) : (
-        <>
-          <form
-            className="flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault()
-              setQuery({ q: search.trim(), page: "1" })
-            }}
-          >
-            <Input
-              aria-label={"搜索" + names[view]}
-              placeholder={"搜索" + names[view]}
-              className="max-w-sm"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <Button variant="outline">搜索</Button>
-          </form>
-          {!error && (
-            <DataTable
-              rows={data?.items}
-              loading={!data}
-              columns={columns}
-              getRowId={(row) => row.id}
-              sort={[]}
-              onSortChange={() => {}}
-              label={names[view]}
-              empty={<p>没有匹配记录。</p>}
-            />
-          )}
-          {data && data.total > data.pageSize && (
-            <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                disabled={+query.page <= 1}
-                onClick={() =>
-                  setQuery({ ...query, page: String(+query.page - 1) })
-                }
-              >
-                上一页
+              <Button type="submit" className="justify-self-start" disabled={mutation.busy}>
+                保存{names[view]}
               </Button>
-              <span>
-                {query.page} / {Math.ceil(data.total / data.pageSize)}
-              </span>
-              <Button
-                variant="outline"
-                disabled={+query.page * data.pageSize >= data.total}
-                onClick={() =>
-                  setQuery({ ...query, page: String(+query.page + 1) })
-                }
+            </form>
+          </>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <form
+                className="flex min-w-0 gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  setQuery({ q: search.trim(), page: "1" })
+                }}
               >
-                下一页
-              </Button>
+                <Input
+                  aria-label={"搜索" + names[view]}
+                  placeholder={"搜索" + names[view]}
+                  className="max-w-sm"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+                <Button type="submit" variant="outline">搜索</Button>
+              </form>
             </div>
-          )}
-        </>
-      )}
-      {(error || mutation.error) && (
-        <p role="alert">{error?.message || mutation.error}</p>
-      )}
-    </section>
+            {!error && (
+              <DataTable
+                rows={data?.items}
+                loading={!data}
+                columns={columns}
+                getRowId={(row) => row.id}
+                sort={[]}
+                onSortChange={() => {}}
+                label={names[view]}
+                empty={<p>没有匹配记录。</p>}
+              />
+            )}
+            {data && data.total > data.pageSize && (
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  disabled={+query.page <= 1}
+                  onClick={() =>
+                    setQuery({ ...query, page: String(+query.page - 1) })
+                  }
+                >
+                  上一页
+                </Button>
+                <span>
+                  {query.page} / {Math.ceil(data.total / data.pageSize)}
+                </span>
+                <Button
+                  variant="outline"
+                  disabled={+query.page * data.pageSize >= data.total}
+                  onClick={() =>
+                    setQuery({ ...query, page: String(+query.page + 1) })
+                  }
+                >
+                  下一页
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+        {(error || mutation.error) && (
+          <p role="alert">{error?.message || mutation.error}</p>
+        )}
+      </div>
+    </ClientLayout>
   )
 }
 
 export function ClientPage({ id }: { id: string }) {
   const { data, error } = usePractice<Client>("client", { id })
+  usePageLoading(!data && !error)
   const mutation = useAction()
   const [requestKey, setKey] = useState(() => crypto.randomUUID())
   if (!data)
@@ -624,6 +683,7 @@ function IntakeRevision({ id }: { id: string }) {
 export function IntakePage({ id }: { id: string }) {
   const [revise, setRevise] = useState(false)
   const { data, error } = usePractice<Intake>("intake", { id })
+  usePageLoading(!data && !error)
   const mutation = useAction()
   const router = useRouter()
   if (!data)
@@ -749,6 +809,7 @@ export function IntakePage({ id }: { id: string }) {
             <Textarea name="note" required maxLength={500} />
           </label>
           <Button
+            type="submit"
             variant="outline"
             className="justify-self-start"
             disabled={mutation.busy}
@@ -790,14 +851,18 @@ export function IntakePage({ id }: { id: string }) {
   )
 }
 
-export function ConflictPrecheck() {
+const conflictColumns: DataColumn<Hits[number]>[] = [
+  { id: "severity", header: "风险等级", cell: row => row.severity },
+  { id: "reason", header: "核查提示", cell: row => row.reason },
+]
+
+function ConflictPrecheck() {
   const [result, setResult] = useState<{ hits: Hits; sameName: number }>()
   const mutation = useAction()
   return (
-    <section className="grid max-w-2xl gap-4">
-      <PageHeader title="利益冲突预检" />
+    <div className="grid gap-3">
       <form
-        className="flex gap-2"
+        className="flex max-w-lg gap-2"
         onSubmit={(e) => {
           e.preventDefault()
           const name = field(new FormData(e.currentTarget), "name")
@@ -814,25 +879,30 @@ export function ConflictPrecheck() {
           required
           maxLength={120}
         />
-        <Button disabled={mutation.busy}>预检</Button>
+        <Button type="submit" disabled={mutation.busy}>预检</Button>
       </form>
       {result && (
-        <div role="status">
-          <p>
+        <>
+          <p role="status" className="text-sm text-muted-foreground">
             提示 {result.hits.length} 项，同名客户 {result.sameName} 项。
           </p>
-          {result.hits.map((h) => (
-            <p key={h.id}>
-              {h.severity} · {h.reason}
-            </p>
-          ))}
-          <Link href="/practice/intakes" className="underline">
+          <DataTable
+            rows={result.hits}
+            loading={false}
+            columns={conflictColumns}
+            getRowId={row => row.id}
+            sort={[]}
+            onSortChange={() => {}}
+            label="冲突预检结果"
+            empty={<p>未发现冲突提示。</p>}
+          />
+          <Link href="/practice/intakes" className="w-fit underline">
             到具体收案登记正式核查
           </Link>
-        </div>
+        </>
       )}
       {mutation.error && <p role="alert">{mutation.error}</p>}
-    </section>
+    </div>
   )
 }
 
@@ -846,30 +916,49 @@ const contactTypes: Record<string, string> = {
   EXPERT: "鉴定专家",
   OTHER: "其他",
 }
-export function ContactsPage() {
-  const [q, setQ] = useState(""),
-    [adding, setAdding] = useState(false)
-  const { data, error } = usePractice<
-    {
-      id: string
-      name: string
-      category: string
-      organization?: string
-      phone?: string
-      status: string
-    }[]
-  >("contacts", { q })
+type Contact = {
+  id: string
+  name: string
+  category: string
+  organization?: string
+  phone?: string
+  status: string
+}
+
+const contactColumns: DataColumn<Contact>[] = [
+  { id: "name", header: "姓名", cell: row => <span className="font-medium">{row.name}</span> },
+  { id: "category", header: "类别", cell: row => contactTypes[row.category] },
+  { id: "organization", header: "单位", cell: row => row.organization || "—" },
+  { id: "phone", header: "电话", cell: row => row.phone || "—" },
+  { id: "status", header: "审核状态", cell: row => row.status === "PENDING_REVIEW" ? "待审核" : "—" },
+]
+
+function ContactsPage() {
+  const [q, setQ] = useState("")
+  const [adding, setAdding] = useState(false)
+  const { data, error } = usePractice<Contact[]>("contacts", { q })
   const mutation = useAction()
   return (
-    <section className="grid gap-4">
-      <PageHeader
-        title="外部联系人"
-        actions={
-          <Button onClick={() => setAdding(!adding)}>
-            {adding ? "收起表单" : "添加联系人"}
-          </Button>
-        }
-      />
+    <div className="grid gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <form
+          className="flex min-w-0 gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            setQ(field(new FormData(e.currentTarget), "q"))
+          }}
+        >
+          <Input
+            name="q"
+            aria-label="姓名、单位或电话"
+            placeholder="姓名、单位或电话"
+          />
+          <Button type="submit" variant="outline">搜索</Button>
+        </form>
+        <Button onClick={() => setAdding(!adding)} variant={adding ? "outline" : "default"}>
+          {adding ? "收起表单" : "添加联系人"}
+        </Button>
+      </div>
       {adding && (
         <form
           className="grid max-w-lg gap-3"
@@ -905,48 +994,26 @@ export function ContactsPage() {
             电话
             <Input type="tel" name="phone" maxLength={30} />
           </label>
-          <Button className="justify-self-start" disabled={mutation.busy}>
+          <Button type="submit" className="justify-self-start" disabled={mutation.busy}>
             保存联系人
           </Button>
         </form>
       )}
-      <form
-        className="flex max-w-sm gap-2"
-        onSubmit={(e) => {
-          e.preventDefault()
-          setQ(field(new FormData(e.currentTarget), "q"))
-        }}
-      >
-        <Input
-          name="q"
-          aria-label="姓名、单位或电话"
-          placeholder="姓名、单位或电话"
+      {!error && (
+        <DataTable
+          rows={data}
+          loading={!data}
+          columns={contactColumns}
+          getRowId={row => row.id}
+          sort={[]}
+          onSortChange={() => {}}
+          label="外部联系人"
+          empty={<p>没有匹配的联系人。</p>}
         />
-        <Button variant="outline">搜索</Button>
-      </form>
-      {data && (
-        <ul className="divide-y">
-          {data.map((row) => (
-            <li key={row.id} className="py-3">
-              <strong>{row.name}</strong>
-              <p>
-                {[
-                  contactTypes[row.category],
-                  row.organization,
-                  row.phone,
-                  row.status === "PENDING_REVIEW" ? "待审核" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
-            </li>
-          ))}
-        </ul>
       )}
-      {data?.length === 0 && <p>没有匹配的联系人。</p>}
       {(error || mutation.error) && (
         <p role="alert">{error?.message || mutation.error}</p>
       )}
-    </section>
+    </div>
   )
 }

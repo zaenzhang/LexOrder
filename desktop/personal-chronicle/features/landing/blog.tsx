@@ -17,16 +17,14 @@ const COVERS: Record<string, { front: Shot; back: Shot }> = {
 }
 
 function CardShot({ shot, back = false }: { shot: Shot; back?: boolean }) {
-  const src = (theme: string) => `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/landing/card-${shot.card}-${theme}.webp`
+  const src = (theme: string) => `${import.meta.env.BASE_URL.replace(/\/$/, "")}/landing/card-${shot.card}-${theme}.webp`
   return (
     <div
       className={cn("absolute overflow-hidden shadow-[0_24px_48px_-24px_color-mix(in_oklch,var(--foreground)_45%,transparent)] ring-1 ring-foreground/10", back && "opacity-60 saturate-50")}
       // The card's own 16px corner, scaled with the cover (cqw), so the crop lines up at every width.
       style={{ left: `${shot.x}%`, top: `${shot.y}%`, width: `${shot.w}%`, borderRadius: `${(16 * shot.w) / shot.width}cqw` }}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src("light")} alt="" width={shot.width} height={shot.height} loading="lazy" decoding="async" className="block h-auto w-full dark:hidden" />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src("dark")} alt="" width={shot.width} height={shot.height} loading="lazy" decoding="async" className="hidden h-auto w-full dark:block" />
     </div>
   )

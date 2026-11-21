@@ -1,9 +1,7 @@
-import type { Metadata } from "next"
-
 import { SITE } from "@/config/site"
 import { AccountPage } from "@/features/settings/account-page"
 
-export const metadata: Metadata = { title: "Account and security" }
+export const metadata = { title: "Account and security" }
 
 /**
  * The Kit's account page splits on viewport breakpoints, but beside the app

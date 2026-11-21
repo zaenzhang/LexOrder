@@ -1,36 +1,28 @@
-import { ResourcesDesk } from "@/features/practice/resources-desk"
-import { notFound } from "next/navigation"
-import {
-  CatalogPage,
-  ContactsPage,
-  ConflictPrecheck,
-} from "@/features/practice/client-intake"
+import { useParams, useSearchParams } from "react-router"
+import NotFound from "@/app/not-found"
+import { isClientTab } from "@/config/client-tabs"
+import { ClientWorkspace } from "@/features/practice/client-intake"
 import { DailyWork } from "@/features/practice/daily-work"
+import { PersonalCalendar } from "@/features/practice/personal-calendar"
+import { beijingDay, isCivilDay } from "@/features/calendar/dates"
 
-export default async function Page({
-  params,
-}: {
-  params: Promise<{ view: string }>
-}) {
-  const { view } = await params
-  if (view === "clients" || view === "intakes")
-    return <CatalogPage key={view} view={view} />
-  if (view === "contacts") return <ContactsPage />
-  if (view === "conflicts") return <ConflictPrecheck />
-  if (
-    view === "today" ||
-    view === "schedule" ||
-    view === "follow-ups" ||
-    view === "notifications"
-  )
-    return <DailyWork key={view} view={view} />
-  if (
-    view === "resources" ||
-    view === "templates" ||
-    view === "reports" ||
-    view === "profile" ||
-    view === "audit"
-  )
-    return <ResourcesDesk key={view} view={view} />
-  notFound()
+export default function Page() {
+  const { view = "" } = useParams()
+  const searchParams = Object.fromEntries(useSearchParams()[0])
+  if (isClientTab(view)) {
+    return <ClientWorkspace view={view} creatingIntake={view === "intakes" && searchParams.create === "1"} />
+  }
+  if (view === "today") {
+    const { taskView } = searchParams
+    return <DailyWork key={view} view={view} todayTab={taskView === "waiting" || taskView === "done" ? taskView : "open"} />
+  }
+  if (view === "schedule") {
+    const { day, event, from } = searchParams
+    const initialDay = isCivilDay(day) ? day : undefined
+    const initialEvent = typeof event === "string" && event.length <= 80 ? event : undefined
+    return <PersonalCalendar key={JSON.stringify([initialDay, initialEvent])} today={beijingDay()}
+      initialDay={initialDay} initialEvent={initialEvent} fromToday={from === "today"} />
+  }
+  if (view === "follow-ups") return <DailyWork key={view} view={view} />
+  return <NotFound />
 }

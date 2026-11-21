@@ -1,7 +1,7 @@
 "use client"
 
 import { CircleHelpIcon, MailIcon, SearchIcon, XIcon } from "lucide-react"
-import Link from "next/link"
+import Link from "@/features/shell/workspace-link"
 import { useDeferredValue, useState } from "react"
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"

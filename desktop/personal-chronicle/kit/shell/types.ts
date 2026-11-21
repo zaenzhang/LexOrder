@@ -7,6 +7,8 @@ export type LogoComponent = ComponentType<{ className?: string }>
 export interface NavLink {
   title: string
   href: string
+  /** Extra routes belonging to this entry, such as in-page tabs with their own URLs. */
+  activePaths?: readonly string[]
   icon?: LucideIcon
   disabled?: boolean
   /** Key into the `badges` map passed to the shell, e.g. "orders". */

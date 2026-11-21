@@ -1,7 +1,9 @@
 "use client"
 
+import { ArrowDownIcon, ArrowUpIcon } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Item, ItemActions, ItemContent, ItemGroup, ItemTitle } from "@/components/ui/item"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import {
@@ -28,8 +30,22 @@ export function VolumeTools({
 }) {
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState("file-in-volume")
+  const [order, setOrder] = useState<typeof folders>([])
+  const [expectedOrder, setExpectedOrder] = useState<string[]>([])
+  const changedOrder = order.some(({ id }, index) => id !== expectedOrder[index])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
+  function shiftFolder(index: number, offset: number) {
+    setOrder(previous => {
+      const next = [...previous]
+      const adjacent = index + offset
+      const folder = next[index]
+      next[index] = next[adjacent]
+      next[adjacent] = folder
+      return next
+    })
+  }
+
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (busy) return
@@ -41,16 +57,18 @@ export function VolumeTools({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...values,
           action: mode,
           matterId,
-          folderId: values.folderId || null,
+          ...(mode === "reorder-volumes"
+            ? { expectedOrder, orderedIds: order.map(folder => folder.id) }
+            : { ...values, folderId: values.folderId || null }),
         }),
       })
       refresh()
       setOpen(false)
     } catch (e) {
-      setError((e as Error).message)
+      setError(e instanceof Error ? e.message : "卷宗操作失败。")
+      if (mode === "reorder-volumes") refresh()
     } finally {
       setBusy(false)
     }
@@ -61,6 +79,7 @@ export function VolumeTools({
       onOpenChange={(value) => {
         if (!busy) {
           setError("")
+          if (value) setMode("file-in-volume")
           setOpen(value)
         }
       }}
@@ -68,7 +87,7 @@ export function VolumeTools({
       <SheetTrigger render={<Button variant="outline" />}>
         管理卷宗
       </SheetTrigger>
-      <SheetContent>
+      <SheetContent className="overflow-y-auto">
         <SheetHeader>
           <SheetTitle>案内卷宗</SheetTitle>
           <SheetDescription>
@@ -80,9 +99,14 @@ export function VolumeTools({
             操作
             <NativeSelect
               value={mode}
+              disabled={busy}
               onChange={(e) => {
                 setError("")
                 setMode(e.target.value)
+                if (e.target.value === "reorder-volumes") {
+                  setOrder(folders)
+                  setExpectedOrder(folders.map(folder => folder.id))
+                }
               }}
             >
               <NativeSelectOption value="file-in-volume">
@@ -96,6 +120,7 @@ export function VolumeTools({
                   重命名卷宗
                 </NativeSelectOption>
               )}
+              {folders.length > 1 && <NativeSelectOption value="reorder-volumes">调整卷宗顺序</NativeSelectOption>}
             </NativeSelect>
           </label>
           {mode === "file-in-volume" && (
@@ -111,7 +136,7 @@ export function VolumeTools({
               </NativeSelect>
             </label>
           )}
-          {mode !== "create-volume" && (
+          {(mode === "file-in-volume" || mode === "rename-volume") && (
             <label>
               卷宗
               <NativeSelect
@@ -131,16 +156,27 @@ export function VolumeTools({
               </NativeSelect>
             </label>
           )}
-          {mode !== "file-in-volume" && (
+          {(mode === "create-volume" || mode === "rename-volume") && (
             <label>
               新名称
               <Input name="name" maxLength={40} required />
             </label>
           )}
-          <Button className="justify-self-start" disabled={busy}>
+          {mode === "reorder-volumes" && <ItemGroup aria-label="卷宗顺序">
+            {order.map((folder, index) => <Item key={folder.id} size="sm" variant="outline" role="listitem">
+              <ItemContent><ItemTitle className="break-all">{folder.name}</ItemTitle></ItemContent>
+              <ItemActions>
+                <Button type="button" size="icon-sm" variant="ghost" aria-label={`上移 ${folder.name}`}
+                  disabled={busy || index === 0} onClick={() => shiftFolder(index, -1)}><ArrowUpIcon /></Button>
+                <Button type="button" size="icon-sm" variant="ghost" aria-label={`下移 ${folder.name}`}
+                  disabled={busy || index === order.length - 1} onClick={() => shiftFolder(index, 1)}><ArrowDownIcon /></Button>
+              </ItemActions>
+            </Item>)}
+          </ItemGroup>}
+          <Button type="submit" className="justify-self-start" disabled={busy || (mode === "reorder-volumes" && !changedOrder)}>
             保存
           </Button>
-          {error && <p role="alert">{error}</p>}
+          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         </form>
       </SheetContent>
     </Sheet>

@@ -1,7 +1,7 @@
 "use client"
 
 import { CheckCircle2Icon, CreditCardIcon, DownloadIcon, LayersIcon, RefreshCwIcon, UsersIcon, UserPlusIcon } from "lucide-react"
-import Link from "next/link"
+import Link from "@/features/shell/workspace-link"
 import { useMemo, useState, useSyncExternalStore } from "react"
 
 import { Button, buttonVariants } from "@/components/ui/button"

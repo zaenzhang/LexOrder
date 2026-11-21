@@ -1,12 +1,49 @@
 # LexOrder 个人桌面工作台
 
-该目录是独立的 Next.js / Chronicle 个人桌面前端。网页业务和数据由仓库根目录的 LexOrder 应用提供。先看 [迁移工作计划](docs/lexorder-desktop-migration-plan.md)、[本机运行与实测](docs/lexorder-personal-migration.md) 和 [界面约束](AGENTS.md)。在本目录使用 pnpm 安装依赖和运行检查。下文保留上游 Chronicle 的说明和 MIT 版权。
+该目录是 Vite / React Router 的 Chronicle 个人桌面前端。页面和案卷 API 由同一个 LexOrder 本地服务提供。先看 [迁移工作计划](docs/lexorder-desktop-migration-plan.md)、[本机运行与实测](docs/lexorder-personal-migration.md) 和 [界面约束](AGENTS.md)。在本目录使用 pnpm 安装依赖和运行检查。桌面构建入口为 `tools/workbench-m1` 中的 `bun run build:desktop`。下文保留上游 Chronicle 的说明和 MIT 版权。
+
+## 桌面运行架构
+
+- 个人版默认独立运行。Tauri 2 管理本机窗口和 Bun Sidecar。业务服务持有工作区、身份校验、文件版本和写入事务，并在同一回环源提供 Chronicle 静态页面和 `/api`。连接团队服务的集成以现有业务 API 为边界，桌面外壳与渲染组件共用。
+- AI 按任务使用已授权的固定材料版本和片段。技能固定输入、结构化输出和引用要求，应用校验原文定位、字段和修订后提交待核对结果。已核对的状态和律师取舍由业务事务保存。前端根据同一份已校验数据渲染时间轴、矩阵、事实表和材料详情。
+- 已确认的任务范围与结果通过原队列、稳定身份和回执复用。样式、筛选、改名及读取已保存的结果沿用现有记录和引用，材料新增或实质变化时只处理受影响的范围。第三方宿主和资料源接入排在本机 AI 及成果回读取证之后。
+
+## 开发与热更新
+
+从仓库根目录运行下面的命令，启动或复用合成案卷的 Bun 业务运行时，再启动 Vite。脚本从就绪文件读取并验证运行时端口。WSL 需要 Node、pnpm、tmux 和 Bun。
+
+从 Windows CMD 启动：
+
+```bat
+wsl.exe -d Ubuntu-24.04 --cd /home/zhang/projects/lexorder-chronicle-main bash -lc "bash tools/workbench-m1/chronicle-harness.sh dev"
+```
+
+在 WSL 终端进入仓库后可直接运行：
+
+```bash
+bash tools/workbench-m1/chronicle-harness.sh dev
+```
+
+首次连接或业务运行时重启后，用运行时提供的本机入口在同一个浏览器建立会话。然后打开 [本机工作台](http://127.0.0.1:5173/)，也可保留案卷路径并将端口改为 5173。React 组件和样式使用 Vite 热更，业务请求走同源 `/api` 代理。按 `Ctrl+C` 关闭 Vite，合成业务运行时继续运行。用 `bash tools/workbench-m1/chronicle-harness.sh status` 查看当前运行时。模板示例可用 `/?template=1` 查看。
+
+Windows 原生 Rust 测试和调试构建使用 CMD 脚本。调试构建需要先暂存 Windows 目标对应的 Bun Sidecar。以下从仓库根目录运行，目标目录可指向 Windows 本地磁盘。
+
+```bat
+tools\workbench-m1\chronicle-rust.cmd test D:\Projects\Lexorder\.local\chronicle-windows
+tools\workbench-m1\chronicle-rust.cmd build D:\Projects\Lexorder\.local\chronicle-windows
+```
+
+使用 WSL 检出时，可在 Windows CMD 里用脚本的 UNC 路径直接调用。实际窗口、文件选择器和案卷打开使用 `tools/workbench-m1` 中的 `bun run desktop "<合成案卷工作区绝对路径>"` 验收。完整步骤见 [个人运行时验收说明](../../tools/workbench-m1/chronicle-smoke/README.md)。
 
 ## 云端接续
 
-在此目录运行 `pnpm install --frozen-lockfile` 和 `pnpm exec tsc --noEmit --project tsconfig.build.json`。模板页可直接在开发服务器查看。案卷联调需要根仓库 [个人运行时](../../tools/workbench-m1) 和隔离样本。运行时生成的会话凭据只留在测试环境。Windows 原生缩放、系统浏览器与默认编辑器按迁移计划另做实机验收。
+在此目录运行 `pnpm install --frozen-lockfile` 和 `pnpm run typecheck`。模板页可直接在开发服务器查看。案卷联调需要根仓库 [个人运行时](../../tools/workbench-m1) 和隔离样本。运行时生成的会话凭据只留在测试环境。Windows 原生缩放、系统浏览器与默认编辑器按迁移计划另做实机验收。
 
-# Chronicle: free shadcn admin dashboard template
+# 上游 Chronicle 源项目说明
+
+以下英文为上游模板说明，LexOrder 的启动步骤见上文。
+
+## Chronicle: free shadcn admin dashboard template
 
 **Chronicle is a free, MIT-licensed admin dashboard template for Next.js, built with shadcn/ui on Base UI, Tailwind CSS v4 and the ShadcnStore Dashboard Kit.** Clone it, install, run it, and you have an admin panel with real screens, real interactions and sample data where every number adds up.
 

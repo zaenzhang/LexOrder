@@ -9,9 +9,11 @@ export const smsParseAndSaveSchema = z.object({
 });
 
 export const smsListFilterSchema = z.object({
+  id: z.cuid().optional(),
   scope: z.enum(["mine", "all"]).default("mine"),
   processed: z.enum(["unprocessed", "processed", "all"]).default("unprocessed"),
   needsManual: z.boolean().default(false),
+  matterId: z.cuid().optional(),
   smsType: z
     .enum([
       "HEARING_NOTICE",

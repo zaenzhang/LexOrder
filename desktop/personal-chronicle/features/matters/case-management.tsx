@@ -21,6 +21,7 @@ export function CaseForm({
   close,
   saved,
   submitDisabled = false,
+  submitLabel = title,
 }: {
   title: string
   children: ReactNode
@@ -28,6 +29,7 @@ export function CaseForm({
   close: () => void
   saved: () => void
   submitDisabled?: boolean
+  submitLabel?: string
 }) {
   const [busy, setBusy] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -71,7 +73,7 @@ export function CaseForm({
         >
           <fieldset disabled={busy} className="grid gap-3">
             {children}
-            <Button type="submit" disabled={submitDisabled}>{busy ? "正在保存…" : title}</Button>
+            <Button type="submit" disabled={submitDisabled}>{busy ? "正在保存…" : submitLabel}</Button>
           </fieldset>
           {error && (
             <p className="text-destructive" role="alert">
@@ -190,9 +192,11 @@ export function ProcedureActions({
   procedure,
   types,
   reload,
+  controls,
 }: {
   matterId: string
   procedure?: ProcedureInfo
+  controls?: readonly ProcAction[]
   types: Record<string, string>
   reload: () => void
 }) {
@@ -233,7 +237,7 @@ export function ProcedureActions({
   return (
     <>
       <div className="flex flex-wrap gap-2">
-        {(procedure ? (["edit", "stage", "deadline", "hearing"] as const) : (["create"] as const)).map((key) => (
+        {(controls ?? (procedure ? ["edit", "stage", "deadline", "hearing"] : ["create"])).map((key) => (
           <Button
             key={key}
             size="sm"

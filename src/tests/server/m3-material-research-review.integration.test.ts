@@ -1,5 +1,8 @@
 // @vitest-environment node
 import { randomUUID } from "node:crypto";
+import { mkdtemp, rmdir, unlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import PizZip from "pizzip";
 import { PDFDict, PDFDocument, PDFName, PDFRawStream } from "pdf-lib";
 import { getDocumentProxy } from "unpdf";
@@ -400,4 +403,66 @@ describe.skipIf(!config.url)("M3 两类真实格式工作包：真实 PG 服务�
     expect((await readResearch(db, f.actor, f.matter.id, r1.id)).content).toEqual(r1View.content);
     expect(await db.auditLog.count({ where: { targetId: revision.id, action: "DOCUMENT_APPROVE", userId: f.reviewer.id } })).toBe(1);
   }, 120_000);
+
+  it("个人成果另存新修订，保留固定原文，拒绝旧基线和跨案请求", async () => {
+    const f = await fixture(scenarios[0]);
+    const original = await upload(f, await createM3Docx("争点出处.docx", ["合成付款原文"]));
+    const processed = await processExactDocument(f, original.id);
+    const position = reference(sourceContaining(processed, "合成付款原文"), "SUPPORTS");
+    const issue = await evidence(f, "ISSUE", "合成付款争点", [position], false);
+    const content = { ...emptyResearchContent(), question: "合成付款争点", scope: "卷内材料",
+      conclusion: "初稿结论", sources: [{ ...position, lawMetadata: emptyLawMetadata() }],
+      issueSelection: { kind: "CURRENT" as const, issueId: issue.id, revision: issue.revision, confirmedAt: null } };
+    const before = await saveResearch(db, f.actor, { ...content, matterId: f.matter.id,
+      supersedesId: null, expectedVersion: null, requestKey: randomUUID() });
+    const origin = "http://127.0.0.1:40188";
+    const token = randomUUID().replaceAll("-", "").repeat(2);
+    vi.stubEnv("LEXORDER_RUNTIME_MODE", "PERSONAL");
+    vi.stubEnv("LEXORDER_PERSONAL_ORIGIN", origin);
+    vi.stubEnv("LEXORDER_PERSONAL_CHANNEL_TOKEN", token);
+    const manifest = { version: 2, mode: "PERSONAL", workspaceId: randomUUID(), actorId: f.actor.id };
+    const folder = await mkdtemp(join(tmpdir(), "lexorder-artifact-test-"));
+    const manifestPath = join(folder, "manifest.json");
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    await db.systemSetting.create({ data: { key: "personal-workspace", value: manifest } });
+    await db.user.update({ where: { id: f.actor.id }, data: { role: "INDEPENDENT_LAWYER", systemRole: "NONE", passwordHash: "!personal-no-login" } });
+    vi.stubEnv("LEXORDER_PERSONAL_WORKSPACE_ID", manifest.workspaceId);
+    vi.stubEnv("LEXORDER_PERSONAL_ACTOR_ID", manifest.actorId);
+    vi.stubEnv("LEXORDER_PERSONAL_MANIFEST", manifestPath);
+    const actor: WorkspaceActor = { ...f.actor, role: "INDEPENDENT_LAWYER", systemRole: "NONE", runtimeMode: "PERSONAL" };
+    config.actor = actor;
+    try {
+      const { POST } = await import("@/app/api/personal/matter-workspace/route");
+      const request = { action: "revise-research", matterId: f.matter.id, supersedesId: before.id, expectedVersion: 1,
+        requestKey: randomUUID(), analysis: { rule: "", exceptions: "", supportingAnalysis: "", opposingAnalysis: "",
+          conclusion: "核对后的结论", unresolved: "待补另一份材料", nextSteps: "" } };
+      const send = (body: object, authorized = true) => POST(new Request(origin + "/api/personal/matter-workspace", {
+        method: "POST", headers: { host: new URL(origin).host, origin, ...(authorized ? { cookie: "lexorder_local_channel=" + token } : {}) },
+        body: JSON.stringify(body),
+      }));
+      expect((await send(request, false)).status).toBe(403);
+      expect((await send({ ...request, matterId: f.client.id })).status).toBe(403);
+      const response = await send(request);
+      const saved = await response.json();
+      expect(response.status, saved.error).toBe(200);
+      expect(saved).toMatchObject({ version: 2, replayed: false });
+      expect(await (await send(request)).json()).toMatchObject({ id: saved.id, replayed: true });
+      expect((await send({ ...request, requestKey: randomUUID() })).status).toBe(403);
+      const reopened = await readResearch(db, actor, f.matter.id, saved.id);
+      expect(reopened).toMatchObject({ version: 2, checkedAt: null, issue: { id: issue.id, revision: issue.revision },
+        content: { question: content.question, scope: content.scope, conclusion: request.analysis.conclusion, unresolved: request.analysis.unresolved },
+        sources: [position] });
+      expect(await readResearchSource(db, actor, f.matter.id, saved.id, reopened.sources[0].id)).toMatchObject({
+        status: "AVAILABLE", documentVersion: 1, text: expect.stringContaining("合成付款原文"),
+      });
+      expect(await readResearch(db, actor, f.matter.id, before.id)).toMatchObject({
+        current: false, content: { conclusion: content.conclusion },
+      });
+    } finally {
+      vi.unstubAllEnvs();
+      await db.systemSetting.delete({ where: { key: "personal-workspace" } });
+      await unlink(manifestPath);
+      await rmdir(folder);
+    }
+  }, 30000);
 });

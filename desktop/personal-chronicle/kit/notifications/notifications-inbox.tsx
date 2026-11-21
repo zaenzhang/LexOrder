@@ -1,7 +1,7 @@
 "use client"
 
 import { ArrowRightIcon, BellIcon, BellOffIcon, CheckCheckIcon, CheckIcon } from "lucide-react"
-import { useState } from "react"
+import { useCallback, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -27,17 +27,25 @@ export interface InboxCategory {
 /** A notification that also says which category it belongs to. */
 export type InboxNotification = BellNotification & { category?: string }
 
-function dayLabel(iso: string): string {
+const chinaDay = new Intl.DateTimeFormat("zh-CN", {
+  timeZone: "Asia/Shanghai",
+  year: "numeric", month: "short", day: "numeric",
+})
+const chinaTime = new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", hour: "2-digit", minute: "2-digit", hour12: false })
+
+function dayLabel(iso: string, now: Date, workbench: boolean): string {
   const date = new Date(iso)
-  const today = currentTime()
-  const yesterday = new Date(today)
-  yesterday.setDate(today.getDate() - 1)
-  if (date.toDateString() === today.toDateString()) {
-    return "Today"
+  const yesterday = new Date(now)
+  if (workbench) {
+    yesterday.setUTCDate(now.getUTCDate() - 1)
+    const day = chinaDay.format(date)
+    if (day === chinaDay.format(now)) return "今天"
+    if (day === chinaDay.format(yesterday)) return "昨天"
+    return day
   }
-  if (date.toDateString() === yesterday.toDateString()) {
-    return "Yesterday"
-  }
+  yesterday.setDate(now.getDate() - 1)
+  if (date.toDateString() === now.toDateString()) return "Today"
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday"
   return formatDate(iso)
 }
 
@@ -53,6 +61,12 @@ export function NotificationsInbox({
   error,
   onRetry,
   onMarkRead,
+  onFilterChange,
+  filter: controlledFilter,
+  unreadCount,
+  selectedId,
+  readPending,
+  workbench = false,
 }: {
   items: InboxNotification[] | undefined
   categories?: InboxCategory[]
@@ -61,18 +75,29 @@ export function NotificationsInbox({
   error?: unknown
   onRetry?: () => void
   onMarkRead: (ids: string[] | "all") => void
+  filter?: "all" | "unread"
+  onFilterChange?: (filter: "all" | "unread") => void
+  unreadCount?: number
+  selectedId?: string | null
+  readPending?: boolean
+  workbench?: boolean
 }) {
-  const [filter, setFilter] = useState<"all" | "unread">("all")
+  const [localFilter, setLocalFilter] = useState<"all" | "unread">("all")
+  const filter = controlledFilter ?? localFilter
   const [category, setCategory] = useState<string | null>(null)
   const all = items ?? []
   const list = all
     .filter((item) => (filter === "all" || !item.read) && (category === null || item.category === category))
     .sort((a, b) => b.at.localeCompare(a.at))
-  const unread = all.filter((item) => !item.read).length
+  const unread = unreadCount ?? all.filter((item) => !item.read).length
+  const scrollToSelected = useCallback((node: HTMLLIElement | null) => {
+    if (selectedId) node?.scrollIntoView({ block: "nearest" })
+  }, [selectedId])
+  const now = workbench ? new Date() : currentTime()
   const look = (id?: string) => categories?.find((entry) => entry.id === id)
   const days: { label: string; items: InboxNotification[] }[] = []
   for (const item of list) {
-    const label = dayLabel(item.at)
+    const label = dayLabel(item.at, now, workbench)
     const last = days.at(-1)
     if (last?.label === label) {
       last.items.push(item)
@@ -119,13 +144,16 @@ export function NotificationsInbox({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <Segmented
-            aria-label="Show"
+            aria-label={workbench ? "筛选通知" : "Show"}
             className="w-auto"
             value={filter}
-            onChange={setFilter}
+            onChange={(value) => {
+              if (controlledFilter === undefined) setLocalFilter(value)
+              onFilterChange?.(value)
+            }}
             options={[
-              { value: "all", label: "All" },
-              { value: "unread", label: `Unread${unread ? ` (${unread})` : ""}` },
+              { value: "all", label: workbench ? "全部" : "All" },
+              { value: "unread", label: `${workbench ? "未读" : "Unread"}${unread > 0 ? ` (${unread})` : ""}` },
             ]}
           />
           {category && (
@@ -134,22 +162,22 @@ export function NotificationsInbox({
             </Button>
           )}
         </div>
-        <Button variant="outline" size="sm" disabled={unread === 0} onClick={() => onMarkRead("all")}>
+        <Button variant="outline" size="sm" disabled={unread === 0 || readPending} onClick={() => onMarkRead("all")}>
           <CheckCheckIcon data-icon="inline-start" />
-          Mark all as read
+          {workbench ? "全部标为已读" : "Mark all as read"}
         </Button>
       </div>
 
       {error ? (
-        <ErrorState error={error} onRetry={onRetry} />
+        <ErrorState error={error} onRetry={onRetry} title={workbench ? "无法读取通知" : undefined} retryLabel={workbench ? "重试" : undefined} />
       ) : loading ? (
         <Skeleton className="h-96 rounded-2xl" />
       ) : days.length === 0 ? (
         <EmptyState
           icon={BellOffIcon}
           className="rounded-2xl border bg-card"
-          title={filter === "unread" ? "You are all caught up" : "No notifications yet"}
-          description={filter === "unread" ? "Nothing new since you last looked." : "Orders, stock alerts and reviews will show up here."}
+          title={workbench ? (filter === "unread" ? "没有未读通知" : "暂无通知") : (filter === "unread" ? "You are all caught up" : "No notifications yet")}
+          description={workbench ? (filter === "unread" ? undefined : "新的案件和办理通知会显示在这里。") : (filter === "unread" ? "Nothing new since you last looked." : "Orders, stock alerts and reviews will show up here.")}
         />
       ) : (
         days.map((day) => (
@@ -165,7 +193,11 @@ export function NotificationsInbox({
                   const kind = look(item.category)
                   const Icon = kind?.icon ?? item.icon ?? BellIcon
                   return (
-                    <li key={item.id} className="group/row relative flex animate-rise items-start gap-3 rounded-xl p-3 transition-colors duration-150 hover:bg-muted/50">
+                    <li
+                      key={item.id}
+                      ref={item.id === selectedId ? scrollToSelected : undefined}
+                      className={cn("group/row relative flex animate-rise items-start gap-3 rounded-xl p-3 transition-colors duration-150 hover:bg-muted/50", item.id === selectedId && "bg-accent")}
+                    >
                       <span
                         className={cn(
                           "flex size-9 shrink-0 items-center justify-center rounded-xl transition-colors duration-250 [&>svg]:size-4",
@@ -175,25 +207,25 @@ export function NotificationsInbox({
                       >
                         <Icon />
                       </span>
-                      <Link href={item.href} onClick={() => !item.read && onMarkRead([item.id])} className="flex min-w-0 flex-1 flex-col gap-0.5 outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-3 focus-visible:after:ring-ring/50">
+                      <Link href={item.href} onClick={() => !item.read && !readPending && onMarkRead([item.id])} className="flex min-w-0 flex-1 flex-col gap-0.5 outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-3 focus-visible:after:ring-ring/50">
                         <span className={cn("flex items-center gap-2 text-sm", item.read ? "text-muted-foreground" : "font-semibold")}>
                           {item.title}
-                          <span className={cn("size-2 shrink-0 rounded-full bg-primary transition-[opacity,scale] duration-250", item.read && "scale-0 opacity-0")} aria-label={item.read ? undefined : "Unread"} />
+                          <span className={cn("size-2 shrink-0 rounded-full bg-primary transition-[opacity,scale] duration-250", item.read && "scale-0 opacity-0")} aria-label={item.read ? undefined : workbench ? "未读" : "Unread"} />
                         </span>
                         <span className="text-sm text-muted-foreground">{item.body}</span>
                         {kind && <span className="text-xs text-muted-foreground/80">{kind.label}</span>}
                       </Link>
                       <div className="relative flex shrink-0 flex-col items-end gap-1.5">
                         <time dateTime={item.at} className="text-xs text-muted-foreground">
-                          {formatRelative(item.at)}
+                          {workbench ? chinaTime.format(new Date(item.at)) : formatRelative(item.at, now)}
                         </time>
                         <div className="flex items-center gap-1 opacity-0 transition-opacity duration-150 group-focus-within/row:opacity-100 group-hover/row:opacity-100">
                           {!item.read && (
                             <Tooltip>
-                              <TooltipTrigger render={<Button variant="ghost" size="icon-xs" aria-label={`Mark "${item.title}" as read`} onClick={() => onMarkRead([item.id])} />}>
+                              <TooltipTrigger render={<Button variant="ghost" size="icon-xs" disabled={readPending} aria-label={workbench ? `将「${item.title}」标为已读` : `Mark "${item.title}" as read`} onClick={() => onMarkRead([item.id])} />}>
                                 <CheckIcon />
                               </TooltipTrigger>
-                              <TooltipContent>Mark as read</TooltipContent>
+                              <TooltipContent>{workbench ? "标为已读" : "Mark as read"}</TooltipContent>
                             </Tooltip>
                           )}
                           <ArrowRightIcon className="size-3.5 text-muted-foreground rtl:rotate-180" aria-hidden />

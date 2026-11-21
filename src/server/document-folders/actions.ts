@@ -1,11 +1,11 @@
 "use server";
-import { roleMutation, checkRoleMutation } from "@/lib/roles/service";
+import { roleMutation } from "@/lib/roles/service";
 
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/session";
-import { audit } from "@/server/audit";
+import { audit, auditTx } from "@/server/audit";
 import { assertMatterWritable } from "@/lib/archive/guard";
 import { assertCanAccessMatter, assertCanLeadMatter } from "@/lib/permissions";
 import {
@@ -17,6 +17,9 @@ import {
 } from "./schemas";
 import { revalidateMatter } from "@/server/matters/route";
 import { ActionError } from "@/lib/action-error";
+import { lockWritableMatters } from "@/server/matters/write-access";
+
+const folderOrderBy = [{ orderIndex: "asc" }, { createdAt: "asc" }, { id: "asc" }] satisfies Prisma.DocumentFolderOrderByWithRelationInput[];
 
 /** 判断当前用户是否能编辑该案件的卷宗结构（仅本案 LEAD / CO_LEAD） */
 async function requireFolderEditor(matterId: string, session: { user: { id: string; role: string } }) {
@@ -28,7 +31,7 @@ export async function listFoldersByMatter(matterId: string) {
   await assertCanAccessMatter(session.user.id, session.user.role, matterId, session.user.rolePermissions);
   return prisma.documentFolder.findMany({
     where: { matterId },
-    orderBy: [{ orderIndex: "asc" }, { createdAt: "asc" }],
+    orderBy: folderOrderBy,
     include: {
       _count: { select: { documents: true } }
     }
@@ -38,27 +41,22 @@ export async function listFoldersByMatter(matterId: string) {
 export async function createFolder(input: z.infer<typeof folderCreateSchema>) {
   const session = await requireSession("documents.write");
   const data = folderCreateSchema.parse(input);
-  await requireFolderEditor(data.matterId, session);
-  await assertMatterWritable(data.matterId);
-
-  // 计算 orderIndex（追加到末尾）
-  const last = await prisma.documentFolder.findFirst({
-    where: { matterId: data.matterId },
-    orderBy: { orderIndex: "desc" },
-    select: { orderIndex: true }
-  });
-  const orderIndex = (last?.orderIndex ?? -1) + 1;
-
   let created;
   try {
-    created = await roleMutation(session.user, "documents.write", async roleDb => roleDb.documentFolder.create({
-      data: {
-        matterId: data.matterId,
-        name: data.name.trim(),
-        orderIndex,
-        isDefault: false
-      }
-    }));
+    created = await prisma.$transaction(async tx => {
+      await lockWritableMatters(tx, session.user, "documents.write", [data.matterId], true);
+      const last = await tx.documentFolder.findFirst({
+        where: { matterId: data.matterId },
+        orderBy: { orderIndex: "desc" },
+        select: { orderIndex: true },
+      });
+      return tx.documentFolder.create({
+        data: {
+          matterId: data.matterId, name: data.name.trim(),
+          orderIndex: (last?.orderIndex ?? -1) + 1, isDefault: false,
+        },
+      });
+    });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       throw new ActionError(`已有同名卷宗「${data.name.trim()}」`);
@@ -124,12 +122,9 @@ export async function deleteFolder(input: z.infer<typeof folderDeleteSchema>) {
   });
   if (!folder) throw new ActionError("卷宗不存在");
   if (folder.isDefault) throw new ActionError("默认卷宗不可删除，只能改名");
-  await requireFolderEditor(folder.matterId, session);
-  await assertMatterWritable(folder.matterId);
-
-  // 卷宗内的文档不删，移到"散件"（folderId = null）
+  // Release the materials and remove the folder under the same matter lock as ordering.
   await prisma.$transaction(async db => {
-    await checkRoleMutation(db, session.user, "documents.write");
+    await lockWritableMatters(db, session.user, "documents.write", [folder.matterId], true);
     await db.document.updateMany({
       where: { folderId: data.id },
       data: { folderId: null }
@@ -152,18 +147,25 @@ export async function deleteFolder(input: z.infer<typeof folderDeleteSchema>) {
 export async function reorderFolders(input: z.infer<typeof folderReorderSchema>) {
   const session = await requireSession("documents.write");
   const data = folderReorderSchema.parse(input);
-  await requireFolderEditor(data.matterId, session);
-  await assertMatterWritable(data.matterId);
-
   await prisma.$transaction(async db => {
-    await checkRoleMutation(db, session.user, "documents.write");
-    for (const [i, id] of data.orderedIds.entries()) {
-      const folder = await db.documentFolder.findFirst({ where: { id, matterId: data.matterId }, select: { id: true } });
-      if (!folder) throw new ActionError("卷宗不存在或不属于此案件");
-      await db.documentFolder.update({ where: { id }, data: { orderIndex: i } });
-    }
-  });
+    await lockWritableMatters(db, session.user, "documents.write", [data.matterId], true);
+    const rows = await db.documentFolder.findMany({
+      where: { matterId: data.matterId }, orderBy: folderOrderBy,
+      select: { id: true, orderIndex: true },
+    });
+    const matches = (ids: string[]) => rows.length === ids.length && rows.every((row, index) => row.id === ids[index]);
+    if (matches(data.orderedIds)) return;
+    if (!matches(data.expectedOrder)) throw new ActionError("卷宗清单或顺序已变化，请刷新后重新排序。");
 
+    const indexById = new Map(rows.map(row => [row.id, row.orderIndex]));
+    for (const [orderIndex, id] of data.orderedIds.entries()) {
+      if (indexById.get(id) !== orderIndex) await db.documentFolder.update({ where: { id }, data: { orderIndex } });
+    }
+    await auditTx(db, {
+      userId: session.user.id, action: "FOLDER_REORDER", targetType: "Matter", targetId: data.matterId,
+      detail: { previousOrder: data.expectedOrder, orderedIds: data.orderedIds },
+    });
+  });
   await revalidateMatter(data.matterId);
   return { ok: true };
 }

@@ -181,7 +181,6 @@ export function MaterialUploadDialog({ current, procedures, canWrite, scopeValid
     form.set("name", draft.name.trim() || row.file.name); form.set("category", draft.category);
     if (draft.procedureId) form.set("procedureId", draft.procedureId);
     if (draft.stageId) form.set("stageId", draft.stageId);
-    form.set("tags", draft.stageId && draft.stageName ? `阶段:${draft.stageName}` : "");
     if (hasParty(draft.category) && draft.sourceParty) form.set("sourceParty", draft.sourceParty);
     if (draft.sourceOrigin) form.set("sourceOrigin", draft.sourceOrigin);
     form.set("contextInputs", JSON.stringify(draft.contextInputs));

@@ -590,6 +590,7 @@ export async function getMatterById(id: string) {
       procedures: {
         orderBy: { order: "asc" },
         include: {
+          leadLawyer: { select: { name: true } },
           deadlines: { ...scheduleDenied, orderBy: [{ completed: "asc" }, { dueAt: "asc" }] },
           hearings: { where:{id:{notIn:excludedHearings}}, ...scheduleDenied, orderBy: { startsAt: "asc" } },
           stages: {

@@ -10,6 +10,7 @@
 import { prisma } from "@/lib/prisma";
 import { matterAssociationFilter } from "@/lib/permissions";
 import { storage } from "@/lib/storage";
+import { decryptBuffer } from "@/lib/storage/crypto";
 import { aiChat, AiNotConfiguredError } from "@/lib/ai/client";
 import { extractDocumentTextLayer, NoTextLayerError, UnsupportedTextExtraction } from "@/lib/documents/text-extraction";
 import { recognizeText, OcrNotConfiguredError } from "@/server/ocr/provider";
@@ -23,7 +24,7 @@ interface AnalyzedDoc {
   docType: string;
   suggestedName: string | null;
   fields: { key: string; value: string; page?: number; excerpt?: string }[];
-  events: { kind: "HEARING" | "DEADLINE"; title: string; dateText: string; timeText?: string; note?: string }[];
+  events: { kind: "HEARING" | "DEADLINE"; title: string; dateText: string; timeText?: string; note?: string; page?: number; excerpt?: string }[];
   caseNumbers: string[];
   court: string | null;
 }
@@ -36,7 +37,7 @@ export async function analyzeDocumentText(text: string, hint?: string, userId?: 
       {
         role: "system",
         content:
-          "你是法院文书结构化助手。只输出一个 JSON 对象，不要输出任何其他文字。字段：docType（文书类型，如 受理通知书/传票/举证通知书/缴费通知书/判决书/裁定书/送达回证/其他）、suggestedName（规范文件名或 null）、fields（数组，每项 {key,value,page,excerpt}，key 限 caseNumber/courtName/acceptedAt/judgeName/clerkPhone/courtRoom）、events（数组，每项 {kind:HEADING|DEADLINE 修正为 HEARING|DEADLINE,title,dateText,timeText,note}，仅来自文书的明确安排）、caseNumbers（文书中出现的全部案号）、court（法院名称或 null）。dateText 用 YYYY-MM-DD；timeText 用 24 小时制 HH:MM（如 09:30、14:00），无法确定具体时刻则省略该字段，不要输出「9时」「14:30:00」等其他形态。无把握的值不要编造，省略该字段。kind 只能是 HEARING 或 DEADLINE。"
+          "你是法院文书结构化助手。只输出一个 JSON 对象，不要输出任何其他文字。字段：docType（文书类型，如 受理通知书/传票/举证通知书/缴费通知书/判决书/裁定书/送达回证/其他）、suggestedName（规范文件名或 null）、fields（数组，每项 {key,value,page,excerpt}，key 限 caseNumber/courtName/acceptedAt/judgeName/clerkPhone/courtRoom）、events（数组，每项 {kind:HEADING|DEADLINE 修正为 HEARING|DEADLINE,title,dateText,timeText,note,page,excerpt}，page 为来源页码（可确定时）；excerpt 须逐字引用该页原文。候选仅来自文书的明确安排）、caseNumbers（文书中出现的全部案号）、court（法院名称或 null）。dateText 用 YYYY-MM-DD；timeText 用 24 小时制 HH:MM（如 09:30、14:00），无法确定具体时刻则省略该字段，不要输出「9时」「14:30:00」等其他形态。无把握的值不要编造，省略该字段。kind 只能是 HEARING 或 DEADLINE。"
       },
       { role: "user", content: `文书文本（\\f 分页，页码按出现顺序递增）：\n${clipped}${hint ? `\n\n上下文提示：${hint}` : ""}` }
     ],
@@ -46,7 +47,16 @@ export async function analyzeDocumentText(text: string, hint?: string, userId?: 
     userId
   });
   const json = extractJson(result.content);
-  return normalizeAnalyzed(json);
+  const analyzed = normalizeAnalyzed(json);
+  const pages = clipped.split("\f");
+  for (const event of analyzed.events) {
+    const pageText = event.page ? pages[event.page - 1] : undefined;
+    if (!pageText || !event.excerpt || !pageText.includes(event.excerpt)) {
+      delete event.page;
+      delete event.excerpt;
+    }
+  }
+  return analyzed;
 }
 
 function extractJson(content: string): Record<string, unknown> {
@@ -91,7 +101,9 @@ function normalizeAnalyzed(raw: Record<string, unknown>): AnalyzedDoc {
         title: str(e.title) ?? "法院文书事项",
         dateText: str(e.dateText) ?? "",
         timeText: str(e.timeText) ?? undefined,
-        note: str(e.note, MAX_NOTE_LEN) ?? undefined
+        note: str(e.note, MAX_NOTE_LEN) ?? undefined,
+        page: typeof e.page === "number" && Number.isSafeInteger(e.page) && e.page > 0 ? e.page : undefined,
+        excerpt: str(e.excerpt, MAX_NOTE_LEN) ?? undefined
       })).filter(e => e.dateText).slice(0, MAX_EVENTS)
     : [];
   return {
@@ -111,23 +123,16 @@ function normalizeAnalyzed(raw: Record<string, unknown>): AnalyzedDoc {
 export async function analyzeInboundFile(fileId: string, initiatedById?: string): Promise<{ state: string; suggestionCount: number }> {
   const file = await prisma.smsInboundFile.findUnique({
     where: { id: fileId },
-    include: { sms: { select: { id: true, matchedMatterId: true, smsType: true, parsedJson: true, receivedById: true } } }
+    include: { document: true, sms: { select: { id: true, matchedMatterId: true, smsType: true, parsedJson: true, receivedById: true } } }
   });
   if (!file) throw new ActionError("来件文件不存在");
 
   await prisma.smsInboundFile.update({ where: { id: fileId }, data: { analysisState: "ANALYZING", analysisError: null } });
   try {
-    // 2026-09-20 第五轮审计 P2-3 修复：两类行读不到可分析内容——
-    // ① ALREADY_DOWNLOADED 合并行 storageKey 为空串（readFile("") 读目录报错）；
-    // ② 已入卷文件（storageKey=卷宗密文路径）在启用存储加密的部署读出的是密文，
-    //    会被当文本喂给 AI。前者落 FAILED 说明，后者仅密文部署防御（明文部署可直接读）。
-    if (!file.storageKey) {
-      throw new ActionError("该文件为重复送达合并记录，无独立存储内容，无需分析");
-    }
-    if (file.documentId && process.env.STORAGE_ENCRYPTION_KEY) {
-      throw new ActionError("已入卷加密文件不支持从暂存盘重读（内容已在案件卷宗，可人工查看）");
-    }
-    const buffer = await storage.readFile(file.storageKey);
+    const doc = file.document;
+    if (doc?.deletedAt || !(doc?.path || file.storageKey)) throw new ActionError("来源文件不可读取");
+    const stored = await storage.readFile(doc?.path ?? file.storageKey);
+    const buffer = doc?.encrypted ? decryptBuffer(stored, doc.iv!, doc.authTag!) : stored;
     let text: string;
     let pageCount: number | null = null;
     try {
@@ -226,7 +231,8 @@ async function persistSuggestions(
       rows.push({
         smsId, fileId, kind: e.kind === "HEARING" ? "HEARING" : "DEADLINE",
         suggestedValue: `${e.title} ${e.dateText}${e.timeText ? ` ${e.timeText}` : ""}`,
-        sourceExcerpt: e.note,
+        sourcePage: e.page,
+        sourceExcerpt: e.excerpt,
         payload: { title: e.title, dateText: e.dateText, timeText: e.timeText, note: e.note, caseNumbers: analyzed.caseNumbers, ...(target?.engagement === "ENGAGED" ? { procedureId: target.id } : {}) }
       });
     }

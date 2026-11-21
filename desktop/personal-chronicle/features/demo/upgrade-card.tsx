@@ -41,7 +41,6 @@ export function UpgradeCard() {
       <PopoverContent side="top" align="end" sideOffset={12} className="w-[min(23rem,calc(100vw-1.5rem))] gap-0 overflow-hidden rounded-2xl p-0">
         <div className="relative border-b bg-muted/40 p-3 pb-0">
           {/* Real screenshot of the live demo, bundled in public/demo/products. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={FEATURED.image} alt={`${FEATURED.name}, the ${FEATURED.kind.toLowerCase()} template`} width={1200} height={750} className="block aspect-[16/10] w-full rounded-t-lg border border-b-0 object-cover object-top-left" />
           <span className="absolute start-5 top-5 rounded-full bg-background/90 px-2 py-0.5 text-xs font-medium shadow-sm ring-1 ring-foreground/10 backdrop-blur">
             <span className="me-1.5 inline-block size-1.5 rounded-full bg-success align-middle" aria-hidden />
@@ -58,7 +57,6 @@ export function UpgradeCard() {
           <div className="flex items-center gap-3">
             <div className="flex shrink-0 -space-x-3 rtl:space-x-reverse" aria-hidden>
               {OTHERS.map((template) => (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img key={template.slug} src={template.image} alt="" width={1200} height={750} loading="lazy" className="h-9 w-14 rounded-md border-2 border-popover object-cover object-top-left shadow-sm" />
               ))}
             </div>

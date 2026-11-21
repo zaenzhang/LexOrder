@@ -9,6 +9,7 @@
  * 但用户可改任何 OpenAI 兼容 endpoint：DeepSeek / Kimi / 智谱 / OpenAI / OpenRouter / Ollama。
  */
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { encryptBuffer, decryptBuffer } from "@/lib/storage/crypto";
 
 const AI_SETTINGS_KEY = "aiSettings";
@@ -51,8 +52,8 @@ function decryptKey(cipher: StoredAiSettings["apiKeyCipher"]): string {
   return decryptBuffer(ct, cipher.iv, cipher.tag).toString("utf-8");
 }
 
-export async function readStoredAiSettings(): Promise<StoredAiSettings> {
-  const row = await prisma.systemSetting.findUnique({ where: { key: AI_SETTINGS_KEY } });
+export async function readStoredAiSettings(db: Prisma.TransactionClient = prisma): Promise<StoredAiSettings> {
+  const row = await db.systemSetting.findUnique({ where: { key: AI_SETTINGS_KEY } });
   const stored = (row?.value as Partial<StoredAiSettings> | null) ?? {};
   return {
     enabled: typeof stored.enabled === "boolean" ? stored.enabled : !!stored.apiKeyCipher,
@@ -91,8 +92,8 @@ export async function readPublicAiSettings(): Promise<{
 }
 
 /** 给 server 内部调用：拿解密后的可用配置 */
-export async function getAiSettings(): Promise<ResolvedAiSettings> {
-  const s = await readStoredAiSettings();
+export async function getAiSettings(db: Prisma.TransactionClient = prisma): Promise<ResolvedAiSettings> {
+  const s = await readStoredAiSettings(db);
   let apiKey = "";
   // A broken optional credential is unavailable, never a startup/page-wide failure.
   try { if (s.enabled) apiKey = decryptKey(s.apiKeyCipher); } catch { /* The settings page exposes a repair action. */ }

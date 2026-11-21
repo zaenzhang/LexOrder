@@ -1,3 +1,5 @@
+import { isPersonalMode } from "@/lib/runtime/mode";
+import { ActionError } from "@/lib/action-error";
 import { canReadDocument } from "@/lib/approvals/documents";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/session";
@@ -108,6 +110,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       buf = stored;
     }
   } catch (err) {
+    if (isPersonalMode() && err instanceof ActionError) return NextResponse.json({ error: err.message }, { status: 409 });
     console.error("[preview] 读取失败：", err);
     return NextResponse.json({ error: "读取失败" }, { status: 500 });
   }

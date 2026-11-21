@@ -12,6 +12,7 @@ export interface CommandPaletteProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   description: string
+  workbench?: boolean
   text: string
   onTextChange: (text: string) => void
   searching: boolean
@@ -23,20 +24,20 @@ export interface CommandPaletteProps {
 }
 
 /** The ⌘K dialog. Loaded lazily by `CommandMenuProvider` on first open. */
-export default function CommandPalette({ open, onOpenChange, description, text, onTextChange, searching, groups, actionGroups, pages, go, runAction }: CommandPaletteProps) {
+export default function CommandPalette({ open, onOpenChange, description, workbench, text, onTextChange, searching, groups, actionGroups, pages, go, runAction }: CommandPaletteProps) {
   // Not ui/CommandDialog: it renders its sr-only title outside the popup, so the title is always in the page
   // (axe "region" on every route) and never labels the dialog. Here the header sits inside the popup.
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="top-1/3 translate-y-0 overflow-hidden rounded-xl! p-0" showCloseButton={false}>
         <DialogHeader className="sr-only">
-          <DialogTitle>Search and actions</DialogTitle>
+          <DialogTitle>{workbench ? "搜索工作区页面" : "Search and actions"}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <Command>
-        <CommandInput placeholder="Search or type a command…" value={text} onValueChange={onTextChange} />
+        <CommandInput placeholder={workbench ? "输入页面名称…" : "Search or type a command…"} value={text} onValueChange={onTextChange} />
         <CommandList>
-          <CommandEmpty>{searching ? <Spinner className="mx-auto" /> : "Nothing found."}</CommandEmpty>
+          <CommandEmpty>{searching ? <Spinner className="mx-auto" /> : workbench ? "没有匹配的页面。" : "Nothing found."}</CommandEmpty>
           {Object.entries(groups).map(([group, items]) => (
             <CommandGroup key={group} heading={group}>
               {items.map((result) => {
@@ -71,7 +72,7 @@ export default function CommandPalette({ open, onOpenChange, description, text, 
             </CommandGroup>
           ))}
           <CommandSeparator />
-          <CommandGroup heading="Go to">
+          <CommandGroup heading={workbench ? "前往页面" : "Go to"}>
             {pages.map((page) => {
               const Icon = page.icon
               return (

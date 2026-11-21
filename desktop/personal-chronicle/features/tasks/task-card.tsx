@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { CalendarIcon } from "lucide-react"
 
 import type { Task } from "@/data/schema"
@@ -84,15 +85,7 @@ export function TaskCard({
 }) {
   const label = LABEL_BY_VALUE.get(task.label)!
   return (
-    <div
-      className={cn(
-        "flex flex-col gap-2.5 rounded-xl bg-card p-3 text-start shadow-(--surface-shadow) ring-1 ring-foreground/5 transition-shadow duration-150",
-        raised &&
-          "rotate-[1.5deg] shadow-(--surface-shadow-raised) ring-primary/30",
-
-        className
-      )}
-    >
+    <TaskCardFrame raised={raised} className={className}>
       <div className="flex items-center justify-between gap-2">
         <span className="font-mono text-xs text-muted-foreground">
           {task.key}
@@ -119,6 +112,14 @@ export function TaskCard({
           tooltip={!raised}
         />
       </div>
-    </div>
+    </TaskCardFrame>
   )
+}
+
+
+export function TaskCardFrame({ children, raised, className }: { children: ReactNode; raised?: boolean; className?: string }) {
+  return <div className={cn(
+    "flex min-w-0 flex-col gap-2.5 rounded-xl bg-card p-3 text-start shadow-(--surface-shadow) ring-1 ring-foreground/5 transition-shadow duration-150",
+    raised && "rotate-[1.5deg] shadow-(--surface-shadow-raised) ring-primary/30", className,
+  )}>{children}</div>
 }

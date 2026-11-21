@@ -13,6 +13,9 @@ import { PERSONAL_CHANNEL_COOKIE, personalChannelAllowed, personalRuntime } from
 import { watchWorkingFile, unwatchWorkingFile } from "@/server/desktop/working-watch";
 import { openDefaultEditor } from "@/server/desktop/default-editor";
 import { ClosedDraftIntent, WorkingCopies } from "@/server/desktop/working-copies";
+import { differsOnlyInDocxSaveStamp } from "@/server/desktop/docx-save-metadata";
+import { storage } from "@/lib/storage";
+import { decryptBuffer } from "@/lib/storage/crypto";
 import { uploadNewVersion } from "@/server/documents/actions";
 import { assertDocumentDerivationAccess } from "@/server/documents/derivation-access";
 import { abandonMaterialIngest, resumeMaterialIngest } from "@/server/documents/material-ingest";
@@ -96,6 +99,12 @@ async function workingCopies() {
       const { doc, extension } = await document(copy.matterId, copy.id);
       if ((doc.familyId ?? doc.id) !== copy.familyId || doc.version !== copy.version || extension !== copy.extension)
         throw new ActionError("工作稿基线已变化，请从材料列表核对。");
+      if (extension === ".docx" && doc.size && doc.size <= 20 * 1024 * 1024) {
+        const stored = await storage.readFile(doc.path);
+        if (doc.encrypted && (!doc.iv || !doc.authTag)) throw new ActionError("原稿加密信息不可用，工作稿已保留。");
+        const baseline = doc.encrypted ? decryptBuffer(stored, doc.iv!, doc.authTag!) : stored;
+        if (await differsOnlyInDocxSaveStamp(baseline, bytes)) return { id: doc.id, version: doc.version };
+      }
       const ticket = issueCheckoutToken({ docId: doc.id, userId: user.id, baselineVersion: copy.version, fileName: doc.name }, copy.checkoutJti);
       const name = doc.name.toLowerCase().endsWith(extension) ? doc.name : doc.name + extension;
       return uploadNewVersion({ documentId: doc.id, file: new File([new Uint8Array(bytes)], name, { type: doc.mimeType! }),

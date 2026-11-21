@@ -6,7 +6,6 @@ import {
 } from "@/lib/approvals/intake-detail";
 import { decryptIdNumber } from "@/lib/clients/id-number-crypto";
 import { clientActivitySchema } from "@/lib/clients/relationship";
-import { formatDeadlineDue } from "@/lib/deadline-due";
 import {
   clientTypeLabel,
   conflictConclusionLabel,
@@ -17,7 +16,7 @@ import {
 } from "@/lib/enums";
 import { isPersonalMode } from "@/lib/runtime/mode";
 import { personalChannelAllowed } from "@/lib/runtime/personal-channel";
-import { shDayKey, shTime } from "@/lib/ui/sh-time";
+import { shDayKey } from "@/lib/ui/sh-time";
 import {
   addContact,
   createClient,
@@ -37,7 +36,6 @@ import {
   runCheckAndSave,
   setConflictConclusion,
 } from "@/server/conflicts/actions";
-import { getDashboardHeroData } from "@/server/dashboard/actions";
 import {
   convertIntakeToMatter,
   createIntake,
@@ -58,19 +56,23 @@ import { requireSession } from "@/lib/auth/session";
 import { personalRuntime } from "@/lib/runtime/personal-channel";
 import { intakeCreateSchema } from "@/server/intakes/schemas";
 import {
+  getNotificationSummary,
   getNotifications,
+  markAllNotificationsRead,
   markNotificationRead,
 } from "@/server/notifications/actions";
-import { listScheduleItems } from "@/server/schedule/actions";
+import { createPersonalCalendarEntry, readPersonalCalendar, readPersonalToday, savePersonalCalendarEntry } from "@/server/schedule/personal-calendar";
 import {
   personalTaskAction,
   readPersonalTaskBoard,
+  taskBoardViews,
   resolvePersonalTask,
 } from "@/server/tasks/personal-schedule";
 
 const id = z.cuid();
 const action = z.discriminatedUnion("action", [
   personalTaskAction,
+  createPersonalCalendarEntry,
   z.object({ action: z.literal("create-client"), input: clientCreateSchema }),
   z.object({
     action: z.literal("client-contact"),
@@ -123,7 +125,8 @@ const action = z.discriminatedUnion("action", [
   }),
   z.object({ action: z.literal("submit-intake"), id }),
   z.object({ action: z.literal("convert-intake"), id }),
-  z.object({ action: z.literal("read-notification"), id }),
+  z.object({ action: z.literal("read-notification"), id: z.string().min(1).max(160) }),
+  z.object({ action: z.literal("read-all-notifications") }),
 ]);
 
 async function intakeDetail(key: string) {
@@ -170,40 +173,15 @@ async function read(query: URLSearchParams) {
     );
     return { title: values.title, description: values.description, revision };
   }
-  if (view === "today") {
-    const { todayDeadlineCount, weekHearingCount, overdueDeadlineCount } =
-      await getDashboardHeroData();
-    return { todayDeadlineCount, weekHearingCount, overdueDeadlineCount };
+  if (view === "today") return readPersonalToday();
+  if (view === "responsibilities") {
+    const taskView = z.enum(taskBoardViews).optional().parse(query.get("taskView") ?? undefined);
+    return readPersonalTaskBoard(query.get("closed") === "1", taskView);
   }
-  if (view === "responsibilities") return readPersonalTaskBoard(query.get("closed") === "1");
   if (view === "schedule") {
-    const month = z
-      .string()
-      .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+    const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).refine(value => value >= "0001-01")
       .parse(query.get("month") ?? shDayKey(new Date()).slice(0, 7));
-    const [year, number] = month.split("-").map(Number);
-    const from = new Date(month + "-01T00:00:00+08:00");
-    const to = new Date(Date.UTC(year, number, 1) - 8 * 3600000 - 1);
-    const items = await listScheduleItems({
-      from,
-      to,
-      onlyMine: true,
-      includeCompleted: true,
-    });
-    return {
-      items: items.map((item) => ({
-        id: item.id,
-        type: item.type,
-        title: item.title,
-        matter: item.matter,
-        href: item.intakeId ? `/practice/intakes/${item.intakeId}` : `/matters/${item.matter.id}/tasks`,
-        when:
-          item.type === "deadline"
-            ? formatDeadlineDue(item.occurredAt, item.duePrecision ?? null)
-            : shDayKey(item.occurredAt) + " " + shTime(item.occurredAt),
-        completed: item.completed ?? false,
-      })),
-    };
+    return readPersonalCalendar(month, query.get("grid") === "1");
   }
   if (view === "clients") {
     const data = await listClients({ page, pageSize: 20, search });
@@ -288,6 +266,7 @@ async function read(query: URLSearchParams) {
     };
   }
   if (view === "notifications") {
+    if (query.get("summary") === "1") return getNotificationSummary();
     const items = await getNotifications({
       limit: 100,
       unreadOnly: query.get("unread") === "1",
@@ -317,6 +296,8 @@ async function handle(request: Request) {
       return json(await read(new URL(request.url).searchParams));
     const data = action.parse(await request.json().catch(() => null));
     switch (data.action) {
+      case "create-calendar-entry":
+        return json(await savePersonalCalendarEntry(data));
       case "resolve-schedule-task":
         return json(await resolvePersonalTask(data));
       case "create-client":
@@ -374,6 +355,8 @@ async function handle(request: Request) {
         return json(await resubmitIntake(data.id));
       case "convert-intake":
         return json(await convertIntakeToMatter(data.id));
+      case "read-all-notifications":
+        return json(await markAllNotificationsRead());
       case "read-notification":
         await markNotificationRead(data.id);
         return json({ ok: true });

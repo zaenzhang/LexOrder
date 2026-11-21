@@ -1,6 +1,6 @@
 "use client"
 
-import dynamic from "next/dynamic"
+import { lazy as lazyComponent, Suspense } from "react"
 import type { ComponentProps, ComponentType } from "react"
 
 import type { HourBars as HourBarsChart } from "@/kit/charts/hour-bars"
@@ -16,11 +16,11 @@ import { cn } from "@/lib/utils"
  * The wrapper keeps the chart's size, so nothing moves when it arrives.
  */
 function lazy<P extends { className?: string }>(load: () => Promise<ComponentType<P>>) {
-  const Chart = dynamic(load, { ssr: false })
+  const Chart = lazyComponent(async () => ({ default: await load() }))
   function LazyChart({ className, ...props }: P) {
     return (
       <div className={cn("min-w-0", className)}>
-        <Chart {...(props as unknown as P)} className="size-full" />
+        <Suspense fallback={null}><Chart {...(props as unknown as P)} className="size-full" /></Suspense>
       </div>
     )
   }

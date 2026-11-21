@@ -18,7 +18,7 @@ import { crossFade } from "../customizer/cross-fade"
  * right on the first paint: the theme is unknown on the server, and reading it
  * would swap the icon visibly after hydration.
  */
-export function ModeToggle() {
+export function ModeToggle({ workbench }: { workbench?: boolean }) {
   const { resolvedTheme, setTheme } = useTheme()
   const layer = "col-start-1 row-start-1 transition-[opacity,scale,rotate] duration-250 ease-smooth-out"
 
@@ -29,7 +29,7 @@ export function ModeToggle() {
           <Button
             variant="ghost"
             size="icon"
-            aria-label="Toggle dark mode"
+            aria-label={workbench ? "切换浅色与深色" : "Toggle dark mode"}
             onClick={() => crossFade(() => setTheme(resolvedTheme === "dark" ? "light" : "dark"))}
           />
         }
@@ -40,7 +40,7 @@ export function ModeToggle() {
         </span>
       </TooltipTrigger>
       <TooltipContent className="flex items-center gap-2">
-        {resolvedTheme === "dark" ? "Light mode" : "Dark mode"}
+        {workbench ? (resolvedTheme === "dark" ? "浅色模式" : "深色模式") : (resolvedTheme === "dark" ? "Light mode" : "Dark mode")}
         <Kbd>D</Kbd>
       </TooltipContent>
     </Tooltip>

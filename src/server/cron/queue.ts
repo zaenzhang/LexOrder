@@ -10,6 +10,14 @@ import { prisma } from "@/lib/prisma";
 import { Prisma, type JobQueue } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 
+const personalMaterialJobTypes = ["document.parse", "document.ingest-reconcile"];
+export type JobScope = "all" | "personal-materials" | "personal-ai";
+function scopedJobTypes(scope: JobScope) {
+  if (scope === "personal-materials") return personalMaterialJobTypes;
+  if (scope === "personal-ai") return ["skill.signoff", "evidence.observations", "evidence.case-grouping"];
+  return null;
+}
+
 export interface JobLease { id: string; leaseToken: string }
 export class JobLeaseLost extends Error {
   constructor() { super("任务已由另一执行器接手"); this.name = "JobLeaseLost"; }
@@ -124,9 +132,11 @@ async function overwritePending(id: string, status: string, input: {
 }
 
 /** 崩溃恢复：租约过期的 RUNNING 任务重新入队（attempts 不变——它没被执行完） */
-export async function recoverStaleLeases(): Promise<number> {
+export async function recoverStaleLeases(scope: JobScope = "all"): Promise<number> {
+  const types = scopedJobTypes(scope);
   const res = await prisma.jobQueue.updateMany({
-    where: { status: "RUNNING", OR: [{ leaseUntil: { lt: new Date() } }, { leaseUntil: null }, { leaseToken: null }] },
+    where: { status: "RUNNING", ...(types ? { type: { in: types } } : {}),
+      OR: [{ leaseUntil: { lt: new Date() } }, { leaseUntil: null }, { leaseToken: null }] },
     data: { status: "PENDING", leaseUntil: null, leaseToken: null }
   });
   return res.count;
@@ -137,9 +147,10 @@ export async function recoverStaleLeases(): Promise<number> {
  *  DEAD 是误杀），失败计数统一由 failJob 在真实失败时原子递增。 */
 // Prisma DateTime columns are timestamp without time zone and contain UTC.
 // Keep raw queue timestamps in UTC even when the PostgreSQL session is not UTC.
-export async function claimDueJobs(limit = 10): Promise<QueueJob[]> {
+export async function claimDueJobs(limit = 10, scope: JobScope = "all"): Promise<QueueJob[]> {
   const take = Math.max(1, Math.min(50, Number.isInteger(limit) ? limit : 10));
   const token = randomUUID();
+  const types = scopedJobTypes(scope);
   const rows = await prisma.$queryRaw<QueueJob[]>(Prisma.sql`
     UPDATE "JobQueue" SET
       "status" = 'RUNNING',
@@ -149,6 +160,7 @@ export async function claimDueJobs(limit = 10): Promise<QueueJob[]> {
     WHERE "id" IN (
       SELECT "id" FROM "JobQueue"
       WHERE "status" IN ('PENDING', 'FAILED') AND "runAt" <= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+      ${types ? Prisma.sql`AND "type" IN (${Prisma.join(types)})` : Prisma.empty}
       ORDER BY "runAt" ASC
       LIMIT ${take}
       FOR UPDATE SKIP LOCKED

@@ -1,7 +1,7 @@
 "use client"
 
 import { CheckIcon, MinusIcon } from "lucide-react"
-import Link from "next/link"
+import Link from "@/features/shell/workspace-link"
 import { Fragment, useState } from "react"
 
 import { buttonVariants } from "@/components/ui/button"

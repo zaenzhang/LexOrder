@@ -2,7 +2,7 @@
 
 import { MenuIcon, MoonIcon, SunIcon } from "lucide-react"
 import { useTheme } from "next-themes"
-import Link from "next/link"
+import Link from "@/features/shell/workspace-link"
 import { useState } from "react"
 
 import { Button, buttonVariants } from "@/components/ui/button"

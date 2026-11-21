@@ -1,7 +1,7 @@
 "use client"
 
 import { DownloadIcon } from "lucide-react"
-import Link from "next/link"
+import Link from "@/features/shell/workspace-link"
 import { parseAsNumberLiteral, useQueryState } from "nuqs"
 import { useMemo, useState } from "react"
 

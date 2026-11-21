@@ -13,7 +13,7 @@ import { isPersonalMode } from "@/lib/runtime/mode";
 import { revalidatePath } from "next/cache";
 import { verifyCheckoutToken } from "@/lib/desktop/checkout-token";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
+import { DocumentCategory, DocumentSourceOrigin, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/session";
 import { assertDocumentWritable } from "@/lib/archive/guard";
@@ -24,20 +24,14 @@ import { extractDocumentTextLayer, ocrStatusFor } from "@/lib/documents/text-ext
 import { revalidateMatter } from "@/server/matters/route";
 import { ingestMaterial, withdrawMaterial, UploadRejectedBeforeReservation } from "./material-ingest";
 import type { UploadDocumentResult } from "@/lib/documents/upload-contract";
+import { materialCatalogEntry, materialCatalogSelect, materialTagSchema, materialTagsSchema } from "@/lib/documents/catalog";
 import { contextInputSelectionsSchema, type ContextInputSelection } from "@/lib/matters/context-inputs";
 import { ActionError } from "@/lib/action-error";
 import { assertDocumentDerivationAccess } from "./derivation-access";
 import { assertFixedReview, type FixedReview } from "@/server/document-reviews/fixed-approval";
 import { canReadDocument } from "@/lib/approvals/documents";
 
-const documentCategorySchema = z.enum([
-  "EVIDENCE",
-  "PLEADING",
-  "PROCEDURE",
-  "JUDGMENT",
-  "CONTRACT",
-  "OTHER"
-]);
+const documentCategorySchema = z.enum(DocumentCategory);
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 
@@ -83,10 +77,9 @@ export async function uploadDocument(formData: FormData): Promise<UploadDocument
     const name = formData.get("name");
     const category = formData.get("category");
     const encrypted = formData.get("encrypted") === "true";
-    const tagsRaw = formData.get("tags");
     const archiveChecklistItemIdRaw = formData.get("archiveChecklistItemId");
     const stageIdRaw = formData.get("stageId");
-    const sourcePartyRaw = formData.get("sourceParty");
+    const sourceParty = z.string().trim().max(500).nullable().parse(formData.get("sourceParty")) || null;
     const sourceOriginRaw = formData.get("sourceOrigin");
     const SOURCE_ORIGINS = ["CLIENT_PROVIDED", "COURT_SERVED", "AI_EXTRACTED", "SELF_COLLECTED", "TEAM_PRODUCED"] as const;
     const sourceOrigin =
@@ -103,10 +96,7 @@ export async function uploadDocument(formData: FormData): Promise<UploadDocument
 
     if (typeof name !== "string" || !name.trim()) throw new ActionError("材料名称必填");
     const parsedCategory = documentCategorySchema.parse(category || "OTHER");
-    const tags =
-      typeof tagsRaw === "string" && tagsRaw
-        ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean)
-        : [];
+    const tags = materialTagsSchema.parse(formData.getAll("tags"));
 
     const validated = validateUploadedFile(file, { purpose: "document", maxBytes: MAX_FILE_SIZE });
 
@@ -187,8 +177,7 @@ export async function uploadDocument(formData: FormData): Promise<UploadDocument
         matterId, intakeId,
         procedureId: typeof procedureId === "string" && procedureId ? procedureId : null,
         stageId: matterId ? stageId : null, folderId, name: name.trim(), category: parsedCategory,
-        sourceOrigin,
-        sourceParty: typeof sourcePartyRaw === "string" && sourcePartyRaw.trim() ? sourcePartyRaw.trim() : null,
+        sourceOrigin, sourceParty,
         mimeType: validated.mimeType, size: file.size, sha256: hash, encrypted,
         algorithm: enc?.algorithm ?? null, iv: enc ? enc.iv.toString("base64") : null,
         authTag: enc ? enc.authTag.toString("base64") : null, tags,
@@ -246,7 +235,11 @@ async function extractIntakeText(id: string, raw: Buffer, mimeType: string) {
 const docListQuerySchema = z.object({
   search: z.string().optional(),
   category: documentCategorySchema.optional(),
+  sourceOrigin: z.enum(DocumentSourceOrigin).optional(),
   folderId: z.cuid().nullable().optional(),
+  stageId: z.cuid().optional(),
+  procedureId: z.cuid().optional(),
+  tag: materialTagSchema.optional(),
   isLatest: z.boolean().optional(),
   matterId: z.string().cuid().optional(),
   limit: z.coerce.number().int().min(1).max(500).default(200)
@@ -265,8 +258,12 @@ export async function listDocumentPage(input: Partial<z.infer<typeof docListQuer
     deletedAt: null,
     matter: { deletedAt: null, ...visFilter },
     ...(query.folderId === undefined ? {} : { folderId: query.folderId }),
+    ...(query.stageId ? { stageId: query.stageId } : {}),
+    ...(query.procedureId ? { procedureId: query.procedureId } : {}),
+    ...(query.tag ? { tags: { has: query.tag } } : {}),
     ...(query.isLatest === undefined ? {} : { isLatest: query.isLatest }),
     ...(query.category ? { category: query.category } : {}),
+    ...(query.sourceOrigin ? { sourceOrigin: query.sourceOrigin } : {}),
     ...(query.matterId ? { matterId: query.matterId } : {}),
     ...(query.search
       ? {
@@ -283,14 +280,11 @@ export async function listDocumentPage(input: Partial<z.infer<typeof docListQuer
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     ...(cursor ? { cursor: { id: z.cuid().parse(cursor) }, skip: 1 } : {}),
     take: query.limit + 1,
-    include: {
-      matter: { select: { id: true, internalCode: true, title: true } },
-      uploadedBy: { select: { id: true, name: true } }
-    }
+    select: { ...materialCatalogSelect, matterId: true, intakeId: true, uploadedById: true }
   });
   const page = rows.slice(0, query.limit);
   const readable = await Promise.all(page.map(row => canReadDocument(session.user.id, row)));
-  return { items: page.filter((_, index) => readable[index]), nextCursor: rows.length > page.length ? page.at(-1)!.id : null };
+  return { items: page.filter((_, index) => readable[index]).map(materialCatalogEntry), nextCursor: rows.length > page.length ? page.at(-1)!.id : null };
 }
 
 // ============ v0.10: 文书审批流程 ============
@@ -318,7 +312,7 @@ export async function submitDocumentForReview(id: string, expected?: FixedReview
       if (expected) await assertFixedReview(db, id, expected);
       await assertDocumentDerivationAccess(session.user.id, id, { purpose: "SUBMIT", db });
       await db.document.update({
-        where: { id, status: "DRAFT", updatedAt: doc.updatedAt },
+        where: { id, status: "DRAFT", ...(!expected && { updatedAt: doc.updatedAt }) },
         data: {
           status: "APPROVED",
           reviewedById: session.user.id,
@@ -345,7 +339,7 @@ export async function submitDocumentForReview(id: string, expected?: FixedReview
       if (expected) await assertFixedReview(db, id, expected);
     await assertDocumentDerivationAccess(session.user.id, id, { purpose: "SUBMIT", db });
     await db.document.update({
-      where: { id, status: "DRAFT", updatedAt: doc.updatedAt },
+      where: { id, status: "DRAFT", ...(!expected && { updatedAt: doc.updatedAt }) },
       data: { status: "PENDING_REVIEW" },
     });
     await approvalAudit(db, session.user.id, "DOCUMENT_SUBMIT_REVIEW", id, {
@@ -370,7 +364,7 @@ export async function approveDocument(id: string, note?: string, expected?: Fixe
     await assertApprovalItem(session.user.id, "DOCUMENT_APPROVE", id, tx);
     await assertDocumentDerivationAccess(session.user.id, id, { purpose: "READ", db: tx });
   await tx.document.update({
-    where: { id, status: "PENDING_REVIEW", updatedAt: doc.updatedAt },
+    where: { id, status: "PENDING_REVIEW", ...(!expected && { updatedAt: doc.updatedAt }) },
     data: {
       status: "APPROVED",
       approvedById: session.user.id,
@@ -396,7 +390,7 @@ export async function rejectDocument(id: string, reason?: string, expected?: Fix
     if (expected) await assertFixedReview(tx, id, expected, false);
     await assertApprovalItem(session.user.id, "DOCUMENT_APPROVE", id, tx);
   await tx.document.update({
-    where: { id, status: "PENDING_REVIEW", updatedAt: doc.updatedAt },
+    where: { id, status: "PENDING_REVIEW", ...(!expected && { updatedAt: doc.updatedAt }) },
     data: {
       status: "DRAFT",
       reviewedById: session.user.id,

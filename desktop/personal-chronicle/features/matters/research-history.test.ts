@@ -1,3 +1,4 @@
+import { renderWithRouter } from "@/scripts/render-test"
 // @vitest-environment jsdom
 import { act, createElement } from "react"
 import { createRoot } from "react-dom/client"
@@ -7,7 +8,7 @@ import { expect, it, vi } from "vitest"
 import { MatterSectionPage } from "./matter-section-page"
 import { SavedResearchRevision } from "./research-revision"
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }))
+vi.mock("@/kit/framework", async importOriginal => ({ ...(await importOriginal<typeof import("@/kit/framework")>()), useRouter: () => ({ replace: vi.fn() }) }))
 vi.mock("./personal-client", async importOriginal => ({
   ...await importOriginal<typeof import("./personal-client")>(),
   readPersonal: async (url: string) => {
@@ -26,7 +27,7 @@ vi.mock("./personal-client", async importOriginal => ({
 it.each(["列表", "独立详情"])("从%s打开合法旧版，隐藏受限正文、出处和操作", async entry => {
   const container = document.body.appendChild(document.createElement("div"))
   const root = createRoot(container)
-  const showRevision = (id: string) => root.render(createElement(SavedResearchRevision, { key: id, matterId: "case", recordId: id }))
+  const showRevision = (id: string) => renderWithRouter(root, createElement(SavedResearchRevision, { key: id, matterId: "case", recordId: id }))
   const navigate = (event: MouseEvent) => {
     const link = (event.target as Element).closest("a")
     if (!link) return
@@ -38,7 +39,7 @@ it.each(["列表", "独立详情"])("从%s打开合法旧版，隐藏受限正�
   document.addEventListener("click", navigate)
   try {
     if (entry === "列表") {
-      await act(async () => root.render(createElement(MatterSectionPage, { matterId: "case", section: "research", title: "研究" })))
+      await act(async () => renderWithRouter(root, createElement(MatterSectionPage, { matterId: "case", section: "research", title: "研究" })))
       const open = await screen.findByRole("button", { name: "查看修订" })
       await act(async () => { fireEvent.click(open) })
     } else {

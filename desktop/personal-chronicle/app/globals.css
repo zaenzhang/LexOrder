@@ -59,6 +59,8 @@
 :root {
   --radius: 0.625rem;
   /* The customizer swaps --font-sans for another of THEME.fonts; headings follow it (kit.css --heading-font). */
+  --font-hanken: "Hanken Grotesk Variable";
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
   --font-sans: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
   --background: oklch(0.974 0.006 255);
   --foreground: oklch(0.19 0.028 264);

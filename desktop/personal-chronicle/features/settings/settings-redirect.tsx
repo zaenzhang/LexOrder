@@ -1,6 +1,6 @@
 "use client"
 
-import { useRouter } from "next/navigation"
+import { useRouter } from "@/kit/framework"
 import { useEffect } from "react"
 
 import { SettingsSkeleton } from "@/kit/settings/section"

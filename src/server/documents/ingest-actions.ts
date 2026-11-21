@@ -10,7 +10,7 @@ import { ActionError } from "@/lib/action-error";
 import { resolveRoleUser } from "@/lib/roles/service";
 import { hasCustomPermission } from "@/lib/roles/catalog";
 import { canReadDocument } from "@/lib/approvals/documents";
-import type { MaterialUploadReceipt } from "@/lib/documents/upload-contract";
+import type { MaterialUploadReceipt, PendingMaterialUploads } from "@/lib/documents/upload-contract";
 
 /** An exact receipt is independent of the newest-20 pending list; absence never cancels an in-flight call. */
 export async function getMaterialUploadReceipt(input: { matterId: string; requestKey: string }): Promise<MaterialUploadReceipt> {
@@ -41,12 +41,12 @@ export async function getMaterialUploadReceipt(input: { matterId: string; reques
   }, { isolationLevel: "RepeatableRead" });
 }
 
-export async function listPendingMaterialUploads(matterId: string) {
+export async function listPendingMaterialUploads(matterId: string, originalUploadsOnly = false): Promise<PendingMaterialUploads> {
   const user = (await requireSession("documents.write")).user;
   const id = z.string().min(1).max(512).parse(matterId);
   await assertCanHandleMatter(user, id);
   const rows = await prisma.materialIngestIntent.findMany({
-    where: { matterId: id, requestedById: user.id, state: { not: "COMMITTED" },
+    where: { matterId: id, requestedById: user.id, state: { not: "COMMITTED" }, ...(originalUploadsOnly && { priorDocumentId: null }),
       OR: [{ errorCode: null }, { errorCode: { not: "UPLOAD_ABANDONED" } }] },
     orderBy: { createdAt: "desc" }, take: 21,
     select: { id: true, metadata: true, state: true, errorCode: true, createdAt: true },

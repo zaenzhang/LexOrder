@@ -5,126 +5,131 @@ param(
     [Parameter(Mandatory)][string]$NewText
 )
 $ErrorActionPreference = 'Stop'
-if ($env:OS -ne 'Windows_NT') { throw 'This acceptance step requires Windows classic Notepad.' }
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+
 $file = [IO.Path]::GetFullPath($WorkingFile)
 $name = [IO.Path]::GetFileName($file)
-$stem = [IO.Path]::GetFileNameWithoutExtension($file)
+$stem = [IO.Path]::GetFileNameWithoutExtension($name)
 if ($name -notmatch '^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}_.+\.txt$' -or
-    -not [IO.File]::Exists($file)) { throw 'Expected an existing, app-issued synthetic TXT working copy.' }
-function CanonicalText([string]$s) { $s.Replace("`r`n", "`n") }
-if ([string]::Equals((CanonicalText $ExpectedText), (CanonicalText $NewText), [StringComparison]::Ordinal)) {
-    throw 'The acceptance edit must change the original text.'
-}
-if ($ExpectedText.Length -gt 65534 -or $NewText.Length -gt 65534 -or $NewText.Contains([char]0)) {
-    throw 'This acceptance helper supports small text fixtures only.'
-}
-if (-not [string]::Equals((CanonicalText ([IO.File]::ReadAllText($file))), (CanonicalText $ExpectedText), [StringComparison]::Ordinal)) {
-    throw 'Fixture contents changed before locating the editor.'
+    -not [IO.File]::Exists($file)) { throw 'Expected an app-issued synthetic TXT working copy.' }
+function CanonicalText([string]$text) { $text.Replace("`r`n", "`n") }
+$before = CanonicalText $ExpectedText
+$after = CanonicalText $NewText
+if ($before -ceq $after -or (CanonicalText ([IO.File]::ReadAllText($file))) -cne $before) {
+    throw 'The fixture must match the expected baseline and the edit must change it.'
 }
 
-Add-Type -TypeDefinition @'
-using System;
-using System.Text;
-using System.Runtime.InteropServices;
+$scope = [System.Windows.Automation.TreeScope]::Descendants
+$controlType = [System.Windows.Automation.AutomationElement]::ControlTypeProperty
+$automationId = [System.Windows.Automation.AutomationElement]::AutomationIdProperty
+$tabType = [System.Windows.Automation.PropertyCondition]::new($controlType, [System.Windows.Automation.ControlType]::TabItem)
+$editorType = [System.Windows.Automation.PropertyCondition]::new($controlType, [System.Windows.Automation.ControlType]::Document)
+$selectionPattern = [System.Windows.Automation.SelectionItemPattern]::Pattern
+$invokePattern = [System.Windows.Automation.InvokePattern]::Pattern
 
-public static class ClassicNotepadProbe {
-    [DllImport("user32", CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr w, StringBuilder s, int n);
-    [DllImport("user32", CharSet=CharSet.Unicode)] static extern IntPtr FindWindowEx(IntPtr p, IntPtr after, string cls, string title);
-    [DllImport("user32")] static extern uint GetWindowThreadProcessId(IntPtr w, out uint pid);
-    [DllImport("user32")] static extern IntPtr GetMenu(IntPtr w);
-    [DllImport("user32")] static extern IntPtr GetSubMenu(IntPtr menu, int i);
-    [DllImport("user32")] static extern int GetMenuItemCount(IntPtr menu);
-    [DllImport("user32")] static extern uint GetMenuItemID(IntPtr menu, int i);
-    [DllImport("user32", CharSet=CharSet.Unicode)] static extern int GetMenuString(IntPtr menu, uint item, StringBuilder s, int n, uint flags);
-    [DllImport("user32", EntryPoint="SendMessageTimeoutW")] static extern IntPtr SendValue(IntPtr w, uint msg, IntPtr a, IntPtr b, uint flags, uint timeout, out IntPtr result);
-    [DllImport("user32", EntryPoint="SendMessageTimeoutW", CharSet=CharSet.Unicode)] static extern IntPtr SendText(IntPtr w, uint msg, IntPtr a, string b, uint flags, uint timeout, out IntPtr result);
-    [DllImport("user32", EntryPoint="SendMessageTimeoutW", CharSet=CharSet.Unicode)] static extern IntPtr GetText(IntPtr w, uint msg, IntPtr a, StringBuilder b, uint flags, uint timeout, out IntPtr result);
-    [DllImport("user32")] static extern bool PostMessage(IntPtr w, uint msg, IntPtr a, IntPtr b);
-
-    public static bool Owned(IntPtr window, uint pid) {
-        uint owner;
-        return window != IntPtr.Zero && GetWindowThreadProcessId(window, out owner) != 0 && owner == pid;
-    }
-    public static IntPtr Edit(IntPtr window, uint pid) {
-        var cls = new StringBuilder(128);
-        if (!Owned(window, pid) || GetClassName(window, cls, cls.Capacity) == 0 || cls.ToString() != "Notepad") return IntPtr.Zero;
-        var edit = FindWindowEx(window, IntPtr.Zero, "Edit", null);
-        return Owned(edit, pid) ? edit : IntPtr.Zero;
-    }
-    public static string ReadEdit(IntPtr edit) {
-        var s = new StringBuilder(65536);
-        IntPtr count;
-        if (GetText(edit, 0x000D, (IntPtr)s.Capacity, s, 3, 3000, out count) == IntPtr.Zero)
-            throw new Exception("Could not read the visible edit control.");
-        return s.ToString();
-    }
-    public static void EditAndSave(IntPtr window, uint pid, IntPtr edit, string expected, string text) {
-        if (Edit(window, pid) != edit || ReadEdit(edit).Replace("\r\n","\n") != expected.Replace("\r\n","\n"))
-            throw new Exception("Window or visible baseline no longer matches the issued working copy.");
-        var fileMenu = GetSubMenu(GetMenu(window), 0);
-        uint save = 0;
-        for (int i = 0; i < GetMenuItemCount(fileMenu); i++) {
-            var label = new StringBuilder(256);
-            GetMenuString(fileMenu, (uint)i, label, label.Capacity, 0x0400);
-            var parts = label.ToString().Split('\t');
-            if (parts.Length == 2 && String.Equals(parts[1].Trim(), "Ctrl+S", StringComparison.OrdinalIgnoreCase)) {
-                save = GetMenuItemID(fileMenu, i);
-                break;
-            }
-        }
-        if (save == 0 || save == UInt32.MaxValue) throw new Exception("Classic File > Save menu was not found.");
-        IntPtr result;
-        if (SendValue(edit, 0x00B1, IntPtr.Zero, (IntPtr)(-1), 3, 3000, out result) == IntPtr.Zero ||
-            SendText(edit, 0x00C2, (IntPtr)1, text, 3, 3000, out result) == IntPtr.Zero ||
-            ReadEdit(edit) != text || !Owned(window,pid) ||
-            SendValue(window, 0x0111, (IntPtr)(long)save, IntPtr.Zero, 3, 8000, out result) == IntPtr.Zero)
-            throw new Exception("Classic Notepad did not acknowledge the edit and Save command.");
-    }
-    public static bool CloseVerified(IntPtr window, uint pid) {
-        return Owned(window,pid) && PostMessage(window, 0x0010, IntPtr.Zero, IntPtr.Zero);
+function SelectedFixtureTab($root) {
+    $root.FindAll($scope, $tabType) | Where-Object {
+        $_.Current.Name.StartsWith($name + '. ', [StringComparison]::OrdinalIgnoreCase) -and
+        $_.GetCurrentPattern($selectionPattern).Current.IsSelected
     }
 }
-'@
 
 $session = (Get-Process -Id $PID).SessionId
-$deadline = [DateTime]::UtcNow.AddSeconds(30)
-$match = $null
+$deadline = [DateTime]::UtcNow.AddSeconds(25)
+$root = $null
+$classicWindow = $classicEditor = [IntPtr]::Zero
 do {
-    $matchesFound = @(Get-Process -Name notepad -ErrorAction SilentlyContinue | Where-Object {
+    $windows = @(Get-Process Notepad -ErrorAction SilentlyContinue | Where-Object {
         $_.SessionId -eq $session -and $_.MainWindowHandle -ne [IntPtr]::Zero -and
-        ($_.MainWindowTitle.StartsWith($name + ' - ', [StringComparison]::OrdinalIgnoreCase) -or
-         $_.MainWindowTitle.StartsWith($stem + ' - ', [StringComparison]::OrdinalIgnoreCase))
+        ($_.MainWindowTitle.TrimStart('*').StartsWith($name + ' - ', [StringComparison]::OrdinalIgnoreCase) -or
+         $_.MainWindowTitle.TrimStart('*').StartsWith($stem + ' - ', [StringComparison]::OrdinalIgnoreCase))
     })
-    if ($matchesFound.Count -gt 1) { throw 'Multiple classic Notepad windows match the issued copy.' }
-    if ($matchesFound.Count -eq 1) {
-        $p = $matchesFound[0]
-        $w = $p.MainWindowHandle
-        $edit = [ClassicNotepadProbe]::Edit($w, $p.Id)
-        if ($edit -ne [IntPtr]::Zero) { $match = $p; break }
+    if ($windows.Count -gt 1) { throw 'Multiple Notepad windows match the synthetic file.' }
+    if ($windows.Count -eq 1) {
+        $candidate = [System.Windows.Automation.AutomationElement]::FromHandle($windows[0].MainWindowHandle)
+        if (@(SelectedFixtureTab $candidate).Count -eq 1) { $root = $candidate; break }
+        if ($windows[0].MainWindowTitle.StartsWith($stem + ' - ', [StringComparison]::OrdinalIgnoreCase)) {
+            if (!('ClassicNotepad' -as [type])) { Add-Type -Path (Join-Path $PSScriptRoot 'ClassicNotepad.cs') }
+            $handle = $windows[0].MainWindowHandle
+            $control = [ClassicNotepad]::FindEditor($handle, [IntPtr]::Zero)
+            if ($control -ne [IntPtr]::Zero) {
+                if ([ClassicNotepad]::FindEditor($handle, $control) -ne [IntPtr]::Zero) {
+                    throw 'Multiple classic Notepad editors match the synthetic file.'
+                }
+                $classicWindow = $handle
+                $classicEditor = $control
+                break
+            }
+        }
     }
-    Start-Sleep -Milliseconds 100
+    Start-Sleep -Milliseconds 150
 } while ([DateTime]::UtcNow -lt $deadline)
-if (-not $match) {
-    $windows = @(Get-Process -Name notepad -ErrorAction SilentlyContinue | Where-Object {
-        $_.SessionId -eq $session -and $_.MainWindowHandle -ne [IntPtr]::Zero
-    }).Count
-    throw "No matching classic Notepad window in session $session ($windows visible Notepad windows)."
+if (!$root -and $classicWindow -eq [IntPtr]::Zero) {
+    $choice = Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.txt\UserChoice' -Name ProgId -ErrorAction SilentlyContinue
+    $registered = Get-Item -LiteralPath 'Registry::HKEY_CLASSES_ROOT\.txt' -ErrorAction SilentlyContinue
+    $extensionHandler = if ($registered) { $registered.GetValue('') }
+    $notepad = @(Get-Process Notepad -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $session })
+    Write-Output "TXT association user=$($choice.ProgId) registered=$extensionHandler; Notepad processes=$($notepad.Count) in session $session"
+    foreach ($process in $notepad) {
+        $handle = $process.MainWindowHandle
+        $title = $process.MainWindowTitle
+        $carriesFixture = $title.IndexOf($stem, [StringComparison]::OrdinalIgnoreCase) -ge 0
+        $carriesExtension = $title.IndexOf($name, [StringComparison]::OrdinalIgnoreCase) -ge 0
+        $tabs = $documents = $editControls = 0
+        if ($handle -ne [IntPtr]::Zero) {
+            $window = [System.Windows.Automation.AutomationElement]::FromHandle($handle)
+            $editType = [System.Windows.Automation.PropertyCondition]::new($controlType, [System.Windows.Automation.ControlType]::Edit)
+            $tabs = $window.FindAll($scope, $tabType).Count
+            $documents = $window.FindAll($scope, $editorType).Count
+            $editControls = $window.FindAll($scope, $editType).Count
+        }
+        Write-Output "Notepad window=$($handle -ne [IntPtr]::Zero) fixtureName=$carriesFixture fixtureExtension=$carriesExtension tabs=$tabs documents=$documents edits=$editControls"
+    }
+    throw 'The synthetic file is not selected in Windows Notepad.'
 }
-$nativeText = (CanonicalText $NewText).Replace("`n", "`r`n")
-[ClassicNotepadProbe]::EditAndSave($w, $match.Id, $edit, $ExpectedText, $nativeText)
+
+if ($classicWindow -ne [IntPtr]::Zero) {
+    [ClassicNotepad]::SaveFixture($classicWindow, $classicEditor, $before, $after)
+} else {
+    $editors = @($root.FindAll($scope, $editorType) | Where-Object { !$_.Current.IsOffscreen })
+    if ($editors.Count -ne 1) { throw 'The selected Notepad tab has no unique visible editor.' }
+    $value = $editors[0].GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+    if ((CanonicalText $value.Current.Value) -cne $before) { throw 'The visible editor text does not match the working copy.' }
+    $value.SetValue($NewText)
+    if ((CanonicalText $value.Current.Value) -cne $after -or @(SelectedFixtureTab $root).Count -ne 1) {
+        throw 'The selected test tab did not accept the edit.'
+    }
+
+    $fileMenu = $root.FindFirst($scope, [System.Windows.Automation.PropertyCondition]::new($automationId, 'File'))
+    $fileMenu.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Expand()
+    $accelerator = [System.Windows.Automation.AutomationElement]::AcceleratorKeyProperty
+    $saveCondition = [System.Windows.Automation.PropertyCondition]::new($accelerator, 'Ctrl+S')
+    $deadline = [DateTime]::UtcNow.AddSeconds(5)
+    do {
+        $save = $root.FindFirst($scope, $saveCondition)
+        if ($save) { break }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $deadline)
+    if (!$save -or @(SelectedFixtureTab $root).Count -ne 1) { throw 'No Save command for the selected test tab.' }
+    $save.GetCurrentPattern($invokePattern).Invoke()
+}
 
 $deadline = [DateTime]::UtcNow.AddSeconds(10)
-$saved = $false
 do {
     try {
-        $saved = [string]::Equals((CanonicalText ([IO.File]::ReadAllText($file))), (CanonicalText $NewText), [StringComparison]::Ordinal)
+        if ((CanonicalText ([IO.File]::ReadAllText($file))) -ceq $after) { break }
     } catch [IO.IOException] { }
-    if ($saved) { break }
     Start-Sleep -Milliseconds 100
 } while ([DateTime]::UtcNow -lt $deadline)
-if (-not $saved) { throw 'Notepad Save did not publish the expected text on disk.' }
-if (-not [ClassicNotepadProbe]::CloseVerified($w, $match.Id)) { throw 'Could not close the verified editor window.' }
-$deadline = [DateTime]::UtcNow.AddSeconds(5)
-while ([ClassicNotepadProbe]::Owned($w,$match.Id) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 100 }
-if ([ClassicNotepadProbe]::Owned($w,$match.Id)) { throw 'The matched editor window did not close cleanly.' }
-Write-Output 'PASS classic Notepad displayed the expected working copy, accepted File > Save, and published its edited text.'
+if ((CanonicalText ([IO.File]::ReadAllText($file))) -cne $after) { throw 'Notepad did not save the expected text.' }
+
+if ($classicWindow -ne [IntPtr]::Zero) {
+    [ClassicNotepad]::CloseFixture($classicWindow)
+    Write-Output 'PASS classic Windows Notepad saved and closed the verified synthetic working copy.'
+} else {
+    $tabs = @(SelectedFixtureTab $root)
+    if ($tabs.Count -ne 1) { throw 'The saved fixture tab is no longer selected.' }
+    $close = $tabs[0].FindFirst($scope, [System.Windows.Automation.PropertyCondition]::new($automationId, 'CloseButton'))
+    $close.GetCurrentPattern($invokePattern).Invoke()
+    Write-Output 'PASS Windows Notepad saved the verified synthetic working copy and closed its tab.'
+}

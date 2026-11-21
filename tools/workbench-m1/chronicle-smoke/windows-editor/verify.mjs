@@ -1,4 +1,4 @@
-// Run from the repository root on Windows with classic Notepad as the .txt association.
+// Run from the repository root on Windows with Microsoft Store Notepad as the .txt association.
 // Only the business checkout/save adapter is a fixture. The launcher, watcher,
 // directory binding, working-copy registry and process restart are production paths.
 import assert from "node:assert/strict";
@@ -24,7 +24,8 @@ const [a, b] = ["a", "b"].map(letter => ({
 }));
 const filename = "同名 [修订].txt";
 const content = ["", "A original", "LexOrder native V2", "LexOrder native V3"];
-const helper = path.join(import.meta.dirname, "save-notepad.ps1");
+const helper = process.env.M1_WINDOWS_EDITOR_SCRIPT ?? path.join(import.meta.dirname, "save-notepad.ps1");
+assert(path.isAbsolute(helper), "Pass the absolute path to the local Notepad automation script.");
 const otherFile = async () => path.join(await matterSubdirectory(b.id, "工作稿"), filename);
 
 async function worker(fixture, version) {
@@ -93,8 +94,8 @@ async function worker(fixture, version) {
   try {
     // The helper operates only on this unique working-copy window. The default
     // editor performs the disk write. Do not call sync until the watcher has saved.
-    const edit = await run("powershell.exe", ["-NoProfile", "-NonInteractive", "-File", helper,
-      "-WorkingFile", file, "-ExpectedText", content[version - 1], "-NewText", content[version]], { timeout: 60000 });
+    const edit = await run("powershell.exe", ["-NoProfile", "-NonInteractive", "-Sta", "-File", helper,
+      "-WorkingFile", file, "-ExpectedText", content[version - 1], "-NewText", content[version]], { timeout: 60000, windowsHide: true });
     process.stdout.write(edit.stdout);
     const record = path.join(registry, saved.id + ".json");
     const readVersion = async () => JSON.parse(await fs.readFile(record, "utf8")).version;
@@ -115,7 +116,7 @@ async function worker(fixture, version) {
 }
 
 async function main() {
-  assert.equal(process.platform, "win32", "requires Windows with classic Notepad as the default .txt editor");
+  assert.equal(process.platform, "win32", "requires Windows with Notepad as the default .txt editor");
   if (process.argv[2] === "--worker") return worker(process.argv[3], Number(process.argv[4]));
   const fixture = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "lexorder-native-")));
   const env = { ...process.env, LEXORDER_RUNTIME_MODE: "PERSONAL", LEXORDER_PERSONAL_WORKSPACE_ID: randomUUID(),

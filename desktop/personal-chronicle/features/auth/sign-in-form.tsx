@@ -1,8 +1,8 @@
 "use client"
 
 import { AlertCircleIcon } from "lucide-react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
+import Link from "@/features/shell/workspace-link"
+import { useRouter } from "@/kit/framework"
 import { useState } from "react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"

@@ -12,7 +12,7 @@ import {
   UserCogIcon,
   UsersIcon,
 } from "lucide-react"
-import Link from "next/link"
+import Link from "@/features/shell/workspace-link"
 
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"

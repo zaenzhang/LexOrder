@@ -1,16 +1,19 @@
 "use client"
 
+import { WorkspaceLoading } from "@/kit/ui-patterns/workspace-loading"
+import Link from "@/features/shell/workspace-link"
 import { PageHeader } from "@/kit/ui-patterns/page-header"
 import { evidenceEndpoint, readPersonal } from "./personal-client"
 import { useEffect, useEffectEvent, useRef, useState } from "react"
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { FileText, Pin, X } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { FileText, Pin, Sparkles, X } from "lucide-react"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { FactReviewForm } from "./fact-review-form"
 import { FixedSourcePreview, type FixedSource } from "./fixed-source-preview"
 import { usePinnedSources } from "./matter-session"
+import { SkillCommissionDesk } from "./skill-commission-desk"
 
 type Source = { id: string; relation: "SUPPORTS" | "REBUTS" | "CONTEXT" | null; status: string; documentName: string | null; documentVersion: number | null; locationLabel: string | null; superseded?: boolean; legacy?: boolean }
 export type Issue = { id: string; revision: number; title: string; content: string; confirmedAt: string | null; restricted: boolean; canEdit: boolean; sources: Source[] }
@@ -22,9 +25,11 @@ function readIssues(matterId: string, signal: AbortSignal) {
   return readPersonal<{ issues: Issue[] }>(`${evidenceEndpoint}?matter=${encodeURIComponent(matterId)}`, { signal })
 }
 
-export function EvidenceReview({ matterId }: { matterId: string }) {
+export function EvidenceReview({ matterId, title = "争点证据对照", intro, initialIssue, hearing }: {
+  matterId: string; title?: string; intro?: React.ReactNode; initialIssue?: string; hearing?: boolean
+}) {
   const [issues, setIssues] = useState<Issue[]>([])
-  const [issueId, setIssueId] = useState("")
+  const [issueId, setIssueId] = useState(initialIssue ?? "")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [tabs, setTabs] = useState<Tab[]>([])
@@ -36,6 +41,7 @@ export function EvidenceReview({ matterId }: { matterId: string }) {
   const [confirmPending, setConfirmPending] = useState(false)
   const [confirmStatus, setConfirmStatus] = useState("")
   const [editing, setEditing] = useState<Issue>()
+  const [commissionIssue, setCommissionIssue] = useState<string>()
   const issueRequest = useRef<AbortController | null>(null)
   const sourceRequest = useRef<{ key: string } | null>(null)
   const pins = usePinnedSources()
@@ -76,7 +82,7 @@ export function EvidenceReview({ matterId }: { matterId: string }) {
       restored.current = true
       setTabs(pinned)
       const resume = pinned.at(-1)
-      if (resume) {
+      if (resume && !initialIssue) {
         setIssueId(resume.issue.id)
         void open(resume)
         return
@@ -165,14 +171,34 @@ export function EvidenceReview({ matterId }: { matterId: string }) {
   }
 
   return <section className="flex min-w-0 flex-col gap-5">
-    <PageHeader title="争点证据对照" />
+    <PageHeader title={title} description={hearing ? "按争点梳理支持、反驳和背景材料" : undefined} actions={issue && !issue.restricted && !loading && !error && <>
+      <Button variant="outline" onClick={() => setCommissionIssue(issue.id)}>委托记录</Button>
+      {issue.canEdit && <Link className={buttonVariants()} href={{
+        pathname: `/matters/${matterId}/materials`,
+        query: { issue: issue.id, issueRevision: issue.revision, issueConfirmedAt: issue.confirmedAt ?? "" },
+      }}><Sparkles aria-hidden />委托核对</Link>}
+    </>} />
+    {intro}
+    {commissionIssue && issue?.id === commissionIssue && !issue.restricted &&
+      <SkillCommissionDesk matterId={matterId} scope={{ kind: "issue", id: commissionIssue }} close={() => setCommissionIssue(undefined)} />}
     {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
-    {loading ? <p role="status" className="text-sm text-muted-foreground">正在读取案卷…</p> : null}
+    {loading ? <WorkspaceLoading label="正在读取案卷…" split /> : null}
     {!loading && !error ? <>
-      <div className="flex flex-wrap gap-2">{issues.length > 1 ? issues.map(item => <Button key={item.id} variant={item.id === issueId ? "default" : "outline"} size="sm" onClick={() => chooseIssue(item.id)}>{item.title}</Button>) : null}
-      {active && !visible ? <Button variant="outline" size="sm" onClick={() => void open(active)}>展开出处</Button> : null}</div>
+
       {!issue ? <p className="text-sm text-muted-foreground">该案暂无争点。</p> : null}
-      {issue ? <div className={visible ? "grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(300px,0.8fr)]" : "grid min-w-0 gap-4"}>
+      {issue ? <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(13rem,1fr)_minmax(0,3fr)]">
+        <Card className="min-w-0 gap-3">
+          <CardHeader><CardTitle className="text-lg">争点目录</CardTitle></CardHeader>
+          <CardContent className="grid max-h-[min(32rem,56vh)] gap-1 overflow-y-auto">
+            {issues.map(item => <Button key={item.id} variant={item.id === issueId ? "secondary" : "ghost"} size="sm"
+              aria-pressed={item.id === issueId} className="h-auto justify-start whitespace-normal px-2 py-2 text-left" onClick={() => chooseIssue(item.id)}>
+              <span className="grid gap-1"><span className="break-words font-semibold">{item.title}</span>
+                <span className="text-xs font-normal text-muted-foreground">{item.confirmedAt ? "已核对" : "待核对"}</span></span>
+            </Button>)}
+            {active && !visible && <Button variant="outline" size="sm" onClick={() => void open(active)}>展开固定出处</Button>}
+          </CardContent>
+        </Card>
+        <div className={visible ? "grid min-w-0 items-start gap-4 2xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]" : "grid min-w-0 gap-4"}>
         <Card className="min-w-0 self-start">
           <CardHeader><CardTitle>{issue.title}</CardTitle><div className="text-xs text-muted-foreground">修订 V{issue.revision} · {issue.confirmedAt ? "已核对" : "待核对"}</div></CardHeader>
           <CardContent className="grid gap-4">
@@ -196,10 +222,12 @@ export function EvidenceReview({ matterId }: { matterId: string }) {
             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{issue.restricted ? "部分出处不可用，争点内容已隐藏。" : issue.content}</p>
             {issue.canEdit && !issue.restricted && issue.sources.some(source => !source.legacy && source.status === "AVAILABLE" && source.relation) &&
               <Button size="sm" variant="outline" onClick={() => setEditing(issue)}>记录取舍并形成研究</Button>}
+            <div className={visible ? "grid gap-2" : "grid gap-2 sm:grid-cols-2"}>
             {groups.map(group => {
               const sources = issue.sources.filter(source => (source.relation ?? "CONTEXT") === group.relation)
               return <section key={group.relation} className="grid gap-1 rounded-lg border p-3"><h3 className="text-sm font-medium">{group.title}</h3>{sources.length ? sources.map(source => sourceButton(source, issue)) : <p className="text-xs text-muted-foreground">暂无材料</p>}</section>
             })}
+            </div>
           </CardContent>
         </Card>
         {visible && active ? <Card className="min-w-0" aria-label="案卷出处">
@@ -213,6 +241,7 @@ export function EvidenceReview({ matterId }: { matterId: string }) {
             {preview && <FixedSourcePreview source={preview} />}
           </CardContent>
         </Card> : null}
+        </div>
       </div> : null}
     </> : null}
     {editing && <FactReviewForm matterId={matterId} issue={editing} current={issues.find(item => item.id === editing.id)}

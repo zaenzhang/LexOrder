@@ -6,6 +6,7 @@ import { requireSession } from "@/lib/auth/session";
 import { matterAssociationFilter } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { hasCustomPermission } from "@/lib/roles/catalog";
+import { isInlinePreviewable, officePreviewKind } from "@/lib/storage/mime-ext";
 import { isPersonalMode } from "@/lib/runtime/mode";
 import { personalChannelAllowed } from "@/lib/runtime/personal-channel";
 import { carriedContextInputs } from "@/lib/matters/context-inputs";
@@ -29,6 +30,7 @@ import {
   createReviewIssueSchema,
   respondReviewIssueSchema,
 } from "@/server/document-reviews/contracts";
+import { citationDraftFilter } from "@/server/research/draft-citation";
 import { fixedReviewSchema } from "@/server/document-reviews/fixed-approval";
 
 const id = z.cuid();
@@ -73,9 +75,13 @@ async function handle(req: Request) {
       OR: [{ sourceOrigin: "TEAM_PRODUCED" as const }, { templateId: { not: null } }],
     };
     if (!documentId) {
+      const citationDrafts = q.get("citationDrafts") === "1";
+      if (citationDrafts && (matter.status === "ARCHIVED" || !hasCustomPermission(user, "documents.write"))) {
+        return json({ items: [], next: null });
+      }
       const cursor = q.has("before") ? id.parse(q.get("before")) : undefined;
       const rows = await prisma.document.findMany({
-        where: { ...candidates, ...(cursor ? { id: { lt: cursor } } : {}) },
+        where: { ...candidates, ...(citationDrafts ? citationDraftFilter : {}), ...(cursor ? { id: { lt: cursor } } : {}) },
         orderBy: { id: "desc" },
         take: 41,
       });
@@ -151,12 +157,21 @@ async function handle(req: Request) {
         }),
       );
     const review = await getDocumentReview(doc.id);
-    const context = await readDocumentContextInputs(prisma, user.id, doc.id, matterId);
+    const [context, researchInputs] = await Promise.all([
+      readDocumentContextInputs(prisma, user.id, doc.id, matterId),
+      prisma.documentResearchSource.findMany({
+        where: { documentId: doc.id, researchRevision: { matterId } },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        select: { researchRevision: { select: { id: true, version: true } } },
+      }),
+    ]);
     const canReject =
       matter.status !== "ARCHIVED" && doc.status === "PENDING_REVIEW" && (await canApproveItem(user.id, "DOCUMENT_APPROVE", doc.id));
     return json({
       review,
       context,
+      researchInputs: researchInputs.map(row => row.researchRevision),
+      preview: officePreviewKind(doc.mimeType, doc.name) ? "office" : isInlinePreviewable(doc.mimeType) ? "inline" : null,
       carried: carriedContextInputs(context),
       status: doc.status,
       isLatest: doc.isLatest,
@@ -175,7 +190,8 @@ async function handle(req: Request) {
       expected: {
         matterId,
         version: doc.version,
-        updatedAt: doc.updatedAt,
+        status: doc.status,
+        reviewedAt: doc.reviewedAt,
         sha256: doc.sha256,
         issues: review.issues.map((i) => ({ id: i.id, version: i.version })),
       },

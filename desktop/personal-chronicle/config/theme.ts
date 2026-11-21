@@ -34,5 +34,6 @@ export const THEME = defineTheme({
   fonts: [
     { id: "hanken", label: "Hanken Grotesk", variable: "var(--font-hanken)" },
     { id: "system", label: "System UI", variable: "ui-sans-serif, system-ui, sans-serif" },
+    { id: "songti", label: "宋体", variable: '"SimSun", "Songti SC", "Noto Serif CJK SC", serif' },
   ],
 })

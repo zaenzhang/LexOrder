@@ -1,5 +1,5 @@
 import { HelpCircleIcon, MailIcon, PlayCircleIcon } from "lucide-react"
-import Link from "next/link"
+import Link from "@/features/shell/workspace-link"
 
 import { ContactForm } from "./contact-form"
 import { Section, SectionHeading } from "./section-heading"

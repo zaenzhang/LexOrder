@@ -7,12 +7,12 @@ const targetLabels: Record<string, string> = {
   DocumentFolder: "材料目录", DocumentTemplate: "文书模板", ExpressTracking: "快递跟踪",
   ExternalContact: "外部联系人", FeeEntry: "收付记录", FirmFile: "律所文书", Hearing: "开庭",
   Intake: "收案", InvoiceRequest: "开票申请", Matter: "案件", MatterList: "案件列表",
-  MatterProcedure: "案件程序", MatterStage: "案件阶段", Note: "跟进记录", Party: "当事人",
+  MatterProcedure: "案件程序", MatterStage: "案件阶段", MatterTimelineEvent: "案件时间轴事件", Note: "跟进记录", Party: "当事人",
   PreservationCase: "保全案件", PreservationProperty: "保全财产", Report: "报告", SealRequest: "用章申请",
   SmsMessage: "法院短信", StageTemplate: "阶段模板", SystemSetting: "系统设置", Task: "事项",
   Team: "律师团队", User: "用户", BuiltinRole: "内置角色", RoleDefinition: "自定义角色",
   Engagement: "委托", EvidenceItem: "证据项", MaterialIngestIntent: "材料上传请求",
-  MatterContextRecord: "案件上下文记录",
+  MatterContextRecord: "案件上下文记录", SkillCommission: "技能核对委托", TaskMaterialReview: "任务核对记录", PersonalCalendarEntry: "个人安排",
   ResearchRevision: "法律研究修订", DocumentReviewIssue: "人工复核问题", DeliveryRecord: "客户交付清单",
   // 第七轮体检：补齐缺失对象标签（缺失时审计页显示「其他对象」）
   ArchiveBorrowRequest: "案卷借阅申请", CommissionSettlement: "分成结算", DeadlineRule: "期限规则",
@@ -82,7 +82,35 @@ const words: Record<string, string> = {
   ANALYSIS: "分析", ADDED: "新增", PENDING: "待处理", SUGGESTIONS: "建议",
   FILED: "已归档", ORGANIZED: "已整理", REOPENED: "已重新开启"
 };
+const skillActionLabels: Record<string, string> = {
+  PERSONAL_CALENDAR_ENTRY_CREATE: "新建个人安排",
+  TASK_REVIEW_SAVED: "记录任务材料核对意见",
+  SKILL_COMMISSION_CREATE: "创建技能核对委托",
+  SKILL_COMMISSION_EXPORT: "导出固定委托范围",
+  SKILL_COMMISSION_SUBMIT: "提交技能待核稿",
+  SKILL_COMMISSION_ADOPT: "保存律师取舍与研究修订",
+  DOCUMENT_BATCH_CATEGORY: "批量更新材料类别",
+  FOLDER_REORDER: "调整材料目录顺序",
+  EVIDENCE_OBSERVATION_RECORD: "记录材料字段",
+  EVIDENCE_CHRONOLOGY_ASSESSMENT: "更新事实核对标记",
+  EVIDENCE_CHRONOLOGY_EXPORT: "导出案情研究",
+  EVIDENCE_CHRONOLOGY_SPLIT_FROM: "拆分事实并保留固定出处",
+  EVIDENCE_GROUP_QUEUE: "案情归并排队",
+  EVIDENCE_GROUP_READY: "生成案情归并建议",
+  EVIDENCE_GROUP_FAIL: "案情归并失败",
+  TIMELINE_GRADE_SET: "调整事件等级",
+  EVIDENCE_AI_QUEUE: "案情记载分析排队",
+  EVIDENCE_AI_CANDIDATES: "生成案情记载待核稿",
+  EVIDENCE_AI_FAIL: "案情记载分析失败",
+  EVIDENCE_AI_ADOPT: "采用案情记载",
+  SKILL_AI_QUEUE: "应用 AI 核对排队",
+  SKILL_AI_SUBMIT: "应用 AI 生成待核稿",
+  SKILL_AI_FAIL: "应用 AI 核对失败",
+  SKILL_HOST_GRANT: "授权本机宿主",
+  SKILL_HOST_REVOKE: "撤回本机宿主授权",
+};
 export function auditActionLabel(code: string): string {
+  if (Object.hasOwn(skillActionLabels, code)) return skillActionLabels[code];
   const parts = code.split("_");
   return parts.every(part => Object.hasOwn(words, part))
     ? parts.map(part => words[part]).join(" · ")

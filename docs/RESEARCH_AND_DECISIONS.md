@@ -1951,6 +1951,57 @@ PR #25 初稿登记的 Deep Research 完整正文仍未取得。本节用实际�
 
 评估重点是完成一条真实任务的能力：是否减少重复阅读，是否准确暴露遗漏和冲突，能否回到证据并接续人工办理。后续若度量耗时、修订次数、来源可回读比例或漏报，应说明同一工作包、样本与判定者，不能从演示、静态测试或供应商宣传推算效率百分比。开发侧 API/静态及必要隔离数据库、用户浏览器、律师专业判断继续分别登记。
 
+### 3.52 案件事实 Artifacts 机制、界面和数据复验（2026-11-19）
+
+目的为确认用户认可的 V8 合成演示如何进入 LexOrder 案卷。实际核对了 Anthropic 公开实践、固定参考源码、V8 生成页和本地业务代码。LexOrder 基线为本地 `00270ba`，远端 `main` 核对时为 `95eabf3`。行动计划见[案件事实看板与 AI 分析实施计划](WORKBENCH_PLAN.md#10-案件事实看板与-ai-分析实施计划2026-11-19)。
+
+| 参考 | 观察及取舍 |
+| --- | --- |
+| Claude 法律 Artifacts 和 Claude Code Skills | 官方说明可从可操作样例起步，使用用户提供的材料，AI 做首轮、律师判断，答案附来源。Cite Check 将引语、页码和论断支持程度分别呈现。Artifacts 是可回访和编辑的成果操作。Skills 组织任务说明和按需加载的参考文件、脚本。法律图库的 Matter Board 是开放事项列表，本项目主要参考 Cite Check 和 Tabular Review 的出处模式。厂商内容为官方公开说明。[法律图库](https://claude.com/resources/articles/introducing-artifacts-for-legal-work) · [Artifacts 帮助](https://support.claude.com/en/articles/17153992-what-are-artifacts-and-how-do-i-use-them) · [Skills 文档](https://code.claude.com/docs/en/skills) |
+| MiaoQichuan V8 固定源码 `16c480c` | Agent 填事实和定位，脚本拼底稿、核引语及生成离线 HTML。渲染代码在共享状态上派生时间线、材料矩阵、事实经过和待审。交付可包含底稿和原文，审阅状态在页面上编辑后随底稿序列化。LexOrder 采用事件到逐材料记载再到原文的路径，历史和授权仍由案卷服务负责。[V8 工作流](https://github.com/MiaoQichuan/new-litigation-visualization/tree/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master) · [底稿结构](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master/references/schema.md#L93-L125) |
+| Legora、OpenContracts | Legora 以材料为行、问题为列，每格展开出处，有锁定和人工已核。V8 对照矩阵的行列是事件与材料。OpenContracts 的 `Datacell` 分开保存原值、修正值、出处和批准人，前端可以回看原值。LexOrder 借鉴字段级核对、原值保留及状态表达。[Legora 官方演示](https://legora.com/product/tabular-review) · [OpenContracts 数据模型](https://github.com/Open-Source-Legal/OpenContracts/blob/2263a19de73d95889a31b07e75bc9948a8cffe1c/opencontractserver/extracts/models.py#L345-L388) · [单元格实现](https://github.com/Open-Source-Legal/OpenContracts/blob/2263a19de73d95889a31b07e75bc9948a8cffe1c/frontend/src/components/extracts/datagrid/ExtractCellFormatter.tsx#L146-L149) |
+| assistant-ui 和中文 chronology | assistant-ui 的工作台按成果 ID 打开并显示版本历史，支持回到触发位置。中文 chronology 明确列出不可访问材料并保留工作大事记。引用回跳用 LexOrder 的案内路由和真实修订，任务规程固定在具体工作流。[成果面板源码](https://github.com/assistant-ui/assistant-ui/blob/1663da7d94cfeb80b54745ebd4f1527c398f281d/examples/with-artifacts/app/artifact-surface.tsx#L154-L177) · [中文大事记技能](https://github.com/CSlawyer1985/claude-for-legal-ZH/blob/59f37f1c8851b8277e24f7a45f4e773bee97bab9/litigation-legal/skills/chronology/SKILL.md#L64-L74) |
+
+**界面实测。** Windows Edge，Playwright 独立会话，1440×900，使用四份虚构材料生成的 V8 独立页。实际点击放大后时间窗从 2023.02–2024.10 收窄至 2023.06–2024.06。首屏是案件标题与材料数、三视图、时间轴、搜索和事实列表。矩阵固定表头，首列为事件，单元格用数字、引语和文字标签显示两日、两万差异。点回单单元格在 400px 原文栏里高亮 480,000.00 元对应整行，主内容左缘保持 60px。事实经过可切换表和叙述，后者保留不同说法及出处标记。待审抽屉确有日期、金额和仅有陈述的分组。原页实测标题 22px、正文 13px，密度及留白是 V8 的样式选择。LexOrder 复用 Chronicle 语义色、字号和标准控件，优先复用固定标题/列、独立滚动和原文就近显示行为。[时间轴与矩阵源码](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master/web/src/app.js#L407) · [事实经过源码](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master/web/src/features.js#L124) · [样式源码](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master/web/src/skin.css#L374-L389)
+
+**已复现实验与问题。**
+
+| 编号 | 方法及结果 | LexOrder 验收影响 |
+| --- | --- | --- |
+| V8-01 | 相同底稿保留 `adopt.F02=F02.1`、`rev.F02=done`，只交换回单与起诉状记录的顺序。用原 `build_page.py` 生成并分别在 Edge 重开。原序指向 L-02、2023-03-03、480000，换序指向 L-03、2023-03-01、500000，仍为已审。源代码在载入时用数组位置重建 `rid`。[载入与序号实现](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master/web/src/app.js#L18-L31) · [底稿保存](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master/web/src/app.js#L843-L851) | 稳定记载版本身份是上线条件。列表重排和更新解析不能改绑历史决定。 |
+| V8-02 | 对原底稿分别只改规范日期 `s` 为 2023-03-30、只改规范金额 `amt` 为 999000，保留原文和原始表述。固定上游 `check_base.py` 两次均退出 0，仍为 9 条引语通过、0 错误、1 提醒。改成不存在的引语则退出 1，命中引语校验。[固定检查器](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master/scripts/check_base.py) | schema、引语匹配、字段值匹配及专业判断分别验。模型预测的规范值不能直接提交。 |
+| V8-03 | 矩阵原文栏缺字段时显示 `undefined`，关闭控件的可访问名为「×」，实测关闭后焦点落到 `BODY`。另核对叙述出处实现，同材料多条记载时按材料 ID 用 `.find` 取第一条，未做浏览器复现。[原文抽屉](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master/web/src/app.js#L749-L757) · [叙述出处](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master/web/src/features.js#L114-L122) | 未知字段按语义显示或省略。原文栏有明确的关闭名称，关闭后回到来源按钮。叙述链接按具体记载及锚点，验同材料的两个不同位置。 |
+| V8-04 | 临时静态服务首屏记录一条 `favicon.ico` 404。查询浏览器几何初次命令引号被 Windows CLI 拆开，修正传参后读取 400px 原文栏和焦点成功。 | 临时服务告警，不归产品故障。 |
+
+截图、合成变体和检查输出留在 Windows 本地 `D:/Projects/Lexorder/.local/v8-plan-review/`。本轮浏览器实测对象为归档 V8。LexOrder 当前页面、付费 Claude/Legora 账户及真实模型的案件抽取结果分别等待对应验收。
+
+
+**底稿重开。** 原始演示中手动把「李四出具借条」标为已确认，走「导出 → 底稿（JSON）→ 新建或打开其他案件 → 打开底稿」。从浏览器下载目录重新选文件，界面仍显示该事件已确认。顺序错绑另用固定变体复现，说明重开体验依赖稳定的数据身份。
+
+#### 3.52.1 扩展材料实测
+
+隔离运行同一批 **25 个文件（17 个公开文件、8 个合成或改坏样本）**。LexOrder 直接调用与当前材料 worker 相同的 `parseMaterial`，应用出队、入卷、权限和 WebView 留给计划的纵向验收。另执行 V8 `ingest.read_file`，PDF 使用独立 pypdf 7.1.1 wheel。两边均未调用 OCR 或模型。LexOrder 结果为 READY 10、PARTIAL 2、PENDING 3、FAILED 5、UNSUPPORTED 5。七条锚点和缺失状态断言全部通过。
+
+| 材料 | 实测与计划影响 |
+| --- | --- |
+| 公开裁判、合同及带文字层的 PDF | 美国最高法院裁判 12／12 页、英国政府公开合同 84／84 页均生成页锚点，后者抽取 209,344 字符，作为选页和预算用例。页锚点成功证明存在可读取的抽取位置。[公开裁判](https://www.supremecourt.gov/opinions/23pdf/23-3_879d.pdf) · [公开合同 PDF](https://www.gov.uk/government/publications/model-services-contract-terms) |
+| 扫描、旋转、JBIG2、图片与混排 | 旋转扫描 PDF、JBIG2 PDF、PNG 均待 OCR。合成三页 PDF 保留第 1、3 页锚点，第 2 页标待 OCR。V8 的 pypdf 路径把混排样本三页都列为需看图，直接对照 pypdf 原始输出确认 V8 的 `_ucs2` 启发式把第 1、3 页的合成 ASCII 日期金额句改成了错误字符。同一路径在 84 页合同标记 60 页、12 页裁判标记 3 页需看图。现有解析器形成的锚点仍须用样本抽查内容正确性。[OCRmyPDF 旋转样本](https://github.com/ocrmypdf/OCRmyPDF/blob/86a5e723ea2b612e8df4a647056b0ebf3b3c97a5/tests/resources/rotated_skew.pdf) · [V8 摄入实现](https://github.com/MiaoQichuan/new-litigation-visualization/blob/16c480c3947e78ba49623423ea0486277f5fe99d/plugins/mqc-nlv/skills/mqc-fact-chronology-master/scripts/ingest.py) |
+| DOCX 表格、脚注、文本框与真实合同 | 四份 DOCX 都生成抽取文本锚点。公开合同有 48 个抽取块、189,673 字符，锚点均为 TEXT。V8 在表格夹具能保留列分隔。现行 LexOrder 引用的是抽取文本选区，Word 原页面、行列、脚注或批注的精确定位需另验。[Mammoth 表格样本](https://github.com/mwilliamson/mammoth.js/blob/5171a9072f8b7343ab1c9ed3a15d6d372cb59b67/test/test-data/tables.docx) · [公开合同 DOCX](https://www.gov.uk/government/publications/the-model-services-contract-core-terms-england-wales) |
+| XLSX 多表、公式、1904 日期及图片 | 公式和 1904 日期样本有单元格锚点。合成台账保留交易金额 B2、余额 C2、缓存值 B3，缺缓存 C3 没有生成值，文件为 PARTIAL（9 可读、1 不支持）。图片表格无可读单元格，LexOrder 标 UNSUPPORTED，V8 返回一条工作表标题。引用具体格，保留公式缓存及覆盖边界。[ExcelJS 公式样本](https://github.com/exceljs/exceljs/blob/5bed18b45e824f409b08456b59b87430ded023ab/spec/integration/data/formulas.xlsx) |
+| 编码、邮件、旧 Office、加密和损坏 | UTF-8 中文、CRLF、代理对跨块保留。CP936 与 UTF-16 文本在 LexOrder 失败，V8 可读 CP936，UTF-16 抛 `UnboundLocalError`。密码 PDF 及截断 PDF/DOCX 均无 LexOrder 锚点，V8 分别出现 `DependencyError`、`PdfStreamError`、`BadZipFile`。按实际 MIME 直接调用，EML、DOC、XLS、CSV 均为 LexOrder UNSUPPORTED。V8 只把本次 CSV 作为文本行读取。[PDF.js 密码样本](https://github.com/mozilla/pdf.js/blob/22d5507352c1820bd6399c178f243411765f89a5/test/pdfs/pr6531_1.pdf) · [邮件样本](https://github.com/nodemailer/mailparser/blob/5e635d3a5261d9690720de73c34c1d603677118e/test/fixtures/mixed.eml) · [Tika 旧文档样本](https://github.com/apache/tika/blob/6ef8f501b1610fcb36d275332d2337e3113de74d/tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-microsoft-module/src/test/resources/test-documents/testWORD.doc) |
+
+**实验环境问题。** EUR-Lex PDF 获取返回空文件，排除出统计，替换为 GOV.UK 官方合同。直接解析时观察到 PDF.js 对象索引提示，pypdf 报重复目录键及损坏文件 EOF 提示。固定来源 URL、提交及大小在 `public-fixtures.json`，两组结果在 `format-results.json` 和 `v8-format-results.json`，均位于上述本地实验目录。公开法律文本用于读取和覆盖测试，语义抽取、律师核对、真实模型速度和费用留待实施验收。
+
+#### 3.52.2 类似项目的处理流与代码借鉴
+
+| 项目与实读代码 | 采用到 LexOrder 的机制 |
+| --- | --- |
+| Paperless-ngx `4610171` | 摄入任务依次执行可用插件。停止、重复和异常有各自的任务出口，失败发进度并清理。消费者先完成解析，再进入数据库事务保存文件记录和版本。LexOrder 将按件上传回执、解析和办案分析分开，接现有材料摄入与任务租约。[消费任务](https://github.com/paperless-ngx/paperless-ngx/blob/4610171a94e5932e85a80e480032e397cdb6f309/src/documents/tasks.py#L185-L279) · [解析及保存](https://github.com/paperless-ngx/paperless-ngx/blob/4610171a94e5932e85a80e480032e397cdb6f309/src/documents/consumer.py#L501-L619) |
+| OpenContracts `2263a19` | 编排器执行时复查处理资格，按材料和字段建立 Datacell 后派发。抽取任务中可见先标完成、随后尽力附来源的路径。LexOrder 以材料分段为工作单元，一次提多个相关字段，成功检查点把结果和已校验出处一起提交，避免字段数乘以材料数的调用开销及无出处的成功状态。[批次编排](https://github.com/Open-Source-Legal/OpenContracts/blob/2263a19de73d95889a31b07e75bc9948a8cffe1c/opencontractserver/tasks/extract_orchestrator_tasks.py#L93-L189) · [完成与附出处](https://github.com/Open-Source-Legal/OpenContracts/blob/2263a19de73d95889a31b07e75bc9948a8cffe1c/opencontractserver/tasks/data_extract_tasks.py#L745-L814) |
+| RAGFlow `db1cd59` | 摄入任务恢复时重读并验证既有 run、文档和数据集的绑定。检索桥传递共享请求与响应，源码注释记载逐字段复制曾丢掉重排或页码。LexOrder 复用任务恢复前的绑定校验和统一响应合同。检索适配只交回案内可重查的锚点，本地解释覆盖及出处。[任务身份校验](https://github.com/infiniflow/ragflow/blob/db1cd5929a7885a3074547791f5ecc4d2f891739/internal/service/ingestion_task_service.go#L659-L692) · [检索桥](https://github.com/infiniflow/ragflow/blob/db1cd5929a7885a3074547791f5ecc4d2f891739/internal/agent/retrievalbridge/runtime_adapter.go#L52-L78) · [检索实验方法](https://ragflow.io/docs/v1.0.0/retrieval_testing) |
+
+**RAG 实验边界。** 在四份借贷材料的原行上做同词包含试验。「交付」只命中起诉状 L-03，「到账」无命中，「借款」命中四份。这是用检索替代覆盖的反例。LexOrder 当前正文搜索使用 `contains`，可作为针对性查证基线。已有 `retrieveScopedEvidence` 和 RAGFlow 适配原型还需真实授权、索引绑定与查询入口。引擎的同样本 A/B、运行成本与收益留待该试验。[现有正文检索](../src/server/search/actions.ts#L125-L175) · [检索原型](../src/server/rag/retrieve.ts#L42-L75)
+
 ## 4. 可选法律服务 MCP 与来源
 
 核查日期 2026-11-16；以下为官方公开的接入信息，不是本项目已取得账号、权益或实测成功。机构目录可扩展，自定义远程 MCP 为未预置服务保留入口；不虚构“市面所有机构都提供官方 MCP”。

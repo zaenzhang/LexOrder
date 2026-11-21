@@ -52,8 +52,17 @@ export const emptyLawMetadata = (): LawMetadata => ({ kind: "MATERIAL", title: "
 export const researchSourceInputSchema = sourceInputSchema.and(z.object({ lawMetadata: lawMetadataSchema }));
 export type ResearchSourceInput = z.infer<typeof researchSourceInputSchema>;
 
+export const currentResearchIssueSchema = z.object({
+  kind: z.literal("CURRENT"), issueId: z.string().cuid(), revision: z.number().int().positive(), confirmedAt: z.string().datetime({ offset: true }).nullable(),
+});
+export const acceptIssueSupplementsSchema = z.strictObject({
+  matterId: z.cuid(), researchId: z.cuid(), expectedVersion: z.number().int().positive(), requestKey: z.uuid(),
+  issue: currentResearchIssueSchema,
+});
+export type AcceptIssueSupplementsInput = z.infer<typeof acceptIssueSupplementsSchema>;
+
 export const researchIssueSelectionSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("CURRENT"), issueId: z.string().cuid(), revision: z.number().int().positive(), confirmedAt: z.string().datetime({ offset: true }).nullable() }),
+  currentResearchIssueSchema,
   z.object({ kind: z.literal("HISTORICAL"), revisionId: z.string().cuid() }),
   z.object({ kind: z.literal("SAVED"), researchRevisionId: z.string().cuid() }),
 ]);
@@ -64,12 +73,16 @@ export function researchIssueSelectionKey(selection: ResearchIssueSelection | nu
   return selection.kind === "SAVED" ? `saved:${selection.researchRevisionId}` : `historical:${selection.revisionId}`;
 }
 
+export const researchAnalysisSchema = z.object({
+  rule: text(15000), exceptions: text(10000), supportingAnalysis: text(15000), opposingAnalysis: text(15000),
+  conclusion: text(15000), unresolved: text(10000), nextSteps: text(5000),
+});
+
 export const researchContentSchema = z.object({
   question: text(300).min(1, "请填写研究问题"), purpose: text(2000), jurisdiction: text(150),
   relevantDate: optionalDay, researchedAt: z.string().datetime({ offset: true }),
   scope: text(5000), queryLog: z.array(researchQuerySchema).max(40),
-  rule: text(15000), exceptions: text(10000), supportingAnalysis: text(15000), opposingAnalysis: text(15000),
-  conclusion: text(15000), unresolved: text(10000), nextSteps: text(5000),
+  ...researchAnalysisSchema.shape,
   issueSelection: researchIssueSelectionSchema.nullable(),
   sources: z.array(researchSourceInputSchema).max(50),
 }).superRefine((value, ctx) => {
@@ -94,6 +107,19 @@ export const researchCheckSchema = z.object({
   acknowledged: z.literal(true, { error: "请确认已核对研究范围、来源与仍待核实项" }), note: text(2000).min(1, "请记录核对结论及仍待核实项"),
 });
 export type ResearchCheckInput = z.infer<typeof researchCheckSchema>;
+export const paragraphCitationSchema = z.object({
+  researchRevisionId: z.cuid(),
+  expectedVersion: z.number().int().positive(),
+  position: z.number().int().positive(),
+  mode: z.enum(["AFTER", "REPLACE"]),
+}).strict();
+export type ParagraphCitation = z.infer<typeof paragraphCitationSchema>;
+export const saveParagraphCitationSchema = paragraphCitationSchema.extend({
+  matterId: z.cuid(),
+  documentId: z.cuid(),
+  requestKey: z.uuid(),
+});
+
 export const researchDraftSchema = z.object({
   matterId: z.string().cuid(), researchRevisionId: z.string().cuid(), requestKey: z.string().uuid(),
   contextInputs: contextInputSelectionsSchema.optional().default([]),

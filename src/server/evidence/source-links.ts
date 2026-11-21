@@ -1,6 +1,7 @@
 import type { EvidenceSourceLink, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { canReadDocument } from "@/lib/approvals/documents";
+import { chronologyStageSchema } from "@/lib/evidence/chronology-assessment";
 import { ActionError } from "@/lib/action-error";
 import { materialPresentation } from "@/lib/documents/presentation";
 import { sourceAnchorSchema, sourceLocationSchema } from "@/lib/workbench/contracts";
@@ -9,7 +10,7 @@ import { sourceReferenceSchema, type EvidenceDocumentOption, type EvidenceSource
 
 const documentSelect = {
   id: true, matterId: true, intakeId: true, uploadedById: true, deletedAt: true,
-  sha256: true, name: true, version: true, mimeType: true, pageCount: true,
+  sha256: true, name: true, version: true, chronologyStage: true, familyId: true, isLatest: true, mimeType: true, pageCount: true,
 } satisfies Prisma.DocumentSelect;
 type SourceDocument = Prisma.DocumentGetPayload<{ select: typeof documentSelect }>;
 type ItemSources = { sourceDocumentId: string | null; sourcePage: number | null; sources: EvidenceSourceLink[] };
@@ -44,7 +45,7 @@ export function locationLabel(location: SourceReference["location"]): string {
 }
 
 /** Request-local lookup only: no permission or source cache survives a request. */
-export async function sourceReader(userId: string, matterId: string, references: SourceReference[], db: Prisma.TransactionClient = prisma) {
+export async function sourceReader(userId: string, matterId: string, references: Pick<SourceReference, "documentId">[], db: Prisma.TransactionClient = prisma) {
   const ids = [...new Set(references.map(reference => reference.documentId))];
   const documents = ids.length ? await db.document.findMany({ where: { id: { in: ids }, matterId }, select: documentSelect }) : [];
   const allowed = new Map<string, SourceDocument>();
@@ -62,9 +63,10 @@ export async function sourceReader(userId: string, matterId: string, references:
       status: document ? "AVAILABLE" : "UNAVAILABLE", documentId: document?.id ?? null, documentName: document?.name ?? null,
       documentVersion: document?.version ?? null, locationLabel: document ? locationLabel(reference.location) : null,
       hasAnchor: Boolean(reference.parseRunId && reference.anchorId),
+      chronologyStage: document?.chronologyStage ? chronologyStageSchema.parse(document.chronologyStage) : null,
     };
   }
-  return { view, documentFor };
+  return { view, documentFor, canRead: (id: string) => allowed.has(id), documentById: (id: string) => allowed.get(id) };
 }
 
 export async function prepareSource(userId: string, matterId: string, input: SourceInput, db: Prisma.TransactionClient) {

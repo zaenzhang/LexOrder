@@ -1,11 +1,32 @@
 "use client"
 
-import { BookOpenIcon, BriefcaseBusinessIcon, ClipboardListIcon, FileCheckIcon, FileStackIcon, GavelIcon, KeyboardIcon, LayoutDashboardIcon, ListChecksIcon, StampIcon, WalletIcon, MoonIcon, UserPlusIcon, UsersIcon, type LucideIcon } from "lucide-react"
+import {
+  ArchiveIcon,
+  BookOpenIcon,
+  FileTextIcon,
+  FilesIcon,
+  FolderCogIcon,
+  InboxIcon,
+  KeyboardIcon,
+  MoonIcon,
+  PanelsTopLeftIcon,
+  ScaleIcon,
+  SquareChartGanttIcon,
+  StampIcon,
+  UserPlusIcon,
+  UsersIcon,
+  WalletIcon,
+  type LucideIcon,
+} from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
 import { useTheme } from "next-themes"
-import { usePathname, useRouter } from "next/navigation"
+import { useNavigation } from "react-router"
+import { usePathname, useRouter } from "@/kit/framework"
 import { lazy, Suspense, useCallback, useMemo, useState } from "react"
 
-import { NAV, SECONDARY_NAV } from "@/config/nav"
+import { CLIENT_TABS } from "@/config/client-tabs"
+import { NAV, SECONDARY_NAV, WORKBENCH_NAV, WORKBENCH_SECONDARY } from "@/config/nav"
+import { WORKBENCH_SETTINGS_NAV } from "@/config/settings-nav"
 import { SITE } from "@/config/site"
 import type { User } from "@/data/schema"
 import { useDemoCommands } from "@/features/demo/demo-commands"
@@ -13,17 +34,23 @@ import { workspace } from "@/data/generate"
 import { useRecentMatter } from "@/features/matters/recent-matter"
 import { MatterSessionProvider } from "@/features/matters/matter-session"
 import { MatterWorkspaceSwitcher } from "@/features/matters/matter-workspace-switcher"
-import { matterSections, type MatterSection } from "@/features/matters/sections"
+import { readPersonal, workspaceEndpoint, type Matter } from "@/features/matters/personal-client"
+import { evidenceViews, matterSections, type MatterSection } from "@/features/matters/sections"
 import { useMail } from "@/features/mail/store"
 import { useNotifications } from "@/features/notifications/store"
 import { CommandMenuProvider, type CommandAction, type CommandSearchResult } from "@/kit/command/command-menu"
 import { NotificationBell } from "@/kit/notifications/notification-bell"
-import { useCustomizer } from "@/kit/customizer/customizer-provider"
+import { activeHref } from "@/kit/shell/nav-active"
 import type { NavGroup, NavLink } from "@/kit/shell/types"
 import { AppShell } from "@/kit/shell/app-shell"
+import { PageLoadingProvider, PagePending } from "@/kit/ui-patterns/page-loading"
 import { ShortcutsProvider, useShortcutsHelp } from "@/kit/shortcuts/shortcuts"
 import { useList } from "@/kit/data/hooks"
 import { adapter, type Resources } from "@/lib/data"
+
+import { useDesktopPlugins } from "./desktop-plugins"
+import WorkspaceLink from "./workspace-link"
+import { WorkbenchNotifications } from "./workbench-notifications"
 
 /**
  * Chronicle's frame: the Dashboard Kit shell (sidebar or top nav, customizer,
@@ -36,68 +63,108 @@ const OPEN_TASKS = { pageSize: 1, filters: { status: ["backlog", "todo", "in_pro
 /** The seed's count, so the badge is in the first HTML and does not pop in. */
 const SEED_OPEN_TASKS = workspace().tasks.filter((task) => task.status !== "done").length
 
-const DebugPanel = process.env.NODE_ENV === "development"
+const DebugPanel = import.meta.env.DEV
   ? lazy(() => import("./debug-panel").then(module => ({ default: module.DebugPanel })))
   : null
 
-const LINKS = [...NAV.flatMap((group) => group.items), ...SECONDARY_NAV]
+const DEMO_LINKS = [...NAV.flatMap((group) => group.items), ...SECONDARY_NAV]
+const WORKBENCH_LINKS = [...WORKBENCH_NAV.items, ...WORKBENCH_SECONDARY]
+const WORKBENCH_COMMAND_LINKS = [
+  ...WORKBENCH_LINKS,
+  ...CLIENT_TABS.slice(1).map(tab => ({ title: tab.label, href: tab.href })),
+]
 
 const SECTION_ICONS: Record<MatterSection, LucideIcon> = {
-  overview: LayoutDashboardIcon, materials: FileStackIcon, evidence: GavelIcon, research: BookOpenIcon,
-  tasks: ListChecksIcon, delivery: FileCheckIcon, records: ClipboardListIcon, finance: WalletIcon, seal: StampIcon,
+  overview: PanelsTopLeftIcon, materials: FilesIcon, court: InboxIcon, evidence: ScaleIcon, research: BookOpenIcon,
+  tasks: SquareChartGanttIcon, delivery: FileTextIcon, records: FolderCogIcon, finance: WalletIcon, seal: StampIcon, archive: ArchiveIcon,
 }
 
 function caseRoute(pathname: string) {
   const [, root, id, key, extra] = pathname.split("/")
-  if (root !== "matters" || !id || !/^c[a-z0-9]{24,}$/.test(id) || extra) return
+  if (root !== "matters" || !id || !/^c[a-z0-9]{24,}$/.test(id) || (extra && key !== "research" && key !== "evidence" && key !== "delivery")) return
   const section = matterSections.find(([value]) => value === key)
-  if (section) return { id, title: section[1], section: section[0] }
+  if (section) return { id, title: section[0] === "evidence" && extra
+    ? evidenceViews.find(([key]) => key === extra)?.[1] ?? section[1] : extra && key === "delivery" ? "文书工作台" : section[1], section: section[0] }
 }
 
-function resolveCaseBreadcrumbs(pathname: string) {
-  const matter = caseRoute(pathname)
-  if (!matter) return
-  return [{ href: "/matters/list", title: "案件总览", isLast: false }, { href: pathname, title: matter.title, isLast: true }]
-}
-
-function Frame({ children }: { children: React.ReactNode }) {
-  const route = caseRoute(usePathname())
-  useRecentMatter(route?.id, route?.section)
-  const [session, setSession] = useState<{ current?: string; sections: Record<string, MatterSection> }>({ sections: {} })
-  if (route && (session.current !== route.id || session.sections[route.id] !== route.section)) {
-    setSession({ current: route.id, sections: { ...session.sections, [route.id]: route.section } })
-  }
-  const matterId = route?.id ?? session.current
-  const topNav = useCustomizer((state) => state.layout === "top")
-  function sectionLink(key: MatterSection, title: string): NavLink {
-    return { title, href: matterId ? "/matters/" + matterId + "/" + key : "/matters/list#" + key,
-      icon: SECTION_ICONS[key], disabled: !matterId }
-  }
-  const sections = Object.fromEntries(matterSections.map(([key, title]) => [key, sectionLink(key, title)])) as Record<MatterSection, NavLink>
-  const caseLinks = topNav
-    ? [{ ...sections.materials, title: "案件", icon: BriefcaseBusinessIcon, expandOnly: true,
-        items: matterSections.filter(([key]) => key !== "overview").map(([key]) => sections[key]) }]
-    : [
-      sections.materials,
-      { ...sections.evidence, title: "事实与研究", expandOnly: true, items: [sections.evidence, sections.research] },
-      sections.tasks, sections.delivery, sections.records,
-      { ...sections.finance, title: "财务与用印", expandOnly: true, items: [sections.finance, sections.seal] },
-    ]
-  const nav: NavGroup[] = NAV.map(group => group.label === "Workspace"
-    ? { ...group, items: [...group.items, ...caseLinks] }
-    : group)
+function DemoNotifications() {
   const items = useNotifications((state) => state.items)
   const markRead = useNotifications((state) => state.markRead)
-  // Open work, through the adapter like every screen, so it follows the board.
-  const openTasks = useList<Resources, "tasks">("tasks", OPEN_TASKS).data?.total ?? SEED_OPEN_TASKS
-  const unreadMail = useMail((state) => state.mails.filter((mail) => !mail.read && mail.folder === "inbox").length)
+  return <NotificationBell items={items} onMarkRead={markRead} viewAllHref="/notifications" settingsHref="/settings/notifications"
+    emptyDescription="Payments, cancellations and upgrades appear here." />
+}
+
+function Frame({ children, workbench }: { children: React.ReactNode; workbench: boolean }) {
+  const tasks = useList<Resources, "tasks">("tasks", OPEN_TASKS, !workbench).data?.total ?? SEED_OPEN_TASKS
+  const mail = useMail((state) => workbench ? 0 : state.mails.filter(item => !item.read && item.folder === "inbox").length)
+  const route = caseRoute(usePathname())
+  useRecentMatter(route?.id, route?.section)
+  const [lastSections, setLastSections] = useState<Record<string, MatterSection>>({})
+  if (route && lastSections[route.id] !== route.section) {
+    setLastSections({ ...lastSections, [route.id]: route.section })
+  }
+  const matterId = route?.id
+  const identity = useQuery({
+    enabled: workbench && Boolean(matterId),
+    queryKey: ["chronicle", "matter-identity", matterId],
+    queryFn: ({ signal }) => readPersonal<Matter>(workspaceEndpoint + "?" +
+      new URLSearchParams({ matter: matterId!, section: "identity" }), { signal }),
+    retry: false, staleTime: 30_000,
+  })
+  function resolveBreadcrumbs(pathname: string) {
+    if (!workbench) return
+    const matter = caseRoute(pathname)
+    if (!matter) {
+      const setting = WORKBENCH_SETTINGS_NAV.flatMap(group => group.items).find(link => link.href === pathname)
+      if (setting) return [
+        { href: "/practice/today", title: "工作区", isLast: false },
+        ...(pathname === "/practice/profile" ? [] : [{ href: "/practice/profile", title: "设置", isLast: false }]),
+        { href: pathname, title: pathname === "/practice/profile" ? "设置" : setting.title, isLast: true },
+      ]
+      const currentHref = activeHref(pathname, WORKBENCH_LINKS)
+      const current = WORKBENCH_LINKS.flatMap(link => [link, ...(link.items ?? [])]).find(link => link.href === currentHref)
+      const customerTab = CLIENT_TABS.slice(1).find(tab => tab.href === pathname)
+      if (customerTab) return [
+        { href: "/practice/today", title: "工作区", isLast: false },
+        { href: CLIENT_TABS[0].href, title: "客户", isLast: false },
+        { href: pathname, title: customerTab.label, isLast: true },
+      ]
+      const page = { href: pathname, title: current?.title ?? "个人工作区", isLast: true }
+      return pathname === "/practice/today" ? [page] : [{ href: "/practice/today", title: "工作区", isLast: false }, page]
+    }
+    return [{ href: "/matters/list", title: "案件", isLast: false },
+      ...(identity.data?.id === matter.id && matter.section !== "overview" ? [{ href: `/matters/${matter.id}/overview`, title: identity.data.title, isLast: false }] : []),
+      { href: pathname, title: matter.title, isLast: true }]
+  }
+  function sectionLink(key: MatterSection, title: string): NavLink {
+    return { title, href: matterId ? "/matters/" + matterId + "/" + key : "/matters/list#" + key,
+      icon: SECTION_ICONS[key], disabled: !route }
+  }
+  const sections = Object.fromEntries(matterSections.map(([key, title]) => [key, sectionLink(key, title)])) as Record<MatterSection, NavLink>
+  const caseLinks = [
+      { ...sections.overview, title: "概览" },
+      { ...sections.tasks, title: "程序" },
+      { ...sections.materials, title: "材料", expandOnly: true, items: [{ ...sections.materials, title: "材料目录" }, sections.court] },
+      { ...sections.evidence, title: "争点", expandOnly: true, items: [
+        ...evidenceViews.map(([key, title]) => ({ title, href: key === "claims" ? sections.evidence.href : sections.evidence.href + "/" + key })),
+        sections.research,
+      ] },
+      { ...sections.delivery, title: "文书", expandOnly: true, items: [{ ...sections.delivery, title: "文书列表" }, sections.seal] },
+      { ...sections.records, title: "案务", expandOnly: true, items: [sections.records, sections.finance, sections.archive] },
+    ]
+  const nav: NavGroup[] = workbench
+    ? [{ label: "本案", items: caseLinks }, WORKBENCH_NAV]
+    : NAV.filter(group => group !== WORKBENCH_NAV)
   return (
     <AppShell
-      config={{ ...SITE, nav }}
-      workspaceSwitcher={<MatterWorkspaceSwitcher matterId={matterId} lastSections={session.sections} />}
-      resolveBreadcrumbs={resolveCaseBreadcrumbs}
-      badges={{ tasks: openTasks, mail: unreadMail }}
-      actions={<NotificationBell items={items} onMarkRead={markRead} viewAllHref="/notifications" settingsHref="/settings/notifications" emptyDescription="Payments, cancellations and upgrades appear here." />}
+      navigationLink={workbench ? WorkspaceLink : undefined}
+      config={{ ...SITE, nav, secondary: workbench ? WORKBENCH_SECONDARY : SECONDARY_NAV,
+        user: workbench ? { name: "本机用户", email: "" } : SITE.user }}
+      workbench={workbench}
+      workspaceSwitcher={workbench ? <MatterWorkspaceSwitcher matterId={matterId} identity={identity.data} identityFailed={identity.isError} lastSections={lastSections} /> : undefined}
+      resolveBreadcrumbs={resolveBreadcrumbs}
+      badges={workbench ? {} : { tasks, mail }}
+      actions={workbench ? <WorkbenchNotifications /> : <DemoNotifications />}
     >
       {children}
     </AppShell>
@@ -106,11 +173,13 @@ function Frame({ children }: { children: React.ReactNode }) {
 
 const USER_ICON: LucideIcon = UsersIcon
 
-function Commands({ children }: { children: React.ReactNode }) {
+function Commands({ children, workbench }: { children: React.ReactNode; workbench: boolean }) {
   const { resolvedTheme, setTheme } = useTheme()
   const help = useShortcutsHelp()
   const router = useRouter()
   const demo = useDemoCommands()
+  const current = caseRoute(usePathname())
+  const catalog = useDesktopPlugins(workbench && !!current)
 
   const actions = useMemo<CommandAction[]>(
     () => [
@@ -135,17 +204,31 @@ function Commands({ children }: { children: React.ReactNode }) {
     return result.rows.map((user: User) => ({ id: user.id, title: user.name, subtitle: `${user.email} · ${user.accountName}`, href: `/users/${user.id}`, group: "Users", icon: USER_ICON }))
   }, [])
 
+  const pluginActions: CommandAction[] = [
+    { id: "local-plugins", title: "查看本机插件", group: "插件", run: () => router.push("/practice/plugins") },
+    ...(current ? catalog.data?.plugins.flatMap(plugin => plugin.commands.map(command => ({
+      id: plugin.id + "/" + command.id,
+      title: command.title,
+      group: plugin.name,
+      run: () => router.push("/matters/" + current.id + "/" + command.section),
+    }))) ?? [] : []),
+  ]
+
   return (
-    <CommandMenuProvider links={LINKS} actions={actions} search={search} description="Search users by name, email or account, jump to a page, or run an action.">
+    <CommandMenuProvider workbench={workbench} links={workbench ? WORKBENCH_COMMAND_LINKS : DEMO_LINKS} actions={workbench ? pluginActions : actions} search={workbench ? undefined : search}
+      description={workbench ? "前往工作区页面" : "Search users by name, email or account, jump to a page, or run an action."}>
       {children}
     </CommandMenuProvider>
   )
 }
 
 export function ChronicleShell({ children }: { children: React.ReactNode }) {
+  const path = usePathname()
+  const workbench = /^\/(matters|practice)(\/|$)/.test(path)
+  const navigation = useNavigation()
   return (
     <ShortcutsProvider
-      links={LINKS}
+      links={workbench ? WORKBENCH_LINKS : DEMO_LINKS}
       extra={[
         { keys: ["⌘", "K"], label: "Search and actions" },
         { keys: ["⌘", "B"], label: "Collapse or expand the sidebar" },
@@ -153,8 +236,11 @@ export function ChronicleShell({ children }: { children: React.ReactNode }) {
         { keys: ["?"], label: "Show these shortcuts" },
       ]}
     >
-      <Commands>
-        <MatterSessionProvider><Frame>{children}</Frame></MatterSessionProvider>
+      <Commands workbench={workbench}>
+        <PageLoadingProvider enabled={workbench}>
+          <PagePending active={navigation.state !== "idle"} />
+          <MatterSessionProvider><Frame workbench={workbench}>{children}</Frame></MatterSessionProvider>
+        </PageLoadingProvider>
         {DebugPanel && <Suspense><DebugPanel /></Suspense>}
       </Commands>
     </ShortcutsProvider>

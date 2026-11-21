@@ -1,10 +1,15 @@
 import { defineConfig, globalIgnores } from "eslint/config"
-import nextVitals from "eslint-config-next/core-web-vitals"
-import nextTs from "eslint-config-next/typescript"
+import js from "@eslint/js"
+import globals from "globals"
+import tseslint from "typescript-eslint"
+import hooks from "eslint-plugin-react-hooks"
 
 const eslintConfig = defineConfig([
-  ...nextVitals,
-  ...nextTs,
+  js.configs.recommended,
+  { files: ["**/*.mjs"], languageOptions: { globals: globals.node } },
+  ...tseslint.configs.recommended,
+  hooks.configs.flat.recommended,
+  { files: ["**/*.{ts,tsx}"], rules: { "no-undef": "off" } },
   {
     // shadcn/ui components stay exactly as the CLI installs them.
     files: ["components/ui/**", "hooks/use-mobile.ts"],
@@ -32,7 +37,7 @@ const eslintConfig = defineConfig([
       ],
     },
   },
-  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts"]),
+  globalIgnores([".next*/**", "dist/**", "out/**", "build/**", "desktop-preview/**", "next-env.d.ts"]),
 ])
 
 export default eslintConfig

@@ -133,3 +133,5 @@ next-env.d.ts
 .next-personal-*/
 .playwright-cli/
 output/playwright/
+
+/dist/

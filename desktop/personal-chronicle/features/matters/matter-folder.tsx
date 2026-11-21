@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { readPersonal } from "./personal-client"
 
 type Binding = { matterId: string; path: string | null; available: boolean; copyStagePath: string | null; suggestedName: string }
-const endpoint = "/api/personal-runtime/matter-folder"
+const endpoint = "/api/personal/matter-folder"
 
 export function MatterFolder({ matterId }: { matterId: string }) {
   return <FolderForm key={matterId} matterId={matterId} />

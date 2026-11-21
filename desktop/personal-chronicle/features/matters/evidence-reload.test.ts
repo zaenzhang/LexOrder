@@ -1,3 +1,4 @@
+import { renderWithRouter } from "@/scripts/render-test"
 // @vitest-environment jsdom
 import { act, createElement } from "react"
 import { createRoot } from "react-dom/client"
@@ -9,7 +10,7 @@ import type { FixedSource } from "./fixed-source-preview"
 const { read, pins } = vi.hoisted(() => ({
   read: vi.fn(), pins: { current: new Map<string, string[]>() },
 }))
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }))
+vi.mock("@/kit/framework", async importOriginal => ({ ...(await importOriginal<typeof import("@/kit/framework")>()), useRouter: () => ({ push: vi.fn() }) }))
 vi.mock("./matter-session", () => ({ usePinnedSources: () => pins }))
 vi.mock("./personal-client", async original => ({
   ...await original<typeof import("./personal-client")>(), readPersonal: read,
@@ -32,7 +33,9 @@ it.each(["已加载后撤回", "请求途中撤回", "案件只读", "争点消�
   const container = document.body.appendChild(document.createElement("div"))
   const root = createRoot(container)
   try {
-    await act(async () => root.render(createElement(EvidenceReview, { matterId: "matter" })))
+    await act(async () => renderWithRouter(root, createElement(EvidenceReview, { matterId: "matter" })))
+    const commission = screen.getByRole("link", { name: "委托核对" })
+    expect(commission.getAttribute("href")).toBe("/matters/matter/materials?issue=issue&issueRevision=1&issueConfirmedAt=")
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: /旧文书/ })) })
     if (scenario !== "请求途中撤回") expect(screen.getByText(preview.text!)).toBeTruthy()
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "固定页签" })) })
@@ -53,6 +56,7 @@ it.each(["已加载后撤回", "请求途中撤回", "案件只读", "争点消�
       expect(container.querySelector('[aria-label="案卷出处"]')).toBeNull()
       expect(pins.current.get("matter")).toEqual([])
     } else expect(container.querySelector("blockquote")?.textContent).toBe(preview.text)
+    expect(screen.queryByRole("link", { name: "委托核对" })).toBeNull()
     expect(screen.getByText(/可复制下方已填写的内容/)).toBeTruthy()
     expect((screen.getByLabelText("采用值") as HTMLTextAreaElement).value).toBe("手工采用值")
     expect((screen.getByLabelText("采用理由") as HTMLTextAreaElement).value).toBe("手工理由")

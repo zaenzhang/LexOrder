@@ -1,3 +1,4 @@
+import { type as osType } from "node:os";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -52,7 +53,7 @@ export class LocalStorageProvider implements StorageProvider {
       await fs.link(temporary, destination);
       // Persist the published directory entry and newly created scope directories.
       // Windows directory fsync is unavailable; its physical acceptance remains separate.
-      if (process.platform !== "win32") {
+      if (osType() !== "Windows_NT") {
         for (let directory = path.dirname(destination);; directory = path.dirname(directory)) {
           const handle = await fs.open(directory, "r");
           try { await handle.sync(); } finally { await handle.close(); }

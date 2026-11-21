@@ -224,7 +224,7 @@ export async function listSmsMessages(input?: z.input<typeof smsListFilterSchema
   const session = await requireSession("matters.write");
   const filter = smsListFilterSchema.parse(input ?? {});
 
-  const where: Prisma.SmsMessageWhereInput = {};
+  const where: Prisma.SmsMessageWhereInput = { id: filter.id };
   if (filter.scope === "mine") where.receivedById = session.user.id;
   // 全所短信含他人收到的法院来件：仅合伙人岗位可列，其余账号一律回到本人收件箱
   if (filter.scope === "all" && !isManager(session.user.role)) throw new ActionError("仅合伙人可查看全所短信");
@@ -232,6 +232,10 @@ export async function listSmsMessages(input?: z.input<typeof smsListFilterSchema
   if (filter.processed === "processed") where.processed = true;
   if (filter.smsType) where.smsType = filter.smsType;
   if (filter.needsManual) where.needsManualAction = true;
+  if (filter.matterId) {
+    await assertCanAccessMatter(session.user.id, session.user.role, filter.matterId, session.user.rolePermissions);
+    where.matchedMatterId = filter.matterId;
+  }
 
   return prisma.smsMessage.findMany({
     where,
@@ -542,37 +546,22 @@ export async function generateDeadlineFromSms(input: z.infer<typeof smsGenerateD
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 export async function markSmsProcessed(input: z.infer<typeof smsIdSchema>) {
-  const session = await requireSession("matters.write");
+  const actor = await smsActor();
   const data = smsIdSchema.parse(input);
-
-  // 对象级校验（与 deleteSms 同口径）：仅收件人可标记，防止跨收件箱篡改处理状态
-  const sms = await prisma.smsMessage.findUnique({
-    where: { id: data.id },
-    select: { receivedById: true }
-  });
-  if (!sms) throw new ActionError("短信不存在");
-  if (sms.receivedById !== session.user.id) {
-    throw new ActionError("仅收件人可标记处理状态");
-  }
-
-  // B1（v3 §6.3）：标记已处理前核对未处置文件——有暂存待确认文件或需人工取件时
-  // 须填写去向说明，不得让角标消失掩盖遗漏；状态机同步置 NO_ACTION_NEEDED。
-  const pendingFiles = await prisma.smsInboundFile.count({ where: { smsId: data.id, state: "PENDING_REVIEW" } });
   const note = String((input as { note?: string }).note ?? "").trim().slice(0, 500);
-  if ((pendingFiles > 0) && !note) {
-    throw new ActionError(`尚有 ${pendingFiles} 个来件文件待确认，请先处置文件或填写去向说明再标记`);
-  }
-  await roleMutation(session.user, "matters.write", async roleDb => roleDb.smsMessage.update({
-    where: { id: data.id },
-    data: { processed: true, processedAt: new Date(), processingState: "NO_ACTION_NEEDED", processingNote: note || null }
-  }));
-
-  await audit({
-    userId: session.user.id,
-    action: "SMS_MARK_PROCESSED",
-    targetType: "SmsMessage",
-    targetId: data.id
-  });
+  await prisma.$transaction(async tx => {
+    await lockSmsActor(tx, actor);
+    await tx.$queryRaw`SELECT id FROM "SmsMessage" WHERE id=${data.id} FOR UPDATE`;
+    const sms = await tx.smsMessage.findUnique({ where: { id: data.id }, select: { receivedById: true } });
+    if (!sms || sms.receivedById !== actor.id) throw new ActionError("仅收件人可标记处理状态");
+    const pending = await tx.smsSuggestion.count({ where: { smsId: data.id, status: "PENDING", kind: { not: "DOC_TYPE" } } });
+    if (pending) throw new ActionError("还有待核对建议，请先逐项确认或标记未采用");
+    const pendingFiles = await tx.smsInboundFile.count({ where: { smsId: data.id, state: "PENDING_REVIEW" } });
+    if (pendingFiles && !note) throw new ActionError("还有来件文件待确认，请先处置文件或填写去向说明");
+    await tx.smsMessage.update({ where: { id: data.id },
+      data: { processed: true, processedAt: new Date(), processingState: "NO_ACTION_NEEDED", processingNote: note || null } });
+    await auditTx(tx, { userId: actor.id, action: "SMS_MARK_PROCESSED", targetType: "SmsMessage", targetId: data.id });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
 
   revalidatePath("/inbox");
   return { ok: true };

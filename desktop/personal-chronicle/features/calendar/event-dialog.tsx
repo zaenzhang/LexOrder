@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -149,20 +149,25 @@ function Form({ date: initialDate, onDone }: { date: string; onDone: () => void 
 }
 
 /** New event. Times are UTC, like the rest of the sample calendar. */
-export function EventDialog({ open, date, session, onOpenChange }: { open: boolean; date: string; /** Changes on every open, so the form starts empty. */ session: number; onOpenChange: (open: boolean) => void }) {
+export function EventDialog({ open, date, session, onOpenChange }: { open: boolean; date: string; session: number; onOpenChange: (open: boolean) => void }) {
+  return <CalendarEventDialog open={open} onOpenChange={onOpenChange} title="New event" description="Times are in UTC."
+    form="event-form" submit="Create event" cancel="Cancel">
+    <Form key={session} date={date} onDone={() => onOpenChange(false)} />
+  </CalendarEventDialog>
+}
+
+export function CalendarEventDialog({ open, onOpenChange, title, description, form, submit, cancel, busy, children }: {
+  open: boolean; onOpenChange: (open: boolean) => void; title: string; description: string
+  form: string; submit: string; cancel: string; busy?: boolean; children: ReactNode
+}) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>New event</DialogTitle>
-          <DialogDescription>Times are in UTC.</DialogDescription>
-        </DialogHeader>
-        <Form key={session} date={date} onDone={() => onOpenChange(false)} />
+        <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader>
+        {children}
         <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-          <Button type="submit" form="event-form">
-            Create event
-          </Button>
+          <DialogClose render={<Button variant="outline" disabled={busy} />}>{cancel}</DialogClose>
+          <Button type="submit" form={form} disabled={busy}>{submit}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

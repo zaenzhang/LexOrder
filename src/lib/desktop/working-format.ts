@@ -1,4 +1,4 @@
-import { ensureExt } from "@/lib/storage/mime-ext";
+import { ensureExt } from "../storage/mime-ext";
 
 const officeDraft = /^\.(?:docx?|xlsx?|pptx?|txt)$/;
 

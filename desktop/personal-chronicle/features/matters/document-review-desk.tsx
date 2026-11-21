@@ -1,17 +1,23 @@
 "use client"
 
+import { PagePending } from "@/kit/ui-patterns/page-loading"
+
+import Link from "@/features/shell/workspace-link"
+import { useRouter } from "@/kit/framework"
+import { FileTextIcon } from "lucide-react"
 import { useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { PageHeader } from "@/kit/ui-patterns/page-header"
 import { CaseForm } from "./case-management"
-import { readPersonal } from "./personal-client"
+import { ResearchSourcePanel } from "./research-revision"
+import { readPersonal, workspaceEndpoint } from "./personal-client"
 
-const ep = "/api/personal-runtime/document-review"
+const ep = "/api/personal/document-review"
 const endpoint = (matter: string, o: Record<string, string> = {}) =>
   ep + "?" + new URLSearchParams({ matter, ...o })
 const send = <T,>(v: object) =>
@@ -57,8 +63,10 @@ type Detail = {
     previousIssues: { id: string; title: string; document: Doc; state: string }[]
   }
   context: { unavailable: boolean; inputs: { content: string; version: number; changed: boolean }[] }
+  researchInputs: { id: string; version: number }[]
   carried: Selection[]
   status: string
+  preview: "office" | "inline" | null
   isLatest: boolean
   canSubmit: boolean
   canReject: boolean
@@ -68,7 +76,8 @@ type Detail = {
     matterId: string
     version: number
     sha256: string | null
-    updatedAt: string
+    status: string
+    reviewedAt: string | null
     issues: { id: string; version: number }[]
   }
 }
@@ -95,7 +104,7 @@ const labels = {
   respond: "记录处理意见",
   check: "复核处理结果",
 }
-const download = (id: string) => "/api/personal-runtime/documents/" + id + "/download"
+const download = (id: string) => "/api/documents/" + id + "/download"
 function fixed(d: Doc) {
   return (
     <a className="underline" href={download(d.id)} download>
@@ -106,7 +115,6 @@ function fixed(d: Doc) {
 
 export function DocumentReviewDesk({ matterId }: { matterId: string }) {
   const [before, setBefore] = useState("")
-  const [selected, setSelected] = useState("")
   const list = useQuery({
     queryKey: ["doc-review-index", matterId, before],
     queryFn: ({ signal }) =>
@@ -118,10 +126,10 @@ export function DocumentReviewDesk({ matterId }: { matterId: string }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>成果送审与人工复核</CardTitle>
+        <CardTitle className="text-lg">文书列表</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-2 text-sm">
-        {list.isPending && <p role="status">正在读取案内文书…</p>}
+        {list.isPending && <p role="status"><PagePending active={!before} />正在读取案内文书…</p>}
         {list.error && (
           <p role="alert">
             {list.error.message}{" "}
@@ -131,16 +139,19 @@ export function DocumentReviewDesk({ matterId }: { matterId: string }) {
           </p>
         )}
         {list.data && !list.data.items.length && <p>本页没有可读的自制文书。</p>}
+        {Boolean(list.data?.items.length) && <div className="max-h-[24rem] min-w-0 overflow-y-auto pe-2">
         {list.data?.items.map((r) => (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b py-1" key={r.id}>
-            <span>
-              {r.name} · V{r.version} · {r.isLatest ? "当前版" : "历史版"} · {statuses[r.status] ?? r.status}
+          <Link className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b py-3 last:border-0 hover:text-primary" key={r.id}
+            href={`/matters/${matterId}/delivery/${r.id}`}>
+            <span className="grid size-8 place-items-center rounded-lg bg-accent text-accent-foreground"><FileTextIcon aria-hidden className="size-4" /></span>
+            <span className="min-w-0">
+              <span className="block break-words font-semibold">{r.name}</span>
+              <span className="text-xs text-muted-foreground">V{r.version} · {r.isLatest ? "当前版" : "历史版"} · {statuses[r.status] ?? r.status}</span>
             </span>
-            <Button size="sm" variant="outline" onClick={() => setSelected(r.id)}>
-              查看与办理
-            </Button>
-          </div>
+            <span className="text-xs">进入工作台 ›</span>
+          </Link>
         ))}
+        </div>}
         {(before || list.data?.next) && (
           <div className="flex gap-2">
             {before && (
@@ -154,20 +165,6 @@ export function DocumentReviewDesk({ matterId }: { matterId: string }) {
               </Button>
             )}
           </div>
-        )}
-        {selected && (
-          <ReviewSheet
-            key={selected}
-            matterId={matterId}
-            id={selected}
-            close={() => setSelected("")}
-            refresh={() => void list.refetch()}
-            select={(id) => {
-              setBefore("")
-              setSelected(id)
-              void list.refetch()
-            }}
-          />
         )}
       </CardContent>
     </Card>
@@ -199,19 +196,10 @@ function IssueText({ issue: i }: { issue: Issue }) {
     </div>
   )
 }
-function ReviewSheet({
-  matterId,
-  id,
-  close,
-  refresh,
-  select,
-}: {
-  matterId: string
-  id: string
-  close: () => void
-  refresh: () => void
-  select: (s: string) => void
-}) {
+export function DocumentWorkbench({ matterId, id }: { matterId: string; id: string }) {
+  const router = useRouter()
+  const cache = useQueryClient()
+  const parent = `/matters/${matterId}/delivery`
   const [action, setAction] = useState<Action>()
   const [previous, setPrevious] = useState("")
   const detail = useQuery({
@@ -227,19 +215,32 @@ function ReviewSheet({
     retry: false,
   })
   const data = detail.data
+  const file = data?.preview === "office" ? `/api/documents/${id}/preview`
+    : data?.preview === "inline" ? download(id) + "?inline=1" : undefined
   return (
-    <Sheet
-      open
-      onOpenChange={(open) => {
-        if (!open && !action) close()
-      }}
-    >
-      <SheetContent className="overflow-y-auto sm:max-w-xl">
-        <SheetHeader>
-          <SheetTitle>固定版本复核</SheetTitle>
-        </SheetHeader>
-        <div className="grid gap-3 px-4 pb-4 text-sm">
-          {detail.isPending && <p role="status">正在读取文书…</p>}
+    <section className="grid min-w-0 gap-4">
+      <PageHeader title={data?.review.document.name ?? "文书工作台"}
+        description={data ? `工作稿 V${data.review.document.version} · ${statuses[data.status]} · ${data.isLatest ? "当前版" : "历史版"}` : undefined}
+        actions={<>
+          <Button size="sm" variant="outline" nativeButton={false} render={<Link href={parent} />}>返回文书列表</Button>
+          {data?.status === "APPROVED" && <Button size="sm" nativeButton={false} render={<Link href={parent + "?prepare=" + id} />}>准备交付</Button>}
+        </>} />
+      <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+        <Card className="min-w-0 gap-3">
+          <CardHeader><CardTitle className="text-lg">工作稿</CardTitle></CardHeader>
+          <CardContent className="grid min-w-0 gap-3">
+            {file && <iframe title="当前固定文书版本" src={file} className="h-[30rem] w-full rounded-md border bg-background" />}
+            {data && !file && <p className="text-sm text-muted-foreground">此格式可下载后查阅。</p>}
+            {data && <Button size="sm" className="justify-self-start" variant="outline" nativeButton={false}
+              render={<a download href={download(id)} />}>下载固定 V{data.review.document.version}</Button>}
+          </CardContent>
+        </Card>
+        <aside className="grid min-w-0 gap-4">
+          {data && <WorkBenchSources matterId={matterId} inputs={data.researchInputs ?? []} />}
+          <Card className="min-w-0 gap-3">
+          <CardHeader><CardTitle className="text-lg">固定版本复核</CardTitle></CardHeader>
+          <CardContent className="grid gap-3 text-sm">
+          {detail.isPending && <p role="status"><PagePending />正在读取文书…</p>}
           {detail.error && (
             <p role="alert">
               {detail.error.message}{" "}
@@ -253,6 +254,10 @@ function ReviewSheet({
               <div>
                 {fixed(data.review.document)} · {statuses[data.status]} · {data.isLatest ? "当前版" : "历史版"}
               </div>
+              {data.researchInputs?.length > 0 && <section aria-label="引用的研究修订" className="flex flex-wrap items-center gap-2">
+                <span className="text-muted-foreground">引用的研究</span>
+                {data.researchInputs.map(row => <Link key={row.id} className="underline" href={`/matters/${matterId}/research/${row.id}`}>研究 V{row.version}</Link>)}
+              </section>}
               {data.expected.sha256 && (
                 <small className="break-all text-muted-foreground">SHA-256 · {data.expected.sha256}</small>
               )}
@@ -328,18 +333,53 @@ function ReviewSheet({
                   close={() => setAction(undefined)}
                   saved={(newId) => {
                     setAction(undefined)
-                    refresh()
-                    if (newId) select(newId)
+                    void cache.invalidateQueries({ queryKey: ["doc-review-index", matterId] })
+                    if (newId) router.push(parent + "/" + newId)
                     else void detail.refetch()
                   }}
                 />
               )}
             </>
           )}
-        </div>
-      </SheetContent>
-    </Sheet>
+          </CardContent>
+          </Card>
+        </aside>
+      </div>
+    </section>
   )
+}
+
+type ResearchSourceChoice = { id: string; documentName: string | null; documentVersion?: number | null; version?: number; locationLabel: string | null }
+function WorkBenchSources({ matterId, inputs }: { matterId: string; inputs: Detail["researchInputs"] }) {
+  const [research, setResearch] = useState("")
+  const [source, setSource] = useState("")
+  const researchId = research || inputs[0]?.id
+  const detail = useQuery({
+    enabled: Boolean(researchId),
+    queryKey: ["chronicle", "workbench-research", matterId, researchId],
+    queryFn: ({ signal }) => readPersonal<{ sources: ResearchSourceChoice[]; issue?: { sources: ResearchSourceChoice[] } }>(
+      workspaceEndpoint + "?" + new URLSearchParams({ matter: matterId, section: "research", record: researchId }), { signal }),
+    retry: false,
+  })
+  const sources = [...(detail.data?.issue?.sources ?? []), ...(detail.data?.sources ?? [])].filter(row => row.documentName)
+  return <Card className="gap-3">
+    <CardHeader><CardTitle className="text-lg">旁读原件</CardTitle></CardHeader>
+    <CardContent className="grid min-w-0 gap-3 text-sm">
+      {!researchId ? <p className="text-muted-foreground">本版尚未引用研究出处。</p> : <>
+        {inputs.length > 1 && <label className="grid gap-1">研究修订<NativeSelect value={researchId} onChange={event => { setResearch(event.target.value); setSource("") }}>
+          {inputs.map(row => <NativeSelectOption key={row.id} value={row.id}>研究 V{row.version}</NativeSelectOption>)}
+        </NativeSelect></label>}
+        {detail.isPending && <p role="status">正在读取固定出处…</p>}
+        {detail.error && <p role="alert">{detail.error.message}</p>}
+        {detail.data && !sources.length && <p className="text-muted-foreground">此研究未记录可读的材料出处。</p>}
+        {sources.length > 0 && <label className="grid gap-1">选择固定出处<NativeSelect className="w-full" value={source} onChange={event => setSource(event.target.value)}>
+          <NativeSelectOption value="">请选择出处</NativeSelectOption>
+          {sources.map(row => <NativeSelectOption key={row.id} value={row.id}>{row.documentName} · V{row.version ?? row.documentVersion} · {row.locationLabel}</NativeSelectOption>)}
+        </NativeSelect></label>}
+        {source && sources.some(row => row.id === source) && <ResearchSourcePanel key={source} matterId={matterId} researchId={researchId} sourceId={source} onClose={() => setSource("")} />}
+      </>}
+    </CardContent>
+  </Card>
 }
 
 function ReviewForm({

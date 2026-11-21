@@ -444,10 +444,13 @@ model RolePermission {
 }
 
 model User {
+  personalCalendarEntries PersonalCalendarEntry[]
+  taskMaterialReviews TaskMaterialReview[]
   taskDependenciesCreated TaskDependency[] @relation("TaskDependencyCreator")
   taskWaitingsCreated TaskWaiting[] @relation("TaskWaitingCreator")
   taskWaitingsEnded TaskWaiting[] @relation("TaskWaitingEnder")
   researchAuthored ResearchRevision[] @relation("ResearchAuthor")
+  skillCommissions SkillCommission[]
   researchChecked ResearchRevision[] @relation("ResearchChecker")
   manualReviewIssues DocumentReviewIssue[] @relation("ManualReviewAuthor")
   manualReviewEvents DocumentReviewEvent[] @relation("ManualReviewActor")
@@ -459,6 +462,10 @@ model User {
   evidenceSourcesCreated EvidenceSourceLink[] @relation("EvidenceSourceCreator")
   evidenceSourcesRemoved EvidenceSourceLink[] @relation("EvidenceSourceRemover")
   evidenceRevisions EvidenceItemRevision[] @relation("EvidenceRevisionEditor")
+  evidenceObservationRevisions EvidenceObservationRevision[]
+  evidenceObservationRuns EvidenceObservationRun[]
+  caseGroupingRuns CaseGroupingRun[]
+  caseObservationAdoptions CaseObservationAdoption[]
   evidenceConfirmed EvidenceItem[] @relation("EvidenceConfirmer")
   ownedClients Client[] @relation("ClientOwner")
   clientActivities ClientActivity[] @relation("ClientActivityAuthor")
@@ -477,6 +484,7 @@ model User {
   workResponsibilities WorkResponsibility[] @relation("WorkAssignee")
   proposedWork WorkResponsibility[] @relation("ProposedWork")
   urgentResponsibilities IntakeUrgentItem[] @relation("UrgentAssignee")
+  timelineGrades MatterTimelineGrade[]
   proposedUrgent IntakeUrgentItem[] @relation("ProposedUrgent")
   handoversInitiated MatterHandover[] @relation("HandoverInitiator")
   handoversSent MatterHandover[] @relation("HandoverSender")
@@ -840,6 +848,7 @@ model Intake {
 
 model Matter {
   researchRevisions ResearchRevision[]
+  skillCommissions SkillCommission[]
   deliveries DeliveryRecord[]
   contextRecords MatterContextRecord[]
   closurePlan ArchiveClosurePlan?
@@ -933,6 +942,9 @@ model Matter {
   Payment          Payment[]
   EngagementMatter EngagementMatter[]
   evidenceItems    EvidenceItem[]
+  evidenceObservationRuns EvidenceObservationRun[]
+  caseGroupingRuns CaseGroupingRun[]
+  timelineGrades  MatterTimelineGrade[]
 
   @@index([status, updatedAt])
   @@index([ownerId])
@@ -1084,6 +1096,7 @@ model MatterStage {
 // ============================================================
 
 model Task {
+  materialReviews TaskMaterialReview[]
   responsibility WorkResponsibility?
   prerequisites TaskDependency[] @relation("TaskPrerequisites")
   dependants TaskDependency[] @relation("TaskDependants")
@@ -1107,6 +1120,37 @@ model Task {
 
   @@index([matterId, completed, dueAt])
   @@index([assigneeId, completed])
+}
+
+model TaskMaterialReview {
+  id String @id @default(cuid())
+  taskId String
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId String
+  author User @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  requestKey String @db.Uuid
+  taskRevision Int
+  content String
+  createdAt DateTime @default(now())
+  sources TaskMaterialReviewSource[]
+
+  @@unique([authorId, requestKey])
+  @@index([taskId, createdAt, id])
+}
+
+model TaskMaterialReviewSource {
+  reviewId String
+  review TaskMaterialReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  // Concrete material identity remains recorded even if access to the version is lost.
+  documentId String
+  documentName String
+  documentVersion Int
+  documentSha256 String
+  page Int?
+  position Int
+
+  @@id([reviewId, documentId])
+  @@unique([reviewId, position])
 }
 
 model TaskDependency {
@@ -1414,6 +1458,7 @@ model Note {
 // ============================================================
 
 model Document {
+  chronologyStage String?
   generationRequestKey String? @unique
   generationRequestHash String?
   researchSources ResearchSource[]
@@ -1768,7 +1813,27 @@ enum EvidenceDatePrecision {
   RANGE
 }
 
+enum TimelineEventLevel {
+  NORMAL
+  IMPORTANT
+  KEY
+}
+
+model MatterTimelineGrade {
+  matterId String
+  userId String
+  eventKey String
+  level TimelineEventLevel
+  updatedAt DateTime @updatedAt
+  matter Matter @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([matterId, userId, eventKey])
+  @@index([userId])
+}
+
 model EvidenceItem {
+  chronologyAssessment Json @default("{}")
   researchRevisions ResearchRevision[]
   // Null only for legacy rows; a new manual creation keeps one stable submission identity.
   requestKey       String?
@@ -1779,6 +1844,9 @@ model EvidenceItem {
   confirmedBy User? @relation("EvidenceConfirmer", fields: [confirmedById], references: [id], onDelete: Restrict)
   confirmedAt DateTime?
   sources EvidenceSourceLink[]
+  observationRevisionIds String[] @default([])
+  observationRuns EvidenceObservationRun[]
+  caseObservationAdoptions CaseObservationAdoption[]
   revisions EvidenceItemRevision[]
   id               String       @id @default(cuid())
   matterId         String
@@ -1905,6 +1973,21 @@ model CommissionPlan {
 // ============================================================
 // 时间线 / 归档 / 审计
 // ============================================================
+
+model PersonalCalendarEntry {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestKey String @db.Uuid
+  title String
+  day DateTime @db.Date
+  startMinute Int?
+  endMinute Int?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, requestKey])
+  @@index([userId, day])
+}
 
 model TimelineEvent {
   id         String   @id @default(cuid())
@@ -3223,15 +3306,112 @@ model EvidenceSourceLink {
   removedById String?
   removedBy User? @relation("EvidenceSourceRemover", fields: [removedById], references: [id], onDelete: Restrict)
   removedAt DateTime?
+  observations EvidenceObservationRevision[]
 
   @@unique([evidenceItemId, documentId, relation, locationKey])
   @@index([documentId])
   @@index([parseRunId])
 }
 
+model EvidenceObservationRun {
+  id String @id @db.Uuid
+  evidenceItemId String?
+  caseMatterId String?
+  caseMatter Matter? @relation(fields: [caseMatterId], references: [id], onDelete: Restrict)
+  evidenceItem EvidenceItem? @relation(fields: [evidenceItemId], references: [id], onDelete: Restrict)
+  authorId String
+  author User @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  baseRevision Int?
+  methodVersion String
+  model String
+  baseUrl String
+  ranges Json
+  state String
+  receipt Json?
+  candidates Json?
+  adoption Json?
+  createdAt DateTime @default(now())
+
+  caseCandidateAdoptions CaseObservationCandidateAdoption[]
+
+  @@index([evidenceItemId, createdAt, id])
+  @@index([caseMatterId, authorId, createdAt, id])
+}
+
+model EvidenceObservationRevision {
+  id String @id @default(cuid())
+  sourceLinkId String
+  sourceLink EvidenceSourceLink @relation(fields: [sourceLinkId], references: [id], onDelete: Restrict)
+  seriesId String @db.Uuid
+  revision Int
+  supersedesId String? @unique
+  supersedes EvidenceObservationRevision? @relation("EvidenceObservationSupersession", fields: [supersedesId], references: [id], onDelete: Restrict)
+  successor EvidenceObservationRevision? @relation("EvidenceObservationSupersession")
+  requestKey String @db.Uuid
+  baseEvidenceRevision Int
+  requestInput Json
+  data Json
+  createdById String
+  createdBy User @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+
+  caseCandidateAdoption CaseObservationCandidateAdoption?
+
+  @@unique([seriesId, revision])
+  @@unique([createdById, requestKey])
+  @@index([sourceLinkId])
+}
+
+model CaseGroupingRun {
+  id String @id @db.Uuid
+  matterId String
+  matter Matter @relation(fields: [matterId], references: [id], onDelete: Restrict)
+  authorId String
+  author User @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  methodVersion String
+  model String
+  baseUrl String
+  selected Json
+  state String
+  receipt Json?
+  result Json?
+  createdAt DateTime @default(now())
+
+  @@index([matterId, authorId, createdAt, id])
+}
+
+model CaseObservationAdoption {
+  id String @id @db.Uuid
+  authorId String
+  author User @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  evidenceItemId String
+  evidenceItem EvidenceItem @relation(fields: [evidenceItemId], references: [id], onDelete: Restrict)
+  revision Int
+  requestHash String
+  candidates CaseObservationCandidateAdoption[]
+  createdAt DateTime @default(now())
+
+  @@index([evidenceItemId])
+}
+
+model CaseObservationCandidateAdoption {
+  runId String @db.Uuid
+  run EvidenceObservationRun @relation(fields: [runId], references: [id], onDelete: Restrict)
+  candidateIndex Int
+  adoptionId String @db.Uuid
+  adoption CaseObservationAdoption @relation(fields: [adoptionId], references: [id], onDelete: Restrict)
+  observationId String @unique
+  observation EvidenceObservationRevision @relation(fields: [observationId], references: [id], onDelete: Restrict)
+
+  @@id([runId, candidateIndex])
+  @@index([adoptionId])
+}
+
 model EvidenceItemRevision {
+  chronologyAssessment Json @default("{}")
   researchRevisions ResearchRevision[]
   sourceSnapshot Json @default("[]")
+  observationRevisionIds String[] @default([])
   confirmedById String?
   confirmedAt DateTime?
   id String @id @default(cuid())
@@ -3403,11 +3583,57 @@ model ResearchRevision {
   createdAt DateTime @default(now())
   sources ResearchSource[]
   outputDocuments DocumentResearchSource[]
+  basedCommissions SkillCommission[] @relation("SkillCommissionBase")
+  adoptedCommission SkillCommission? @relation("SkillCommissionAdoption")
 
   @@unique([seriesId, version])
   @@unique([authorId, requestKey])
   @@index([matterId, createdAt])
   @@index([issueId])
+}
+
+model SkillCommission {
+  id String @id @default(uuid())
+  matterId String
+  matter Matter @relation(fields: [matterId], references: [id], onDelete: Restrict)
+  authorId String
+  author User @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  baseResearchId String
+  baseResearch ResearchRevision @relation("SkillCommissionBase", fields: [baseResearchId], references: [id], onDelete: Restrict)
+  baseCheckedAt DateTime?
+  methodVersion String
+  requestKey String
+  ranges Json
+  exportedAt DateTime?
+  result Json?
+  submittedAt DateTime?
+  adoptedResearchId String? @unique
+  adoptedResearch ResearchRevision? @relation("SkillCommissionAdoption", fields: [adoptedResearchId], references: [id], onDelete: Restrict)
+  decisions Json?
+  aiExecution Json?
+  priorCommissionId String?
+  priorCommission SkillCommission? @relation("SkillFollowUp", fields: [priorCommissionId], references: [id], onDelete: Restrict)
+  followUps SkillCommission[] @relation("SkillFollowUp")
+  followUp Json?
+  hostGrants SkillHostGrant[]
+  createdAt DateTime @default(now())
+
+  @@unique([authorId, requestKey])
+  @@index([matterId, baseResearchId, createdAt])
+  @@index([priorCommissionId])
+}
+
+model SkillHostGrant {
+  id String @id @default(uuid())
+  commissionId String
+  commission SkillCommission @relation(fields: [commissionId], references: [id], onDelete: Restrict)
+  tokenHash String @unique
+  host String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  @@index([commissionId, expiresAt])
 }
 
 model ResearchSource {

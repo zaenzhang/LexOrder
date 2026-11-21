@@ -1,0 +1,217 @@
+name: Chronicle Sidecar acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      native_performance:
+        description: Run an additional performance benchmark
+        type: choice
+        options: [none, macos, macos-wide, macos-layout, windows]
+        default: none
+      macos_dmg_run_id:
+        description: Re-run macOS window checks against the DMG from this workflow run ID
+        type: string
+        default: ''
+      macos_dmg_scope:
+        description: Check every window operation or focus on the batch file chooser
+        type: choice
+        options: [full, batch]
+        default: full
+  push:
+    paths:
+      - .github/workflows/chronicle-sidecar.yml
+      - desktop/personal-chronicle/**
+      - tools/workbench-m1/**
+  pull_request:
+    paths:
+      - .github/workflows/chronicle-sidecar.yml
+      - desktop/personal-chronicle/**
+      - tools/workbench-m1/**
+      - prisma/**
+      - package-lock.json
+      - next.config.mjs
+      - src/proxy.ts
+      - src/app/api/personal/**
+      - src/lib/runtime/**
+
+permissions:
+  contents: read
+
+jobs:
+  sidecar:
+    if: inputs.macos_dmg_run_id == ''
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(startsWith(inputs.native_performance, 'macos') && '["macos-15"]' || inputs.native_performance == 'windows' && '["windows-2022"]' || '["windows-2022","macos-15","ubuntu-24.04"]') }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.5
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: desktop/personal-chronicle/package.json
+      - name: Install Tauri system dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libayatana-appindicator3-dev
+      - run: npm ci
+      - run: npm run prisma:generate
+      - run: npm ci --prefix tools/workbench-m1
+      - run: pnpm install --frozen-lockfile
+        working-directory: desktop/personal-chronicle
+      - run: pnpm run lint && pnpm run kit:check && pnpm run typecheck && pnpm run test
+        if: startsWith(inputs.native_performance, 'macos') == false && inputs.native_performance != 'windows'
+        working-directory: desktop/personal-chronicle
+      - name: Build Chronicle and the single HTTP runtime
+        run: bun run build:desktop
+        working-directory: tools/workbench-m1
+      - name: Test host capability and readiness rules
+        if: startsWith(inputs.native_performance, 'macos') == false && inputs.native_performance != 'windows'
+        run: cargo test --locked --manifest-path desktop/personal-chronicle/desktop-preview/Cargo.toml
+      - name: Build Tauri with the native Bun external binary
+        if: startsWith(inputs.native_performance, 'macos') == false && inputs.native_performance != 'windows'
+        run: bun run desktop --build-only
+        working-directory: tools/workbench-m1
+      - name: Build the isolated WKWebView test host
+        if: startsWith(inputs.native_performance, 'macos')
+        run: bun run desktop --build-only --macos-webdriver
+        working-directory: tools/workbench-m1
+      - name: Measure cold start, PDF paint and background parsing in WKWebView
+        if: startsWith(inputs.native_performance, 'macos')
+        env:
+          LEXORDER_MAC_PERFORMANCE: ${{ inputs.native_performance }}
+        run: |
+          sw_vers
+          if [[ "$LEXORDER_MAC_PERFORMANCE" == macos-layout ]]; then
+            xcrun swift tools/workbench-m1/chronicle-smoke/macos-display.swift --wide
+            node tools/workbench-m1/chronicle-smoke/webkit-performance.mjs \
+              desktop/personal-chronicle/desktop-preview/target/debug/lexorder-chronicle-preview 1 --chronology-layout
+          elif [[ "$LEXORDER_MAC_PERFORMANCE" == macos-wide ]]; then
+            xcrun swift tools/workbench-m1/chronicle-smoke/macos-display.swift --wide
+            node tools/workbench-m1/chronicle-smoke/webkit-performance.mjs \
+              desktop/personal-chronicle/desktop-preview/target/debug/lexorder-chronicle-preview 3
+          else
+            xcrun swift tools/workbench-m1/chronicle-smoke/macos-display.swift
+            node tools/workbench-m1/chronicle-smoke/webkit-performance.mjs \
+              desktop/personal-chronicle/desktop-preview/target/debug/lexorder-chronicle-preview 3 --runner-viewport
+          fi
+      - name: Create a case, stop, reopen and verify permissions
+        if: startsWith(inputs.native_performance, 'macos') == false && inputs.native_performance != 'windows'
+        run: bun --no-env-file --no-install tools/workbench-m1/chronicle-smoke/sidecar.mjs "${{ runner.temp }}/lexorder-sidecar-case"
+      - name: Build the native package
+        if: startsWith(inputs.native_performance, 'macos') == false
+        run: bun run desktop --package
+        working-directory: tools/workbench-m1
+      - name: Install and smoke the Windows NSIS package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bundles = @(Get-ChildItem desktop/personal-chronicle/desktop-preview/target/release/bundle/nsis/*.exe)
+          if ($bundles.Count -ne 1) { throw "Expected one NSIS installer" }
+          $install = Join-Path $env:RUNNER_TEMP 'lexorder-installed'
+          $setup = Start-Process -FilePath $bundles[0].FullName -ArgumentList @('/S', ("/D=" + $install)) -WindowStyle Hidden -Wait -PassThru
+          if ($setup.ExitCode -ne 0) { throw "NSIS exited with code $($setup.ExitCode)" }
+          $env:LEXORDER_SMOKE_RUNTIME_ROOT = Join-Path $install 'lexorder-runtime'
+          $env:LEXORDER_SMOKE_BUN = Join-Path $install 'lexorder-bun.exe'
+          $installedWorkspace = Join-Path $env:RUNNER_TEMP 'lexorder-installed-case'
+          bun --no-env-file --no-install tools/workbench-m1/chronicle-smoke/sidecar.mjs $installedWorkspace
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ("${{ inputs.native_performance }}" -eq 'windows') {
+            $env:M1_WORKSPACE = $installedWorkspace
+            $env:M1_CHRONOLOGY_CASEBOOK_ROOT = Join-Path $env:RUNNER_TEMP 'lexorder-performance-casebooks'
+            New-Item -ItemType Directory -Path $env:M1_CHRONOLOGY_CASEBOOK_ROOT | Out-Null
+            $hostExe = Join-Path $install 'lexorder-chronicle-preview.exe'
+            for ($round = 1; $round -le 3; $round++) {
+              node tools/workbench-m1/chronicle-smoke/webview2.mjs $hostExe --performance --installed
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+          }
+      - name: Verify and smoke the Apple Silicon DMG
+        if: runner.os == 'macOS' && startsWith(inputs.native_performance, 'macos') == false
+        shell: bash
+        run: |
+          bash tools/workbench-m1/chronicle-smoke/macos-dmg.sh \
+            desktop/personal-chronicle/desktop-preview/target/release/bundle/dmg \
+            "$RUNNER_TEMP/lexorder-installed-case"
+      - name: Extract and smoke the Linux DEB
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          shopt -s nullglob
+          bundles=(desktop/personal-chronicle/desktop-preview/target/release/bundle/deb/*.deb)
+          test "${#bundles[@]}" -eq 1
+          install="$RUNNER_TEMP/lexorder-deb"
+          dpkg-deb -x "${bundles[0]}" "$install"
+          runtime=$(find "$install/usr/lib" -type d -name lexorder-runtime -print -quit)
+          test -n "$runtime"
+          export LEXORDER_SMOKE_RUNTIME_ROOT="$runtime"
+          export LEXORDER_SMOKE_BUN="$install/usr/bin/lexorder-bun"
+          bun --no-env-file --no-install tools/workbench-m1/chronicle-smoke/sidecar.mjs "$RUNNER_TEMP/lexorder-installed-case"
+      - name: Upload Windows NSIS installer
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: lexorder-windows-nsis
+          path: desktop/personal-chronicle/desktop-preview/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+      - name: Upload macOS DMG
+        if: runner.os == 'macOS' && startsWith(inputs.native_performance, 'macos') == false
+        uses: actions/upload-artifact@v7
+        with:
+          name: lexorder-macos-dmg
+          path: desktop/personal-chronicle/desktop-preview/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+
+  existing-macos-dmg:
+    if: inputs.macos_dmg_run_id != ''
+    runs-on: macos-15
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.5
+      - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@v8
+        with:
+          name: lexorder-macos-dmg
+          path: ${{ runner.temp }}/lexorder-dmg-artifact
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.macos_dmg_run_id }}
+      - name: Record available screen sizes
+        if: inputs.macos_dmg_scope == 'full'
+        run: xcrun swift tools/workbench-m1/chronicle-smoke/macos-display.swift
+      - name: Verify and smoke the Apple Silicon DMG
+        env:
+          LEXORDER_MACOS_DIAGNOSTICS_DIR: ${{ runner.temp }}/lexorder-macos-diagnostics
+          LEXORDER_DMG_SCOPE: ${{ inputs.macos_dmg_scope }}
+        run: |
+          mode=--case-flow
+          if [[ "$LEXORDER_DMG_SCOPE" == batch ]]; then mode=--batch; fi
+          bash tools/workbench-m1/chronicle-smoke/macos-dmg.sh \
+            "$RUNNER_TEMP/lexorder-dmg-artifact" "$RUNNER_TEMP/lexorder-installed-case" "$mode"
+      - name: Upload failed window screenshot
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: lexorder-macos-window-diagnostic
+          path: ${{ runner.temp }}/lexorder-macos-diagnostics/*.png
+          if-no-files-found: ignore

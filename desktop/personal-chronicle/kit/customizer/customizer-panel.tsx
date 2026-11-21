@@ -15,7 +15,7 @@ const loadBody = () => import("./customizer-panel-body")
 const CustomizerPanelBody = lazy(loadBody)
 const ImportDialog = lazy(() => loadBody().then((module) => ({ default: module.ImportDialog })))
 
-export function CustomizerPanel() {
+export function CustomizerPanel({ workbench }: { workbench?: boolean }) {
   const open = useCustomizer((state) => state.panelOpen)
   const setOpen = useCustomizer((state) => state.setPanelOpen)
   // Outside the popover, so closing the popover never takes an open import (and its pasted CSS) with it.
@@ -30,15 +30,15 @@ export function CustomizerPanel() {
     <>
       <Popover open={open} onOpenChange={setOpen}>
         <Tooltip>
-          <TooltipTrigger render={<PopoverTrigger render={<Button variant="ghost" size="icon" aria-label="Customize theme" />} />}>
+          <TooltipTrigger render={<PopoverTrigger render={<Button variant="ghost" size="icon" aria-label={workbench ? "外观设置" : "Customize theme"} />} />}>
             <PaletteIcon />
           </TooltipTrigger>
-          <TooltipContent>Customize</TooltipContent>
+          <TooltipContent>{workbench ? "外观设置" : "Customize"}</TooltipContent>
         </Tooltip>
         {/* Its own view-transition layer, kept live (see globals.css), so its controls animate while the page cross-fades. */}
         <PopoverContent align="end" className="w-[min(20rem,calc(100vw-2rem))] gap-0 overflow-hidden p-0 [view-transition-name:customizer]">
           <Suspense fallback={<div className="h-[min(38rem,calc(var(--available-height)-1rem))]" />}>
-            <CustomizerPanelBody onImport={() => setImporting(true)} />
+            <CustomizerPanelBody workbench={workbench} onImport={() => setImporting(true)} />
           </Suspense>
         </PopoverContent>
       </Popover>

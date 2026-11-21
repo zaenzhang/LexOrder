@@ -1,4 +1,4 @@
-import Link from "next/link"
+import Link from "@/features/shell/workspace-link"
 
 import { buttonVariants } from "@/components/ui/button"
 import { BrandLogo } from "@/components/chronicle/brand-logo"

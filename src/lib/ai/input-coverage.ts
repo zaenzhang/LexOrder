@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { DocumentParseState } from "@prisma/client";
-import { identifierSchema, type ProcessingCoverage, type SourceAnchor } from "@/lib/workbench/contracts";
+import { identifierSchema, type ProcessingCoverage, type SourceAnchor } from "../workbench/contracts";
 
 export const INPUT_COVERAGE_MAX_DOCUMENTS = 50;
 export const INPUT_COVERAGE_MAX_CHARS = 36_000;
@@ -10,6 +10,7 @@ const selectionId = identifierSchema.trim().min(1);
 
 export const matterInputCoverageSchema = z.strictObject({
   matterId: selectionId,
+  purpose: z.literal("FACT_ANALYSIS").optional(),
   documents: z.array(z.strictObject({
     documentId: selectionId,
     // Only an explicit run selects historical parsing of this exact Document version.
@@ -94,6 +95,15 @@ export type MatterInputCoverageItem = AvailableInputCoverageItem | {
   documentId: string;
 };
 
+export type MatterAnalysisPlan = {
+  batches: {
+    characters: number;
+    ranges: { documentId: string; parseRunId: string; anchorId: string; locationLabel: string; start: number; end: number }[];
+  }[];
+  plannedCharacters: number;
+  unplannedCharacters: number;
+};
+
 export type MatterInputCoverageView = {
   mode: "PREVIEW";
   matterId: string;
@@ -117,4 +127,5 @@ export type MatterInputCoverageView = {
     omittedUnitCount: number;
   };
   items: MatterInputCoverageItem[];
+  analysisPlan?: MatterAnalysisPlan;
 };

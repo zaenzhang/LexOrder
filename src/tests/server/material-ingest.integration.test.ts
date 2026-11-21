@@ -381,7 +381,7 @@ describe.skipIf(!databaseUrl)("Server 原件摄入：真实 PG 恢复与幂等�
     const readStarted = new Promise<void>(resolve => { entered = resolve; });
     const readGate = new Promise<void>(resolve => { release = resolve; });
     syntheticStorage.beforeRead = async () => { entered(); await readGate; };
-    const executing = resumeMaterialIngest(input.requestKey, f.user.id, oldLease);
+    const executing = resumeMaterialIngest(input.requestKey, f.user.id, { lease: oldLease });
     let currentLease = oldLease;
     try {
       await Promise.race([readStarted, executing.then(() => { throw new Error("恢复未读取原件便已结束"); })]);
@@ -390,7 +390,7 @@ describe.skipIf(!databaseUrl)("Server 原件摄入：真实 PG 恢复与幂等�
     } finally { syntheticStorage.beforeRead = undefined; release(); }
     await expect(executing).rejects.toThrow("另一执行器");
     expect(await db.materialIngestIntent.findUniqueOrThrow({ where: { id: input.requestKey } })).toMatchObject({ state: "FAILED", errorCode: "NEW_ATTEMPT_OBSERVATION", documentId: null });
-    const recovered = await resumeMaterialIngest(input.requestKey, f.user.id, currentLease);
+    const recovered = await resumeMaterialIngest(input.requestKey, f.user.id, { lease: currentLease });
     expect(await db.document.count({ where: { id: recovered.id } })).toBe(1);
     expect(await completeJob(currentLease)).toBe(true);
   });

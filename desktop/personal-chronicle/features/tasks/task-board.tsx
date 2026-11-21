@@ -21,10 +21,8 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { PlusIcon } from "lucide-react"
 import { useMemo, useState } from "react"
 
-import { Button } from "@/components/ui/button"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Task, TaskStatus } from "@/data/schema"
@@ -32,6 +30,7 @@ import { useAdapter, useKitMutation } from "@/kit/data/hooks"
 import type { Resources } from "@/lib/data"
 import { cn } from "@/lib/utils"
 
+import { TaskBoardLane } from "./task-board-lane"
 import { TaskCard } from "./task-card"
 import { STATUSES } from "./task-meta"
 
@@ -124,31 +123,10 @@ function Column({
   const { setNodeRef, isOver } = useDroppable({
     id: `${COLUMN_PREFIX}${status.value}`,
   })
-  const Icon = status.icon
   return (
-    <section
-      aria-label={status.label}
-      className={cn(
-        "flex w-72 shrink-0 snap-start flex-col gap-2 rounded-2xl bg-muted/50 p-2 transition-colors duration-150 2xl:w-auto 2xl:min-w-0 dark:bg-muted/30",
-        isOver && "bg-primary/5 ring-1 ring-primary/20"
-      )}
-    >
-      <header className="flex items-center gap-2 px-1.5 pt-1">
-        <Icon className={cn("size-4", status.tone)} />
-        <h2 className="text-sm font-medium">{status.label}</h2>
-        <span className="font-mono text-xs text-muted-foreground tabular-nums">
-          {ids.length}
-        </span>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="ms-auto text-muted-foreground"
-          aria-label={`Add a task to ${status.label}`}
-          onClick={onAdd}
-        >
-          <PlusIcon />
-        </Button>
-      </header>
+    <TaskBoardLane label={status.label} count={ids.length} icon={status.icon} tone={status.tone}
+      onAdd={onAdd} addLabel={"Add a task to " + status.label}
+      className={cn("w-72 shrink-0 snap-start 2xl:w-auto", isOver && "bg-primary/5 ring-1 ring-primary/20")}>
       <SortableContext
         id={status.value}
         items={ids}
@@ -166,7 +144,7 @@ function Column({
           )}
         </ul>
       </SortableContext>
-    </section>
+    </TaskBoardLane>
   )
 }
 

@@ -11,7 +11,7 @@ import {
   INPUT_COVERAGE_MAX_CHARS, INPUT_COVERAGE_MAX_DOCUMENTS, INPUT_COVERAGE_MAX_RANGES,
   INPUT_COVERAGE_MAX_UNIT_DETAILS, inputCoverageIssueLabels, matterInputCoverageSchema,
   type AvailableInputCoverageItem, type InputCoverageIssue, type InputCoverageIssueCode,
-  type InputProcessingCoverage, type MatterInputCoverageInput, type MatterInputCoverageItem,
+  type InputProcessingCoverage, type MatterAnalysisPlan, type MatterInputCoverageInput, type MatterInputCoverageItem,
   type MatterInputCoverageView,
 } from "@/lib/ai/input-coverage";
 
@@ -25,7 +25,7 @@ const runSelect = {
 } satisfies Prisma.DocumentParseRunSelect;
 type InputDocument = Prisma.DocumentGetPayload<{ select: typeof documentSelect }>;
 type InputRun = Prisma.DocumentParseRunGetPayload<{ select: typeof runSelect }>;
-type AnchorMeasure = Pick<SourceAnchor, "anchorId" | "unit" | "location"> & { chars: number; prefix: string };
+type AnchorMeasure = Pick<SourceAnchor, "anchorId" | "unit" | "location"> & { chars: number; prefix: string; sections: { start: number; end: number }[] };
 type Candidate = {
   document: InputDocument;
   explicitRun: boolean;
@@ -82,17 +82,64 @@ function unavailable(documentId: string): MatterInputCoverageItem {
   return { status: "UNAVAILABLE", documentId };
 }
 
-/** Keep only bounded text prefixes needed to avoid splitting a UTF-16 surrogate pair. */
-function measureAnchors(anchors: SourceAnchor[]): AnchorMeasure[] {
+const analysisFragmentLimit = 6000;
+const analysisBatchRanges = 8;
+
+function splitsSurrogate(text: string, offset: number) {
+  return /[\uD800-\uDBFF]/.test(text[offset - 1] ?? "") && /[\uDC00-\uDFFF]/.test(text[offset] ?? "");
+}
+
+/** Keep only the metadata needed to project coverage or propose exact ranges. */
+function measureAnchors(anchors: SourceAnchor[], plan: boolean): AnchorMeasure[] {
   let prefixBudget = INPUT_COVERAGE_MAX_CHARS;
+  let sectionBudget = INPUT_COVERAGE_MAX_RANGES;
   return [...anchors].sort((a, b) => a.unit - b.unit || (a.anchorId < b.anchorId ? -1 : a.anchorId > b.anchorId ? 1 : 0)).map(anchor => {
-    const prefix = prefixBudget > 0 ? anchor.text.slice(0, prefixBudget + 1) : "";
-    prefixBudget -= Math.min(prefixBudget, anchor.text.length);
-    return { anchorId: anchor.anchorId, unit: anchor.unit, location: anchor.location, chars: anchor.text.length, prefix };
+    const text = anchor.text;
+    const prefix = prefixBudget > 0 ? text.slice(0, prefixBudget + 1) : "";
+    prefixBudget -= Math.min(prefixBudget, text.length);
+    const sections: AnchorMeasure["sections"] = [];
+    if (plan) for (let start = 0; start < text.length && sectionBudget > 0;) {
+      let end = Math.min(start + analysisFragmentLimit, text.length);
+      if (splitsSurrogate(text, end)) end--;
+      sections.push({ start, end });
+      sectionBudget--;
+      start = end;
+    }
+    return { anchorId: anchor.anchorId, unit: anchor.unit, location: anchor.location, chars: text.length, prefix, sections };
   });
 }
 
-async function readCandidate(document: InputDocument, selection: MatterInputCoverageInput["documents"][number]): Promise<Candidate> {
+function planAnalysis(documents: MatterInputCoverageInput["documents"], candidates: Map<string, AuthorizedCandidate>): MatterAnalysisPlan {
+  const batches: MatterAnalysisPlan["batches"] = [];
+  let remaining = INPUT_COVERAGE_MAX_RANGES;
+  let plannedCharacters = 0;
+  let eligibleCharacters = 0;
+  for (const { documentId } of documents) {
+    const candidate = candidates.get(documentId);
+    if (!candidate?.canPrepare || !candidate.run) continue;
+    for (const anchor of candidate.anchors) {
+      eligibleCharacters += anchor.chars;
+      if (!remaining || !anchor.sections.length) continue;
+      const locationLabel = materialLocationLabel(anchor.location);
+      for (const { start, end } of anchor.sections) {
+        if (!remaining) break;
+        const characters = end - start;
+        let batch = batches.at(-1);
+        if (!batch || batch.ranges.length === analysisBatchRanges || batch.characters + characters > INPUT_COVERAGE_MAX_CHARS) {
+          batch = { characters: 0, ranges: [] };
+          batches.push(batch);
+        }
+        batch.ranges.push({ documentId, parseRunId: candidate.run.id, anchorId: anchor.anchorId, locationLabel, start, end });
+        batch.characters += characters;
+        plannedCharacters += characters;
+        remaining--;
+      }
+    }
+  }
+  return { batches, plannedCharacters, unplannedCharacters: eligibleCharacters - plannedCharacters };
+}
+
+async function readCandidate(document: InputDocument, selection: MatterInputCoverageInput["documents"][number], plan: boolean): Promise<Candidate> {
   const result: Candidate = {
     document, explicitRun: Boolean(selection.parseRunId), run: null, coverage: null,
     anchors: [], issues: [], state: "NOT_PROCESSED",
@@ -132,7 +179,7 @@ async function readCandidate(document: InputDocument, selection: MatterInputCove
     if (!snapshot) {
       result.state = "UNAVAILABLE";
       addIssue(result.issues, "INVALID_SNAPSHOT");
-    } else result.anchors = measureAnchors(snapshot.anchors);
+    } else result.anchors = measureAnchors(snapshot.anchors, plan);
   }
   return result;
 }
@@ -147,6 +194,7 @@ function coverageView(coverage: ProcessingCoverage, remainingDetails: number): I
 }
 
 function project(input: MatterInputCoverageInput, candidates: Map<string, AuthorizedCandidate>): MatterInputCoverageView {
+  const analysisPlan = input.purpose === "FACT_ANALYSIS" ? planAnalysis(input.documents, candidates) : undefined;
   let remainingChars = INPUT_COVERAGE_MAX_CHARS;
   let remainingRanges = INPUT_COVERAGE_MAX_RANGES;
   let remainingUnits = INPUT_COVERAGE_MAX_UNIT_DETAILS;
@@ -165,7 +213,7 @@ function project(input: MatterInputCoverageInput, candidates: Map<string, Author
     };
     if (canPrepare) for (const anchor of candidate.anchors) {
       let end = Math.min(anchor.chars, remainingChars);
-      if (end > 0 && end < anchor.chars && /[\uD800-\uDBFF]/.test(anchor.prefix[end - 1] ?? "") && /[\uDC00-\uDFFF]/.test(anchor.prefix[end] ?? "")) end--;
+      if (end > 0 && end < anchor.chars && splitsSurrogate(anchor.prefix, end)) end--;
       if (end > 0) {
         preparation.preparedChars += end;
         preparation.rangeCount++;
@@ -204,6 +252,7 @@ function project(input: MatterInputCoverageInput, candidates: Map<string, Author
       omittedUnitCount: available.reduce((sum, item) => sum + (item.coverage?.omittedUnitCount ?? 0), 0),
     },
     items,
+    ...(analysisPlan ? { analysisPlan } : {}),
   };
 }
 
@@ -217,7 +266,7 @@ export async function readMatterInputCoverage(userId: string, untrustedInput: Ma
   const candidates = new Map<string, Candidate>();
   for (const selection of input.documents) {
     const document = documentMap.get(selection.documentId);
-    if (document && await canReadDocument(userId, document)) candidates.set(document.id, await readCandidate(document, selection));
+    if (document && await canReadDocument(userId, document)) candidates.set(document.id, await readCandidate(document, selection, input.purpose === "FACT_ANALYSIS"));
   }
   if (!candidates.size) return project(input, new Map());
 

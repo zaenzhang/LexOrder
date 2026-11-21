@@ -1,6 +1,8 @@
 "use client"
 
-import Link from "next/link"
+import { usePageLoading } from "@/kit/ui-patterns/page-loading"
+
+import Link from "@/features/shell/workspace-link"
 import { useEffect, useState, type FormEvent } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -12,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { PageHeader } from "@/kit/ui-patterns/page-header"
 import { readPersonal, type Matter } from "@/features/matters/personal-client"
 
-const endpoint = "/api/personal-runtime/practice-operations"
+const endpoint = "/api/personal/practice-operations"
 const tabs = { express: "快递收寄", preservation: "财产保全", closure: "归档检查" }
 const types = { PRE_LITIGATION: "诉前保全", LITIGATION: "诉讼保全", ENFORCEMENT: "执行保全" }
 const propertyTypes = { BANK_DEPOSIT: "银行存款", REAL_ESTATE: "不动产", VEHICLE: "车辆", EQUITY: "股权", IP: "知识产权", OTHER: "其他财产" }
@@ -90,6 +92,8 @@ export function OperationsDesk({ matterId, section }: { matterId?: string; secti
   const [dialog, setDialog] = useState<Dialog>()
   const [busy, setBusy] = useState(false)
 
+  usePageLoading(!error && (matterId ? !data : !matters))
+
   useEffect(() => {
     const c = new AbortController()
     const t = window.setTimeout(() => {
@@ -97,7 +101,7 @@ export function OperationsDesk({ matterId, section }: { matterId?: string; secti
         .then(r => { if (!c.signal.aborted) setData(r) })
         : readPersonal<{ matters: Matter[] }>(endpoint + "?q=" + encodeURIComponent(query), { signal: c.signal }).then(r => { if (!c.signal.aborted) setMatters(r.matters) })
       load.catch(e => { if (!c.signal.aborted) setError(e.message) })
-    }, matterId ? 0 : 150)
+    }, matterId || !query ? 0 : 150)
     return () => { c.abort(); window.clearTimeout(t) }
   }, [matterId, section, query, refresh])
   function show(form: Dialog) { setDialogError(""); setDialog(form) }

@@ -55,7 +55,6 @@ export function Screenshot({ template, priority = false, className }: { template
         <span className="size-2 rounded-full bg-muted-foreground/30" />
       </div>
       {/* Bundled for the demo only; the template you download never shows these. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={template.image} alt={`${template.name}: ${template.pitch}`} width={1200} height={750} loading={priority ? "eager" : "lazy"} className="aspect-[16/10] w-full object-cover object-top" />
     </div>
   )

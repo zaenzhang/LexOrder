@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { ActionError } from "@/lib/action-error";
+import { aiSettingsSaveSchema } from "@/lib/ai/settings-contract";
+import { getAiSettingsPublic, saveAiSettingsAction, clearAiKeyAction, testAiConnection } from "@/server/settings/ai-actions";
 import { requireSession } from "@/lib/auth/session";
 import { matterCategoryLabel } from "@/lib/enums";
 import { prisma } from "@/lib/prisma";
@@ -36,6 +38,8 @@ const category = z.enum([
 ]);
 async function read(query: URLSearchParams) {
   switch (query.get("view")) {
+    case "ai":
+      return getAiSettingsPublic();
     case "resources":
       return listFirmFiles({
         search: z
@@ -124,6 +128,9 @@ async function handle(request: Request) {
     }
     const input = z
       .discriminatedUnion("action", [
+        z.object({ action: z.literal("save-ai-settings"), settings: aiSettingsSaveSchema }),
+        z.object({ action: z.literal("clear-ai-key"), confirm: z.literal(true) }),
+        z.object({ action: z.literal("probe-ai-settings") }),
         z.object({
           action: z.literal("toggle-template"),
           id: z.cuid(),
@@ -135,6 +142,9 @@ async function handle(request: Request) {
         }),
       ])
       .parse(await request.json().catch(() => null));
+    if (input.action === "save-ai-settings") return json(await saveAiSettingsAction(input.settings));
+    if (input.action === "clear-ai-key") return json(await clearAiKeyAction(input));
+    if (input.action === "probe-ai-settings") return json(await testAiConnection());
     return json(
       input.action === "profile"
         ? await updateMyProfile(input.profile)

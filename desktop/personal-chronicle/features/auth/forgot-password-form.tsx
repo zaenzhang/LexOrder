@@ -1,7 +1,7 @@
 "use client"
 
 import { AlertCircleIcon, ArrowLeftIcon, MailCheckIcon } from "lucide-react"
-import Link from "next/link"
+import Link from "@/features/shell/workspace-link"
 import { useState } from "react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"

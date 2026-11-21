@@ -1,21 +1,30 @@
 "use client"
 
-import Link from "next/link"
+import { usePageLoading } from "@/kit/ui-patterns/page-loading"
+
+import { InlineLoading } from "@/kit/ui-patterns/workspace-loading"
+import Link from "@/features/shell/workspace-link"
 import { useState } from "react"
+import { ClipboardListIcon, PlugIcon, UserIcon } from "lucide-react"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { SettingsCard, SettingsHero, SettingsSkeleton } from "@/kit/settings/section"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { PageHeader } from "@/kit/ui-patterns/page-header"
 import { readPersonal } from "@/features/matters/personal-client"
 import { chinaDate } from "./data"
 
-const ep = "/api/personal-runtime/practice-resources"
+const ep = "/api/personal/practice-resources"
 const views = {
-  resources: "资料库",
+  skills: "技能方法",
   templates: "文书模板",
-  profile: "执业资料",
-  audit: "操作记录",
+  resources: "资料库",
   reports: "业务报表",
 }
 type View = keyof typeof views
@@ -50,7 +59,7 @@ const templates: Record<string, string> = {
   CLOSING: "结案",
   BLANK: "通用",
 }
-const download = "/api/personal-runtime/firm-files/"
+const download = "/api/firm-files/"
 function useRead<T>(view: string, params: Record<string, string> = {}) {
   const query = new URLSearchParams({ view, ...params }).toString()
   return useQuery({
@@ -97,6 +106,7 @@ function FileCollection({ template }: { template: boolean }) {
     q: search,
     old: old ? "1" : "0",
   })
+  usePageLoading(!search && !old && list.isPending)
   const [history, setHistory] = useState<string>()
   const mutation = useSave()
   const rows = template
@@ -298,8 +308,8 @@ function ResourceHistory({ id }: { id: string }) {
     </section>
   )
 }
-function Profile() {
-  const { data, error } = useRead<{
+export function WorkbenchProfile() {
+  const { data, error, isPending, refetch } = useRead<{
     name: string
     email: string
     phone: string | null
@@ -307,53 +317,64 @@ function Profile() {
   }>("profile")
   const mutation = useSave()
   const [message, setMessage] = useState("")
-  if (!data)
-    return (
-      <p role={error ? "alert" : "status"}>
-        {error?.message ?? "正在读取资料…"}
-      </p>
-    )
+  usePageLoading(isPending)
+  if (!data) return error ? (
+    <SettingsCard title="无法读取执业资料" icon={UserIcon}>
+      <p role="alert" className="text-sm text-destructive">{error.message}</p>
+      <Button size="sm" variant="outline" className="mt-3" onClick={() => void refetch()}>重试</Button>
+    </SettingsCard>
+  ) : <SettingsSkeleton />
+
   return (
-    <form
-      key={data.updatedAt}
-      className="grid max-w-md gap-3"
-      onSubmit={(e) => {
-        e.preventDefault()
-        const f = new FormData(e.currentTarget)
-        setMessage("")
-        void mutation.save(
-          {
-            action: "profile",
-            profile: {
-              ...Object.fromEntries(f),
-              expectedUpdatedAt: data.updatedAt,
-            },
-          },
-          () => setMessage("执业资料已保存。")
-        )
-      }}
-    >
-      <label>
-        姓名
-        <Input name="name" defaultValue={data.name} maxLength={40} />
-      </label>
-      <label>
-        邮箱
-        <Input name="email" type="email" defaultValue={data.email} />
-      </label>
-      <label>
-        联系电话
-        <Input name="phone" type="tel" defaultValue={data.phone ?? ""} />
-      </label>
-      <Button disabled={mutation.busy} className="justify-self-start">
-        保存资料
-      </Button>
-      {mutation.error && <p role="alert">{mutation.error}</p>}
-      {message && <p role="status">{message}</p>}
-    </form>
+    <>
+      <SettingsHero>
+        <div className="flex items-center gap-4">
+          <Avatar className="size-16 text-lg ring-4 ring-primary/10">
+            <AvatarFallback className="bg-primary text-primary-foreground">{data.name.slice(0, 1) || "律"}</AvatarFallback>
+          </Avatar>
+          <div className="flex min-w-0 flex-col gap-1">
+            <span className="truncate text-lg font-semibold">{data.name}</span>
+            <span className="truncate text-sm text-muted-foreground">{data.email || "本机用户"}</span>
+          </div>
+        </div>
+      </SettingsHero>
+      <SettingsCard icon={UserIcon} title="个人资料">
+        <form
+          key={data.updatedAt}
+          className="flex flex-col items-start gap-4"
+          onSubmit={(event) => {
+            event.preventDefault()
+            const fields = new FormData(event.currentTarget)
+            setMessage("")
+            void mutation.save({
+              action: "profile",
+              profile: { ...Object.fromEntries(fields), expectedUpdatedAt: data.updatedAt },
+            }, () => setMessage("执业资料已保存。"))
+          }}
+        >
+          <FieldGroup className="grid gap-4 sm:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="workbench-profile-name">姓名</FieldLabel>
+              <Input id="workbench-profile-name" name="name" defaultValue={data.name} autoComplete="name" maxLength={40} required />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="workbench-profile-email">邮箱</FieldLabel>
+              <Input id="workbench-profile-email" name="email" type="email" defaultValue={data.email} autoComplete="email" />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="workbench-profile-phone">联系电话</FieldLabel>
+              <Input id="workbench-profile-phone" name="phone" type="tel" defaultValue={data.phone ?? ""} autoComplete="tel" />
+            </Field>
+          </FieldGroup>
+          <Button disabled={mutation.busy}>保存资料</Button>
+          {mutation.error && <p role="alert" className="text-sm text-destructive">{mutation.error}</p>}
+          {message && <p role="status" className="text-sm">{message}</p>}
+        </form>
+      </SettingsCard>
+    </>
   )
 }
-function Audit() {
+export function AuditSettingsPanel() {
   const [q, setQ] = useState(""),
     [text, setText] = useState("")
   const { data, error } = useRead<
@@ -366,7 +387,7 @@ function Audit() {
     }[]
   >("audit", { q })
   return (
-    <>
+    <SettingsCard title="操作记录" icon={ClipboardListIcon}>
       <form
         className="flex max-w-lg gap-2"
         onSubmit={(e) => {
@@ -401,7 +422,7 @@ function Audit() {
         </ul>
       )}
       {data?.length === 0 && <p>最近 30 天没有匹配记录。</p>}
-    </>
+    </SettingsCard>
   )
 }
 function Reports() {
@@ -441,7 +462,7 @@ function Reports() {
           nativeButton={false}
           render={
             <a
-              href={"/api/personal-runtime/reports/export?period=" + period}
+              href={"/api/reports/export?period=" + period}
               download
             />
           }
@@ -496,11 +517,71 @@ function Reports() {
     </>
   )
 }
+type AiSettings = { enabled: boolean; configured: boolean; credentialSaved: boolean; baseUrl: string;
+  textModel: string; configurationError?: string }
+
+function AiSettingsForm({ settings }: { settings: AiSettings }) {
+  const [enabled, setEnabled] = useState(settings.enabled)
+  const [key, setKey] = useState("")
+  const [confirmClear, setConfirmClear] = useState(false)
+  const [probe, setProbe] = useState("")
+  const [probing, setProbing] = useState(false)
+  const mutation = useSave()
+  async function verify() {
+    setProbing(true)
+    setProbe("")
+    try {
+      const result = await readPersonal<{ ok: boolean; reply?: string; message?: string }>(ep, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "probe-ai-settings" }),
+      })
+      setProbe(result.ok ? result.reply ?? "文本模型已响应。" : result.message ?? "连接检查失败。")
+    } catch (error) { setProbe(error instanceof Error ? error.message : "连接检查失败。") }
+    finally { setProbing(false) }
+  }
+  return <SettingsCard title="文本模型" icon={PlugIcon}><div className="grid gap-4">
+    <form className="grid gap-3" onSubmit={event => {
+      event.preventDefault()
+      const data = new FormData(event.currentTarget)
+      setProbe("")
+      void mutation.save({ action: "save-ai-settings", settings: {
+        baseUrl: String(data.get("url")).trim(), textModel: String(data.get("model")).trim(), enabled, apiKey: key,
+      } }, () => setKey(""))
+    }}>
+      <label className="flex items-center gap-2 text-sm"><Checkbox checked={enabled} onCheckedChange={setEnabled} />启用应用 AI</label>
+      <label className="grid gap-2 text-sm">OpenAI 兼容 HTTPS 地址<Input name="url" type="url" required defaultValue={settings.baseUrl} /></label>
+      <label className="grid gap-2 text-sm">文本模型<Input name="model" required maxLength={80} defaultValue={settings.textModel} /></label>
+      <label className="grid gap-2 text-sm">API 密钥<Input type="password" autoComplete="new-password" maxLength={4096} value={key}
+        placeholder={settings.credentialSaved ? "已保存。替换时填写新密钥" : "输入 API 密钥"} onChange={event => setKey(event.target.value)} /></label>
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" size="sm" disabled={mutation.busy || probing}>保存配置</Button>
+        <Button type="button" size="sm" variant="outline" disabled={!settings.configured || mutation.busy || probing}
+          onClick={() => void verify()}>{probing ? "正在测试…" : "测试已保存的模型"}</Button>
+      </div>
+    </form>
+    {settings.credentialSaved && <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+      <label className="flex items-center gap-2 text-sm"><Checkbox checked={confirmClear} onCheckedChange={setConfirmClear} />确认清除密钥</label>
+      <Button size="sm" variant="outline" disabled={!confirmClear || mutation.busy || probing}
+        onClick={() => void mutation.save({ action: "clear-ai-key", confirm: true }, () => setConfirmClear(false))}>清除</Button>
+    </div>}
+    {(settings.configurationError || mutation.error) && <p role="alert" className="text-sm text-destructive">{mutation.error || settings.configurationError}</p>}
+    {probe && <p role="status" className="text-sm">{probe}</p>}
+  </div></SettingsCard>
+}
+
+export function AiSettingsPanel() {
+  const query = useRead<AiSettings>("ai")
+  usePageLoading(query.isPending)
+  if (query.error) return <p role="alert">{query.error.message} <Button size="sm" variant="outline" onClick={() => void query.refetch()}>重试</Button></p>
+  if (!query.data) return <InlineLoading label="正在读取应用 AI 配置…" />
+  const data = query.data
+  return <AiSettingsForm key={[data.enabled, data.baseUrl, data.textModel, data.credentialSaved].join("/")} settings={data} />
+}
+
 export function ResourcesDesk({ view }: { view: View }) {
   return (
     <section className="grid gap-4">
-      <PageHeader title={views[view]} />
-      <nav className="flex flex-wrap gap-1" aria-label="资料与设置">
+      <PageHeader title="工具" />
+      <nav className="flex flex-wrap gap-1" aria-label="工具分区">
         {Object.entries(views).map(([k, v]) => (
           <Button
             size="sm"
@@ -509,7 +590,7 @@ export function ResourcesDesk({ view }: { view: View }) {
             nativeButton={false}
             render={
               <Link
-                href={`/practice/${k}`}
+                href={k === "skills" ? "/practice/skills" : "/practice/skills/" + k}
                 aria-current={k === view ? "page" : undefined}
               />
             }
@@ -518,15 +599,17 @@ export function ResourcesDesk({ view }: { view: View }) {
           </Button>
         ))}
       </nav>
-      {view === "resources" || view === "templates" ? (
+      {view === "skills" ? <Card className="max-w-3xl">
+        <CardHeader><CardTitle>对照签收与验收</CardTitle></CardHeader>
+        <CardContent className="grid justify-items-start gap-3 text-sm">
+          <Badge variant="outline">本机委托</Badge>
+          <p>对照合同验收条款和交接清单，区分签收数量、外观核对与性能验收。</p>
+          <p className="text-muted-foreground">从绑定争点的研究打开「选材发起委托」，选择固定片段，再领取宿主授权或导出输入。</p>
+          <Button nativeButton={false} size="sm" variant="outline" render={<Link href="/matters/list" />}>选择案件</Button>
+        </CardContent>
+      </Card> : view === "resources" || view === "templates" ? (
         <FileCollection key={view} template={view === "templates"} />
-      ) : view === "profile" ? (
-        <Profile />
-      ) : view === "reports" ? (
-        <Reports />
-      ) : (
-        <Audit />
-      )}
+      ) : <Reports />}
     </section>
   )
 }

@@ -26,7 +26,10 @@ export interface AiChatOptions {
   model?: string; // 覆盖默认 textModel
   maxTokens?: number;
   temperature?: number;
+  jsonObject?: boolean;
+  jsonSchema?: { name: string; schema: Record<string, unknown> };
   timeoutMs?: number;
+  expectedDestination?: { baseUrl: string; model: string };
   logAction?: string; // 外部调用台账的业务动作名（如 review-document）
   /**
    * 发起人 id，落 ExternalCallLog.userId（第八轮体检）。
@@ -49,6 +52,13 @@ export class AiNotConfiguredError extends Error {
   }
 }
 
+export class AiDeliveryUncertainError extends ActionError {
+  constructor(status?: number) {
+    super("AI 调用结果未确认" + (status === undefined ? "" : "（HTTP " + status + "）"));
+    this.name = "AiDeliveryUncertainError";
+  }
+}
+
 async function callOpenAiCompatible(opts: {
   apiKey: string;
   baseUrl: string;
@@ -60,20 +70,33 @@ async function callOpenAiCompatible(opts: {
   try {
     // 私网校验（2026-09-19 审计）：管理端可配的 baseUrl 不得指向本机/内网
     await assertSafeHttpUrl(opts.baseUrl.replace(/\/$/, ""));
-    const res = await safeFetch(`${opts.baseUrl.replace(/\/$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${opts.apiKey}`
-      },
-      body: JSON.stringify(opts.body),
-      signal: ctrl.signal
-    });
-    if (!res.ok) {
-      const body = await res.text();
-      throw new ActionError(`AI 请求失败 (${res.status}): ${body.slice(0, 200)}`);
+    let res: Response;
+    try {
+      res = await safeFetch(`${opts.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${opts.apiKey}`
+        },
+        body: JSON.stringify(opts.body),
+        signal: ctrl.signal
+      });
+    } catch (error) {
+      if (error instanceof ActionError) throw error;
+      throw new AiDeliveryUncertainError();
     }
-    return res.json();
+    if (!res.ok) {
+      await res.body?.cancel();
+      // A timeout or gateway failure may have happened after the provider began work.
+      if (res.status === 408 || res.status >= 500) throw new AiDeliveryUncertainError(res.status);
+      throw new ActionError(`AI 请求失败 (${res.status})`);
+    }
+    try {
+      return await res.json();
+    } catch (error) {
+      if (error instanceof SyntaxError) throw new ActionError("AI 响应不是有效的 JSON");
+      throw new AiDeliveryUncertainError();
+    }
   } finally {
     clearTimeout(timer);
   }
@@ -82,12 +105,24 @@ async function callOpenAiCompatible(opts: {
 export async function aiChat(input: AiChatOptions): Promise<AiChatResult> {
   const s = await getAiSettings();
   if (!s.configured) throw new AiNotConfiguredError();
+  if (input.expectedDestination && (s.baseUrl !== input.expectedDestination.baseUrl || s.textModel !== input.expectedDestination.model)) {
+    throw new ActionError("AI 配置已变化，请重新确认模型和材料范围");
+  }
 
+  const model = input.model || s.textModel;
+  const officialOpenAi = new URL(s.baseUrl).origin === "https://api.openai.com";
+  const responseFormat = input.jsonSchema && officialOpenAi && /^gpt-(?:4\.1|4o|5)(?:[-.]|$)/.test(model)
+    ? { type: "json_schema", json_schema: { ...input.jsonSchema, strict: true } }
+    : input.jsonObject && officialOpenAi ? { type: "json_object" } : undefined;
+  const messages: ChatMessage[] = input.jsonSchema && responseFormat?.type !== "json_schema"
+    ? [{ role: "system", content: "输出结构：" + JSON.stringify(input.jsonSchema.schema) }, ...input.messages]
+    : input.messages;
   const body = {
-    model: input.model || s.textModel,
-    messages: input.messages,
+    model,
+    messages,
     max_tokens: input.maxTokens ?? 1500,
-    temperature: input.temperature ?? 0.2
+    temperature: input.temperature ?? 0.2,
+    ...(responseFormat && { response_format: responseFormat }),
   };
 
   // v1.x P1: 外部调用台账（成败/耗时；失败不改变原有异常行为）

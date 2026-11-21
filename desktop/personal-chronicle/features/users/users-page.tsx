@@ -11,8 +11,8 @@ import {
   UserPlusIcon,
   UsersIcon,
 } from "lucide-react"
-import Link from "next/link"
-import { useSearchParams } from "next/navigation"
+import Link from "@/features/shell/workspace-link"
+import { useSearchParams } from "@/kit/framework"
 import { useMemo, useState, useSyncExternalStore } from "react"
 
 import { Button } from "@/components/ui/button"
