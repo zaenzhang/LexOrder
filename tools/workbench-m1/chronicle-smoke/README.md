@@ -124,7 +124,7 @@ node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-P
 ```
 
 
-原生 Windows 性能基线使用 `--performance`。在同一个专用合成工作区串行重复。首次自动建两案并保存固定 PDF，其后按登记 ID 复用。每次在乙案新增 8 个 512 KiB 的合成 TXT，输出 `CHRONICLE_PERFORMANCE` 一行 JSON。包括冷启、切案、PDF HTTP 响应与截图识别的首屏、批量入卷回执、后台解析完成及两个窗口中的进程树工作集。批次原件通过本地预检回读当前解析代的已发布文本，模型发送为零。Windows 采样使用系统 PowerShell，工作集求和含共享页重复计数。脚本启动新的 WebView2 配置目录，不清 OS 文件缓存。
+原生 Windows 性能基线使用 `--performance`。在同一个专用合成工作区串行重复。首次自动建两案并保存固定 PDF，其后按登记 ID 复用。每次在乙案新增 8 个 512 KiB 的合成 TXT，输出 `CHRONICLE_PERFORMANCE` 一行 JSON。包括冷启、切案、PDF HTTP 响应与截图识别的首屏、批量入卷回执、后台解析完成及两个窗口中的进程树工作集。批次原件通过本地预检回读当前解析代的已发布文本，模型发送为零。Windows 采样通过系统 PowerShell 用 PID 和创建时间跟踪宿主与后代，工作集求和含共享页重复计数。脚本启动新的 WebView2 配置目录，不清 OS 文件缓存。
 
 ```powershell
 node (Join-Path $repo 'tools/workbench-m1/chronicle-smoke/webview2.mjs') (Join-Path $qaTarget 'debug/lexorder-chronicle-preview.exe') --performance

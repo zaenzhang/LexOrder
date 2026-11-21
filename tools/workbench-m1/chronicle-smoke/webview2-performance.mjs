@@ -30,19 +30,30 @@ async function workingSetSampler(hostPid) {
   assert(Number.isSafeInteger(hostPid) && hostPid > 0);
   const script = `
 $ErrorActionPreference='Stop'
-$rootPid=${hostPid}
-while (Get-Process -Id $rootPid -ErrorAction SilentlyContinue) {
-  $rows = Get-CimInstance -ClassName Win32_Process -Property ProcessId,ParentProcessId,WorkingSetSize
-  $known = [Collections.Generic.HashSet[uint32]]::new()
-  [void]$known.Add($rootPid)
+$rootPid=[uint32]${hostPid}
+$rootCreated=$null
+while ($true) {
+  $rows = Get-CimInstance -ClassName Win32_Process -Property ProcessId,ParentProcessId,CreationDate,WorkingSetSize
+  $root = $rows | Where-Object ProcessId -EQ $rootPid | Select-Object -First 1
+  if (!$root.CreationDate -or ($rootCreated -and $root.CreationDate -ne $rootCreated)) { break }
+  $rootCreated = $root.CreationDate
+  $known = [Collections.Generic.Dictionary[uint32,datetime]]::new()
+  $known.Add($rootPid, $rootCreated)
+  $sum = [int64]$root.WorkingSetSize
   do {
     $before=$known.Count
     foreach ($row in $rows) {
-      if ($known.Contains($row.ParentProcessId)) { [void]$known.Add($row.ProcessId) }
+      $parentCreated=[datetime]::MinValue
+      # An orphan can still report a parent PID now used by a younger process.
+      if ($row.CreationDate -and !$known.ContainsKey($row.ProcessId) -and
+          $known.TryGetValue($row.ParentProcessId, [ref]$parentCreated) -and
+          $row.CreationDate -ge $parentCreated) {
+        $known.Add($row.ProcessId, $row.CreationDate)
+        $sum += [int64]$row.WorkingSetSize
+      }
     }
   } while ($known.Count -ne $before)
-  $sum = ($rows | Where-Object {$known.Contains($_.ProcessId)} | Measure-Object -Property WorkingSetSize -Sum).Sum
-  [Console]::WriteLine(("{0} {1} {2}" -f [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds(),[int64]$sum,$known.Count))
+  [Console]::WriteLine(("{0} {1} {2}" -f [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds(),$sum,$known.Count))
   Start-Sleep -Milliseconds 100
 }
 `;

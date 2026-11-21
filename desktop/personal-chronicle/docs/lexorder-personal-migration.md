@@ -743,3 +743,15 @@ Windows 用相同场景在原生 WebView2 另跑三轮，延长采样至后台�
 **macOS 冒烟问题，待复验。** Apple Silicon runner 已编译带原生 WebKit WebDriver 的 Tauri 调试宿主。首次从空工作区启动时，12 秒内驱动未确认窗口就绪，也未产生性能样本。专项现在复用业务冒烟准备同一个隔离工作区，再从 Tauri 进程启动计时。等待上限与应用启动分开，记录最后的驱动状态和宿主输出。常规三端矩阵仍保留组件、宿主、安全和安装包业务检查，手动性能专项仅运行该平台所需的构建和业务准备。 [首次专项日志](https://github.com/zaenzhang/LexOrder/actions/runs/44841310175/job/136650097159)
 
 **macOS 复跑 · 窗口已启动。** Apple Silicon macOS 15.8.2 从已初始化的工作区启动。业务冒烟通过固定 PDF 回读、重开、重复启动拒绝及旧会话失效，Tauri 也成功打开 WKWebView 并读到今日办理。runner 初始正文视口为 1024 × 656，严格尺寸守卫将该轮拦在性能采样前。现用原生窗口尺寸命令在后续采样前核对实际 1440 × 900 视口，分别记录启动尺寸与采样尺寸。 [第二轮原生日志](https://github.com/zaenzhang/LexOrder/actions/runs/44843332020/job/136656896433)
+
+### Windows NSIS 安装后原生应用复验 · 2026-11-21
+
+Windows Server 2022 CI 使用 `c61c3e9` 构建的 NSIS 隔离安装目录，以包内运行时建案。原生 WebView2 在 1440 × 900 复跑三轮。每轮切换两案各两次，实际截图确认 PDF 首屏色块，批量导入 8 × 512 KiB TXT 后回读全部 READY。三轮共 24 件，模型调用为零。
+
+| 轮次 | 冷启 | 四次切案 | PDF 响应 / 首屏 | 入卷 / 解析完成 |
+| --- | ---: | --- | ---: | ---: |
+| 1 | 13,087 ms | 370 / 366 / 361 / 371 ms | 1,094 / 3,304 ms | 2,876 / 10,063 ms |
+| 2 | 5,798 ms | 305 / 357 / 368 / 330 ms | 810 / 1,433 ms | 2,588 / 6,867 ms |
+| 3 | 5,895 ms | 306 / 387 / 350 / 280 ms | 843 / 1,452 ms | 3,074 / 6,242 ms |
+
+**冒烟问题 · 内存归属待重测。** 第二轮旧采样器计入 126 个进程，第一、三轮各 12 个。这批数据不用于确认安装后内存峰值。Windows 的 `ParentProcessId` 可能指向复用该编号的新进程。采样器现在用 PID 和创建时间锁定宿主，只沿父进程先创建的边计入后代。PowerShell 合成快照复现了孤立子树撞到复用编号及宿主编号被复用，修正后两种情况均排除。本机 Windows WebView2 调试宿主复跑一轮，正确完成 8 件解析，峰值样本包含 11 个进程。 [Windows 安装后实测](https://github.com/zaenzhang/LexOrder/actions/runs/44842615164/job/136654487656) · [微软 Win32_Process 进程身份说明](https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-process#members)
