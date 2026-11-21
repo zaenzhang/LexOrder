@@ -757,3 +757,5 @@ Windows Server 2022 CI 使用 `c61c3e9` 构建的 NSIS 隔离安装目录，以�
 **冒烟问题 · 内存归属待重测。** 第二轮旧采样器计入 126 个进程，第一、三轮各 12 个。这批数据不用于确认安装后内存峰值。Windows 的 `ParentProcessId` 可能指向复用该编号的新进程。采样器现在用 PID 和创建时间锁定宿主，只沿父进程先创建的边计入后代。PowerShell 合成快照复现了孤立子树撞到复用编号及宿主编号被复用，修正后两种情况均排除。本机 Windows WebView2 调试宿主复跑一轮，正确完成 8 件解析，峰值样本包含 11 个进程。 [Windows 安装后实测](https://github.com/zaenzhang/LexOrder/actions/runs/44842615164/job/136654487656) · [微软 Win32_Process 进程身份说明](https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-process#members)
 
 **macOS 第三轮 · 宽视口待验。** 原生窗口尺寸命令执行后，网页仍未达到 1440 × 900，严格尺寸检查再次让该轮提前停止。托管虚拟显示专项现在按其实际尺寸测量，附显示设备和视口读数。严格 1440 × 900 路径继续用于有足够显示空间的 Mac。不同视口的时间结果分别记录。 [第三轮原生日志](https://github.com/zaenzhang/LexOrder/actions/runs/44844309241/job/136660149756)
+
+**macOS 实际视口复跑 · PDF 计时待验。** 已在托管 WKWebView 的 1024 × 656 视口启动，从今日办理进入并切换两件合成案件。脚本在读取 PDF 嵌入请求的 Resource Timing 时提前中断，未输出完整性能记录。脚本改在截图观察之后读取请求时间，缺失则明确留空。真正绘出的测试色块和同一固定原件的成功回读仍是必验项。 [第四轮原生日志](https://github.com/zaenzhang/LexOrder/actions/runs/44845550401/job/136664234187)
