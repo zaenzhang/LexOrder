@@ -117,7 +117,10 @@ async function measure() {
       signal: AbortSignal.timeout(30_000),
     });
     const { value } = await response.json();
-    if (!response.ok) throw new Error(method + " " + route + ": " + value.error + " " + value.message);
+    if (!response.ok) {
+      throw Object.assign(new Error(method + " " + route + ": " + value.error + " " + value.message),
+        { webdriverError: value.error });
+    }
     return value;
   }
   let session;
@@ -197,7 +200,12 @@ async function measure() {
       return new Response(Uint8Array.from(result.bytes), { status: result.status, headers: result.headers });
     };
     const { cases: [a, b], documentId } = await prepareCases(request, workspace, casebookRoot);
-    const navigate = route => command(session + "/url", "POST", { url: native.origin + route });
+    const navigate = async route => {
+      await command(session + "/url", "POST", { url: native.origin + route });
+      await waitFor("navigation to " + route, () => execute(
+        "return location.pathname === arguments[0] && document.readyState !== 'loading'", route,
+      ));
+    };
     const element = async (selector, title, attribute, hitTest = false) => {
       const handle = await waitFor(title ?? selector, () => execute(`
         const [selector, title, attribute, hitTest] = arguments;
@@ -217,16 +225,30 @@ async function measure() {
       }) : handle;
       return session + "/element/" + identified[elementKey];
     };
-    const click = handle => command(handle + "/click", "POST", {});
+    const click = async (...locator) => {
+      let began;
+      await waitFor("click " + (locator[1] ?? locator[0]), async () => {
+        try {
+          const handle = await element(...locator);
+          began ??= performance.now();
+          await command(handle + "/click", "POST", {});
+          return true;
+        } catch (error) {
+          // Neither response dispatches a click. A route can replace the node while
+          // WebDriver is resolving its handle, so reacquire it within the deadline.
+          if (["no such element", "stale element reference"].includes(error.webdriverError)) return false;
+          throw error;
+        }
+      });
+      return began;
+    };
     const overview = title => waitFor("overview " + title, () => visible('section[aria-label="案件状态和期限"] h2', title));
     await navigate("/matters/" + a.id + "/overview");
     await overview(a.title);
     const switchCaseMs = [];
     for (const [from, to] of [[a, b], [b, a], [a, b], [b, a]]) {
-      await click(await element("button", "切换案件：" + from.title, "aria-label"));
-      const link = await element('[role="menuitem"]', to.title, null, true);
-      const began = performance.now();
-      await click(link);
+      await click("button", "切换案件：" + from.title, "aria-label");
+      const began = await click('[role="menuitem"]', to.title, null, true);
       await overview(to.title);
       switchCaseMs.push(elapsed(began));
     }
@@ -264,7 +286,7 @@ async function measure() {
     assert.equal(Buffer.from(await pdf.arrayBuffer()).subarray(0, 5).toString(), "%PDF-");
 
     await navigate("/matters/" + b.id + "/materials");
-    await click(await element("button", "批量导入"));
+    await click("button", "批量导入");
     const pickerSelector = '[role="dialog"] input[type="file"]';
     const picker = await element(pickerSelector);
     const tag = randomUUID().slice(0, 8);
@@ -304,7 +326,7 @@ async function measure() {
       } else {
         await command(picker + "/value", "POST", { text: files.join("\n") });
       }
-      await click(await element('[role="dialog"] button', "导入待处理文件"));
+      await click('[role="dialog"] button', "导入待处理文件");
       await waitFor("all import receipts", () => visible('[role="dialog"] [role="status"]',
         "已入卷 " + fileCount + " 件，待处理 0 件，失败 0 件", true), 90_000);
       importFinished = performance.now();
