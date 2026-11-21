@@ -28,7 +28,9 @@ const fixture = (mode === '--case-flow' || mode === '--batch')
   ? JSON.parse(await readFile(path.join(workspace, 'chronicle-performance-fixture.json'), 'utf8')) : null;
 
 async function probe(pid, action, label = '', value = '') {
-  const { stdout } = await run('/usr/bin/osascript', [script, String(pid), action, label, value], { timeout: action === 'inspect' ? 20_000 : 8000 });
+  const scopedCatalog = action === 'material-scope' || (action === 'press' && ['Select all on this page', '委托材料预检'].includes(label));
+  const timeout = action === 'inspect' || scopedCatalog ? 20_000 : 8000;
+  const { stdout } = await run('/usr/bin/osascript', [script, String(pid), action, label, value], { timeout });
   return stdout.trim();
 }
 
@@ -112,6 +114,7 @@ async function measureImport(pid, existingPids) {
     await press('导入待处理文件');
     await textVisible('已入卷 ' + fileCount + ' 件，待处理 0 件，失败 0 件', 90_000);
     receiptAt = performance.now();
+    console.log('CHRONICLE_MACOS_IMPORT_RECEIPT ' + JSON.stringify({ fileCount, ms: Math.round(receiptAt - started) }));
 
     await press('Close');
     assert.equal(await probe(pid, 'type', '搜索案内材料', tag), 'typed');

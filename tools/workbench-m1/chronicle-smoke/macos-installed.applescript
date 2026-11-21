@@ -6,6 +6,22 @@ on getText(uiNode, propertyName)
 	end try
 end getText
 
+-- Read the app document. Large material previews live in a separate web area.
+on pageControls(hostNode, insideDocument)
+	tell application "System Events" to set childNodes to UI elements of hostNode
+	set resultNodes to {}
+	repeat with uiNode in childNodes
+		set nodeRole to my getText(uiNode, "AXRole")
+		if nodeRole is not "AXWebArea" or not insideDocument then
+			set end of resultNodes to uiNode
+			if nodeRole is not in {"AXStaticText", "AXImage", "AXTextField", "AXCheckBox"} then
+				set resultNodes to resultNodes & my pageControls(uiNode, insideDocument or (nodeRole is "AXWebArea"))
+			end if
+		end if
+	end repeat
+	return resultNodes
+end pageControls
+
 on run argv
 	set desktopPID to (item 1 of argv) as integer
 	set operation to item 2 of argv
@@ -57,7 +73,11 @@ on run argv
 		set textCount to 0
 		set consecutiveText to ""
 		set selectedFiles to {}
-		set tree to entire contents of desktopWindow
+		if operation is "material-scope" or (operation is "press" and targetLabel is in {"Select all on this page", "委托材料预检"}) then
+			set tree to my pageControls(desktopWindow, false)
+		else
+			set tree to entire contents of desktopWindow
+		end if
 		repeat with uiNode in tree
 			set nodeRole to my getText(uiNode, "AXRole")
 			set isControl to nodeRole is in {"AXButton", "AXPopUpButton", "AXMenuButton", "AXMenuItem", "AXLink", "AXCheckBox", "AXFileUploadButton"}
