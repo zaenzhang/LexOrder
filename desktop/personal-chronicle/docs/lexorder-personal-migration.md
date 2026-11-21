@@ -791,3 +791,15 @@ GitHub Actions 的 macOS 15.8.2（24H232）使用 e087dee 的 Tauri 调试验收
 **重用 DMG 冒烟问题 · 已修正依赖入口。** 指定构建的 DMG 已下载并挂载。合成样本脚本需要根项目锁定的 `pdf-lib`，首轮复用任务只安装了工作台子项目的依赖，脚本在初始化隔离工作区时退出。复用任务安装根依赖并跳过安装钩子，仍复用包内 Bun 与运行时。 [首轮复用日志](https://github.com/zaenzhang/LexOrder/actions/runs/44851147563/job/136682541357)
 
 **发行包冒烟问题 · 锁标记断言已修正。** 复用 `e087dee` 的 Apple Silicon DMG 后，包内服务成功建案并重开，实际 Tauri 输出就绪信号，辅助功能读到了「今日办理」的数据。脚本随后用 `access` 检查 `.owner` 时返回 ENOENT。macOS 运行时使用目录 flock 持锁，`.owner` 是指向不存在的 `/proc/<PID>` 的标记链接。改用 `lstat` 直接验证运行时标记，并在关窗成功退出后检查链接移除与下轮重开。 [发行包复用日志](https://github.com/zaenzhang/LexOrder/actions/runs/44851296538/job/136683014867)
+
+### macOS DMG 原生窗口启动和退出 · 2026-11-21
+
+在 macOS 15 托管 runner 从只读挂载的 `e087dee` Apple Silicon DMG 直接运行包内 Tauri。使用 `4aabbb8` 的验收脚本，三次重开同一个隔离合成工作区。每轮从新进程启动计时，核对宿主就绪信号、「今日办理」已加载的日期和运行中的工作区标记。通过系统窗口关闭按钮发起退出，三轮退出码均为 0，退出后标记均移除。 [发行包三轮日志](https://github.com/zaenzhang/LexOrder/actions/runs/44851582015/job/136683930188) · [被测 DMG 来源](https://github.com/zaenzhang/LexOrder/actions/runs/44848588605/artifacts/14684394017)
+
+| 轮次 | 启动到今日办理数据可读 | 关窗到退出并释放标记 | 系统窗口外框 |
+| --- | ---: | ---: | ---: |
+| 1 | 14,555 ms | 314 ms | 1024 × 684 |
+| 2 | 8,838 ms | 262 ms | 1024 × 684 |
+| 3 | 10,417 ms | 277 ms | 1024 × 684 |
+
+计时包含系统辅助功能轮询和从挂载 DMG 读取包。宽窗、发行包内的切案、PDF 首屏、批量解析和内存仍待测。调试验收宿主的对应数据见上一节。
