@@ -129,7 +129,9 @@ jobs:
           test "${#apps[@]}" -eq 1
           export LEXORDER_SMOKE_RUNTIME_ROOT="${apps[0]}/Contents/Resources/lexorder-runtime"
           export LEXORDER_SMOKE_BUN="${apps[0]}/Contents/MacOS/lexorder-bun"
-          bun --no-env-file --no-install tools/workbench-m1/chronicle-smoke/sidecar.mjs "$RUNNER_TEMP/lexorder-installed-case"
+          workspace="$RUNNER_TEMP/lexorder-installed-case"
+          bun --no-env-file --no-install tools/workbench-m1/chronicle-smoke/sidecar.mjs "$workspace"
+          node tools/workbench-m1/chronicle-smoke/macos-installed.mjs "${apps[0]}" "$workspace"
       - name: Extract and smoke the Linux DEB
         if: runner.os == 'Linux'
         shell: bash

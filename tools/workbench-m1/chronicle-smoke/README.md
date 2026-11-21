@@ -171,6 +171,12 @@ node tools/workbench-m1/chronicle-smoke/webkit-performance.mjs \
 
 已有 Chronicle Sidecar 工作流支持手动选择 `native_performance: macos`，该专项先用现有业务冒烟初始化私有工作区，再从原生宿主启动计时。命令默认要求 1440 × 900，托管虚拟显示用 `--runner-viewport` 单独记录实际视口。脚本使用 WKWebView 原生截图查找实际 PDF 首屏色块，并单独回读固定原件。若 WebKit 未提供嵌入请求的 Resource Timing，`pdfResponseMs` 输出 `null`，仍要求实际首屏画面和固定原件校验通过。批量入口在测试窗口接收合成 FileList，之后通过实际确认按钮和案卷 API 入卷，系统文件选择器另验。输出 `CHRONICLE_WK_PERFORMANCE`。进程内存统计包含 Tauri 子进程，并记录隔离环境中新出现的 WebKit XPC 进程数和累加 RSS。并行浏览任务会影响 XPC 归属，故只在专用环境采集。每轮使用临时 WebView 数据存储，关窗后检查案卷解锁。
 
+macOS DMG 验收在挂载包内分别检查业务运行时和原生 Tauri 窗口。业务冒烟先初始化一个隔离合成工作区，然后从挂载的 .app 运行三轮冷启动。使用系统辅助功能按宿主 PID 确认「今日办理」的日期已加载、读取系统窗口尺寸并关闭该窗口，每轮确认正常退出和工作区锁释放。输出 `CHRONICLE_MACOS_INSTALLED`，计时包含辅助功能轮询，窗口尺寸为系统外框。手动执行需在有图形会话、已允许系统辅助功能自动化的 Mac 上，传入挂载的 .app 与业务冒烟已初始化的隔离合成工作区。
+
+```bash
+node tools/workbench-m1/chronicle-smoke/macos-installed.mjs "$app_bundle" "$smoke_workspace"
+```
+
 ## 检查内容
 
 - 工作稿用两个案件的同名 TXT 核对归属、原件限制、受控签出、Linux 默认编辑器保存、替换写、V1 至 V3 字节及重复事件。脚本只轮询材料详情，等待宿主监听主动回传。随后还原一份旧基线工作稿登记，确认冲突及两份内容保留。200 毫秒安静期用于合并同一次保存的多个文件事件，间隔短于窗口的多次改写可能合并。工作台重新打开时检查已登记工作稿并恢复监听。
