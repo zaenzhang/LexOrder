@@ -177,6 +177,8 @@ macOS DMG 验收在挂载包内分别检查业务运行时和原生 Tauri 窗口
 node tools/workbench-m1/chronicle-smoke/macos-installed.mjs "$app_bundle" "$smoke_workspace"
 ```
 
+已有发行包可以通过同一个工作流的 `macos_dmg_run_id` 复跑。输入包含 `lexorder-macos-dmg` 的构建运行 ID，工作流只启动一个 Mac runner、下载指定包，并执行与新构建相同的校验。复测时记录所用包的来源提交。
+
 ## 检查内容
 
 - 工作稿用两个案件的同名 TXT 核对归属、原件限制、受控签出、Linux 默认编辑器保存、替换写、V1 至 V3 字节及重复事件。脚本只轮询材料详情，等待宿主监听主动回传。随后还原一份旧基线工作稿登记，确认冲突及两份内容保留。200 毫秒安静期用于合并同一次保存的多个文件事件，间隔短于窗口的多次改写可能合并。工作台重新打开时检查已登记工作稿并恢复监听。

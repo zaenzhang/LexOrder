@@ -30,8 +30,10 @@ async function measure(round) {
   delete env.NEXT_DIST_DIR;
   delete env.LEXORDER_MACOS_SMOKE_PORT;
   const started = performance.now();
-  const child = spawn(binary, { cwd: path.dirname(binary), env, stdio: ['ignore', 'ignore', 'pipe'] });
+  const child = spawn(binary, { cwd: path.dirname(binary), env, stdio: ['ignore', 'pipe', 'pipe'] });
   let diagnostic = '';
+  let hostOutput = '';
+  child.stdout.on('data', chunk => { hostOutput = (hostOutput + chunk).slice(-2000); });
   child.stderr.on('data', chunk => { diagnostic = (diagnostic + chunk).slice(-4000); });
   const closed = new Promise(resolve => {
     child.once('error', error => resolve({ error }));
@@ -44,10 +46,14 @@ async function measure(round) {
       assert.equal(child.exitCode, null, 'Bundled Tauri process exited before the home page');
       assert.equal(child.signalCode, null, 'Bundled Tauri process was terminated before the home page');
       size = await probe(child.pid, 'page');
-      if (size) break;
+      if (/^\d+ \d+$/.test(size)) break;
       await delay(250);
     }
-    assert.match(size ?? '', /^\d+ \d+$/, 'The installed window did not expose the loaded 今日办理 date');
+    if (!/^\d+ \d+$/.test(size ?? '')) {
+      const structure = await probe(child.pid, 'inspect').catch(error => error.message);
+      throw new Error('The installed window did not expose the loaded 今日办理 date: ' + size + '\n' + structure);
+    }
+    assert.match(hostOutput, /LEXORDER_DESKTOP_READY http:\/\/127\.0\.0\.1:\d+/);
     const startMs = Math.round(performance.now() - started);
     await access(owner);
 
@@ -60,6 +66,7 @@ async function measure(round) {
       round, startMs, closeMs: Math.round(performance.now() - closeAt), window: size.split(' ').map(Number),
     }));
   } catch (error) {
+    if (hostOutput) console.error(hostOutput);
     if (diagnostic) console.error(diagnostic);
     throw error;
   } finally {
