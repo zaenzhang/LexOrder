@@ -10,6 +10,7 @@ import { promisify } from 'node:util';
 import sharp from 'sharp';
 import { bytesPerFile, fileCount, hasPerformancePdfMarker, syntheticImportFiles } from './desktop-performance-fixture.mjs';
 import { processTable, processTree } from './webkit-process-memory.mjs';
+import { readPublishedBatch } from './release-parse-proof.mjs';
 
 const [bundle, workspace, mode] = process.argv.slice(2);
 assert(process.platform === 'darwin' && path.isAbsolute(bundle ?? '') && bundle.endsWith('.app')
@@ -17,6 +18,7 @@ assert(process.platform === 'darwin' && path.isAbsolute(bundle ?? '') && bundle.
 assert.notEqual(workspace, process.env.LEXORDER_DESKTOP_WORKSPACE, 'Use a separate smoke workspace');
 
 const binary = path.join(bundle, 'Contents/MacOS/lexorder-chronicle-preview');
+const runtime = path.join(bundle, 'Contents/Resources/lexorder-runtime');
 const owner = path.join(workspace, '.owner');
 await access(binary);
 await access(path.join(workspace, 'workspace.json'));
@@ -27,10 +29,9 @@ const diagnosticsDir = process.env.LEXORDER_MACOS_DIAGNOSTICS_DIR;
 const fixture = (mode === '--case-flow' || mode === '--batch')
   ? JSON.parse(await readFile(path.join(workspace, 'chronicle-performance-fixture.json'), 'utf8')) : null;
 
-async function probe(pid, action, label = '', value = '') {
-  const scopedCatalog = action === 'material-scope' || (action === 'press' && ['Select all on this page', '委托材料预检'].includes(label));
-  const timeout = action === 'inspect' || scopedCatalog ? 20_000 : 8000;
-  const { stdout } = await run('/usr/bin/osascript', [script, String(pid), action, label, value], { timeout });
+async function probe(pid, action, label = '') {
+  const timeout = action === 'inspect' ? 20_000 : 8000;
+  const { stdout } = await run('/usr/bin/osascript', [script, String(pid), action, label], { timeout });
   return stdout.trim();
 }
 
@@ -100,50 +101,48 @@ async function measureImport(pid, existingPids) {
   const baseline = processTree(pid, existingPids);
   assert(baseline.processes && baseline.bytes > 0, 'No desktop process tree at baseline');
   const samples = [];
-  const sample = () => samples.push({ at: performance.now(), ...processTree(pid, existingPids) });
+  const sample = () => samples.push({ at: Date.now(), ...processTree(pid, existingPids) });
+  sample();
   const sampler = setInterval(sample, 125);
+  const startedAt = Date.now();
   const started = performance.now();
-  let receiptAt;
   try {
     assert.equal(await probe(pid, 'go-to-folder', folder + '/'), 'navigated');
     await delay(700);
     assert.equal(await probe(pid, 'select-files'), 'submitted');
     await textVisible('已入卷 0 件，待处理 ' + fileCount + ' 件，失败 0 件');
+    const names = files.map(file => file.name).sort();
     const queuedFiles = (await probe(pid, 'queued-files')).split(', ').sort();
-    assert.deepEqual(queuedFiles, files.map(file => file.name).sort(), 'Only this round’s synthetic files may be imported');
+    assert.deepEqual(queuedFiles, names, 'Only this round’s synthetic files may be imported');
     await press('导入待处理文件');
     await textVisible('已入卷 ' + fileCount + ' 件，待处理 0 件，失败 0 件', 90_000);
-    receiptAt = performance.now();
-    console.log('CHRONICLE_MACOS_IMPORT_RECEIPT ' + JSON.stringify({ fileCount, ms: Math.round(receiptAt - started) }));
+    const receiptAt = Date.now();
+    const importMs = Math.round(performance.now() - started);
+    console.log('CHRONICLE_MACOS_IMPORT_RECEIPT ' + JSON.stringify({ fileCount, ms: importMs }));
 
-    await press('Close');
-    assert.equal(await probe(pid, 'type', '搜索案内材料', tag), 'typed');
-    await waitFor(pid, 'material-scope', tag, String(fileCount));
-    await press('Select all on this page');
-    await press('委托材料预检');
-    const until = performance.now() + 45_000;
-    let parsed = false;
-    do {
-      if (Number(await probe(pid, 'text', '文本提取完成')) === fileCount) {
-        parsed = true;
-        break;
-      }
-      await press('刷新预检');
-    } while (performance.now() < until);
-    assert(parsed, 'Expected an available parsed version for every file in this round');
+    // Cover the worker without querying the running workspace directly. After
+    // shutdown, verify that the real completion timestamp fell within this interval.
+    await delay(18_000);
     sample();
+    return { names, matterId: b.id, baseline, samples, startedAt, receiptAt, importMs };
   } finally {
     clearInterval(sampler);
   }
+}
 
+async function confirmImportedBatch(batch) {
+  const { names, matterId, baseline, samples, startedAt, receiptAt, importMs } = batch;
+  const { parseStates, firstFinishedMs, lastFinishedMs } = await readPublishedBatch(runtime, workspace, matterId, names);
+  const endOfActivity = Math.max(receiptAt, lastFinishedMs);
+  assert(firstFinishedMs >= startedAt && endOfActivity < samples.at(-1).at, 'The published batch must finish while the running app is sampled');
+  const lastSample = samples.findIndex(row => row.at > endOfActivity);
   const intake = samples.filter(row => row.at <= receiptAt);
-  assert(intake.length && samples.some(row => row.at > receiptAt), 'Missing import or parsing memory samples');
-  const peak = samples.reduce((largest, current) => current.bytes > largest.bytes ? current : largest);
+  assert(intake.length && lastSample > 0, 'Missing import or parsing memory samples');
+  const peak = samples.slice(0, lastSample + 1).reduce((largest, current) => current.bytes > largest.bytes ? current : largest);
   return {
-    fileCount, inputBytes: fileCount * bytesPerFile, parseStates: Array(fileCount).fill('READY'),
-    importMs: Math.round(receiptAt - started), verifiedParsingMs: Math.round(performance.now() - started),
+    fileCount, inputBytes: fileCount * bytesPerFile, parseStates, importMs, parsedMs: lastFinishedMs - startedAt,
     baselineBytes: baseline.bytes, intakePeakBytes: Math.max(...intake.map(row => row.bytes)),
-    peakBytes: peak.bytes, observedProcesses: peak.processes, xpcProcesses: peak.xpcProcesses, samplingCount: samples.length,
+    peakBytes: peak.bytes, observedProcesses: peak.processes, xpcProcesses: peak.xpcProcesses, samplingCount: lastSample + 1,
   };
 }
 
@@ -183,15 +182,17 @@ async function measure(round) {
 
     const caseMetrics = mode === '--case-flow' ? await measureCases(child.pid, round) : {};
 
-    const importMetrics = fixture ? await measureImport(child.pid, existingPids) : {};
+    const batch = fixture ? await measureImport(child.pid, existingPids) : null;
 
     const closeAt = performance.now();
     assert.equal(await probe(child.pid, 'close'), 'pressed', 'Could not close the installed window');
     const exit = await Promise.race([closed, delay(45_000, null, { ref: false })]);
     assert.deepEqual(exit, { code: 0, signal: null }, 'The installed window did not shut down cleanly');
     await assert.rejects(lstat(owner), { code: 'ENOENT' });
+    const closeMs = Math.round(performance.now() - closeAt);
+    const importMetrics = batch ? await confirmImportedBatch(batch) : {};
     console.log('CHRONICLE_MACOS_INSTALLED ' + JSON.stringify({
-      round, ...caseMetrics, ...importMetrics, startMs, closeMs: Math.round(performance.now() - closeAt), window: size.split(' ').map(Number),
+      round, ...caseMetrics, ...importMetrics, startMs, closeMs, window: size.split(' ').map(Number),
     }));
   } catch (error) {
     if (hostOutput) console.error(hostOutput);
