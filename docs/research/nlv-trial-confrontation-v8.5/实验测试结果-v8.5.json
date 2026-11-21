@@ -1,0 +1,41 @@
+{
+  "preview": "LexOrder-诉讼分析工作台-实验预览-v8.5.html",
+  "browser": "Chromium headless via Playwright",
+  "checks": [
+    {
+      "name": "default",
+      "heading": "争点攻防",
+      "case": "甲方学校与乙方公司买卖合同纠纷"
+    },
+    {
+      "name": "artifact_links",
+      "count": 15,
+      "missing_local_files": []
+    },
+    {
+      "name": "element_route",
+      "hash": "#/matters/A/confrontation?element=P2-1",
+      "title": "解除条件成就且解除通知已送达"
+    },
+    {
+      "name": "global_disabled",
+      "disabled_count": 12,
+      "workspace": "全局工作区"
+    },
+    {
+      "name": "case_isolation",
+      "title": "第二案（导航隔离测试）",
+      "A_data_count": 0
+    }
+  ],
+  "console_errors": [],
+  "page_errors": [],
+  "status": "passed for listed interactions",
+  "not_verified": [
+    "上游 pipeline.py/build_matrix.py/render_main.py 原样执行",
+    "真实 LexOrder 服务读写",
+    "Windows Tauri WebView 实机",
+    "浏览器重启后的 localStorage 跨会话持久化"
+  ],
+  "environment_note": "localhost navigation was blocked by the browser harness; HTML interaction tests used set_content. Git clone also failed because github.com DNS could not be resolved."
+}

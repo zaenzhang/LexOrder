@@ -1,0 +1,66 @@
+{
+  "upstream": {
+    "repository": "MiaoQichuan/new-litigation-visualization",
+    "branch": "main",
+    "commit": "16c480c3947e78ba49623423ea0486277f5fe99d",
+    "skill": "mqc-trial-confrontation-master",
+    "skill_version": "1.1.0",
+    "license": "AGPL-3.0-only"
+  },
+  "input": {
+    "path": "source-evidence/upstream-matrix-input.json",
+    "github_blob_sha": "1b90bf714a184ba35954fdbe7d13627c488fe03d",
+    "local_sha256": "8989fc2e0ee46484dea438a1c4ae9625d685fe75e26574144e3a1619caa30da2"
+  },
+  "workbook": {
+    "path": "庭审对抗分析-示例-结构复核版.xlsx",
+    "sha256": "fdb698ccd904153b0880e57756f714b33e7f8bf3e5bb097a2b0ebebb84ad23af",
+    "sheet_count": 1,
+    "sheet_name": "庭审对抗分析",
+    "columns": 17,
+    "rows": 26,
+    "freeze_panes": "B8",
+    "auto_filter": "A7:Q20",
+    "decisive_elements": [
+      "P1-1"
+    ]
+  },
+  "data_counts": {
+    "claims": 3,
+    "parts": 3,
+    "elements": 4,
+    "disputed_elements": 3,
+    "non_disputed_elements": 1
+  },
+  "source_files": {
+    "SKILL.md": "45fe9d835f529db800b9cb1cbb4e5f28146931e3",
+    "README.md": "4f4604aee1c75c7cb7ab485100079128735b91dc",
+    "examples/matrix-input.json": "1b90bf714a184ba35954fdbe7d13627c488fe03d",
+    "scripts/build_matrix.py": "575b11fa4174accae0060e9ecd11fde6e3667091",
+    "scripts/check_claims.py": "fe3d546008ec5afa43bc9c8dbbd2a9c86ac6bf80",
+    "scripts/to_figure.py": "0910404a7afb7a6936c4654b9a363e2bf0246463",
+    "scripts/render_main.py": "02996894bbc1512aabf6be5e1da8324d3e868884",
+    "references/intake.md": "0d47fe2d2d2697edf642735b5360d670f634a8bc",
+    "references/extraction.md": "392d53b43474c2084f2cca47166d455b1e800d3b",
+    "references/layout-constraints.md": "448e369d1c3dc4d9db82303c9d54b9515579b3b5",
+    "docs/adr/0005-rowgroup-is-the-element.md": "not retrieved in full hash; source path verified",
+    "docs/adr/0007-scope-and-stance.md": "not retrieved in full hash; source path verified"
+  },
+  "findings": [
+    "The workbook implementation has 17 COLS entries although the build_matrix.py module docstring says the column count was reduced to 16.",
+    "The build_matrix.py build() comment says no freeze panes, but executable code sets freeze_panes to B{HR+1}; it also sets an auto_filter over the element matrix. references/layout-constraints.md separately says the header and identifier column are frozen.",
+    "The to_figure.py module docstring says it selects the decisive disputed element or the first one, but the current convert() implementation iterates every element whose dispute is 有争议待证.",
+    "The sample's P1 is tied to a 形成 claim and method=法律关系分析法, yet it still contains P1-1/P1-2 rows labelled as constitutive elements. This conflicts with SKILL/extraction guidance that formation claims should not be broken into request-right elements.",
+    "P3 is marked track=反诉 but has no claim_ref; the claims array has no matching continued-performance counterclaim. The case.counterattacks item is 抵销, whose handling says it should be filed as a counterclaim, but the sample does not explicitly connect that item to P3.",
+    "A3 requires each four-part argument segment to identify its actual source. The example elements have no src object. check_claims.py does not enforce a src value for each non-empty segment; to_figure.py falls back to SRC_DEFAULT labels.",
+    "to_figure.py cards_of() calculates absence metadata but passes it as _blank to add(), where the parameter is not used. The sample's P1-1 second field says 无书面记载 while scope.not_obtained includes 质证意见. This distinction is not resolved by the sample.",
+    "Evidence is represented as free-text names such as 原证2·招标文件, not immutable Document ID, version, SHA, page or text-range anchors."
+  ],
+  "execution_limits": {
+    "git_clone": "failed: current execution environment could not resolve github.com (DNS)",
+    "github_file_reads": "success: exact source files and blob SHAs retrieved via GitHub file access",
+    "upstream_pipeline_executed": false,
+    "workbook": "independent reproduction of current build_matrix.py structure and data, not a byte-for-byte upstream pipeline output",
+    "diagram": "interactive HTML and first-pass SVG are independent previews, not output from upstream render_main.py"
+  }
+}

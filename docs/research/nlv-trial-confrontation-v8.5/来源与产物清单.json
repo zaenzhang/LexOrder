@@ -1,0 +1,125 @@
+{
+  "repository": "https://github.com/MiaoQichuan/new-litigation-visualization",
+  "module": "plugins/mqc-nlv/skills/mqc-trial-confrontation-master",
+  "branch": "main",
+  "commit": "16c480c3947e78ba49623423ea0486277f5fe99d",
+  "skill_version": "1.1.0",
+  "license": "AGPL-3.0-only",
+  "sources": {
+    "SKILL.md": {
+      "blob_sha": "45fe9d835f529db800b9cb1cbb4e5f28146931e3",
+      "url": "https://github.com/MiaoQichuan/new-litigation-visualization/blob/main/plugins/mqc-nlv/skills/mqc-trial-confrontation-master/SKILL.md"
+    },
+    "README.md": {
+      "blob_sha": "4f4604aee1c75c7cb7ab485100079128735b91dc",
+      "url": "https://github.com/MiaoQichuan/new-litigation-visualization/blob/main/plugins/mqc-nlv/skills/mqc-trial-confrontation-master/README.md"
+    },
+    "examples/matrix-input.json": {
+      "blob_sha": "1b90bf714a184ba35954fdbe7d13627c488fe03d",
+      "local_sha256": "8989fc2e0ee46484dea438a1c4ae9625d685fe75e26574144e3a1619caa30da2",
+      "url": "https://github.com/MiaoQichuan/new-litigation-visualization/blob/main/plugins/mqc-nlv/skills/mqc-trial-confrontation-master/examples/matrix-input.json"
+    },
+    "scripts/build_matrix.py": {
+      "blob_sha": "575b11fa4174accae0060e9ecd11fde6e3667091",
+      "url": "https://github.com/MiaoQichuan/new-litigation-visualization/blob/main/plugins/mqc-nlv/skills/mqc-trial-confrontation-master/scripts/build_matrix.py"
+    },
+    "scripts/check_claims.py": {
+      "blob_sha": "fe3d546008ec5afa43bc9c8dbbd2a9c86ac6bf80",
+      "url": "https://github.com/MiaoQichuan/new-litigation-visualization/blob/main/plugins/mqc-nlv/skills/mqc-trial-confrontation-master/scripts/check_claims.py"
+    },
+    "scripts/to_figure.py": {
+      "blob_sha": "0910404a7afb7a6936c4654b9a363e2bf0246463",
+      "url": "https://github.com/MiaoQichuan/new-litigation-visualization/blob/main/plugins/mqc-nlv/skills/mqc-trial-confrontation-master/scripts/to_figure.py"
+    },
+    "scripts/render_main.py": {
+      "blob_sha": "02996894bbc1512aabf6be5e1da8324d3e868884",
+      "url": "https://github.com/MiaoQichuan/new-litigation-visualization/blob/main/plugins/mqc-nlv/skills/mqc-trial-confrontation-master/scripts/render_main.py"
+    },
+    "references/intake.md": {
+      "blob_sha": "0d47fe2d2d2697edf642735b5360d670f634a8bc",
+      "url": "https://github.com/MiaoQichuan/new-litigation-visualization/blob/main/plugins/mqc-nlv/skills/mqc-trial-confrontation-master/references/intake.md"
+    },
+    "references/extraction.md": {
+      "blob_sha": "392d53b43474c2084f2cca47166d455b1e800d3b",
+      "url": "https://github.com/MiaoQichuan/new-litigation-visualization/blob/main/plugins/mqc-nlv/skills/mqc-trial-confrontation-master/references/extraction.md"
+    },
+    "references/layout-constraints.md": {
+      "blob_sha": "448e369d1c3dc4d9db82303c9d54b9515579b3b5",
+      "url": "https://github.com/MiaoQichuan/new-litigation-visualization/blob/main/plugins/mqc-nlv/skills/mqc-trial-confrontation-master/references/layout-constraints.md"
+    }
+  },
+  "artifacts": {
+    "LexOrder-诉讼分析工作台-实验预览-v8.5.html": {
+      "bytes": 57461,
+      "sha256": "d53277df3ddee2274afdf3d5a4cb3f47db74643b7f71e087f4a1cf4136741a84"
+    },
+    "庭审对抗分析-示例-结构复核版.xlsx": {
+      "bytes": 13538,
+      "sha256": "fdb698ccd904153b0880e57756f714b33e7f8bf3e5bb097a2b0ebebb84ad23af"
+    },
+    "庭审对抗分析-示例-按注释理解版.xlsx": {
+      "bytes": 13387,
+      "sha256": "14e67e2b666fdf916dcaa644c04ab1ab2b0723ae5f6f2075cd0c61883bf0f6b1"
+    },
+    "庭审对抗分析-示例-初次复现版.xlsx": {
+      "bytes": 13403,
+      "sha256": "bc7c4c59a755ca08b98defd4f6f9a4ff3b6f58f24a07bbdb15317aafb43ff8e8"
+    },
+    "source-evidence/upstream-matrix-input.json": {
+      "bytes": 12082,
+      "sha256": "8989fc2e0ee46484dea438a1c4ae9625d685fe75e26574144e3a1619caa30da2"
+    },
+    "庭审对抗图-结构预览.svg": {
+      "bytes": 9945,
+      "sha256": "ad5e50c318a8d72eeaff7a36d59f2efd1f8114379a9ec51b3ab2d3cb3fdbea02"
+    },
+    "庭审对抗图-结构预览.png": {
+      "bytes": 264952,
+      "sha256": "8f9c44c02a26b0eeab22017d378d965be8994c0068043347a290a570548bf48a"
+    },
+    "V8.5-争点攻防.png": {
+      "bytes": 331325,
+      "sha256": "ed90fed6d1fe88c1a34dd758b8a692e913cb8614b7e24881c2e7439dac556655"
+    },
+    "V8.5-实验依据.png": {
+      "bytes": 362081,
+      "sha256": "7069ac4684f8fe2021c79a9c71919910393f996f2902a87817911a5b93415c29"
+    },
+    "实验记录.md": {
+      "bytes": 9707,
+      "sha256": "a8566f59cb40bb1745f44728432779a0bef378195e1381d03584e8b7668cf238"
+    },
+    "实验分析-第二轮.md": {
+      "bytes": 3920,
+      "sha256": "be1f00d1f334b0de07fcfdf9d1b128db310685296ca291928ba21585768aeeca"
+    },
+    "实验结构检查-结构复核版.json": {
+      "bytes": 4315,
+      "sha256": "dd08094775db1a524be990eb3d0b2fe57c89b3b5ba1f0334331351512b76e458"
+    },
+    "实验结构检查-初次复现版.json": {
+      "bytes": 2653,
+      "sha256": "87fe6378f593464bd36a4970ec888fefd98ed56f155b79121eba71b74b6b3a23"
+    },
+    "pdf-preview/庭审对抗分析-示例.pdf": {
+      "bytes": 342166,
+      "sha256": "b48950e5b016c9443cf0eb48879cf55dd6d5ef10b6deb8999c8c316a622e5856"
+    },
+    "实验测试结果-v8.5.json": {
+      "bytes": 1269,
+      "sha256": "93d9c60b92c10ba02ffbf4fdb874331c81f2c8d8663007af33090980c4cbcaa4"
+    },
+    "README-实验档案.md": {
+      "bytes": 2377,
+      "sha256": "6710b581c10f55f4163d5b81fbaa63e442efa330f34e64d58c6bd28635dc4d1b"
+    },
+    "V8.5-庭审对抗图.png": {
+      "bytes": 407630,
+      "sha256": "de56151465c02c6dfaf123bac95d3c8bb346b522510539b313279b355018b67c"
+    },
+    "来源与产物清单.json": {
+      "bytes": 5665,
+      "sha256": "4673b71d4c570744979ea1c9d72515e47fd32dfec7474daf5002914431c65b05"
+    }
+  }
+}
