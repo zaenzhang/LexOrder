@@ -169,7 +169,7 @@ node tools/workbench-m1/chronicle-smoke/webkit-performance.mjs \
   desktop/personal-chronicle/desktop-preview/target/debug/lexorder-chronicle-preview 3
 ```
 
-已有 Chronicle Sidecar 工作流支持手动选择 `native_performance: macos`，只运行 macOS 矩阵。验收从原生启动计时，使用 WKWebView 原生截图查找实际 PDF 首屏色块。批量入口在测试窗口接收合成 FileList，之后通过实际确认按钮和案卷 API 入卷，系统文件选择器另验。输出 `CHRONICLE_WK_PERFORMANCE`。进程内存统计包含 Tauri 子进程，并记录隔离环境中新出现的 WebKit XPC 进程数和累加 RSS。并行浏览任务会影响 XPC 归属，故只在专用环境采集。每轮使用临时 WebView 数据存储，关窗后检查案卷解锁。
+已有 Chronicle Sidecar 工作流支持手动选择 `native_performance: macos`，该专项先用现有业务冒烟初始化私有工作区，再从原生宿主启动计时，使用 WKWebView 原生截图查找实际 PDF 首屏色块。批量入口在测试窗口接收合成 FileList，之后通过实际确认按钮和案卷 API 入卷，系统文件选择器另验。输出 `CHRONICLE_WK_PERFORMANCE`。进程内存统计包含 Tauri 子进程，并记录隔离环境中新出现的 WebKit XPC 进程数和累加 RSS。并行浏览任务会影响 XPC 归属，故只在专用环境采集。每轮使用临时 WebView 数据存储，关窗后检查案卷解锁。
 
 ## 检查内容
 

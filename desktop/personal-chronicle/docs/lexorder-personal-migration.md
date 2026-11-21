@@ -739,3 +739,5 @@ Windows 用相同场景在原生 WebView2 另跑三轮，延长采样至后台�
 | 3 | 2,625 ms | 124 / 120 / 118 / 142 ms | 429 / 1,076 ms | 1,509 / 5,309 ms | 1,713 / 1,886 / 1,888 MiB，71 次采样 |
 
 退出后工作区锁释放。环境仍为 WSL2，包以解包方式启用。三端矩阵中，同一提交的 Ubuntu DEB 解包业务冒烟和 macOS DMG 挂载业务冒烟通过。 [三端 CI](https://github.com/zaenzhang/LexOrder/actions/runs/44841283837) · [复跑命令](../../../tools/workbench-m1/chronicle-smoke/README.md#linux-webkitgtk-性能基线)
+
+**macOS 冒烟问题，待复验。** Apple Silicon runner 已编译带原生 WebKit WebDriver 的 Tauri 调试宿主。首次从空工作区启动时，12 秒内驱动未确认窗口就绪，也未产生性能样本。专项现在复用业务冒烟准备同一个隔离工作区，再从 Tauri 进程启动计时。等待上限与应用启动分开，记录最后的驱动状态和宿主输出。常规三端矩阵仍保留组件、宿主、安全和安装包业务检查，手动性能专项仅运行该平台所需的构建和业务准备。 [首次专项日志](https://github.com/zaenzhang/LexOrder/actions/runs/44841310175/job/136650097159)

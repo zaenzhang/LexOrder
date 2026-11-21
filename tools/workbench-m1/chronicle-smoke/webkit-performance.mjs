@@ -29,6 +29,15 @@ const workspace = path.join(root, "workspace");
 const casebookRoot = path.join(root, "casebook");
 await mkdir(casebookRoot, { recursive: true });
 await mkdir(workspace, { recursive: true, mode: 0o700 });
+if (isMac) {
+  // Initialize the private database before timing a cold desktop process, as
+  // in the Windows benchmark. The fixture has no real cases or credentials.
+  const bun = path.join(path.dirname(binary), "lexorder-bun");
+  execFileSync(bun, ["--no-env-file", "--no-install", path.join(import.meta.dirname, "sidecar.mjs"), workspace], {
+    cwd: repo, stdio: "inherit", timeout: 240_000,
+    env: { ...process.env, NEXT_DIST_DIR: ".next-personal", LEXORDER_SMOKE_RUNTIME_ROOT: repo, LEXORDER_SMOKE_BUN: bun },
+  });
+}
 
 const elapsed = start => Math.round(performance.now() - start);
 const elementKey = "element-6066-11e4-a52e-4f735466cecf";
@@ -111,11 +120,17 @@ async function measure() {
     return value;
   }
   let session;
+  let driverStatus = "not listening";
   try {
     await waitFor("WebKit WebDriver", async () => {
       assert(child.exitCode === null, "WebKit WebDriver process exited");
-      return (await command("/status").catch(() => null))?.ready;
-    });
+      const status = await command("/status").catch(error => {
+        if (error.cause?.code === "ECONNREFUSED") return null;
+        throw error;
+      });
+      driverStatus = status?.message ?? "not listening";
+      return status?.ready;
+    }, isMac ? 120_000 : 12_000);
     if (!isMac) started = performance.now();
     const capabilities = isMac ? {} : { "webkitgtk:browserOptions": { binary, args: [] } };
     const { sessionId } = await command("/session", "POST", { capabilities: { alwaysMatch: capabilities } });
@@ -247,7 +262,7 @@ async function measure() {
       if (isMac) {
         // Embedded WebDriver cannot send file paths to an input. Use the same bytes and
         // the actual upload control with a synthetic FileList in this private webview.
-        await execute(`
+        const selected = await execute(`
           const [selector, entries, size] = arguments;
           const transfer = new DataTransfer();
           for (const { name, mimeType, pattern } of entries) {
@@ -257,7 +272,9 @@ async function measure() {
           const input = document.querySelector(selector);
           input.files = transfer.files;
           input.dispatchEvent(new Event("change", { bubbles: true }));
+          return transfer.files.length;
         `, pickerSelector, syntheticImportFileSpecs(tag), bytesPerFile);
+        assert.equal(selected, fileCount);
       } else {
         await command(picker + "/value", "POST", { text: files.join("\n") });
       }
@@ -284,14 +301,20 @@ async function measure() {
     if (pdfFirstVisibleMs === null) console.error("Native PDF first-page marker absent: " + profile);
     return pdfFirstVisibleMs !== null;
   } catch (error) {
-    console.error((await readFile(path.join(profile, "driver.log"), "utf8")).split("\n").slice(-20).join("\n"));
+    console.error("Last WebDriver status: " + driverStatus);
+    console.error((await readFile(path.join(profile, "driver.log"), "utf8")).split("\n").slice(-24).join("\n"));
     throw error;
   } finally {
     try {
       if (session && isMac) {
-        await command(session + "/window", "DELETE");
+        // The app can exit before the in-process driver replies to the close.
+        const close = command(session + "/window", "DELETE").catch(error => error);
         const result = await Promise.race([exited, delay(20_000, null, { ref: false })]);
-        assert.equal(result?.[0], 0, "Expected the macOS host to stop cleanly");
+        if (result?.[0] !== 0) {
+          const closeError = await close;
+          throw new Error("Expected the macOS host to stop cleanly", { cause: closeError });
+        }
+        await close;
       } else if (session) await command(session, "DELETE");
     } finally {
       if (child.exitCode === null) child.kill();
