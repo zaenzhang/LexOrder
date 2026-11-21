@@ -79,8 +79,9 @@ jobs:
         if: inputs.native_performance == 'macos'
         run: |
           sw_vers
+          system_profiler SPDisplaysDataType
           node tools/workbench-m1/chronicle-smoke/webkit-performance.mjs \
-            desktop/personal-chronicle/desktop-preview/target/debug/lexorder-chronicle-preview 3
+            desktop/personal-chronicle/desktop-preview/target/debug/lexorder-chronicle-preview 3 --runner-viewport
       - name: Create a case, stop, reopen and verify permissions
         if: inputs.native_performance != 'macos' && inputs.native_performance != 'windows'
         run: bun --no-env-file --no-install tools/workbench-m1/chronicle-smoke/sidecar.mjs "${{ runner.temp }}/lexorder-sidecar-case"

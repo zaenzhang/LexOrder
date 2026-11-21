@@ -13,13 +13,14 @@ import { bytesPerFile, fileCount, hasPerformancePdfMarker, prepareCases, synthet
 const isMac = process.platform === "darwin";
 const args = process.argv.slice(2);
 const installed = args.at(-1) === "--installed";
-if (installed) args.pop();
+const runnerViewport = args.at(-1) === "--runner-viewport";
+if (installed || runnerViewport) args.pop();
 const binaryArgument = args[0];
 const driverArgument = isMac ? undefined : args[1];
 const roundsArgument = args[isMac ? 1 : 2] ?? "3";
-assert((isMac || process.platform === "linux") && binaryArgument && (isMac ? !installed : driverArgument)
+assert((isMac || process.platform === "linux") && binaryArgument && (isMac ? !installed : driverArgument && !runnerViewport)
   && /^[1-9]$/.test(roundsArgument) && args.length <= (isMac ? 2 : 3),
-  "Usage: webkit-performance.mjs <app binary> [Linux WebKitWebDriver] [rounds] [--installed on Linux]");
+  "Usage: webkit-performance.mjs <app binary> [Linux WebKitWebDriver] [rounds] [--installed | --runner-viewport]");
 const repo = path.resolve(import.meta.dirname, "../../..");
 const binary = path.resolve(binaryArgument);
 const driver = driverArgument ? path.resolve(driverArgument) : binary;
@@ -147,18 +148,25 @@ async function measure() {
     assert.match(native.origin, /^http:\/\/127\.0\.0\.1:\d+$/);
     assert.match(native.userAgent, isMac ? /Macintosh.*AppleWebKit/ : /Linux.*AppleWebKit/);
     const startupViewport = native.viewport;
-    if (isMac && (startupViewport[0] !== 1440 || startupViewport[1] !== 900)) {
+    if (isMac && !runnerViewport && (startupViewport[0] !== 1440 || startupViewport[1] !== 900)) {
       const rect = await command(session + "/window/rect");
       await command(session + "/window/rect", "POST", {
         width: rect.width + 1440 - startupViewport[0],
         height: rect.height + 900 - startupViewport[1],
       });
+      let actual = startupViewport;
       native.viewport = await waitFor("the 1440 × 900 WKWebView viewport", async () => {
-        const actual = await execute("return [innerWidth, innerHeight]");
+        actual = await execute("return [innerWidth, innerHeight]");
         return actual[0] === 1440 && actual[1] === 900 ? actual : null;
+      }).catch(error => {
+        throw new Error("WKWebView viewport after resizing: " + actual.join(" × "), { cause: error });
       });
     }
-    assert.deepEqual(native.viewport, [1440, 900], "Use a 1440 × 900 test viewport");
+    if (runnerViewport) {
+      console.log("WKWebView runner viewport " + native.viewport.join(" × "));
+    } else {
+      assert.deepEqual(native.viewport, [1440, 900], "Use a 1440 × 900 test viewport");
+    }
     const request = async (route, body, expected = 200) => {
       assert.match(route, /^\/api\//);
       const multipart = body instanceof FormData;
