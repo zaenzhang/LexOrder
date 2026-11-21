@@ -11,9 +11,12 @@ import sharp from "sharp";
 import { bytesPerFile, fileCount, hasPerformancePdfMarker, prepareCases, syntheticImportFiles, syntheticImportFileSpecs, waitForImportParsing } from "./desktop-performance-fixture.mjs";
 
 import { processTable, processTree } from "./webkit-process-memory.mjs";
+import { verifyWebKitChronologyLayout } from "./webkit-chronology-layout.mjs";
 
 const isMac = process.platform === "darwin";
 const args = process.argv.slice(2);
+const chronologyLayout = args.at(-1) === "--chronology-layout";
+if (chronologyLayout) args.pop();
 const installed = args.at(-1) === "--installed";
 const runnerViewport = args.at(-1) === "--runner-viewport";
 if (installed || runnerViewport) args.pop();
@@ -21,8 +24,8 @@ const binaryArgument = args[0];
 const driverArgument = isMac ? undefined : args[1];
 const roundsArgument = args[isMac ? 1 : 2] ?? "3";
 assert((isMac || process.platform === "linux") && binaryArgument && (isMac ? !installed : driverArgument && !runnerViewport)
-  && /^[1-9]$/.test(roundsArgument) && args.length <= (isMac ? 2 : 3),
-  "Usage: webkit-performance.mjs <app binary> [Linux WebKitWebDriver] [rounds] [--installed | --runner-viewport]");
+  && !(runnerViewport && chronologyLayout) && /^[1-9]$/.test(roundsArgument) && args.length <= (isMac ? 2 : 3),
+  "Usage: webkit-performance.mjs <app binary> [Linux WebKitWebDriver] [rounds] [--installed | --runner-viewport] [--chronology-layout]");
 const repo = path.resolve(import.meta.dirname, "../../..");
 const binary = path.resolve(binaryArgument);
 const driver = driverArgument ? path.resolve(driverArgument) : binary;
@@ -172,7 +175,6 @@ async function measure() {
       assert.equal(result.status, expected, route.split("?")[0]);
       return new Response(Uint8Array.from(result.bytes), { status: result.status, headers: result.headers });
     };
-    const { cases: [a, b], documentId } = await prepareCases(request, workspace, casebookRoot);
     const navigate = async route => {
       await command(session + "/url", "POST", { url: native.origin + route });
       await waitFor("navigation to " + route, () => execute(
@@ -215,6 +217,8 @@ async function measure() {
       });
       return began;
     };
+    if (chronologyLayout) return await verifyWebKitChronologyLayout({ request, casebookRoot, navigate, execute, click, visible, waitFor });
+    const { cases: [a, b], documentId } = await prepareCases(request, workspace, casebookRoot);
     const overview = title => waitFor("overview " + title, () => visible('section[aria-label="案件状态和期限"] h2', title));
     await navigate("/matters/" + a.id + "/overview");
     await overview(a.title);
@@ -352,7 +356,7 @@ async function measure() {
 }
 
 let verified = true;
-for (let round = 0; round < Number(roundsArgument); round++) {
+for (let round = 0; round < (chronologyLayout ? 1 : Number(roundsArgument)); round++) {
   const passed = await measure();
   verified &&= passed;
 }

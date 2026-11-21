@@ -144,6 +144,7 @@ export function CaseChronology({ matterId, items, programs = [], onEdit, matrixO
   }>()
   const comparisonPanel = useRef<HTMLElement>(null)
   const returnToComparison = useRef<string>(undefined)
+  const returnToSource = useRef<{ itemId: string; revision: number; sourceId: string; observationId?: string }>(undefined)
   const factPanel = useRef<HTMLDivElement>(null)
   const revealFact = useRef(false)
   const backFromOriginal = useRef<HTMLButtonElement>(null)
@@ -236,6 +237,7 @@ export function CaseChronology({ matterId, items, programs = [], onEdit, matrixO
     : undefined
 
   const open = useCallback((item: EvidenceNote, source?: Source, observation?: FactObservation) => {
+    returnToSource.current = undefined
     setOriginal(undefined)
     setOfficialId(undefined)
     setSelection(previous => ({
@@ -367,6 +369,8 @@ export function CaseChronology({ matterId, items, programs = [], onEdit, matrixO
         .find(entry => entry.dataset.comparisonSource === returnToComparison.current)
       returnToComparison.current = undefined
       button?.focus()
+    } else if (returnToSource.current) {
+      factPanel.current?.focus({ preventScroll: true })
     }
   }, [originalOpen])
 
@@ -586,6 +590,9 @@ export function CaseChronology({ matterId, items, programs = [], onEdit, matrixO
             onClick={() => {
               if (activeOriginal.field && activeOriginal.observation) {
                 returnToComparison.current = activeOriginal.field + "/" + activeOriginal.observation.id
+              } else {
+                returnToSource.current = { itemId: activeOriginal.itemId, revision: activeOriginal.revision,
+                  sourceId: activeOriginal.sourceId, observationId: activeOriginal.observation?.id }
               }
               setOriginal(undefined)
             }}><ChevronLeftIcon data-icon="inline-start" />返回事实</Button>}
@@ -715,6 +722,14 @@ export function CaseChronology({ matterId, items, programs = [], onEdit, matrixO
                             matterId={matterId} item={selected} source={source} records={records} focusedId={focusedObservation?.id}
                             pending={assessmentPending} onAssess={onObservationsSaved ? change => void assess(selected, change) : undefined}
                             onOriginal={(fixed, entry) => setOriginal({ itemId: selected.id, revision: selected.revision, sourceId: source.id, source: fixed, observation: entry })}
+                            onOriginalControl={(button, observationId) => {
+                              const pending = returnToSource.current
+                              if (!button || pending?.itemId !== selected.id || pending.revision !== selected.revision ||
+                                pending.sourceId !== source.id || pending.observationId !== observationId) return
+                              returnToSource.current = undefined
+                              const active = document.activeElement
+                              if (active === factPanel.current || active === document.body) button.focus()
+                            }}
                             onSaved={onObservationsSaved && (result => {
                               setSelection({ itemId: selected.id, revision: result.revision, sourceId: source.id,
                                 observationId: result.observationId, showSources: true })
@@ -947,9 +962,10 @@ function readChronologySource(matterId: string, evidenceItemId: string, revision
   })
 }
 
-function ChronologySource({ matterId, item, source, records, focusedId, pending, onAssess, onOriginal, onSaved }: {
+function ChronologySource({ matterId, item, source, records, focusedId, pending, onAssess, onOriginal, onOriginalControl, onSaved }: {
   matterId: string; item: EvidenceNote; source: Source; records?: FactObservation[]; focusedId?: string
   pending?: boolean; onAssess?(change: ChronologyChange): void; onOriginal(source: FixedSource, observation?: FactObservation): void
+  onOriginalControl(button: HTMLButtonElement | null, observationId?: string): void
   onSaved?(saved: ObservationSaved): void
 }) {
   const [editing, setEditing] = useState<{ observation?: FactObservation; trigger: HTMLElement }>()
@@ -995,7 +1011,7 @@ function ChronologySource({ matterId, item, source, records, focusedId, pending,
         <Button size="xs" variant="ghost" className="font-normal hover:underline"
           aria-label={"查看固定原文 · " + preview.documentName}
           title={preview.documentName + " · V" + preview.documentVersion + " · " + preview.locationLabel}
-          onClick={() => onOriginal(preview)}>查看固定原文</Button>
+          ref={button => onOriginalControl(button)} onClick={() => onOriginal(preview)}>查看固定原文</Button>
         {addRecord}
       </div>
       {preview.text && recordCount === 0 && <blockquote className="whitespace-pre-wrap rounded-md bg-muted/40 px-2.5 py-2 text-xs [overflow-wrap:anywhere]">{preview.text}</blockquote>}
@@ -1007,7 +1023,7 @@ function ChronologySource({ matterId, item, source, records, focusedId, pending,
             <span className="font-medium">{statements[entry.data.statement]}</span>
             <div className="flex flex-wrap items-center gap-1">
               {preview && <Button size="xs" variant="ghost" className="font-normal hover:underline"
-                onClick={() => onOriginal(preview, entry)}>查看原文</Button>}
+                ref={button => onOriginalControl(button, entry.id)} onClick={() => onOriginal(preview, entry)}>查看原文</Button>}
               {recordCount === 1 && addRecord}
               {(canRecord || canSplit) && <DropdownMenu>
                 <DropdownMenuTrigger render={<Button ref={button => {

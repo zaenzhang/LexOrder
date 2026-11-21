@@ -6,7 +6,7 @@ on:
       native_performance:
         description: Run an additional performance benchmark
         type: choice
-        options: [none, macos, macos-wide, windows]
+        options: [none, macos, macos-wide, macos-layout, windows]
         default: none
       macos_dmg_run_id:
         description: Re-run macOS window checks against the DMG from this workflow run ID
@@ -91,7 +91,11 @@ jobs:
           LEXORDER_MAC_PERFORMANCE: ${{ inputs.native_performance }}
         run: |
           sw_vers
-          if [[ "$LEXORDER_MAC_PERFORMANCE" == macos-wide ]]; then
+          if [[ "$LEXORDER_MAC_PERFORMANCE" == macos-layout ]]; then
+            xcrun swift tools/workbench-m1/chronicle-smoke/macos-display.swift --wide
+            node tools/workbench-m1/chronicle-smoke/webkit-performance.mjs \
+              desktop/personal-chronicle/desktop-preview/target/debug/lexorder-chronicle-preview 1 --chronology-layout
+          elif [[ "$LEXORDER_MAC_PERFORMANCE" == macos-wide ]]; then
             xcrun swift tools/workbench-m1/chronicle-smoke/macos-display.swift --wide
             node tools/workbench-m1/chronicle-smoke/webkit-performance.mjs \
               desktop/personal-chronicle/desktop-preview/target/debug/lexorder-chronicle-preview 3
